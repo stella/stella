@@ -63,6 +63,7 @@ const linkedBalance = (
   return {
     amountDue: invoiceAmountDue(balance),
     settlement: invoiceSettlement({ ...balance, status: invoice.status }),
+    ledger: { paidAmount, creditedAmount },
   };
 };
 

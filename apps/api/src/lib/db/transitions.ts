@@ -8,13 +8,16 @@ import {
   isSQLWrapper,
   sql,
 } from "drizzle-orm";
-import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
+import type {
+  DriverValueDecoder,
+  GetColumnData,
+  SQL,
+  SQLWrapper,
+} from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
-  PgAsyncDatabase,
   PgInsertValue,
-  PgQueryResultHKT,
   PgTable,
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
@@ -136,7 +139,10 @@ export const defineScopedTransitions = <
   const keyColumn = columns[key];
   const keyNames = [key, ...scope];
   const keyColumns = keyNames.map((name) => columns[name]);
-  if (state?.enumValues === undefined || keyColumn === undefined) {
+  if (state === undefined || keyColumn === undefined) {
+    panic("A scoped transition requires an enum state and identity columns");
+  }
+  if (state.enumValues === undefined) {
     panic("A scoped transition requires an enum state and identity columns");
   }
   const stateValues = state.enumValues;
@@ -1049,11 +1055,9 @@ export type TransitionResult<TId, TStatus> =
   | { type: "transitioned"; row: { id: TId; status: TStatus } }
   | { type: "stale" };
 
-export type TransitionTransaction = Pick<
-  PgAsyncDatabase<PgQueryResultHKT>,
-  "execute"
-> &
-  Pick<Transaction, "rollback">;
+export type TransitionTransaction = {
+  execute: (query: SQLWrapper | string) => PromiseLike<unknown>;
+} & Pick<Transaction, "rollback">;
 
 type InvoiceEffectArgs<
   TTx extends TransitionTransaction,
@@ -1140,30 +1144,26 @@ type LifecycleUpdateArgs<
   ) => Promise<void>;
 };
 
-type LifecycleStatementOptions = Pick<
+type LifecyclePredicateOptions = Pick<
   LifecycleUpdateArgs,
-  "table" | "identity" | "ids" | "match" | "moves" | "guard"
+  "identity" | "ids" | "match" | "moves" | "guard"
 > & {
   scope: LifecycleUpdateArgs["scope"];
-  assignments: readonly SQL[];
   fence: AnyPgColumn | undefined;
   expectedFence: unknown;
-  capturePreviousStatus: "none" | "invoice";
 };
 
-const lifecycleUpdateStatement = ({
-  table,
+/** The predicate a lifecycle update selects its rows by. */
+const lifecycleUpdatePredicate = ({
   identity,
   ids,
   match,
   moves,
   scope,
   guard,
-  assignments,
   fence,
   expectedFence,
-  capturePreviousStatus,
-}: LifecycleStatementOptions) => {
+}: LifecyclePredicateOptions) => {
   const scoped = scope === undefined ? sql`` : transitionScopePredicate(scope);
   const identityMatch =
     match === "one"
@@ -1179,23 +1179,9 @@ const lifecycleUpdateStatement = ({
         sql`, `,
       )})`,
   );
-  const returned = moves.map(
-    ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
-  );
-  const predicate = sql`${identityMatch} ${scoped} ${sql.join(sources, sql` `)}
+  return sql`${identityMatch} ${scoped} ${sql.join(sources, sql` `)}
     ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
     ${guard === undefined ? sql`` : sql`AND (${guard})`}`;
-  if (capturePreviousStatus === "none") {
-    return sql`UPDATE ${table} SET ${sql.join([...assignments], sql`, `)}
-      WHERE ${predicate}
-      RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}`;
-  }
-  return sql`WITH transition_source AS MATERIALIZED (${lockedInvoiceTransitionSource(predicate)})
-    UPDATE ${table} SET ${sql.join([...assignments], sql`, `)}
-    FROM transition_source
-    WHERE ${identity.column} = transition_source.source_id
-    RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)},
-      transition_source.previous_status AS "previousStatus"`;
 };
 
 /** One conditional update; every moved column's expected sources join its predicate. */
@@ -1275,20 +1261,42 @@ const lifecycleUpdate = async <TTx extends TransitionTransaction>({
   if (ids.length === 0) {
     return [];
   }
+  const predicate = lifecycleUpdatePredicate({
+    identity,
+    ids,
+    match,
+    moves,
+    scope,
+    guard,
+    fence,
+    expectedFence,
+  });
+  const returned = moves.map(
+    ({ key, column }) => sql`, ${column} AS ${sql.identifier(key)}`,
+  );
+  // An invoice transition reads each row's prior status in the same statement,
+  // so link revocation sees the states the update actually left.
+  const source =
+    invoiceEffect === undefined
+      ? null
+      : lockedInvoiceTransitionSource(predicate);
   const executed = await tx.execute(
-    lifecycleUpdateStatement({
-      table,
-      identity,
-      ids,
-      match,
-      moves,
-      scope,
-      guard,
-      assignments,
-      fence,
-      expectedFence,
-      capturePreviousStatus: invoiceEffect === undefined ? "none" : "invoice",
-    }),
+    source === null
+      ? sql`
+        UPDATE ${table}
+        SET ${sql.join(assignments, sql`, `)}
+        WHERE ${predicate}
+        RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
+      `
+      : sql`
+        WITH transition_source AS MATERIALIZED (${source})
+        UPDATE ${table}
+        SET ${sql.join(assignments, sql`, `)}
+        FROM transition_source
+        WHERE ${identity.column} = transition_source.source_id
+        RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)},
+          transition_source.previous_status AS "previousStatus"
+      `,
   );
   const rows = returnedTransitionRows(executed);
   // Stale updates change nothing and record nothing.
@@ -1656,6 +1664,8 @@ type TransitionLifecycleArgs<
   tx: TTx;
   spec: DefinedLifecycle<TTable, TKey, TGraphs>;
   moves: LifecycleMoves<NoInfer<TGraphs>>;
+  /** Write-time conditions a row must still meet to move; see `guard`. */
+  guard?: SQL;
   set?: Omit<
     PgUpdateSetSource<NoInfer<TTable>>,
     NoInfer<TKey> | (keyof NoInfer<TGraphs> & string)
@@ -1695,6 +1705,7 @@ export const transitionLifecycle = async <
   spec,
   id,
   moves,
+  guard,
   set,
   recordTransitionAuditEvent,
 }: TransitionLifecycleArgs<TTx, TTable, TKey, TGraphs> & {
@@ -1723,6 +1734,7 @@ export const transitionLifecycle = async <
     moves: lifecycleMoves(spec.lifecycleColumns, moves),
     set,
     fence: { key: undefined, value: undefined },
+    guard,
     recordTransitionAuditEvent: async ([changed]) => {
       await recordTransitionAuditEvent(tx, {
         id: idDecoder.mapFromDriverValue(
@@ -1750,6 +1762,7 @@ export const transitionLifecycleBatch = async <
   spec,
   ids,
   moves,
+  guard,
   set,
   recordTransitionAuditEvent,
 }: TransitionLifecycleArgs<TTx, TTable, TKey, TGraphs> & {
@@ -1777,6 +1790,7 @@ export const transitionLifecycleBatch = async <
     moves: lifecycleMoves(spec.lifecycleColumns, moves),
     set,
     fence: { key: undefined, value: undefined },
+    guard,
     recordTransitionAuditEvent: async (changed) => {
       await recordTransitionAuditEvent(tx, { ids: decode(changed), moves });
     },
@@ -1977,4 +1991,42 @@ export const releaseInvoiceTimeEntries = async (
       },
     })),
   );
+};
+
+type DeriveCaseLawParsedInputStateBatchOptions = {
+  tx: Transaction;
+  ids: readonly SafeId<"caseLawDecision">[];
+  recordTransitionAuditEvent: (count: number) => Promise<void>;
+};
+
+/** Derive historical NULLs; subsequent writes are owned by the SQL trigger. */
+export const deriveCaseLawParsedInputStateBatch = async ({
+  tx,
+  ids,
+  recordTransitionAuditEvent,
+}: DeriveCaseLawParsedInputStateBatchOptions): Promise<number> => {
+  if (ids.length === 0) {
+    return 0;
+  }
+  // Raw SQL avoids Drizzle's updatedAt onUpdate. The corpus AFTER UPDATE
+  // triggers list other columns, so this derives only parsed_input_state.
+  const updated = executedRows(
+    await tx.execute(sql`
+    UPDATE case_law_decisions
+    SET parsed_input_state = case_law_parsed_input_state(
+      source_hash, source_hash_version, source_raw_s3_key,
+      parsed_source_hash, parsed_source_hash_version, parsed_source_raw_s3_key
+    )
+    WHERE id = ANY(ARRAY[${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    )}]::uuid[])
+      AND parsed_input_state IS NULL
+    RETURNING id
+  `),
+  );
+  if (updated.length > 0) {
+    await recordTransitionAuditEvent(updated.length);
+  }
+  return updated.length;
 };

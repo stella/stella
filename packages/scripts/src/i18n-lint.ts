@@ -13,6 +13,8 @@
  *    category the target locale needs (e.g. Polish few/many, Arabic's six).
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
+ *  - typography: no em dash, the catalogue half of the `no-em-dash-copy`
+ *    oxlint rule (oxlint does not parse JSON).
  *  - bare errors: no en message says only that something failed ("Error",
  *    "Something went wrong") without telling the person what to do next.
  *    Never grandfathered.
@@ -33,19 +35,19 @@ import path from "node:path";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { parseGlossary } from "./glossary-gen";
-import type { Glossary } from "./glossary-gen";
+import type { Glossary, Term } from "./glossary-gen";
 import { isPlainRecord, parseNestedMessages } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
 
 const flatten = (
   obj: NestedMessages,
   prefix = "",
-  out: Record<string, string> = {},
-): Record<string, string> => {
+  out = new Map<string, string>(),
+): Map<string, string> => {
   for (const [key, value] of Object.entries(obj)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     if (typeof value === "string") {
-      out[fullKey] = value;
+      out.set(fullKey, value);
     } else {
       flatten(value, fullKey, out);
     }
@@ -111,6 +113,17 @@ const collectArgNames = (
       }
     }
   }
+};
+
+/** The interpolation variables and rich-text tags a message carries; empty when it does not parse. */
+export const findArgumentNames = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (!ast) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names];
 };
 
 /**
@@ -223,7 +236,9 @@ export const findMissingPluralCategories = (
     return [];
   }
 
-  const omitted = OMITTED_CARDINAL_PLURALS[locale];
+  const omitted = Object.hasOwn(OMITTED_CARDINAL_PLURALS, locale)
+    ? OMITTED_CARDINAL_PLURALS[locale]
+    : undefined;
   const cardinal = pluralCategories(locale, "cardinal").filter(
     (category) => !omitted?.has(category),
   );
@@ -517,6 +532,15 @@ export const hasInvalidCapitalizedStella = (value: string): boolean => {
   return false;
 };
 
+// Match the `no-em-dash-copy` oxlint rule for locale JSON: copy breaks a
+// sentence with a period, comma, colon or parentheses, in every locale. A
+// value that is only the glyph is the empty-cell marker, not punctuation.
+export const hasEmDash = (value: string): boolean =>
+  value.includes("\u2014") && value !== "\u2014";
+
+export const EM_DASH_GUIDANCE =
+  "no em dash: rewrite the break with a period, comma, colon or parentheses";
+
 export type ForbiddenRule = {
   concept: string;
   guidance?: string;
@@ -593,12 +617,26 @@ export const findForbiddenGuidance = ({
   for (const rule of rules) {
     if (
       rule.guidance &&
-      findForbiddenTerms(source, target, locale, [rule], key).length > 0
+      findForbiddenTerms({
+        source,
+        target,
+        locale,
+        rules: [rule],
+        key,
+      }).length > 0
     ) {
       guidance.add(rule.guidance);
     }
   }
   return [...guidance];
+};
+
+type FindForbiddenTermsOptions = {
+  source: string;
+  target: string;
+  locale: string;
+  rules: ForbiddenRule[];
+  key?: string | undefined;
 };
 
 /**
@@ -609,13 +647,13 @@ export const findForbiddenGuidance = ({
  * key-path triggering; omit it for source-only checks. `forbiddenAlways` forms
  * are checked regardless of either trigger.
  */
-export const findForbiddenTerms = (
-  source: string,
-  target: string,
-  locale: string,
-  rules: ForbiddenRule[],
-  key?: string,
-): string[] => {
+export const findForbiddenTerms = ({
+  source,
+  target,
+  locale,
+  rules,
+  key,
+}: FindForbiddenTermsOptions): string[] => {
   const hits: string[] = [];
   for (const rule of rules) {
     // An exempt key opts out of every ban this concept carries, including the
@@ -664,6 +702,25 @@ export const findForbiddenTerms = (
   }
   return hits;
 };
+
+type FindMentionedTermsOptions = {
+  glossary: Glossary;
+  source: string;
+  key: string;
+};
+
+/** Glossary terms a message is about, by the same triggers the terminology lint uses. */
+export const findMentionedTerms = ({
+  glossary,
+  source,
+  key,
+}: FindMentionedTermsOptions): Term[] =>
+  [...glossary.verbs, ...glossary.legalConcepts, ...glossary.nouns].filter(
+    (term) =>
+      !(term.keyExempt ?? []).some((exempt) => key.includes(exempt)) &&
+      (containsWord(source, term.en, "en") ||
+        (term.keyTriggers ?? []).some((trigger) => key.includes(trigger))),
+  );
 
 /**
  * Whole messages that say something failed and nothing else. Nobody can act
@@ -793,9 +850,15 @@ const findViolations = (
     if (targetValue === sourceValue) {
       if (
         locale === "en" &&
-        (findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
-          0 ||
-          hasInvalidCapitalizedStella(targetValue))
+        (findForbiddenTerms({
+          source: sourceValue,
+          target: targetValue,
+          locale: "en",
+          rules,
+          key,
+        }).length > 0 ||
+          hasInvalidCapitalizedStella(targetValue) ||
+          hasEmDash(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -816,9 +879,15 @@ const findViolations = (
       result.plural.push(key);
     }
     if (
-      findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
-        0 ||
-      hasInvalidCapitalizedStella(targetValue)
+      findForbiddenTerms({
+        source: sourceValue,
+        target: targetValue,
+        locale,
+        rules,
+        key,
+      }).length > 0 ||
+      hasInvalidCapitalizedStella(targetValue) ||
+      hasEmDash(targetValue)
     ) {
       result.terminology.push(key);
     }
@@ -827,14 +896,22 @@ const findViolations = (
   return result;
 };
 
+type IsSuppressedOptions = {
+  baseline: LintBaseline;
+  category: LintCategory;
+  key: string;
+  locale: string;
+  entry: BaselineEntry;
+};
+
 /** A violation is suppressed only if the baselined (source, target) still matches. */
-export const isSuppressed = (
-  baseline: LintBaseline,
-  category: LintCategory,
-  key: string,
-  locale: string,
-  entry: BaselineEntry,
-): boolean => {
+export const isSuppressed = ({
+  baseline,
+  category,
+  key,
+  locale,
+  entry,
+}: IsSuppressedOptions): boolean => {
   const stored = baseline[category][key]?.[locale];
   if (stored === undefined) {
     return false;
@@ -866,7 +943,9 @@ if (import.meta.main) {
       return parseNestedMessages(text, filePath);
     };
 
-    const source = flatten(await readJson(path.resolve(langsDir, "en.json")));
+    const source = Object.fromEntries(
+      flatten(await readJson(path.resolve(langsDir, "en.json"))),
+    );
     const glossary = parseGlossary(await Bun.file(glossaryPath).text());
     const rules = buildForbiddenRules(glossary);
 
@@ -897,7 +976,15 @@ if (import.meta.main) {
         .toSorted(),
     ];
 
-    const next = emptyBaseline();
+    const next: Record<
+      LintCategory,
+      Map<string, Map<string, BaselineEntry>>
+    > = {
+      placeholder: new Map(),
+      icu: new Map(),
+      plural: new Map(),
+      terminology: new Map(),
+    };
     let hasIssues = false;
 
     for (const file of localeFiles) {
@@ -905,7 +992,9 @@ if (import.meta.main) {
       const target =
         locale === "en"
           ? source
-          : flatten(await readJson(path.resolve(langsDir, file)));
+          : Object.fromEntries(
+              flatten(await readJson(path.resolve(langsDir, file))),
+            );
       const violations = findViolations(source, target, locale, rules);
 
       const reported: string[] = [];
@@ -916,17 +1005,31 @@ if (import.meta.main) {
             target: target[key] ?? "",
           };
           if (writeBaseline) {
-            (next[category][key] ??= {})[locale] = entry;
-          } else if (!isSuppressed(baseline, category, key, locale, entry)) {
+            const byLocale =
+              next[category].get(key) ?? new Map<string, BaselineEntry>();
+            byLocale.set(locale, entry);
+            next[category].set(key, byLocale);
+          } else if (
+            !isSuppressed({
+              baseline,
+              category,
+              key,
+              locale,
+              entry,
+            })
+          ) {
             const guidance =
               category === "terminology"
-                ? findForbiddenGuidance({
-                    source: entry.source,
-                    target: entry.target,
-                    locale,
-                    rules,
-                    key,
-                  })
+                ? [
+                    ...findForbiddenGuidance({
+                      source: entry.source,
+                      target: entry.target,
+                      locale,
+                      rules,
+                      key,
+                    }),
+                    ...(hasEmDash(entry.target) ? [EM_DASH_GUIDANCE] : []),
+                  ]
                 : [];
             const suffix =
               guidance.length > 0 ? ` (${guidance.join("; ")})` : "";
@@ -988,17 +1091,15 @@ if (import.meta.main) {
 
     if (writeBaseline) {
       const sortRecord = (
-        record: Record<string, Record<string, BaselineEntry>>,
+        record: Map<string, Map<string, BaselineEntry>>,
       ): Record<string, Record<string, BaselineEntry>> =>
         Object.fromEntries(
-          Object.entries(record)
+          [...record]
             .toSorted(([a], [b]) => a.localeCompare(b))
             .map(([key, byLocale]) => [
               key,
               Object.fromEntries(
-                Object.entries(byLocale).toSorted(([a], [b]) =>
-                  a.localeCompare(b),
-                ),
+                [...byLocale].toSorted(([a], [b]) => a.localeCompare(b)),
               ),
             ]),
         );
@@ -1012,8 +1113,8 @@ if (import.meta.main) {
       const count = CATEGORIES.reduce(
         (sum, category) =>
           sum +
-          Object.values(next[category]).reduce(
-            (n, byLocale) => n + Object.keys(byLocale).length,
+          [...next[category].values()].reduce(
+            (n, byLocale) => n + byLocale.size,
             0,
           ),
         0,

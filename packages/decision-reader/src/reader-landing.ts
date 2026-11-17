@@ -110,3 +110,51 @@ export const readerBlockByAnchor = (
   anchorId: string,
 ): HTMLElement | null =>
   article.querySelector<HTMLElement>(`[data-anchor="${CSS.escape(anchorId)}"]`);
+
+type ClientTop = { top: number };
+
+/** The members of a block a landing reads. */
+export type ReaderBlock = { getBoundingClientRect: () => ClientTop };
+
+/**
+ * The members of a scroll container a landing needs. Narrower than
+ * `HTMLElement` so the arithmetic can be exercised without a DOM.
+ */
+export type ReaderScroller = {
+  getBoundingClientRect: () => ClientTop;
+  scrollTop: number;
+  scrollTo: (options: { top: number; behavior: ScrollBehavior }) => void;
+};
+
+/** How far down its scroller a block sits, whatever is scrolled away. */
+export const blockOffset = (
+  target: ReaderBlock,
+  container: ReaderScroller,
+): number =>
+  target.getBoundingClientRect().top -
+  container.getBoundingClientRect().top +
+  container.scrollTop;
+
+/**
+ * How far below the top of the text a block lands: the reader's controls bar
+ * floats over that band, so anything higher is hidden behind it. It is
+ * `--reader-controls-clearance` as a number, what `--reader-anchor-offset`
+ * gives a followed address, and the line that decides which heading the
+ * reader is on.
+ */
+export const READER_BREADCRUMB_CLEARANCE = 64;
+
+/** Every jump in a reader lands here: at the top of the text, below the bar. */
+export const scrollReaderToBlock = (
+  target: ReaderBlock,
+  container: ReaderScroller,
+): void => {
+  // Round toward the block so an integer scroll position crosses that line,
+  // and the reader is on the block they jumped to.
+  container.scrollTo({
+    top: Math.ceil(
+      blockOffset(target, container) - READER_BREADCRUMB_CLEARANCE,
+    ),
+    behavior: "instant",
+  });
+};

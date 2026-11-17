@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 
 import { cents } from "@stll/money";
 
-import { invoiceAmountDue, invoicePaymentAmounts } from "../invoice-payments";
+import {
+  invoiceAmountDue,
+  invoicePaymentAmounts,
+  invoicePaymentState,
+} from "../invoice-payment-amounts";
 import { assertInvoicePaymentRequest } from "./payment.test-helpers";
 import { buildInvoicePaymentPayload } from "./render-helpers";
 import { buildInvoiceTemplateData } from "./typst/data";
@@ -37,7 +41,13 @@ for (const { paidAmount, creditedAmount, due } of balances) {
     );
     expect<number>(amountDue).toBe(due);
     assertInvoicePaymentRequest({
-      invoice: { ...invoice, paymentAmountMinor: amountDue },
+      invoice: {
+        ...invoice,
+        settlement: invoicePaymentState({
+          ...balance,
+          documentType: "invoice",
+        }),
+      },
       grossAmountMinor: 756_250,
       outstandingAmount: due,
     });
@@ -46,14 +56,15 @@ for (const { paidAmount, creditedAmount, due } of balances) {
 
 test("an unpaid credit note with a seller account requests no payment", () => {
   const fixture = invoiceFixture(1);
-  const amountDue = invoiceAmountDue({
+  const balance = {
     totalAmount: cents(-756_250),
     paidAmount: 0,
     creditedAmount: 0,
-  });
+    status: "finalized",
+  } as const;
   // The balance of an unpaid credit note is positive; the document type alone
   // must keep its payment block and QR code out.
-  expect(amountDue).toBeGreaterThan(0);
+  expect(invoiceAmountDue(balance)).toBeGreaterThan(0);
   const credit = {
     ...fixture,
     originalNumber: "2026-ORIGINAL",
@@ -63,9 +74,14 @@ test("an unpaid credit note with a seller account requests no payment", () => {
       invoiceNumber: "2026-CREDIT",
     },
     totals: { ...fixture.totals, grossAmountMinor: cents(-756_250) },
-    paymentAmountMinor: amountDue,
+    settlement: invoicePaymentState({
+      ...balance,
+      documentType: "credit_note",
+    }),
   };
   expect(credit.seller.iban).toBeTruthy();
-  expect(buildInvoiceTemplateData(credit).unwrap().payment).toBeNull();
+  expect(buildInvoiceTemplateData(credit).unwrap().payment).toEqual({
+    status: "not_payable",
+  });
   expect(buildInvoicePaymentPayload(credit)).toBeNull();
 });

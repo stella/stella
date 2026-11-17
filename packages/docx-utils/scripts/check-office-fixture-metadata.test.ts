@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { writeZipEntry } from "../src/zip-entry";
+import { ZipArchive } from "@stll/docx-core/zip";
+
 import {
   inspectOfficeFixture,
   listOfficeFixtures,
@@ -21,11 +21,11 @@ afterEach(async () => {
 });
 
 const fixture = async (parts: Record<string, string>) => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const [name, bytes] of Object.entries(parts)) {
-    writeZipEntry(zip, name, bytes);
+    zip.set(name, bytes);
   }
-  return await zip.generateAsync({ type: "uint8array" });
+  return await zip.generate({ compression: "store" });
 };
 const inspect = async (parts: Record<string, string>) =>
   await inspectOfficeFixture({

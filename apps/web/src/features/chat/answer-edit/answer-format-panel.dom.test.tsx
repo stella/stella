@@ -13,7 +13,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 import type { AnswerFormatPanelProps } from "./answer-format-panel";

@@ -21,62 +21,44 @@ protection from stale work.
 1. **Stable identity.** Give every source item a stable, tenant-scoped identity.
    Enforce it with a database unique constraint whose leading columns preserve
    the tenant or source boundary. Do not rely on a hash collision check alone.
+   [review]
 2. **Idempotent persistence.** Upsert, claim, or transition by stable identity.
    Reapplying the same input must not duplicate rows, counters, notifications,
-   or other effects.
+   or other effects. [review]
 3. **Explicit outcomes.** Distinguish terminal outcomes (applied, unchanged,
    deliberately rejected) from retryable failures. A skipped item is terminal
    only when losing it is intentional and auditable.
+   [check: ratchet:unsignalled-skip]
 4. **Checkpoint last.** Advance a cursor, watermark, or checkpoint only after
    every earlier item is terminal or has a durable retry record. On an
-   ambiguous failure, hold the old checkpoint and replay.
-5. **Atomic database batches.** For database-only work, persist the items and
-   checkpoint in one short transaction with
-   `commitReplaySafeIngestionBatch` from
-   `apps/api/src/lib/replay-safe-ingestion.ts`.
-6. **External side effects.** Object storage, search indexes, email, and remote
+   ambiguous failure, hold the old checkpoint and replay. [review]
+5. **External side effects.** Object storage, search indexes, email, and remote
    APIs cannot join the database transaction. Make the database record the
    source identity/fingerprint and retry state first; use deterministic object
    keys or provider idempotency keys. Persist the cursor only after all page
-   work is durable.
-7. **Compare-and-set cursors.** Capture the cursor loaded at run start and
-   require it in the checkpoint update. A stale run must return the persisted
-   winner, never overwrite newer progress. Public corpus ingestion uses
-   `advanceCorpusIngestionCheckpoint` from
-   `apps/api/src/lib/corpus-ingestion-checkpoint.ts`.
-8. **Stale-work protection.** Mutable inputs need a source version or content
+   work is durable. [review]
+6. **Stale-work protection.** Mutable inputs need a source version or content
    fingerprint. A late worker must compare the claimed version before
    overwriting newer state. AI outputs also include schema, model, prompt, and
-   parser versions in their identity/provenance.
-9. **Durable execution.** Do not rely on detached promises or process memory
+   parser versions in their identity/provenance. [review]
+7. **Durable execution.** Do not rely on detached promises or process memory
    for required work. Use a durable queue/outbox and deterministic job
    identity. Add a bounded repair scan when enqueue and commit cannot be
-   atomic.
-10. **Bounded recovery.** Repair scans and list reads use cursor pagination and
-    configured limits. Workers remain stateless and safe under concurrency.
-11. **Owned schema.** The vertical slice owns its source, item, attempt, and
-    failure tables. Shared code provides transaction and identity primitives,
-    not a cross-domain ingestion framework.
-12. **Bounded external calls.** Every remote request has an explicit timeout,
-    bounded retry policy with jitter, provider-aware rate limiting, and a
-    maximum concurrency. Persist retry state; do not hold a database
-    transaction while waiting on the provider.
-13. **Poison-item isolation.** One malformed or permanently rejected item must
+   atomic. [check: ratchet:detached-promise-review-sites]
+8. **Owned schema.** The vertical slice owns its source, item, attempt, and
+   failure tables. Shared code provides transaction and identity primitives,
+   not a cross-domain ingestion framework. [review]
+9. **Bounded external calls.** Every remote request has a bounded retry
+   policy with jitter, provider-aware rate limiting, and a maximum
+   concurrency. Persist retry state; do not hold a database transaction while
+   waiting on the provider. [review]
+10. **Poison-item isolation.** One malformed or permanently rejected item must
     not stall an entire source forever. Persist the item identity, classified
     terminal/retryable outcome, sanitized error context, and operator-visible
-    repair path before allowing later progress.
-14. **Accounted-for source fields.** Every field a source states on a page the
+    repair path before allowing later progress. [review]
+11. **Accounted-for source fields.** Every field a source states on a page the
     adapter already fetches is stored, or excluded with the reason. See below.
-15. **A publisher is not a court.** The deciding court comes from the record:
-    the court code in its ECLI first, then the record's own court field,
-    resolved through the shared resolver
-    (`apps/api/src/lib/case-law/cz-ecli-courts.ts` for Czech sources). Never a
-    per-adapter constant, even where the portal is believed to serve one
-    court's decisions: portals republish other courts, and the court name is
-    what authority weighting is read off. An inventory declaration must name
-    the field the value is read from, and a value produced from a literal
-    satisfies no declaration. `no-literal-decision-court` rejects a literal
-    `court` in a case-law adapter.
+    [test: apps/api/src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts]
 
 ## Checkpoint Boundary
 
@@ -102,14 +84,17 @@ Each surface is one of three things:
   envelope part. The conformance suite reads the part back out of an envelope
   this repository can produce, so an adapter with no such capture cannot
   declare one;
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts]
 - `excludedSourceSurface(reason)` — the same constructor discipline as the
   field inventory: a blank reason does not compile, and "not fetched today" is
   not a reason. A rendering of a payload already kept, a corpus-wide index, a
   query-scoped export and a page the publisher's robots policy disallows are;
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts]
 - `backlogSurface(adapter, reason)` — it belongs in the row and is not there
   yet. Only an adapter already on `source-surface-backlog-baseline.json` can be
   named, each entry is listed there, and `source-surface-census.test.ts` fails
   both ways, so the set only shrinks. Recording a surface deletes its line.
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts]
 
 ## Source-Field Inventory
 
@@ -122,6 +107,7 @@ An inventory has three parts, in the adapter beside the readers it mirrors:
 
 - `SOURCE_FIELDS`, the list of names the source labels on the per-decision
   pages this adapter parses, `as const`;
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts]
 - a disposition map written
   `as const satisfies Record<<that union>, SourceFieldDisposition>`, so the map
   is total by type and a new name without a decision does not compile. Each
@@ -132,10 +118,12 @@ An inventory has three parts, in the adapter beside the readers it mirrors:
   a stored field, derived elsewhere, no field on the row, and data minimization
   are. The constructor is the only way to write an exclusion, and a blank
   reason does not compile;
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts]
 - `listSourceFields(parts)`, which reads the stored envelope back and answers
   what the publisher labelled across it. The whole envelope, not one page: a
   source states fields on the listing row as well as on the detail payload, and
   a reader given one of them declares the others out of scope by accident.
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts]
 
 `source-field-inventory.test.ts` drives every registered adapter from the
 registry: each adapter's fixture is built, its stored envelope goes
@@ -177,19 +165,23 @@ re-crawl adds to them.
 
 Test the behavior that types and lint cannot prove:
 
-- replay the same batch and assert the same fixed point;
-- fail item persistence and assert the checkpoint does not advance;
+- replay the same batch and assert the same fixed point; [review]
+- fail item persistence and assert the checkpoint does not advance; [review]
 - fail checkpoint persistence and assert database item writes roll back;
-- deliver duplicates concurrently and assert one durable effect;
+  [review]
+- deliver duplicates concurrently and assert one durable effect; [review]
 - crash after a remote side effect and before acknowledgment, then replay;
+  [review]
 - finish stale work after a newer version and assert it cannot overwrite;
-- leave an enqueue gap and assert the bounded repair scan finds it;
+  [review]
+- leave an enqueue gap and assert the bounded repair scan finds it; [review]
 - exhaust the retry budget for one poison item and assert later items still
-  reach a durable terminal state without silently dropping the failure;
+  reach a durable terminal state without silently dropping the failure; [review]
 - overlap two workers at the provider concurrency limit and assert calls stay
-  bounded and the persisted winner cannot be overwritten;
+  bounded and the persisted winner cannot be overwritten; [review]
 - read a source fixture back through the adapter's own `listSourceFields` and
   assert every field it states is stored or excluded with a reason.
+  [test: apps/api/src/handlers/case-law/ingestion/adapters/source-field-inventory.test.ts]
 
 Prefer invariant and state-machine tests over one example retry.
 

@@ -179,6 +179,7 @@ test.each(workflowCases)(
             RUNNER_TEMP: runnerTemp,
             GENERATOR_ALLOWED: "**",
             TAURI_ALLOWED: "unused",
+            BRIDGE_VERSION_ALLOWED: "unused",
           },
           stdout: "pipe",
           stderr: "pipe",

@@ -40,6 +40,12 @@ const isPreferenceKey = (key: string): key is PreferenceKey =>
 const PREFERENCE_KEYS = Object.keys(PREFERENCE_LABELS).filter(isPreferenceKey);
 
 const INITIAL_SNAPSHOT = {
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   bridgePort: 45_901,
   bridgeVersion: 1,
   capabilities: [],

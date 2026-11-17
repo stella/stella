@@ -161,8 +161,8 @@ const addWrongOrganizationSelectTest = (table: OrganizationScopedTable) => {
 
 const addWrongWorkspaceInsertTest = ({ table, values }: InsertCase) => {
   test(`INSERT ${getTableName(table)} with wrong workspace_id → policy violation`, async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () => values(tx)),
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => values(tx)),
     );
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
@@ -170,8 +170,8 @@ const addWrongWorkspaceInsertTest = ({ table, values }: InsertCase) => {
 
 const addWrongOrganizationInsertTest = ({ table, values }: InsertCase) => {
   test(`INSERT ${getTableName(table)} with wrong org_id → policy violation`, async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () => values(tx)),
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => values(tx)),
     );
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
@@ -1418,8 +1418,8 @@ describe("workspaces table — wrong scope", () => {
   });
 
   test("UPDATE workspace organization_id with time entries → foreign key violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx
           .update(workspaces)
           .set({ organizationId: ids.orgB })
@@ -1440,8 +1440,8 @@ describe("workspaces table — wrong scope", () => {
   });
 
   test("INSERT workspace with wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(workspaces).values({
           id: toSafeId<"workspace">(Bun.randomUUIDv7()),
           organizationId: ids.orgB,
@@ -1528,8 +1528,8 @@ describe("cross-org isolation", () => {
 // table that carries the column, however its workspace was authorized.
 describe("dual-scope integrity (ws + org columns)", () => {
   test("INSERT timeEntry with correct ws but wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(timeEntries).values({
           id: testId(),
           organizationId: ids.orgB,
@@ -1550,8 +1550,8 @@ describe("dual-scope integrity (ws + org columns)", () => {
   });
 
   test("INSERT expense with correct ws but wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(expenses).values({
           id: testId(),
           organizationId: ids.orgB,
@@ -1570,8 +1570,8 @@ describe("dual-scope integrity (ws + org columns)", () => {
   });
 
   test("INSERT invoice with correct ws but wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(invoices).values({
           id: testId(),
           organizationId: ids.orgB,
@@ -1595,8 +1595,8 @@ describe("scope reassignment via UPDATE", () => {
     // PostgreSQL applies USING as WITH CHECK on the new row
     // when no explicit WITH CHECK is set. The updated row's
     // workspace_id would not match the session wsIds.
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx
           .update(entities)
           .set({ workspaceId: ids.wsB1 })
@@ -1609,8 +1609,8 @@ describe("scope reassignment via UPDATE", () => {
 
   test("UPDATE workspace id to foreign workspace → policy violation", async () => {
     // USING defaults as WITH CHECK; the new id must be in wsIds.
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx
           .update(workspaces)
           .set({ id: ids.wsB1 })

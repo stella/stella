@@ -1,0 +1,6 @@
+{
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty population tables created in the same migration, under 1s lock_timeout and 30s statement_timeout.",
+  "create-policy": "The owner and public-law reader policies are catalog-only metadata on the new empty population tables created in the same migration, under 1s lock_timeout and 30s statement_timeout.",
+  "create-trigger": "The statement-level projection triggers on case_law_decisions and the new projection table register catalog entries without scanning rows; SHARE ROW EXCLUSIVE is held only for the statement, under 1s lock_timeout and 30s statement_timeout.",
+  "unresolved-execute": "Both EXECUTE statements run inside function bodies at call time, not during the migration: one inserts aggregated deltas into the population queue and the other projects one bounded seed batch. Neither issues DDL or takes a relation lock beyond row writes."
+}

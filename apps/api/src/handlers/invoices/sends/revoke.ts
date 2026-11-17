@@ -77,7 +77,11 @@ const revokeInvoiceSend = createSafeHandler(
     );
     if (revoked === null) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Invoice send not found" }),
+        new HandlerError({
+          status: 404,
+          code: "not_found",
+          message: "Invoice send not found",
+        }),
       );
     }
     return Result.ok({ id: params.sendId, revokedAt: revoked.toISOString() });

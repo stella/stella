@@ -19,6 +19,10 @@ type AccountExportDisposition =
 // Actor-attribution FKs on shared legal records do not confer personal ownership.
 // Mixed tables export only their private subset, enforced by the page owner.
 export const ACCOUNT_EXPORT_REGISTRY = {
+  organization_creation_requests: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
   account: { type: "exempt", reason: ACCOUNT_EXPORT_EXEMPT_REASON.security },
   account_audit_logs: {
     type: "exempt",
@@ -68,7 +72,12 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  billing_draft_user_settings: { type: "exported" },
   case_law_matter_links: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  legislation_matter_links: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
@@ -86,6 +95,21 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  chat_browser_site_grants: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
+  chat_limit_reminders: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
+  },
+  // Why a thread's queue waits: no content of the member's.
+  chat_queue_holds: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.noUserContent,
+  },
+  // A message the member wrote and queued: their content before it is sent.
+  chat_queued_messages: { type: "exported" },
   chat_threads: { type: "exported" },
   chat_tool_grants: {
     type: "exempt",
@@ -93,6 +117,12 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   },
   chat_turns: { type: "exempt", reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived },
   clauses: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  // The firm's compliance record about third parties; the runner and the
+  // decider are attribution on it, not the account's own content.
+  conflict_checks: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
@@ -129,6 +159,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   desktop_presence: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
+  desktop_runners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
@@ -249,6 +283,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  legal_list_source_documents: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   legal_list_verification_read_receipts: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -296,13 +334,26 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  oauth_grant_revocations: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   oauth_refresh_token: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
+  organization_data_exports: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
   organization_professional_use_acceptances: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  // Confirmation envelopes bind encrypted previews to an actor and approval hash.
+  outbound_actions: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   pdf_signing_sessions: {
     type: "exempt",
@@ -321,6 +372,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
   push_devices: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
+  timer_activity_devices: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
@@ -343,6 +398,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   saved_searches: { type: "exported" },
   saved_time_narratives: { type: "exported" },
   search_history_entries: { type: "exported" },
+  search_history_country_clears: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   search_history_owners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,

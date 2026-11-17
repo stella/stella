@@ -325,7 +325,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
             );
             await admin.unsafe(`SET ROLE ${ownerRole}`);
             const authority = (
-              await admin.unsafe(
+              await admin.unsafe<
+                {
+                  caller: string;
+                  maySignalLogin: boolean;
+                  maySignalAny: boolean;
+                }[]
+              >(
                 `SELECT current_user AS caller,
                       pg_has_role(current_user, session_user, 'USAGE') AS "maySignalLogin",
                       pg_has_role(current_user, 'pg_signal_backend', 'USAGE') AS "maySignalAny"`,

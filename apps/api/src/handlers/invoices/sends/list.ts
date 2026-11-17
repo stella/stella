@@ -138,7 +138,11 @@ const listInvoiceSends = createSafeHandler(
       const cursor = sendHistoryCursor.decode(query.cursor);
       if (cursor === null) {
         return Result.err(
-          new HandlerError({ status: 400, message: "Invalid cursor" }),
+          new HandlerError({
+            status: 400,
+            code: "invalid_cursor",
+            message: "Invalid cursor",
+          }),
         );
       }
       const condition = sendHistoryCursor.keysetAfter({
@@ -204,7 +208,11 @@ const listInvoiceSends = createSafeHandler(
     );
     if (loaded === null) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Invoice not found" }),
+        new HandlerError({
+          status: 404,
+          code: "not_found",
+          message: "Invoice not found",
+        }),
       );
     }
     const page = createCursorPage({

@@ -4,6 +4,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 const authorizeDesktopEditSessionMock = mock();
 const readDesktopEditSessionEventStateMock = mock();
@@ -60,6 +61,38 @@ describe("desktop edit session events", () => {
     );
   });
 
+  test("one session keeps at most the stream limit open, closing its oldest", async () => {
+    const scope = createSessionScope();
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { scopedDb: scope.scopedDb, userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    const readers = [];
+    for (let index = 0; index <= LIMITS.desktopEditSessionStreams; index++) {
+      const response = await desktopEditSessionEventsHandlerForTest({
+        headers: { authorization: `Bearer ${sessionToken}` },
+        sessionId,
+      });
+      if (!(response instanceof Response) || response.body === null) {
+        throw new TypeError("Expected an SSE response with a body.");
+      }
+      const reader = response.body.getReader();
+      // The connected comment flushes headers on every admitted stream.
+      expect((await reader.read()).done).toBe(false);
+      readers.push(reader);
+    }
+
+    const [oldest, ...newer] = readers;
+    expect((await oldest?.read())?.done).toBe(true);
+    for (const reader of newer) {
+      await reader.cancel();
+    }
+  });
+
   test("reads state and refreshes liveness in separate scoped transactions", async () => {
     const scope = createSessionScope();
     authorizeDesktopEditSessionMock.mockResolvedValue({
@@ -76,7 +109,7 @@ describe("desktop edit session events", () => {
     });
 
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }
@@ -139,7 +172,7 @@ describe("desktop edit session events", () => {
 
     const response = await responsePromise;
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }

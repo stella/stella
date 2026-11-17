@@ -1,0 +1,4 @@
+{
+  "add-column": "The non-volatile constant empty-text default uses PostgreSQL's fast-default catalog path for the NOT NULL column without scanning or rewriting organization settings rows; the metadata-only ACCESS EXCLUSIVE lock is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The length CHECK is added NOT VALID as metadata only, without scanning existing organization settings rows under ACCESS EXCLUSIVE; lock acquisition is bounded by 1s lock_timeout and the statement by 5s statement_timeout. The registered online repair validates it after the schema transaction releases its lock."
+}

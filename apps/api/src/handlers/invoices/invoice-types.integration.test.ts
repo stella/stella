@@ -37,6 +37,10 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -50,6 +54,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seededEntries: SafeId<"timeEntry">[] = [];
 const seededIds: SafeId<"invoice">[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -69,6 +74,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
 });
 afterAll(async () => {
   if (seededIds.length > 0) {
@@ -82,6 +88,7 @@ afterAll(async () => {
       .delete(timeEntries)
       .where(inArray(timeEntries.id, seededEntries));
   }
+  await removeIssuingSeller(testDb, issuingSellerId);
   await releaseRlsFixture();
 });
 
@@ -169,6 +176,7 @@ const seedOriginal = async (
     currency: "USD",
     status: INVOICE_STATUS.FINALIZED,
     totalAmount: cents(1210),
+    sellerProfileId: issuingSellerId,
     ...options,
   });
   return id;
@@ -641,6 +649,13 @@ describe("invoice document types", () => {
   test("linked credit notes protect original transitions and deletion", async () => {
     const originalInvoiceId = await seedOriginal();
     const creditId = createdId(await createCredit(originalInvoiceId));
+    // Issued by the original's seller, which finalizing requires.
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: creditId } },
+        columns: { sellerProfileId: true },
+      }),
+    ).toEqual({ sellerProfileId: issuingSellerId });
     for (const action of ["void", "revert_to_draft"] as const) {
       expect(await changeStatus(originalInvoiceId, action)).toMatchObject({
         code: 409,

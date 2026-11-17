@@ -23,6 +23,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { fieldsSetTogetherCheck } from "../field-groups";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
@@ -437,11 +438,14 @@ export const entityVersions = p.pgTable(
       .$type<DocumentTranslationSourceLanguageCode>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /**
-     * Chain-of-custody tombstone. A non-null `deletedAt` hides the version
-     * from every read / list / restore / download path while its row and S3
-     * objects are retained under legal hold: version history must never be
-     * hard-deleted. `deletedBy` mirrors `createdBy` (plain user id, no FK) so
-     * the actor survives a user deletion.
+     * Version tombstone. Deleting a version sets `deletedAt` and keeps the
+     * row, its fields and their storage objects; a non-null `deletedAt` hides
+     * the version from every read / list / restore / download path. Moving
+     * the document to another matter carries its tombstones with it,
+     * `deletedAt`/`deletedBy` unchanged. Deleting the whole document removes
+     * all of its versions, tombstones included, with their objects.
+     * `deletedBy` mirrors `createdBy` (plain user id, no FK) so the actor
+     * survives a user deletion.
      */
     deletedAt: timestamptz("deleted_at"),
     deletedBy: p.text("deleted_by"),
@@ -1516,6 +1520,22 @@ export const fields = p.pgTable(
   },
   (table) => [
     ...entityFeatureGateChecks(table),
+    // A claim is its run, batch, deadline and attempt; a cell never holds part of one.
+    fieldsSetTogetherCheck({
+      name: "fields_owner_fields_check",
+      columns: [
+        table.ownerRunId,
+        table.ownerBatchId,
+        table.deadlineAt,
+        table.attempt,
+      ],
+    }),
+    // Only a pending cell is owned. A pending cell may be unowned: version
+    // clones copy it without its claim, and orphan recovery retries it.
+    p.check(
+      "fields_owner_pending_check",
+      sql`${table.ownerRunId} IS NULL OR ${table.content}->>'type' = 'pending'`,
+    ),
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")
       .on(table.propertyId, table.entityVersionId),

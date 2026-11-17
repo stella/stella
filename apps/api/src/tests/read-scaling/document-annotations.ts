@@ -36,6 +36,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 /** The fixed page the list scenario reads, whatever the document holds. */
 const PAGE_SIZE = 10;
@@ -272,9 +273,7 @@ export const seedDocumentAnnotationScaling = async ({
     tenant,
     annotationIds,
     cleanup: async () => {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, tenant.organizationId));
+      await deleteOrganizationsForTest(db, [tenant.organizationId]);
       await db.delete(user).where(eq(user.id, tenant.userId));
     },
   };

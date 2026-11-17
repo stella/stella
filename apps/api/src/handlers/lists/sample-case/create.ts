@@ -15,6 +15,7 @@ import {
   LIST_ITEM_TYPE,
   TASK_STATUS,
 } from "@stll/api-contract/entity-options";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -39,7 +40,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { defaultVarcharSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
@@ -116,7 +117,7 @@ const config = {
     reason: "document_processing",
     consumesServices: true,
   },
-  body: v.object({ filePropertyName: defaultVarcharSchema }),
+  body: v.object({ filePropertyName: displayNameSchema() }),
 } satisfies WorkspaceHandlerConfig;
 
 type SampleCaseResult = {
@@ -137,7 +138,7 @@ const lockSampleWorkspace = async (
   workspaceId: SafeId<"workspace">,
 ) => {
   const status = await lockWorkspaceForEntityCreate(tx, workspaceId);
-  if (status !== "active") {
+  if (!workspaceAcceptsWrites(status)) {
     abortTransaction(
       documentWriteRefusal(
         status === undefined ? "workspace-not-found" : "workspace-not-active",

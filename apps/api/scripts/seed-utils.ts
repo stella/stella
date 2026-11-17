@@ -7,6 +7,12 @@
 
 import { panic } from "better-result";
 
+import {
+  formatSeedUuid,
+  MARKETING_LOCALE_ACCOUNTS,
+  PRIMARY_MARKETING_LOCALE,
+  seedIdHashInput,
+} from "@stll/playwright-tools/marketing-locales";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -14,8 +20,12 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
 // ─── Constants ──────────────────────────────────────────
 
-export const DEFAULT_USER_ID = "test-user-stella-dev";
-export const DEFAULT_ORG_ID = toSafeId<"organization">("test-org-stella-dev");
+// The English development firm, which the marketing captures also film.
+export const DEFAULT_USER_ID =
+  MARKETING_LOCALE_ACCOUNTS[PRIMARY_MARKETING_LOCALE].userId;
+export const DEFAULT_ORG_ID = toSafeId<"organization">(
+  MARKETING_LOCALE_ACCOUNTS[PRIMARY_MARKETING_LOCALE].organizationId,
+);
 
 export const DEFAULT_SEED_COLLEAGUE_COUNT = 3;
 export const DEFAULT_TEST_USER_COLLEAGUE_COUNT = 7;
@@ -29,61 +39,61 @@ export type SeedColleague = {
   hourlyRate: number;
 };
 
+// Illustrated avatars ship with the web app (apps/web/public/seed-avatars), so
+// the content security policy's `img-src 'self'` allows them and the stored
+// path stays short in every response that lists members.
+const SEED_AVATAR_COUNT = 8;
+const seedAvatar = (index: number): string =>
+  `/seed-avatars/${String((index % SEED_AVATAR_COUNT) + 1)}.svg`;
+
 const BASE_SEED_COLLEAGUES: SeedColleague[] = [
   {
     id: "test-user-alice-johnson",
     name: "Alice Johnson",
     email: "alice@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=alice&backgroundColor=b6e3f4",
+    image: seedAvatar(0),
     hourlyRate: 4500,
   },
   {
     id: "test-user-bob-martinez",
     name: "Bob Martinez",
     email: "bob@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=bob&backgroundColor=d1d4f9",
+    image: seedAvatar(1),
     hourlyRate: 2500,
   },
   {
     id: "test-user-clara-novak",
     name: "Clara Novak",
     email: "clara@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=clara&backgroundColor=ffd5dc",
+    image: seedAvatar(2),
     hourlyRate: 4500,
   },
   {
     id: "test-user-david-kim",
     name: "David Kim",
     email: "david@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=david&backgroundColor=c0aede",
+    image: seedAvatar(3),
     hourlyRate: 6500,
   },
   {
     id: "test-user-eva-schmidt",
     name: "Eva Schmidt",
     email: "eva@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=eva&backgroundColor=b6e3f4",
+    image: seedAvatar(4),
     hourlyRate: 3500,
   },
   {
     id: "test-user-frank-horvat",
     name: "Frank Horvát",
     email: "frank@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=frank&backgroundColor=d1d4f9",
+    image: seedAvatar(5),
     hourlyRate: 2500,
   },
   {
     id: "test-user-greta-jones",
     name: "Greta Jones",
     email: "greta@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=greta&backgroundColor=ffd5dc",
+    image: seedAvatar(6),
     hourlyRate: 5500,
   },
 ];
@@ -145,7 +155,7 @@ const getGeneratedSeedColleague = (index: number): SeedColleague => {
     id: `test-user-${slug}`,
     name: `${firstName} ${lastName}`,
     email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${ordinal}@stella.dev`,
-    image: `https://api.dicebear.com/9.x/avataaars/svg?seed=${slug}&backgroundColor=b6e3f4`,
+    image: seedAvatar(BASE_SEED_COLLEAGUES.length + index),
     hourlyRate:
       GENERATED_HOURLY_RATES[index % GENERATED_HOURLY_RATES.length] ?? 4000,
   };
@@ -155,7 +165,7 @@ const GENERATED_SEED_COLLEAGUES = Array.from({
   length: MAX_SEED_COLLEAGUE_COUNT - BASE_SEED_COLLEAGUES.length,
 }).map((_, index) => getGeneratedSeedColleague(index));
 
-export const SEED_COLLEAGUES: readonly SeedColleague[] = [
+const SEED_COLLEAGUES: readonly SeedColleague[] = [
   ...BASE_SEED_COLLEAGUES,
   ...GENERATED_SEED_COLLEAGUES,
 ];
@@ -178,31 +188,6 @@ export const ALL_TEST_USER_IDS = [
     (colleague) => colleague.id,
   ),
 ];
-
-export const buildSeedUserIds = ({
-  primaryUserId,
-  colleagueCount = DEFAULT_SEED_COLLEAGUE_COUNT,
-}: {
-  primaryUserId: string;
-  colleagueCount?: number;
-}): string[] => [
-  primaryUserId,
-  ...getSeedColleagues(colleagueCount).map((colleague) => colleague.id),
-];
-
-export const buildSeedUserRates = (
-  userIds: readonly string[],
-): Record<string, number> => {
-  const entries = userIds.map((userId, index) => {
-    if (index === 0) {
-      return [userId, 6500] as const;
-    }
-
-    return [userId, SEED_COLLEAGUES[index - 1]?.hourlyRate ?? 4000] as const;
-  });
-
-  return Object.fromEntries(entries);
-};
 
 export const pickAuthor = (
   userIds: readonly string[],
@@ -233,19 +218,20 @@ const getSeedIdNamespace = (): string => {
 
 export const seedId = <T extends SafeIdType = never>(
   label: string,
-): SafeId<T> => {
-  const namespace = getSeedIdNamespace();
-  const namespacedLabel = namespace ? `${namespace}:${label}` : label;
-  const hash = hashSha256Hex(namespacedLabel);
-  const raw = hash.slice(0, 32);
-  if (raw.length !== 32) {
-    panic(`Seed data: failed to create UUID for label "${label}"`);
-  }
-  const uuid = `${raw.slice(0, 12)}5${raw.slice(13, 16)}8${raw.slice(17)}`;
-  return toSafeId<T>(
-    `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20, 32)}`,
+): SafeId<T> =>
+  toSafeId<T>(
+    formatSeedUuid(hashSha256Hex(seedIdHashInput(getSeedIdNamespace(), label))),
   );
-};
+
+/**
+ * Id of a row every organization shares (the case-law corpus). Never
+ * namespaced: each locale firm's run must resolve the rows the primary run
+ * wrote.
+ */
+export const globalSeedId = <T extends SafeIdType = never>(
+  label: string,
+): SafeId<T> =>
+  toSafeId<T>(formatSeedUuid(hashSha256Hex(seedIdHashInput("", label))));
 
 /** Safe array access for seed data (panics on out-of-bounds). */
 export const at = <T>(arr: readonly T[], i: number): T => {

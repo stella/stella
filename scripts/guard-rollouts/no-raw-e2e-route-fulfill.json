@@ -1,0 +1,18 @@
+{
+  "id": "no-raw-e2e-route-fulfill",
+  "rules": ["no-raw-e2e-route-fulfill/no-raw-e2e-route-fulfill"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-18T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-e2e-route-fulfill/no-raw-e2e-route-fulfill",
+    "apps/web/e2e"
+  ]
+}

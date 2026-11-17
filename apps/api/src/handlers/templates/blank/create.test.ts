@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   createDocx,
   createEmptyDocument,
@@ -28,10 +28,10 @@ describe("blank template buffer", () => {
 
     expect(buffer.byteLength).toBeGreaterThan(0);
 
-    const zip = await JSZip.loadAsync(buffer);
-    expect(zip.file("word/document.xml")).not.toBeNull();
-    expect(zip.file("[Content_Types].xml")).not.toBeNull();
-    const styles = await zip.file("word/styles.xml")?.async("text");
+    const zip = await ZipArchive.read(buffer);
+    expect(zip.entry("word/document.xml")).toBeDefined();
+    expect(zip.entry("[Content_Types].xml")).toBeDefined();
+    const styles = await zip.entry("word/styles.xml")?.text();
     expect(styles).toContain('w:styleId="BodyText"');
     expect(styles).toContain('w:styleId="ClauseHeading1"');
     expect(styles).toContain('w:ascii="Arial"');
@@ -68,9 +68,9 @@ describe("blank template buffer", () => {
       }),
       name: "Imported styles",
     });
-    const zip = await JSZip.loadAsync(buffer);
-    const documentXml = await zip.file("word/document.xml")?.async("text");
-    const stylesXml = await zip.file("word/styles.xml")?.async("text");
+    const zip = await ZipArchive.read(buffer);
+    const documentXml = await zip.entry("word/document.xml")?.text();
+    const stylesXml = await zip.entry("word/styles.xml")?.text();
 
     expect(documentXml).not.toContain(sourceText);
     expect(stylesXml).toContain('w:styleId="BodyText"');

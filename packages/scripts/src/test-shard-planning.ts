@@ -1,4 +1,6 @@
 export const API_TEST_SHARD_ENV = "API_TEST_SHARD";
+/** The encoded file list (scripts/plan-output-codec.ts) a CI run restricts the API tests to. */
+export const API_TEST_FILES_ENCODED_ENV = "API_TEST_FILES_ENCODED";
 
 export const TEST_DURATION_SOURCE = {
   measured: "measured",

@@ -165,17 +165,21 @@ export const InspectorFacetBar = <F extends string>({
       data-slot="inspector-facet-bar"
       ref={containerRef}
     >
-      {visibleFacets.map((value) => (
-        <FacetChip
-          activeBadge={activeBadge}
-          disabled={disabledFacets?.has(value) ?? false}
-          isActive={value === facet}
-          key={value}
-          label={labels[value]}
-          onSelect={() => onChange(value)}
-          value={value}
-        />
-      ))}
+      {/* `contents` keeps the chips in the bar's flex row, and the overflow
+          trigger outside the list: a tablist owns only tabs. */}
+      <div className="contents" role="tablist">
+        {visibleFacets.map((value) => (
+          <FacetChip
+            activeBadge={activeBadge}
+            disabled={disabledFacets?.has(value) ?? false}
+            isActive={value === facet}
+            key={value}
+            label={labels[value]}
+            onSelect={() => onChange(value)}
+            value={value}
+          />
+        ))}
+      </div>
 
       {overflowing && (
         <Menu>
@@ -278,6 +282,7 @@ const FacetChip = ({
     <TooltipTrigger
       render={
         <button
+          aria-selected={isActive}
           className={cn(
             CHIP_CLASS,
             isActive ? "bg-foreground text-background" : INACTIVE_CHIP_CLASS,
@@ -287,6 +292,7 @@ const FacetChip = ({
           data-facet-value={value}
           disabled={disabled}
           onClick={onSelect}
+          role="tab"
           type="button"
         />
       }

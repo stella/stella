@@ -32,10 +32,12 @@ import {
   invoicePolicies,
   organizationCheck,
   timeEntryPolicies,
+  timeTimerOwnerReadPolicy,
 } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import { accountErasureUserOwnerPolicies } from "../account-erasure-policies";
 import {
   importProvenanceColumns,
   importProvenanceConstraints,
@@ -437,6 +439,7 @@ export const timeTimers = p.pgTable(
   },
   (table) => [
     ...reviewResetOwnerPolicies("time_timers"),
+    timeTimerOwnerReadPolicy(),
     p.foreignKey({
       columns: [table.workspaceId, table.organizationId],
       foreignColumns: [workspaces.id, workspaces.organizationId],
@@ -548,6 +551,7 @@ export const savedTimeNarratives = p.pgTable(
   },
   (table) => [
     ...reviewResetOwnerPolicies("saved_time_narratives"),
+    ...accountErasureUserOwnerPolicies("saved_time_narratives"),
     p
       .index("saved_time_narratives_owner_name_id_idx")
       .on(table.organizationId, table.userId, table.name, table.id),

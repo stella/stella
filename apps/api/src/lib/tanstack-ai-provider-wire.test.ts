@@ -2,10 +2,11 @@ import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -46,7 +47,7 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import {
   bodyBytesOf,
-  installProviderWireReplay,
+  registerProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   Chunking,
@@ -75,29 +76,24 @@ const {
 } = CHAT_ORACLE;
 
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+const state = createTestState({ file: import.meta.path, config: env });
 
-beforeAll(() => {
-  // Real adapters, not the local mock model.
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  // Were a Bedrock request ever to bypass `fetch`, it would go to a host
-  // that does not resolve rather than to AWS.
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay({ retryAfterMs: 1 });
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ retryAfterMs: 1 }),
 });
 
-afterAll(() => {
-  replay.restore();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
+state.beforeAll(() => {
+  // Real adapters, not the local mock model.
+  state.setConfig("USE_MOCK_AI", false);
+  // Were a Bedrock request ever to bypass `fetch`, it would go to a host
+  // that does not resolve rather than to AWS.
+  state.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
 });
 
 const expectContract = (
@@ -160,16 +156,7 @@ const expectProviderRules = (sent: readonly ReplayedRequest[]) => {
 
 const checkCassette = async (cassette: ProviderWireCassette) => {
   const { findings, requests, run, sent, transcripts } =
-    await replayWireScenario({
-      cassette,
-      // One existing server-error case per SDK exercises its default first backoff.
-      recordedRetryResponses:
-        cassette.scenario === "server-error" &&
-        (cassette.provider === "openai" || cassette.provider === "anthropic")
-          ? 1
-          : 0,
-      replay,
-    });
+    await replayWireScenario({ cassette, replay });
   expectContract(
     cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
@@ -215,10 +202,12 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
   expectProviderRules(sent);
   expectPinnedRequests(cassette, sent);
   if (
-    (cassette.provider === "openai" || cassette.provider === "anthropic") &&
-    (cassette.scenario === "rate-limit" || cassette.scenario === "server-error")
+    cassette.scenario === "rate-limit" ||
+    cassette.scenario === "server-error"
   ) {
-    expect(sent.map(({ exchange }) => exchange)).toEqual([0, 0, 0]);
+    // The adapter sends a failed request once; the generation layer owns
+    // retries (`tanstack-ai-models.retries.test.ts`).
+    expect(sent.map(({ exchange }) => exchange)).toEqual([0]);
   }
 };
 
@@ -475,7 +464,8 @@ const LF = 0x0a;
 const hasCrlf = (bytes: Uint8Array): boolean =>
   bytes.some((byte, index) => byte === CR && bytes[index + 1] === LF);
 
-const checkSplit = async (cassette: ProviderWireCassette) => {
+/** The cut-anywhere property, after the one-byte read already matched. */
+const splitReadProperty = async (cassette: ProviderWireCassette) => {
   const multibyte = withMultibyteText(cassette);
   const { run: whole } = await replayWireScenario({
     cassette: multibyte,
@@ -495,17 +485,14 @@ const checkSplit = async (cassette: ProviderWireCassette) => {
   };
   await expectSame({ every: 1 });
   const length = firstBodyOf(multibyte).length;
-  await fc.assert(
-    fc.asyncProperty(
-      fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
-        minLength: 1,
-        maxLength: 48,
-      }),
-      async (at) => {
-        await expectSame({ at });
-      },
-    ),
-    propertyConfig({ numRuns: SPLIT_RUNS, seed: SPLIT_SEED }),
+  return fc.asyncProperty(
+    fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
+      minLength: 1,
+      maxLength: 48,
+    }),
+    async (at) => {
+      await expectSame({ at });
+    },
   );
 };
 
@@ -528,13 +515,19 @@ describe("every adapter reads a stream cut anywhere as it reads it whole", () =>
   });
 
   for (const cassette of streamed) {
-    test(
-      cassetteKey(cassette).replace("/", " "),
-      async () => {
-        await checkSplit(cassette);
-      },
-      propertyTestTimeout(RETRY_TIMEOUT_MS),
-    );
+    describe(cassetteKey(cassette).replace("/", " "), () => {
+      test(
+        "matches the whole read at any cut",
+        async () => {
+          await assertProperty(
+            "matches the whole read at any cut",
+            await splitReadProperty(cassette),
+            { numRuns: SPLIT_RUNS, seed: SPLIT_SEED },
+          );
+        },
+        propertyTestTimeout(RETRY_TIMEOUT_MS),
+      );
+    });
   }
 });
 
@@ -562,6 +555,7 @@ describe("the stream contract holds where an adapter does not", () => {
     });
     const chunks: StreamChunk[] = [];
     for await (const chunk of withProviderStreamContract(released).chatStream({
+      threadId: "tanstack-ai-provider-wire-thread",
       logger: resolveDebugOption(false),
       messages: [],
       model: cassette.model,
@@ -601,6 +595,7 @@ test("a cancelled structured Bedrock request never reaches the provider", async 
   const outcome = await adapter
     .structuredOutput({
       chatOptions: {
+        threadId: "tanstack-ai-provider-wire-thread",
         logger: resolveDebugOption(false),
         messages: [{ content: "Reply with OK.", role: "user" }],
         model,
@@ -646,6 +641,7 @@ test("Gemini structured output preserves its provider HTTP status", async () => 
   const result = await Result.tryPromise(async () =>
     adapter.structuredOutput({
       chatOptions: {
+        threadId: "tanstack-ai-provider-wire-thread",
         logger: resolveDebugOption(false),
         messages: [{ content: "Reply with OK.", role: "user" }],
         model,

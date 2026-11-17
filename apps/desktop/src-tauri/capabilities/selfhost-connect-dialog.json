@@ -4,6 +4,7 @@
   "windows": ["selfhost-connect-dialog"],
   "permissions": [
     "allow-self-host-connect-dialog-respond",
-    "allow-fit-static-dialog"
+    "allow-fit-static-dialog",
+    "core:window:allow-start-dragging"
   ]
 }

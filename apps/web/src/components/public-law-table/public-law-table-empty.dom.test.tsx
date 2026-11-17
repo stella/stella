@@ -8,10 +8,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { StatuteRowData } from "@/components/workspaces/table/types";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { cleanup, render } = await import("@testing-library/react");

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -148,7 +148,8 @@ describe("US code citation properties", () => {
   test(
     "a generated citation is read back whole, with its identity and path",
     () => {
-      fc.assert(
+      assertProperty(
+        "a generated citation is read back whole, with its identity and path",
         fc.property(
           generated,
           fc.constantFrom(...PROSE),
@@ -170,7 +171,7 @@ describe("US code citation properties", () => {
             expect(only?.path).toEqual(citation.path);
           },
         ),
-        propertyConfig({ numRuns: 400, seed: propertySeed() }),
+        { numRuns: 400, seed: propertySeed() },
       );
     },
     propertyTestTimeout(20_000),
@@ -179,7 +180,8 @@ describe("US code citation properties", () => {
   test(
     "every listed section of a citation is read, in order",
     () => {
-      fc.assert(
+      assertProperty(
+        "every listed section of a citation is read, in order",
         fc.property(
           fc.integer({ min: 1, max: 54 }),
           fc.uniqueArray(uscSection, { minLength: 2, maxLength: 6 }),
@@ -191,7 +193,7 @@ describe("US code citation properties", () => {
             ).toEqual(sections);
           },
         ),
-        propertyConfig({ numRuns: 200, seed: propertySeed() }),
+        { numRuns: 200, seed: propertySeed() },
       );
     },
     propertyTestTimeout(20_000),
@@ -200,7 +202,8 @@ describe("US code citation properties", () => {
   test(
     "any text yields only ordered, in-bounds citations of real sections",
     () => {
-      fc.assert(
+      assertProperty(
+        "any text yields only ordered, in-bounds citations of real sections",
         fc.property(hostileText, (text) => {
           const found = locateUsCodeCitations(text);
           let previousStart = 0;
@@ -227,7 +230,7 @@ describe("US code citation properties", () => {
           // Reading is a function of the text alone.
           expect(locateUsCodeCitations(text)).toEqual(found);
         }),
-        propertyConfig({ numRuns: 300, seed: propertySeed() }),
+        { numRuns: 300, seed: propertySeed() },
       );
     },
     propertyTestTimeout(30_000),
@@ -236,7 +239,8 @@ describe("US code citation properties", () => {
   test(
     "text before a citation moves it and changes nothing else",
     () => {
-      fc.assert(
+      assertProperty(
+        "text before a citation moves it and changes nothing else",
         fc.property(
           generated,
           fc.string({ maxLength: 60 }),
@@ -255,7 +259,7 @@ describe("US code citation properties", () => {
             );
           },
         ),
-        propertyConfig({ numRuns: 200, seed: propertySeed() }),
+        { numRuns: 200, seed: propertySeed() },
       );
     },
     propertyTestTimeout(20_000),

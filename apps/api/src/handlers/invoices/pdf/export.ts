@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
+import { withBillingRead } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -7,10 +9,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
-import {
-  invoiceAmountDue,
-  paidAmountOf,
-} from "@/api/lib/billing/invoice-payments";
+import { paidAmountOf } from "@/api/lib/billing/invoice-payments";
 import {
   invoiceDocumentError,
   invoicePdfFileName,
@@ -29,11 +28,12 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 const EXPORT_URL_TTL_SECONDS = 300;
 
 const config = {
+  moneyResponse: moneyExportSchema,
   contract: "patch",
   contentDelivery: { type: "audited" },
   description:
     "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
-  permissions: { workspace: ["read"] },
+  permissions: withBillingRead({ workspace: ["read"] }),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   access: "write",
@@ -86,11 +86,10 @@ export const createInvoicePdfExport = (
       const body = yield* Result.await(
         renderInvoiceDocumentPdf({
           loaded,
-          paymentAmountMinor: invoiceAmountDue({
-            totalAmount: loaded.invoice.totalAmount,
+          ledger: {
             paidAmount: paidAmountOf(loaded.invoice.payments),
             creditedAmount: loaded.invoice.creditedAmount,
-          }),
+          },
           renderInvoice,
         }),
       );

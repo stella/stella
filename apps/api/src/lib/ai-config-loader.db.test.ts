@@ -16,7 +16,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { createTestState } from "@stll/test-state";
 
@@ -66,6 +66,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -284,16 +285,12 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(
-      inArray(organization.id, [
-        corruptOrgId,
-        unsetOrgId,
-        seededOrgId,
-        ...unreadableFixtures.map(({ organizationId }) => organizationId),
-      ]),
-    );
+  await deleteOrganizationsForTest(testDb, [
+    corruptOrgId,
+    unsetOrgId,
+    seededOrgId,
+    ...unreadableFixtures.map(({ organizationId }) => organizationId),
+  ]);
   await releaseTestDb();
 });
 

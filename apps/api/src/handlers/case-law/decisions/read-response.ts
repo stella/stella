@@ -1,14 +1,15 @@
-import { panic } from "better-result";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import { decisionReviewsSchema } from "@stll/api-contract/case-law-reviews";
 import {
+  DECISION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_WITHHELD_REASON,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
-  type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -19,6 +20,11 @@ import {
 
 import type { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
+import {
+  DECISION_READER_PROSE_BYTES,
+  projectReaderTextField,
+  readerTextFields,
+} from "@/api/lib/case-law/reader-text-fields";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DECISION_SECTION_TYPES } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -68,11 +74,13 @@ const DECISION_READER_TEXT_BYTES = {
     | "citationsNextCursor"
     | "courtTier"
     | "documentAstSource"
+    | "textIncompleteReason"
+    | "textWithheldReason"
   >,
   number
 >;
 
-const PROSE_BYTES = 65_536;
+const PROSE_BYTES = DECISION_READER_PROSE_BYTES;
 const LABEL_BYTES = 2048;
 const URL_BYTES = 8192;
 const CURSOR_BYTES = 2048;
@@ -165,6 +173,10 @@ const caseFileDocumentSchema = v.object({
 >);
 
 export const readDecisionSuccessResponseSchema = v.object({
+  textIncompleteReason: v.nullable(
+    v.picklist([...DECISION_TEXT_INCOMPLETE_REASONS]),
+  ),
+  textWithheldReason: v.nullable(v.enum(DECISION_TEXT_WITHHELD_REASON)),
   documentPending: v.boolean(),
   hasDocument: v.boolean(),
   documentReadFailed: v.boolean(),
@@ -206,6 +218,7 @@ export const readDecisionSuccessResponseSchema = v.object({
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
   citationCount: v.number(),
+  appealReviews: decisionReviewsSchema,
   extractionWarnings: extractionWarningsSchema,
   documentAst: v.unknown(),
   fulltext: v.nullable(v.string()),
@@ -320,21 +333,6 @@ export const DECISION_READER_NON_DOCUMENT_MAX_BYTES = responseByteBound(
     "sections",
   ]),
 );
-
-const projectTextField = (field: TextField): TextField => {
-  switch (field.type) {
-    case TEXT_FIELD_TYPE.PRESENT:
-      return {
-        type: field.type,
-        text: truncateTextBytes(field.text, PROSE_BYTES),
-      };
-    case TEXT_FIELD_TYPE.ABSENT:
-      return field;
-    default:
-      field satisfies never;
-      return panic(`Unhandled reader text field: ${String(field)}`);
-  }
-};
 
 const projectMetadata = (metadata: Record<string, unknown>) => {
   let remaining = METADATA_NODES;
@@ -467,13 +465,8 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         ?.slice(0, SOURCE_LANGUAGES_MAX)
         .map((tag) => truncateTextBytes(tag, SOURCE_LANGUAGE_TAG_BYTES)) ??
       null,
-    headnote: projectTextField(decision.headnote),
-    textFields: {
-      abstract: projectTextField(decision.textFields.abstract),
-      headnote: projectTextField(decision.textFields.headnote),
-      legalSentence: projectTextField(decision.textFields.legalSentence),
-      summary: projectTextField(decision.textFields.summary),
-    },
+    headnote: projectReaderTextField(decision.headnote),
+    textFields: readerTextFields(decision.textFields),
     source: {
       ...decision.source,
       name: truncateTextBytes(decision.source.name, 256 * 4),

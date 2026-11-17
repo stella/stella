@@ -4,21 +4,23 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { plugin } from "bun";
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import {
   type DecisionAnalysis,
   parsePersistedDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // A DOM for this file only: the notes are rendered for real and the column's
 // click is answered from the elements a reader actually hits.
@@ -224,6 +226,7 @@ const absent = {
   type: TEXT_FIELD_TYPE.ABSENT,
 } as const;
 const rangeDecision = {
+  appealReviews: noDecisionReviewFound(),
   id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000102"),
   caseNumber: "1 As 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -301,7 +304,12 @@ const installWorkspaceServer = () => {
         return Response.json(aiAvailableResponse());
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (/\/chat\/threads\/[^/]+\/messages$/u.test(path)) {
         return Response.json({ message: "Not found" }, { status: 404 });
@@ -390,7 +398,10 @@ test("an inline holding reference highlights its full range and scrolls to its s
 
   fireEvent.click(view.getByRole("button", { name: "Paragraph 9–12" }));
 
-  expect(scrollTo).toHaveBeenCalledWith({ top: 87, behavior: "instant" });
+  expect(scrollTo).toHaveBeenCalledWith({
+    top: 87 - READER_BREADCRUMB_CLEARANCE,
+    behavior: "instant",
+  });
   for (const anchorId of ["p-2", "p-3", "p-4"]) {
     expect(
       view.container.querySelector<HTMLElement>(`#${anchorId}`)?.dataset[

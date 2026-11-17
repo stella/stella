@@ -15,7 +15,6 @@ import {
   fetchDecisionsByCelex,
   SPARQL_LIMIT,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -28,11 +27,15 @@ import {
   STORED_RAW_REPARSE_REJECTION,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { SHELL_STEM } from "../parsers/__fixtures__/eu-ecj/corpus";
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
 import { PublisherRateLimitRefusalError } from "./retry";
+
+const testFetchState = createTestFetch();
 
 const fulltextHtml = await Bun.file(
   new URL("__fixtures__/eu-ecj-fulltext-en.html", import.meta.url),
@@ -44,20 +47,21 @@ const FR_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0012.05";
 const DE_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0013.05";
 
 describe("publisher rate-limit halt (rule 13)", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
   test("a 429 spends one request and leaves the page cursor untouched", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response(null, {
-          status: 429,
-          headers: { "Retry-After": "3" },
-        });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response(null, {
+            status: 429,
+            headers: { "Retry-After": "3" },
+          });
+        }),
+      ),
     );
     const cursor = "2024-01-18";
     const result = await ecjAdapter.fetchPage(cursor, {});
@@ -181,6 +185,22 @@ describe("celexToCaseNumber", () => {
     expect(celexToCaseNumber("62009FJ0100")).toBe("F-100/09");
   });
 
+  test("every document form maps to its court's register", () => {
+    // Civil Service Tribunal orders, a corrected one included.
+    expect(celexToCaseNumber("62013FO0060")).toBe("F-60/13");
+    expect(celexToCaseNumber("62014FO0049(01)")).toBe("F-49/14");
+    // General Court third-party proceedings; Court of Justice seizure
+    // orders, opinions on agreements and rulings.
+    expect(celexToCaseNumber("62019TT0012")).toBe("T-12/19");
+    expect(celexToCaseNumber("62020CS0003")).toBe("C-3/20");
+    expect(celexToCaseNumber("62019CV0001")).toBe("C-1/19");
+    expect(celexToCaseNumber("62015CX0002")).toBe("C-2/15");
+  });
+
+  test("a case number longer than the register's four digits is no CELEX", () => {
+    expect(celexToCaseNumber("62013FO00601")).toBe("62013FO00601");
+  });
+
   test("strips leading zeros from case number", () => {
     expect(celexToCaseNumber("62024CJ0007")).toBe("C-7/24");
   });
@@ -202,8 +222,6 @@ describe("celexToCaseNumber", () => {
 const PARSE_TEST_TIMEOUT = { timeout: 30_000 } as const;
 
 describe("euEcjAdapter.fetchPage", () => {
-  const originalFetch = globalThis.fetch;
-
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -211,7 +229,7 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -219,24 +237,26 @@ describe("euEcjAdapter.fetchPage", () => {
     "a branch notice HTTP %s holds the page only when retryable",
     async (status) => {
       let noticeRequests = 0;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) => {
-          const url = input instanceof Request ? input.url : String(input);
-          if (url.includes("sparql")) {
-            return Response.json({ results: { bindings: [enBinding] } });
-          }
-          if (
-            new Headers(init?.headers).get("Accept") ===
-            "application/xml; notice=branch"
-          ) {
-            noticeRequests += 1;
-            return new Response("refused", { status });
-          }
-          expect(url).toContain("publications.europa.eu/resource/cellar/");
-          return new Response(fulltextHtml, {
-            headers: { "Content-Type": "text/html" },
-          });
-        },
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            const url = input instanceof Request ? input.url : String(input);
+            if (url.includes("sparql")) {
+              return Response.json({ results: { bindings: [enBinding] } });
+            }
+            if (
+              new Headers(init?.headers).get("Accept") ===
+              "application/xml; notice=branch"
+            ) {
+              noticeRequests += 1;
+              return new Response("refused", { status });
+            }
+            expect(url).toContain("publications.europa.eu/resource/cellar/");
+            return new Response(fulltextHtml, {
+              headers: { "Content-Type": "text/html" },
+            });
+          },
+        ),
       );
 
       const result = await ecjAdapter.fetchPage("2024-01-18", {});
@@ -301,39 +321,41 @@ describe("euEcjAdapter.fetchPage", () => {
         frBinding,
         secondDecision,
       ];
-      globalThis.fetch = asFetchMock(
-        mock((url: string) => {
-          const urlStr = url;
+      testFetchState.set(
+        asFetchMock(
+          mock((url: string) => {
+            const urlStr = url;
 
-          if (urlStr.includes("sparql")) {
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  results: { bindings },
-                }),
-                {
+            if (urlStr.includes("sparql")) {
+              return Promise.resolve(
+                new Response(
+                  JSON.stringify({
+                    results: { bindings },
+                  }),
+                  {
+                    status: 200,
+                    headers: {
+                      "Content-Type": "application/sparql-results+json",
+                    },
+                  },
+                ),
+              );
+            }
+
+            if (urlStr.includes("publications.europa.eu/resource/cellar/")) {
+              return Promise.resolve(
+                new Response(fulltextHtml, {
                   status: 200,
                   headers: {
-                    "Content-Type": "application/sparql-results+json",
+                    "Content-Type": "text/html",
                   },
-                },
-              ),
-            );
-          }
+                }),
+              );
+            }
 
-          if (urlStr.includes("publications.europa.eu/resource/cellar/")) {
-            return Promise.resolve(
-              new Response(fulltextHtml, {
-                status: 200,
-                headers: {
-                  "Content-Type": "text/html",
-                },
-              }),
-            );
-          }
-
-          return Promise.resolve(new Response("Not found", { status: 404 }));
-        }),
+            return Promise.resolve(new Response("Not found", { status: 404 }));
+          }),
+        ),
       );
 
       const { euEcjAdapter } =
@@ -403,9 +425,11 @@ describe("euEcjAdapter.fetchPage", () => {
   );
 
   test("handles SPARQL error", async () => {
-    globalThis.fetch = asFetchMock(
-      mock(() =>
-        Promise.resolve(new Response("Server error", { status: 500 })),
+    testFetchState.set(
+      asFetchMock(
+        mock(() =>
+          Promise.resolve(new Response("Server error", { status: 500 })),
+        ),
       ),
     );
 
@@ -421,14 +445,16 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test("handles empty results", async () => {
-    globalThis.fetch = asFetchMock(
-      mock(() =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              results: { bindings: [] },
-            }),
-            { status: 200 },
+    testFetchState.set(
+      asFetchMock(
+        mock(() =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify({
+                results: { bindings: [] },
+              }),
+              { status: 200 },
+            ),
           ),
         ),
       ),
@@ -450,38 +476,40 @@ describe("euEcjAdapter.fetchPage", () => {
   test(
     "skips languages without fulltext",
     async () => {
-      globalThis.fetch = asFetchMock(
-        mock((url: string) => {
-          const urlStr = url;
+      testFetchState.set(
+        asFetchMock(
+          mock((url: string) => {
+            const urlStr = url;
 
-          if (urlStr.includes("sparql")) {
-            const fixture = {
-              results: {
-                bindings: [enBinding, frBinding, deBinding],
-              },
-            };
-            return Promise.resolve(
-              new Response(JSON.stringify(fixture), {
-                status: 200,
-              }),
-            );
-          }
+            if (urlStr.includes("sparql")) {
+              const fixture = {
+                results: {
+                  bindings: [enBinding, frBinding, deBinding],
+                },
+              };
+              return Promise.resolve(
+                new Response(JSON.stringify(fixture), {
+                  status: 200,
+                }),
+              );
+            }
 
-          // Only the EN and FR Cellar manifestations return fulltext.
-          if (
-            urlStr.includes(EN_MANIFESTATION_ID) ||
-            urlStr.includes(FR_MANIFESTATION_ID)
-          ) {
-            return Promise.resolve(
-              new Response(fulltextHtml, {
-                status: 200,
-                headers: { "Content-Type": "text/html" },
-              }),
-            );
-          }
+            // Only the EN and FR Cellar manifestations return fulltext.
+            if (
+              urlStr.includes(EN_MANIFESTATION_ID) ||
+              urlStr.includes(FR_MANIFESTATION_ID)
+            ) {
+              return Promise.resolve(
+                new Response(fulltextHtml, {
+                  status: 200,
+                  headers: { "Content-Type": "text/html" },
+                }),
+              );
+            }
 
-          return Promise.resolve(new Response("Not found", { status: 404 }));
-        }),
+            return Promise.resolve(new Response("Not found", { status: 404 }));
+          }),
+        ),
       );
 
       const { euEcjAdapter } =
@@ -503,25 +531,27 @@ describe("euEcjAdapter.fetchPage", () => {
   );
 
   test("no decisions when all languages 404", async () => {
-    globalThis.fetch = asFetchMock(
-      mock((url: string) => {
-        const urlStr = url;
+    testFetchState.set(
+      asFetchMock(
+        mock((url: string) => {
+          const urlStr = url;
 
-        if (urlStr.includes("sparql")) {
-          const fixture = {
-            results: {
-              bindings: [enBinding],
-            },
-          };
-          return Promise.resolve(
-            new Response(JSON.stringify(fixture), {
-              status: 200,
-            }),
-          );
-        }
+          if (urlStr.includes("sparql")) {
+            const fixture = {
+              results: {
+                bindings: [enBinding],
+              },
+            };
+            return Promise.resolve(
+              new Response(JSON.stringify(fixture), {
+                status: 200,
+              }),
+            );
+          }
 
-        return Promise.resolve(new Response("Not found", { status: 404 }));
-      }),
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }),
+      ),
     );
 
     const { euEcjAdapter } =
@@ -537,34 +567,36 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test("language appears in URLs", async () => {
-    globalThis.fetch = asFetchMock(
-      mock((url: string) => {
-        const urlStr = url;
+    testFetchState.set(
+      asFetchMock(
+        mock((url: string) => {
+          const urlStr = url;
 
-        if (urlStr.includes("sparql")) {
-          const fixture = {
-            results: {
-              bindings: [enBinding],
-            },
-          };
-          return Promise.resolve(
-            new Response(JSON.stringify(fixture), {
-              status: 200,
-            }),
-          );
-        }
+          if (urlStr.includes("sparql")) {
+            const fixture = {
+              results: {
+                bindings: [enBinding],
+              },
+            };
+            return Promise.resolve(
+              new Response(JSON.stringify(fixture), {
+                status: 200,
+              }),
+            );
+          }
 
-        if (urlStr.includes(EN_MANIFESTATION_ID)) {
-          return Promise.resolve(
-            new Response(fulltextHtml, {
-              status: 200,
-              headers: { "Content-Type": "text/html" },
-            }),
-          );
-        }
+          if (urlStr.includes(EN_MANIFESTATION_ID)) {
+            return Promise.resolve(
+              new Response(fulltextHtml, {
+                status: 200,
+                headers: { "Content-Type": "text/html" },
+              }),
+            );
+          }
 
-        return Promise.resolve(new Response("Not found", { status: 404 }));
-      }),
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }),
+      ),
     );
 
     const { euEcjAdapter } =
@@ -588,31 +620,33 @@ describe("euEcjAdapter.fetchPage", () => {
 
   test("rejects a manifestation URL outside the Cellar origin", async () => {
     let externalFetches = 0;
-    globalThis.fetch = asFetchMock(
-      mock((url: string) => {
-        if (url.includes("sparql")) {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({
-                results: {
-                  bindings: [
-                    {
-                      ...enBinding,
-                      manifestation: {
-                        type: "uri",
-                        value: "https://attacker.example/document",
+    testFetchState.set(
+      asFetchMock(
+        mock((url: string) => {
+          if (url.includes("sparql")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  results: {
+                    bindings: [
+                      {
+                        ...enBinding,
+                        manifestation: {
+                          type: "uri",
+                          value: "https://attacker.example/document",
+                        },
                       },
-                    },
-                  ],
-                },
-              }),
-              { status: 200 },
-            ),
-          );
-        }
-        externalFetches += 1;
-        return Promise.resolve(new Response(fulltextHtml, { status: 200 }));
-      }),
+                    ],
+                  },
+                }),
+                { status: 200 },
+              ),
+            );
+          }
+          externalFetches += 1;
+          return Promise.resolve(new Response(fulltextHtml, { status: 200 }));
+        }),
+      ),
     );
 
     const { euEcjAdapter } =
@@ -713,43 +747,45 @@ const installSparqlMock = ({
   const queries: string[] = [];
   const documentFetches: string[] = [];
   const noticeRequests: NoticeRequest[] = [];
-  globalThis.fetch = asFetchMock(
-    mock((input: string | URL | Request, init?: RequestInit) => {
-      const url = requestUrl(input);
-      if (url.includes("sparql")) {
-        const body = typeof init?.body === "string" ? init.body : "";
-        queries.push(new URLSearchParams(body).get("query") ?? "");
-        return Promise.resolve(
-          new Response(JSON.stringify({ results: { bindings } }), {
-            status: 200,
-          }),
-        );
-      }
-      if (isNoticeRequest(url)) {
-        noticeRequests.push({
-          url,
-          language:
-            new Headers(init?.headers).get("accept-language") ?? undefined,
-        });
-        return Promise.resolve(
-          notice === undefined
-            ? new Response("Not found", { status: 404 })
-            : new Response(notice, {
-                status: 200,
-                headers: { "Content-Type": "application/xml;notice=branch" },
-              }),
-        );
-      }
-      documentFetches.push(url);
-      return served.some((id) => url.includes(id))
-        ? Promise.resolve(
-            new Response(shortDocumentHtml, {
+  testFetchState.set(
+    asFetchMock(
+      mock((input: string | URL | Request, init?: RequestInit) => {
+        const url = requestUrl(input);
+        if (url.includes("sparql")) {
+          const body = typeof init?.body === "string" ? init.body : "";
+          queries.push(new URLSearchParams(body).get("query") ?? "");
+          return Promise.resolve(
+            new Response(JSON.stringify({ results: { bindings } }), {
               status: 200,
-              headers: { "Content-Type": "text/html" },
             }),
-          )
-        : Promise.resolve(new Response("Not found", { status: 404 }));
-    }),
+          );
+        }
+        if (isNoticeRequest(url)) {
+          noticeRequests.push({
+            url,
+            language:
+              new Headers(init?.headers).get("accept-language") ?? undefined,
+          });
+          return Promise.resolve(
+            notice === undefined
+              ? new Response("Not found", { status: 404 })
+              : new Response(notice, {
+                  status: 200,
+                  headers: { "Content-Type": "application/xml;notice=branch" },
+                }),
+          );
+        }
+        documentFetches.push(url);
+        return served.some((id) => url.includes(id))
+          ? Promise.resolve(
+              new Response(shortDocumentHtml, {
+                status: 200,
+                headers: { "Content-Type": "text/html" },
+              }),
+            )
+          : Promise.resolve(new Response("Not found", { status: 404 }));
+      }),
+    ),
   );
   return { queries, documentFetches, noticeRequests };
 };
@@ -779,9 +815,8 @@ const variantDecisions = async (walk: "crawl" | "celex" | "reconciliation") => {
 };
 
 describe("language variant completion", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test.each(["crawl", "celex", "reconciliation"] as const)(
@@ -808,18 +843,20 @@ describe("language variant completion", () => {
         served: [EN_MANIFESTATION_ID, duplicateId],
       });
       const servedFetch = globalThis.fetch;
-      globalThis.fetch = asFetchMock((input, init) => {
-        const url = requestUrl(input);
-        if (url.endsWith(rejectedId)) {
-          documentFetches.push(url);
-          return Promise.resolve(
-            new Response(shortDocumentHtml, {
-              headers: { "Content-Type": "text/html" },
-            }),
-          );
-        }
-        return servedFetch(input, init);
-      });
+      testFetchState.set(
+        asFetchMock((input, init) => {
+          const url = requestUrl(input);
+          if (url.endsWith(rejectedId)) {
+            documentFetches.push(url);
+            return Promise.resolve(
+              new Response(shortDocumentHtml, {
+                headers: { "Content-Type": "text/html" },
+              }),
+            );
+          }
+          return servedFetch(input, init);
+        }),
+      );
       const decisions = await variantDecisions(walk);
       expect(
         decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
@@ -872,9 +909,8 @@ describe("language variant completion", () => {
 });
 
 describe("translations published as the Court's HTML", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const HTML_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0011.01";
@@ -989,22 +1025,27 @@ describe("translations published as the Court's HTML", () => {
  * `Content-Type`, so a test can state what the publisher answered with.
  */
 const installTypedDocumentMock = (body: string, contentType: string): void => {
-  globalThis.fetch = asFetchMock(
-    mock((input: string | URL | Request) => {
-      if (requestUrl(input).includes("sparql")) {
+  testFetchState.set(
+    asFetchMock(
+      mock((input: string | URL | Request) => {
+        if (requestUrl(input).includes("sparql")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ results: { bindings: [enBinding] } }),
+              {
+                status: 200,
+              },
+            ),
+          );
+        }
         return Promise.resolve(
-          new Response(JSON.stringify({ results: { bindings: [enBinding] } }), {
+          new Response(body, {
             status: 200,
+            headers: { "Content-Type": contentType },
           }),
         );
-      }
-      return Promise.resolve(
-        new Response(body, {
-          status: 200,
-          headers: { "Content-Type": contentType },
-        }),
-      );
-    }),
+      }),
+    ),
   );
 };
 
@@ -1020,24 +1061,24 @@ const languageCount = (cellarLanguage: string, n: number) => ({
 });
 
 describe("euEcjAdapter.getTotalCount", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const answerCount = (bindings: readonly unknown[]) => {
     const queries: string[] = [];
-    globalThis.fetch = asFetchMock(
-      mock((_url: string, init?: RequestInit) => {
-        const body = typeof init?.body === "string" ? init.body : "";
-        queries.push(new URLSearchParams(body).get("query") ?? "");
-        return Promise.resolve(
-          new Response(JSON.stringify({ results: { bindings } }), {
-            status: 200,
-          }),
-        );
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock((_url: string, init?: RequestInit) => {
+          const body = typeof init?.body === "string" ? init.body : "";
+          queries.push(new URLSearchParams(body).get("query") ?? "");
+          return Promise.resolve(
+            new Response(JSON.stringify({ results: { bindings } }), {
+              status: 200,
+            }),
+          );
+        }),
+      ),
     );
     return queries;
   };
@@ -1227,7 +1268,6 @@ describe("euEcjAdapter.reconciliation slices", () => {
 });
 
 describe("euEcjAdapter.reconciliation.listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -1235,7 +1275,7 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -1319,10 +1359,12 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
     // The other half of the truncation rule: an aborted or failed listing
     // must reach the caller as a failure. Answering with the items that did
     // arrive would bank a partial slice as the whole of it.
-    globalThis.fetch = asFetchMock(
-      mock(() =>
-        Promise.reject(
-          new DOMException("The operation timed out", "TimeoutError"),
+    testFetchState.set(
+      asFetchMock(
+        mock(() =>
+          Promise.reject(
+            new DOMException("The operation timed out", "TimeoutError"),
+          ),
         ),
       ),
     );
@@ -1403,7 +1445,6 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
 });
 
 describe("euEcjAdapter.reconciliation.buildDecision", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -1411,7 +1452,7 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -1507,37 +1548,39 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     servedOrdinal: number,
   ): { fetches: { url: string; accept: string | undefined }[] } => {
     const fetches: { url: string; accept: string | undefined }[] = [];
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url.includes("sparql")) {
+    testFetchState.set(
+      asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          const url = requestUrl(input);
+          if (url.includes("sparql")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: { bindings: [enBinding] } }),
+                { status: 200 },
+              ),
+            );
+          }
+          if (isNoticeRequest(url)) {
+            return Promise.resolve(new Response("Not found", { status: 404 }));
+          }
+          const accept = new Headers(init?.headers).get("accept") ?? undefined;
+          fetches.push({ url, accept });
+          if (!url.endsWith(`/DOC_${servedOrdinal}`)) {
+            return Promise.resolve(new Response("Not found", { status: 404 }));
+          }
+          // Cellar serves an older item as simplified HTML, and refuses any
+          // `Accept` naming a bare type it does not match.
+          if (accept !== undefined) {
+            return Promise.resolve(new Response("", { status: 406 }));
+          }
           return Promise.resolve(
-            new Response(
-              JSON.stringify({ results: { bindings: [enBinding] } }),
-              { status: 200 },
-            ),
+            new Response(shortDocumentHtml, {
+              status: 200,
+              headers: { "Content-Type": "text/html;type=simplified" },
+            }),
           );
-        }
-        if (isNoticeRequest(url)) {
-          return Promise.resolve(new Response("Not found", { status: 404 }));
-        }
-        const accept = new Headers(init?.headers).get("accept") ?? undefined;
-        fetches.push({ url, accept });
-        if (!url.endsWith(`/DOC_${servedOrdinal}`)) {
-          return Promise.resolve(new Response("Not found", { status: 404 }));
-        }
-        // Cellar serves an older item as simplified HTML, and refuses any
-        // `Accept` naming a bare type it does not match.
-        if (accept !== undefined) {
-          return Promise.resolve(new Response("", { status: 406 }));
-        }
-        return Promise.resolve(
-          new Response(shortDocumentHtml, {
-            status: 200,
-            headers: { "Content-Type": "text/html;type=simplified" },
-          }),
-        );
-      }),
+        }),
+      ),
     );
     return { fetches };
   };
@@ -1545,25 +1588,27 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
   /** Answer every document address with one status, and record the requests. */
   const installStatusMock = (status: number): { fetches: string[] } => {
     const fetches: string[] = [];
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request) => {
-        const url = requestUrl(input);
-        if (url.includes("sparql")) {
-          return Promise.resolve(
-            new Response(
-              JSON.stringify({ results: { bindings: [enBinding] } }),
-              {
-                status: 200,
-              },
-            ),
-          );
-        }
-        if (isNoticeRequest(url)) {
-          return Promise.resolve(new Response("", { status: 404 }));
-        }
-        fetches.push(url);
-        return Promise.resolve(new Response("", { status }));
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock((input: string | URL | Request) => {
+          const url = requestUrl(input);
+          if (url.includes("sparql")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: { bindings: [enBinding] } }),
+                {
+                  status: 200,
+                },
+              ),
+            );
+          }
+          if (isNoticeRequest(url)) {
+            return Promise.resolve(new Response("", { status: 404 }));
+          }
+          fetches.push(url);
+          return Promise.resolve(new Response("", { status }));
+        }),
+      ),
     );
     return { fetches };
   };
@@ -1658,17 +1703,19 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
       const { fetches } = installItemOnlyMock(0);
       const itemFetch = globalThis.fetch;
       const failedUrl = `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}${ordinal === 0 ? "" : `/DOC_${ordinal}`}`;
-      globalThis.fetch = asFetchMock(
-        mock((input: string | URL | Request, init?: RequestInit) => {
-          if (requestUrl(input) === failedUrl) {
-            fetches.push({
-              url: failedUrl,
-              accept: new Headers(init?.headers).get("accept") ?? undefined,
-            });
-            return Promise.resolve(new Response("Unavailable", { status }));
-          }
-          return itemFetch(input, init);
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock((input: string | URL | Request, init?: RequestInit) => {
+            if (requestUrl(input) === failedUrl) {
+              fetches.push({
+                url: failedUrl,
+                accept: new Headers(init?.headers).get("accept") ?? undefined,
+              });
+              return Promise.resolve(new Response("Unavailable", { status }));
+            }
+            return itemFetch(input, init);
+          }),
+        ),
       );
 
       const rejection = await rejectionOf(
@@ -1703,16 +1750,18 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
       });
       const servedFetch = globalThis.fetch;
       const rejectedUrl = `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`;
-      globalThis.fetch = asFetchMock(
-        mock((input: string | URL | Request, init?: RequestInit) => {
-          if (requestUrl(input) === rejectedUrl) {
-            documentFetches.push(rejectedUrl);
-            return Promise.resolve(
-              new Response("Rejected", { status: rejectedStatus }),
-            );
-          }
-          return servedFetch(input, init);
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock((input: string | URL | Request, init?: RequestInit) => {
+            if (requestUrl(input) === rejectedUrl) {
+              documentFetches.push(rejectedUrl);
+              return Promise.resolve(
+                new Response("Rejected", { status: rejectedStatus }),
+              );
+            }
+            return servedFetch(input, init);
+          }),
+        ),
       );
 
       const outcome = await ecjAdapter.fetchPage("2024-01-18", {});
@@ -1766,30 +1815,32 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     // The item is chosen by content negotiation now that the URL no longer
     // names one, so the Accept header is what selects the document.
     const accepts: (string | undefined)[] = [];
-    globalThis.fetch = asFetchMock(
-      mock((input: string | URL | Request, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url.includes("sparql")) {
+    testFetchState.set(
+      asFetchMock(
+        mock((input: string | URL | Request, init?: RequestInit) => {
+          const url = requestUrl(input);
+          if (url.includes("sparql")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: { bindings: [enBinding] } }),
+                {
+                  status: 200,
+                },
+              ),
+            );
+          }
+          if (isNoticeRequest(url)) {
+            return Promise.resolve(new Response("Not found", { status: 404 }));
+          }
+          accepts.push(new Headers(init?.headers).get("accept") ?? undefined);
           return Promise.resolve(
-            new Response(
-              JSON.stringify({ results: { bindings: [enBinding] } }),
-              {
-                status: 200,
-              },
-            ),
+            new Response(shortDocumentHtml, {
+              status: 200,
+              headers: { "Content-Type": "application/xhtml+xml" },
+            }),
           );
-        }
-        if (isNoticeRequest(url)) {
-          return Promise.resolve(new Response("Not found", { status: 404 }));
-        }
-        accepts.push(new Headers(init?.headers).get("accept") ?? undefined);
-        return Promise.resolve(
-          new Response(shortDocumentHtml, {
-            status: 200,
-            headers: { "Content-Type": "application/xhtml+xml" },
-          }),
-        );
-      }),
+        }),
+      ),
     );
 
     await reconciliation.buildDecision({

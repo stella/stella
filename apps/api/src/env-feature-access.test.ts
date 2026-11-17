@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 
 import { ParameterStoreError } from "@stll/parameter-store";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createFakeTimers } from "@stll/test-kit";
 
 import {
   createFeatureAccessGrantsOwner,
@@ -70,7 +71,7 @@ test("the server closes its grants refresh with background workers", async () =>
   );
 });
 
-test("test fixtures can replace the snapshot while exercising strict access", () => {
+test("fixtures in tests can replace the snapshot while exercising strict access", () => {
   const initial = readFeatureAccessGrants();
   const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
   try {
@@ -183,21 +184,27 @@ describe("feature access grant refresh", () => {
     }
   });
 
-  // timeout: the real five-second owner deadline needs room for scheduler jitter in CI.
   test("a stalled initial read releases startup within five seconds and cannot publish late grants", async () => {
+    const timers = createFakeTimers();
+    const started = Promise.withResolvers<undefined>();
     const previous = readFeatureAccessGrants();
     envFeatureAccess.API_FEATURE_ACCESS_GRANTS = updatedGrants;
     const late = Promise.withResolvers<{ raw: string; version: number }>();
     const lateReadSettled = Promise.withResolvers<undefined>();
     let requestSignal: AbortSignal | undefined;
     const errors = spyOn(logger, "error").mockImplementation(() => {});
-    const started = performance.now();
-    const stop = await startFeatureAccessGrantsRefresh({
+    let stop: (() => Promise<void>) | null | undefined;
+    const pending = startFeatureAccessGrantsRefresh({
       parameterName: "test-grants",
+      scheduleTimeout: (callback, delayMs) => {
+        const timer = timers.setTimeout(callback, delayMs);
+        return () => timers.clearTimeout(timer);
+      },
       source: {
         readVersion: async () => 1,
         readValue: async (signal) => {
           requestSignal = signal;
+          started.resolve(undefined);
           try {
             return await late.promise;
           } finally {
@@ -205,10 +212,20 @@ describe("feature access grant refresh", () => {
           }
         },
       },
+    }).then((cleanup) => {
+      stop = cleanup;
+      return cleanup;
     });
     try {
-      expect(performance.now() - started).toBeLessThan(6500);
+      await started.promise;
+      await timers.advance(4999);
+      expect(stop).toBeUndefined();
+      expect(requestSignal?.aborted).toBe(false);
+      expect(timers.pendingTimers()).toBe(1);
+      await timers.advance(1);
       expect(requestSignal?.aborted).toBe(true);
+      await pending;
+      expect(timers.pendingTimers()).toBe(0);
       expect(readFeatureAccessGrants()).toEqual({
         grants: updatedGrants,
         version: null,
@@ -234,7 +251,7 @@ describe("feature access grant refresh", () => {
       errors.mockRestore();
       envFeatureAccess.API_FEATURE_ACCESS_GRANTS = previous.grants;
     }
-  }, 10_000);
+  });
 
   test("unknown refreshed grants report only their count once per version", async () => {
     const client = new FakeSsmClient();

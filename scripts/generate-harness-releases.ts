@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 /**
  * Regenerates `apps/desktop/src-tauri/harness/releases.gen.json`, the
- * per-platform download table of the agent CLIs Stella Desktop installs,
- * from the versions pinned in `apps/desktop/src-tauri/harness/pins.json`.
+ * per-platform download table of the agent CLIs and tools Stella Desktop
+ * installs, from the versions pinned in
+ * `apps/desktop/src-tauri/harness/pins.json`.
  *
  * - Codex: the `codex-package-<target>.tar.gz` asset of the OpenAI GitHub
  *   release, with the SHA-256 digest and byte size GitHub reports for it.
@@ -10,6 +11,10 @@
  *   (`@anthropic-ai/claude-agent-sdk-<os>-<cpu>`) at the pinned SDK version,
  *   with the registry's SHA-512 integrity and the tarball's byte size. The
  *   CLI version the probe expects is the SDK's `claudeCodeVersion`.
+ * - Bun: its native platform package on npm (`@oven/bun-<os>-<cpu>`) at the
+ *   pinned version, with the registry's SHA-512 integrity and the tarball's
+ *   byte size. x64 takes the baseline build, which also runs on CPUs without
+ *   AVX2.
  *
  * Digests come only from upstream metadata; never edit the table by hand.
  * The desktop crate's tests bind the table to the pins file.
@@ -41,6 +46,7 @@ const TABLE_PATH = path.join(HARNESS_DIR, "releases.gen.json");
 const CODEX_REPOSITORY = "openai/codex";
 const NPM_REGISTRY = "https://registry.npmjs.org";
 const CLAUDE_SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
+const BUN_SCOPE = "@oven";
 
 /** The platforms Stella Desktop ships for, in npm's `<os>-<cpu>` naming. */
 const PLATFORMS = {
@@ -72,6 +78,7 @@ const versionSchema = v.pipe(
 const pinsSchema = v.strictObject({
   codex: versionSchema,
   claudeAgentSdk: versionSchema,
+  bun: versionSchema,
 });
 
 const githubReleaseSchema = v.object({
@@ -191,6 +198,51 @@ const codexRelease = async (version: string): Promise<Release> => {
   return { version, assets: byPlatform(asset) };
 };
 
+/** An npm package's tarball as an asset, by the registry's own metadata. */
+const npmAsset = async ({
+  name,
+  version,
+  platform,
+  executable,
+}: {
+  name: string;
+  version: string;
+  platform: Platform;
+  executable: string;
+}): Promise<Asset> => {
+  const metadata = v.parse(
+    platformPackageSchema,
+    await fetchJson(`${NPM_REGISTRY}/${name}/${version}`),
+  );
+  if (metadata.name !== name || metadata.version !== version) {
+    return panic(`${name}@${version} metadata names another package`);
+  }
+  const url = requireUrl(metadata.dist.tarball, `${NPM_REGISTRY}/${name}/-/`);
+  return {
+    url,
+    digest: { sha512: integrityHex(metadata.dist.integrity) },
+    archiveBytes: await archiveBytes(url),
+    target: PLATFORMS[platform].target,
+    executable,
+  };
+};
+
+/** A value per platform, fetched concurrently. */
+const fetchByPlatform = async (
+  fetchAsset: (platform: Platform) => Promise<Asset>,
+): Promise<Record<Platform, Asset>> => {
+  const fetched = new Map(
+    await Promise.all(
+      platforms().map(
+        async (platform) => [platform, await fetchAsset(platform)] as const,
+      ),
+    ),
+  );
+  return byPlatform(
+    (platform) => fetched.get(platform) ?? panic(`${platform} was not fetched`),
+  );
+};
+
 const claudeRelease = async (sdkVersion: string): Promise<Release> => {
   const sdk = v.parse(
     sdkVersionSchema,
@@ -201,38 +253,39 @@ const claudeRelease = async (sdkVersion: string): Promise<Release> => {
     if (sdk.optionalDependencies[name] !== sdkVersion) {
       return panic(`${CLAUDE_SDK_PACKAGE}@${sdkVersion} does not pin ${name}`);
     }
-    const metadata = v.parse(
-      platformPackageSchema,
-      await fetchJson(`${NPM_REGISTRY}/${name}/${sdkVersion}`),
-    );
-    if (metadata.name !== name || metadata.version !== sdkVersion) {
-      return panic(`${name}@${sdkVersion} metadata names another package`);
-    }
-    const url = requireUrl(metadata.dist.tarball, `${NPM_REGISTRY}/${name}/-/`);
-    const { exe, target } = PLATFORMS[platform];
-    return {
-      url,
-      digest: { sha512: integrityHex(metadata.dist.integrity) },
-      archiveBytes: await archiveBytes(url),
-      target,
-      executable: `package/claude${exe}`,
-    };
+    return await npmAsset({
+      name,
+      version: sdkVersion,
+      platform,
+      executable: `package/claude${PLATFORMS[platform].exe}`,
+    });
   };
-  const fetched = new Map(
-    await Promise.all(
-      platforms().map(
-        async (platform) => [platform, await asset(platform)] as const,
-      ),
-    ),
-  );
   return {
     version: sdk.claudeCodeVersion,
-    assets: byPlatform(
-      (platform) =>
-        fetched.get(platform) ?? panic(`${platform} was not fetched`),
-    ),
+    assets: await fetchByPlatform(asset),
   };
 };
+
+/** Bun's npm name per platform; x64 takes the baseline build. */
+const BUN_PACKAGES = {
+  "darwin-arm64": "bun-darwin-aarch64",
+  "darwin-x64": "bun-darwin-x64-baseline",
+  "win32-arm64": "bun-windows-aarch64",
+  "win32-x64": "bun-windows-x64-baseline",
+} as const satisfies Record<Platform, string>;
+
+const bunRelease = async (version: string): Promise<Release> => ({
+  version,
+  assets: await fetchByPlatform(
+    async (platform) =>
+      await npmAsset({
+        name: `${BUN_SCOPE}/${BUN_PACKAGES[platform]}`,
+        version,
+        platform,
+        executable: `package/bin/bun${PLATFORMS[platform].exe}`,
+      }),
+  ),
+});
 
 const main = async (): Promise<number> => {
   const write = process.argv.includes("--write");
@@ -240,11 +293,16 @@ const main = async (): Promise<number> => {
     pinsSchema,
     JSON.parse(await readFile(PINS_PATH, "utf-8")),
   );
-  const [codex, claudeCode] = await Promise.all([
+  const [codex, claudeCode, bun] = await Promise.all([
     codexRelease(pins.codex),
     claudeRelease(pins.claudeAgentSdk),
+    bunRelease(pins.bun),
   ]);
-  const table = { pins, harnesses: { codex, "claude-code": claudeCode } };
+  const table = {
+    pins,
+    harnesses: { codex, "claude-code": claudeCode },
+    tools: { bun },
+  };
   return await writeOrCheckArtifacts(
     [
       {

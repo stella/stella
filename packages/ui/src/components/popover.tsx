@@ -15,6 +15,7 @@ import {
   IN_FLOW_POPUP_CLASS_NAME,
 } from "../lib/positioner-sizing";
 import { cn } from "../lib/utils";
+import { COMPOSER_PICKER_TRIGGER_CLASS } from "./composer-tokens";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const PopoverCreateHandle = PopoverPrimitive.createHandle;
@@ -22,13 +23,33 @@ const PopoverCreateHandle = PopoverPrimitive.createHandle;
 const Popover = PopoverPrimitive.Root;
 
 function PopoverTrigger({
+  appearance = "default",
+  className,
   tooltip,
   ...props
-}: PopoverPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+}: PopoverPrimitive.Trigger.Props & {
+  appearance?: "default" | "caption";
+  tooltip?: React.ReactNode;
+}) {
+  const appearanceClassName =
+    appearance === "caption"
+      ? cn(
+          COMPOSER_PICKER_TRIGGER_CLASS,
+          "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+        )
+      : undefined;
   return renderTooltipTrigger({
     tooltip,
     trigger: (
-      <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+      <PopoverPrimitive.Trigger
+        className={
+          typeof className === "function"
+            ? (state) => cn(appearanceClassName, className(state))
+            : cn(appearanceClassName, className)
+        }
+        data-slot="popover-trigger"
+        {...props}
+      />
     ),
   });
 }

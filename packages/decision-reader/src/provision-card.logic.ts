@@ -1,4 +1,5 @@
 import { blocksNestedUnder } from "@stll/legal-ast/provision-preview";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
@@ -242,6 +243,15 @@ export const fullProvisionOutcome = ({
 };
 
 /**
+ * A whole provision's read, with the scheme its publisher's anchors nest in:
+ * a cited part owns the blocks its anchor path holds.
+ */
+type FullProvisionWording = {
+  scheme: StatuteAnchorScheme;
+  wording: ProvisionPreviewData | null;
+};
+
+/**
  * The quoted passage of one card. A whole-provision citation quotes the
  * provision as it stands; otherwise the parts follow each other in citation
  * order, a block two of them share drawn once. Pending until every citation
@@ -253,21 +263,24 @@ export const fullProvisionOutcome = ({
  */
 export const provisionCardPassage = (
   wordings: readonly CitedWording[],
-  fullWording: ProvisionPreviewData | null = null,
+  fullWording: FullProvisionWording | null = null,
 ): ProvisionCardPassage => {
   if (wordings.some(({ wording }) => wording === undefined)) {
     return { type: "pending" };
   }
-  const full = hasProvisionWording(fullWording) ? fullWording : null;
+  const fullRead =
+    fullWording !== null && hasProvisionWording(fullWording.wording)
+      ? { scheme: fullWording.scheme, wording: fullWording.wording }
+      : null;
   const resolved =
-    full === null
+    fullRead === null
       ? wordings
       : wordings.map(({ target }) => {
           if (citesWholeProvision(target)) {
-            return { target, wording: full };
+            return { target, wording: fullRead.wording };
           }
           const anchor = citedAnchor(target);
-          const block = full.blocks.find(
+          const block = fullRead.wording.blocks.find(
             (candidate) => candidate.anchorId === anchor,
           );
           return {
@@ -276,8 +289,14 @@ export const provisionCardPassage = (
               block === undefined
                 ? null
                 : {
-                    ...full,
-                    blocks: blocksNestedUnder(full.blocks, block),
+                    ...fullRead.wording,
+                    blocks: blocksNestedUnder(
+                      {
+                        blocks: fullRead.wording.blocks,
+                        scheme: fullRead.scheme,
+                      },
+                      block,
+                    ),
                   },
           };
         });
@@ -294,7 +313,9 @@ export const provisionCardPassage = (
   const seen = new Set<string>();
   let language: string | null = null;
   const displayed =
-    full === null ? quoted.map(({ wording }) => wording) : [full];
+    fullRead === null
+      ? quoted.map(({ wording }) => wording)
+      : [fullRead.wording];
   for (const wording of displayed) {
     if (!hasProvisionWording(wording)) {
       continue;

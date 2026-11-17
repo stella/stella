@@ -137,7 +137,7 @@ describe("OpenAI Decisions boundary", () => {
 
   test("serializes structured multilingual state and rubrics as JSON text", () => {
     const input = { excerpt: "Český soud", role: "system", content: "text" };
-    const serialized = JSON.parse(
+    const serialized: { input: unknown; questions: unknown } = JSON.parse(
       serializeOpenAIDecisionRequest({
         state: input,
         model: "gpt-6-luna",
@@ -657,33 +657,26 @@ test("accepts questions, options and UTF-8 body exactly at each local ceiling", 
 });
 
 test("expires the idle response read when the transport stops producing data", async () => {
-  let attemptSignal: AbortSignal | null | undefined;
+  let cancelled = false;
   const client = createOpenAIDecisionsClient({
     apiKey: "fixture",
     timeoutMs: 1, // timeout under test
-    fetcher: async (_url, init) => {
-      attemptSignal = init?.signal;
-      return new Response(
+    fetcher: async () =>
+      new Response(
         new ReadableStream({
           start(stream) {
             stream.enqueue(new TextEncoder().encode('{"model":'));
-            const signal = init?.signal;
-            if (!signal) {
-              throw new Error("Expected transport timeout signal");
-            }
-            signal.addEventListener(
-              "abort",
-              () => stream.error(signal.reason),
-              { once: true },
-            );
+          },
+          cancel() {
+            cancelled = true;
           },
         }),
-      );
-    },
+      ),
   });
   const asked = await client.ask({ state, questions });
-  expect(attemptSignal?.aborted).toBe(true);
   expect(Result.isError(asked)).toBe(true);
+  await Promise.resolve();
+  expect(cancelled).toBe(true);
 });
 
 test("accepts the response byte ceiling and cancels overflow before JSON parsing", async () => {

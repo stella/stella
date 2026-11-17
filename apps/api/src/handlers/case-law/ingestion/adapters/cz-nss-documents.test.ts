@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -25,12 +25,10 @@ import {
   nssRecoveryFixture,
   nssRecoveryReference,
 } from "@/api/tests/helpers/cz-nss-recovery";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
+const testFetchState = createTestFetch();
 
 const fixtures = new URL("__fixtures__/", import.meta.url);
 
@@ -300,9 +298,11 @@ describe("NSS document recovery", () => {
         .subarray(0, 5)
         .toString(),
     ).toBe("%PDF-");
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Replay must not fetch");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Replay must not fetch");
+      }),
+    );
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
       throw new TypeError("NSS replay required");

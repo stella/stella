@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -25,6 +26,7 @@ import { Separator } from "@stll/ui/separator";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
@@ -45,9 +47,12 @@ import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
+  DocumentRecoverySnapshot,
   LinkedAccountSnapshot,
+  RecoveryTarget,
 } from "../shared/rpc";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -57,9 +62,14 @@ import {
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
+import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
+import { DictationSetting } from "./DictationSetting";
+import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
+import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
+import { SigningDriverSection } from "./SigningDriverSection";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
@@ -88,6 +98,18 @@ const PREFERENCES_TABS = [
 ] as const;
 
 type PreferencesTab = (typeof PREFERENCES_TABS)[number];
+
+/**
+ * Where on General a `stella://settings/agents` link scrolls to: the coding
+ * agents' group or one agent's card. Native code sends only these ids
+ * (`AgentSettingsFocus` in `src-tauri/src/lib.rs`).
+ */
+const AGENT_SETTINGS_FOCUS = [
+  "agents",
+  "codex",
+  "claude-code",
+] as const satisfies readonly AgentSettingsFocus[];
+
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
 const NOTIFICATION_PREFERENCE_KEYS = [
@@ -107,6 +129,9 @@ const isMacDesktop = navigator.userAgent.includes("Mac");
 
 const isPreferencesTab = (value: string | null): value is PreferencesTab =>
   value !== null && (PREFERENCES_TABS as readonly string[]).includes(value);
+
+const isAgentSettingsFocus = (value: unknown): value is AgentSettingsFocus =>
+  AGENT_SETTINGS_FOCUS.some((focus) => focus === value);
 
 const reportSubscriptionFailure = () => {
   reportDesktopError({
@@ -217,6 +242,102 @@ const PanelGroup = ({
     </div>
   </section>
 );
+
+const DocumentRecovery = ({
+  recovery,
+  onRefresh,
+}: {
+  recovery: DocumentRecoverySnapshot;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const act = async (target: RecoveryTarget | "retry") => {
+    setBusy(true);
+    const result = await Result.tryPromise(async () =>
+      target === "retry"
+        ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
+        : invoke("open_recovery_folder", { target }),
+    );
+    setError(result.isErr() ? t("recoveryError") : null);
+    setBusy(false);
+  };
+  if (
+    !recovery.edits.length &&
+    !recovery.unassigned &&
+    !recovery.pending &&
+    recovery.access === "available"
+  ) {
+    return null;
+  }
+  return (
+    <PanelGroup title={t("recoveryTitle")}>
+      <div className="space-y-3 px-4 py-3 text-sm">
+        {recovery.edits.length ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryBody")}</p>
+            <ul className="space-y-1">
+              {recovery.edits.map((edit) => (
+                <li key={edit.id} className="wrap-break-word">
+                  <BidiText>{edit.fileName}</BidiText>
+                  {edit.status === "pending"
+                    ? ` (${t("recoveryFilePending")})`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("account");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenFolder")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.access === "signInRequired" ? (
+          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+        ) : null}
+        {recovery.unassigned ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("unassigned");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenUnassigned")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.pending ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryPending")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("retry");
+              }}
+              variant="outline"
+            >
+              {t("tryAgain")}
+            </Button>
+          </>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </PanelGroup>
+  );
+};
 
 type TelemetryPreferenceState =
   | { status: "loading" }
@@ -329,17 +450,24 @@ const TelemetryPreferenceControl = ({ onRetry }: { onRetry: () => void }) => {
 const GeneralPane = ({
   language,
   accountState,
+  agentSettingsFocus,
+  onAgentSettingsShown,
   onLanguageChange,
   onAccountAction,
 }: {
   language: SupportedLanguage;
   accountState: DesktopAccountState;
+  agentSettingsFocus: AgentSettingsFocus | null;
+  onAgentSettingsShown: () => void;
   onLanguageChange: (language: SupportedLanguage) => void;
   onAccountAction: () => void;
 }) => {
   const format = useFormatter();
   const t = useTranslations("settings");
   const tSubscriptions = useTranslations("agentSubscriptions");
+  const tLocalSkills = useTranslations("localSkills");
+  const tSigningDriver = useTranslations("signingDriver");
+  const tLinkedFolders = useTranslations("localLinkedFolders");
   const presentation = accountPresentation(accountState);
   const linkedAccount =
     accountState.status === "connected" ? accountState.account : null;
@@ -358,11 +486,11 @@ const GeneralPane = ({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">
+            <TruncatedText className="text-sm font-medium" render={<p />}>
               {linkedAccount?.name?.trim() ||
                 linkedAccount?.email ||
                 t("stellaDesktop")}
-            </p>
+            </TruncatedText>
           </div>
           <span
             className={cn(
@@ -432,9 +560,29 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
+      <DictationSetting
+        renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
+      />
       <AgentSubscriptionsSection
+        focus={agentSettingsFocus}
+        onFocusShown={onAgentSettingsShown}
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalSkillFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLocalSkills("title")}>{content}</PanelGroup>
+        )}
+      />
+      <SigningDriverSection
+        renderGroup={(content) => (
+          <PanelGroup title={tSigningDriver("title")}>{content}</PanelGroup>
+        )}
+      />
+      <LocalLinkedFoldersSection
+        renderGroup={(content) => (
+          <PanelGroup title={tLinkedFolders("title")}>{content}</PanelGroup>
         )}
       />
       <PanelGroup title={t("permissions")}>
@@ -705,7 +853,11 @@ const App = () => {
   });
   const accountRefresh = useRef<() => void>(() => undefined);
   const accountGeneration = useRef(0);
+  const snapshotGeneration = useRef(0);
+  const snapshotRefresh = useRef<() => void>(() => undefined);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
+  const [agentSettingsFocus, setAgentSettingsFocus] =
+    useState<AgentSettingsFocus | null>(null);
   const activityAvailability = useActivityAvailability();
   // A requested Activity tab stays shown while availability loads, so opening
   // it does not flash General first; it falls back only once activity is off.
@@ -728,12 +880,16 @@ const App = () => {
   // Listen for tab activation from Rust backend
   useEffect(
     () =>
-      subscribeDesktopEvent<{ tab: string }>({
+      subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
         event: "activate-tab",
         handler: (event) => {
-          const nextTab = event.payload.tab;
-          if (isPreferencesTab(nextTab)) {
-            setActiveTab(nextTab);
+          const { tab: nextTab, focus } = event.payload;
+          if (!isPreferencesTab(nextTab)) {
+            return;
+          }
+          setActiveTab(nextTab);
+          if (nextTab === "general" && isAgentSettingsFocus(focus)) {
+            setAgentSettingsFocus(focus);
           }
         },
         onError: reportSubscriptionFailure,
@@ -771,19 +927,32 @@ const App = () => {
 
     const syncState = async () => {
       const revision = snapshotRevision.current;
+      const request = ++snapshotGeneration.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed || revision !== snapshotRevision.current) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
+        if (!isAppSnapshot(nextState)) {
+          setError(t("errorReadState"));
+          return;
+        }
         confirmedSnapshot.current = nextState;
         startTransition(() => {
           setError(null);
           setState(nextState);
         });
       } catch (fetchError) {
-        if (disposed || revision !== snapshotRevision.current) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
@@ -791,10 +960,14 @@ const App = () => {
       }
     };
 
+    snapshotRefresh.current = () => {
+      void syncState();
+    };
     void syncState();
 
     return () => {
       disposed = true;
+      snapshotGeneration.current += 1;
       stopListening();
     };
   }, [t]);
@@ -803,6 +976,12 @@ const App = () => {
     let disposed = false;
     const refresh = () => {
       const request = ++accountGeneration.current;
+      snapshotGeneration.current += 1;
+      snapshotRevision.current += 1;
+      latestEdit.current += 1;
+      confirmedSnapshot.current = null;
+      setState(null);
+      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -962,9 +1141,10 @@ const App = () => {
 
   return (
     <main className="bg-background text-foreground min-h-dvh">
+      <WindowDragRegion />
       <div
         className={cn(
-          "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",
+          "mx-auto flex h-dvh max-w-[44rem] flex-col px-4 pb-4",
           isMacDesktop ? "pt-9" : "pt-4",
         )}
       >
@@ -1013,6 +1193,10 @@ const App = () => {
                 <div className="space-y-4 p-4">
                   <GeneralPane
                     accountState={accountState}
+                    agentSettingsFocus={agentSettingsFocus}
+                    onAgentSettingsShown={() => {
+                      setAgentSettingsFocus(null);
+                    }}
                     language={language}
                     onAccountAction={() => {
                       if (accountState.status === "unavailable") {
@@ -1046,6 +1230,12 @@ const App = () => {
                       void handleLanguageChange(nextLanguage);
                     }}
                   />
+                  {state ? (
+                    <DocumentRecovery
+                      recovery={state.documentRecovery}
+                      onRefresh={() => snapshotRefresh.current()}
+                    />
+                  ) : null}
                 </div>
               </ScrollArea>
             </TabsPanel>

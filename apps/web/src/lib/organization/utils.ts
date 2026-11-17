@@ -1,35 +1,35 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
-import { slugify } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { requiredTrimmedStringSchema } from "@/lib/schema";
 
-export const createSlug = (value: string) =>
-  `${slugify(value, {
-    charset: "ascii",
-    fallback: "",
-    maxLength: Number.MAX_SAFE_INTEGER,
-    separator: "-",
-  })}-${String(Math.floor(Temporal.Now.instant().epochMilliseconds / 1000))}`;
-
 export const getOrganizationSchema = () => {
   const t = getTranslator();
 
   return v.strictObject({
-    name: requiredTrimmedStringSchema(t("validation.organizationNameRequired")),
+    name: v.pipe(
+      requiredTrimmedStringSchema(t("validation.organizationNameRequired")),
+      v.maxLength(ORGANIZATION_NAME_MAX_LENGTH),
+    ),
     slug: v.pipe(
       v.string(),
       v.trim(),
-      v.nonEmpty(t("validation.slugRequired")),
-      v.maxLength(
-        ORGANIZATION_SLUG_RULES.maxLength,
-        t("validation.slugFormat"),
+      v.transform((slug) => (slug.length === 0 ? undefined : slug)),
+      v.optional(
+        v.pipe(
+          v.string(),
+          v.maxLength(
+            ORGANIZATION_SLUG_RULES.maxLength,
+            t("validation.slugFormat"),
+          ),
+          v.regex(ORGANIZATION_SLUG_RULES.pattern, t("validation.slugFormat")),
+        ),
       ),
-      v.regex(ORGANIZATION_SLUG_RULES.pattern, t("validation.slugFormat")),
     ),
   });
 };

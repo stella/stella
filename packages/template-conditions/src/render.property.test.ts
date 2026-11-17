@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   classifyMarker,
@@ -75,7 +75,8 @@ const writable = (
 
 describe("rendering a marker the scanner reads back", () => {
   test("a value marker round-trips through the classifier", () => {
-    fc.assert(
+    assertProperty(
+      "a value marker round-trips through the classifier",
       fc.property(path, chain, (fieldPath, filters) => {
         fc.pre(writable(filters));
         for (const renderedFilters of [filters, withNegativeZero(filters)]) {
@@ -87,12 +88,13 @@ describe("rendering a marker the scanner reads back", () => {
           });
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a value marker is one scannable span in surrounding text", () => {
-    fc.assert(
+    assertProperty(
+      "a value marker is one scannable span in surrounding text",
       fc.property(path, chain, (fieldPath, filters) => {
         fc.pre(writable(filters));
         for (const renderedFilters of [filters, withNegativeZero(filters)]) {
@@ -106,13 +108,14 @@ describe("rendering a marker the scanner reads back", () => {
           });
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a loop opener round-trips with its placement prefix", () => {
     const prefixes: MarkerPrefix[] = ["none", "paragraph", "row"];
-    fc.assert(
+    assertProperty(
+      "a loop opener round-trips with its placement prefix",
       fc.property(
         fc.constantFrom("item", "row", "party"),
         path,
@@ -139,13 +142,14 @@ describe("rendering a marker the scanner reads back", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a condition tag round-trips its boolean's chain with its placement prefix", () => {
     const prefixes: MarkerPrefix[] = ["none", "paragraph", "row"];
-    fc.assert(
+    assertProperty(
+      "a condition tag round-trips its boolean's chain with its placement prefix",
       fc.property(
         fc.constantFrom("if" as const, "elif" as const),
         path,
@@ -171,7 +175,7 @@ describe("rendering a marker the scanner reads back", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

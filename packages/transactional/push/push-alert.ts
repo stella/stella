@@ -20,6 +20,8 @@ const PUSH_ALERT_KEYS = {
   [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]:
     "pushAlert.flowRunAwaitingApproval",
   [NOTIFICATION_KIND.ANNOUNCEMENT]: "pushAlert.announcement",
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: "pushAlert.taskAssigned",
+  [NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET]: "pushAlert.localRunLimitReset",
 } as const satisfies Record<
   NotificationKind,
   `pushAlert.${string}` | `reportExportStatus.${string}Subject`

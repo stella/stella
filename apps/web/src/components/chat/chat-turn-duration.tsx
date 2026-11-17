@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { useTranslations } from "use-intl";
 
 import {
@@ -8,7 +6,6 @@ import {
 } from "@stll/api-contract/chat-turn-duration";
 
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type ChatTurnDurationProps = {
@@ -16,32 +13,23 @@ type ChatTurnDurationProps = {
 };
 
 export const ChatTurnDuration = ({ timing }: ChatTurnDurationProps) => {
-  if (timing === undefined || timing === null) {
+  if (timing === undefined || timing === null || timing.status === "running") {
     return null;
   }
   return <TimedChatTurnDuration timing={timing} />;
 };
 
 type TimedChatTurnDurationProps = {
-  timing: NonNullable<ChatTurnDurationProps["timing"]>;
+  timing: Extract<
+    NonNullable<ChatTurnDurationProps["timing"]>,
+    { status: "finished" }
+  >;
 };
 
 const TimedChatTurnDuration = ({ timing }: TimedChatTurnDurationProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const [now, setNow] = useState(() => performance.now());
-  const observedAt =
-    timing.status === "running" ? timing.observedAt : undefined;
-  useExternalSyncEffect(() => {
-    if (observedAt === undefined) {
-      return undefined;
-    }
-    // Synchronize with the browser's monotonic clock, including a fresh receipt.
-    setNow(performance.now());
-    const interval = setInterval(() => setNow(performance.now()), 1000);
-    return () => clearInterval(interval);
-  }, [observedAt]);
-  const durationMs = getChatTurnDurationMs(timing, now);
+  const durationMs = getChatTurnDurationMs(timing, 0);
   if (durationMs === undefined) {
     return null;
   }

@@ -18,9 +18,10 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { Result } from "better-result";
-import { load } from "cheerio";
+import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -28,7 +29,12 @@ import {
 } from "@stll/api-contract/email-mime-types";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
+import { load } from "@stll/html";
 
+import {
+  dataBoxMessageText,
+  parseDataBoxMessage,
+} from "@/api/lib/email/correspondence/data-box/zfo";
 import {
   type EmailAttachment,
   type EmailParseError,
@@ -50,6 +56,7 @@ import {
   formatWorkerErrorLine,
   getWorkerErrorClass,
 } from "@/api/lib/search/extraction-worker-error";
+import { writeWorkerStdout } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
   DOCM_MIME_TYPE,
@@ -99,6 +106,7 @@ const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   xls: XLS_MIME_TYPE,
   xlsb: XLSB_MIME_TYPE,
   xlsx: XLSX_MIME_TYPE,
+  zfo: DATA_BOX_MESSAGE_MIME_TYPE,
 };
 
 /**
@@ -306,6 +314,12 @@ const extract = async (
       mimeType: normalizedMimeType,
       nestingDepth,
     });
+  } else if (normalizedMimeType === DATA_BOX_MESSAGE_MIME_TYPE) {
+    // The message's files are stored as documents of their own, so only the
+    // envelope is this file's text. An unreadable file has none; filing it
+    // as correspondence records why it was skipped.
+    const message = parseDataBoxMessage(fileBytes);
+    text = message.isOk() ? dataBoxMessageText(message.value) : null;
   }
 
   if (!text || text.trim().length === 0) {
@@ -360,16 +374,25 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return buffer;
 };
 
+/** The caller's character budget (argv[3]); the shared one when absent. */
+const readMaxCharsArgument = (value: string | undefined): number => {
+  if (value === undefined) {
+    return LIMITS.extractedContentMaxChars;
+  }
+  const parsed = parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(0);
+  if (parsed < 1) {
+    return panic("Extraction worker character budget is invalid");
+  }
+  return parsed;
+};
+
 // ── Main ──────────────────────────────────────────────────
 
 try {
   const mimeType = process.argv[2] ?? "";
+  const maxChars = readMaxCharsArgument(process.argv[3]);
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const result = await extract(
-    fileBytes,
-    mimeType,
-    LIMITS.extractedContentMaxChars,
-  );
+  const result = await extract(fileBytes, mimeType, maxChars);
   if (result.isErr()) {
     const errorClass = getWorkerErrorClass(result.error);
     const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
@@ -379,7 +402,7 @@ try {
     process.exit(1);
   }
   if (result.value) {
-    process.stdout.write(result.value);
+    await writeWorkerStdout(result.value);
   }
   process.exit(0);
 } catch (error) {

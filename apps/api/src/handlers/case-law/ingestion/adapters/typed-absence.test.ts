@@ -22,10 +22,12 @@ import {
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 test("every registered source has a publication fixture", () => {
@@ -94,12 +96,13 @@ for (const { key } of listSourceRegistrations()) {
     expect(
       normalized.metadata[DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY],
     ).toBe(DECISION_TEXT_ABSENCE_SCHEMA_VERSION);
-    expect(
-      caseLawCanonicalPayload({
-        ...normalized,
-        metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
-      }).unwrap(),
-    ).toEqual(caseLawCanonicalPayload(normalized).unwrap());
+    const legacyObservation = {
+      ...normalized,
+      metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
+    };
+    expect(caseLawCanonicalPayload(legacyObservation).unwrap()).toEqual(
+      caseLawCanonicalPayload(normalized).unwrap(),
+    );
     expect(
       shouldSkipRefresh({
         existingMetadata: legacyMetadata,

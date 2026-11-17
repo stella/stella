@@ -4,13 +4,23 @@ export default {
   id: "letter-spacing",
   capability:
     "Reading letter-spaced display type (`r o z h o d l`, `p o s t a n a w i a`) as words",
-  owner: ["apps/api/src/lib/legal-search/parsers/letter-spacing.ts"],
+  owner: [
+    "packages/text-normalize/src/letter-spacing.ts",
+    "apps/api/src/lib/legal-search/parsers/letter-spacing.ts",
+  ],
   summary:
     "Courts across jurisdictions set operative verbs and section titles in " +
-    "spaced letters. The owner keeps the word gaps a parser would otherwise " +
-    "squeeze (`týmspáchal`) and is what a role or heading rule matches " +
-    "against, so a spaced `U z a s a d n i e n i e` reads as the reasons " +
-    "heading in every source. A local spacing rule imports nothing a lint " +
-    "rule could confine; the structure-fidelity guard reads the output.",
-  enforcement: { kind: "none" },
+    "spaced letters. `collapseLetterSpacing` reads them as words and keeps " +
+    "the word gaps a parser would otherwise squeeze (`týmspáchal`); " +
+    "`collapseSpacedLetters` is the same reading folded for search and the " +
+    "role vocabularies, and `letterSpacingJoins` names the gaps the reader " +
+    "and find-in-page hide. Parsers read inline trees and blocks through " +
+    "`readInlineLetterSpacing` and `withAttestedLetterSpacing` in the API.",
+  enforcement: {
+    kind: "custom-rule",
+    rule: "no-local-letter-spacing/no-local-letter-spacing",
+    reason:
+      "A local reading is a regular expression that joins two letters " +
+      "across a gap or repeats a letter and a gap; no import names it.",
+  },
 } as const satisfies OwnershipEntry;

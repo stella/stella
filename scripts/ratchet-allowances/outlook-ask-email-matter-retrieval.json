@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 2,
+  "reason": "The Outlook question endpoint authorizes the named matter through the chat scope resolver, the one body workspace id sink the ownership-id lint accepts, and reads the matter through the search summary's own retrieval, so the answer uses the product's search instead of a parallel one."
+}

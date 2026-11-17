@@ -232,7 +232,11 @@ const refuseUnsendable = async (
     columns: { status: true },
   });
   if (!current) {
-    return new HandlerError({ status: 404, message: "Invoice not found" });
+    return new HandlerError({
+      status: 404,
+      code: "not_found",
+      message: "Invoice not found",
+    });
   }
   return isSendable(current.status)
     ? null
@@ -278,6 +282,7 @@ const validateInvoiceSend = async (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_changed",
         message: "The invoice changed while it was being sent",
         hint: "Reload the invoice and send it again.",
       }),
@@ -481,6 +486,7 @@ const recordDelivery = async (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_changed",
         message: "The invoice disappeared while its email was being delivered",
       }),
     );
@@ -494,6 +500,7 @@ const recordDelivery = async (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_link_unavailable",
         message: "The invoice link disappeared before delivery completed",
       }),
     );
@@ -550,6 +557,7 @@ const recordDelivery = async (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_send_state_changed",
           message: "The invoice email delivery state changed before completion",
         }),
       );
@@ -667,6 +675,7 @@ export const createSendInvoice = ({
           classifyFailure(
             new HandlerError({
               status: 404,
+              code: "not_found",
               message: "Organization not found",
             }),
             "not_found",

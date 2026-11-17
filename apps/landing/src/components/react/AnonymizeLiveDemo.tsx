@@ -1,10 +1,12 @@
-import type { UIEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
+import { Button } from "@stll/ui/button";
+import { HighlightedTextarea } from "@stll/ui/highlighted-textarea";
+import { Label } from "@stll/ui/label";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
@@ -111,11 +113,11 @@ const bucketOf = (label: string): Bucket => LABEL_TO_BUCKET[label] ?? "misc";
 // theme-paired --auth-gradient-end/--terminal-accent/--warning/
 // --muted-foreground tokens) rather than inventing new colors.
 const BUCKET_STYLE: Record<Bucket, { fg: string; displayLabel: string }> = {
-  person: { fg: "rgb(22,163,74)", displayLabel: "Person" },
-  organization: { fg: "rgb(37,99,235)", displayLabel: "Organization" },
-  id: { fg: "rgb(217,119,6)", displayLabel: "ID / number" },
-  phone: { fg: "#6264a7", displayLabel: "Phone" },
-  address: { fg: "#d97757", displayLabel: "Address" },
+  person: { fg: "var(--preview-green)", displayLabel: "Person" },
+  organization: { fg: "var(--preview-blue)", displayLabel: "Organization" },
+  id: { fg: "var(--preview-amber)", displayLabel: "ID / number" },
+  phone: { fg: "var(--accent-iris)", displayLabel: "Phone" },
+  address: { fg: "var(--accent-ember)", displayLabel: "Address" },
   country: { fg: "var(--auth-gradient-end)", displayLabel: "Country" },
   email: { fg: "var(--terminal-accent)", displayLabel: "Email" },
   date: { fg: "var(--muted-foreground)", displayLabel: "Date" },
@@ -308,16 +310,10 @@ const highlightsFor = (engine: EngineState, text: string): Highlights => {
   return { source: "pending", pairs: NO_PAIRS };
 };
 
-// Shared metrics so the backdrop's highlighted text lines up with the
-// transparent textarea's real characters on top of it.
-const textLayerClassName =
-  "m-0 h-full w-full resize-none overflow-auto p-4 font-sans text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]";
-
 export const AnonymizeLiveDemo = () => {
   const [text, setText] = useState(INITIAL_TEXT);
   const [engine, setEngine] = useState<EngineState>({ status: "warming" });
   const latestRequestRef = useRef(0);
-  const backdropRef = useRef<HTMLDivElement>(null);
 
   const run = (value: string) => {
     latestRequestRef.current += 1;
@@ -371,60 +367,47 @@ export const AnonymizeLiveDemo = () => {
     run(text);
   };
 
-  const syncBackdropScroll = (event: UIEvent<HTMLTextAreaElement>) => {
-    if (backdropRef.current) {
-      backdropRef.current.scrollTop = event.currentTarget.scrollTop;
-      backdropRef.current.scrollLeft = event.currentTarget.scrollLeft;
-    }
-  };
-
   return (
     <div
       className="flex h-full w-full flex-col overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={backdropRef}
-          aria-hidden="true"
-          className={`${textLayerClassName} pointer-events-none absolute inset-0 overflow-hidden`}
-          style={{ color: "var(--foreground)" }}
-        >
-          {segments.map((segment) =>
-            segment.bucket === undefined ? (
-              <span key={`${segment.sourceStart}-${segment.sourceEnd}`}>
-                {segment.text}
-              </span>
-            ) : (
-              <span
-                key={`${segment.sourceStart}-${segment.sourceEnd}`}
-                className="entity-span rounded-[0.2em]"
-                style={{
-                  backgroundColor: `color-mix(in srgb, ${BUCKET_STYLE[segment.bucket].fg} 20%, transparent)`,
-                  color: BUCKET_STYLE[segment.bucket].fg,
-                  boxDecorationBreak: "clone",
-                  WebkitBoxDecorationBreak: "clone",
-                }}
-              >
-                {segment.text}
-              </span>
-            ),
-          )}
-        </div>
-        <label htmlFor="anon-demo-textarea" className="sr-only">
-          Try the anonymization engine: edit this paragraph
-        </label>
-        <textarea
-          id="anon-demo-textarea"
-          className={`${textLayerClassName} absolute inset-0 border-0 bg-transparent text-transparent caret-[var(--foreground)] outline-none [-webkit-text-fill-color:transparent]`}
-          value={text}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          onChange={(event) => setText(event.target.value)}
-          onScroll={syncBackdropScroll}
-        />
-      </div>
+      <Label className="sr-only" htmlFor="anon-demo-textarea">
+        Try the anonymization engine: edit this paragraph
+      </Label>
+      <HighlightedTextarea
+        className="flex-1"
+        id="anon-demo-textarea"
+        value={text}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        onChange={(event) => setText(event.target.value)}
+        highlightedContent={
+          <>
+            {segments.map((segment) =>
+              segment.bucket === undefined ? (
+                <span key={`${segment.sourceStart}-${segment.sourceEnd}`}>
+                  {segment.text}
+                </span>
+              ) : (
+                <span
+                  key={`${segment.sourceStart}-${segment.sourceEnd}`}
+                  className="entity-span rounded-[0.2em]"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${BUCKET_STYLE[segment.bucket].fg} 20%, transparent)`,
+                    color: BUCKET_STYLE[segment.bucket].fg,
+                    boxDecorationBreak: "clone",
+                    WebkitBoxDecorationBreak: "clone",
+                  }}
+                >
+                  {segment.text}
+                </span>
+              ),
+            )}
+          </>
+        }
+      />
       <div
         className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 py-2 text-xs"
         style={{
@@ -437,18 +420,9 @@ export const AnonymizeLiveDemo = () => {
             {describeEngineStatus(engine, highlights)}
           </p>
           {engine.status === "error" && (
-            <button
-              type="button"
-              className="cursor-pointer rounded border px-2 py-0.5 underline-offset-2 hover:underline"
-              style={{
-                borderColor:
-                  "color-mix(in srgb, var(--border) 65%, transparent)",
-                color: "var(--foreground)",
-              }}
-              onClick={retry}
-            >
+            <Button onClick={retry} size="xs" variant="outline">
               {engine.recovery === "reload" ? "Reload" : "Retry"}
-            </button>
+            </Button>
           )}
         </div>
         {legend.length > 0 && (
@@ -501,7 +475,7 @@ const describeEngineStatus = (
     }
     case "ready": {
       if (highlights.pairs.length === 0) {
-        return "No entities detected yet — try adding a name or company.";
+        return "No entities detected yet. Try adding a name or company.";
       }
       return highlights.pairs.length === 1
         ? "1 entity detected"

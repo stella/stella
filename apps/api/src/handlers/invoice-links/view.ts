@@ -120,24 +120,30 @@ const openLinkedInvoice = async (
     return Result.err(unavailable);
   }
   const data = buildInvoiceTemplateData(
-    invoiceDocumentRenderOptions(document, linked.amountDue),
+    invoiceDocumentRenderOptions(document, linked.ledger),
   );
   if (data.isErr()) {
     return Result.err(
-      new HandlerError({ status: 409, message: data.error.message }),
+      new HandlerError({
+        status: 409,
+        code: "invoice_not_renderable",
+        message: data.error.message,
+      }),
     );
   }
   const eInvoice = await buildEInvoice(linked);
   const { invoice } = document;
   const { settlement } = linked;
+  const { payment } = data.value;
   const payable =
     settlement.kind !== "open" ||
+    payment?.status !== "due" ||
     !requestsPayment({
       documentType: invoice.documentType,
       amountMinor: linked.amountDue,
     })
       ? null
-      : data.value.payment;
+      : payment;
   return await deliverInvoiceLink({
     caller,
     workspaceId: invoice.workspaceId,

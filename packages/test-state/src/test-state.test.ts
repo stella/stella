@@ -464,3 +464,50 @@ test("next file sees the originals", () => {
   expect(child.output).toContain("CLOSED_FIXTURE_VERIFIED");
   expect(child.output).toContain("NEXT_FILE_ORIGINALS_VERIFIED");
 });
+
+test("one fixture restores distinct configuration owners and shared views by object identity", () => {
+  const child = runLifecycleFixture(`
+const key = Symbol("shared-key");
+const first: { value: string; [key: string | symbol]: string } = {
+  value: "first-original", [key]: "first-symbol", 0: "numeric-original",
+};
+const second = { value: "second-original", [key]: "second-symbol" };
+const originalFirst = Object.getOwnPropertyDescriptors(first);
+const originalSecond = Object.getOwnPropertyDescriptors(second);
+const state = createTestState({ file: import.meta.path, config: first });
+const other = state.forConfig(second);
+const same = state.forConfig(first);
+state.setConfig("value", "first-file");
+other.setConfig("value", "second-file");
+state.beforeAll(() => {
+  same.setConfig("value", "first-suite");
+  other.setConfig("value", "second-suite");
+});
+afterEach(() => {
+  expect(first.value).toBe("first-suite");
+  expect(second.value).toBe("second-suite");
+  expect(first[key]).toBe("first-symbol");
+  expect(first[0]).toBe("numeric-original");
+  expect(second[key]).toBe("second-symbol");
+});
+afterAll(() => {
+  expect(Object.getOwnPropertyDescriptors(first)).toEqual(originalFirst);
+  expect(Object.getOwnPropertyDescriptors(second)).toEqual(originalSecond);
+  expect(() => other.setConfig("value", "late")).toThrow("closed");
+  console.log("MULTIPLE_CONFIGS_RESTORED");
+});
+test.each(["one", "two"])("independent originals survive repeated writes: %s", (value) => {
+  state.setConfig("value", value);
+  state.setConfig(0, "numeric-write");
+  same.setConfig("0", "string-write");
+  same.patchConfig({ value: "same-owner", [key]: "first-changed" });
+  other.patchConfig({ value, [key]: "second-changed" });
+  other.deleteConfig("value");
+  other.setConfig("value", "second-recreated");
+  expect(first.value).toBe("same-owner");
+  expect(second.value).toBe("second-recreated");
+});
+`);
+  expect(child.output).toContain("MULTIPLE_CONFIGS_RESTORED");
+  expect(child.exitCode).toBe(0);
+});

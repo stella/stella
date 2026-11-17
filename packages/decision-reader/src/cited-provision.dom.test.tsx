@@ -11,13 +11,13 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { section72aSubsection1Blocks } from "@stll/legal-ast/fixtures/cz-141-1961-section-72a";
 import { section128Subsection2Blocks } from "@stll/legal-ast/fixtures/sk-300-2005-section-128";
 import {
-  E_SBIRKA_LIST_SCHEME,
-  SLOV_LEX_LIST_SCHEME,
-} from "@stll/legal-ast/statute-list";
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+} from "@stll/legal-ast/statute-anchor-scheme";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 
+import { fakeReaderAdapters } from "../tests/reader-adapters";
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
-import { fakeReaderAdapters } from "./decision-text.test";
 import { BlockRenderer } from "./document-ast-text";
 import { DecisionReaderProvider } from "./reader-adapters";
 import type {
@@ -127,7 +127,11 @@ const openCard = async (container: HTMLElement) => {
     container.querySelector<HTMLElement>('[data-slot="provision-card"]') ??
     panic("Missing provision card");
   await act(async () => {
-    card.click();
+    (
+      card.querySelector<HTMLButtonElement>(
+        '[data-slot="provision-card-trigger"]',
+      ) ?? panic("Missing provision disclosure")
+    ).click();
   });
   return card;
 };
@@ -194,6 +198,66 @@ describe("a cited provision's wording", () => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
     await GlobalRegistrator.unregister();
   });
+  for (const placement of ["inline", "gutter"] as const) {
+    test(`${placement} wording and independent actions do not activate the disclosure`, async () => {
+      let fullRequests = 0;
+      const container = await mount(
+        <CitedProvisionExpansion
+          citations={[citation]}
+          full={{ isPending: false, whole: null }}
+          onToggleFull={() => {
+            fullRequests++;
+          }}
+          placement={placement}
+          showsFull={false}
+          wordings={wordings}
+        />,
+      );
+      const card = await openCard(container);
+      const trigger =
+        card.querySelector<HTMLButtonElement>(
+          '[data-slot="provision-card-trigger"]',
+        ) ?? panic("Missing disclosure");
+      expect(card.hasAttribute("role")).toBe(false);
+      expect(card.hasAttribute("tabindex")).toBe(false);
+      expect(trigger.tagName).toBe("BUTTON");
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      const contentId =
+        trigger.getAttribute("aria-controls") ??
+        panic("Missing disclosure target");
+      expect(card.querySelector(`[id="${contentId}"]`)).not.toBeNull();
+      const paragraph =
+        wordingOf(card).querySelector("p") ?? panic("Missing wording");
+      await act(async () => {
+        paragraph.click();
+      });
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      const fullToggle =
+        [...card.querySelectorAll("button")].find(
+          (button) =>
+            button !== trigger && button.hasAttribute("aria-expanded"),
+        ) ?? panic("Missing full wording action");
+      await act(async () => {
+        fullToggle.click();
+      });
+      expect(fullRequests).toBe(1);
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      for (const action of card.querySelectorAll<HTMLElement>(
+        "[data-peek-action]",
+      )) {
+        expect(trigger.contains(action)).toBe(false);
+      }
+      expect(wordingOf(card).querySelector("p") === paragraph).toBe(true);
+      await act(async () => {
+        trigger.click();
+      });
+      expect(trigger.getAttribute("aria-expanded")).toBe("false");
+      expect(wordingOf(card).querySelector("p")?.textContent).toBe(
+        paragraph.textContent,
+      );
+    });
+  }
+
   test("the hover preview quotes a paragraph and its letters as one unit", async () => {
     const container = await mount(
       <CitedProvisionPeek provision={citation} wordings={wordings} />,
@@ -301,7 +365,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
-            statuteLists={E_SBIRKA_LIST_SCHEME}
+            statuteAnchors={E_SBIRKA_ANCHORS}
             variant="statute"
           />
         ))}
@@ -324,7 +388,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
-            statuteLists={SLOV_LEX_LIST_SCHEME}
+            statuteAnchors={SLOV_LEX_ANCHORS}
             variant="statute"
           />
         ))}

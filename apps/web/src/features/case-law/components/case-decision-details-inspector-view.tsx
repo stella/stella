@@ -12,6 +12,7 @@ import type { CaseDecisionViewPayload } from "@/components/inspector/case-decisi
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { DecisionAppealReviews } from "@/features/case-law/components/case-viewer/decision-appeal-reviews";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
 import { DECISION_FACT_KINDS } from "@/features/case-law/components/case-viewer/decision-facts.logic";
@@ -44,9 +45,9 @@ export const CaseDecisionDetailsInspectorView = ({
   const decision =
     decisionView.type === "items" ? decisionView.items : undefined;
   const decided =
-    decision?.decisionDate === undefined || decision.decisionDate === null
-      ? null
-      : parseDeterministicDate(decision.decisionDate);
+    decision?.decisionDate !== undefined && decision.decisionDate !== null
+      ? parseDeterministicDate(decision.decisionDate)
+      : null;
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -111,6 +112,10 @@ export const CaseDecisionDetailsInspectorView = ({
               </Section>
               {/* Who cites this decision and what it cites, off the page so
                   the text starts at the top and the lists have room. */}
+              <DecisionAppealReviews
+                reviews={decision.appealReviews}
+                country={decision.country}
+              />
               <DecisionCitationBox
                 decision={{
                   caseNumber: decision.caseNumber,

@@ -6,7 +6,7 @@ import {
   normalizeSaosDumpItem,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
@@ -30,13 +30,18 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -560,9 +565,8 @@ test("SAOS detail null URLs and chambers fall back to the listing", async () => 
 });
 
 describe("SAOS detail refusals preserve the dump crawl's storage policy", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test.each([401, 403, 429])(
@@ -570,17 +574,19 @@ describe("SAOS detail refusals preserve the dump crawl's storage policy", () => 
     async (status) => {
       const listing = await rowById(DUMP_PAGE, 332_735);
       let detailRequests = 0;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.pathname.includes("/dump/")) {
-          return Response.json({ items: [listing] });
-        }
-        expect(url.pathname.endsWith("/332735")).toBe(true);
-        detailRequests += 1;
-        return new Response("refused", { status });
-      });
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          if (url.pathname.includes("/dump/")) {
+            return Response.json({ items: [listing] });
+          }
+          expect(url.pathname.endsWith("/332735")).toBe(true);
+          detailRequests += 1;
+          return new Response("refused", { status });
+        }),
+      );
 
       const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
       expect(detailRequests).toBe(1);

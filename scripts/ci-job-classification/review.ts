@@ -75,12 +75,24 @@ export const isPrivilegedJobClosure = ({
   privileged,
   shape,
   reachableDocuments,
-}: PrivilegedJobClosureOptions) =>
-  isPrivilegedJob({ kind, privileged, shape }) ||
-  [...reachableDocuments].some((document) => document.privileged);
+}: PrivilegedJobClosureOptions) => {
+  const documents = [...reachableDocuments];
+  return (
+    isPrivilegedJob({ kind, privileged, shape }) ||
+    documents.some((document) => document.privileged) ||
+    // Only privileged jobs are reviewed, and a repository writer must be
+    // reviewed as `priority`: the signed-commit action writes without a
+    // token permission or secret that would mark the job otherwise.
+    isRepositoryWritingJob({ shape, reachableDocuments: documents })
+  );
+};
 
 export class ReviewRequiredError extends TaggedError("ReviewRequiredError")<{
   message: string;
   privilegedJobs: string[];
+  /** Privileged jobs whose review does not cover the current digest. */
+  staleJobs: string[];
+  /** Decision keys whose job is not privileged or no longer exists. */
+  staleDecisions: string[];
   refusal?: string;
 }> {}

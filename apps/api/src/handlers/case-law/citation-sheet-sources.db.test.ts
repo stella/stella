@@ -478,7 +478,7 @@ const carriedByLookup = async (
         ? []
         : resolution.candidates.map(({ id }) => id);
     case "incomplete_identifier":
-      return resolution.candidates.map(({ id }) => id);
+      return [resolution.decision.id];
     default: {
       resolution satisfies never;
       return panic("Unhandled identity resolution");

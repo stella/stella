@@ -44,7 +44,7 @@ export const ROLE_KEYS = MODEL_OVERRIDE_GROUPS.toSorted(
 );
 
 export type ProviderValue = (typeof PROVIDER_KEYS)[number];
-export type RegionValue = Extract<
+type RegionValue = Extract<
   OrganizationAIConfig,
   { configured: true }
 >["providers"][number]["region"];
@@ -178,7 +178,7 @@ export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Record<
   >
 >;
 
-export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
+const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
   ProviderValue,
   readonly string[]
 >;
@@ -205,9 +205,6 @@ export const getModelOptionsForRole = ({
 
 export const isProviderValue = (value: string | null): value is ProviderValue =>
   value !== null && PROVIDER_KEYS.some((provider) => provider === value);
-
-export const isRoleValue = (value: string): value is RoleValue =>
-  ROLE_KEYS.some((role) => role === value);
 
 export const createProviderCredentialDraft = (
   provider: ProviderValue = "google",

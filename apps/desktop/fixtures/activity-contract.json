@@ -15,8 +15,19 @@
     "unreadable": true,
     "incompatible": true
   },
-  "recordingStatuses": ["off", "recording", "paused"],
-  "retentions": ["week", "month", "quarter"],
-  "retentionDays": [7, 30, 90],
-  "narrativeAssists": ["ask", "always"]
+  "recordingStatuses": [
+    "off",
+    "recording",
+    "paused"
+  ],
+  "retentions": [
+    "week",
+    "month",
+    "quarter"
+  ],
+  "retentionDays": [
+    7,
+    30,
+    90
+  ]
 }

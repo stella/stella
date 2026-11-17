@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, gte, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, lte, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -31,8 +31,7 @@ import type {
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
-
-const DELETING_WORKSPACE_STATUS = "deleting" as const;
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const myTimeEntryColumns = {
   id: timeEntries.id,
@@ -248,7 +247,7 @@ const listMyTimeEntries = createSafeRootHandler(
         and(
           eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
           eq(workspaces.organizationId, session.activeOrganizationId),
-          ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+          visibleWorkspaceSql(),
         ),
       ),
     );

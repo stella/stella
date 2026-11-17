@@ -51,6 +51,9 @@ fi
 if [[ "$*" == "--no-env-file scripts/dependency-audit.ts --prune-baseline" ]]; then
   exit 0
 fi
+if [[ "$1" == fmt ]]; then
+  exit 0
+fi
 exit 2
 STUB
 chmod +x "$fixture/bin/gh" "$fixture/bin/bun"
@@ -97,7 +100,9 @@ for scenario in TEST_FIX_AVAILABLE TEST_QUARANTINED TEST_UPSTREAM_BLOCKED TEST_S
   : > "$GITHUB_OUTPUT"
   env "$scenario=true" TEST_OPEN_PRS=1 bash "$subject"
   grep -q '^changed=true$' "$GITHUB_OUTPUT"
-  [[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 3 ]]
+  # Every scenario rewrites a JSON file, which the repository formatter owns.
+  grep -Eq '^bun fmt (scripts/dependency-audit-baseline\.json|package\.json)' "$TEST_CALLS"
+  [[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 4 ]]
   refute_call '^gh pr list |^gh pr create |^git push '
   [[ "$(git rev-parse HEAD)" == "$initial_sha" ]]
 done

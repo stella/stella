@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -6,6 +7,7 @@ import {
   canTransitionCorpusIndexIntent,
   CORPUS_INDEX_INTENT_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_URLS = [
@@ -22,6 +24,15 @@ const MIGRATION_URLS = [
     import.meta.url,
   ),
 ] as const;
+/**
+ * The newest definition of the transition function. Only that function is
+ * taken from it: the guards above are pinned at the versions these tests
+ * describe, and the function they call is the one production runs.
+ */
+const LATEST_TRANSITION_MIGRATION_URL = new URL(
+  "../../../drizzle/20261115130000_corpus_projection_offline_delivery/migration.sql",
+  import.meta.url,
+);
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000001";
 const FIRST_DECISION_ID = "0198e331-e578-7000-8000-000000000002";
 const RACED_DECISION_ID = "0198e331-e578-7000-8000-000000000003";
@@ -60,6 +71,10 @@ const rejectionMessage = async (run: Promise<unknown>): Promise<string> =>
 beforeAll(
   async () => {
     client = await createTestPglite();
+    await optOutOfCorpusProjectionSeedingGuard(client, {
+      reason:
+        "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+    });
     db = drizzle({ client });
 
     await db.execute(sql`
@@ -115,6 +130,20 @@ beforeAll(
         await db.execute(sql.raw(ddl));
       }
     }
+    const latestTransition = (
+      await Bun.file(LATEST_TRANSITION_MIGRATION_URL).text()
+    )
+      .split("--> statement-breakpoint")
+      .map((statement) => statement.trim())
+      .find((statement) =>
+        statement.includes(
+          'FUNCTION "corpus_index_projection_intent_transition_allowed"',
+        ),
+      );
+    if (latestTransition === undefined) {
+      panic("The newest transition function is missing");
+    }
+    await db.execute(sql.raw(latestTransition));
   },
   { timeout: 120_000 },
 );

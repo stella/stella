@@ -21,6 +21,12 @@
         -webkit-user-select: none;
         user-select: none;
       }
+      .window-drag-region {
+        height: 28px;
+        inset: 0 0 auto;
+        position: fixed;
+        z-index: 1;
+      }
       .dialog {
         flex-shrink: 0;
         padding: 56px 24px 20px;
@@ -138,6 +144,11 @@
     </style>
   </head>
   <body>
+    <div
+      aria-hidden="true"
+      class="window-drag-region"
+      data-tauri-drag-region
+    ></div>
     <main class="dialog">
       <div class="mark">
         <svg
@@ -172,6 +183,11 @@
       </div>
     </main>
     <script type="module">
+      import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
+
+      installNativeContextMenuPolicy(document);
+    </script>
+    <script type="module">
       import { fitStaticDialog } from "./static-dialog-fit.js";
       // Origins and wording both arrive in the URL hash, set by Rust when it
       // opens the window: the dialog carries no strings of its own, so it
@@ -181,7 +197,10 @@
       const webOrigin = params.get("webOrigin") || "";
       const apiBaseUrl = params.get("apiBaseUrl") || "";
       const handoffMode = params.get("mode") === "handoff";
-      const accountMode = params.get("mode") === "account";
+      const switchMode = params.get("mode") === "switch";
+      // A switch names the account it connects the same way a connection
+      // does; only its wording and default answer differ.
+      const accountMode = params.get("mode") === "account" || switchMode;
 
       document.documentElement.lang = params.get("lang") || "en";
       document.documentElement.dir = params.get("dir") || "ltr";
@@ -214,6 +233,16 @@
       document.getElementById("apiBaseUrl").textContent = accountMode
         ? params.get("organizationName")
         : apiBaseUrl;
+
+      if (switchMode) {
+        document.title = strings.switchWindowTitle;
+        document.getElementById("title").textContent = strings.switchTitle;
+        document.getElementById("subtitle").textContent = params.get("message");
+        document.getElementById("connectBtn").textContent =
+          strings.switchConfirm;
+        // Switching ends the current link, so Cancel is the default answer.
+        document.getElementById("cancelBtn").focus();
+      }
 
       if (handoffMode) {
         document.title = strings.handoffWindowTitle;

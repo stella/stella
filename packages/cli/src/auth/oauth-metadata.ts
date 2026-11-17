@@ -16,7 +16,6 @@ export type AuthorizationServerMetadata = {
   readonly issuer: string;
   readonly authorization_endpoint: string;
   readonly token_endpoint: string;
-  readonly registration_endpoint?: string | undefined;
   readonly client_id_metadata_document_supported?: boolean | undefined;
   readonly code_challenge_methods_supported?: readonly string[] | undefined;
   readonly scopes_supported?: readonly string[] | undefined;
@@ -28,7 +27,6 @@ const authorizationServerMetadataSchema = v.object({
   issuer: v.pipe(v.string(), v.url()),
   authorization_endpoint: v.pipe(v.string(), v.url()),
   token_endpoint: v.pipe(v.string(), v.url()),
-  registration_endpoint: v.optional(v.pipe(v.string(), v.url())),
   client_id_metadata_document_supported: v.optional(v.boolean()),
   code_challenge_methods_supported: v.optional(v.array(v.string())),
   scopes_supported: v.optional(v.array(v.string())),

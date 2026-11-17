@@ -1,10 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { panic, UnhandledException } from "better-result";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { readFailureBrand } from "@stll/errors";
+import { withFakeTimers } from "@stll/test-kit";
 
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
+  findRequestBudgetExpiry,
   remainingRequestBudgetMs,
+  requestBoundedTimeout,
   requestBoundedTimeoutMs,
   requestBudgetExpiry,
   runBoundedRequestStep,
@@ -137,14 +141,73 @@ describe("request budget expiry", () => {
   });
 
   test("counts the budget from the request's start, not from the scope", () => {
+    const clock = spyOn(performance, "now").mockReturnValue(1500);
+    try {
+      runWithinRequestLatencyBudget(
+        {
+          label: "read_statute",
+          budgetMs: 2000,
+          startedAtMs: 0,
+        },
+        () => {
+          expect(requestBoundedTimeoutMs(30_000)).toBe(500);
+          clock.mockReturnValue(1999);
+          expect(requestBoundedTimeoutMs(30_000)).toBe(1);
+          clock.mockReturnValue(2000);
+          expect(remainingRequestBudgetMs()).toBe(0);
+          expect(requestBoundedTimeoutMs(30_000)).toBe(1);
+        },
+      );
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("attributes a timeout to the request only when it keeps the request's deadline", () => {
+    expect(requestBoundedTimeout(30_000).endsAtRequestDeadline).toBe(false);
     runWithinRequestLatencyBudget(
-      {
-        label: "read_statute",
-        budgetMs: 2000,
-        startedAtMs: performance.now() - 1500,
-      },
+      { label: "search_legislation", budgetMs: 8000 },
       () => {
-        expect(requestBoundedTimeoutMs(30_000)).toBeLessThanOrEqual(500);
+        expect(requestBoundedTimeout(30_000).endsAtRequestDeadline).toBe(true);
+        expect(requestBoundedTimeout(0).endsAtRequestDeadline).toBe(true);
+        expect(requestBoundedTimeout(1500)).toEqual({
+          timeoutMs: 1500, // timeout under test
+          endsAtRequestDeadline: false,
+        });
+        // A timeout passed down as what is left of the request keeps its
+        // deadline even though the clamp floors to whole milliseconds.
+        const remaining = remainingRequestBudgetMs() ?? panic("in scope");
+        expect(
+          requestBoundedTimeout(remaining - 0.5).endsAtRequestDeadline,
+        ).toBe(true);
+      },
+    );
+  });
+
+  test("finds the budget's expiry through the errors that carry it, and only it", () => {
+    runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 0 },
+      () => {
+        const expiry =
+          requestBudgetExpiry(cause, { clampedTimeout: true }) ??
+          panic("in scope");
+        const carried = new HandlerError({
+          status: 503,
+          code: "search_index_unavailable",
+          message: "refused",
+          cause: new UnhandledException({ cause: expiry }),
+        });
+        expect(findRequestBudgetExpiry(carried)).toBe(expiry);
+        expect(
+          findRequestBudgetExpiry(
+            new TimeoutError({
+              message: "a timeout of its own",
+              label: "search_legislation",
+              timeoutMs: 20, // timeout under test
+            }),
+          ),
+        ).toBeUndefined();
+        expect(findRequestBudgetExpiry(cause)).toBeUndefined();
       },
     );
   });
@@ -154,50 +217,84 @@ describe("bounded request step", () => {
   test("answers the step's value when it completes in time", async () => {
     expect(
       await runBoundedRequestStep(async () => await Promise.resolve(42), {
-        label: "step",
+        label: "case-law-admitted-courts",
         budgetMs: 1000,
       }),
     ).toEqual({ status: "complete", value: 42 });
   });
 
   test("degrades at its sub-budget instead of waiting", async () => {
-    const startedAt = performance.now();
-    const step = await runBoundedRequestStep(never, {
-      label: "court-list",
-      budgetMs: 20,
+    await withFakeTimers(async (timers) => {
+      const started = Promise.withResolvers<AbortSignal>();
+      const pending = runBoundedRequestStep(
+        async (signal) => {
+          started.resolve(signal);
+          return await never();
+        },
+        { label: "case-law-admitted-courts", budgetMs: 20 },
+      );
+      const signal = await started.promise;
+      await timers.advance(19);
+      expect(signal.aborted).toBe(false);
+      await timers.advance(1);
+      expect(signal.aborted).toBe(true);
+      const step = await pending;
+      expect(step).toMatchObject({
+        status: "degraded",
+        reason: "budget_exhausted",
+        budgetMs: 20,
+      });
+      expect(step.status === "degraded" ? step.error : undefined).toBe(
+        signal.reason,
+      );
+      expect(
+        step.status === "degraded" ? readFailureBrand(step.error) : undefined,
+      ).toEqual({ reason: "timeout_budgeted", source: "instance" });
+      expect(timers.pendingTimers()).toBe(0);
     });
-    expect(performance.now() - startedAt).toBeLessThan(1000);
-    expect(step).toMatchObject({
-      status: "degraded",
-      reason: "budget_exhausted",
-      budgetMs: 20,
-    });
-    // Graded as a budgeted wait, never as an unbounded timeout defect.
-    expect(
-      step.status === "degraded" ? readFailureBrand(step.error) : undefined,
-    ).toEqual({ reason: "timeout_budgeted", source: "instance" });
   });
 
   test("degrades at the request's budget when that is the shorter", async () => {
-    const step = await runWithinRequestLatencyBudget(
-      { label: "search_case_law", budgetMs: 20 },
-      async () =>
-        await runBoundedRequestStep(never, {
-          label: "court-list",
-          budgetMs: 60_000,
-        }),
-    );
-    expect(step).toMatchObject({ status: "degraded" });
-    expect(step.status === "degraded" ? step.budgetMs : 0).toBeLessThanOrEqual(
-      20,
-    );
+    await withFakeTimers(async (timers) => {
+      const clock = spyOn(performance, "now").mockImplementation(
+        timers.clock.monotonic,
+      );
+      try {
+        const started = Promise.withResolvers<AbortSignal>();
+        const pending = runWithinRequestLatencyBudget(
+          { label: "search_case_law", budgetMs: 20 },
+          async () =>
+            await runBoundedRequestStep(
+              async (signal) => {
+                started.resolve(signal);
+                return await never();
+              },
+              { label: "case-law-admitted-courts", budgetMs: 60_000 },
+            ),
+        );
+        const signal = await started.promise;
+        await timers.advance(19);
+        expect(signal.aborted).toBe(false);
+        await timers.advance(1);
+        expect(signal.aborted).toBe(true);
+        expect(await pending).toMatchObject({
+          status: "degraded",
+          reason: "budget_exhausted",
+          budgetMs: 20,
+          error: signal.reason,
+        });
+        expect(timers.pendingTimers()).toBe(0);
+      } finally {
+        clock.mockRestore();
+      }
+    });
   });
 
   test("reports any other failure as failed, with its own error", async () => {
     const failure = new Error("court list unreadable");
     expect(
       await runBoundedRequestStep(async () => await Promise.reject(failure), {
-        label: "court-list",
+        label: "case-law-admitted-courts",
         budgetMs: 1000,
       }),
     ).toEqual({ status: "failed", error: failure });

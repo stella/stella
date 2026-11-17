@@ -11,11 +11,7 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
-import {
-  assertProperty,
-  propertyConfig,
-  propertySeed,
-} from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   extractCitations,
@@ -32,9 +28,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const paragraph = (
   id: string,
@@ -842,7 +835,7 @@ describe("case captions", () => {
           ).toEqual([["9137 N.Y. 9246"], ["9137 N.Y. 9246"]]);
         },
       ),
-      config(30),
+      { numRuns: 30, seed: propertySeed() },
     );
   });
 
@@ -1102,7 +1095,8 @@ const separator = fc.constantFrom(". ", "; ", "; see ");
 
 describe("occurrences (properties)", () => {
   test("any unsupported authority between a case and Id. stops it", () => {
-    fc.assert(
+    assertProperty(
+      "any unsupported authority between a case and Id. stops it",
       fc.property(
         reference,
         unsupportedAuthority,
@@ -1122,12 +1116,13 @@ describe("occurrences (properties)", () => {
           });
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("spacing and spelling variants read as the same bases", () => {
-    fc.assert(
+    assertProperty(
+      "spacing and spelling variants read as the same bases",
       fc.property(
         fc.array(reference, { minLength: 1, maxLength: 4 }),
         (references) => {
@@ -1144,12 +1139,13 @@ describe("occurrences (properties)", () => {
           );
         },
       ),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   test("a pin never changes what a reference names", () => {
-    fc.assert(
+    assertProperty(
+      "a pin never changes what a reference names",
       fc.property(reference, pinText, ({ printed }, pin) => {
         const bare = targetsOf([paragraph("p", `${printed}. Id.`)]);
         const pinned = targetsOf([
@@ -1157,12 +1153,13 @@ describe("occurrences (properties)", () => {
         ]);
         expect(pinned).toEqual(bare);
       }),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   test("renaming an opinion never links across opinions", () => {
-    fc.assert(
+    assertProperty(
+      "renaming an opinion never links across opinions",
       fc.property(
         fc.uniqueArray(fc.stringMatching(/^[a-z]{1,6}$/u), {
           minLength: 2,
@@ -1184,12 +1181,13 @@ describe("occurrences (properties)", () => {
           ]);
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 
   test("repeating a reference or its short forms adds occurrences, never edges", () => {
-    fc.assert(
+    assertProperty(
+      "repeating a reference or its short forms adds occurrences, never edges",
       fc.property(
         reference,
         fc.integer({ min: 1, max: 5 }),
@@ -1211,7 +1209,7 @@ describe("occurrences (properties)", () => {
           );
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 });

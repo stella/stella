@@ -1,5 +1,9 @@
 [
   {
+    "id": "create_organization::delegated",
+    "reason": "The organizations.create session capability checks its declared account OAuth scope; organization creation has no existing organization member permission."
+  },
+  {
     "id": "mint_web_handoff::delegated",
     "reason": "The mint operation verifies current OAuth consent and its live user grant, rather than a workspace mutation permission."
   },

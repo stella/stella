@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,7 +17,7 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
@@ -69,7 +70,7 @@ import {
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createMemoryPressureGate,
   createPressurePause,
@@ -164,7 +165,7 @@ const lockActiveWorkspaceForDerivative = async (
     .where(eq(workspaces.id, workspaceId))
     .limit(1)
     .for("update");
-  return workspaceRows.at(0)?.status === "active";
+  return workspaceAcceptsWrites(workspaceRows.at(0)?.status);
 };
 
 const cleanupUnpublishedDerivative = async ({
@@ -439,7 +440,6 @@ export const initFileDerivativeWorker = () => {
     createFileDerivativeProcessor({
       memory,
       pausing,
-      processPdf: processPdfDerivativeJob,
       processThumbnail: processImageThumbnailJob,
     }),
     {
@@ -452,20 +452,28 @@ export const initFileDerivativeWorker = () => {
     // Local pause without waiting: it is called from inside the processor,
     // which must still finish the job in hand.
     pause: () => {
-      worker.pause(true).catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        async () =>
+          worker.pause(true).catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.pause",
+      );
     },
     resume: () => {
-      worker.resume().catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        async () =>
+          worker.resume().catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.resume",
+      );
     },
   };
 
@@ -473,33 +481,41 @@ export const initFileDerivativeWorker = () => {
     const exhausted =
       job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
     if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-      markImageThumbnailFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext("fileDerivative.markThumbnailFailed", {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
+      detached(
+        async () =>
+          markImageThumbnailFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markThumbnailFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "file-derivative-queue.mark-image-thumbnail-failed",
+      );
     } else if (exhausted) {
-      markPdfDerivativeFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext("fileDerivative.markPdfFailed", {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
+      detached(
+        async () =>
+          markPdfDerivativeFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markPdfFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "file-derivative-queue.mark-pdf-derivative-failed",
+      );
     }
 
     captureError(
@@ -560,13 +576,13 @@ export const createFileDerivativeProcessor =
     memory,
     now = () => Temporal.Now.instant().epochMilliseconds,
     pausing,
-    processPdf,
+    processPdf = processPdfDerivativeJob,
     processThumbnail,
   }: {
     memory: Pick<MemoryPressureGate, "read">;
     now?: () => number;
     pausing: Pick<PressurePause, "closed">;
-    processPdf: (data: FileDerivativeJobData) => Promise<void>;
+    processPdf?: (data: FileDerivativeJobData) => Promise<void>;
     processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
   }) =>
   async (job: FileDerivativeProcessorJob): Promise<void> => {
@@ -782,6 +798,9 @@ const buildPdfDerivative = async (
       };
     }
     throw conversion.error;
+  }
+  if (conversion.value.buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+    return { type: "refused", reason: DERIVATIVE_FAILURE_REASON.TOO_LARGE };
   }
   return { type: "built", value: conversion.value.buffer };
 };

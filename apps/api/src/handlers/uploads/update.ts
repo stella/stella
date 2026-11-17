@@ -52,6 +52,7 @@ import {
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { LIMITS } from "@/api/lib/limits";
+import { DOCUMENT_BYTES_ADMISSION } from "@/api/lib/load/document-bytes-admission";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -59,7 +60,6 @@ import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
-import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -214,9 +214,9 @@ const finalizeUpload = createSafeHandler(
     // comes before the claim: waiting for capacity never runs the reclaim
     // clock, and a request that is not admitted in time leaves the row as it
     // was, so the retry can claim it at once.
-    const release = await UPLOAD_FINALIZE_ADMISSION.acquire(
+    const release = await DOCUMENT_BYTES_ADMISSION.acquire(
       pending.declaredSize,
-      LIMITS.uploadFinalizeAdmissionWaitMs,
+      LIMITS.documentBytesAdmissionWaitMs,
     );
     if (release === null) {
       return Result.err(
@@ -229,7 +229,7 @@ const finalizeUpload = createSafeHandler(
     try {
       logger.info("uploads.finalize_admitted", {
         declaredBytes: pending.declaredSize,
-        inFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+        inFlightBytes: DOCUMENT_BYTES_ADMISSION.inUseBytes(),
       });
       return yield* claimAndFinalize({
         organizationId: session.activeOrganizationId,

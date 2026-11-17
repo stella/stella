@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -195,7 +195,8 @@ describe("replay walk boundary", () => {
   test(
     "every stored decision is served exactly once, at any page size",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "every stored decision is served exactly once, at any page size",
         fc.asyncProperty(
           fc.uniqueArray(fc.integer({ min: 0, max: 999 }), {
             minLength: 2,
@@ -233,7 +234,7 @@ describe("replay walk boundary", () => {
             );
           },
         ),
-        propertyConfig({ numRuns: 12 }),
+        { numRuns: 12 },
       );
     },
     propertyTestTimeout(60_000),
@@ -894,6 +895,55 @@ describe("replay of a source", () => {
     expect(ran.report.visited).toBe(1);
     expect(ran.report.resumeAfter).toBe(matchingId);
     expect(reads).toHaveLength(1);
+  });
+
+  test("a parser-version scope selects only the decisions that version wrote", async () => {
+    const sourceId = await createSource();
+    const writtenId = createSafeId<"caseLawDecision">();
+    const earlierId = createSafeId<"caseLawDecision">();
+    const laterId = createSafeId<"caseLawDecision">();
+    for (const [index, id] of [writtenId, earlierId, laterId].entries()) {
+      await insertDecision({
+        sourceId,
+        id,
+        sub: 21 + index,
+        caseNumber: `III. ÚS ${String(index + 1)}/2026`,
+        storedRaw: true,
+        sourceHash: `version-${String(index)}`,
+      });
+    }
+    for (const [id, version] of [
+      [writtenId, 12],
+      [earlierId, 11],
+      [laterId, 13],
+    ] as const) {
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: version })
+        .where(eq(caseLawDecisions.id, id));
+    }
+    const scope = {
+      type: "parser-version",
+      parserVersion: 12,
+    } as const satisfies CaseLawReplayScope;
+
+    const end = await selectScopeEnd({ scopedDb, sourceId, scope });
+    if (end === null) {
+      throw new TypeError("Expected the version scope to hold a row");
+    }
+    const selected = await selectReplayPage({
+      scopedDb,
+      sourceId,
+      scope,
+      after: null,
+      until: end,
+      limit: 10,
+    });
+    expect(selected.map(({ id }) => id)).toEqual([writtenId]);
+    expect(await countReplayability({ scopedDb, sourceId, scope })).toEqual({
+      storedLocally: 1,
+      needsRefetch: 0,
+    });
   });
 
   test("a dry run classifies each row by its re-parsed hash and writes nothing", async () => {

@@ -63,6 +63,7 @@ export const buildLinkedEInvoice = async ({
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "e_invoice_not_buildable",
         message: file.error.message,
       }),
     );

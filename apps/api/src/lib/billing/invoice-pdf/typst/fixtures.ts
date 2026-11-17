@@ -1,6 +1,6 @@
 import { cents } from "@stll/money";
 
-import { invoiceAmountDue } from "../../invoice-payments";
+import { invoiceAmountDue } from "../../invoice-payment-amounts";
 import type { RenderInvoicePdfOptions } from "../render-helpers";
 
 /** The amount due on an unpaid, uncredited document of this total. */
@@ -27,7 +27,6 @@ const line = (index: number) =>
 
 export const invoiceFixture = (lineCount: number) =>
   ({
-    paymentAmountMinor: amountDueOf(756_250 * lineCount),
     invoice: {
       status: "finalized",
       documentType: "invoice",
@@ -80,6 +79,10 @@ export const invoiceFixture = (lineCount: number) =>
           grossAmountMinor: cents(756_250 * lineCount),
         },
       ],
+    },
+    settlement: {
+      status: "due",
+      amountMinor: amountDueOf(756_250 * lineCount),
     },
     originalNumber: null,
   }) satisfies RenderInvoicePdfOptions;

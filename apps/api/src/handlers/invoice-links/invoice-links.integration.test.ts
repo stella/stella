@@ -19,6 +19,7 @@ import type { InvoiceExportRecord } from "@stll/invoicing";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestClock } from "@stll/test-kit";
 import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -99,6 +100,7 @@ import { qrSvg } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { TRANSITIONS as DATABASE_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transition as transitionStatus,
@@ -243,12 +245,24 @@ const budgetOf = (max: number) =>
     max,
   });
 
+const testClock = createTestClock();
+
 testState.beforeAll(async () => {
   testState.setConfig("FEATURE_INVOICE_LINKS", true);
   testState.setConfig("FEATURE_TIME_BILLING", true);
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  // Link lifetimes run on the database clock; the test clock starts there.
+  const databaseTime = v.parse(
+    v.object({ now: v.string() }),
+    executedRows(
+      await testDb.execute(
+        sql`SELECT (extract(epoch FROM now()) * 1000)::bigint::text AS now`,
+      ),
+    ).at(0),
+  );
+  testClock.setTime(Number(databaseTime.now));
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "invoice-links": [ids.orgA, ids.orgB].map((organizationId) => ({
       type: "organization",
@@ -270,7 +284,7 @@ testState.beforeAll(async () => {
     organizationId: ids.orgA,
     userId: verifiedSellerUserId,
     role: "member",
-    createdAt: new Date(),
+    createdAt: new Date(testClock.now()),
   });
   await testDb
     .insert(featureEnrolments)
@@ -376,7 +390,8 @@ const seedInvoice = async ({
     buyerCity: "Brno",
     buyerPostalCode: "602 00",
     buyerCountry: "CZ",
-    finalizedAt: status === INVOICE_STATUS.DRAFT ? null : new Date(),
+    finalizedAt:
+      status === INVOICE_STATUS.DRAFT ? null : new Date(testClock.now()),
     netAmount: cents(100_000 * lineCount),
     vatAmount: cents(0),
     totalAmount: cents(100_000 * lineCount),
@@ -429,7 +444,8 @@ const seedCreditNote = async (
     buyerCity: "Brno",
     buyerPostalCode: "602 00",
     buyerCountry: "CZ",
-    finalizedAt: status === INVOICE_STATUS.DRAFT ? null : new Date(),
+    finalizedAt:
+      status === INVOICE_STATUS.DRAFT ? null : new Date(testClock.now()),
     netAmount: cents(-amount),
     vatAmount: cents(0),
     totalAmount: cents(-amount),
@@ -610,7 +626,7 @@ const sendRows = async (invoiceId: SafeId<"invoice">) =>
 const createStandaloneLink = async (
   invoiceId: SafeId<"invoice">,
   {
-    expiresAt = new Date(Date.now() + 86_400_000),
+    expiresAt = new Date(testClock.now() + 86_400_000),
     deliveryStatus = "delivered",
   }: { expiresAt?: Date; deliveryStatus?: "pending" | "delivered" } = {},
 ) => {
@@ -1183,7 +1199,7 @@ describe("sending an invoice by link", () => {
         language: "en" as const,
         replyTo: "billing@firm.example.test",
         tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-        expiresAt: new Date(Date.now() + 86_400_000),
+        expiresAt: new Date(testClock.now() + 86_400_000),
         deliveryStatus: "pending" as const,
       }));
       if (history.length > 0) {
@@ -1403,7 +1419,7 @@ describe("sending an invoice by link", () => {
           organizationId: ids.orgA,
           userId,
           role: "member",
-          createdAt: new Date(),
+          createdAt: new Date(testClock.now()),
         });
       }
       try {
@@ -1464,7 +1480,7 @@ describe("sending an invoice by link", () => {
           recipients: ["clock-skew@example.test"],
           message: null,
           tokenHash: hashInvoiceLinkToken(createInvoiceLinkToken()),
-          now: new Date(Date.now() + skewDays * 86_400_000),
+          now: new Date(testClock.now() + skewDays * 86_400_000),
           recordAuditEvent: invoiceTransitionRecorder(),
         });
         if (result.isErr()) {
@@ -1954,7 +1970,7 @@ describe("sending an invoice by link", () => {
         language: "cs" as const,
         replyTo: "b@example.test",
         tokenHash: sha256Hex(Bun.randomUUIDv7()),
-        expiresAt: new Date(Date.now() + 86_400_000),
+        expiresAt: new Date(testClock.now() + 86_400_000),
         deliveryStatus: "pending" as const,
       })),
     );
@@ -2018,7 +2034,7 @@ describe("sending an invoice by link", () => {
             (position >= 99 ? position : Math.floor(position / 2)) * 1000,
         ),
         expiresAt: new Date(
-          position >= 99 ? Date.now() + 86_400_000 : baseTime,
+          position >= 99 ? testClock.now() + 86_400_000 : baseTime,
         ),
         deliveryStatus: "pending" as const,
       };
@@ -2497,7 +2513,7 @@ describe("opening an invoice link", () => {
     async (responseKind, invalidation) => {
       const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
       const expiresAt = new Date(
-        Date.now() + (invalidation === "expired" ? 2000 : 86_400_000),
+        testClock.now() + (invalidation === "expired" ? 2000 : 86_400_000),
       );
       const { token } = await createStandaloneLink(invoiceId, { expiresAt });
       let completedWork = false;
@@ -2509,7 +2525,7 @@ describe("opening an invoice link", () => {
         } else if (invalidation === "revoked") {
           await testDb
             .update(invoiceSends)
-            .set({ revokedAt: new Date() })
+            .set({ revokedAt: new Date(testClock.now()) })
             .where(eq(invoiceSends.invoiceId, invoiceId));
         } else {
           await waitForExternalState({
@@ -2608,7 +2624,7 @@ describe("opening an invoice link", () => {
   test("an expired link opens nothing", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
     const { token } = await createStandaloneLink(invoiceId, {
-      expiresAt: new Date(Date.now() - 1000),
+      expiresAt: new Date(testClock.now() - 1000),
     });
     expect((await post(server, "view", { token })).status).toBe(404);
     expect(
@@ -2625,7 +2641,15 @@ describe("opening an invoice link", () => {
     const sendId = row?.id ?? "";
     const first = await revoke(invoiceId, sendId);
     expect(first).toMatchObject({ id: sendId });
+    // Revocation selects only live sends: a repeated revocation writes no row.
+    const rowVersion = async () =>
+      await testDb
+        .select({ version: sql<string>`xmin::text` })
+        .from(invoiceSends)
+        .where(eq(invoiceSends.invoiceId, invoiceId));
+    const revokedVersion = await rowVersion();
     expect(await revoke(invoiceId, sendId)).toEqual(first);
+    expect(await rowVersion()).toEqual(revokedVersion);
     expect((await post(server, "view", { token })).status).toBe(404);
     expect(
       (await post(server, "download", { token, file: "pdf" })).status,
@@ -2653,7 +2677,7 @@ describe("opening an invoice link", () => {
       await createStandaloneLink(invoiceId, {
         deliveryStatus: "pending",
       });
-      const now = new Date();
+      const now = new Date(testClock.now());
       const recordAuditEvent = invoiceTransitionRecorder();
       const moved = await tokenDb().scoped({
         organizationId: ids.orgA,
@@ -2707,7 +2731,7 @@ describe("opening an invoice link", () => {
     const finalizedId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
     await createStandaloneLink(draftId);
     await createStandaloneLink(finalizedId);
-    const now = new Date();
+    const now = new Date(testClock.now());
     const recordAuditEvent = invoiceTransitionRecorder();
     const moved = await tokenDb().scoped({
       organizationId: ids.orgA,
@@ -2998,7 +3022,7 @@ describe("opening an invoice link", () => {
       organizationId: ids.orgA,
       userId: senderId,
       role: "owner",
-      createdAt: new Date(),
+      createdAt: new Date(testClock.now()),
     });
     await testDb.insert(featureEnrolments).values({
       organizationId: ids.orgA,
@@ -3338,7 +3362,7 @@ describe("invoice payment requests", () => {
     await assertBalance(40_000);
     await testDb
       .update(invoicePayments)
-      .set({ voidedAt: new Date(), voidedBy: ids.userA1 })
+      .set({ voidedAt: new Date(testClock.now()), voidedBy: ids.userA1 })
       .where(eq(invoicePayments.invoiceId, invoiceId));
     expect(await send(invoiceId, ["restored@example.test"])).toMatchObject({
       deliveryStatus: "delivered",
@@ -3802,7 +3826,7 @@ describe("public invoice settlement projection", () => {
     );
     await testDb
       .update(invoicePayments)
-      .set({ voidedAt: new Date(), voidedBy: ids.userA1 })
+      .set({ voidedAt: new Date(testClock.now()), voidedBy: ids.userA1 })
       .where(eq(invoicePayments.invoiceId, invoiceId));
     await testDb
       .update(invoices)
@@ -3870,7 +3894,7 @@ describe("public invoice settlement projection", () => {
     );
     await testDb
       .update(invoiceSends)
-      .set({ revokedAt: new Date() })
+      .set({ revokedAt: new Date(testClock.now()) })
       .where(eq(invoiceSends.tokenHash, revoked.tokenHash));
     expect(await readSettlementFunction("A", revoked.tokenHash)).toEqual([]);
 
@@ -3880,7 +3904,7 @@ describe("public invoice settlement projection", () => {
       paidOn: "2026-10-03",
     });
     const expired = await createStandaloneLink(expiredInvoice, {
-      expiresAt: new Date(Date.now() - 1000),
+      expiresAt: new Date(testClock.now() - 1000),
     });
     expect(await readSettlementFunction("A", expired.tokenHash)).toEqual([]);
 

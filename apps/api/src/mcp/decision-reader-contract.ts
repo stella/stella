@@ -4,7 +4,7 @@ import { decisionParagraphRangeSchema } from "@stll/api-contract/decision-paragr
 
 import { LIMITS } from "@/api/lib/limits";
 
-import { cursorInput, nullAsAbsent, uuidInputSchema } from "./tool-utils";
+import { cursorInput, nullAsAbsent, uuidInputSchema } from "./input-schemas";
 
 export { READER_PAGE_MAX_CHARS } from "@stll/api-contract/limits";
 export {

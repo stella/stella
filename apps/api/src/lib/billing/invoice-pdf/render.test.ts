@@ -3,7 +3,6 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { cents, formatMoneyCents } from "@stll/money";
 
-import { invoiceAmountDue } from "../invoice-payments";
 import { buildInvoicePaymentPayload } from "./render-helpers";
 import type { RenderInvoicePdfOptions } from "./render-helpers";
 import { amountDueOf } from "./typst/fixtures";
@@ -30,7 +29,6 @@ const sampleLine = {
 } as const;
 
 const options = {
-  paymentAmountMinor: amountDueOf(55_555),
   invoice: {
     status: "finalized",
     documentType: "invoice",
@@ -76,6 +74,7 @@ const options = {
     grossAmountMinor: cents(55_555),
     vatBreakdown: [],
   },
+  settlement: { status: "due", amountMinor: amountDueOf(55_555) },
   originalNumber: null,
 } satisfies RenderInvoicePdfOptions;
 
@@ -304,7 +303,7 @@ describe("invoice PDF", () => {
     const flat = text.replace(/[  ]/gu, " ");
     expect(flat).toContain("Česko");
     expect(flat).toContain("Datum splatnosti: 14. 10. 2026");
-    expect(flat).toContain("Reference: 0987654321");
+    expect(flat).toContain("Variabilní symbol: 0987654321");
   });
 
   test("prints an unassigned country code as stored, not as an unknown region", async () => {
@@ -489,12 +488,6 @@ describe("invoice QR payment", () => {
       expect(
         buildInvoicePaymentPayload({
           ...options,
-          // Nothing stays due on a zero or negative total.
-          paymentAmountMinor: invoiceAmountDue({
-            totalAmount: grossAmountMinor,
-            paidAmount: Math.abs(grossAmountMinor),
-            creditedAmount: 0,
-          }),
           totals: { ...options.totals, grossAmountMinor },
         }),
       ).toBeNull();

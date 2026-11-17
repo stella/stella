@@ -417,13 +417,18 @@ export const toExportRecords = (
   const { matter } = loaded;
   if (!matter) {
     return Result.err(
-      new HandlerError({ status: 404, message: "Matter not found" }),
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "Matter not found",
+      }),
     );
   }
   if (selected && loaded.invoices.length !== new Set(selected).size) {
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_export_not_issued",
         message: "Only issued invoices in this matter can be exported",
         hint: "Drafts and void invoices have no export; finalize the draft first.",
       }),
@@ -433,6 +438,7 @@ export const toExportRecords = (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_export_too_many",
         message: `The matter has more than ${MAX_EXPORT_INVOICES} issued invoices to export at once`,
         hint: "Pass invoiceIds to export a selection of invoices at a time.",
       }),
@@ -442,6 +448,7 @@ export const toExportRecords = (
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "invoice_export_empty",
         message: "The matter has no issued invoices to export",
       }),
     );
@@ -457,6 +464,7 @@ export const toExportRecords = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_export_not_issued",
           message: `Invoice ${invoice.id} is not issued`,
         }),
       );
@@ -465,6 +473,7 @@ export const toExportRecords = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_export_home_currency_vat",
           message: `Invoice ${invoice.invoiceNumber} includes VAT stated in the seller's home currency`,
           hint: "This export cannot yet carry the home-currency VAT; use the PDF.",
         }),
@@ -474,6 +483,7 @@ export const toExportRecords = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_export_missing_seller",
           message: `Invoice ${invoice.invoiceNumber} has no seller profile`,
           hint: "Select a seller profile on the invoice; accounting files need the issuing company.",
         }),

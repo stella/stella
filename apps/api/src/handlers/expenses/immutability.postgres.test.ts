@@ -23,6 +23,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import addEntries from "../invoices/entries/add";
@@ -224,9 +225,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await setup.db
                   .delete(workspaces)
                   .where(eq(workspaces.id, workspaceId));
-                await setup.db
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(setup.db, [organizationId]);
                 await setup.db.delete(user).where(eq(user.id, userId));
               }
             }

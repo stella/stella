@@ -17,6 +17,7 @@ import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/lib/rate-limit/organization-
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 // timeout: real email-code sign-ins and organization writes use migrated Postgres.
@@ -31,7 +32,7 @@ const slugAnswer = v.object({ slug: v.string() });
 afterAll(async () => {
   await server.stop();
   for (const id of organizationIds) {
-    await rootDb.delete(organization).where(eq(organization.id, id));
+    await deleteOrganizationsForTest(rootDb, [id]);
   }
 });
 
@@ -130,7 +131,8 @@ describe.skipIf(!runPostgresTests)(
       const beforeAudit = await rootDb
         .select()
         .from(auditLogs)
-        .where(eq(auditLogs.organizationId, second.org.id));
+        .where(eq(auditLogs.organizationId, second.org.id))
+        .orderBy(auditLogs.id);
       const selectOtherOrganization = await getAuth().api.setActiveOrganization(
         {
           body: { organizationId: second.org.id },
@@ -170,7 +172,8 @@ describe.skipIf(!runPostgresTests)(
         await rootDb
           .select()
           .from(auditLogs)
-          .where(eq(auditLogs.organizationId, second.org.id)),
+          .where(eq(auditLogs.organizationId, second.org.id))
+          .orderBy(auditLogs.id),
       ).toEqual(beforeAudit);
       const permitted = await updateSlug(second.owner, {
         type: "explicit",
@@ -195,7 +198,8 @@ describe.skipIf(!runPostgresTests)(
       const beforeAudit = await rootDb
         .select()
         .from(auditLogs)
-        .where(eq(auditLogs.organizationId, org.id));
+        .where(eq(auditLogs.organizationId, org.id))
+        .orderBy(auditLogs.id);
       expect((await updateSlug(browser, { type: "opaque" })).status).toBe(403);
       expect(
         await rootDb
@@ -207,7 +211,8 @@ describe.skipIf(!runPostgresTests)(
         await rootDb
           .select()
           .from(auditLogs)
-          .where(eq(auditLogs.organizationId, org.id)),
+          .where(eq(auditLogs.organizationId, org.id))
+          .orderBy(auditLogs.id),
       ).toEqual(beforeAudit);
     });
 

@@ -6,10 +6,16 @@ import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import type { ConditionNode, Operand } from "@stll/conditions";
-import { evaluateCondition, isSafeFieldPath } from "@stll/template-conditions";
+import { isSafeFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import {
   Dialog,
   DialogFooter,
@@ -21,6 +27,7 @@ import {
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import {
   AiActionIcon,
   AlertTriangleIcon,
@@ -38,6 +45,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -80,14 +88,20 @@ import type {
 } from "@/components/templates/template-discover-types";
 import type { LookupRegistry } from "@/components/templates/template-field-manifest";
 import {
+  arrayIndexKey,
+  buildInitialValues,
+  getDefaultValue,
   groupFieldsByPrefix,
+  isFieldVisible,
   readAiFieldErrorPaths,
+  readArrayIndices,
   readClauseWarnings,
   readUndecidedConditionLabels,
   runLeadingSingleFlight,
   savedFillNotices,
   visibleItemFields,
 } from "@/components/templates/template-form.logic";
+import type { FormValues } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -171,6 +185,128 @@ const isValidKrsNumber = (value: string): boolean =>
 
 type FieldErrors = Record<string, string | undefined>;
 type TouchedFields = Record<string, boolean>;
+
+type SubmitValuesOptions = {
+  values: FormValues;
+  fields: ResolvedField[];
+  /** The template's AI-decided conditions. They render no input, so a value
+   *  exists under one only while the user has taken it over; sending it makes
+   *  the fill engine's "user value wins" rule keep it over the model's
+   *  answer. */
+  conditionFields: readonly ResolvedField[];
+  conditions: NamedCondition[];
+};
+
+const buildSubmitValues = ({
+  values,
+  fields,
+  conditionFields,
+  conditions,
+}: SubmitValuesOptions): Record<string, unknown> => {
+  const result = new Map<string, unknown>();
+
+  for (const field of [...fields, ...conditionFields]) {
+    // Skip hidden fields
+    if (!isFieldVisible(field, values, conditions)) {
+      continue;
+    }
+
+    if (field.kind === "array") {
+      const arrayKey = arrayIndexKey(field.path);
+      const items = readArrayIndices(values, arrayKey);
+      const arrayValues: Record<string, unknown>[] = [];
+
+      for (let i = 0; i < items.length; i++) {
+        const itemValues = new Map<string, unknown>();
+        // Like a hidden field, an item field this item's branch prunes is
+        // not sent.
+        for (const subField of visibleItemFields({
+          field,
+          index: i,
+          itemCount: items.length,
+          values,
+          conditions,
+        })) {
+          const path = `${field.path}[${i}].${subField.path}`;
+          const val = values[path];
+          if (
+            val !== undefined &&
+            val !== "" &&
+            isSafeFieldPath(subField.path)
+          ) {
+            itemValues.set(subField.path, coerceValue(subField, val));
+          }
+        }
+        arrayValues.push({
+          __proto__: null,
+          ...Object.fromEntries(itemValues),
+        });
+      }
+
+      result.set(field.path, arrayValues);
+      continue;
+    }
+
+    const val = values[field.path];
+    if (val !== undefined && val !== "") {
+      setNestedValue(result, field.path, coerceValue(field, val));
+    }
+  }
+
+  return { __proto__: null, ...Object.fromEntries(result) };
+};
+
+const coerceValue = (field: ResolvedField, value: unknown): unknown => {
+  if (field.kind === "boolean") {
+    return value === true;
+  }
+  if (field.inputType === "number" && typeof value === "string") {
+    const num = Number(value);
+    return Number.isNaN(num) ? value : num;
+  }
+  return value;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const createNullRecord = (): Record<string, unknown> => ({ __proto__: null });
+
+const setNestedValue = (
+  entries: Map<string, unknown>,
+  path: string,
+  value: unknown,
+): void => {
+  if (!isSafeFieldPath(path)) {
+    return;
+  }
+  const parts = path.split(".");
+  const first = parts.shift();
+  if (first === undefined) {
+    return;
+  }
+  const last = parts.pop();
+  if (last === undefined) {
+    entries.set(first, value);
+    return;
+  }
+  if (last === "") {
+    return;
+  }
+  const ancestors: { record: FormValues; key: string }[] = [];
+  const rootValue = entries.get(first);
+  let current = isRecord(rootValue) ? rootValue : createNullRecord();
+  for (const part of parts) {
+    ancestors.push({ record: current, key: part });
+    const next = Object.hasOwn(current, part) ? current[part] : undefined;
+    current = isRecord(next) ? next : createNullRecord();
+  }
+  let updated: FormValues = { __proto__: null, ...current, [last]: value };
+  for (const { record, key } of ancestors.toReversed()) {
+    updated = { __proto__: null, ...record, [key]: updated };
+  }
+  entries.set(first, updated);
+};
 
 type ValidationError =
   | { kind: "required" }
@@ -324,30 +460,6 @@ type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
   prefill?: { workspaceId?: string | undefined } | undefined;
 };
 
-type FormValues = Record<string, unknown>;
-
-/** Form-state key holding an array field's item index list (`number[]`),
- *  bookkeeping rather than a field value. Single source of the array key
- *  naming scheme; hosts tapping `onValuesChange` parse keys through
- *  {@link parseArrayItemKey} in `template-array-item-key.ts`. */
-export const ARRAY_INDEX_KEY_PREFIX = "__array_";
-
-const arrayIndexKey = (fieldPath: string): string =>
-  `${ARRAY_INDEX_KEY_PREFIX}${fieldPath}`;
-
-/**
- * Read an `__array_*` key from form state into a `number[]` index list.
- * Returns `[]` when the key is missing or holds a non-number-array value;
- * runtime validation absorbs the previous unchecked cast.
- */
-const readArrayIndices = (values: FormValues, arrayKey: string): number[] => {
-  const raw = values[arrayKey];
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.filter((item): item is number => typeof item === "number");
-};
-
 /** Current values of the field referenced by `optionsFrom`, gathered from
  *  live form state: a scalar sibling contributes its value, an array item
  *  path (`parties.name`) contributes every item's entry. Deduplicated,
@@ -453,46 +565,6 @@ const validateDependentSelection = (
   };
 };
 
-/** How one row of the form's field list is boxed. A dotted path is how a
- *  template author says "these belong together", so a `named` group renders
- *  as one bordered block under a heading; `ungrouped` fields render bare. */
-const getDefaultValue = (field: ResolvedField): unknown => {
-  if (field.kind === "boolean") {
-    return false;
-  }
-  if (field.kind === "array") {
-    return [];
-  }
-  return "";
-};
-
-const buildInitialValues = (fields: readonly ResolvedField[]): FormValues => {
-  const values: FormValues = {};
-  for (const field of fields) {
-    if (field.kind !== "array") {
-      values[field.path] = getDefaultValue(field);
-    }
-  }
-  return values;
-};
-
-/**
- * Check if a field is visible given current form values
- * and named conditions. Returns true if the field has no
- * `visibleWhen` condition, or if the condition evaluates
- * to true.
- */
-const isFieldVisible = (
-  field: ResolvedField,
-  values: FormValues,
-  conditions: readonly NamedCondition[],
-): boolean => {
-  if (!field.visibleWhen) {
-    return true;
-  }
-  return evaluateCondition(field.visibleWhen, values, conditions);
-};
-
 const RequiredIndicator = () => (
   <span className="text-destructive-foreground">{REQUIRED_MARKER}</span>
 );
@@ -540,6 +612,13 @@ const EditFieldButton = ({ onEdit }: { onEdit: () => void }) => {
     </Button>
   );
 };
+
+/** A number field's stored text as the number it shows; empty or unreadable
+ *  text shows an empty field. */
+const numberFieldValue = (value: unknown): number | null =>
+  typeof value === "string"
+    ? parseDecimalToken(value.trim()).unwrapOr(null)
+    : null;
 
 /** Standard field label line: label text, required marker, prefill badge, and
  *  (when an edit handler is present) a trailing pencil. */
@@ -606,14 +685,15 @@ const DateQuickChips = ({ onPick }: { onPick: (iso: string) => void }) => {
   return (
     <div className="flex flex-wrap gap-1.5">
       {chips.map((chip) => (
-        <button
-          className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+        <Button
           key={chip.key}
           onClick={() => onPick(chip.iso())}
-          type="button"
+          variant="plain"
         >
-          {chip.label}
-        </button>
+          <span className="bg-accent text-accent-foreground hover:bg-accent/80 block rounded-md px-1.5 py-0.5 text-xs font-medium">
+            {chip.label}
+          </span>
+        </Button>
       ))}
     </div>
   );
@@ -773,17 +853,16 @@ const FieldRenderer = ({
           prefillSnippet={prefillSnippet}
           required={required}
         />
-        <FieldControl
-          render={
-            <Input
-              name={field.path}
-              onBlur={handleBlur}
-              onChange={(e) => onChange(field.path, e.target.value)}
-              placeholder={field.hint}
-              type="number"
-              value={typeof value === "string" ? value : ""}
-            />
+        <NumberInput
+          // Shown as stored: no grouping (years, registry numbers) and no
+          // rounding of the digits the user typed.
+          format={{ maximumFractionDigits: 20, useGrouping: false }}
+          inputProps={{ onBlur: handleBlur, placeholder: field.hint }}
+          name={field.path}
+          onValueChange={(next) =>
+            onChange(field.path, next === null ? "" : String(next))
           }
+          value={numberFieldValue(value)}
         />
         <FieldError message={error} />
       </Field>
@@ -909,7 +988,7 @@ const ArrayFieldRenderer = ({
     }
     onChange(arrayKey, newItems);
 
-    const updated: FormValues = {};
+    const updated = new Map<string, unknown>();
     let newIdx = 0;
     for (let i = 0; i < items.length; i++) {
       if (i === index) {
@@ -918,7 +997,7 @@ const ArrayFieldRenderer = ({
       for (const subField of itemFields) {
         const oldPath = `${field.path}[${i}].${subField.path}`;
         const newPath = `${field.path}[${newIdx}].${subField.path}`;
-        updated[newPath] = values[oldPath];
+        updated.set(newPath, values[oldPath]);
       }
       newIdx++;
     }
@@ -931,7 +1010,7 @@ const ArrayFieldRenderer = ({
     }
     onClearPaths(stalePaths);
 
-    for (const [path, val] of Object.entries(updated)) {
+    for (const [path, val] of updated) {
       onChange(path, val);
     }
   };
@@ -1009,119 +1088,6 @@ const ArrayFieldRenderer = ({
       ))}
     </div>
   );
-};
-
-type SubmitValuesOptions = {
-  values: FormValues;
-  fields: ResolvedField[];
-  /** The template's AI-decided conditions. They render no input, so a value
-   *  exists under one only while the user has taken it over; sending it makes
-   *  the fill engine's "user value wins" rule keep it over the model's
-   *  answer. */
-  conditionFields: readonly ResolvedField[];
-  conditions: NamedCondition[];
-};
-
-const buildSubmitValues = ({
-  values,
-  fields,
-  conditionFields,
-  conditions,
-}: SubmitValuesOptions): Record<string, unknown> => {
-  const result = createNullRecord();
-
-  for (const field of [...fields, ...conditionFields]) {
-    // Skip hidden fields
-    if (!isFieldVisible(field, values, conditions)) {
-      continue;
-    }
-
-    if (field.kind === "array") {
-      const arrayKey = arrayIndexKey(field.path);
-      const items = readArrayIndices(values, arrayKey);
-      const arrayValues: Record<string, unknown>[] = [];
-
-      for (let i = 0; i < items.length; i++) {
-        const itemObj = createNullRecord();
-        // Like a hidden field, an item field this item's branch prunes is
-        // not sent.
-        for (const subField of visibleItemFields({
-          field,
-          index: i,
-          itemCount: items.length,
-          values,
-          conditions,
-        })) {
-          const path = `${field.path}[${i}].${subField.path}`;
-          const val = values[path];
-          if (
-            val !== undefined &&
-            val !== "" &&
-            isSafeFieldPath(subField.path)
-          ) {
-            itemObj[subField.path] = coerceValue(subField, val);
-          }
-        }
-        arrayValues.push(itemObj);
-      }
-
-      result[field.path] = arrayValues;
-      continue;
-    }
-
-    const val = values[field.path];
-    if (val !== undefined && val !== "") {
-      setNestedValue(result, field.path, coerceValue(field, val));
-    }
-  }
-
-  return result;
-};
-
-const coerceValue = (field: ResolvedField, value: unknown): unknown => {
-  if (field.kind === "boolean") {
-    return value === true;
-  }
-  if (field.inputType === "number" && typeof value === "string") {
-    const num = Number(value);
-    return Number.isNaN(num) ? value : num;
-  }
-  return value;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const createNullRecord = (): Record<string, unknown> => ({ __proto__: null });
-
-const setNestedValue = (
-  obj: Record<string, unknown>,
-  path: string,
-  value: unknown,
-) => {
-  if (!isSafeFieldPath(path)) {
-    return;
-  }
-
-  const parts = path.split(".");
-  const last = parts.at(-1);
-  if (!last) {
-    return;
-  }
-  let current = obj;
-
-  for (const part of parts.slice(0, -1)) {
-    const next = Object.hasOwn(current, part) ? current[part] : undefined;
-    if (isRecord(next)) {
-      current = next;
-      continue;
-    }
-    const child = createNullRecord();
-    current[part] = child;
-    current = child;
-  }
-
-  current[last] = value;
 };
 
 /** Collect all validatable fields, including array
@@ -1384,6 +1350,65 @@ const RegistryAutofillControl = ({
   );
 };
 
+/** Directives the template's structure check could not place, folded away
+ *  until the user opens them. */
+const StructureWarnings = ({ errors }: { errors: StructureError[] }) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  if (errors.length === 0) {
+    return null;
+  }
+  return (
+    <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 rounded-lg border p-3">
+      <Collapsible onOpenChange={setOpen} open={open}>
+        <CollapsibleTrigger
+          render={<Button className="w-full" variant="plain" />}
+        >
+          <span className="text-warning-foreground flex items-start gap-2 text-sm">
+            <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+            <span className="flex-1">
+              {t("templates.structureWarnings", {
+                count: errors.length,
+              })}
+            </span>
+            <DirectionalIcon
+              className={cn(
+                "mt-0.5 size-4 shrink-0 transition-transform",
+                open && "rotate-90",
+              )}
+              flip={!open}
+              icon={ChevronRightIcon}
+            />
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <ul className="mt-3 grid gap-2 ps-6">
+            {errors.map((error, index) => (
+              <li
+                className="text-warning-foreground text-sm"
+                // oxlint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
+                key={`${error.paragraphIndex}-${error.directive}-${index}`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="bg-muted rounded-sm px-1 py-0.5 font-mono text-xs">
+                    {error.directive}
+                  </code>
+                  <span className="text-muted-foreground text-xs">
+                    {t("templates.structureWarningParagraph", {
+                      paragraph: error.paragraphIndex + 1,
+                    })}
+                  </span>
+                </div>
+                <p className="mt-0.5">{error.message}</p>
+              </li>
+            ))}
+          </ul>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
+  );
+};
+
 export const TemplateForm = ({
   fields: allFields,
   conditions,
@@ -1477,7 +1502,6 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
-  const [structureWarningsOpen, setStructureWarningsOpen] = useState(false);
   const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -1660,7 +1684,7 @@ export const TemplateForm = ({
         }
         return { ...prev, [path]: true };
       });
-      touchedRef.current[path] = true;
+      touchedRef.current = { ...touchedRef.current, [path]: true };
       const def = findFieldDef(path);
       if (def) {
         const msg = resolveError(validateField(def, valuesRef.current[path]));
@@ -1716,7 +1740,7 @@ export const TemplateForm = ({
    *  Everything stays freely editable; nothing is submitted. */
   const applyPrefill = (suggestions: PrefillSuggestionDto[]): number => {
     let applied = 0;
-    const nextSnippets: Record<string, string | null> = {};
+    const nextSnippets = new Map<string, string | null>();
     const fieldByPath = new Map(fields.map((f) => [f.path, f]));
 
     for (const suggestion of suggestions) {
@@ -1734,16 +1758,19 @@ export const TemplateForm = ({
       }
 
       if (
-        !(suggestion.path in nextSnippets) ||
+        !nextSnippets.has(suggestion.path) ||
         suggestion.sourceSnippet !== null
       ) {
-        nextSnippets[suggestion.path] = suggestion.sourceSnippet;
+        nextSnippets.set(suggestion.path, suggestion.sourceSnippet);
       }
       applied++;
     }
 
     if (applied > 0) {
-      setPrefillSnippets((prev) => ({ ...prev, ...nextSnippets }));
+      setPrefillSnippets((prev) => ({
+        ...prev,
+        ...Object.fromEntries(nextSnippets),
+      }));
     }
     return applied;
   };
@@ -1752,12 +1779,12 @@ export const TemplateForm = ({
   const validateAll = useCallback(
     (currentValues: FormValues): boolean => {
       const all = collectValidatableFields(fields, currentValues, conditions);
-      const nextErrors: FieldErrors = {};
-      const nextTouched: TouchedFields = {};
+      const nextErrors = new Map<string, string | undefined>();
+      const nextTouched = new Map<string, boolean>();
       let valid = true;
 
       for (const { path, field } of all) {
-        nextTouched[path] = true;
+        nextTouched.set(path, true);
         const msg = resolveError(
           validateField(field, currentValues[path]) ??
             validateDependentSelection(
@@ -1767,7 +1794,7 @@ export const TemplateForm = ({
               currentValues,
             ),
         );
-        nextErrors[path] = msg;
+        nextErrors.set(path, msg);
         if (msg) {
           valid = false;
         }
@@ -1793,14 +1820,14 @@ export const TemplateForm = ({
           arrayIndexKey(field.path),
         ).length;
         if (count < min) {
-          nextTouched[field.path] = true;
-          nextErrors[field.path] = resolveError({ kind: "minItems", min });
+          nextTouched.set(field.path, true);
+          nextErrors.set(field.path, resolveError({ kind: "minItems", min }));
           valid = false;
         }
       }
 
-      setTouched((prev) => ({ ...prev, ...nextTouched }));
-      setErrors(nextErrors);
+      setTouched((prev) => ({ ...prev, ...Object.fromEntries(nextTouched) }));
+      setErrors(Object.fromEntries(nextErrors));
       return valid;
     },
     [fields, conditions, resolveError],
@@ -2352,19 +2379,20 @@ export const TemplateForm = ({
   };
 
   return (
-    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      <DialogFormState
-        dirty={
-          JSON.stringify({ values, clauseOverrides }) !==
-          JSON.stringify({ values: initialFormValues, clauseOverrides: {} })
-        }
-        onDiscard={() => {
-          setValues(initialFormValues);
-          setClauseOverrides({});
-          setTouched({});
-          setErrors({});
-        }}
-      />
+    <Form
+      className="min-h-0 flex-1 gap-0"
+      dirty={
+        JSON.stringify({ values, clauseOverrides }) !==
+        JSON.stringify({ values: initialFormValues, clauseOverrides: {} })
+      }
+      onDiscard={() => {
+        setValues(initialFormValues);
+        setClauseOverrides({});
+        setTouched({});
+        setErrors({});
+      }}
+      onSubmit={handleSubmit}
+    >
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl p-6">
           {/* Transient (upload) fill shows the form header + "upload different";
@@ -2381,50 +2409,7 @@ export const TemplateForm = ({
             </div>
           )}
 
-          {structureErrors.length > 0 && (
-            <details
-              className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3"
-              onToggle={(event) =>
-                setStructureWarningsOpen(event.currentTarget.open)
-              }
-              open={structureWarningsOpen}
-            >
-              <summary className="text-warning-foreground flex cursor-pointer list-none items-start gap-2 text-sm [&::-webkit-details-marker]:hidden">
-                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-                <span className="flex-1">
-                  {t("templates.structureWarnings", {
-                    count: structureErrors.length,
-                  })}
-                </span>
-                <DirectionalIcon
-                  className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-90"
-                  flip={!structureWarningsOpen}
-                  icon={ChevronRightIcon}
-                />
-              </summary>
-              <ul className="mt-3 grid gap-2 ps-6">
-                {structureErrors.map((error, index) => (
-                  <li
-                    className="text-warning-foreground text-sm"
-                    // oxlint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
-                    key={`${error.paragraphIndex}-${error.directive}-${index}`}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
-                        {error.directive}
-                      </code>
-                      <span className="text-muted-foreground text-xs">
-                        {t("templates.structureWarningParagraph", {
-                          paragraph: error.paragraphIndex + 1,
-                        })}
-                      </span>
-                    </div>
-                    <p className="mt-0.5">{error.message}</p>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
+          <StructureWarnings errors={structureErrors} />
 
           <div className="flex flex-col gap-5">
             {prefill !== undefined && templateId !== undefined && (
@@ -2645,7 +2630,7 @@ export const TemplateForm = ({
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-    </form>
+    </Form>
   );
 };
 

@@ -10,6 +10,7 @@ import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
 import {
+  INLINE_FIELD_CLASS_NAME,
   INPUT_CONTROL_CLASS_NAME,
   INPUT_ELEMENT_CLASS_NAME,
   INPUT_SIZE_CLASS_NAMES,
@@ -24,6 +25,12 @@ type InputProps = Omit<
   size?: ControlSize | number;
   style?: React.CSSProperties;
   unstyled?: boolean;
+  /**
+   * A borderless field in a line of text: it edits a value where it is read,
+   * with no box until focused and the parent's type, leading and colour. See
+   * `INLINE_FIELD_CLASS_NAME`.
+   */
+  inline?: boolean;
   nativeInput?: boolean;
 };
 
@@ -31,6 +38,7 @@ const Input = ({
   className,
   size = CONTROL_SIZE.default,
   unstyled = false,
+  inline = false,
   nativeInput = false,
   dir,
   onChange,
@@ -51,9 +59,9 @@ const Input = ({
     onChange?.(event);
   };
   const inputClassName = cn(
-    INPUT_ELEMENT_CLASS_NAME,
-    INPUT_SIZE_CLASS_NAMES[controlSize],
-    unstyled && "px-0",
+    inline ? INLINE_FIELD_CLASS_NAME : INPUT_ELEMENT_CLASS_NAME,
+    !inline && INPUT_SIZE_CLASS_NAMES[controlSize],
+    unstyled && !inline && "px-0",
     props.type === "search" &&
       "ps-8 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none",
   );
@@ -61,7 +69,12 @@ const Input = ({
   return (
     <span
       className={
-        cn(!unstyled && INPUT_CONTROL_CLASS_NAME, className) || undefined
+        cn(
+          inline
+            ? "relative inline-flex w-full"
+            : !unstyled && INPUT_CONTROL_CLASS_NAME,
+          className,
+        ) || undefined
       }
       data-size={size}
       data-slot="input-control"

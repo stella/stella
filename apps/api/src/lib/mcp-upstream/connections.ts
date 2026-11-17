@@ -753,7 +753,7 @@ type DiscoverCachedMcpToolsResult = {
   server: McpServerMetadata | null;
 };
 
-export const discoverCachedMcpTools = async ({
+const discoverCachedMcpTools = async ({
   permit,
   organizationId,
   row,

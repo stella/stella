@@ -13,7 +13,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PlaybookRunProjection } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { documentReviewRuns, entities, fields } from "@/api/db/schema";
+import {
+  documentReviewRuns,
+  entities,
+  fields,
+  properties,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";
@@ -79,12 +84,21 @@ type TargetDocument = {
   contentSha256: string;
 };
 
-const loadTargetDocuments = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-  docTypeGate: DocTypeGate | null,
-  limit: number,
-): Promise<TargetDocument[]> => {
+type LoadTargetDocumentsOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  docTypeGate: DocTypeGate | null;
+  projection: PlaybookRunProjection;
+  limit: number;
+};
+
+const loadTargetDocuments = async ({
+  tx,
+  workspaceId,
+  docTypeGate,
+  projection,
+  limit,
+}: LoadTargetDocumentsOptions): Promise<TargetDocument[]> => {
   // A scoped playbook reviews only the documents its classifier already routed
   // to it, mirroring the gate the materialized columns carry. A document whose
   // type has not been classified yet is not reviewed rather than reviewed
@@ -101,6 +115,25 @@ const loadTargetDocuments = async (
              AND gate_field.content->>'value' = ${docTypeGate.label}
         )`;
 
+  // Materialized columns read only the system file column, so a run on any other
+  // file would never receive its findings. The review worker reads the run's own
+  // file, so it covers them all.
+  const columnsReadCondition =
+    projection === PLAYBOOK_RUN_PROJECTION.COLUMNS
+      ? inArray(
+          fields.propertyId,
+          tx
+            .select({ id: properties.id })
+            .from(properties)
+            .where(
+              and(
+                eq(properties.workspaceId, workspaceId),
+                eq(properties.system, true),
+              ),
+            ),
+        )
+      : undefined;
+
   const rows = await tx
     .select({
       entityId: entities.id,
@@ -114,6 +147,7 @@ const loadTargetDocuments = async (
       and(
         eq(fields.entityVersionId, entities.currentVersionId),
         eq(fields.workspaceId, workspaceId),
+        columnsReadCondition,
         sql`${fields.content}->>'type' = 'file'`,
         sql`${fields.content}->>'mimeType' = ${DOCX_MIME_TYPE}`,
       ),
@@ -180,12 +214,13 @@ export const createPlaybookTableRuns = async ({
 
   // One row past the cap is what makes "there are more" a fact rather than a
   // guess, without counting the whole table.
-  const documents = await loadTargetDocuments(
+  const documents = await loadTargetDocuments({
     tx,
     workspaceId,
     docTypeGate,
-    PLAYBOOK_RUN_DOCUMENTS_MAX + 1,
-  );
+    projection,
+    limit: PLAYBOOK_RUN_DOCUMENTS_MAX + 1,
+  });
   const uncoveredCount = Math.max(
     documents.length - PLAYBOOK_RUN_DOCUMENTS_MAX,
     0,

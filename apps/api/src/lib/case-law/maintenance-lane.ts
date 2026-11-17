@@ -57,10 +57,8 @@ export const CASE_LAW_MAINTENANCE_LANE = {
 /** Waits longer than this are logged so a stuck pass is visible. */
 const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
 
-/** What `execute` resolves to for a row shape, as the drizzle instance types it. */
-type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
-  ReturnType<typeof rootDatabase.execute<TRow>>
->;
+/** Explicit object mode returns one array of rows, independent of driver raw envelopes. */
+type ExecuteResult<TRow extends Record<string, unknown>> = TRow[];
 
 /** A root-connection handle: the subset scripts use of the drizzle instance. */
 export type CaseLawRootHandle = {
@@ -146,6 +144,8 @@ const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
 type CaseLawSchemaLaneHandleOptions = {
   signal?: AbortSignal;
   laneWaitMs?: number;
+  /** Test seam: how a refused try waits before the next. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 export const caseLawRootHandleUnderCorpusSchemaLane = (
@@ -160,7 +160,8 @@ export const caseLawRootHandleUnderCorpusSchemaLane = (
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
       query: SQLWrapper | string,
-    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    ) =>
+      await transaction(async (tx) => await tx.execute<TRow>(query, "objects")),
   };
 };
 
@@ -275,7 +276,10 @@ export const createCaseLawMaintenanceCleanupHandles = async ({
       transaction,
       execute: async <TRow extends Record<string, unknown>>(
         query: SQLWrapper | string,
-      ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+      ) =>
+        await transaction(
+          async (tx) => await tx.execute<TRow>(query, "objects"),
+        ),
     },
     ingestionDb: createIngestionDb(markRlsDatabase({ transaction }), {
       laneWaitMs: timeoutMs,
@@ -351,7 +355,10 @@ const runBoundedMaintenanceLane = async <T>({
         transaction,
         execute: async <TRow extends Record<string, unknown>>(
           query: SQLWrapper | string,
-        ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+        ) =>
+          await transaction(
+            async (tx) => await tx.execute<TRow>(query, "objects"),
+          ),
       };
       const scoped = createIngestionDb(markRlsDatabase(queuedDatabase), {
         laneWaitMs: lockTimeout,
@@ -435,7 +442,9 @@ export const readOnlyHandles = ({
       execute: async <TRow extends Record<string, unknown>>(
         query: SQLWrapper | string,
       ) =>
-        await readOnlyTransaction(async (tx) => await tx.execute<TRow>(query)),
+        await readOnlyTransaction(
+          async (tx) => await tx.execute<TRow>(query, "objects"),
+        ),
     },
     ingestionDb: async (fn) =>
       await ingestionDb(async (tx) => {

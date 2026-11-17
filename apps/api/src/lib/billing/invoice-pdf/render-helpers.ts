@@ -22,11 +22,17 @@ import type { PayBySquareResult } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
 
-import type { AmountDue } from "@/api/lib/billing/invoice-payments";
+import type {
+  AmountDue,
+  InvoicePaymentState,
+} from "@/api/lib/billing/invoice-payment-amounts";
 
 export type RenderInvoicePdfOptions = {
-  /** Remaining balance for payment fields and QR; zero suppresses the payment block. */
-  paymentAmountMinor: AmountDue;
+  /**
+   * What the document states about payment: the amount still due after
+   * payments and issued credit notes, or that it is settled or asks nothing.
+   */
+  settlement: InvoicePaymentState;
   invoice: {
     status: InvoiceStatus;
     documentType: InvoiceDocumentType;
@@ -105,17 +111,27 @@ export const requestsPayment = ({
 export const buildInvoicePaymentPayload = ({
   invoice,
   seller,
-  paymentAmountMinor,
+  totals,
+  settlement,
 }: RenderInvoicePdfOptions): InvoicingResult<
   | (CzechQrPaymentResult & { errorCorrection: "M"; scheme: "spayd" })
   | (PayBySquareResult & { errorCorrection: "M"; scheme: "pay_by_square" })
   | (PolishQrPaymentResult & { errorCorrection: "L"; scheme: "zbp" })
 > | null => {
+  switch (settlement.status) {
+    case "not_payable":
+    case "settled":
+      return null;
+    case "due":
+      break;
+    default:
+      settlement satisfies never;
+      return panic("Unknown invoice settlement state");
+  }
   if (
-    !requestsPayment({
-      documentType: invoice.documentType,
-      amountMinor: paymentAmountMinor,
-    }) ||
+    invoice.documentType === "credit_note" ||
+    totals.grossAmountMinor <= 0 ||
+    invoice.status === "void" ||
     !seller?.iban
   ) {
     return null;
@@ -127,7 +143,7 @@ export const buildInvoicePaymentPayload = ({
   const payment = {
     documentType: invoice.documentType,
     iban: seller.iban,
-    amountMinor: paymentAmountMinor,
+    amountMinor: settlement.amountMinor,
     currency: invoice.currency,
     ...(invoice.dueDate === null ? {} : { dueDate: invoice.dueDate }),
     ...(variableSymbol === null ? {} : { variableSymbol }),

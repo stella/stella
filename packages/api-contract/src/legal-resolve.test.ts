@@ -9,6 +9,15 @@ describe("legal resolve response", () => {
       status: "resolved",
       document: {
         kind: "decision",
+        appealReviews: {
+          status: "none_found",
+          basis: "available_corpus",
+          reason: "no_link_in_corpus",
+          reviewedBy: [],
+          reviews: [],
+          reviewedByTruncated: false,
+          reviewsTruncated: false,
+        },
         decisionId: "decision-id",
         identifier: "x",
         country: "CZE",
@@ -19,38 +28,22 @@ describe("legal resolve response", () => {
         language: "en",
         languageAlternates: [],
         readerUrl: "https://example.test/decision",
-        text: {
-          status: "readable",
-          blocks: [],
-          extent: { type: "complete" },
-        },
+        text: { status: "readable", charCount: 9000 },
       },
     },
     {
       status: "resolved",
       document: {
         kind: "decision",
-        decisionId: "decision-id",
-        identifier: "x",
-        country: "CZE",
-        caseNumber: "1 A 2/2024",
-        ecli: null,
-        court: "Court",
-        decisionDate: null,
-        language: "en",
-        languageAlternates: [],
-        readerUrl: "https://example.test/decision",
-        text: {
-          status: "readable",
-          blocks: [],
-          extent: { type: "partial", returnedChars: 8000, totalChars: 9000 },
+        appealReviews: {
+          status: "none_found",
+          basis: "available_corpus",
+          reason: "no_link_in_corpus",
+          reviewedBy: [],
+          reviews: [],
+          reviewedByTruncated: false,
+          reviewsTruncated: false,
         },
-      },
-    },
-    {
-      status: "resolved",
-      document: {
-        kind: "decision",
         decisionId: "decision-id",
         identifier: "x",
         country: "CZE",
@@ -126,23 +119,25 @@ describe("legal resolve response", () => {
   });
 
   test.each([
-    { status: "readable", blocks: [] },
-    {
-      status: "readable",
-      blocks: [],
-      extent: { type: "complete", returnedChars: 0, totalChars: 0 },
-    },
-    {
-      status: "readable",
-      blocks: [],
-      extent: { type: "partial", totalChars: 1 },
-    },
-  ])("rejects an invalid readable extent", (text) => {
+    { status: "readable" },
+    { status: "readable", charCount: "1200" },
+    { status: "readable", charCount: 1, blocks: [] },
+    { status: "readable", charCount: 1, extent: { type: "complete" } },
+  ])("rejects a readable decision that is not identity only", (text) => {
     expect(
       v.safeParse(legalResolveResponseSchema, {
         status: "resolved",
         document: {
           kind: "decision",
+          appealReviews: {
+            status: "none_found",
+            basis: "available_corpus",
+            reason: "no_link_in_corpus",
+            reviewedBy: [],
+            reviews: [],
+            reviewedByTruncated: false,
+            reviewsTruncated: false,
+          },
           decisionId: "decision-id",
           identifier: "x",
           country: "CZE",

@@ -16,11 +16,11 @@ import type { RouteAccess, RouteDefinition } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
 import {
-  hasAccountExportAuthority,
-  isAccountExportScope,
-} from "@/api/lib/auth/account-export-policy";
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
+import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -84,7 +84,11 @@ import {
   findRemovedInputIssues,
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
-import { plainRecord } from "@/api/mcp/input-schemas";
+import {
+  cursorInput,
+  nullAsAbsent,
+  plainRecord,
+} from "@/api/mcp/input-schemas";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
@@ -103,7 +107,6 @@ import type {
 import {
   closestToolNames,
   confirmationUnavailableResult,
-  cursorInput,
   DEFAULT_LIST_LIMIT,
   didYouMean,
   FEATURE_DISABLED_MESSAGE,
@@ -114,7 +117,6 @@ import {
   MAX_TOOL_NAME_CHARS,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
-  nullAsAbsent,
   oauthScopeRecoveryHint,
   quoteToolName,
   searchIndexUnavailableResult,
@@ -157,6 +159,7 @@ type CatalogEntry = {
   confirmation?: "required";
   idempotency?: { type: "replay" };
   scope: string;
+  accountScope?: string;
   additionalScopes?: readonly string[];
   /**
    * When true, this capability's REST route admits archived matters
@@ -281,6 +284,15 @@ const isCapabilityTransport = (
 const isReplayPolicy = (value: unknown): value is { type: "replay" } =>
   isRecord(value) && value["type"] === "replay";
 
+/** Optional invocation policy fields a catalog entry may declare. */
+const hasValidInvocationPolicy = (value: Record<string, unknown>) =>
+  (value["confirmation"] === undefined ||
+    value["confirmation"] === "required") &&
+  (value["idempotency"] === undefined ||
+    isReplayPolicy(value["idempotency"])) &&
+  (value["accountScope"] === undefined ||
+    typeof value["accountScope"] === "string");
+
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
@@ -295,10 +307,7 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
         value["readClass"] === "public" ||
         value["readClass"] === "both"))) &&
   typeof value["destructive"] === "boolean" &&
-  (value["confirmation"] === undefined ||
-    value["confirmation"] === "required") &&
-  (value["idempotency"] === undefined ||
-    isReplayPolicy(value["idempotency"])) &&
+  hasValidInvocationPolicy(value) &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&
@@ -974,11 +983,8 @@ const capabilityFeatureEnabled = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
-  (!(
-    capabilityDomain(entry.id) === "account-exports" ||
-    requiredScopesOf(entry).some(isAccountExportScope)
-  ) ||
-    hasAccountExportAuthority(context, entry.access)) &&
+  (entry.accountScope === undefined ||
+    hasAccountCapabilityAuthority(context, entry.accountScope)) &&
   (entry.featureAccess === "conditional" ||
     isMcpDescriptorFeatureEnabled({
       context,
@@ -1009,6 +1015,23 @@ export const accessibleFeatureCapabilityIds = async (
         contextFeatureEnabled(entry.feature, context),
     )
     .map((entry) => entry.id);
+
+export const disabledFeatureCapabilityIds = async (
+  context: McpRequestContext,
+): Promise<string[]> =>
+  (await getCatalog())
+    .filter(
+      (entry) =>
+        entry.featureAccess === "required" &&
+        !isMcpDescriptorFeatureEnabled({
+          context,
+          kind: "capabilities",
+          id: entry.id,
+          featureId: entry.featureId,
+        }),
+    )
+    .map((entry) => entry.id)
+    .toSorted();
 
 /**
  * Catalog capability ids gated off in this deployment, sorted: the ids
@@ -1777,8 +1800,10 @@ const resolveCapabilityWorkspace = ({
   // `accessibleWorkspaceStatusById`, so this branch only ever sees
   // active/archived.
   if (
-    workspaceStatus !== "active-or-archived" &&
-    getWorkspaceStatus({ context, workspaceId: rawId }) !== "active"
+    !admitsWorkspaceStatus(
+      getWorkspaceStatus({ context, workspaceId: rawId }),
+      workspaceStatus,
+    )
   ) {
     return {
       ok: false,

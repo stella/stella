@@ -5,6 +5,7 @@ import type { AggregateLockDefinition } from "../aggregate-lock-definition";
 export default {
   rank: 600,
   kind: "row",
+  holder: "application",
 } as const satisfies AggregateLockDefinition;
 
 export type Identity = {

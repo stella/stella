@@ -13,12 +13,12 @@
  * characters as before by construction. No offset map exists because none is
  * needed: the drawn text is the source minus the elided ranges.
  *
- * Letter spacing follows the one rule the index and the reader's find
- * already share (`spacedLetterRunRegex` in `@stll/text-normalize`), so the
+ * Letter spacing follows the one reading the index and the reader's find
+ * already share (`letterSpacingJoins` in `@stll/text-normalize`), so the
  * reader draws a spaced word the way search folds it.
  */
 
-import { spacedLetterRunRegex } from "@stll/text-normalize";
+import { letterSpacingJoins } from "@stll/text-normalize";
 
 export const DISPLAY_ELISION_KIND = {
   /** A space between the letters of a letter-spaced word. */
@@ -37,50 +37,13 @@ export type DisplayElision = {
   end: number;
 };
 
-const SPACE = " ";
-const SPACES_RE = / {2,}/gu;
-
-type VisibleTextOptions = {
-  elided: ReadonlySet<number>;
-  /** Draw each run of spaces as one, as `collapseSpacedLetters` squeezes. */
-  squeeze: boolean;
-};
-
-/**
- * The text without its elided characters, with the source range every
- * remaining character stands for.
- */
-const visibleText = (text: string, { elided, squeeze }: VisibleTextOptions) => {
-  let visible = "";
-  const sources: { start: number; end: number }[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    if (elided.has(index)) {
-      continue;
-    }
-    const character = text.charAt(index);
-    const previous = sources.at(-1);
-    if (
-      squeeze &&
-      character === SPACE &&
-      previous !== undefined &&
-      visible.endsWith(SPACE)
-    ) {
-      previous.end = index + 1;
-      continue;
-    }
-    visible += character;
-    sources.push({ start: index, end: index + 1 });
-  }
-  return { visible, sources };
-};
-
 /** Adjacent elided indices as ranges, in order. */
 const elisionRanges = (
-  indices: ReadonlySet<number>,
+  indices: readonly number[],
   kind: DisplayElisionKind,
 ): DisplayElision[] => {
   const ranges: DisplayElision[] = [];
-  for (const index of [...indices].toSorted((a, b) => a - b)) {
+  for (const index of indices) {
     const last = ranges.at(-1);
     if (last?.end === index) {
       last.end = index + 1;
@@ -92,50 +55,12 @@ const elisionRanges = (
 };
 
 /**
- * The spaces inside every letter-spaced run, elided until no run is left.
- *
- * Round for round what `collapseSpacedLetters` does: the first round matches
- * the source as it stands, every later one the text the rounds before left,
- * each run of spaces squeezed to one, until a round finds nothing. A run
- * whose letters stand two spaces apart only appears once its gaps are
- * squeezed. Every space of a matched gap is elided, so the drawn text, its
- * spaces squeezed as a browser draws them, is the owner's collapse.
- * Terminates: a later round that finds anything elides one more source
- * character.
+ * The gaps inside every letter-spaced word: exactly the whitespace the
+ * owner's fold removes, so the drawn text, its spaces squeezed as a browser
+ * draws them, is the fold.
  */
-const letterSpacingElisions = (text: string): DisplayElision[] => {
-  // Every round matches text whose spaces at most get squeezed, and a run in
-  // any of them is a run once squeezed: text without one there has nothing
-  // to elide. Most text is in that case, and this skips the rounds.
-  if (!spacedLetterRunRegex().test(text.replaceAll(SPACES_RE, () => SPACE))) {
-    return [];
-  }
-  const elided = new Set<number>();
-  for (let round = 0; ; round += 1) {
-    const { visible, sources } = visibleText(text, {
-      elided,
-      squeeze: round > 0,
-    });
-    const before = elided.size;
-    for (const match of visible.matchAll(spacedLetterRunRegex())) {
-      for (let offset = 0; offset < match[0].length; offset += 1) {
-        const source = sources[match.index + offset];
-        if (match[0].charAt(offset) !== SPACE || source === undefined) {
-          continue;
-        }
-        for (let index = source.start; index < source.end; index += 1) {
-          elided.add(index);
-        }
-      }
-    }
-    // The first round matches unsqueezed text, so a round over the squeezed
-    // text always follows it, as the owner's loop runs once more whenever
-    // its squeeze changed anything.
-    if (round > 0 && elided.size === before) {
-      return elisionRanges(elided, DISPLAY_ELISION_KIND.LETTER_SPACING);
-    }
-  }
-};
+const letterSpacingElisions = (text: string): DisplayElision[] =>
+  elisionRanges(letterSpacingJoins(text), DISPLAY_ELISION_KIND.LETTER_SPACING);
 
 const QUOTE = '"';
 const BACKSLASH = "\\";

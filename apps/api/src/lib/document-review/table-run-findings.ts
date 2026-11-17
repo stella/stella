@@ -10,36 +10,43 @@
  * batch decides is also committed here, against the run created for that
  * document when the playbook was started.
  *
- * A document holds at most one active run, so this path only ever writes into a
- * run it owns (`executor = "table"`). A review someone started from the
+ * A document holds at most one active table run, so this path only ever writes
+ * into a run it owns (`executor = "table"`). A review someone started from the
  * inspector is never touched.
  */
 
+import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { documentReviewRuns, properties } from "@/api/db/schema";
+import { properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
+import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
-  upsertDocumentReviewFindings,
+  writeReviewFindingBatch,
 } from "@/api/lib/document-review/finding-write";
-import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
-import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
-import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import {
-  DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-  DOCUMENT_REVIEW_RUN_EXECUTOR,
-} from "@/api/lib/document-review/run-contract";
 import type {
-  DocumentReviewRunBasis,
-  DocumentReviewRunErrorCode,
-} from "@/api/lib/document-review/run-contract";
-import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+  DocumentReviewFindingRow,
+  WriteReviewFindingBatchResult,
+} from "@/api/lib/document-review/finding-write";
+import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
+import { UNGRADED_VERDICT } from "@/api/lib/document-review/review-grade";
+import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
+import type { DocumentReviewRunErrorCode } from "@/api/lib/document-review/run-contract";
+import {
+  failReviewRun,
+  recordRunWithheldSources,
+  reportFinalizedReviewRun,
+} from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
-import { logger } from "@/api/lib/observability/logger";
-import type { GradedVerdict } from "@/api/lib/workflow/verdict-engine";
+import type {
+  GradedVerdict,
+  UngradedVerdict,
+} from "@/api/lib/workflow/verdict-engine";
 
 export type RecordTableRunVerdictsArgs = {
   scopedDb: ScopedDb;
@@ -48,9 +55,13 @@ export type RecordTableRunVerdictsArgs = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   graded: readonly GradedVerdict[];
+  /** Positions the model declined or could not grade. Each one becomes the
+   *  finding the review worker writes for it, flagged for a person, and the
+   *  rest of the review stands. */
+  ungraded: readonly UngradedVerdict[];
   /** Verdicts this batch decided nothing about: a gate that no longer matches,
-   *  or a grading call that failed. Either one means the run's promised finding
-   *  set can never be completed. */
+   *  or an ASK whose extraction never finished. Either one means the run's
+   *  promised finding set can never be completed. */
   unresolvedPropertyIds: readonly SafeId<"property">[];
 };
 
@@ -59,34 +70,117 @@ export type RecordTableRunVerdictsResult =
   | { type: "written"; findingCount: number; completed: boolean }
   | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
 
-/** The run row this path executes against. */
-type TableRun = {
-  id: SafeId<"documentReviewRun">;
-  entityVersionId: SafeId<"entityVersion">;
-  fileFieldId: SafeId<"field">;
-  basis: DocumentReviewRunBasis;
-};
-
-const failRun = async (
+const loadPlaybookSourceIds = async (
   tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-  runId: SafeId<"documentReviewRun">,
-  errorCode: DocumentReviewRunErrorCode,
-): Promise<void> => {
-  // audit: skip — failure bookkeeping on the run row audited at create.
-  await tx
-    .update(documentReviewRuns)
-    .set({ status: "failed", errorCode, finishedAt: new Date() })
+  {
+    workspaceId,
+    propertyIds,
+  }: {
+    workspaceId: SafeId<"workspace">;
+    propertyIds: readonly SafeId<"property">[];
+  },
+) => {
+  const rows = await tx
+    .select({
+      id: properties.id,
+      playbookSourceId: properties.playbookSourceId,
+    })
+    .from(properties)
     .where(
       and(
-        eq(documentReviewRuns.id, runId),
-        eq(documentReviewRuns.workspaceId, workspaceId),
-        inArray(documentReviewRuns.status, [
-          ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-        ]),
+        eq(properties.workspaceId, workspaceId),
+        inArray(properties.id, [...propertyIds]),
       ),
     );
+  return new Map(rows.map((row) => [row.id, row.playbookSourceId]));
 };
+
+type RecordTableRunDocumentReadArgs = {
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  /** The columns the batch extracted. */
+  propertyIds: readonly SafeId<"property">[];
+  read:
+    | { type: "tooLarge" }
+    | { type: "cut"; withheld: readonly ReviewWithheldSource[] };
+};
+
+/**
+ * Tells the document's active table run how its extraction read the document.
+ * Grading runs a level later and sees only stored cells, so the run hears it
+ * from the extraction batch that made the cut.
+ *
+ * A run has no link to one workflow request, because a run opened while a
+ * workflow is in flight is carried by that workflow. What ties a batch to the
+ * run is what it read: the pinned version, for one of the run's positions.
+ */
+export const recordTableRunDocumentRead = async ({
+  scopedDb,
+  workspaceId,
+  entityId,
+  entityVersionId,
+  propertyIds,
+  read,
+}: RecordTableRunDocumentReadArgs): Promise<void> => {
+  await scopedDb(async (tx) => {
+    const run = await lockActiveTableRun(tx, { workspaceId, entityId });
+    if (run === undefined || run.entityVersionId !== entityVersionId) {
+      return;
+    }
+    const sourceIds = new Set(
+      (await loadPlaybookSourceIds(tx, { workspaceId, propertyIds })).values(),
+    );
+    const { positions } = planReviewRun({
+      basis: run.basis,
+      executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+    });
+    if (!positions.some(({ positionId }) => sourceIds.has(positionId))) {
+      return;
+    }
+    switch (read.type) {
+      case "tooLarge":
+        await failReviewRun(
+          tx,
+          { workspaceId, runId: run.id },
+          "document_too_large",
+        );
+        return;
+      case "cut": {
+        const withheld = read.withheld.filter(
+          ({ fileFieldId }) => fileFieldId === run.fileFieldId,
+        );
+        if (withheld.length > 0) {
+          await recordRunWithheldSources(
+            tx,
+            { workspaceId, runId: run.id },
+            withheld,
+          );
+        }
+        return;
+      }
+      default:
+        read satisfies never;
+        panic(`Unhandled document read: ${String(read)}`);
+    }
+  });
+};
+
+/** What one finding row records about its position. */
+type Judgment = Pick<
+  ReviewFinding,
+  "verdict" | "rationale" | "matchedRef" | "extracted"
+> & { propertyId: SafeId<"property"> };
+
+type RecordedBatch =
+  | Exclude<RecordTableRunVerdictsResult, { type: "written" }>
+  | {
+      type: "batch";
+      runId: SafeId<"documentReviewRun">;
+      rowCount: number;
+      finalized: WriteReviewFindingBatchResult;
+    };
 
 export const recordTableRunVerdicts = async ({
   scopedDb,
@@ -95,35 +189,21 @@ export const recordTableRunVerdicts = async ({
   entityId,
   entityVersionId,
   graded,
+  ungraded,
   unresolvedPropertyIds,
 }: RecordTableRunVerdictsArgs): Promise<RecordTableRunVerdictsResult> => {
-  if (graded.length === 0 && unresolvedPropertyIds.length === 0) {
+  if (
+    graded.length === 0 &&
+    ungraded.length === 0 &&
+    unresolvedPropertyIds.length === 0
+  ) {
     return { type: "no-run" };
   }
 
-  return await scopedDb(async (tx): Promise<RecordTableRunVerdictsResult> => {
-    // At most one active run per document, and only a table-executed one is
-    // ours to write into.
-    const runs = await tx
-      .select({
-        id: documentReviewRuns.id,
-        entityVersionId: documentReviewRuns.entityVersionId,
-        fileFieldId: documentReviewRuns.fileFieldId,
-        basis: documentReviewRuns.basis,
-      })
-      .from(documentReviewRuns)
-      .where(
-        and(
-          eq(documentReviewRuns.workspaceId, workspaceId),
-          eq(documentReviewRuns.entityId, entityId),
-          eq(documentReviewRuns.executor, DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE),
-          inArray(documentReviewRuns.status, [
-            ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-          ]),
-        ),
-      )
-      .limit(1);
-    const run: TableRun | undefined = runs.at(0);
+  const recorded = await scopedDb(async (tx): Promise<RecordedBatch> => {
+    // At most one active table run per document, and only a table-executed one
+    // is ours to write into.
+    const run = await lockActiveTableRun(tx, { workspaceId, entityId });
     if (run === undefined) {
       return { type: "no-run" };
     }
@@ -132,7 +212,7 @@ export const recordTableRunVerdicts = async ({
     // just graded is not what the run promised to judge, so the run fails
     // rather than mixing two versions into one review.
     if (run.entityVersionId !== entityVersionId) {
-      await failRun(tx, workspaceId, run.id, "pin_unresolved");
+      await failReviewRun(tx, { workspaceId, runId: run.id }, "pin_unresolved");
       return { type: "failed", errorCode: "pin_unresolved" };
     }
 
@@ -149,23 +229,13 @@ export const recordTableRunVerdicts = async ({
     // cell to the topic it answers.
     const propertyIds = [
       ...graded.map((verdict) => verdict.propertyId),
+      ...ungraded.map((verdict) => verdict.propertyId),
       ...unresolvedPropertyIds,
     ];
-    const sourceRows = await tx
-      .select({
-        id: properties.id,
-        playbookSourceId: properties.playbookSourceId,
-      })
-      .from(properties)
-      .where(
-        and(
-          eq(properties.workspaceId, workspaceId),
-          inArray(properties.id, propertyIds),
-        ),
-      );
-    const sourceIdByPropertyId = new Map(
-      sourceRows.map((row) => [row.id, row.playbookSourceId]),
-    );
+    const sourceIdByPropertyId = await loadPlaybookSourceIds(tx, {
+      workspaceId,
+      propertyIds,
+    });
 
     const belongsToRun = (propertyId: SafeId<"property">): boolean => {
       const sourceId = sourceIdByPropertyId.get(propertyId);
@@ -178,12 +248,28 @@ export const recordTableRunVerdicts = async ({
       // The run promised one finding per planned position; a position that
       // decided nothing makes that promise unreachable. Fail now instead of
       // leaving the run open until the reconciler notices.
-      await failRun(tx, workspaceId, run.id, "playbook_check_failed");
+      await failReviewRun(
+        tx,
+        { workspaceId, runId: run.id },
+        "playbook_check_failed",
+      );
       return { type: "failed", errorCode: "playbook_check_failed" };
     }
 
     const rows: DocumentReviewFindingRow[] = [];
-    for (const verdict of graded) {
+    const judgments: Judgment[] = [
+      ...graded,
+      // The judgment the review worker records for a position it could not
+      // grade: a deviation a person must look at, with the reason it carries,
+      // never a verdict about the document.
+      ...ungraded.map(({ propertyId, extracted }): Judgment => ({
+        propertyId,
+        verdict: UNGRADED_VERDICT.verdict,
+        rationale: UNGRADED_VERDICT.rationale,
+        extracted,
+      })),
+    ];
+    for (const verdict of judgments) {
       const sourceId = sourceIdByPropertyId.get(verdict.propertyId);
       if (sourceId === undefined || sourceId === null) {
         continue;
@@ -233,29 +319,25 @@ export const recordTableRunVerdicts = async ({
       );
     }
 
-    await upsertDocumentReviewFindings(tx, rows);
-
-    const finalized = await finalizeReviewRun({
+    const finalized = await writeReviewFindingBatch({
       tx,
       workspaceId,
-      runId: run.id,
-      entityId,
-      fileFieldId: run.fileFieldId,
+      rows,
       executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+      run,
+      entityId,
       expectedFindingCount: plan.expectedFindingCount,
     });
-    if (finalized.type === "completed" && finalized.carried > 0) {
-      logger.info("document_review_run.decisions_carried", {
-        count: String(finalized.carried),
-        runId: run.id,
-        workspaceId,
-      });
-    }
-
-    return {
-      type: "written",
-      findingCount: rows.length,
-      completed: finalized.type === "completed",
-    };
+    return { type: "batch", runId: run.id, rowCount: rows.length, finalized };
   });
+  if (recorded.type !== "batch") {
+    return recorded;
+  }
+  const { runId, rowCount, finalized } = recorded;
+  reportFinalizedReviewRun(finalized, { workspaceId, runId });
+  return {
+    type: "written",
+    findingCount: rowCount,
+    completed: finalized.type === "completed",
+  };
 };

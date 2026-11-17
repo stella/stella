@@ -10,8 +10,8 @@ import {
   INVOICE_SELLER_COLUMNS,
 } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import { invoicePaymentState } from "@/api/lib/billing/invoice-payment-amounts";
 import { INVOICE_CREDITED_AMOUNT_EXTRA } from "@/api/lib/billing/invoice-payments";
-import type { AmountDue } from "@/api/lib/billing/invoice-payments";
 import type { RenderInvoicePdfOptions } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
 import { openTypstSession } from "@/api/lib/billing/invoice-pdf/typst/session";
@@ -111,6 +111,7 @@ export const invoiceDocumentError = (
   if (loaded.invoice.sellerProfileId !== null && loaded.seller === null) {
     return new HandlerError({
       status: 409,
+      code: "invoice_seller_unavailable",
       message: "Invoice seller profile is unavailable",
       hint: "Select an available seller profile before exporting the invoice.",
     });
@@ -121,6 +122,7 @@ export const invoiceDocumentError = (
   ) {
     return new HandlerError({
       status: 409,
+      code: "invoice_original_unavailable",
       message: "Original invoice number is unavailable",
       hint: "The credit note must reference an issued invoice in this matter.",
     });
@@ -128,15 +130,30 @@ export const invoiceDocumentError = (
   return null;
 };
 
+/** What the payment ledger holds against a document: its payments and issued credit notes. */
+export type InvoiceDocumentLedger = {
+  paidAmount: number;
+  creditedAmount: number;
+};
+
 /** The render input for a loaded invoice, with its lines and totals. */
 export const invoiceDocumentRenderOptions = (
   loaded: InvoiceDocumentSource,
-  paymentAmountMinor: AmountDue,
+  ledger: InvoiceDocumentLedger,
 ): RenderInvoicePdfOptions => {
   const amounts = readInvoiceDocumentLines(loaded.invoice);
   return {
     ...loaded,
-    paymentAmountMinor,
+    // The document's own gross, not the stored total: a legacy invoice (no
+    // stored lines) prints entries its stored total may not count, and the
+    // payment it asks for must match.
+    settlement: invoicePaymentState({
+      documentType: loaded.invoice.documentType,
+      status: loaded.invoice.status,
+      totalAmount: amounts.totals.grossAmountMinor,
+      paidAmount: ledger.paidAmount,
+      creditedAmount: ledger.creditedAmount,
+    }),
     invoice: {
       ...loaded.invoice,
       lines: amounts.lines.map((line, index) => {
@@ -183,6 +200,7 @@ const invoiceRenderError = (cause: unknown) => {
   }
   return new HandlerError({
     status: 409,
+    code: "invoice_not_renderable",
     message:
       cause instanceof Error
         ? cause.message
@@ -226,15 +244,15 @@ export type InvoicePdfRenderer = typeof renderInvoiceWithTypst;
 
 type RenderInvoiceDocumentPdfOptions = {
   loaded: InvoiceDocumentSource;
-  /** Required remaining balance from the caller's payment snapshot; zero means settled. */
-  paymentAmountMinor: AmountDue;
+  /** The caller's payment ledger snapshot the document states its balance from. */
+  ledger: InvoiceDocumentLedger;
   renderInvoice?: InvoicePdfRenderer;
 };
 
 /** Lays a loaded invoice out as its PDF bytes without changing document totals. */
 export const renderInvoiceDocumentPdf = async ({
   loaded,
-  paymentAmountMinor,
+  ledger,
   renderInvoice = renderInvoiceWithTypst,
 }: RenderInvoiceDocumentPdfOptions): Promise<
   Result<Uint8Array, HandlerError>
@@ -244,7 +262,7 @@ export const renderInvoiceDocumentPdf = async ({
       await renderInvoice({
         session: invoiceTypstSession,
         createdAt: new Date(),
-        invoice: invoiceDocumentRenderOptions(loaded, paymentAmountMinor),
+        invoice: invoiceDocumentRenderOptions(loaded, ledger),
       }),
     catch: invoiceRenderError,
   });

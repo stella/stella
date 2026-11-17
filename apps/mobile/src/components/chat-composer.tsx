@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useImperativeHandle, useState } from "react";
+import type { Ref } from "react";
 
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import {
@@ -10,7 +11,9 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
+import type { ChatLocalRunSteerRefusal } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
+import { Button } from "@stll/ui/button";
 import { COMPOSER_BOX_CLASS } from "@stll/ui/composer-tokens";
 import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
@@ -19,9 +22,22 @@ import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
-import { ArrowUpIcon, SquareIcon } from "@/icons.gen";
+import { useDictation } from "@/components/use-dictation";
+import type { DictationNotice } from "@/components/use-dictation";
+import { useSharedDraft } from "@/components/use-shared-draft";
+import {
+  ArrowUpIcon,
+  CheckIcon,
+  ClockIcon,
+  DictateIcon,
+  SendIcon,
+  SquareIcon,
+  XIcon,
+} from "@/icons.gen";
+import type { LucideIcon } from "@/icons.gen";
 import { canScan } from "@/native/document-scanner";
 import {
+  asWrittenGetsPast,
   attachmentsSendable,
   CHAT_FILES_PER_MESSAGE,
   readyFiles,
@@ -29,8 +45,10 @@ import {
 import type {
   ChatAttachment,
   ChatDraft,
+  DraftSendMode,
   SendRefusal,
 } from "@/state/chat-attachments";
+import { appendDictation, DICTATION_MAX_SECONDS } from "@/state/dictation";
 import { sizeInUnits } from "@/state/scan-pages";
 import { useUiColors } from "@/theme";
 
@@ -47,56 +65,190 @@ import { useUiColors } from "@/theme";
  * document. Each shows as a chip above the text while it is read, and goes
  * with the message once it is. What went wrong with a file, or with a send,
  * is said above the box.
+ *
+ * With nothing to send, the round button is a microphone instead: it records
+ * until the person taps done (or for a minute at most), and the transcribed
+ * text lands in the box to read over before sending.
  */
+/** What the thread may do to its composer. */
+export type ChatComposerHandle = {
+  /** Puts text taken back into the box, such as a queued message to edit,
+   *  before what is typed. */
+  readonly handBack: (text: string) => void;
+};
+
 export const ChatComposer = ({
   busy,
   canStop,
+  handle,
+  onQueue,
   onSend,
+  onSteer,
   onStop,
   sendError,
+  shareId,
+  steerRefusal,
 }: {
   busy: boolean;
   canStop: boolean;
+  /** What the thread may do to the box from outside it. */
+  handle?: Ref<ChatComposerHandle> | undefined;
+  /**
+   * Queues the draft behind the answer arriving now (the web's queue
+   * button); undefined where the conversation keeps no queue.
+   */
+  onQueue?: ((draft: ChatDraft, onRefused: () => void) => boolean) | undefined;
   /** Sends the draft; returns false when it was not taken, so it stays in the box. */
-  onSend: (draft: ChatDraft, onRefused: () => void) => boolean;
+  onSend: (
+    draft: ChatDraft,
+    onRefused: () => void,
+    mode: DraftSendMode,
+  ) => boolean;
+  /**
+   * Hands the draft to the turn answering now, while one that can take it
+   * runs (where a plain send steers, `chatSendIntent`); returns false when
+   * it was not taken.
+   */
+  onSteer: ((draft: ChatDraft, onRefused: () => void) => boolean) | undefined;
   onStop: () => void;
   /** Why the last message was not sent, if it was not. */
   sendError: SendRefusal | undefined;
+  /** Why the agent did not take the last steered message, if it did not. */
+  steerRefusal: ChatLocalRunSteerRefusal | undefined;
+  /** A share from another app the conversation starts with (`src/app/share`). */
+  shareId: string | undefined;
 }) => {
-  const ui = useUiColors();
   const t = useTranslations("chat");
   const [draft, setDraft] = useState("");
+  useImperativeHandle(handle, () => ({
+    handBack: (text: string) => {
+      setDraft((typed) => (typed === "" ? text : `${text}\n\n${typed}`));
+    },
+  }));
   const files = useChatAttachments();
+  useSharedDraft({
+    addFiles: files.addFiles,
+    onFailed: files.shareFailed,
+    onText: (text) => {
+      setDraft((typed) => (typed === "" ? text : `${typed}\n\n${text}`));
+    },
+    shareId,
+  });
+  const dictation = useDictation((text) => {
+    setDraft((typed) => appendDictation(typed, text));
+  });
   const message = draft.trim();
-  const notice = useNoticeText(files.notice, sendError);
-  const canSend =
-    (message !== "" || files.attachments.length > 0) &&
-    attachmentsSendable(files.attachments);
+  const notice = useNoticeText({
+    notice: files.notice,
+    dictationNotice: dictation.notice,
+    sendError,
+    steerRefusal,
+  });
+  const hasDraft = message !== "" || files.attachments.length > 0;
+  const canSend = hasDraft && attachmentsSendable(files.attachments);
 
-  const send = () => {
+  const send = (mode: DraftSendMode) => {
     if (!canSend) {
       return;
     }
+    // A refusal of this send is what the composer shows next, not an older
+    // dictation's failure.
+    dictation.settleForSend();
     const taken = files.attachments;
-    const accepted = onSend({ text: message, files: readyFiles(taken) }, () => {
-      // Handed back only into an empty box, so nothing typed or attached
-      // since is lost.
-      setDraft((typed) => (typed === "" ? message : typed));
-      files.restore(taken);
-    });
+    const accepted = onSend(
+      { text: message, files: readyFiles(taken) },
+      () => {
+        // Handed back only into an empty box, so nothing typed or attached
+        // since is lost.
+        setDraft((typed) => (typed === "" ? message : typed));
+        files.restore(taken);
+      },
+      mode,
+    );
     if (accepted) {
       setDraft("");
       files.clear();
     }
   };
 
-  // A one-line text cell is 42pt tall (24pt line, 9pt above and below); the
-  // 36pt round controls sit centred on it. With nothing to send, the button
-  // is drawn muted rather than dimmed, so it never reads as ready.
-  const round =
-    "mb-[3px] size-9 shrink-0 items-center justify-center rounded-full";
-  const ready = `${round} bg-foreground`;
-  const muted = `${round} bg-secondary`;
+  const queue = () => {
+    if (onQueue === undefined || !canSend) {
+      return;
+    }
+    const taken = files.attachments;
+    const accepted = onQueue(
+      { text: message, files: readyFiles(taken) },
+      () => {
+        // Refused after the box was freed, often once the member typed on:
+        // what comes back goes before what is in the box, never instead.
+        setDraft((typed) =>
+          typed === "" ? message : `${message}\n\n${typed}`,
+        );
+        files.restore(taken);
+      },
+    );
+    if (accepted) {
+      setDraft("");
+      files.clear();
+    }
+  };
+
+  // Only text goes to an agent while it works.
+  const canSteer =
+    onSteer !== undefined && message !== "" && files.attachments.length === 0;
+  const steer = () => {
+    if (onSteer === undefined || !canSteer) {
+      return;
+    }
+    if (
+      onSteer({ text: message, files: [] }, () => {
+        // A steer is settled later than a send, often after the member typed
+        // on: what comes back goes before what is in the box, never instead.
+        setDraft((typed) =>
+          typed === "" ? message : `${message}\n\n${typed}`,
+        );
+      })
+    ) {
+      setDraft("");
+    }
+  };
+
+  // The round button: done while dictating, stop while an answer arrives,
+  // send once there is something to send, else the microphone.
+  let action: RoundButtonProps;
+  if (dictation.phase !== "idle") {
+    action = {
+      enabled: dictation.phase === "recording",
+      Icon: CheckIcon,
+      label: t("dictationFinish"),
+      onPress: dictation.finish,
+    };
+  } else if (busy) {
+    action = {
+      enabled: canStop,
+      Icon: SquareIcon,
+      iconSize: 16,
+      label: t("stop"),
+      onPress: onStop,
+    };
+  } else if (hasDraft) {
+    action = {
+      enabled: canSend,
+      Icon: ArrowUpIcon,
+      label: t("send"),
+      onPress: () => {
+        send("as-thread");
+      },
+    };
+  } else {
+    action = {
+      enabled: true,
+      filled: false,
+      Icon: DictateIcon,
+      label: t("dictate"),
+      onPress: dictation.start,
+    };
+  }
 
   // iOS 26's Liquid Glass: the box is a glass capsule floating over the
   // screen, as the platform's own message fields are. Elsewhere it keeps the
@@ -108,9 +260,23 @@ export const ChatComposer = ({
     <View className={`${glass ? "" : "bg-background"} gap-1 px-3 pt-1 pb-2`}>
       {notice === undefined ? null : (
         <Text accessibilityLiveRegion="polite" className="px-1" variant="error">
-          {notice}
+          {notice.text}
         </Text>
       )}
+      {/* The refused draft is back in the box; this sends it as written. */}
+      {notice?.of === "send" && asWrittenGetsPast(sendError) && !busy ? (
+        <Button
+          className="self-start"
+          disabled={!canSend}
+          onPress={() => {
+            send("as-written");
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("sendWithoutAnonymization")}
+        </Button>
+      ) : null}
       <Box>
         {files.attachments.length === 0 ? null : (
           <ScrollView
@@ -131,51 +297,115 @@ export const ChatComposer = ({
           </ScrollView>
         )}
         <View className="min-h-[54px] flex-row items-end gap-2 px-2 py-1.5">
-          <ComposerAttachMenu
-            onAttachFile={files.pickDocument}
-            onScan={canScan() ? files.scanDocument : undefined}
-          />
-          <View className="min-w-0 flex-1 py-2.25">
-            <Textarea
-              accessibilityLabel={t("composerPlaceholder")}
-              onChangeText={setDraft}
-              placeholder={t("composerPlaceholder")}
-              unstyled
-              value={draft}
+          {dictation.phase === "idle" ? (
+            <ComposerAttachMenu
+              onAttachFile={files.pickDocument}
+              onScan={canScan() ? files.scanDocument : undefined}
             />
-          </View>
-          {busy ? (
-            <Pressable
-              accessibilityLabel={t("stop")}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canStop }}
-              className={canStop ? ready : muted}
-              disabled={!canStop}
-              onPress={onStop}
-            >
-              <SquareIcon
-                color={canStop ? ui.background : ui.mutedForeground}
-                size={16}
-              />
-            </Pressable>
           ) : (
-            <Pressable
-              accessibilityLabel={t("send")}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSend }}
-              className={canSend ? ready : muted}
-              disabled={!canSend}
-              onPress={send}
-            >
-              <ArrowUpIcon
-                color={canSend ? ui.background : ui.mutedForeground}
-                size={18}
-              />
-            </Pressable>
+            <RoundButton
+              enabled={dictation.phase === "recording"}
+              filled={false}
+              Icon={XIcon}
+              label={t("dictationCancel")}
+              onPress={dictation.cancel}
+            />
           )}
+          <View className="min-w-0 flex-1 py-2.25">
+            {dictation.phase === "idle" ? (
+              <Textarea
+                accessibilityLabel={t("composerPlaceholder")}
+                onChangeText={setDraft}
+                placeholder={t("composerPlaceholder")}
+                unstyled
+                value={draft}
+              />
+            ) : (
+              <Text
+                accessibilityLiveRegion="polite"
+                className="text-muted-foreground"
+                variant="body"
+              >
+                {dictation.phase === "recording"
+                  ? t("dictationListening", {
+                      elapsed: clock(dictation.elapsedMs),
+                      limit: clock(DICTATION_MAX_SECONDS * 1000),
+                    })
+                  : t("dictationTranscribing")}
+              </Text>
+            )}
+          </View>
+          {busy && onQueue !== undefined && hasDraft ? (
+            <RoundButton
+              enabled={canSend}
+              filled={false}
+              Icon={ClockIcon}
+              label={t("queue.prompt")}
+              onPress={queue}
+            />
+          ) : null}
+          {busy && canSteer ? (
+            <RoundButton
+              enabled
+              filled={false}
+              Icon={SendIcon}
+              label={t("steerPrompt")}
+              onPress={steer}
+            />
+          ) : null}
+          <RoundButton {...action} />
         </View>
       </Box>
     </View>
+  );
+};
+
+// A one-line text cell is 42pt tall (24pt line, 9pt above and below); the
+// 36pt round controls sit centred on it.
+const ROUND =
+  "mb-[3px] size-9 shrink-0 items-center justify-center rounded-full";
+
+type RoundButtonProps = {
+  readonly enabled: boolean;
+  /**
+   * Drawn in the foreground colour when ready; by default only when
+   * enabled, so a button with nothing to do is muted rather than dimmed and
+   * never reads as ready.
+   */
+  readonly filled?: boolean;
+  readonly Icon: LucideIcon;
+  readonly iconSize?: number;
+  readonly label: string;
+  readonly onPress: () => void;
+};
+
+/** One of the composer's round controls. */
+const RoundButton = ({
+  enabled,
+  filled = enabled,
+  Icon,
+  iconSize = 18,
+  label,
+  onPress,
+}: RoundButtonProps) => {
+  const ui = useUiColors();
+  let color: string = ui.mutedForeground;
+  if (filled) {
+    color = ui.background;
+  } else if (enabled) {
+    color = ui.foreground;
+  }
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !enabled }}
+      className={`${ROUND} ${filled ? "bg-foreground" : "bg-secondary"}`}
+      disabled={!enabled}
+      onPress={onPress}
+    >
+      <Icon color={color} size={iconSize} />
+    </Pressable>
   );
 };
 
@@ -191,13 +421,35 @@ const GlassBox = ({ children }: React.PropsWithChildren) => (
   </GlassView>
 );
 
-/** What the composer says went wrong: with a file just added, else with the last send. */
-function useNoticeText(
-  notice: AttachmentNotice | undefined,
-  sendError: SendRefusal | undefined,
-): string | undefined {
+/** What a composer notice is about. */
+type NoticeOf = "dictation" | "file" | "send" | "steer";
+
+/**
+ * What the composer says went wrong: with a dictation, a file just added,
+ * the last send, else the last steer.
+ */
+function useNoticeText({
+  notice,
+  dictationNotice,
+  sendError,
+  steerRefusal,
+}: {
+  notice: AttachmentNotice | undefined;
+  dictationNotice: DictationNotice | undefined;
+  sendError: SendRefusal | undefined;
+  steerRefusal: ChatLocalRunSteerRefusal | undefined;
+}): { readonly of: NoticeOf; readonly text: string } | undefined {
   const t = useTranslations("chat");
   const scanT = useTranslations("scan");
+  const shareT = useTranslations("share");
+  if (dictationNotice !== undefined) {
+    const dictationText = {
+      denied: t("dictationDenied"),
+      failed: t("dictationFailed"),
+      silent: t("dictationSilent"),
+    } as const satisfies Record<DictationNotice, string>;
+    return { of: "dictation", text: dictationText[dictationNotice] };
+  }
   if (notice !== undefined) {
     const noticeText = {
       unsupported: t("unsupportedFileType"),
@@ -209,16 +461,29 @@ function useNoticeText(
       "pick-failed": t("pickFailed"),
       "scan-failed": scanT("failed"),
       "pdf-failed": scanT("pdfFailed"),
+      "share-failed": shareT("unavailable"),
     } as const satisfies Record<AttachmentNotice, string>;
-    return noticeText[notice];
+    return { of: "file", text: noticeText[notice] };
   }
   if (sendError !== undefined) {
     const sendErrorText = {
       failed: t("sendFailed"),
       "file-refused": t("sendFileRefused"),
       "file-not-anonymizable": t("sendFileNotAnonymizable"),
+      "local-run-not-anonymizable": t("sendLocalRunNotAnonymizable"),
     } as const satisfies Record<SendRefusal, string>;
-    return sendErrorText[sendError];
+    return { of: "send", text: sendErrorText[sendError] };
+  }
+  if (steerRefusal !== undefined) {
+    const steerRefusalText = {
+      turn_not_running: t("steerRefused.turnNotRunning"),
+      no_run: t("steerRefused.noRun"),
+      harness_cannot_steer: t("steerRefused.cannotSteer"),
+      run_full: t("steerRefused.runFull"),
+      queued_message_changed: t("steerRefused.queuedMessageChanged"),
+      not_taken: t("steerRefused.notTaken"),
+    } as const satisfies Record<ChatLocalRunSteerRefusal, string>;
+    return { of: "steer", text: steerRefusalText[steerRefusal] };
   }
   return undefined;
 }
@@ -250,6 +515,12 @@ const DraftChip = ({
       status={CHIP_STATUS[status]}
     />
   );
+};
+
+/** Minutes and seconds, as a recorder counts: 0:07, 1:00. */
+const clock = (milliseconds: number): string => {
+  const seconds = Math.floor(milliseconds / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
 const CHIP_STATUS = {

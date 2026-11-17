@@ -35,6 +35,7 @@ import {
   agentSkillsQueryRoot,
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");
@@ -107,7 +108,12 @@ export const AddToStella = ({
   }
 
   const mutation = useMutation({
-    mutationFn: async () => await installCatalogueEntry(entry),
+    mutationFn: resourceMutation({
+      mutation: "installCatalogueEntry",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => await installCatalogueEntry(entry),
+    }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({

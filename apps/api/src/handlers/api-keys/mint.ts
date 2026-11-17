@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { getAuth } from "@/api/lib/auth";
 import type { UpdateApiKey } from "@/api/lib/auth/api-key-endpoints";
 import type { SafeId } from "@/api/lib/branded-types";
-import { uniqueItems } from "@/api/lib/custom-schema";
+import { displayNameSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
@@ -14,6 +14,7 @@ import {
   MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
+  MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
@@ -68,11 +69,9 @@ const reportUnreadableKey = (
  * on either endpoint so the two paths cannot drift into accepting different
  * shapes for the same credential.
  */
-export const machineApiKeyNameSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(MACHINE_API_KEY_NAME_MAX_LENGTH),
-);
+export const machineApiKeyNameSchema = displayNameSchema({
+  maxLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
+});
 
 /**
  * Scopes are constrained at the HTTP boundary to the grantable set, so an
@@ -81,6 +80,7 @@ export const machineApiKeyNameSchema = v.pipe(
 export const machineApiKeyScopesSchema = v.pipe(
   v.array(v.picklist([...MACHINE_API_KEY_GRANTABLE_SCOPES])),
   v.minLength(1),
+  v.maxLength(MACHINE_API_KEY_GRANTABLE_SCOPES.length),
   uniqueItems(),
 );
 
@@ -89,11 +89,28 @@ export const machineApiKeyScopesSchema = v.pipe(
  * checked against the canonical `statements` map by
  * `validateGrantablePermissions`, which produces a far better error than a
  * schema union of every resource would, and keeps this schema out of the
- * type-instantiation hot path.
+ * type-instantiation hot path. New requests name each action once; their
+ * shape ceilings derive from that same catalog. Stored grants are unchanged.
  */
-export const machineApiKeyPermissionsBodySchema = v.record(
-  v.string(),
-  v.pipe(v.array(v.pipe(v.string(), v.minLength(1))), v.minLength(1)),
+export const machineApiKeyPermissionsBodySchema = v.pipe(
+  v.record(
+    v.string(),
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(
+            MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS.actionNameChars,
+          ),
+        ),
+      ),
+      v.minLength(1),
+      v.maxLength(MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS.actionsPerResource),
+      uniqueItems(),
+    ),
+  ),
+  v.maxEntries(MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS.resources),
 );
 
 /**

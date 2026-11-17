@@ -13,18 +13,27 @@
  * carry. The corpus a deployment configures is not this file's business.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import { Temporal } from "@stll/time";
 
 import {
+  listPlCourtsDayPage,
+  PL_COURTS_DETAIL_READ_STATE,
   PL_COURTS_WALK_KIND,
   PL_COURTS_WALK_KINDS,
   plCourtsAdapter,
   plCourtsModifiedSince,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 /** One policy entry naming a kind this adapter serves. */
 type WalkEntry = {
@@ -188,17 +197,18 @@ const requestedParams = (sourceUrl: string | undefined): URLSearchParams => {
 };
 
 const answerWith = (body: unknown): (() => void) => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = asFetchMock(
-    async () =>
-      await Promise.resolve(
-        new Response(JSON.stringify(body), {
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }),
-      ),
+  testFetchState.set(
+    asFetchMock(
+      async () =>
+        await Promise.resolve(
+          new Response(JSON.stringify(body), {
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+          }),
+        ),
+    ),
   );
   return () => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   };
 };
 
@@ -308,19 +318,20 @@ describe("a configured policy drives the crawl", () => {
         textContent: "Rejected label",
       },
     ];
-    const originalFetch = globalThis.fetch;
     restore = () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     };
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : input.toString();
-      return new Response(
-        JSON.stringify(url.includes("/judgments/") ? {} : { items: rows }),
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        return new Response(
+          JSON.stringify(url.includes("/judgments/") ? {} : { items: rows }),
+          {
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
     const page = (await plCourtsAdapter.fetchPage("offset:0", {})).unwrap();
     expect(page.decisions).toHaveLength(2);
     expect(page.nextCursor).toBe("offset:2");
@@ -400,5 +411,183 @@ describe("a dump answer the crawl cannot read", () => {
       return;
     }
     expect(result.error.message).toContain("no items array");
+  });
+});
+
+/** Finite valid JSON when read whole; a bounded reader stops before the tail. */
+const oversizedPublisherResponse = (
+  onCancel: (reason: unknown) => void,
+  tail = '{"items":[],"info":{"totalResults":0}}',
+): Response =>
+  new Response(
+    new ReadableStream<Uint8Array>(
+      {
+        start(controller) {
+          controller.enqueue(
+            new Uint8Array(PUBLISHER_BODY_MAX_BYTES + 1).fill(32),
+          );
+        },
+        pull(controller) {
+          controller.enqueue(new TextEncoder().encode(tail));
+          controller.close();
+        },
+        cancel: onCancel,
+      },
+      { highWaterMark: 0 },
+    ),
+    {
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+
+describe("SAOS listing response bounds", () => {
+  afterEach(() => testFetchState.restore());
+
+  test("an oversized dump page fails at its current cursor instead of ending the walk", async () => {
+    let cancelledWith: unknown;
+    testFetchState.set(
+      asFetchMock(async () =>
+        oversizedPublisherResponse((reason) => {
+          cancelledWith = reason;
+        }),
+      ),
+    );
+    const result = await plCourtsAdapter.fetchPage("offset:100", {});
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      expect.unreachable("Expected a failed page");
+    }
+    expect(result.error.cursor).toBe("offset:100");
+    expect(BodyByteLimitError.is(cancelledWith)).toBe(true);
+    expect(cancelledWith).toHaveProperty("limit", PUBLISHER_BODY_MAX_BYTES);
+  });
+
+  test("an oversized total probe fails rather than reporting a stated zero", async () => {
+    let cancelledWith: unknown;
+    testFetchState.set(
+      asFetchMock(async () =>
+        oversizedPublisherResponse((reason) => {
+          cancelledWith = reason;
+        }),
+      ),
+    );
+    expect(
+      await plCourtsAdapter.getTotalCount(new AbortController().signal),
+    ).toEqual({
+      type: "probe-failed",
+      errorTag: "BodyByteLimitError",
+    });
+    expect(BodyByteLimitError.is(cancelledWith)).toBe(true);
+  });
+
+  test("an oversized day listing cannot settle an empty slice", async () => {
+    let cancelledWith: unknown;
+    testFetchState.set(
+      asFetchMock(async () =>
+        oversizedPublisherResponse((reason) => {
+          cancelledWith = reason;
+        }),
+      ),
+    );
+    const failure = await listPlCourtsDayPage({
+      date: "2024-01-01",
+      page: 0,
+    }).catch((error: unknown) => error);
+    expect(BodyByteLimitError.is(failure)).toBe(true);
+    expect(cancelledWith).toBe(failure);
+  });
+
+  test("an oversized detail preserves the captured dump decision and raw payload", async () => {
+    const capture: unknown = JSON.parse(
+      new TextDecoder().decode(
+        Bun.gunzipSync(
+          await Bun.file(
+            new URL("__fixtures__/pl-courts-dump-day.json.gz", import.meta.url),
+          ).bytes(),
+        ),
+      ),
+    );
+    if (!isRecord(capture) || !Array.isArray(capture["items"])) {
+      panic("Captured dump declares items");
+    }
+    const listing: unknown = capture["items"].find(
+      (row: unknown) => isRecord(row) && row["id"] === 332_735,
+    );
+    if (!isRecord(listing)) {
+      panic("Captured dump contains judgment 332735");
+    }
+    let detailResponse: () => Response = () =>
+      new Response(null, { status: 404 });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.includes("/dump/")) {
+          return Response.json({ items: [listing] });
+        }
+        expect(url.pathname).toEndWith("/332735");
+        return detailResponse();
+      }),
+    );
+    const normalPage = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+    const normal =
+      normalPage.decisions.at(0) ?? panic("Captured listing yields a decision");
+    const normalFulltext =
+      normal.fulltext ?? panic("Captured listing has fulltext");
+    expect(normalFulltext.length).toBeGreaterThan(0);
+
+    let cancelledWith: unknown;
+    detailResponse = () =>
+      oversizedPublisherResponse(
+        (reason) => {
+          cancelledWith = reason;
+        },
+        JSON.stringify({ data: listing }),
+      );
+    const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+    expect(page.decisions).toHaveLength(1);
+    const decision =
+      page.decisions.at(0) ??
+      panic("Oversized detail retains its listed decision");
+    expect(decision.sourceDocumentId).toBe(normal.sourceDocumentId);
+    expect(decision.fulltext).toBe(normalFulltext);
+    expect(decision.metadata).toHaveProperty(
+      "detailReadState",
+      PL_COURTS_DETAIL_READ_STATE.FAILED,
+    );
+    expect(
+      decodeSourceRawEnvelope(
+        decision.sourceRaw ?? panic("Dump payload is retained"),
+      ),
+    ).toEqual({
+      "listing-dump": JSON.stringify(listing),
+    });
+    expect(page.nextCursor).toBe(normalPage.nextCursor);
+    expect(BodyByteLimitError.is(cancelledWith)).toBe(true);
+  });
+
+  test("a chunked empty listing retains its request and recovers its cursor", async () => {
+    const bytes = new TextEncoder().encode('{"items":[]}');
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                for (const byte of bytes) {
+                  controller.enqueue(new Uint8Array([byte]));
+                }
+                controller.close();
+              },
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+    const page = (await plCourtsAdapter.fetchPage("offset:100", {})).unwrap();
+    expect(page.decisions).toEqual([]);
+    expect(page.nextCursor).toBe("offset:0");
+    expect(requestedParams(page.sourceUrl).get("pageNumber")).toBe("1");
   });
 });

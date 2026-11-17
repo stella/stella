@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type {
@@ -199,8 +200,8 @@ const stubGenerate: AiFieldGenerator = async ({ item }) => ({
 });
 
 const readDocumentXml = async (file: ScannedFile): Promise<string> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  return (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  return (await zip.entry("word/document.xml")?.text()) ?? "";
 };
 
 describe("Due Diligence Report built-in template", () => {

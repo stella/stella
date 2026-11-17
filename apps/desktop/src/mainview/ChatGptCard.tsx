@@ -2,12 +2,17 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import type { ChatGptFailure, ChatGptStatus } from "./chatgpt-status";
+import type {
+  ChatGptFailure,
+  ChatGptSignIn,
+  ChatGptStatus,
+} from "./chatgpt-status";
 import { ChatGptPasteCallback } from "./ChatGptPasteCallback";
 
 /** The ChatGPT connection: its state, and what the user can do next. */
 export const ChatGptCard = ({
   status,
+  install,
   notice,
   onSignIn,
   onCancel,
@@ -85,6 +90,7 @@ export const ChatGptCard = ({
       {status.state === "signing_in" ? (
         <ChatGptPasteCallback onComplete={onComplete} />
       ) : null}
+      {install}
       {notice ? (
         <p
           className="text-destructive-foreground text-sm"
@@ -97,14 +103,13 @@ export const ChatGptCard = ({
   );
 };
 
-/** Which account a sign-in is for: the saved one, a new one, or `account`. */
-type ChatGptSignIn = { newAccount: boolean; account?: string };
-
 export type ChatGptNotice =
   "actionFailed" | "pasteRejected" | "revocationUnconfirmed";
 
 type ChatGptCardProps = {
   status: ChatGptStatus;
+  /** The managed Codex CLI's install line; `null` while its status is unknown. */
+  install: React.JSX.Element | null;
   notice: ChatGptNotice | null;
   onSignIn: (request: ChatGptSignIn) => void;
   onCancel: () => void;

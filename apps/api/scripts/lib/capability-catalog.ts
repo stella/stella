@@ -29,6 +29,7 @@ import {
   transportAlternative,
   transportFileInput,
 } from "../../src/lib/capability-transport";
+import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 import { isRecord } from "../../src/lib/type-guards";
@@ -100,7 +101,7 @@ export const reviewedInvoiceManagementEndpoints = <
   });
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
-export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
+const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
 
 /**
  * Internal handler-tree words and the public word each becomes in a capability
@@ -241,9 +242,11 @@ export const DOMAIN_ACTION_VERBS = [
   "lookup",
   "move",
   "pause",
+  "place",
   "prefill",
   "prepare",
   "preview",
+  "release",
   "remove",
   "rename",
   "reorder",
@@ -289,11 +292,6 @@ export const isAllowedActionVerb = (id: string): boolean => {
   return ALLOWED_ACTION_VERBS.has(verb);
 };
 
-/** Ids whose action verb is in neither allowed set, sorted (empty when all conform). */
-export const findNonConformingActionVerbs = (
-  ids: readonly string[],
-): string[] => ids.filter((id) => !isAllowedActionVerb(id)).toSorted();
-
 export type AccessClassification = {
   access: "read" | "write";
   destructive: boolean;
@@ -303,7 +301,15 @@ export type AccessClassification = {
 // both sets are "unclassifiable" and force an explicit ACCESS_OVERRIDES entry
 // so a newly introduced verb fails the export instead of silently defaulting.
 const READ_VERBS = new Set(["read", "list", "view"]);
-const WRITE_VERBS = new Set(["create", "update", "delete", "manage", "write"]);
+const WRITE_VERBS = new Set([
+  "create",
+  "update",
+  "delete",
+  "manage",
+  "write",
+  "place",
+  "release",
+]);
 const DESTRUCTIVE_VERBS = new Set(["delete"]);
 
 export type VerbClassification =
@@ -611,6 +617,43 @@ export type CapabilityDispatchRecord = {
     { featureId: string; type: "required" | "conditional" } | undefined;
 };
 
+/** Required feature access hides the entire capability; conditional access only narrows its input. */
+export const requiredDeploymentFeature = (
+  registry: FeatureRegistry,
+  requirement: CapabilityDispatchRecord["featureAccess"],
+) => {
+  if (requirement?.type !== "required") {
+    return undefined;
+  }
+  const definition = Object.hasOwn(registry, requirement.featureId)
+    ? registry[requirement.featureId]
+    : undefined;
+  if (definition === undefined) {
+    return panic("Required capability feature must be registered", {
+      featureId: requirement.featureId,
+    });
+  }
+  return definition.deploymentFeature;
+};
+
+type CapabilityDeploymentFeatureOptions = {
+  registry: FeatureRegistry;
+  requirement: CapabilityDispatchRecord["featureAccess"];
+  inheritedFeature: string | undefined;
+  domainFeature: string | undefined;
+};
+
+/** Existing tool and domain classifications retain precedence over a handler's derived flag. */
+export const resolveCapabilityDeploymentFeature = ({
+  registry,
+  requirement,
+  inheritedFeature,
+  domainFeature,
+}: CapabilityDeploymentFeatureOptions) => {
+  const requiredFeature = requiredDeploymentFeature(registry, requirement);
+  return inheritedFeature ?? domainFeature ?? requiredFeature;
+};
+
 /**
  * Per-segment allowlists for every value interpolated into the generated
  * dispatch module. Each derived value (id, import path, export name) is split
@@ -807,7 +850,7 @@ export const CAPABILITY_DISPATCH = {
  * destructured-context usage handlers actually write (e.g. `set.status`,
  * `redirect(...)`), not just the `ctx.`-qualified form.
  */
-export const CONTEXT_FIDELITY_PATTERNS: readonly {
+const CONTEXT_FIDELITY_PATTERNS: readonly {
   feature: string;
   pattern: RegExp;
 }[] = [
@@ -833,7 +876,7 @@ export const detectContextFidelityFeatures = (source: string): string[] => {
   return [...features].toSorted();
 };
 
-export type ContextFidelityViolation = { id: string; features: string[] };
+type ContextFidelityViolation = { id: string; features: string[] };
 
 export type ContextFidelityScan = {
   /** Catalog ids whose handler uses an un-honorable feature but is not waived. */
@@ -932,7 +975,7 @@ const isDirectBinaryProp = (schema: unknown): boolean => {
 };
 
 /** One top-level input property whose schema carries binary bytes. */
-export type BinarySchemaField = {
+type BinarySchemaField = {
   part: "body" | "params" | "query";
   field: string;
   /** Whether the part's `required` list names it (`v.optional(...)` -> false). */
@@ -1222,7 +1265,7 @@ export const returnsInlineFileResponse = (source: string): boolean =>
  * signal only (keeps the flag table honest); the refusal itself keys off the
  * flag plus the runtime backstop in `mapHandlerResult`.
  */
-export const constructsBinaryLike = (source: string): boolean =>
+const constructsBinaryLike = (source: string): boolean =>
   /\bnew Response\s*\(|\bsecureDocumentResponse\s*\(|\bUint8Array\b|\bArrayBuffer\b|\bnew Blob\s*\(|\bReadableStream\b/u.test(
     source,
   );
@@ -1420,8 +1463,8 @@ export const compareScopeStrictness = ({
  * The six write-only OAuth grants. A capability whose `access` is `read` must
  * never resolve to one of these — a read-only credential (`stella:read` /
  * `stella:admin_read`) would then be unable to invoke it. Enforced structurally
- * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
- * ratchet, so the class stays impossible even if the resolver is later changed.
+ * by the exporter's read-scope guard, so the class stays impossible even if the
+ * resolver is later changed.
  */
 export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
@@ -1495,7 +1538,7 @@ export const resolveScope = ({
 // --- Coverage doc (generated docs/capability-coverage.md) -------------------
 
 /** The `mcp` disposition shape a coverage-doc entry carries (mirrors CapabilityMcp). */
-export type CoverageDocMcp =
+type CoverageDocMcp =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };

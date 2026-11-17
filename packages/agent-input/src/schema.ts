@@ -16,6 +16,7 @@ import { normalizeLocale } from "./locale";
 import type { Normalized, NormalizedOptional } from "./normalized";
 import { readAsAbsent } from "./normalized";
 import { normalizeNumber, normalizeNumberInRange } from "./number";
+import { normalizeSlug } from "./slug";
 import { normalizeStringList } from "./string-list";
 import { normalizeUuid } from "./uuid";
 
@@ -34,6 +35,7 @@ export const AGENT_INPUT_NORMALIZATION_KIND = {
   filter: "filter",
   locale: "locale",
   number: "number",
+  slug: "slug",
   stringList: "string-list",
   uuid: "uuid",
 } as const;
@@ -138,6 +140,8 @@ export const agentInputNormalizationGuidance = (
       return annotation.range === "clamp"
         ? "Use a JSON number; a value outside the range is clamped to it."
         : "Use a JSON number; unambiguous localized numeric notation is normalized.";
+    case "slug":
+      return "Use a-z, 0-9 or hyphens; outer whitespace is trimmed.";
     case "string-list":
       return "Use a JSON array of strings; a single string is read as a one-item list.";
     case "uuid":
@@ -432,6 +436,8 @@ const normalizeLeaf = ({
         locale === undefined ? undefined : { locale },
       );
     }
+    case "slug":
+      return normalizeSlug(value);
     case "string-list":
       return normalizeStringList(value, { split: "never" });
     case "uuid":

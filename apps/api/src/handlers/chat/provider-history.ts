@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { hasChatModelContent } from "@stll/api-contract/chat-message-content";
+
 import { answerHistoryCallsInTheirStep } from "@/api/handlers/chat/step-answers";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -59,11 +61,41 @@ export const withoutRepeatedCalls = (
     : messages;
 };
 
+const userMessageHasModelContent = (message: ChatMessage): boolean =>
+  hasChatModelContent(
+    message.parts.map((part) =>
+      part.type === "text"
+        ? { type: part.type, content: part.content }
+        : { type: part.type },
+    ),
+  );
+
 /**
- * The provider's copy of `messages`: each tool call once, every call
- * answered right after its step, then run through the model-ingress guard,
- * so the answers it adds pass the guard like everything else the provider
- * reads.
+ * `messages` without any user message that gives the model nothing to read,
+ * together with the replies to it up to the next user message. A provider
+ * rejects an empty user message, so a thread stored with one would fail on
+ * every later turn; the send endpoint refuses new ones. Dropping the replies
+ * with it keeps user and assistant turns alternating. Returns `messages`
+ * when every user message has content.
+ */
+export const withoutContentlessUserTurns = (
+  messages: readonly ChatMessage[],
+): readonly ChatMessage[] => {
+  let dropping = false;
+  const kept = messages.filter((message) => {
+    if (message.role === "user") {
+      dropping = !userMessageHasModelContent(message);
+    }
+    return !dropping || message.role === "system";
+  });
+  return kept.length === messages.length ? messages : kept;
+};
+
+/**
+ * The provider's copy of `messages`: no user turn without content, each tool
+ * call once, every call answered right after its step, then run through the
+ * model-ingress guard, so the answers it adds pass the guard like everything
+ * else the provider reads.
  */
 export const guardProviderHistory = ({
   messages,
@@ -75,7 +107,9 @@ export const guardProviderHistory = ({
   v.parse(
     providerHistorySchema,
     guardModelMessages({
-      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),
+      messages: answerHistoryCallsInTheirStep(
+        withoutRepeatedCalls(withoutContentlessUserTurns(messages)),
+      ),
       workspaceIds,
     }),
   );

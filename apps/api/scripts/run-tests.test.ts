@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,7 +11,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { waitForExternalState } from "@stll/property-testing/external-state";
+import {
+  waitForExternalState,
+  waitForFileContent,
+} from "@stll/property-testing/external-state";
+
+import { encodePlanFileList } from "../../../scripts/plan-output-codec";
+import { API_TEST_FILES_ENCODED_ENV } from "./test-file-shards";
 
 const apiRoot = path.resolve(import.meta.dirname, "..");
 
@@ -73,7 +78,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         const ready = await descendant.stdout.getReader().read();
         const leafPid = new TextDecoder().decode(ready.value).trim();
         // The test reads the marker as soon as it exists: publish it whole.
-        await Bun.write(${JSON.stringify(`${marker}.partial`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        await Bun.write(${JSON.stringify(`${marker}.partial`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid + "\\n");
         renameSync(${JSON.stringify(`${marker}.partial`)}, ${JSON.stringify(marker)});
         setInterval(() => {}, 1000);
       `,
@@ -89,7 +94,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
             ...process.env,
             CI: "true",
             API_TEST_ARTIFACT_DIR: path.join(directory, "diagnostics"),
-            API_TEST_FILES: "src/blocked.db.test.ts",
+            [API_TEST_FILES_ENCODED_ENV]: encodePlanFileList([
+              "src/blocked.db.test.ts",
+            ]),
             API_TEST_SHARD: "",
             API_TEST_DURATIONS_FILE: "",
             API_TEST_DURATIONS_HASH: "",
@@ -99,14 +106,19 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       );
       const pids: number[] = [];
       try {
-        await waitForExternalState({
-          description: "snapshot builder announces its descendant",
-          read: () => existsSync(marker),
+        const announced = await waitForFileContent({
+          description:
+            "snapshot builder announces itself, its descendant and the leaf",
+          path: marker,
+          // The builder publishes the marker whole (written aside, then
+          // renamed) and ends it with a newline. Content without the newline
+          // is not complete yet, whoever wrote it; complete content goes to
+          // the assertions below, so a malformed announcement fails at once.
+          parse: (content) =>
+            content.endsWith("\n")
+              ? content.trim().split(" ").map(Number)
+              : undefined,
         });
-        const announced = readFileSync(marker, "utf-8")
-          .trim()
-          .split(" ")
-          .map(Number);
         expect(announced).toHaveLength(3);
         expect(
           announced.every((pid) => Number.isSafeInteger(pid) && pid > 1),

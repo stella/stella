@@ -11,6 +11,7 @@ import {
   REVIEW_RESET_KEPT_TABLES,
   REVIEW_RESET_MANUAL_TABLES,
   REVIEW_RESET_MATTER_TABLE,
+  REVIEW_RESET_SHARED_STATEMENTS,
 } from "@/api/lib/review-organization/reset-scope";
 import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
 
@@ -87,21 +88,25 @@ describe("review organization reset scope", () => {
     expect(listed.length).toBe(new Set(listed).size);
   });
 
+  test("a shared sweep statement holds swept tables that stand together in the sweep order", () => {
+    const order: readonly string[] = REVIEW_RESET_CLEARED_TABLES;
+    const grouped = REVIEW_RESET_SHARED_STATEMENTS.flat();
+    expect(grouped.length).toBe(new Set(grouped).size);
+    for (const group of REVIEW_RESET_SHARED_STATEMENTS) {
+      expect(group.length).toBeGreaterThan(1);
+      const start = order.indexOf(group[0] ?? "");
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(order.slice(start, start + group.length)).toEqual([...group]);
+    }
+  });
+
   test("every organization-scoped table is cleared or kept with a reason", () => {
-    // Cleared means swept by name, or removed by a cascade from the matters
-    // the authorized matter deletion takes first.
-    const goneWithMatters = matterClosure();
-    const goneWithBilling = cascadeClosure(REVIEW_RESET_BILLING_TABLES);
+    // Foreign keys determine which dependent rows leave with a cleared parent.
+    const goneWithClearedParents = clearedClosure();
     const undecided = [...tables.entries()]
       .filter(([, table]) => columnNames(table).has("organization_id"))
       .map(([name]) => name)
-      .filter(
-        (name) =>
-          !cleared.has(name) &&
-          !kept.has(name) &&
-          !goneWithMatters.has(name) &&
-          !goneWithBilling.has(name),
-      );
+      .filter((name) => !goneWithClearedParents.has(name) && !kept.has(name));
     expect(undecided).toEqual([]);
   });
 

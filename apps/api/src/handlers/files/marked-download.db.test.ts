@@ -187,7 +187,7 @@ test.each(["above the marking limit", "encrypted", "unreadable"] as const)(
       );
       expect(response).toBeInstanceOf(Response);
       if (!(response instanceof Response)) {
-        throw new Error("Expected the PDF response");
+        throw new TypeError("Expected the PDF response");
       }
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toBe(PDF_MIME_TYPE);

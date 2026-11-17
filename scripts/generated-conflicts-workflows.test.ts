@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { GENERATED_MERGE_HEADLINE } from "./generated-conflicts";
 import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
@@ -1046,7 +1047,7 @@ describe("publish", () => {
       "run-id": githubExpression("steps.select.outputs.run"),
     });
     const checkouts = steps.filter((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(step.uses),
     );
     expect(checkouts).toHaveLength(1);
     expect(checkouts[0]?.with).toMatchObject({

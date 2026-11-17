@@ -75,7 +75,7 @@ export const genericPanelFixtures = [
     id: `statute:${FIXTURE_ID}`,
     label: "Občanský zákoník",
     payload: {
-      country: "cz",
+      country: "CZE",
       documentId: FIXTURE_ID,
       eli: "eli/cz/sb/2012/89",
       slug: "89-2012",

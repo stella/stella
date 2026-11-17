@@ -14,10 +14,10 @@ import {
 import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings/account" });
 
@@ -37,6 +37,7 @@ const { DesktopConnectionCard } =
   await import("@/features/desktop/desktop-connection-card");
 const { desktopPresenceOptions } = await import("./desktop-presence");
 const desktopBridge = await import("@/lib/desktop-bridge");
+const userToast = await import("@/lib/errors/user-toast");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 
@@ -218,12 +219,54 @@ describe("a challenge the desktop app just opened", () => {
 
     // The connection store is shared by the module, so the attempt ends on an
     // outcome that returns it to idle: shuffled tests must not inherit a link.
+    // Built outside the call, as the test above builds its outcome: inferred
+    // inside `resolve`, its error type comes from the union the deferred
+    // takes, which the checker does not resolve the same way every run.
+    const approvalRequired = Result.ok({
+      status: "approval-required",
+    } as const);
     await act(async () => {
-      settled.resolve(Result.ok({ status: "approval-required" }));
+      settled.resolve(approvalRequired);
       await settled.promise;
     });
     expect(
       await view.findByRole("button", { name: messages.common.approve }),
     ).toBeDefined();
+  });
+
+  test("an app linked to another account says so and offers to switch it", async () => {
+    const conflict = Result.ok({
+      status: "refused",
+      reason: "account_conflict",
+    } as const);
+    spyOn(desktopBridge, "linkDesktopAccount").mockResolvedValue(conflict);
+    const requestSwitch = spyOn(
+      desktopBridge,
+      "openDesktopAccountSwitch",
+    ).mockImplementation(() => undefined);
+    const problem = spyOn(userToast, "notifyUserProblem");
+    arriveFromDesktop();
+    const view = mountCard(PRESENCE_FIXTURES.none);
+
+    expect(
+      await view.findByText(messages.settings.account.desktopAccountConflict),
+    ).toBeDefined();
+    expect(problem).not.toHaveBeenCalled();
+    // The page only asks: the app confirms the switch in its own window.
+    expect(requestSwitch).not.toHaveBeenCalled();
+
+    // Switching also returns the shared connection store to idle, so later
+    // tests start without this refusal.
+    await act(async () => {
+      fireEvent.click(
+        view.getByRole("button", {
+          name: messages.settings.account.desktopSwitchAccount,
+        }),
+      );
+    });
+    expect(requestSwitch).toHaveBeenCalledTimes(1);
+    expect(
+      view.queryByText(messages.settings.account.desktopAccountConflict),
+    ).toBeNull();
   });
 });

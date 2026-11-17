@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createPageOrganizerOperationOwner } from "@/components/pdf/page-organizer-upload.logic";
+
 import { isPageTransformRequest } from "./page-editor-protocol";
 import { transformPDFInWorker } from "./page-editor-worker-client";
 
@@ -71,8 +73,13 @@ const withFakeWorker = async (
   }
 };
 
-const request = async (signal: AbortSignal, sourceBytes = new ArrayBuffer(8)) =>
-  await transformPDFInWorker({
+const request = async (
+  signal: AbortSignal,
+  sourceBytes = new ArrayBuffer(8),
+) => {
+  const owner = createPageOrganizerOperationOwner();
+  const operationRequest = owner.beginRequest(owner.operation);
+  return await transformPDFInWorker({
     sources: [{ id: "source", bytes: sourceBytes }],
     pages: [
       {
@@ -84,7 +91,12 @@ const request = async (signal: AbortSignal, sourceBytes = new ArrayBuffer(8)) =>
     ],
     outputs: [["page"]],
     signal,
+    operation: owner.operation,
+    operationRequest,
+    isOperationCurrent: (operation, candidate) =>
+      owner.isLive(operation) && owner.isCurrent(candidate),
   });
+};
 
 describe("PDF page editor worker boundary", () => {
   test("rejects an already-aborted operation before creating a worker", async () => {

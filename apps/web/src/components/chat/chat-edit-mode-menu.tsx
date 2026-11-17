@@ -14,6 +14,8 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { TranslationKey } from "@/i18n/types";
 import type {
@@ -62,16 +64,20 @@ export const DocxEditSafetyChip = ({ safety }: { safety: DocxEditSafety }) => {
     return null;
   }
   return (
-    <span
-      className="text-muted-foreground text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5"
-      title={t("folio.unsupportedDocxEditDescription")}
-    >
-      <LockIcon aria-hidden="true" className="size-3 shrink-0" />
-      {/* min-w-0: a flex item defaults to min-width:auto, so without this the
-          label refuses to shrink below its content and the chip overruns
-          max-w, colliding with the row's end cluster in longer locales. */}
-      <span className="min-w-0 truncate">{t("folio.viewOnly")}</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5" />
+        }
+      >
+        <LockIcon aria-hidden="true" className="size-3 shrink-0" />
+        {/* min-w-0: a flex item defaults to min-width:auto, so without this the
+            label refuses to shrink below its content and the chip overruns
+            max-w, colliding with the row's end cluster in longer locales. */}
+        <TruncatedText>{t("folio.viewOnly")}</TruncatedText>
+      </TooltipTrigger>
+      <TooltipPopup>{t("folio.unsupportedDocxEditDescription")}</TooltipPopup>
+    </Tooltip>
   );
 };
 
@@ -130,9 +136,7 @@ export const ComposerEditModeSubmenu = ({
                 <span className="flex min-w-0 items-start gap-1.5">
                   <Icon className="mt-0.5 size-3.5 shrink-0" />
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate">
-                      {t(OPTION_LABEL_KEY[option])}
-                    </span>
+                    <TruncatedText>{t(OPTION_LABEL_KEY[option])}</TruncatedText>
                     <span className="text-muted-foreground text-2xs text-wrap">
                       {t(OPTION_DESCRIPTION_KEY[option])}
                     </span>

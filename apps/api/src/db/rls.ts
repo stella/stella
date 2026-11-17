@@ -57,6 +57,13 @@ export const SETTING_USER_ID = "app.user_id";
 export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
   "app.account_export_organization_id";
 export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
+/**
+ * Organization ids, comma-separated, whose row this transaction may delete.
+ * The organization delete guard trigger refuses every other row; only the
+ * deletion owner (completeOrganizationDeletion) sets it in production.
+ */
+export const SETTING_ORGANIZATION_DELETION_IDS =
+  "app.organization_deletion_ids";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
@@ -106,7 +113,8 @@ END`;
 export const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
 
 /** Check the row's `id` against the transaction workspace authorization.
- * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */
+ * Only for `workspaces`, whose `id` is the workspace id: on any other table
+ * `id` never matches and every row reads as hidden; use `workspaceCheck`. */
 export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 
 // Embedded chat data must remain visible only while every contributing
@@ -287,6 +295,27 @@ const chatTurnScopeCheck = sql`(
   )
 )`;
 
+// Queue rows mirror the turn rows' ownership columns and prove they match
+// the owning thread, with the thread's embedded-data scope, as turns do.
+const chatQueueScopeCheck = (
+  table: "chat_queued_messages" | "chat_queue_holds",
+) => sql`(
+  ${userCheck} AND
+  ${organizationCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = ${sql.raw(table)}.thread_id
+      AND ct.user_id = ${sql.raw(table)}.user_id
+      AND ct.organization_id = ${sql.raw(table)}.organization_id
+      AND ct.workspace_id IS NOT DISTINCT FROM ${sql.raw(table)}.workspace_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
+      )
+  )
+)`;
+
 const fileChatThreadScopeCheck = sql`(
   ${userCheck} AND
   ${organizationCheck} AND
@@ -440,6 +469,41 @@ export const wsOrganizationPolicies = (
     using: workspaceOrganizationCheck,
   }),
 ];
+
+/**
+ * Workspace policies for a table whose organization_id was added after rows
+ * existed. Every new row must record its organization and match the
+ * session's; a row written before the column carries none and stays reachable
+ * through its workspace alone, so its history and pending work keep working.
+ * Policy names match `wsPolicies`, which such a table used before.
+ */
+export const wsRecordedOrganizationPolicies = () => {
+  const recordedOrganizationCheck = sql`(
+  ${workspaceCheck} AND (organization_id IS NULL OR ${organizationCheck})
+)`;
+  return [
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: workspaceOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_update", {
+      for: "update",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+    p.pgPolicy("workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: recordedOrganizationCheck,
+    }),
+  ];
+};
 
 const wsOrganizationUserCheck = sql`(
   ${userCheck} AND ${workspaceOrganizationCheck}
@@ -1175,6 +1239,47 @@ export const sharepointOAuthStatePolicies = () => [
   }),
 ];
 
+// Outbound actions act as one user outside stella: only that user in the
+// active org reads, prepares, confirms or discards them. Previews inherit the
+// owning thread's current matter and embedded-data scope. Row security is
+// forced, so the owner role used by member offboarding has its own policy.
+const outboundActionCheck = sql`(
+  ${organizationCheck} AND ${userCheck} AND
+  ${chatDerivedThreadScopeCheck(sql`outbound_actions.chat_thread_id`)}
+)`;
+const outboundActionOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass)`;
+
+export const outboundActionPolicies = () => [
+  p.pgPolicy("outbound_action_owner", {
+    for: "all",
+    to: "public",
+    using: outboundActionOwnerCheck,
+    withCheck: outboundActionOwnerCheck,
+  }),
+  p.pgPolicy("outbound_action_select", {
+    for: "select",
+    to: stella,
+    using: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_update", {
+    for: "update",
+    to: stella,
+    using: outboundActionCheck,
+    withCheck: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 // Stored chat tool approval grants are per user+org: only the owning user in
 // the active org reads, adds or removes them. A grant is never edited in
 // place; changing one is a delete and a new insert.
@@ -1209,6 +1314,80 @@ export const chatToolGrantPolicies = () => [
     using: chatToolGrantCheck,
   }),
   p.pgPolicy("chat_tool_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
+// A chat limit reminder is the member's own: only they set, read or cancel
+// it in the active org. Moving the time is a delete and a new insert.
+const chatLimitReminderCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+// Row security is forced on this table, so the owner role the reminder sweep
+// and member offboarding use needs its own policy to reach every row.
+const chatLimitReminderOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_limit_reminders'::regclass)`;
+
+export const chatLimitReminderPolicies = () => [
+  p.pgPolicy("chat_limit_reminder_owner", {
+    for: "all",
+    to: "public",
+    using: chatLimitReminderOwnerCheck,
+    withCheck: chatLimitReminderOwnerCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_select", {
+    for: "select",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_delete", {
+    for: "delete",
+    to: stella,
+    using: chatLimitReminderCheck,
+  }),
+  p.pgPolicy("chat_limit_reminder_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
+// Stored browser site approvals follow the tool grants: per user+org, never
+// edited in place, and reachable by the owner role for member offboarding.
+const chatBrowserSiteGrantOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_browser_site_grants'::regclass)`;
+
+export const chatBrowserSiteGrantPolicies = () => [
+  p.pgPolicy("chat_browser_site_grant_owner", {
+    for: "all",
+    to: "public",
+    using: chatBrowserSiteGrantOwnerCheck,
+    withCheck: chatBrowserSiteGrantOwnerCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_select", {
+    for: "select",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_delete", {
+    for: "delete",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_browser_site_grant_no_update", {
     as: "restrictive",
     for: "update",
     to: stella,
@@ -1327,7 +1506,7 @@ const organizationManagementRoleValues = sql.raw(
 );
 
 /** The session user holds a management role in the session organization. */
-const organizationManagerCheck = sql`EXISTS (
+export const organizationManagerCheck = sql`EXISTS (
   SELECT 1
   FROM member m
   WHERE m.organization_id = (SELECT current_setting(
@@ -1338,6 +1517,30 @@ const organizationManagerCheck = sql`EXISTS (
     ))
     AND m.role IN (${organizationManagementRoleValues})
 )`;
+
+export const billingGuidelinePolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("admin_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_update", {
+    for: "update",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+    withCheck: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+  p.pgPolicy("admin_delete", {
+    for: "delete",
+    to: stella,
+    using: sql`${organizationCheck} AND ${organizationManagerCheck}`,
+  }),
+];
 
 // Internal work is visible to its owner and approvers, never every org member.
 const internalTimeEntryAccessCheck = sql`(
@@ -1689,6 +1892,58 @@ export const chatTurnPolicies = () => [
   }),
 ];
 
+const queuedMessageScopeCheck = chatQueueScopeCheck("chat_queued_messages");
+
+export const chatQueuedMessagePolicies = () => [
+  p.pgPolicy("chat_queued_message_select", {
+    for: "select",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_update", {
+    for: "update",
+    to: stella,
+    using: queuedMessageScopeCheck,
+    withCheck: queuedMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_queued_message_delete", {
+    for: "delete",
+    to: stella,
+    using: queuedMessageScopeCheck,
+  }),
+];
+
+const queueHoldScopeCheck = chatQueueScopeCheck("chat_queue_holds");
+
+export const chatQueueHoldPolicies = () => [
+  p.pgPolicy("chat_queue_hold_select", {
+    for: "select",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_update", {
+    for: "update",
+    to: stella,
+    using: queueHoldScopeCheck,
+    withCheck: queueHoldScopeCheck,
+  }),
+  p.pgPolicy("chat_queue_hold_delete", {
+    for: "delete",
+    to: stella,
+    using: queueHoldScopeCheck,
+  }),
+];
+
 const chatSecretScopeCheck = sql`(
   ${userCheck} AND ${organizationCheck} AND
   EXISTS (
@@ -1728,6 +1983,28 @@ export const chatSecretPolicies = () => [
     for: "delete",
     to: stella,
     using: chatSecretScopeCheck,
+  }),
+];
+
+const chatLocalRunStepContentOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_local_run_step_contents'::regclass)`;
+
+// What a local run's steps produced is thread content: a member reads a step
+// only with its thread, under the thread's own scope. Nothing but the
+// gateway's owner connection writes it, settled against the run that sends
+// it, so the application role gets no write policy.
+export const chatLocalRunStepContentPolicies = () => [
+  p.pgPolicy("chat_local_run_step_contents_owner_access", {
+    for: "all",
+    to: "public",
+    using: chatLocalRunStepContentOwnerCheck,
+    withCheck: chatLocalRunStepContentOwnerCheck,
+  }),
+  p.pgPolicy("chat_local_run_step_content_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(
+      sql`chat_local_run_step_contents.thread_id`,
+    ),
   }),
 ];
 
@@ -2007,4 +2284,13 @@ export const invoiceLineOwnerReadPolicy = () =>
     for: "select",
     to: "public",
     using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });
+
+// The timer presence function reads every member's timer under FORCE RLS.
+// Only the table owner gains SELECT; request-role visibility and owner writes stay unchanged.
+export const timeTimerOwnerReadPolicy = () =>
+  p.pgPolicy("time_timers_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.time_timers'::regclass)`,
   });

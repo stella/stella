@@ -132,7 +132,7 @@ beforeAll(
         const tx = new Proxy(roleTx, {
           get: (target, property, receiver) => {
             if (property !== "execute") {
-              return Reflect.get(target, property, receiver);
+              return Reflect.get(target, property, receiver) as unknown;
             }
             return async (...args: Parameters<typeof roleTx.execute>) =>
               (await roleTx.execute(...args)).rows;

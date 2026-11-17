@@ -2,7 +2,7 @@ import type { ModelMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   sortToolJsonKeys,
@@ -29,7 +29,8 @@ const withReversedKeys = (value: unknown): unknown => {
 
 describe("the JSON keys of tool calls and results", () => {
   test("serialize alike whatever order the value was built in", () => {
-    fc.assert(
+    assertProperty(
+      "serialize alike whatever order the value was built in",
       fc.property(fc.jsonValue(), (value) => {
         const built = JSON.stringify(value);
         const stored = JSON.stringify(withReversedKeys(value));
@@ -38,7 +39,7 @@ describe("the JSON keys of tool calls and results", () => {
         expect(JSON.parse(sorted)).toEqual(JSON.parse(built));
         expect(withSortedJsonKeys(sorted)).toBe(sorted);
       }),
-      propertyConfig(),
+      {},
     );
   });
 

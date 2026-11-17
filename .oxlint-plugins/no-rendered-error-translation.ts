@@ -14,7 +14,6 @@ const OWNERS = [
   "apps/web/src/features/case-law/components/case-viewer/analysis/analysis-error-notice.tsx",
   // Existing scoped status and validation surfaces. They own recovery in place;
   // listing exact modules keeps new raw renderers fail-closed.
-  "apps/web/src/components/bilingual-run-panel.tsx",
   "apps/web/src/components/chat/connect-connector-card.tsx",
   "apps/web/src/components/chat/request-secret-card.tsx",
   "apps/web/src/components/contact-read-error.tsx",
@@ -30,11 +29,10 @@ const OWNERS = [
   "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
   "apps/web/src/features/statutes/components/provision-inspector-view.tsx",
   "apps/web/src/features/style-sets/style-set-picker-dialog.tsx",
-  "apps/web/src/routes/_protected.admin/-components/organization/number-series-preview.tsx",
-  "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx",
-  "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-refusal.tsx",
-  "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-display.tsx",
-  "apps/web/src/routes/_protected.admin/audit-logs.tsx",
+  "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-preview.tsx",
+  "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx",
+  "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-refusal.tsx",
+  "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-display.tsx",
   "apps/web/src/routes/_protected.settings/account.beta.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-time-read.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx",

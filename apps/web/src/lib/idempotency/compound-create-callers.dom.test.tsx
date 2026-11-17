@@ -4,11 +4,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, fireEvent, render, waitFor } =
@@ -105,8 +105,11 @@ const createClient = () => {
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
     promptCachingEnabled: true,
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     managedAIResidency: "eu",
     memoryExtractionEnabled: false,
+    localRunMaxApprovalMode: "full_auto",
     timeMinimumUnitMinutes: 1,
     timeEditWindowDays: 30,
     timeLockedThroughMonth: null,
@@ -166,6 +169,7 @@ const ComposerSubmitButton = ({
       type="button"
       onClick={() =>
         submit.mutate({
+          workspaceId,
           issue: true,
           body: {
             invoiceDate: "2026-10-27",

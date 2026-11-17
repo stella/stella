@@ -17,6 +17,7 @@ import type {
   DecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
   ExternalDecisionProvisionAnchor,
+  UnresolvedCitationAnchorSource,
 } from "@stll/decision-reader/reader-types";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
@@ -29,6 +30,7 @@ import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 export type WebDecisionReaderProps = Omit<
   DecisionTextProps,
@@ -37,6 +39,8 @@ export type WebDecisionReaderProps = Omit<
   surface: DecisionReaderSurface;
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
+  unresolvedCitationAnchors?:
+    readonly UnresolvedCitationAnchorSource[] | undefined;
   externalProvisionAnchors?:
     readonly ExternalDecisionProvisionAnchor[] | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
@@ -50,20 +54,10 @@ type WebDecisionReaderContentProps = WebDecisionReaderProps & {
 
 const NO_ANCHORS = [] as const;
 
-/** A paragraph inside a folded section is out of sight until it unfolds. */
-const openEnclosingDisclosures = (target: HTMLElement) => {
-  for (
-    let disclosure = target.closest("details");
-    disclosure !== null;
-    disclosure = disclosure.parentElement?.closest("details") ?? null
-  ) {
-    disclosure.open = true;
-  }
-};
-
 const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
   citationAnchors = NO_ANCHORS,
+  unresolvedCitationAnchors = NO_ANCHORS,
   provisionAnchors = NO_ANCHORS,
   externalProvisionAnchors = NO_ANCHORS,
   statuteCitationAnchors = NO_ANCHORS,
@@ -93,7 +87,7 @@ const WebDecisionReaderContent = ({
     const target =
       readerBlockByAnchor(article, anchorId) ??
       panic("Citation jump to a paragraph the reader did not render");
-    openEnclosingDisclosures(target);
+    revealEnclosingDisclosures(target);
     target.scrollIntoView({
       behavior: "instant",
       block: "center",
@@ -121,6 +115,9 @@ const WebDecisionReaderContent = ({
     blocks,
     annotationAnchors: hydrated ? annotationAnchors : NO_ANCHORS,
     citationAnchors: citations,
+    unresolvedCitationAnchors: hydrated
+      ? unresolvedCitationAnchors
+      : NO_ANCHORS,
     provisionAnchors: hydrated ? provisionAnchors : NO_ANCHORS,
     externalProvisionAnchors: hydrated ? externalProvisionAnchors : NO_ANCHORS,
     statuteCitationAnchors: hydrated ? statuteCitationAnchors : NO_ANCHORS,
@@ -143,7 +140,7 @@ const WebDecisionReaderContent = ({
     if (!target) {
       return undefined;
     }
-    openEnclosingDisclosures(target);
+    revealEnclosingDisclosures(target);
     return holdLanding({ article, target });
   }, [landingAnchorId, landingSessionId]);
 

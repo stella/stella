@@ -7,6 +7,7 @@ import {
   describeMissingSkillTools,
   SKILL_TOOL_AVAILABILITY_STATUS,
 } from "@/api/lib/agent-skills/required-tools";
+import { windowSkillResource } from "@/api/lib/agent-skills/resource-window";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -203,6 +204,26 @@ export const dispatchGatewayToolCall = async ({
     };
   }
 
+  if (
+    input.output.cursor !== undefined &&
+    input.output.resource === undefined
+  ) {
+    return {
+      type: "internal",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "cursor needs resource",
+        issues: [
+          {
+            path: "cursor",
+            message: "A cursor continues one resource file's text.",
+          },
+        ],
+        hint: `Pass the same \`resource\` the cursor came from, or call ${toolName} without \`cursor\`.`,
+      }),
+    };
+  }
+
   const skill = resolved;
   const resourcePath = input.output.resource ?? null;
   const auditRead = async (outcome: SkillReadOutcome) =>
@@ -269,20 +290,50 @@ export const dispatchGatewayToolCall = async ({
           }),
         ),
       };
-    case SKILL_TOOL_READ_TYPE.resource:
+    case SKILL_TOOL_READ_TYPE.resource: {
+      const skillId = chatSkillId(read.skill);
+      const window = windowSkillResource({
+        content: read.content,
+        cursor: input.output.cursor,
+        path: read.path,
+        skillId,
+        skillName: read.skill.name,
+      });
+      if (window.type === "invalid-cursor") {
+        await auditRead(SKILL_READ_OUTCOME.error);
+        return {
+          type: "internal",
+          result: structuredErrorResult({
+            code: "validation_error",
+            message: "Invalid cursor",
+            issues: [
+              {
+                path: "cursor",
+                message:
+                  "This cursor does not continue this resource as it is " +
+                  "now: it came from another file or the file has changed.",
+              },
+            ],
+            hint: `Call ${toolName} with this \`resource\` and without \`cursor\` to read the file from the start.`,
+          }),
+        };
+      }
       await auditRead(SKILL_READ_OUTCOME.success);
       return {
         type: "internal",
         result: toolDataResult(
           projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
             type: SKILL_TOOL_OUTPUT_TYPE.resource,
-            content: read.content,
-            id: chatSkillId(read.skill),
+            charCount: window.charCount,
+            content: window.content,
+            id: skillId,
             name: read.skill.name,
+            nextCursor: window.nextCursor,
             path: read.path,
           }),
         ),
       };
+    }
     default: {
       read satisfies never;
       return panic("skill tool read returned an unknown type");

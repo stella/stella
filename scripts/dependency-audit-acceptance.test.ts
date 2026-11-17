@@ -1384,7 +1384,8 @@ describe("audit acceptance expiry", () => {
         "untilPatched" in entry &&
         entry.untilPatched === true,
     );
-    expect(temporary.length).toBeGreaterThan(0);
+    // An empty set is a valid baseline: the last temporary acceptance lapses
+    // once its advisory is fixed or no longer reported.
     for (const entry of temporary) {
       const expiresOn =
         typeof entry === "object" && entry !== null && "expiresOn" in entry

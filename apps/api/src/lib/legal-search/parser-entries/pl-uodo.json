@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_UODO",
   "key": "pl-uodo",
-  "parserVersion": 16,
+  "parserVersion": 22,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+    "reason": "Retain the publisher's excluded fields in the stored record instead of naming them as exclusions. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."
   }
 }

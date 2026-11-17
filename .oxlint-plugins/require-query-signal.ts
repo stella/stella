@@ -61,6 +61,7 @@ import {
   type Variable,
 } from "@oxlint/plugins";
 
+import { resolveApiClientReceiverRoot } from "./api-client-chain.ts";
 import {
   getImportedName,
   getPropertyName,
@@ -337,10 +338,11 @@ export default eslintCompatPlugin({
         };
 
         const isApiClientRoot = (node: unknown): boolean => {
-          if (!isIdentifierReference(node)) {
+          const root = resolveApiClientReceiverRoot(context, node);
+          if (root === null) {
             return false;
           }
-          const variable = resolveVariable(context, node);
+          const variable = resolveVariable(context, root);
           if (variable?.defs.length !== 1) {
             return false;
           }

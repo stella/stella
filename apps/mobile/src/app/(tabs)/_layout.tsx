@@ -44,7 +44,9 @@ const TabLayout = () => {
         <NativeTabs.Trigger.Icon {...tabIcon("layers")} />
         <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="more">
+      {/* More places its cards itself; the system's automatic inset left a
+          list too short to scroll under the header. */}
+      <NativeTabs.Trigger disableAutomaticContentInsets name="more">
         <NativeTabs.Trigger.Icon {...tabIcon("grid-2x2-plus")} />
         <NativeTabs.Trigger.Label>{t("more")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>

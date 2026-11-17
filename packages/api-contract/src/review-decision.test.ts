@@ -1,12 +1,44 @@
 import { describe, expect, test } from "bun:test";
 
-import { foldReviewDecisions } from "./review-decision";
+import { foldReviewDecisions, REVIEW_STATUS_DECISION } from "./review-decision";
 
 const event = (
   decision: "accepted" | "rejected" | null,
   at: string,
   actorId = "user-1",
 ) => ({ decision, reason: decision === null ? null : "because", actorId, at });
+
+test("each surface's statuses read as the shared decision", () => {
+  expect(REVIEW_STATUS_DECISION).toEqual({
+    claim: {
+      reviewed: "accepted",
+      disputed: "rejected",
+      "needs-evidence": null,
+    },
+    finding: { open: null, accepted: "accepted", dismissed: "rejected" },
+    docxSuggestion: {
+      pending: null,
+      accepted: "accepted",
+      rejected: "rejected",
+    },
+    listItem: {
+      verified: "accepted",
+      changes_requested: "rejected",
+      rejected: "rejected",
+    },
+    listItemSource: {
+      unverified: null,
+      verified: "accepted",
+      rejected: "rejected",
+    },
+    listGenerationCandidate: {
+      pending: null,
+      accepting: null,
+      accepted: "accepted",
+      rejected: "rejected",
+    },
+  });
+});
 
 describe("foldReviewDecisions", () => {
   test("returns an open state for empty history", () => {

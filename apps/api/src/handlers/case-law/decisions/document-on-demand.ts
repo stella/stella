@@ -5,16 +5,17 @@
  * list and detail endpoints give it and leaves the document itself to
  * the queue in `ingestion/sk-document-backfill.ts`. A reader who opens
  * such a decision before the queue reaches it would otherwise see a
- * case number and nothing to read, so the read fetches the document
- * itself, through the same unit the queue runs.
+ * case number and nothing to read, so the read fetches a transient copy.
+ * The queue persists its own fetch independently.
  *
  * Three bounds keep that from turning a read into an outbound crawl:
- * one fetch per decision no matter how many readers arrive, a small cap
- * on concurrent fetches, and a wait shorter than the fetch it starts.
- * Past the wait the reader gets the metadata-only decision and the
- * fetch continues; whoever opens the decision next finds it stored.
- * Nothing here can fail a read — a failure is recorded and the decision
- * stays queued.
+ * one fetch per decision and eligibility snapshot, a small cap on
+ * concurrent fetches, and a wait shorter than the fetch it starts. A
+ * different snapshot does not share the result. Past the wait, the reader
+ * gets metadata only and the transient fetch continues; a later read can
+ * fetch again unless the independent queue has persisted the document.
+ * Nothing here can fail a read: failures are recorded and do not affect the
+ * durable queue state.
  *
  * That last sentence is a guarantee, so it is enforced at one place
  * rather than restated at every await: `readThroughDeferredDocument`
@@ -28,15 +29,14 @@
  * publisher gate at the outbound boundary; a busy or unavailable gate
  * leaves the read metadata-only.
  *
- * The bounds above are per process. The cross-process claim that keeps
- * two replicas off one document lives in the fetch unit itself, which
- * is also where the database access is: this module stays free of it,
- * so importing it never opens a connection pool. `document-on-demand-
- * deps.ts` holds the wiring, and `get-deferred-document.ts` puts the
- * two together for the public read.
+ * The bounds above are per process. This module stays free of database
+ * access; `document-on-demand-deps.ts` wires transient reads and optional
+ * durable demand recording, while the queue owns persistence.
  */
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
+
+import { declareFailureClass, type FailureReason } from "@stll/errors";
 
 import type {
   ImmediatePublisherSlotResult,
@@ -53,6 +53,7 @@ import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-con
 import type {
   BackfilledDocument,
   DecisionDocumentOutcome,
+  DocumentFetchRequest,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
@@ -72,25 +73,52 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
 
+export type DocumentReadDeferral =
+  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+
+/**
+ * Every deferral is a designed outcome: the reader gets the metadata-only
+ * decision and the queue keeps the work. None of them is a defect, so each
+ * is graded by its cause rather than by the tag's baseline.
+ */
+const DEFERRAL_REASON = {
+  "pacing-deferred": "work_capacity_unavailable",
+  "pacing-unavailable": "limiter_store_unavailable",
+  "ownership-busy": "deferred_document_owned_elsewhere",
+  "ownership-lost": "deferred_document_owned_elsewhere",
+} as const satisfies Record<DocumentReadDeferral, FailureReason>;
+
 class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
   message: string;
   outcome: DocumentReadDeferral;
-}> {}
-
-export type DocumentReadDeferral =
-  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+}> {
+  static {
+    declareFailureClass(this, ({ outcome }) => DEFERRAL_REASON[outcome]);
+  }
+}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
 /**
- * In-flight fetches by decision. Doubles as the concurrency counter:
- * one entry is one running fetch, because the map is keyed by the
- * decision every arriving reader would otherwise fetch again.
+ * In-flight fetches by decision. Same-revision readers may share one
+ * transient document; a reader with a different eligibility snapshot cannot.
+ * One entry per decision also bounds concurrent publisher fetches.
  */
-const inFlight = new Map<
-  SafeId<"caseLawDecision">,
-  Promise<BackfilledDocument | null>
->();
+type InFlightDocumentRead = {
+  textEligibilityFingerprint: string;
+  promise: Promise<BackfilledDocument | null>;
+};
+
+const inFlight = new Map<SafeId<"caseLawDecision">, InFlightDocumentRead>();
+
+/**
+ * Frees every concurrency slot. A test whose fetch never settles keeps its
+ * slot for the life of the process, so each test starts from empty slots
+ * rather than from whatever the tests before it left running.
+ */
+export const resetDocumentFetchesForTesting = (): void => {
+  inFlight.clear();
+};
 
 export type DeferredDocumentState = {
   adapterKey: string;
@@ -132,12 +160,12 @@ export const isDeferredDocumentFetchable = ({
   isDeferredDocumentAdapterKey(adapterKey);
 
 /**
- * The pacing and durable effects this path needs are supplied by the
- * caller: the tests drive them directly, and production passes the
- * production wiring from `document-on-demand-deps.ts`.
+ * Demand recording and publisher pacing are supplied by the caller: the
+ * tests drive them directly, and production passes the wiring from
+ * `document-on-demand-deps.ts`. The fetched document itself is transient.
  */
 export type OnDemandDocumentDeps = {
-  recordRequest: (decisionId: SafeId<"caseLawDecision">) => Promise<void>;
+  recordRequest: (request: DocumentFetchRequest) => Promise<void>;
   fetchDocument: (
     decision: PendingDocument,
     adapterKey: DeferredDocumentAdapterKey,
@@ -196,10 +224,28 @@ export const recordDocumentPacingOutcome = (
  * under one event per slow read. `Result.tryPromise` reports a rejection
  * as an `UnhandledException` carrying the original as its cause, so the
  * label is read through that wrapper as well as directly.
+ *
+ * The request's public-read scope can run out before this budget does: its
+ * signal then aborts the fetch, or a read that starts after it, with the
+ * signal's own `TimeoutError`. That is the same designed expiry, reached
+ * through the caller's deadline instead of this one.
  */
 const isReadBudgetExpiry = (error: unknown): boolean => {
   const raised = error instanceof UnhandledException ? error.cause : error;
-  return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
+  return (
+    (TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL) ||
+    (raised instanceof DOMException && raised.name === "TimeoutError")
+  );
+};
+
+/** Record a read-through failure unless it is the read running out of time. */
+const recordReadFailure = (
+  error: unknown,
+  decisionId: SafeId<"caseLawDecision">,
+): void => {
+  if (!isReadBudgetExpiry(error)) {
+    recordFailure(error, decisionId);
+  }
 };
 
 type FetchDeferredDocumentOptions = {
@@ -229,7 +275,7 @@ const runFetch = async ({
         deps.recordPacingOutcome(decision.id, budgeted.status);
         return null;
       case "failed":
-        recordFailure(budgeted.error, decision.id);
+        recordReadFailure(budgeted.error, decision.id);
         return null;
       case "completed":
         if (
@@ -255,7 +301,7 @@ const runFetch = async ({
   });
 
   if (Result.isError(outcome)) {
-    recordFailure(outcome.error, decision.id);
+    recordReadFailure(outcome.error, decision.id);
     return null;
   }
 
@@ -266,19 +312,29 @@ const startFetch = async ({
   decision,
   deps,
   adapterKey,
-}: FetchDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
+  textEligibilityFingerprint,
+}: FetchDeferredDocumentOptions & {
+  textEligibilityFingerprint: string;
+}): Promise<BackfilledDocument | null> => {
   const flight = runFetch({ decision, deps, adapterKey }).finally(() => {
-    inFlight.delete(decision.id);
+    const current = inFlight.get(decision.id);
+    if (current?.promise === flight) {
+      inFlight.delete(decision.id);
+    }
   });
-  inFlight.set(decision.id, flight);
+  inFlight.set(decision.id, { textEligibilityFingerprint, promise: flight });
 
   return await flight;
 };
 
 export type ReadThroughDeferredDocumentOptions = {
   decision: PendingDocument;
+  /** Document revision observed with the read that decided this fetch was pending. */
+  textRevisionFingerprint: string;
   adapterKey: string;
   deps: OnDemandDocumentDeps;
+  /** Eligibility snapshot that permits this result to reach the response. */
+  textEligibilityFingerprint: string;
   /**
    * Whether this reader's interest is persisted as demand.
    *
@@ -300,9 +356,11 @@ export type ReadThroughDeferredDocumentOptions = {
  */
 export const readThroughDeferredDocument = async ({
   decision,
+  textRevisionFingerprint,
   adapterKey,
   deps,
   recordDemand,
+  textEligibilityFingerprint,
 }: ReadThroughDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
   // The whole read-through — including the request recording — runs
   // inside the read budget: a stalled ingestion pool or a locked row
@@ -318,19 +376,34 @@ export const readThroughDeferredDocument = async ({
     // this decision to the front of the queue.
     if (recordDemand) {
       const recorded = await Result.tryPromise(
-        async () => await deps.recordRequest(decision.id),
+        async () =>
+          await deps.recordRequest({
+            decisionId: decision.id,
+            textRevisionFingerprint,
+            documentUrl: decision.documentUrl,
+          }),
       );
       if (Result.isError(recorded)) {
-        recordFailure(recorded.error, decision.id);
+        recordReadFailure(recorded.error, decision.id);
       }
     }
 
     const existing = inFlight.get(decision.id);
-    if (!existing && inFlight.size >= CONCURRENT_FETCH_LIMIT) {
+    if (existing !== undefined) {
+      return existing.textEligibilityFingerprint === textEligibilityFingerprint
+        ? await existing.promise
+        : null;
+    }
+    if (inFlight.size >= CONCURRENT_FETCH_LIMIT) {
       return null;
     }
 
-    return await (existing ?? startFetch({ decision, deps, adapterKey }));
+    return await startFetch({
+      decision,
+      deps,
+      adapterKey,
+      textEligibilityFingerprint,
+    });
   };
 
   // The single boundary the module's guarantee rests on. Every await
@@ -357,9 +430,7 @@ export const readThroughDeferredDocument = async ({
       ),
   );
   if (Result.isError(outcome)) {
-    if (!isReadBudgetExpiry(outcome.error)) {
-      recordFailure(outcome.error, decision.id);
-    }
+    recordReadFailure(outcome.error, decision.id);
     return null;
   }
 

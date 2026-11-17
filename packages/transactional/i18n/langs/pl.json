@@ -49,7 +49,9 @@
     "flowRunAwaitingApproval": "Przepływ pracy czeka na Twoje zatwierdzenie",
     "flowRunCompleted": "Przepływ pracy został zakończony",
     "flowRunFailed": "Przepływ pracy nie powiódł się",
-    "mention": "Wspomniano o Tobie w komentarzu"
+    "localRunLimitReset": "Agent programistyczny na Twoim komputerze może kontynuować Twój czat",
+    "mention": "Wspomniano o Tobie w komentarzu",
+    "taskAssigned": "Przydzielono Ci zadanie"
   },
   "reportExportStatus": {
     "action": "Otwórz stella",

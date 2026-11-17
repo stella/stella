@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use tauri::{
   AppHandle, Manager, Wry,
   menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
@@ -226,6 +227,48 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// Shows a short mark beside the status icon, or removes it.
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+pub fn set_status_mark(app: &AppHandle, mark: Option<&'static str>) {
+  let handle = app.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      set_status_mark_on_main_thread(&handle, mark, &main_thread);
+    })
+    .is_err()
+  {
+    tracing::warn!("tray mark skipped: the event loop is gone");
+  }
+}
+
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn set_status_mark_on_main_thread(
+  app: &AppHandle,
+  mark: Option<&'static str>,
+  _main_thread: &TrayMainThread,
+) {
+  if let Some(tray) = app.tray_by_id("main")
+    && tray.set_title(mark).is_err()
+  {
+    tracing::warn!("tray mark failed");
+  }
+}
+
 /// The status icon and its owning screen in one logical coordinate space;
 /// `None` when there is no icon or the OS cannot place it (an icon in
 /// Windows' hidden overflow area). The handle is read and dropped on the
@@ -300,14 +343,14 @@ fn refresh_on_main_thread(
     build_tray_menu_with_activity(app, snapshot, None, main_thread)
   };
   if let Ok(menu) = menu {
-    let _ = tray.set_menu(Some(menu));
+    best_effort(tray.set_menu(Some(menu)), "tray menu was not updated");
   }
   let recording = current
     && activity
       .as_ref()
       .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
   if let Ok(icon) = recording_icon(recording) {
-    let _ = set_tray_icon(&tray, icon);
+    best_effort(set_tray_icon(&tray, icon), "tray icon was not updated");
   }
 }
 
@@ -715,6 +758,7 @@ mod tests {
 
   fn make_snapshot(sessions: Vec<SessionSnapshot>) -> AppSnapshot {
     AppSnapshot {
+      document_recovery: crate::types::DocumentRecoverySnapshot::default(),
       bridge_port: 45_901,
       bridge_version: crate::types::BRIDGE_VERSION,
       capabilities: crate::types::BRIDGE_CAPABILITIES

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- stella-pkcs11-helper loads smart card vendors' PKCS #11 modules,
+       signed by their vendors rather than by stella's team. Only the helper
+       carries this; the app keeps library validation. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

@@ -1,26 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Button } from "@stll/ui/button";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
-
-import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
 import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
-
-const KNOWLEDGE_MCP_PATH = "/knowledge/tools";
-const FALLBACK_NAVIGATE_DELAY_MS = 150;
+import {
+  MCP_TOOLS_PATH,
+  McpOAuthOutcomeScreen,
+} from "@/routes/-mcp-oauth-outcome";
 
 const searchSchema = routeSearchSchema({
   // A callback that does not say it connected reports a failure, never a
@@ -39,65 +29,38 @@ export const Route = createFileRoute("/mcp/oauth-callback")({
   component: McpOAuthCallbackPage,
 });
 
+/**
+ * Where an integration's sign-in ends, in the popup the integrations page
+ * opened: tell that page what happened and close. A tab the member opened
+ * themselves cannot be closed by script: once connected it goes on to the
+ * integrations, and after a failure it stays on the outcome and its way on.
+ */
 function McpOAuthCallbackPage() {
-  const t = useTranslations();
   const navigate = useNavigate();
   const status = Route.useSearch({ select: (search) => search.status });
   const reason = Route.useSearch({ select: (search) => search.reason });
+  const slug = Route.useSearch({ select: (search) => search.slug });
 
-  useMountEffect(() => {
-    const outcome: McpOAuthOutcome =
-      status === "connected"
-        ? { status: "connected" }
-        : { status: "error", reason: reason ?? "unexpected" };
-    broadcastMcpOAuthOutcome(outcome);
-    window.close();
-    // `window.close()` is a no-op for tabs the user navigated to
-    // themselves (the popup-blocked fallback path uses
-    // `window.location.assign`). If we're still here after a tick,
-    // route back to the MCP settings page so the user is not stranded.
-    const fallback = window.setTimeout(() => {
-      detached(
-        navigate({ to: KNOWLEDGE_MCP_PATH }),
-        "mcp-oauth-callback.navigate",
-      );
-    }, FALLBACK_NAVIGATE_DELAY_MS);
-    return () => window.clearTimeout(fallback);
-  });
-
-  const isError = status === "error";
+  const connected = status === "connected";
+  const outcome: McpOAuthOutcome = connected
+    ? { status: "connected" }
+    : { status: "error", reason: reason ?? "unexpected" };
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>
-            {isError
-              ? t("knowledge.mcp.errorTitle")
-              : t("knowledge.mcp.connectedToast")}
-          </FrameTitle>
-          {isError ? (
-            <FrameDescription>
-              {t("knowledge.mcp.errorDescription")}
-            </FrameDescription>
-          ) : null}
-        </FrameHeader>
-        <FramePanel>
-          <Button
-            className="w-full"
-            onClick={() => {
-              window.close();
-              detached(
-                navigate({ to: KNOWLEDGE_MCP_PATH }),
-                "mcp-oauth-callback.navigate",
-              );
-            }}
-            type="button"
-          >
-            {t("common.close")}
-          </Button>
-        </FramePanel>
-      </Frame>
-    </div>
+    <McpOAuthOutcomeScreen
+      closeTab={{
+        onBeforeClose: () => broadcastMcpOAuthOutcome(outcome),
+        onStillOpen: () => {
+          if (connected) {
+            detached(
+              navigate({ to: MCP_TOOLS_PATH }),
+              "mcp-oauth-callback.navigate",
+            );
+          }
+        },
+      }}
+      outcome={outcome}
+      slug={slug}
+    />
   );
 }

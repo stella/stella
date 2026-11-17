@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { withBillingRead } from "@stll/permissions";
+
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
@@ -10,6 +12,7 @@ import {
   paidAmountOf,
 } from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { invoiceDetailMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -19,6 +22,7 @@ const invoiceParamsSchema = workspaceParams({
 
 const readInvoiceById = createSafeHandler(
   {
+    moneyResponse: invoiceDetailMoneyResponse,
     contract: "patch",
     description:
       "Read one invoice with its full detail: its lines in order with " +
@@ -29,7 +33,7 @@ const readInvoiceById = createSafeHandler(
       "before invoice lines lists no lines for its attached entries until " +
       "its first line edit; its totals still count them. Use " +
       "invoices.list for a paginated summary without lines.",
-    permissions: { workspace: ["read"] },
+    permissions: withBillingRead({ workspace: ["read"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "covered", by: "list_invoices" },

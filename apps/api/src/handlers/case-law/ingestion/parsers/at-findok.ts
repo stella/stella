@@ -1,9 +1,11 @@
-/** Parse Findok's decision XML envelope and embedded publisher XHTML. */
-import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+import { panic, Result } from "better-result";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+/** Parse Findok's decision XML envelope and embedded publisher XHTML. */
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
@@ -11,6 +13,7 @@ import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-x
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
+import { type AtPrintedLine, readAtDecisionRoles } from "./at-decision-regions";
 import { compareTextFidelity, normalizeInlineLayout } from "./at-ris-markup";
 import {
   inlinesToPlainText,
@@ -115,7 +118,7 @@ const headingLevel = (element: Element): 1 | 2 | 3 => {
  * to account for is `ngesamt`, not the container it repeats inside.
  */
 export const listFindokDocumentFields = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const names = new Set<string>();
   for (const group of ["Grundk", "Segk"]) {
     $(group)
@@ -162,7 +165,7 @@ const envelopeFields = ($: cheerio.CheerioAPI): FindokEnvelopeFields => ({
 export const parseFindokHeadnoteXml = (
   xml: string,
 ): ParseFindokHeadnotesOutput => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const sentences = $("Segk > txtascii")
     .toArray()
     .map((element) => normalizedText($(element).text()))
@@ -178,7 +181,7 @@ export const parseFindokHeadnoteXml = (
 export const parseFindokDecisionXml = (
   input: ParseFindokDecisionInput,
 ): Result<ParseFindokDecisionOutput, ParseXmlError> => {
-  const envelope = cheerio.load(input.xml, { xml: true });
+  const envelope = load(input.xml, { xml: true });
   const xhtmlSegments = envelope("Segk > txt")
     .toArray()
     .map((element) => envelope(element).text())
@@ -264,7 +267,7 @@ export const parseFindokDecisionXml = (
   };
 
   for (const xhtml of xhtmlSegments) {
-    const document = cheerio.load(xhtml);
+    const document = load(xhtml);
     const body = document("body").first();
     if (body.length === 0 || normalizedText(visibleHtmlText(body)) === "") {
       return Result.err(
@@ -288,6 +291,37 @@ export const parseFindokDecisionXml = (
         cause: undefined,
       }),
     );
+  }
+
+  // Findok labels no part of the decision: its roles are what the court
+  // printed, read over the whole decision.
+  const roles = readAtDecisionRoles(
+    blocks.map((block): AtPrintedLine => {
+      switch (block.type) {
+        case "heading": {
+          return { type: "heading", text: block.plainText };
+        }
+        case "paragraph": {
+          return { type: "paragraph", text: block.plainText, section: "text" };
+        }
+        case "table":
+        case "image": {
+          // Findok's reader emits neither; a block with no text is no line.
+          return { type: "field" };
+        }
+        default: {
+          block satisfies never;
+          return panic("Unhandled Findok block type");
+        }
+      }
+    }),
+    [input.caseNumber],
+  );
+  for (const [index, block] of blocks.entries()) {
+    const role = roles[index];
+    if (block.type === "paragraph" && role !== undefined) {
+      blocks[index] = { ...block, role };
+    }
   }
 
   const textFidelity = compareTextFidelity(

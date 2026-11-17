@@ -57,7 +57,10 @@ beforeEach(async () => {
     .where(eq(entities.id, fixture.ids.entityA1));
 });
 
-const invocation = (entityId = fixture.ids.entityA1) => {
+const invocation = (
+  entityId = fixture.ids.entityA1,
+  name = "updated/name.md",
+) => {
   const { testDb, ids } = fixture;
   const enqueue = mock(async () => undefined);
   const flush = mock(async () => ({ failed: 0, repaired: 0 }));
@@ -80,7 +83,7 @@ const invocation = (entityId = fixture.ids.entityA1) => {
           safeDb,
           workspaceId: ids.wsA1,
           recordAuditEvent: audit,
-          body: { entityId, name: "updated/name.md" },
+          body: { entityId, name },
         }),
       ),
   };
@@ -91,6 +94,27 @@ const stored = async () =>
     where: { id: { eq: fixture.ids.entityA1 } },
     with: { currentVersion: { with: { fields: true } } },
   });
+
+test("stores, audits and returns the name without format characters", async () => {
+  const { run, audit } = invocation(fixture.ids.entityA1, "re\u202Enamed.md");
+  const result = await run();
+  if (result.isErr()) {
+    throw result.error;
+  }
+  const entity = await stored();
+  const file = entity?.currentVersion?.fields.find(
+    (field) => field.content.type === "file",
+  );
+  expect(result.value.name).toBe("renamed.md");
+  expect(entity?.name).toBe("renamed.md");
+  expect(file?.content).toMatchObject({ fileName: "renamed.md" });
+  expect(audit).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      changes: { name: { old: "previous.md", new: "renamed.md" } },
+    }),
+  );
+});
 
 test("returns the same file metadata it commits without replacing field identity", async () => {
   const { run, enqueue, flush, audit } = invocation();

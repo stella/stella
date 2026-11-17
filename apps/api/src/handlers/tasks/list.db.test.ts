@@ -190,6 +190,59 @@ describe("GET /v1/tasks", () => {
     expect(page.items.map((item) => item.id)).toEqual([othersTask]);
   });
 
+  test("everyone's tasks in the caller's matters, done ones too when asked", async () => {
+    const open = pageOf(await listAs(ids.userA1, { assignee: "any" }));
+    // Another firm's task stays out whoever it is assigned to.
+    expect(open.items.map((item) => item.id)).toEqual([
+      othersTask,
+      unassignedTask,
+      mineA2Dated,
+      mineA1,
+      mineA2Undated,
+    ]);
+
+    const all = pageOf(
+      await listAs(ids.userA1, { assignee: "any", openOnly: false }),
+    );
+    expect(new Set(all.items.map((item) => item.id))).toEqual(
+      new Set([...open.items.map((item) => item.id), mineDone, mineCancelled]),
+    );
+  });
+
+  test("the tasks nobody has, and one matter's tasks", async () => {
+    const unassigned = pageOf(
+      await listAs(ids.userA1, { assignee: "unassigned" }),
+    );
+    expect(unassigned.items.map((item) => item.id)).toEqual([unassignedTask]);
+
+    const inA2 = pageOf(
+      await listAs(ids.userA1, { assignee: "any", matterId: ids.wsA2 }),
+    );
+    expect(inA2.items.map((item) => item.id)).toEqual([
+      othersTask,
+      mineA2Dated,
+      mineA2Undated,
+    ]);
+  });
+
+  test("open tasks due on or before a day are the overdue ones", async () => {
+    const overdue = pageOf(
+      await listAs(ids.userA1, { assignee: "any", dateTo: "2026-02-01" }),
+    );
+    expect(overdue.items.map((item) => item.id)).toEqual([
+      othersTask,
+      unassignedTask,
+      mineA2Dated,
+    ]);
+  });
+
+  test("a matter outside the caller's access is not found", async () => {
+    expect(await listAs(ids.userA1, { matterId: ids.wsB1 })).toEqual({
+      code: 404,
+      response: { code: "not_found", message: "Matter not found" },
+    });
+  });
+
   test("a cursor this list did not produce is refused", async () => {
     expect(await listAs(ids.userA1, { cursor: "not-a-cursor" })).toEqual({
       code: 400,

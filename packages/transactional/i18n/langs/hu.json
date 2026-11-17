@@ -49,7 +49,9 @@
     "flowRunAwaitingApproval": "Egy munkafolyamat a jóváhagyására vár",
     "flowRunCompleted": "Egy munkafolyamat befejeződött",
     "flowRunFailed": "Egy munkafolyamat sikertelen",
-    "mention": "Megemlítették Önt egy hozzászólásban"
+    "localRunLimitReset": "A számítógépén futó kódoló ügynök folytathatja a csevegést",
+    "mention": "Megemlítették Önt egy hozzászólásban",
+    "taskAssigned": "Feladatot rendeltek önhöz"
   },
   "reportExportStatus": {
     "action": "stella megnyitása",

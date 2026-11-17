@@ -33,7 +33,11 @@ const migrationPath = (directory: string) =>
  * The full seed rendered the declaration without them, and each one's own
  * migration renders its rows alone.
  */
-const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set(["USA", "GBR"]);
+const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set([
+  "USA",
+  "GBR",
+  "BRA",
+]);
 
 /**
  * Jurisdictions whose enrolled courts include no constitutional court, so the
@@ -111,6 +115,7 @@ describe("court weight seed", () => {
       "EU",
       "USA",
       "GBR",
+      "BRA",
     ]);
   });
 
@@ -131,6 +136,7 @@ describe("court weight seed", () => {
     const map = courtWeightMapFromSeed();
     expect([...map.keys()].toSorted()).toEqual([
       "AUT",
+      "BRA",
       "CZE",
       "EU",
       "GBR",
@@ -162,6 +168,26 @@ describe("court weight seed", () => {
       court: string,
       label: string,
     ][] = [
+      ["BRA", "Supremo Tribunal Federal", "constitutional"],
+      ["BRA", "STF", "constitutional"],
+      ["BRA", "Superior Tribunal de Justiça", "supreme"],
+      ["BRA", "Tribunal Superior do Trabalho", "supreme"],
+      ["BRA", "Tribunal Superior Eleitoral", "supreme"],
+      ["BRA", "Superior Tribunal Militar", "supreme"],
+      ["BRA", "TST", "supreme"],
+      [
+        "BRA",
+        "Tribunal de Justiça do Distrito Federal e dos Territórios",
+        "appeal",
+      ],
+      ["BRA", "Tribunal de Justiça do Estado de São Paulo", "appeal"],
+      ["BRA", "Tribunal de Justiça Militar do Estado de São Paulo", "appeal"],
+      ["BRA", "Tribunal Regional Federal da 4ª Região", "appeal"],
+      ["BRA", "Tribunal Regional do Trabalho da 2ª Região", "appeal"],
+      ["BRA", "Tribunal Regional Eleitoral de Minas Gerais", "appeal"],
+      ["BRA", "TJDFT", "appeal"],
+      ["BRA", "TRT24", "appeal"],
+      ["BRA", "TRE-SP", "appeal"],
       ["GBR", "UKSC", "supreme"],
       ["GBR", "UKPC", "supreme"],
       ["GBR", "UKHL", "supreme"],

@@ -3,9 +3,10 @@ import { useState } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { birthDateDraft } from "./person-details-fields.logic";
 import type { BirthDateDraft } from "./person-details-fields.logic";

@@ -130,7 +130,10 @@ describe("API and CLI release contract", () => {
     expect(cliPackage.scripts["codegen:version"]).toBe(
       "bun run src/codegen-version.ts",
     );
-    expect(cliPackage.scripts.codegen).toContain(
+    // Full codegen derives the catalog, then regenerates the registry
+    // projections and the baked version.
+    expect(cliPackage.scripts.codegen).toContain("bun run codegen:registry");
+    expect(cliPackage.scripts["codegen:registry"]).toContain(
       "bun run src/codegen-version.ts",
     );
 
@@ -181,7 +184,7 @@ describe("API and CLI release contract", () => {
       "source_sha must be a full lowercase commit SHA.",
     );
     expect(publishWorkflow).toContain(
-      "source_sha is not reachable from protected main.",
+      'bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/check-release-source-on-main.sh" "$source_sha"',
     );
     expect(publishWorkflow).toContain(
       `git rev-parse "refs/tags/\${tag}^{commit}"`,
@@ -194,7 +197,15 @@ describe("API and CLI release contract", () => {
   test("release and pull-request smoke tests refuse corrupt history with pending SQL", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
+      // The migration smoke job runs its history rehearsal from a script.
+      Promise.all([
+        Bun.file(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("check-migration-history-refusal.sh", import.meta.url),
+        ).text(),
+      ]).then((sources) => sources.join("\n")),
     ]);
 
     for (const source of [releaseSmoke, migrationSmoke]) {
@@ -227,7 +238,15 @@ describe("API and CLI release contract", () => {
   test("release and migration smoke tests wait for scheduler initialization", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
+      // The migration smoke job runs its history rehearsal from a script.
+      Promise.all([
+        Bun.file(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("check-migration-history-refusal.sh", import.meta.url),
+        ).text(),
+      ]).then((sources) => sources.join("\n")),
     ]);
 
     expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
@@ -235,8 +254,10 @@ describe("API and CLI release contract", () => {
     expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
+    // Catalog discovery imports handlers that embed MCP App bundles, so the
+    // bundles are prepared before the runtime generator reads them.
     expect(apiPackage.scripts["generate:capability-runtime"]).toBe(
-      "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+      "bun ../../scripts/prepare-mcp-apps.ts && bun scripts/generate-capability-runtime.ts",
     );
     const prepareRuntime = migrationSmoke.indexOf(
       "bun --filter @stll/api generate:capability-runtime",

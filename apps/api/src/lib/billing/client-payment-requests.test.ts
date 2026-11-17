@@ -10,6 +10,7 @@ import type {
   InvoiceSettlement,
 } from "@/api/lib/billing/invoice-payments";
 import type {
+  InvoiceDocumentLedger,
   invoiceDocumentRenderOptions,
   renderInvoiceDocumentPdf,
 } from "@/api/lib/billing/invoice-pdf/document";
@@ -38,6 +39,8 @@ const CLIENT_PAYMENT_RENDERERS = {
   "src/handlers/invoices/pdf/export.ts": "renders the member's PDF export",
   "src/handlers/invoices/sends/create.ts":
     "states the amount due in the invoice email",
+  "src/lib/billing/invoice-payment-amounts.ts":
+    "decides the payment state a document states from its ledger",
   "src/lib/billing/invoice-pdf/document.ts": "maps a document to render input",
   "src/lib/billing/invoice-pdf/render-helpers.ts":
     "builds the QR payment payload",
@@ -90,14 +93,18 @@ describe("client-facing payment requests", () => {
 
   test("each renderer takes the amount due, not a plain amount", () => {
     expectTypeOf<
-      RenderInvoicePdfOptions["paymentAmountMinor"]
+      Extract<
+        RenderInvoicePdfOptions["settlement"],
+        { status: "due" }
+      >["amountMinor"]
     >().toEqualTypeOf<AmountDue>();
+    // Documents take the payment ledger and derive the amount due themselves.
     expectTypeOf<
       Parameters<typeof invoiceDocumentRenderOptions>[1]
-    >().toEqualTypeOf<AmountDue>();
+    >().toEqualTypeOf<InvoiceDocumentLedger>();
     expectTypeOf<
-      Parameters<typeof renderInvoiceDocumentPdf>[0]["paymentAmountMinor"]
-    >().toEqualTypeOf<AmountDue>();
+      Parameters<typeof renderInvoiceDocumentPdf>[0]["ledger"]
+    >().toEqualTypeOf<InvoiceDocumentLedger>();
     expectTypeOf<
       Parameters<typeof requestsPayment>[0]["amountMinor"]
     >().toEqualTypeOf<AmountDue>();

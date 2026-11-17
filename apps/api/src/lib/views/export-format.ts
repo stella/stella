@@ -1,6 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import { recordText } from "@/api/lib/fields/record-text";
 
 const exportDateFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -127,6 +128,8 @@ export const formatFieldContent = (
       return content.name;
     case "clip":
       return content.url;
+    case "record":
+      return recordText(content.state, locale);
     case "error":
       return "Error";
     case "pending":
@@ -134,6 +137,7 @@ export const formatFieldContent = (
     case "unsupported":
       return "Unsupported";
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };

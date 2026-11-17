@@ -45,6 +45,7 @@ export const BottomRow = ({
               event.currentTarget.click();
             }
           }}
+          // oxlint-disable-next-line no-native-ui/no-native-button -- the add row is a row of the workspace grid: its pinned cells must follow the grid's column template and sticky offsets, which a Button wrapping block cells cannot
           role="button"
           tabIndex={0}
           {...guideAnchor(GUIDE_ANCHORS.documentsUpload)}
@@ -65,7 +66,7 @@ export const BottomRow = ({
               position: "sticky",
             }}
           >
-            {t("workspaces.newDocument")}
+            {t("workspaces.uploadDocuments")}
           </WorkspaceGridCell>
           <WorkspaceGridCell
             aria-hidden="true"

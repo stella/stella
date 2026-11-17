@@ -317,6 +317,28 @@ describe("decision text fields", () => {
     }
   });
 
+  test("a source that names no decision type in words stores a typed marker", () => {
+    const textFields = absentDecisionTextFields(
+      TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    );
+    const marker = (status: string) =>
+      storeDecisionTextFields({
+        metadata: { decisionTypeAvailability: { status } },
+        textFields,
+      })[DECISION_TEXT_ABSENCE_METADATA_KEY];
+
+    expect(marker("not-published-by-source")).toContainEqual({
+      field: "decisionType",
+      reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    });
+    expect(marker("published")).not.toContainEqual(
+      expect.objectContaining({ field: "decisionType" }),
+    );
+    expect(() => marker("unknown")).toThrow(
+      "Decision type availability must carry a source status",
+    );
+  });
+
   test("a source that publishes no decision date stores a typed marker", () => {
     const textFields = absentDecisionTextFields(
       TEXT_ABSENCE_REASON.NOT_PUBLISHED,

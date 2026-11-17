@@ -8,6 +8,7 @@ import { BUSINESS_REGISTRY_CONFIGURATION } from "@stll/api-contract";
 import type { BusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
 import { companySpecificationRegistryKey } from "@/components/company-specification.logic";
@@ -117,13 +118,13 @@ export const RegistryCredentialSetup = ({
   return (
     <div className="space-y-3 px-3 py-2">
       <div className="space-y-1.5">
-        <label className="text-sm font-medium" htmlFor={inputId}>
+        <Label htmlFor={inputId}>
           {t(
             configuration === "api-key"
               ? "catalogue.setup.apiKey"
               : "search.registryCredentialUserAgent",
           )}
-        </label>
+        </Label>
         {configuration === "api-key" ? (
           <SecretInput {...inputProps} />
         ) : (

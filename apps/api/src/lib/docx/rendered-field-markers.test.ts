@@ -1,11 +1,10 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 import { resolvePath } from "@stll/template-conditions";
 
@@ -139,16 +138,13 @@ for (const part of ["document", "header1", "footer1"]) {
           part === "document"
             ? `<w:document xmlns:w="${W_NS}"><w:body>${content}</w:body></w:document>`
             : `<w:${part === "header1" ? "hdr" : "ftr"} xmlns:w="${W_NS}">${content}</w:${part === "header1" ? "hdr" : "ftr"}>`;
-        const zip = new JSZip();
-        writeZipEntry(
-          zip,
+        const zip = new ZipArchive();
+        zip.set(
           "word/document.xml",
           `<w:document xmlns:w="${W_NS}"><w:body/></w:document>`,
         );
-        writeZipEntry(zip, `word/${part}.xml`, wrap(paragraph));
-        const file = testDocxFile(
-          await zip.generateAsync({ type: "uint8array" }),
-        );
+        zip.set(`word/${part}.xml`, wrap(paragraph));
+        const file = testDocxFile(await zip.generate({ compression: "store" }));
         const markers = await renderedTemplateMarkers(
           file,
           { outer: "A", name: "Ann" },
@@ -164,8 +160,8 @@ for (const part of ["document", "header1", "footer1"]) {
         const filled = await fillTemplate(file, { outer: "A", name: "Ann" });
         expect(filled.structureErrors).toEqual([]);
         expect(filled.unmatchedPlaceholders).toEqual([]);
-        const output = await JSZip.loadAsync(filled.file.bytes);
-        const xml = await output.file(`word/${part}.xml`)?.async("string");
+        const output = await ZipArchive.read(filled.file.bytes);
+        const xml = await output.entry(`word/${part}.xml`)?.text();
         expect(xml).toBeDefined();
         const doc = slimdom.parseXmlDocument(xml ?? "");
         const text = [...doc.getElementsByTagNameNS(W_NS, "t")]
@@ -241,13 +237,12 @@ test("paragraph marker ownership is independent of text-box nesting depth", () =
 });
 
 test("authored text outside a run produces a typed template refusal", async () => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<w:document xmlns:w="${W_NS}"><w:body><w:p><w:t>{{ name }}</w:t></w:p></w:body></w:document>`,
   );
-  const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const file = testDocxFile(await zip.generate({ compression: "store" }));
   const result = await renderedTemplateMarkers(file, { name: "Ann" }, []);
   expect(Result.isError(result)).toBe(true);
   if (Result.isOk(result)) {

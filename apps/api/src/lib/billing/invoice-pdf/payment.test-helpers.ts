@@ -23,7 +23,9 @@ export const assertInvoicePaymentRequest = ({
   grossAmountMinor,
   outstandingAmount,
 }: AssertInvoicePaymentRequestOptions) => {
-  expect<number>(invoice.paymentAmountMinor).toBe(outstandingAmount);
+  expect<number>(
+    invoice.settlement.status === "due" ? invoice.settlement.amountMinor : 0,
+  ).toBe(outstandingAmount);
   expect(invoice.totals.grossAmountMinor).toBe(cents(grossAmountMinor));
   const data = buildInvoiceTemplateData(invoice).unwrap(
     "Payment fixture must build invoice template data",
@@ -36,7 +38,7 @@ export const assertInvoicePaymentRequest = ({
   expect(data.totals.grossMinor).toBe(cents(grossAmountMinor));
   expect(data.totals.gross).toBe(money(grossAmountMinor));
   if (outstandingAmount === 0) {
-    expect(data.payment).toBeNull();
+    expect(data.payment?.status).not.toBe("due");
     expect(buildInvoicePaymentPayload(invoice)).toBeNull();
     return;
   }
@@ -61,7 +63,10 @@ export const assertInvoicePaymentRequest = ({
   if (payload.status !== "payable") {
     panic("Payment fixture must support Czech QR payments");
   }
-  const payment = data.payment ?? panic("Payable invoice must carry payment");
+  const payment = data.payment;
+  if (payment?.status !== "due") {
+    return panic("Payable invoice must carry payment");
+  }
   expect(payment.fields.map(({ value }) => value)).toContain(
     money(outstandingAmount),
   );

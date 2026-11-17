@@ -64,7 +64,11 @@ type IngestionHealthRefreshOptions = {
   observeHeartbeatFailure: (error: unknown) => void;
 };
 
-/** A failed telemetry read must neither hot-loop nor starve credential refresh. */
+/**
+ * A failed or slow telemetry read must neither hot-loop nor starve credential
+ * refresh: the read runs in the background, one at a time, so the caller's
+ * loop keeps its own cadence however long the read takes.
+ */
 export const createIngestionHealthRefresh = ({
   clock,
   emitStoredTotalHeartbeat,
@@ -73,24 +77,38 @@ export const createIngestionHealthRefresh = ({
 }: IngestionHealthRefreshOptions) => {
   let nextStoredTotalHeartbeatAt = 0;
   let warningStatus: "unreported" | "reported" = "unreported";
-  return async () => {
+  let inFlight: Promise<void> | undefined;
+  const emitOnce = async () => {
+    const heartbeat = await Result.tryPromise({
+      try: emitStoredTotalHeartbeat,
+      catch: (error) => error,
+    });
+    // One observation per failure episode: a success ends the episode, so
+    // a later outage is reported again.
+    if (heartbeat.isOk()) {
+      warningStatus = "unreported";
+    } else if (warningStatus === "unreported") {
+      warningStatus = "reported";
+      observeHeartbeatFailure(heartbeat.error);
+    }
+  };
+  const refresh = async () => {
     const now = clock();
-    if (now >= nextStoredTotalHeartbeatAt) {
+    if (inFlight === undefined && now >= nextStoredTotalHeartbeatAt) {
       // Advance before reading: failures use the same cadence as successes.
       nextStoredTotalHeartbeatAt = now + STORED_TOTAL_HEARTBEAT_INTERVAL_MS;
-      const heartbeat = await Result.tryPromise({
-        try: emitStoredTotalHeartbeat,
-        catch: (error) => error,
-      });
-      // One observation per failure episode: a success ends the episode, so
-      // a later outage is reported again.
-      if (heartbeat.isOk()) {
-        warningStatus = "unreported";
-      } else if (warningStatus === "unreported") {
-        warningStatus = "reported";
-        observeHeartbeatFailure(heartbeat.error);
-      }
+      inFlight = emitOnce()
+        // A throwing observer must not surface as an unhandled rejection.
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = undefined;
+        });
     }
     await refreshCredentials();
   };
+  /** Settles once the background read, if any, has finished. */
+  const idle = async () => {
+    await inFlight;
+  };
+  return Object.assign(refresh, { idle });
 };

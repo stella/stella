@@ -237,10 +237,14 @@ export const renderParserRegistry = (files: ReadonlyMap<string, string>) => {
         });
     }
   }
+  // A blank line between entries keeps every adapter's lines apart from its
+  // neighbours', so two pull requests that change different adapters merge
+  // without a textual conflict in this generated file. Changes to the same
+  // adapter still conflict, in its JSON entry first.
   const declarations = PARSER_REGISTRY_NAMES.map((name) => {
     const values =
       fields.get(name) ?? panic(`Missing registry projection: ${name}`);
-    return `export const ${name} = {\n${values.join("\n")}\n} as const${REGISTRY_CONSTRAINTS[name]};`;
+    return `export const ${name} = {\n${values.join("\n\n")}\n} as const${REGISTRY_CONSTRAINTS[name]};`;
   });
   return [
     "// Generated from parser-entries/*.json by scripts/generate-parser-registry.ts.",

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { misdecode } from "./charsets.js";
 import {
@@ -322,35 +322,67 @@ describe("work on a long text of distinct words", () => {
   });
 });
 
-// Smoke checks in real time, far above linear cost and far below what
-// rescanning a run from every position costs at these sizes (seconds). The
-// linearity itself is asserted by operation count in the property suite.
-describe("a long run of one character class finishes promptly", () => {
-  const PROMPT_MS = 1000;
+describe("a long run of one character class stays within its work bounds", () => {
   const RUN = 30_000;
 
   test.each([
     ["before a final non-ASCII letter", `${".".repeat(RUN)}ø`, "clean"],
     ["inside a token", `a${".".repeat(RUN)}ø`, "incomplete"],
   ] as const)("ASCII punctuation %s", (_, text, status) => {
-    const started = performance.now();
-    const check = checkTextEncoding(text, "cs");
-    expect(performance.now() - started).toBeLessThan(PROMPT_MS);
+    const counters = {
+      wordsExamined: 0,
+      pairEvaluations: 0,
+      codeUnits: 0,
+      scannedCodeUnits: 0,
+    };
+    const check = checkTextEncoding(text, "cs", { counters });
     expect(check.status).toBe(status);
+    expect(counters.scannedCodeUnits).toBeLessThanOrEqual(4 * text.length);
+    expect(counters.wordsExamined).toBeLessThanOrEqual(MAX_EXAMINED_WORDS);
+    expect(counters.pairEvaluations).toBeLessThanOrEqual(
+      PAIR_EVALUATION_BUDGET,
+    );
+    expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
   });
 
   test("combining marks in a word too long to weigh are left as they are", () => {
     // Canonical reordering sorts a run of combining marks by insertion, so
     // normalizing this word costs seconds.
     const text = `a${"̖́".repeat(20_000)}`;
-    const started = performance.now();
-    const repaired = repairMisdecoding(text, {
-      language: "cs",
-      pair: { actual: "utf-8", assumed: "windows-1252" },
-      layers: 1,
+    expect(text.length).toBeGreaterThan(MAX_WORD_CODE_UNITS);
+    const normalize = String.prototype.normalize;
+    const normalizedLengths: number[] = [];
+    const normalization = spyOn(
+      String.prototype,
+      "normalize",
+    ).mockImplementation(function (this: string, form) {
+      normalizedLengths.push(this.length);
+      if (this.length > MAX_WORD_CODE_UNITS) {
+        throw new TypeError("Oversized word reached normalization");
+      }
+      return normalize.call(this, form);
     });
-    expect(performance.now() - started).toBeLessThan(PROMPT_MS);
-    expect(repaired).toBe(text);
+    try {
+      expect(
+        repairMisdecoding("cafÃ©", {
+          language: "fr",
+          pair: { actual: "utf-8", assumed: "windows-1252" },
+          layers: 1,
+        }),
+      ).toBe("café");
+      expect(normalizedLengths.length).toBeGreaterThan(0);
+      const repaired = repairMisdecoding(text, {
+        language: "cs",
+        pair: { actual: "utf-8", assumed: "windows-1252" },
+        layers: 1,
+      });
+      expect(repaired).toBe(text);
+      expect(
+        normalizedLengths.every((length) => length <= MAX_WORD_CODE_UNITS),
+      ).toBe(true);
+    } finally {
+      normalization.mockRestore();
+    }
   });
 });
 

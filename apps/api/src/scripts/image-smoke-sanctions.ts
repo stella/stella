@@ -7,10 +7,16 @@ import { createSanctionsMatcherPoolCore } from "@/api/lib/lists/sanctions/matche
 
 export const checkBundledSanctionsMatcher = async (): Promise<void> => {
   const failures: string[] = [];
+  // Work the pool starts without awaiting is joined after close, so its
+  // failures land in `failures` instead of escaping the smoke.
+  const detachedWork: Promise<void>[] = [];
   const pool = createSanctionsMatcherPoolCore({
     deadlineMs: 10_000,
     reportFailure: ({ reason }) => {
       failures.push(reason);
+    },
+    detach: (work, _context, onRejection) => {
+      detachedWork.push(Promise.try(work).then(() => undefined, onRejection));
     },
   });
   const list = {
@@ -64,5 +70,6 @@ export const checkBundledSanctionsMatcher = async (): Promise<void> => {
     }
   } finally {
     await pool.close();
+    await Promise.all(detachedWork);
   }
 };

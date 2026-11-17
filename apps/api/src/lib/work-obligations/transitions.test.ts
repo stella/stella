@@ -28,7 +28,10 @@ const closingTaskStatuses = WORK_OBLIGATION_TRANSITION_ACTIONS.filter(
 const OWNERSHIP_STATES = [
   { acknowledgedAt: null, ownerUserId: null },
   { acknowledgedAt: null, ownerUserId: "user_1" },
-  { acknowledgedAt: new Date(), ownerUserId: "user_1" },
+  {
+    acknowledgedAt: new Date("2026-04-30T09:00:00.000Z"),
+    ownerUserId: "user_1",
+  },
 ];
 
 describe("work obligation transition table", () => {
@@ -85,6 +88,10 @@ describe("resolveWorkObligationTransition", () => {
             ? "allowed"
             : "invalid_status",
         );
+        if (resolution.type === "allowed") {
+          expect(resolution.move.from).toEqual(resolution.from);
+          expect(resolution.move.to).toBe(resolution.nextStatus);
+        }
       }
     }
   });
@@ -93,7 +100,7 @@ describe("resolveWorkObligationTransition", () => {
     const resolution = resolveWorkObligationTransition(
       WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE,
       {
-        acknowledgedAt: new Date(),
+        acknowledgedAt: new Date("2026-04-30T09:00:00.000Z"),
         ownerUserId: "user_1",
         status: WORK_OBLIGATION_STATUS.ACTIVE,
       },
@@ -102,6 +109,10 @@ describe("resolveWorkObligationTransition", () => {
     expect(resolution).toEqual({
       type: "allowed",
       eventType: WORK_OBLIGATION_TRANSITIONS.complete.eventType,
+      move: {
+        from: WORK_OBLIGATION_TRANSITIONS.complete.from,
+        to: WORK_OBLIGATION_TRANSITIONS.complete.to,
+      },
       from: WORK_OBLIGATION_TRANSITIONS.complete.from,
       nextStatus: WORK_OBLIGATION_TRANSITIONS.complete.to,
       taskStatus: WORK_OBLIGATION_TRANSITIONS.complete.taskStatus,
@@ -119,6 +130,10 @@ describe("resolveWorkObligationTransition", () => {
         expect(resolution).toEqual({
           type: "allowed",
           eventType: WORK_OBLIGATION_TRANSITIONS.reopen.eventType,
+          move: {
+            from: WORK_OBLIGATION_TRANSITIONS.reopen.from,
+            to: reopenedWorkObligationStatus(ownership),
+          },
           from: WORK_OBLIGATION_TRANSITIONS.reopen.from,
           nextStatus: reopenedWorkObligationStatus(ownership),
           taskStatus: WORK_OBLIGATION_TRANSITIONS.reopen.taskStatus,

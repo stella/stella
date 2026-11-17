@@ -35,7 +35,9 @@ describe("readDecisionAnalysis", () => {
     expect(relation).toBe(publishedCaseLawDecisions);
     expect(selection).toEqual(
       expect.objectContaining({
+        // The join key: a matched source never reads back as no source.
         source: {
+          id: caseLawSources.id,
           adapterKey: caseLawSources.adapterKey,
           descriptor: caseLawSources.descriptor,
         },

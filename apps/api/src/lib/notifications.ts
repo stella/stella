@@ -53,6 +53,11 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
     entityId: SafeId<"entity">;
     workspaceId: SafeId<"workspace">;
   };
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: {
+    entityType: "task";
+    entityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
+  };
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: {
     entityType: "report_export";
     entityId: SafeId<"reportExport">;
@@ -77,6 +82,13 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
     entityType: "flow_run";
     entityId: SafeId<"flowRun">;
     workspaceId: SafeId<"workspace">;
+  };
+  // The chat the member asked to hear about; a chat outside a matter has no
+  // workspace, and the link opens it from the chat list.
+  [NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET]: {
+    entityType: "chat_thread";
+    entityId: SafeId<"chatThread">;
+    workspaceId: SafeId<"workspace"> | null;
   };
   [NOTIFICATION_KIND.ANNOUNCEMENT]: {
     entityType: null;

@@ -5,7 +5,6 @@ import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
@@ -47,6 +46,7 @@ import {
   selectableOperations,
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
@@ -109,6 +109,13 @@ const capability = (id: string): RestEndpointRef => ({
 const ADDITIONAL_REST_OPERATIONS: Readonly<
   Record<string, readonly RestOperation[]>
 > = {
+  create_organization: [
+    {
+      endpoints: [capability("organizations.create")],
+      reason:
+        "Creates an organization through the account-scoped session capability.",
+    },
+  ],
   configure_template_fields: [
     {
       endpoints: [capability("templates.update")],
@@ -203,10 +210,11 @@ const catalogEntrySchema = v.object({
     v.object({ type: v.literal("capability"), reason: v.string() }),
   ]),
   permissions: v.optional(v.unknown()),
+  handlerKind: v.string(),
 });
 const rawCatalog = v.parse(
   v.array(catalogEntrySchema),
-  readCapabilityCatalog(),
+  repositoryCapabilityCatalog,
 );
 
 /** Catalog endpoints the catalog attributes to a curated tool, by tool name. */
@@ -246,15 +254,24 @@ for (const entry of rawCatalog) {
  */
 const restDeclarationOf = async (
   endpoint: RestEndpointRef,
-): Promise<{ permissions: PermissionInput; accountAccess: AccountAccess }> => {
+): Promise<{
+  permissions: PermissionInput | undefined;
+  accountAccess: AccountAccess;
+}> => {
   const config =
     endpoint.type === "handler"
       ? endpoint.config
       : (await loadCapabilityEndpoint(endpoint.id))?.config;
   const name = endpoint.type === "handler" ? endpoint.name : endpoint.id;
-  if (config?.permissions === undefined || config.accountAccess === undefined) {
-    // A write endpoint always declares both; one without is not a
-    // counterpart this matrix can derive from.
+  const sessionScoped =
+    endpoint.type === "capability" &&
+    rawCatalog.find(({ id }) => id === endpoint.id)?.handlerKind === "session";
+  if (
+    config?.accountAccess === undefined ||
+    (config.permissions === undefined && !sessionScoped)
+  ) {
+    // Organization-scoped writes declare a member grant; session writes
+    // authorize the account independently of organization membership.
     throw new Error(`REST endpoint ${name} declares no permissions`);
   }
   return {
@@ -292,7 +309,7 @@ const writeTools = (() => {
 
 type ResolvedOperation = {
   endpoints: string[];
-  permissions: PermissionInput[];
+  permissions: (PermissionInput | undefined)[];
   accountAccess: AccountAccess[];
 };
 
@@ -305,7 +322,7 @@ for (const { definition } of writeTools) {
   ];
   const resolved: ResolvedOperation[] = [];
   for (const operation of operations) {
-    const permissions: PermissionInput[] = [];
+    const permissions: (PermissionInput | undefined)[] = [];
     const accountAccess: AccountAccess[] = [];
     for (const endpoint of operation.endpoints) {
       // db-await-in-loop: no database; each dispatch thunk loads one module.
@@ -326,8 +343,10 @@ for (const { definition } of writeTools) {
 
 /** REST: may this role perform the operation (every endpoint it needs)? */
 const restAllows = (role: MemberRole, operation: ResolvedOperation): boolean =>
-  operation.permissions.every((permissions) =>
-    hasMemberPermission(sessionMemberRole(role), permissions),
+  operation.permissions.every(
+    (permissions) =>
+      permissions === undefined ||
+      hasMemberPermission(sessionMemberRole(role), permissions),
   );
 
 /**
@@ -345,11 +364,18 @@ const restExpectation = (tool: string, role: MemberRole): boolean | null => {
 /** Union of several permission sets, as sorted `resource:action` pairs. */
 type PermissionSet = Readonly<Record<string, readonly string[] | undefined>>;
 
-const permissionInputSchema = v.record(v.string(), v.array(v.string()));
+const permissionInputSchema = v.optional(
+  v.record(v.string(), v.array(v.string())),
+);
 
-const permissionPairs = (sets: readonly PermissionSet[]): string[] => {
+const permissionPairs = (
+  sets: readonly (PermissionSet | undefined)[],
+): string[] => {
   const pairs = new Set<string>();
   for (const set of sets) {
+    if (set === undefined) {
+      continue;
+    }
     for (const [resource, actions] of Object.entries(set)) {
       for (const action of actions ?? []) {
         pairs.add(`${resource}:${action}`);
@@ -377,7 +403,7 @@ const declaredGrantSets = (definition: WriteTool): string[][] => {
         permissionPairs([alternative]),
       );
     case "delegated":
-      return [];
+      return [[]];
     default:
       permissions satisfies never;
       return [];
@@ -758,7 +784,7 @@ const bakedListings: readonly RegistryToolListing[] = registrySnapshot.map(
     inputSchema: entry.inputSchema,
   }),
 );
-const cliCatalogEntries = parseCapabilityCatalog(readCapabilityCatalog());
+const cliCatalogEntries = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (cliCatalogEntries === null) {
   throw new TypeError("Invalid capability catalog");
 }

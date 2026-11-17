@@ -57,7 +57,7 @@ export const APP_SEARCH_SCHEMA = v.union([
                 v.pick(
                   search.entries.facets.wrapped.entries.court.item.entries
                     .courts.item,
-                  ["value"],
+                  ["value", "count"],
                 ).entries,
               ),
             ),
@@ -80,6 +80,8 @@ export const APP_SEARCH_SCHEMA = v.union([
   }),
 ]);
 export const APP_RESOLVE_SCHEMA = legalResolveResponseSchema;
+
+export { CASE_LAW_COURT_CATALOG_PROJECTION as APP_COURT_CATALOG_SCHEMA } from "../lib/chat/case-law-court-catalog-projection";
 
 export {
   openDecisionOutput as APP_OPEN_DECISION_SCHEMA,

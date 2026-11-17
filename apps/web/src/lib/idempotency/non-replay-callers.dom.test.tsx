@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -14,7 +15,6 @@ import { toSafeId } from "@/lib/safe-id";
 import type { InvoiceSends } from "@/lib/workspaces/queries/invoices";
 import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =

@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { CI_GENERATED_DIRECTORIES } from "../packages/scripts/src/generated-files";
 import { PR_CODE_QUALITY_CANCEL_JOBS } from "./ci-cancellation-contract";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
 import { lexShell, programWords } from "./install-free-ci";
@@ -630,7 +631,9 @@ test("CLI runtime determinism remains a fresh generation proof", () => {
     new URL("check-cli-runtime-generation.ts", import.meta.url),
     "utf-8",
   );
-  expect(source).toContain('["packages/cli/src/codegen.ts", "--runtime-only"]');
+  expect(source).toContain(
+    '["packages/cli/scripts/codegen.ts", "--runtime-only"]',
+  );
   expect(source).not.toContain('"codegen:runtime"');
 });
 
@@ -681,7 +684,9 @@ const generationCommandViolations = (command: readonly string[]) => {
       : ["Turbo owner package script does not exist"];
   }
   if (!target.startsWith("--cwd=")) {
-    return command.length === 2 &&
+    // A generator that also has a check mode is asked to write.
+    return (command.length === 2 ||
+      (command.length === 3 && action === "--write")) &&
       existsSync(new URL(`../${target}`, import.meta.url))
       ? []
       : ["Expected a direct generator file or explicit package script"];
@@ -707,7 +712,10 @@ const generationCommandViolations = (command: readonly string[]) => {
 };
 
 test("every preparation command resolves a real generator file or package script", () => {
-  for (const command of CI_GENERATION_COMMANDS) {
+  for (const command of [
+    ...CI_GENERATION_COMMANDS,
+    ...CI_GENERATED_DIRECTORIES.map((directory) => directory.command),
+  ]) {
     expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
   }
   for (const command of [
@@ -745,6 +753,9 @@ test("every preparation command resolves a real generator file or package script
     "utf-8",
   );
   expect(producer).toContain("for (const command of CI_GENERATION_COMMANDS)");
+  expect(producer).toContain(
+    "for (const { command } of CI_GENERATED_DIRECTORIES)",
+  );
   expect(
     generationCommandViolations([
       "bun",
@@ -850,7 +861,7 @@ test("API boot entry points prepare capability runtime sources before starting",
       "turbo run generate:typecheck-declarations --filter=@stll/api",
     );
     expect(emission).toBeGreaterThanOrEqual(0);
-    expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);
+    expect(script.indexOf("bun scripts/lint.ts")).toBeGreaterThan(emission);
   }
   expect(turbo.tasks["@stll/api#typecheck"]?.dependsOn).toContain(
     "typecheck:src",
@@ -865,14 +876,10 @@ test("API boot entry points prepare capability runtime sources before starting",
     new URL("../apps/api/Dockerfile", import.meta.url),
     "utf-8",
   );
-  expect(
-    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
-  ).toBeGreaterThanOrEqual(0);
-  expect(
-    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
-  ).toBeLessThan(docker.indexOf("RUN bun build"));
+  // The runtime derives its catalog from the handler graph, which embeds the
+  // MCP App bundles, so the bundles are built first.
   const runtime = docker.indexOf(
-    "RUN bun apps/api/scripts/generate-capability-runtime.ts",
+    "bun --env-file=apps/api/.env.example apps/api/scripts/generate-capability-runtime.ts",
   );
   const contracts = docker.indexOf(
     "bun apps/api/scripts/generate-mcp-app-contracts.ts",
@@ -880,9 +887,10 @@ test("API boot entry points prepare capability runtime sources before starting",
   const bundles = docker.indexOf(
     "bun packages/mcp-apps/scripts/build-mcp-apps.ts",
   );
-  expect(contracts).toBeGreaterThan(runtime);
+  expect(contracts).toBeGreaterThanOrEqual(0);
   expect(bundles).toBeGreaterThan(contracts);
-  expect(bundles).toBeLessThan(docker.indexOf("RUN bun build"));
+  expect(runtime).toBeGreaterThan(bundles);
+  expect(runtime).toBeLessThan(docker.indexOf("RUN bun build"));
   expect(api.scripts["generate:capability-runtime"]).toContain(
     "bun ../../scripts/prepare-mcp-apps.ts",
   );

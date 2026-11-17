@@ -22,8 +22,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { detached } from "@/lib/detached";
-import { apiFieldIssueMessage } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { fieldIssueOrToast } from "@/lib/errors/user-toast";
 import type { ViewLayout } from "@/lib/types";
 import { useCreateViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
 
@@ -106,8 +105,9 @@ export const SaveAsTemplateDialogView = ({
         onOpenChange(false);
       },
       onError: (error) => {
-        setNameIssue(apiFieldIssueMessage(error, "name"));
-        notifyUserError(error, t("errors.failedToSaveTemplate"));
+        setNameIssue(
+          fieldIssueOrToast(error, "name", t("errors.failedToSaveTemplate")),
+        );
       },
     });
   };

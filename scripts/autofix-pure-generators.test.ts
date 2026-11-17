@@ -25,6 +25,10 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Converts the static manifest schema and shared version policy; no DB imports.
+  "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
+  // Emits export lines from committed entry filenames; values stay in their owners.
+  "online-migration-entries": "scripts/generate-online-migration-entries.ts",
   "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
@@ -32,7 +36,6 @@ const PURE_AUTOFIX = {
     "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
-  "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
@@ -53,10 +56,12 @@ const PURE_AUTOFIX = {
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
   "transition-triggers": "apps/api/scripts/generate-transition-triggers.ts",
-  // Static source analysis and pinned formatters render the catalog and CLI
-  // contracts; setup-env supplies static validation defaults, never live data.
-  "capability-catalog": "apps/api/scripts/export-capability-catalog.ts",
-  "cli-registry": "codegen",
+  // Static source analysis and pinned formatters render the coverage table and
+  // CLI contracts; setup-env supplies static validation defaults, never live data.
+  "capability-coverage": "apps/api/scripts/export-capability-catalog.ts",
+  "cli-registry": "codegen:registry",
+  // Projects the committed registry snapshot and the derived route map.
+  "cli-tool-reference": "packages/cli/scripts/generate-tool-reference.ts",
   // Compiler input discovery and pinned bundlers consume repository sources.
   "api-typecheck-projects": "packages/scripts/src/api-typecheck-regenerate.ts",
   "visual-sandbox-bundle": "build:visual-sandbox",
@@ -74,6 +79,9 @@ const PURE_AUTOFIX = {
   "mobile-icons": "scripts/generate-mobile-icons.ts",
   // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
   "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
+  // Renders a committed component with the lockfile-pinned React and compiles
+  // its utilities with the pinned Tailwind; reads only committed files.
+  "outcome-page": "packages/ui/scripts/generate-outcome-page.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
@@ -112,8 +120,10 @@ const EXCLUDED_AUTOFIX = {
     "Mounted handler discovery runs API module initialization under its test preload",
   "playwright-devices":
     "Device descriptors are refreshed explicitly from the installed SDK",
-  "ci-job-classification-digests":
-    "Protected workflow metadata is refreshed outside pull-request autofix",
+  "ci-job-classification-decisions":
+    "Protected workflow metadata is pruned outside pull-request autofix",
+  "merge-group-parser":
+    "Workflow script blocks are refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
   "migration-lock-baseline": "Migration lock decisions require human review",
   "model-catalog-inputs": "Fetches upstream model catalogs",
@@ -136,6 +146,8 @@ const EXCLUDED_AUTOFIX = {
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",
+  "package-api-reports":
+    "API changes require explicit review and release intent",
 } as const;
 
 test("every committed generator has an explicit autofix purity decision", () => {
@@ -219,8 +231,10 @@ test("every module the case-law re-parse imports selects it", () => {
   expect(
     [...graph.computedImports].filter((file) => closure.has(file)),
   ).toEqual([]);
+  // The segmenter shapes every re-parsed section; the payload reads it
+  // directly, not through the ingestion re-export.
   expect(closure).toContain(
-    "apps/api/src/handlers/case-law/ingestion/segmenter.ts",
+    "apps/api/src/lib/legal-search/segment-decision.ts",
   );
   const { inputs } = generator("case-law-fixture-reparse");
   expect(
@@ -228,6 +242,33 @@ test("every module the case-law re-parse imports selects it", () => {
       (file) => !inputs.some((input) => matchesGeneratedGlob(input, file)),
     ),
   ).toEqual([]);
+});
+
+test("export schema inputs select the canonical producer without database initialization", () => {
+  const manifest = readFileSync(
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "utf-8",
+  );
+  expect(manifest).toContain("@/api/lib/data-export/version-scope");
+  expect(manifest).not.toContain("@/api/db/");
+  for (const file of [
+    "apps/api/scripts/generate-data-export-schema.ts",
+    "scripts/generated-artifacts.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "bunfig.toml",
+    "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "apps/api/src/lib/data-export/version-scope.ts",
+    "packages/api-contract/src/api-date.ts",
+    "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
+    "packages/api-contract/src/json-schema-regex.ts",
+    "packages/legal-ast/src/analysis.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("data-export-schema");
+  }
 });
 
 test("translation content never becomes an autofix output", () => {

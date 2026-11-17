@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the opening-formula paragraph role to the vocabulary; only the Czech and Slovak readers that emit it change their output, and each carries its own parser version bump.
 // parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 // parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
@@ -25,6 +26,7 @@
 // parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
+// parser-output-unchanged: Statute anchor resolution (`resolveDocumentAnchor`, `resolveDocumentHeadingAnchor`) now reads the publisher's scheme; no decision parser or adapter calls either.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -57,6 +59,8 @@ import {
   rawInlineTypes,
 } from "./inline.js";
 import type { Inline } from "./inline.js";
+import { anchorEndsWithPath } from "./statute-anchor-scheme.js";
+import type { StatuteBlocks } from "./statute-anchor-scheme.js";
 
 export type {
   Inline,
@@ -114,6 +118,13 @@ export type HeadingBlock = {
 
 export const PARAGRAPH_ROLES = [
   "case-number",
+  /**
+   * The formula a court decides under and the state it decides for, printed
+   * beside the decision's title (`ČESKÁ REPUBLIKA`, `JMÉNEM REPUBLIKY`,
+   * `V MENE SLOVENSKEJ REPUBLIKY`). The court's words as printed, neither
+   * a heading nor the preamble's prose.
+   */
+  "opening-formula",
   "intro",
   "history",
   "argumentation",
@@ -317,12 +328,13 @@ export const hasBlockInlines = (block: Block): block is InlineBlock =>
 
 /**
  * Resolve an AST anchor stated without its structural parent path. Exact
- * anchors win; a suffix alias is usable only when it identifies one block.
+ * anchors win; a tail alias is usable only when it identifies one block.
  * This lets a legal reference such as `cl_7` reach `prilohy-cl_7` without
- * guessing when several annexes repeat the same local designation.
+ * guessing when several annexes repeat the same local designation. The tail
+ * is whole segments of the publisher's scheme, never a substring.
  */
 const resolveAnchorCandidate = <TBlock extends Block>(
-  blocks: readonly TBlock[],
+  { blocks, scheme }: StatuteBlocks<TBlock>,
   requestedAnchorId: string,
 ): TBlock | null => {
   const exact = blocks.find(({ anchorId }) => anchorId === requestedAnchorId);
@@ -330,10 +342,14 @@ const resolveAnchorCandidate = <TBlock extends Block>(
     return exact;
   }
 
-  const suffix = `-${requestedAnchorId}`;
   let resolved: TBlock | null = null;
   for (const block of blocks) {
-    if (!block.anchorId.endsWith(suffix)) {
+    if (
+      !anchorEndsWithPath(scheme, {
+        anchor: block.anchorId,
+        tail: requestedAnchorId,
+      })
+    ) {
       continue;
     }
     if (resolved !== null) {
@@ -345,16 +361,21 @@ const resolveAnchorCandidate = <TBlock extends Block>(
 };
 
 export const resolveDocumentAnchor = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   requestedAnchorId: string,
-): Block | null => resolveAnchorCandidate(blocks, requestedAnchorId);
+): Block | null => resolveAnchorCandidate(statute, requestedAnchorId);
 
 export const resolveDocumentHeadingAnchor = (
-  blocks: readonly Block[],
+  { blocks, scheme }: StatuteBlocks<Block>,
   requestedAnchorId: string,
 ): HeadingBlock | null =>
   resolveAnchorCandidate(
-    blocks.filter((block): block is HeadingBlock => block.type === "heading"),
+    {
+      blocks: blocks.filter(
+        (block): block is HeadingBlock => block.type === "heading",
+      ),
+      scheme,
+    },
     requestedAnchorId,
   );
 
@@ -1121,6 +1142,7 @@ const hasUniqueBlockIdentities = (blocks: readonly Block[]): boolean => {
 /** Every paragraph role explicitly declares whether it starts the decision body. */
 const PARAGRAPH_STARTS_BODY = {
   "case-number": false,
+  "opening-formula": false,
   intro: false,
   history: false,
   argumentation: true,

@@ -11,11 +11,12 @@
  */
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+import { SLOV_LEX_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
+import { titleHeadsFor } from "./act-titles";
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   JurisdictionProfile,
-  TitleHeadSpec,
   WorkIdentifier,
 } from "./provision-citation-profile";
 
@@ -65,10 +66,8 @@ const LABOUR_CODE_SUCCESSION = {
   on: LABOUR_CODE_RECODIFICATION,
 };
 
-const ACT_HEAD = {
-  nominative: "zákon",
-  forms: ["zákon", "zákona", "zákonu", "zákonom", "zákone", "zák."],
-} as const satisfies TitleHeadSpec;
+const TITLE_HEADS = titleHeadsFor("sk");
+const [ACT_HEAD] = TITLE_HEADS;
 
 export const SK_PROFILE = {
   jurisdiction: "SVK",
@@ -354,13 +353,18 @@ export const SK_PROFILE = {
     },
   ],
 
-  titleHeads: [
-    ACT_HEAD,
-    {
-      nominative: "zákonník",
-      forms: ["zákonník", "zákonníka", "zákonníku", "zákonníkom"],
-    },
-  ],
+  titleHeads: TITLE_HEADS,
+  amendingClause: {
+    openers: [
+      "a o zmene",
+      "a o doplnení",
+      "a o zrušení",
+      "a ktorým sa mení",
+      "a ktorým sa dopĺňa",
+      "a ktorým sa zrušuje",
+    ],
+    amendedActStems: ["zákon", "poriad", "predpis"],
+  },
 
   ordinalWords: {
     prvá: "1",
@@ -421,14 +425,5 @@ export const SK_PROFILE = {
   earliestYear: 1918,
   maxActGapChars: 60,
 
-  anchor: {
-    join: ".",
-    render: {
-      section: (value) => `paragraf-${value}`,
-      article: (value) => `clanok-${value}`,
-      subsection: (value) => `odsek-${value}`,
-      letter: (value) => `pismeno-${value}`,
-      point: (value) => `bod-${value}`,
-    },
-  },
+  anchor: SLOV_LEX_ANCHORS,
 } as const satisfies JurisdictionProfile;

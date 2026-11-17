@@ -25,7 +25,10 @@ import path from "node:path";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
-import { runLedgerMembershipGuard } from "./ledger-membership.ts";
+import {
+  type NormalizeBaseEntriesOptions,
+  runLedgerMembershipGuard,
+} from "./ledger-membership.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
@@ -182,6 +185,7 @@ type PluginBudgetLedgerOptions = {
   /** What to do instead of budgeting a new site. */
   remediation: string;
   args: readonly string[];
+  normalizeBaseEntries?: (options: NormalizeBaseEntriesOptions) => string[];
 };
 
 export const runPluginBudgetLedger = ({
@@ -190,6 +194,7 @@ export const runPluginBudgetLedger = ({
   todoReason,
   remediation,
   args,
+  normalizeBaseEntries,
 }: PluginBudgetLedgerOptions): number => {
   const ledgerRel = `scripts/${plugin}-ledger.json`;
 
@@ -358,5 +363,6 @@ export const runPluginBudgetLedger = ({
     label: plugin,
     args,
     remediation,
+    normalizeBaseEntries,
   });
 };

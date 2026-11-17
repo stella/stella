@@ -113,7 +113,7 @@
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/apps/web/package.json",
-        "$TURBO_ROOT$/packages/{ai-catalog,api-contract,boe,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
+        "$TURBO_ROOT$/packages/{ai-catalog,api-contract,boe,brand,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
         "$TURBO_ROOT$/packages/typescript-config/base.json",
         "!$TURBO_ROOT$/apps/**/node_modules/**",
         "!$TURBO_ROOT$/apps/**/.cache/**",
@@ -122,6 +122,7 @@
         "!$TURBO_ROOT$/apps/**/.turbo/**",
         "!$TURBO_ROOT$/apps/**/*.tsbuildinfo",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
         "!$TURBO_ROOT$/packages/**/.env*",
@@ -169,6 +170,7 @@
     "@stll/web#lint": {
       "dependsOn": [
         "transit",
+        "tailwind-cache",
         "generate:api-types",
         "generate:route-tree",
         "generate:messages"
@@ -178,6 +180,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -185,13 +189,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -211,13 +215,23 @@
         "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
         "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/mutation-query-census.ts",
+        "$TURBO_ROOT$/scripts/mutation-query-census.test.ts",
+        "$TURBO_ROOT$/scripts/check-mutation-query-invalidation.ts",
+        "$TURBO_ROOT$/scripts/check-mutation-query-invalidation.test.ts",
+        "$TURBO_ROOT$/scripts/mutation-query-invalidation-baseline.json",
+        "$TURBO_ROOT$/packages/api-contract/src/resource-ref.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -232,6 +246,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -251,6 +266,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -258,13 +275,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -282,12 +299,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -302,6 +323,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -331,12 +353,12 @@
     // script runs. scripts/landing-deploy-scope.ts reads these inputs to decide
     // whether a push can change the site, so a new outside read belongs here.
     "@stll/landing#build": {
-      "dependsOn": ["^build", "@stll/cli#codegen:runtime"],
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         ".env*",
         "$TURBO_ROOT$/docs/changelog/**",
-        "$TURBO_ROOT$/packages/cli/**",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/scripts/product-media.ts"
       ],
       "outputs": ["dist/**"]
@@ -438,10 +460,11 @@
     // lint would type-check a program without the generated declarations.
     "@stll/landing#typecheck": {
       "cache": true,
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
+      "dependsOn": ["transit"],
       // `astro check` generates the `astro:content` types.
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
@@ -471,7 +494,11 @@
     "lint": {
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
-      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "dependsOn": [
+        "transit",
+        "^generate:capability-runtime",
+        "tailwind-cache"
+      ],
       // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, tsrs and
       // better-result are covered by Turbo's global root dependency hash.
       // Type-aware lint reads the same external install and compiler inputs as
@@ -481,6 +508,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -488,13 +517,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -512,12 +541,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -532,6 +565,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -541,23 +575,92 @@
         "$TURBO_ROOT$/types/**"
       ]
     },
+    // Lint reads the generated Tailwind cache only in the workspaces whose files
+    // the Tailwind rules cover (oxlint.config.ts `settings.tailwindcss`). Each
+    // lint depends on its own workspace's node, and only those workspaces'
+    // nodes depend on generating the cache, so a change to the Tailwind
+    // sources re-lints the workspaces that read the cache, not every one.
+    "tailwind-cache": {
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/web#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/desktop#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/playground#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/landing#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/ui#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/chat#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "@stll/workspace-ui#tailwind-cache": {
+      "dependsOn": ["//#generate:tailwind-cache"],
+      "inputs": [],
+      "outputs": []
+    },
+    "//#generate:tailwind-cache": {
+      "cache": true,
+      "inputs": [
+        "$TURBO_ROOT$/apps/web/**",
+        "$TURBO_ROOT$/apps/desktop/**",
+        "$TURBO_ROOT$/apps/playground/**",
+        "$TURBO_ROOT$/apps/landing/**",
+        "$TURBO_ROOT$/packages/ui/**",
+        "$TURBO_ROOT$/packages/chat/**",
+        "$TURBO_ROOT$/packages/workspace-ui/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
+        "$TURBO_ROOT$/oxlint.tailwind.config.ts",
+        "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
+        "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
+        "$TURBO_ROOT$/patches/oxlint-tailwindcss@*.patch",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock"
+      ],
+      "outputs": ["$TURBO_ROOT$/.tailwind-cache/**"]
+    },
     "@stll/landing#dev": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
       "persistent": true,
       "cache": false
     },
     "@stll/landing#lint:fix": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+      "dependsOn": ["transit"]
     },
     "@stll/landing#lint": {
       // Astro check generates the content types consumed by type-aware Oxlint.
       // Running a second astro sync concurrently races on the same temp file.
-      "dependsOn": ["typecheck"],
+      "dependsOn": ["typecheck", "tailwind-cache"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -565,13 +668,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -589,12 +692,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -609,6 +716,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -626,6 +734,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -633,13 +743,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -657,12 +767,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -677,6 +791,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -691,6 +806,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -698,13 +815,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -719,12 +836,16 @@
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -739,6 +860,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -760,11 +882,25 @@
       "dependsOn": ["transit"],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    // The WebView baseline scans every bundled package; the pre-paint colours
+    // are pinned to the resolved theme and to the web's pre-paint script.
+    "@stll/desktop#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
+        "$TURBO_ROOT$/apps/web/public/prepaint-init.js"
+      ]
+    },
     "@stll/cli#codegen:runtime": {
+      "dependsOn": ["generate:capabilities"],
       "inputs": [
         "package.json",
-        "capabilities/**",
-        "src/codegen.ts",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/**",
+        "$TURBO_ROOT$/packages/**/src/**",
+        "scripts/codegen.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
@@ -785,12 +921,37 @@
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/bun.lock",
-        "$TURBO_ROOT$/patches/**"
+        "$TURBO_ROOT$/patches/**",
+        // The task's own outputs live under the broad source globs above.
+        "!src/generated/route-map.ts",
+        "!src/generated/tool-annotations.ts"
       ],
       "outputs": [
         "src/generated/route-map.ts",
         "src/generated/tool-annotations.ts"
       ]
+    },
+    "generate:capabilities": {},
+    "@stll/cli#generate:capabilities": {
+      // The export reads the MCP app bundles. Building them first keeps a
+      // cache restore of @stll/mcp-apps#build from rewriting the generated
+      // stylesheet while this task's own generation reads it.
+      "dependsOn": ["@stll/mcp-apps#build"],
+      "inputs": [
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/export-capability-catalog.ts",
+        "$TURBO_ROOT$/apps/api/scripts/lib/**",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        // Its own shards and the CLI runtime derived from them are outputs,
+        // never inputs.
+        "!capabilities/**",
+        "!src/generated/route-map.ts",
+        "!src/generated/tool-annotations.ts"
+      ],
+      "outputs": ["capabilities/**"]
     },
     "@stll/cli#build": {
       "dependsOn": ["^build", "codegen:runtime"]
@@ -820,6 +981,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -827,13 +990,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -851,12 +1014,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -871,6 +1038,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -893,7 +1061,8 @@
       "dependsOn": ["transit", "codegen:runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
+        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts",
+        "$TURBO_ROOT$/apps/api/**"
       ]
     },
     "@stll/agent-engine#test": {
@@ -901,7 +1070,12 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/agent-sandbox-canary.yml",
-        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
+        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml",
+        // The compatibility test binds the policy to the pinned releases.
+        "$TURBO_ROOT$/apps/desktop/package.json",
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json",
+        // The sidecar build test reads the desktop release's rebuild paths.
+        "$TURBO_ROOT$/scripts/detect-desktop-release-changes.sh"
       ]
     },
     // Lets dependents name `^generate:capability-runtime`; only @stll/api has
@@ -917,6 +1091,7 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -938,11 +1113,11 @@
         "src/mcp/generated/capability-dispatch/**"
       ]
     },
-    // typecheck prepares the derived contracts and bundles first, so its cache
-    // restores them and lint waits for it.
+    // Build alone restores generated artifacts; diagnostic consumers wait for
+    // that restoration before preparing or reading the same files.
     "@stll/mcp-apps#typecheck": {
       "cache": true,
-      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "dependsOn": ["transit", "^generate:capability-runtime", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -962,6 +1137,7 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -976,21 +1152,7 @@
         "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts",
         "$TURBO_ROOT$/bun.lock"
       ],
-      "outputs": [
-        "src/*/generated/app.html.txt",
-        "src/*/generated/app.js.txt",
-        "src/*/generated/app.css.txt",
-        "src/shared/generated/messages.json",
-        "src/shared/generated/schemas.json",
-        "src/shared/generated/reader-messages.json",
-        "src/shared/generated/reader-inputs.json",
-        "src/shared/generated/contracts.js",
-        "src/shared/generated/contracts.d.ts",
-        "src/shared/generated/style.css",
-        "src/generated/runtime.js.txt",
-        "src/generated/runtime.css.txt",
-        "src/generated/bundles.ts"
-      ]
+      "outputs": []
     },
     "@stll/mcp-apps#lint": {
       "dependsOn": ["typecheck"],
@@ -999,6 +1161,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -1006,13 +1170,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -1030,12 +1194,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -1050,6 +1218,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -1074,6 +1243,10 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
+        // The CLI runtime derived after this build never feeds the bundles.
+        "!$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
+        "!$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -1155,6 +1328,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1166,9 +1340,11 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1237,6 +1413,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1248,9 +1425,11 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1325,14 +1504,14 @@
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
-        "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
+        "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
-        "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
@@ -1342,8 +1521,10 @@
         "$TURBO_ROOT$/packages/stable-stringify/**",
         "$TURBO_ROOT$/packages/template-conditions/**",
         "$TURBO_ROOT$/packages/template-packs/**",
+        "$TURBO_ROOT$/packages/test-state/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
+        "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/types/**",
         "**",
         "$TURBO_ROOT$/.npmrc",
@@ -1385,6 +1566,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1396,9 +1578,11 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1468,6 +1652,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1479,9 +1664,11 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1540,9 +1727,11 @@
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
+        "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "**",
@@ -1580,6 +1769,8 @@
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/lint.ts",
+        "$TURBO_ROOT$/scripts/lint-command.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/oxlint-presets/**",
@@ -1587,13 +1778,13 @@
         "$TURBO_ROOT$/scripts/ownership/*.ts",
         "$TURBO_ROOT$/scripts/ownership-loader.ts",
         "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/provider-client-modules.ts",
         "$TURBO_ROOT$/scripts/sha256-owners.ts",
-        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
         "$TURBO_ROOT$/scripts/status-write-shapes.ts",
         "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
         "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
         "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
-        "$TURBO_ROOT$/scripts/guard-rollouts/*.json",
+        "$TURBO_ROOT$/scripts/guard-rollouts/**",
         "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
         "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
@@ -1611,12 +1802,16 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
         "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/test-ambient-time-baseline.json",
+        "$TURBO_ROOT$/scripts/test-real-timers-baseline.json",
+        "$TURBO_ROOT$/scripts/test-wallclock-assertion-baseline.json",
         "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
         "$TURBO_ROOT$/scripts/baseline-paths.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/product-frontend-files.ts",
         "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
         "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+        "$TURBO_ROOT$/packages/api-contract/src/document-version-upload.ts",
         "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
         "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
         "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
@@ -1631,6 +1826,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -1653,13 +1849,21 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/mcp-kit/src/**"],
       "cache": false
     },
+    "@stll/html#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
+    },
     "@stll/api#test": {
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime"
       ],
-      "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
+      "env": [
+        "API_TEST_DURATIONS_HASH",
+        "API_TEST_SHARD",
+        "API_TEST_FILES_ENCODED",
+        "STELLA_RUN_SHARED_POSTGRES_TESTS"
+      ],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": [
@@ -1669,28 +1873,47 @@
         "API_TEST_DURATIONS_FILE"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/html/src/email.ts",
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
+        "$TURBO_ROOT$/scripts/shared-test-postgres.sh",
+        "$TURBO_ROOT$/packages/scripts/src/shared-test-postgres.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-postgres-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generation-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-docker.ts",
+        "$TURBO_ROOT$/docker/postgres/**",
+        "$TURBO_ROOT$/scripts/generate-online-migration-entries.ts",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/en.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/docs/data-export/**",
         "$TURBO_ROOT$/apps/desktop/src-tauri/Cargo.toml",
         "$TURBO_ROOT$/apps/desktop/src-tauri/src/http_client.rs",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/bundled-consumers.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-contender.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-writer-gap.ts",
+        "$TURBO_ROOT$/scripts/check-migration-safety.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/guard-rollouts.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/parser-output-fixtures.ts",
+        "$TURBO_ROOT$/scripts/plan-output-codec.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
     "@stll/mcp-apps#test": {
+      "dependsOn": ["transit", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/**",
@@ -1708,6 +1931,11 @@
         "$TURBO_ROOT$/apps/web/src/routes/auth/route.tsx",
         "$TURBO_ROOT$/apps/web/src/components/workspace-primary-nav.ts",
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
+        // The phone draws the web's recorded chats and its step titles.
+        "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        // And gives each failed turn the reason the web's map names.
+        "$TURBO_ROOT$/apps/web/src/lib/errors/ai-failure.ts",
         "$TURBO_ROOT$/packages/ui/src/**"
       ]
     },
@@ -1720,7 +1948,7 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/cli/capabilities/**",
+        "$TURBO_ROOT$/scripts/mutation-query-invalidation-baseline.json",
         "$TURBO_ROOT$/packages/ui/src/**",
         "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1730,8 +1958,15 @@
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
-        "$TURBO_ROOT$/oxlint.config.ts"
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/network-baseline-scope.ts"
       ]
+    },
+    // The palette test checks the colours DESIGN.md documents.
+    "@stll/brand#test": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/DESIGN.md"]
     },
     // The native suite compiles files it embeds from outside the crate, so its
     // inputs are the crate plus those embeds: a web-only edit elsewhere in the
@@ -1750,13 +1985,28 @@
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
         "src/mainview/App.tsx",
+        "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-account-link.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-cleanup.fixture.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-cleanup.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-cleanup.plausibility.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-dictation-transcription.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-runner.fixtures.json",
+        "$TURBO_ROOT$/packages/api-contract/src/chat-local-run-step-content.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
-        "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.success.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.error.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.details.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.detail-row.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.note.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.control.gen.html",
+        "$TURBO_ROOT$/packages/ui/generated/outcome-page.button-label.gen.html"
       ]
     },
     // Repository-wide tooling guards: these suites walk apps/*, packages/* and
@@ -1775,7 +2025,8 @@
       "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
+        "$TURBO_ROOT$/packages/ui/src/styles/theme.css",
+        "$TURBO_ROOT$/scripts/generate-us-courts.ts"
       ]
     },
     "@stll/catalogue#test": {

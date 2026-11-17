@@ -96,6 +96,7 @@ const basisFor = (perspective: ReviewPerspective): DocumentReviewRunBasis => ({
           },
         ],
       },
+      scope: null,
     },
   },
   perspective,
@@ -127,7 +128,10 @@ const seedRun = async ({
     basis: basisFor(perspective),
     status,
     ...(status === "completed"
-      ? { startedAt: new Date(), finishedAt: new Date() }
+      ? {
+          startedAt: new Date("2026-04-30T09:00:00.000Z"),
+          finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+        }
       : {}),
   });
   return runId;

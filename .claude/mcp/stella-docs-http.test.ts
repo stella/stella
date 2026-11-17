@@ -1,7 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { afterEach, describe, expect, test } from "bun:test";
 import { connect, createServer } from "node:net";
 
@@ -105,9 +104,7 @@ const connectHttpClient = async (baseUrl: string, name: string) => {
     new URL(`${baseUrl}/mcp`),
   );
   const client = new Client({ name, version: "1.0.0" });
-  // Same SDK typing gap as the server transport under exactOptionalPropertyTypes.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- SDK typing gap described above
-  await client.connect(transport as Transport);
+  await client.connect(transport);
   return { client, transport };
 };
 

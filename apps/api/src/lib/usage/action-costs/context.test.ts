@@ -1,6 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import {
   type ActionCallObserver,
@@ -10,6 +11,8 @@ import {
   runObservedAction,
 } from "./context";
 import * as failure from "./observation-failure";
+
+const testFetchState = createTestFetch();
 
 const identityFor = (organization: string): ActionCostIdentity => ({
   organizationId: toSafeId<"organization">(organization),
@@ -220,14 +223,16 @@ test("multi-request registry lookup records every outbound request in its captur
   const leftRows: ActionCostObservation[] = [];
   const rightRows: ActionCostObservation[] = [];
   let outbound = 0;
-  globalThis.fetch = Object.assign(
-    async () => {
-      outbound += 1;
-      return new Response("[]", {
-        headers: { "content-type": "application/json" },
-      });
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async () => {
+        outbound += 1;
+        return new Response("[]", {
+          headers: { "content-type": "application/json" },
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   try {
     await runObservedAction({
@@ -259,6 +264,6 @@ test("multi-request registry lookup records every outbound request in its captur
       });
     }
   } finally {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   }
 });

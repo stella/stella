@@ -6,10 +6,12 @@ import {
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawCitations,
+  caseLawDecisionAnchorRedirects,
   caseLawDecisionCitationStats,
   caseLawDecisionCitationStatsState,
   caseLawDecisionIdentifiers,
   caseLawDecisionJudges,
+  caseLawDecisionReviews,
   caseLawProvisionCitations,
   caseLawStatuteCitationMemberships,
 } from "@/api/db/schema";
@@ -39,6 +41,15 @@ export const CASE_LAW_REMOVAL_STORES = {
         .delete(caseLawDecisionIdentifiers)
         .where(eq(caseLawDecisionIdentifiers.decisionId, id)),
   },
+  // Anchor ids are derived from the erased document's text.
+  case_law_decision_anchor_redirects: {
+    type: "remove",
+    erase: async (tx, id) =>
+      // audit: skip — derived rows belong to the canonical redaction audit.
+      await tx
+        .delete(caseLawDecisionAnchorRedirects)
+        .where(eq(caseLawDecisionAnchorRedirects.decisionId, id)),
+  },
   case_law_decision_judges: {
     type: "remove",
     erase: async (tx, id) =>
@@ -63,6 +74,22 @@ export const CASE_LAW_REMOVAL_STORES = {
             eq(caseLawCitations.citedDecisionId, id),
           ),
         ),
+  },
+  // The erased decision's own review evidence goes; a review of it by another
+  // decision keeps that decision's evidence but no longer links the erased one.
+  case_law_decision_reviews: {
+    type: "remove",
+    erase: async (tx, id) => {
+      // audit: skip — derived rows belong to the canonical redaction audit.
+      await tx
+        .delete(caseLawDecisionReviews)
+        .where(eq(caseLawDecisionReviews.reviewingDecisionId, id));
+      // audit: skip — derived rows belong to the canonical redaction audit.
+      await tx
+        .update(caseLawDecisionReviews)
+        .set({ reviewedDecisionId: null })
+        .where(eq(caseLawDecisionReviews.reviewedDecisionId, id));
+    },
   },
   case_law_provision_citations: {
     type: "remove",

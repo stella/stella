@@ -12,6 +12,7 @@ import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 import { DECISION_LIST_SORTS } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
@@ -90,6 +91,8 @@ import { encodeCursor } from "@/api/lib/search/cursor";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 type ScopedDbIsPublicReadDb = ScopedDb extends CaseLawPublicReadDb
   ? true
   : false;
@@ -108,6 +111,7 @@ const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
 const PG_FTS_FACETS_FILE =
   "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts";
+const POPULATION_COUNTS_FILE = "apps/api/src/lib/case-law/population-counts.ts";
 const CORPUS_INDEX_FACETS_FILE =
   "apps/api/src/lib/legal-search/corpus-index-facets.ts";
 const CORPUS_INDEX_PROJECTION_INPUT_FILE =
@@ -131,6 +135,8 @@ const COVERAGE_ARRIVALS_FILE =
 const COVERAGE_FILE = "apps/api/src/handlers/case-law/decisions/coverage.ts";
 const CITATION_GRAPH_FILE =
   "apps/api/src/handlers/case-law/decisions/citation-graph.ts";
+const TEXT_COMPLETION_FILE =
+  "apps/api/src/handlers/case-law/decisions/text-completion.ts";
 const LANGUAGE_ALTERNATES_FILE =
   "apps/api/src/lib/case-law/language-alternates.ts";
 const SITEMAP_DECISIONS_FILE =
@@ -159,6 +165,7 @@ const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/:decisionId",
+  "GET /case/decisions/:decisionId/anchor-redirects",
   "GET /case/decisions/:decisionId/citations",
   "GET /case/decisions/:decisionId/citations/leading",
   "GET /case/decisions/:decisionId/citations/summary",
@@ -174,6 +181,7 @@ const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/provisions/citing-decisions",
   "GET /case/sitemap/decisions/shard",
   "GET /case/sitemap/shards",
+  "POST /case/decisions/quotes/verify",
   "POST /case/decisions/search",
 ] as const;
 
@@ -375,7 +383,7 @@ const publicRouteBlock = (source: string): string => {
 describe("public case-law route boundary", () => {
   test("public law APIs are dark-launched outside local development", async () => {
     const previousFeature = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
@@ -398,7 +406,7 @@ describe("public case-law route boundary", () => {
       }
     } finally {
       restoreRuntimeMode();
-      env.FEATURE_PUBLIC_LAW = previousFeature;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeature);
     }
   });
 
@@ -577,18 +585,28 @@ describe("public case-law route boundary", () => {
   });
 
   test("public decision payload is an explicit allowlist", async () => {
-    const [source, subjectSource] = await Promise.all([
+    const [source, subjectSource, completionSource] = await Promise.all([
       readDecisionSource(),
       readPublicSubjectSource(),
+      readSource(TEXT_COMPLETION_FILE),
     ]);
 
-    expect(source).not.toContain("...decision");
+    expect(source).not.toMatch(/\.\.\.decision\b/u);
     expect(source).toContain("id: decision.id");
     expect(source).toContain("caseNumber: decision.caseNumber");
     expect(source).toContain("slug: decision.slug");
     expect(source).toContain("languageAlternates,");
     expect(source).toContain("language: decision.language");
     expect(source).toContain("fulltext,");
+    expect(source).toContain(
+      '...decisionTextCompletionReasons({ type: "eligible" })',
+    );
+    for (const field of [
+      "textIncompleteReason",
+      "textWithheldReason",
+    ] as const) {
+      expect(completionSource).toContain(`${field}:`);
+    }
     // Slug lookup and its language matching moved into the gate module, which
     // resolves every subject. Both halves of the normalisation are pinned
     // here; `public-subject.db.test.ts` drives them against Postgres.
@@ -598,15 +616,21 @@ describe("public case-law route boundary", () => {
   });
 
   test("public facets payload is aggregate public data only", async () => {
-    // Facets are provider-dispatched, so the invariant has to hold on the
-    // handler and on both implementations behind it.
-    const [handlerSource, pgFtsSource, corpusIndexSource] = await Promise.all([
-      readFacetsSource(),
-      readPgFtsFacetsSource(),
-      readCorpusIndexFacetsSource(),
-    ]);
+    // Follow the public reader into its mandatory population scope owner.
+    const [handlerSource, pgFtsSource, corpusIndexSource, populationSource] =
+      await Promise.all([
+        readFacetsSource(),
+        readPgFtsFacetsSource(),
+        readCorpusIndexFacetsSource(),
+        readSource(POPULATION_COUNTS_FILE),
+      ]);
 
-    for (const source of [handlerSource, pgFtsSource, corpusIndexSource]) {
+    for (const source of [
+      handlerSource,
+      pgFtsSource,
+      corpusIndexSource,
+      populationSource,
+    ]) {
       expect(source).not.toContain("analysis");
       expect(source).not.toContain("workspace");
       expect(source).not.toContain("organization");
@@ -614,10 +638,17 @@ describe("public case-law route boundary", () => {
     }
 
     expect(handlerSource).toContain("LIMITS.caseLawFacetLimit");
-    expect(pgFtsSource).toContain("caseLawBrowseFacetCounts.country");
-    expect(pgFtsSource).toContain('eq(caseLawBrowseFacetCounts.kind, "court")');
-    expect(pgFtsSource).toContain('eq(caseLawBrowseFacetCounts.kind, "year")');
-    expect(pgFtsSource).toContain("redistributableCaseLawSource");
+    expect(pgFtsSource).toContain(
+      "caseLawPopulationRows(tx, query.excludedSourceIds)",
+    );
+    expect(pgFtsSource).toContain("eq(population.country, query.jurisdiction)");
+    expect(pgFtsSource).toContain("IN ('country', 'court', 'year')");
+    expect(populationSource).toContain("excludedSourceIds: readonly string[]");
+    expect(populationSource).toContain("redistributableCaseLawSource");
+    expect(populationSource).toContain(
+      'typedPgArray(excludedSourceIds, "uuid")',
+    );
+    expect(populationSource).toContain("caseLawSources.id} <> ALL(");
     expect(corpusIndexSource).toContain('field: "jurisdiction"');
     expect(corpusIndexSource).toContain('field: "court"');
     expect(corpusIndexSource).toContain(
@@ -1084,7 +1115,12 @@ describe("public case-law route boundary", () => {
     expect(await readPublicSubjectSource()).toContain(
       "!isRedistributable(row.descriptor)",
     );
-    expect(pgFtsFacetsSource).toContain("redistributableCaseLawSource");
+    expect(pgFtsFacetsSource).toContain(
+      "caseLawPopulationRows(tx, query.excludedSourceIds)",
+    );
+    expect(await readSource(POPULATION_COUNTS_FILE)).toContain(
+      "redistributableCaseLawSource",
+    );
     // The corpus-index facets aggregate the index rather than the table, so
     // the gate is two-sided. Projection reads eligibility off the source
     // descriptor and erases whatever is ineligible; because a revocation only

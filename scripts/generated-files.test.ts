@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import * as ts from "tsrs/unstable/ast";
+import * as ts from "tsrs/ast";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
@@ -32,7 +32,6 @@ import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
   DEFAULT_DETECTORS,
-  MODEL_CATALOG_DRIFT_INPUTS,
   ROUTE_TREE_INPUTS,
   type ScopeOutput,
 } from "./ci-plan-scope";
@@ -411,15 +410,9 @@ test("capability runtime cache manifests cover every file the producer writes", 
   const fixture = await mkdtemp(nodePath.join(tmpdir(), "capability-outputs-"));
   try {
     const generated = nodePath.join(fixture, "apps/api/src/mcp/generated");
-    const catalog = nodePath.join(fixture, "packages/cli/capabilities");
     await mkdir(nodePath.join(generated, "capability-dispatch"), {
       recursive: true,
     });
-    await mkdir(catalog, { recursive: true });
-    await writeFile(
-      nodePath.join(catalog, "matters.list.json"),
-      JSON.stringify({ id: "matters.list", featureId: "matters" }),
-    );
     await mkdir(nodePath.join(fixture, "apps/api/src/handlers/workspaces"), {
       recursive: true,
     });
@@ -427,7 +420,9 @@ test("capability runtime cache manifests cover every file the producer writes", 
       nodePath.join(fixture, "apps/api/src/handlers/workspaces/list.ts"),
       "export default {};\n",
     );
-    await generateCapabilityRuntime(pathToFileURL(`${fixture}/`));
+    await generateCapabilityRuntime(pathToFileURL(`${fixture}/`), [
+      { id: "matters.list", featureId: "matters" },
+    ]);
     expect(ciGeneratedFiles(fixture)).toContain(
       "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
     );
@@ -623,7 +618,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["tailwind-class-cache", "module-ownership", "route-tree"]);
+  ).toEqual(["module-ownership", "route-tree"]);
   // api-typecheck-projects declares the derived CLI and capability runtimes,
   // which a clean checkout lacks, so they are planned with it.
   expect(
@@ -631,9 +626,12 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
       ({ id }) => id,
     ),
   ).toEqual([
+    "capability-catalog",
     "capability-runtime",
     "cli-runtime",
+    "mcp-app-contracts",
     "api-typecheck-projects",
+    "mcp-app-bundles",
     "module-ownership",
   ]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
@@ -774,7 +772,12 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
   for (const entry of GENERATORS) {
     for (const glob of entry.inputs) {
       expect(
-        tracked.some((file) => matchesGeneratedGlob(glob, file)),
+        tracked.some((file) => matchesGeneratedGlob(glob, file)) ||
+          GENERATORS.some(
+            ({ outputKind, outputs }) =>
+              outputKind === "derived" &&
+              outputs.some((output) => output === glob),
+          ),
         `${entry.id}: ${glob}`,
       ).toBe(true);
     }
@@ -811,7 +814,11 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
       ).toBe(true);
     }
     expect(entry.outputs.every((glob) => !/[|\n]/u.test(glob))).toBe(true);
-    const scriptFile = entry.write.find((part) => /\.(?:ts|sh)$/u.test(part));
+    // Any file a runtime can execute directly: TypeScript, JavaScript in each
+    // module flavour, or a shell script.
+    const scriptFile = entry.write.find((part) =>
+      /\.(?:[cm]?[jt]s|sh)$/u.test(part),
+    );
     if (scriptFile) {
       expect(existsSync(scriptFile), `${entry.id}: ${scriptFile}`).toBe(true);
       continue;
@@ -926,13 +933,6 @@ test("route-tree CI scope covers every manifest input and output", () => {
   expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
 });
 
-test("CI rate snapshot scope stays pinned to the manifest", () => {
-  const inputs = generator("model-rates").inputs.map((glob) =>
-    glob.replace(/\/\*\*$/u, "/*"),
-  );
-  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
-});
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -957,6 +957,7 @@ const generationInputs = (name: string) => {
     .filter((input) => !input.startsWith("!"));
 };
 
+// timeout: exercises real scope detectors and subprocesses for every input; measured 27.3 s.
 test("CI determinism selectors cover the cached generators' input contracts", () => {
   for (const [name, output] of [
     ["generate:api-types", "web_api_types_required"],
@@ -992,7 +993,7 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
       ).toBe("true");
     }
   }
-});
+}, 60_000);
 
 test.each([
   "apps/api/src/mcp/web-handoff-link-contract.ts",
@@ -1201,7 +1202,7 @@ test("web messages have one derived owner and are generated wherever the route t
 
 // Runs in a copy of the tracked files the checks read, never by deleting the
 // checkout's declarations: other test files read them concurrently.
-// Measured p95 is 19.8 s; this test must run the real web catalog checker in that copy.
+// timeout: measured p95 is 19.8 s; runs the real web catalog checker in that copy.
 test("web catalog checks pass without the derived message declarations", async () => {
   const repo = new URL("..", import.meta.url).pathname;
   const tracked = Bun.spawnSync(
@@ -1409,6 +1410,33 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "# Generated by stll-cloud-setup.",
     ),
   ).toBe(false);
+});
+
+test("generators declare producers of build-time outputs they list as inputs", () => {
+  const problems: string[] = [];
+  for (const consumer of GENERATORS) {
+    for (const producer of GENERATORS) {
+      if (producer.id === consumer.id || producer.outputKind !== "derived") {
+        continue;
+      }
+      // Only inputs within an output boundary imply a dependency; a broad
+      // source glob such as packages/** also sees generated files incidentally.
+      const readsOutput = consumer.inputs.some((input) =>
+        producer.outputs.some((output) =>
+          matchesGeneratedGlob(
+            output,
+            input
+              .replaceAll("**", "example/generated.ts")
+              .replaceAll("*", "example"),
+          ),
+        ),
+      );
+      if (readsOutput && !consumer.after.includes(producer.id)) {
+        problems.push(`${consumer.id} must declare after ${producer.id}`);
+      }
+    }
+  }
+  expect(problems).toEqual([]);
 });
 
 // A plan runs from a clean checkout, where no derived output exists: every

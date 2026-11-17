@@ -49,7 +49,9 @@
     "flowRunAwaitingApproval": "Ein Workflow wartet auf Ihre Freigabe",
     "flowRunCompleted": "Ein Workflow wurde abgeschlossen",
     "flowRunFailed": "Ein Workflow ist fehlgeschlagen",
-    "mention": "Sie wurden in einem Kommentar erwähnt"
+    "localRunLimitReset": "Der Coding-Agent auf Ihrem Computer kann Ihren Chat fortsetzen",
+    "mention": "Sie wurden in einem Kommentar erwähnt",
+    "taskAssigned": "Ihnen wurde eine Aufgabe zugewiesen"
   },
   "reportExportStatus": {
     "action": "stella öffnen",

@@ -13,15 +13,12 @@ import type {
   Inline,
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { annotateUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-annotations";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { CitationWorkBudget } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const paragraph = (id: string, inlines: Inline[]): ParagraphBlock => ({
   id,
@@ -174,7 +171,8 @@ const placeless = ({
 
 describe("annotation (properties)", () => {
   test("styling and page anchors change no offset and no target", () => {
-    fc.assert(
+    assertProperty(
+      "styling and page anchors change no offset and no target",
       fc.property(sample, ({ inlines, text }) => {
         const plain = extract(
           documentOf([paragraph("p", [{ type: "text", text }])]),
@@ -184,12 +182,13 @@ describe("annotation (properties)", () => {
           plain.occurrences.map(placeless),
         );
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("keeps every character, block ID and anchor, and is a fixed point", () => {
-    fc.assert(
+    assertProperty(
+      "keeps every character, block ID and anchor, and is a fixed point",
       fc.property(sample, ({ inlines }) => {
         const ast = documentOf([paragraph("p", inlines)]);
         const { documentAst: annotated, occurrences } = extract(ast);
@@ -201,12 +200,13 @@ describe("annotation (properties)", () => {
         expect(annotate(annotated, occurrences)).toEqual(annotated);
         expect(extract(annotated).occurrences).toEqual(occurrences);
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("every occurrence becomes one wrapper whose cite is its text", () => {
-    fc.assert(
+    assertProperty(
+      "every occurrence becomes one wrapper whose cite is its text",
       fc.property(sample, ({ inlines, text }) => {
         const { documentAst: annotated, occurrences } = extract(
           documentOf([paragraph("p", inlines)]),
@@ -228,7 +228,7 @@ describe("annotation (properties)", () => {
           ]),
         );
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
@@ -259,7 +259,8 @@ const pinLikeTail = fc
 
 describe("pins (properties)", () => {
   test("any pin the scanner reads fits the pin schema", () => {
-    fc.assert(
+    assertProperty(
+      "any pin the scanner reads fits the pin schema",
       fc.property(pinLikeTail, pinLikeTail, (afterFull, afterId) => {
         const { documentAst: annotated } = extract(
           documentOf([
@@ -273,7 +274,7 @@ describe("pins (properties)", () => {
         );
         expect(isDocumentAst(annotated)).toBe(true);
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 });

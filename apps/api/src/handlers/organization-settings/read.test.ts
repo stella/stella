@@ -66,8 +66,10 @@ describe("projectOrganizationSettingsRow", () => {
           { countryCode: "SK", isPrimary: false },
         ],
         promptCachingEnabled: true,
+        aiInstructions: "Use Czech legal terminology.",
         managedAIResidency: "us",
         memoryExtractionEnabled: false,
+        localRunMaxApprovalMode: "full_auto",
         timeMinimumUnitMinutes: 6,
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,
@@ -85,6 +87,8 @@ describe("projectOrganizationSettingsRow", () => {
     expect(result.primaryJurisdictionTimeZone).toBe(PRAGUE_TIME_ZONE);
     expect(result.documentProcessingMode).toBe("searchable-text");
     expect(result.managedAIResidency).toBe("us");
+    expect(result.aiInstructions).toBe("Use Czech legal terminology.");
+    expect(result.aiInstructionsMaxLength).toBe(3000);
   });
 
   test("defaults practiceJurisdictions to an empty array when no row exists", () => {
@@ -111,6 +115,8 @@ describe("projectOrganizationSettingsRow", () => {
       timeLockedThroughMonth: null,
       timeNarrativeRequired: true,
       managedAIResidency: "eu",
+      aiInstructions: "",
+      aiInstructionsMaxLength: 3000,
     });
   });
 });
@@ -330,14 +336,14 @@ describe.serial("undeclared feature deployment discovery", () => {
     });
     try {
       for (const enabled of [false, true]) {
-        env.FEATURE_LEGAL_LISTS = enabled;
+        testState.setConfig("FEATURE_LEGAL_LISTS", enabled);
         const result = projectOrganizationSettingsRow(null, emptySnapshot);
         expect(result.declaredFeatureIds).toEqual([]);
         expect(result.capabilities).toEqual({});
         expect(result.deploymentFeatures.legalLists).toBe(enabled);
       }
     } finally {
-      env.FEATURE_LEGAL_LISTS = previous;
+      testState.setConfig("FEATURE_LEGAL_LISTS", previous);
       restoreRuntimeMode();
     }
   });

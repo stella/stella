@@ -3,6 +3,7 @@ import {
   beforeEach,
   describe,
   expect,
+  jest,
   type Mock,
   mock,
   spyOn,
@@ -10,27 +11,40 @@ import {
 } from "bun:test";
 
 import {
+  newNotificationRealtimeEvent,
   RESOURCE_TYPE,
   resourceRef,
   resourceUpdatedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { createTestClock, settledWithin } from "@stll/test-kit";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
 import type {
+  announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
   broadcast as Broadcast,
+  broadcastToUser as BroadcastToUser,
+  registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
   revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
   SseSessionLivenessReader,
   startSse as StartSse,
   stopSse as StopSse,
   subscribe as Subscribe,
+  subscribeUser as SubscribeUser,
 } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
+  INSTANCE_ID,
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 beforeEach(async () => {
   setIntervalSpy = spyOn(globalThis, "setInterval");
@@ -40,8 +54,17 @@ beforeEach(async () => {
   const clientsBeforeImport = createdClients.length;
   const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
   const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
-  ({ broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
-    await import("@/api/lib/sse"));
+  ({
+    announceMcpToolProjectionChange,
+    broadcast,
+    broadcastToUser,
+    registerMcpToolProjectionDelivery,
+    revokeWorkspaceSseAccess,
+    startSse,
+    stopSse,
+    subscribe,
+    subscribeUser,
+  } = await import("@/api/lib/sse"));
   clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
   redisClientsCreatedDuringImport =
     createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
@@ -157,11 +180,15 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 let setIntervalSpy: Mock<typeof globalThis.setInterval>;
 let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
+let announceMcpToolProjectionChange: typeof AnnounceMcpToolProjectionChange;
 let broadcast: typeof Broadcast;
+let broadcastToUser: typeof BroadcastToUser;
+let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
 let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
 let startSse: typeof StartSse;
 let stopSse: typeof StopSse;
 let subscribe: typeof Subscribe;
+let subscribeUser: typeof SubscribeUser;
 
 // Measure the import itself. Bun's --rerun-each retains mock history between
 // iterations, so absolute call counts include lifecycle calls from earlier
@@ -170,24 +197,20 @@ let clientsCreatedDuringImport = 0;
 let redisClientsCreatedDuringImport = 0;
 let intervalsStartedDuringImport = 0;
 
-// Let the fire-and-forget subscribe promise inside startSse settle. A timer
-// turn drains the whole pending microtask queue, so this does not depend on
-// how many `await` points the module's attach path happens to have — counting
-// ticks silently under-drains the moment that chain grows. `Bun.sleep` is used
-// rather than `setTimeout` so the tests that stub the global timer still get a
-// real turn. The delay is 0, so a pending attach retry (200 ms at the shortest)
-// never fires inside it.
+// The test clock drains the pending promise chain without moving time or
+// firing the subscriber's retry timer. Counting microtasks would couple the
+// tests to the number of awaits in the asynchronous attach path.
 const settlePendingWork = async (): Promise<void> => {
-  await Bun.sleep(0);
+  await createTestClock().advance(0);
 };
 
 const observeStreamRead = async (stream: ReadableStream) => {
   const reader = stream.getReader();
   try {
-    return await Promise.race([
-      reader.read(),
-      Bun.sleep(100).then(() => "test-deadline" as const),
-    ]);
+    return await settledWithin(reader.read(), {
+      description: "SSE stream result",
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+    });
   } finally {
     // swallow-ok: finally cancels the observation reader without masking its original read result or failure
     await reader.cancel().catch(() => undefined);
@@ -240,7 +263,7 @@ const authorizeAllUserConnections = async ({
   sessionIds,
 }: {
   sessionIds: readonly string[];
-}) => new Set(sessionIds);
+}) => ({ member: true, liveSessionIds: new Set(sessionIds) });
 const holdAllSessions: SseSessionLivenessReader = async (sessions) =>
   await Promise.resolve(new Set(sessions.map((session) => session.sessionId)));
 const startTestSse = (): void => {
@@ -324,6 +347,126 @@ const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
  *  An omitted delay is 0, as the timer itself reads it. */
 const startedIntervals = () =>
   setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
+describe("MCP tool projection changes", () => {
+  test("a change from another replica reaches this replica and its own echo does not", async () => {
+    createdClients.length = 0;
+    const delivered: unknown[] = [];
+    registerMcpToolProjectionDelivery((change) => {
+      delivered.push(change);
+    });
+    startTestSse();
+    await settlePendingWork();
+    try {
+      const deliver = createdClients[0]?.messageHandler;
+      expect(deliver).toBeFunction();
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: "api:another-replica",
+          scope: "mcp-tool-projection",
+          userId: "user_1",
+        }),
+      );
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: INSTANCE_ID,
+          scope: "mcp-tool-projection",
+        }),
+      );
+      expect(delivered).toEqual([
+        { organizationId: "org_1", userId: "user_1" },
+      ]);
+    } finally {
+      stopSse();
+      await settlePendingWork();
+    }
+  });
+
+  /**
+   * Announces one change through a publisher whose first `failures` publishes
+   * fail, recording the backoff each retry asked for and each failure the
+   * announcement reported.
+   */
+  const announceThroughFailingPublisher = async (failures: number) => {
+    let failuresRemaining = failures;
+    const published: unknown[] = [];
+    const delays: number[] = [];
+    const publishMcpToolProjectionChange = mock(async (change: unknown) => {
+      if (failuresRemaining > 0) {
+        failuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
+      published.push(change);
+    });
+    createdClients.length = 0;
+    startSse(
+      {
+        sessions: holdAllSessions,
+        user: authorizeAllUserConnections,
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      {
+        createClient: createRedisClientMock,
+        publisher: { ...testPublisher, publishMcpToolProjectionChange },
+        retryWait: async (delayMs) => {
+          delays.push(delayMs);
+          await Promise.resolve();
+        },
+      },
+    );
+    await settlePendingWork();
+    const reported: { phase: unknown; step: unknown }[] = [];
+    setLogSinkForTesting(({ attributes, message }) => {
+      if (message === "sse.mcp_tool_projection_publish_failed") {
+        reported.push({
+          phase: attributes?.["phase"],
+          step: attributes?.["step"],
+        });
+      }
+    });
+    try {
+      await announceMcpToolProjectionChange({ organizationId, userId });
+    } finally {
+      resetLogSinkForTesting();
+      resetFailureObservationsForTesting();
+      stopSse();
+      await settlePendingWork();
+    }
+    return {
+      attempts: publishMcpToolProjectionChange.mock.calls.length,
+      delays,
+      published,
+      reported,
+    };
+  };
+
+  test("a failed cross-replica announcement is retried with backoff until it lands", async () => {
+    const { attempts, delays, published, reported } =
+      await announceThroughFailingPublisher(2);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([{ organizationId, userId }]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+    ]);
+  });
+
+  test("an announcement that keeps failing stops after its last attempt and never rejects", async () => {
+    const { attempts, delays, published, reported } =
+      await announceThroughFailingPublisher(Number.POSITIVE_INFINITY);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+      { phase: "abandoned", step: "attempt_3_of_3" },
+    ]);
+  });
+});
 
 describe("startSse / stopSse lifecycle", () => {
   test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {
@@ -488,6 +631,106 @@ describe("subscribe: already-aborted signal", () => {
 
     const second = await reader.read();
     expect(second.done).toBe(true);
+  });
+});
+
+describe("subscribe: streams per session", () => {
+  test("a session keeps at most the limit of streams on one workspace, newest first", async () => {
+    startTestSse();
+    stopSse();
+    await settlePendingWork();
+
+    const opened = Array.from(
+      { length: LIMITS.sseStreamsPerSession + 2 },
+      () => {
+        const controller = new AbortController();
+        return {
+          controller,
+          reader: subscribeToWorkspace(controller.signal).getReader(),
+        };
+      },
+    );
+    const otherSession = new AbortController();
+    const otherReader = subscribeToWorkspace(
+      otherSession.signal,
+      toSafeId<"user">("user_other_session"),
+    ).getReader();
+
+    broadcastTestEvent(workspaceId, testEvent("within-limit"));
+
+    const results = await Promise.all(
+      opened.map(async ({ reader }) => await reader.read()),
+    );
+    expect(results.slice(0, 2).every(({ done }) => done)).toBe(true);
+    for (const { done, value } of results.slice(2)) {
+      expect(done).toBe(false);
+      expect(new TextDecoder().decode(value)).toContain("within-limit");
+    }
+    const other = await otherReader.read();
+    expect(new TextDecoder().decode(other.value)).toContain("within-limit");
+
+    for (const { controller } of opened) {
+      controller.abort();
+    }
+    otherSession.abort();
+    await settlePendingWork();
+  });
+});
+
+describe("subscribeUser: what each delivery re-checks", () => {
+  test("an app credential's stream holds by membership, a browser session's by its live session", async () => {
+    let member = true;
+    const sessionChecks: (readonly string[])[] = [];
+    startSse(
+      {
+        sessions: holdAllSessions,
+        // A member whose browser sessions have all ended.
+        user: async ({ sessionIds }) => {
+          sessionChecks.push(sessionIds);
+          return await Promise.resolve({ member, liveSessionIds: new Set() });
+        },
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      { createClient: createRedisClientMock, publisher: testPublisher },
+    );
+    stopSse();
+    await settlePendingWork();
+
+    // Both holders share an id, so neither kind can stand in for the other.
+    const holderId = "oauth-client:app";
+    const credential = new AbortController();
+    const credentialReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "credential" },
+      signal: credential.signal,
+      userId,
+    }).getReader();
+    const session = new AbortController();
+    const sessionReader = subscribeUser({
+      organizationId,
+      holder: { id: holderId, kind: "session" },
+      signal: session.signal,
+      userId,
+    }).getReader();
+
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+
+    const delivered = await credentialReader.read();
+    expect(new TextDecoder().decode(delivered.value)).toContain(
+      newNotificationRealtimeEvent().type,
+    );
+    expect((await sessionReader.read()).done).toBe(true);
+    // Only the browser session's id is asked about as a session.
+    expect(sessionChecks).toEqual([[holderId]]);
+
+    member = false;
+    broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
+    expect((await credentialReader.read()).done).toBe(true);
+    expect(sessionChecks.at(-1)).toEqual([]);
+
+    credential.abort();
+    session.abort();
+    await settlePendingWork();
   });
 });
 
@@ -680,10 +923,6 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
         }),
       );
       const received = await observeStreamRead(stream);
-      expect(received).not.toBe("test-deadline");
-      if (received === "test-deadline") {
-        return;
-      }
       expect(decode(received.value)).toContain("publish-rejected");
     } finally {
       controller.abort();
@@ -976,129 +1215,107 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 });
 
 describe("startSse: subscriber attach retry", () => {
-  test("a transient attach failure is retried and the subscriber attaches", async () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
     createdClients.length = 0;
-    // First attach attempt fails; the bounded backoff retry must attach.
-    subscribeFailuresRemaining = 1;
+    subscribeBehavior = "resolve";
+  });
 
+  afterEach(() => {
+    stopSse();
+    subscribeFailuresRemaining = 0;
+    closeFailuresRemaining = 0;
+    jest.useRealTimers();
+  });
+
+  // Each retry must wait its full backoff, then create exactly one client.
+  // Drain the asynchronous attach outcome before advancing the next deadline.
+  const advanceRetries = async (delays: readonly number[]): Promise<void> => {
+    const [delay, ...remaining] = delays;
+    if (delay === undefined) {
+      return;
+    }
+    const clientsBefore = createdClients.length;
+    jest.advanceTimersByTime(delay - 1);
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(clientsBefore);
+    jest.advanceTimersByTime(1);
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(clientsBefore + 1);
+    await advanceRetries(remaining);
+  };
+
+  test("a transient attach failure is retried and the subscriber attaches", async () => {
+    subscribeFailuresRemaining = 1;
     startTestSse();
     await settlePendingWork();
 
-    // The first attempt created a client, failed, and closed it.
     expect(createdClients).toHaveLength(1);
     expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
+    await advanceRetries([200]);
 
-    // Wait past the first backoff delay (200ms) so the retry can run.
-    await Bun.sleep(300);
-    await settlePendingWork();
-
-    // A second client was created for the retry and stayed attached.
-    expect(createdClients).toHaveLength(2);
     const attached = createdClients[1];
     expect(attached?.subscribe).toHaveBeenCalledTimes(1);
     expect(attached?.close).not.toHaveBeenCalled();
 
-    // Stopping now closes the attached retry client exactly once.
     stopSse();
     expect(attached?.close).toHaveBeenCalledTimes(1);
-
     await settlePendingWork();
-    subscribeFailuresRemaining = 0;
   });
 
   test("keeps retrying at the capped interval and recovers after a long outage", async () => {
-    createdClients.length = 0;
-    subscribeBehavior = "resolve";
-    // Fail the 5-step ramp plus 35 steady attempts (40 failures), then attach.
-    // Proves retries continue indefinitely deep into the steady phase, so an
-    // outage far longer than the ramp still self-heals when Redis recovers —
-    // and, with the timer-scheduled driver, without any recursive/awaited
-    // attempt chain building up.
+    // Fail the five-step ramp plus 35 steady attempts, then attach.
     subscribeFailuresRemaining = 40;
-
-    // Zero out the retry backoff so 41 attempts run fast: each attempt's timer
-    // fires on the next macrotask instead of after the real ramp/steady delay.
-    // The drain below uses the real setTimeout captured here.
-    const realSetTimeout = globalThis.setTimeout;
-    // A timer stub that fires the callback promptly, ignoring the delay. Matching
-    // Bun's full overloaded setTimeout type adds no test value, so assert it.
-    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
-      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
-    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-      immediateSetTimeout,
-    );
-
     startTestSse();
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(1);
 
-    // Drain macrotasks until the subscriber attaches; bounded recursion (not a
-    // loop) so no await sits inside a loop and a stuck run cannot hang forever.
-    const drainUntilAttached = async (remaining: number): Promise<void> => {
-      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        realSetTimeout(resolve, 0);
-      });
-      await drainUntilAttached(remaining - 1);
-    };
-    await drainUntilAttached(300);
+    await advanceRetries([
+      200,
+      500,
+      1000,
+      2000,
+      ...Array.from({ length: 36 }, () => 5000),
+    ]);
 
-    // 41 clients: 40 failed attach attempts (well past the 5-step ramp) + the
-    // one that finally subscribed.
     expect(createdClients).toHaveLength(41);
     const attached = createdClients.at(-1);
     expect(attached?.subscribedLive).toBe(true);
     expect(attached?.subscribe).toHaveBeenCalledTimes(1);
     expect(attached?.close).not.toHaveBeenCalled();
 
-    timeoutSpy.mockRestore();
-    subscribeFailuresRemaining = 0;
-    stopSse();
+    // Recovery leaves no retry armed, even after another steady interval.
+    jest.advanceTimersByTime(5000);
     await settlePendingWork();
+    expect(createdClients).toHaveLength(41);
   });
 
   test("a failed attach whose cleanup close() also throws still schedules the next attempt", async () => {
-    createdClients.length = 0;
-    subscribeBehavior = "resolve";
-    // The first 3 attach attempts fail AND their cleanup close() throws. The
-    // retry scheduling must survive the throwing close, so a 4th attempt runs
-    // and attaches — otherwise a single unlucky close would leave the instance
-    // permanently deaf.
     subscribeFailuresRemaining = 3;
     closeFailuresRemaining = 3;
-
-    const realSetTimeout = globalThis.setTimeout;
-    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
-      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
-    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-      immediateSetTimeout,
-    );
-
     startTestSse();
+    await settlePendingWork();
+    expect(createdClients).toHaveLength(1);
 
-    const drainUntilAttached = async (remaining: number): Promise<void> => {
-      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        realSetTimeout(resolve, 0);
-      });
-      await drainUntilAttached(remaining - 1);
-    };
-    await drainUntilAttached(100);
+    await advanceRetries([200, 500, 1000]);
 
-    // 4 clients: 3 failed attempts (each whose close() threw) + the attach.
     expect(createdClients).toHaveLength(4);
     expect(createdClients.at(-1)?.subscribedLive).toBe(true);
-    // All three throwing closes were consumed, proving they actually ran.
     expect(closeFailuresRemaining).toBe(0);
+  });
 
-    timeoutSpy.mockRestore();
-    subscribeFailuresRemaining = 0;
-    closeFailuresRemaining = 0;
-    stopSse();
+  test("stopping during backoff cancels the pending attach attempt", async () => {
+    subscribeFailuresRemaining = 1;
+    startTestSse();
     await settlePendingWork();
+    expect(createdClients).toHaveLength(1);
+
+    jest.advanceTimersByTime(199);
+    stopSse();
+    jest.advanceTimersByTime(5000);
+    await settlePendingWork();
+
+    expect(createdClients).toHaveLength(1);
+    expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
   });
 });

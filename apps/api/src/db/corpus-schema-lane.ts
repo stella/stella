@@ -12,7 +12,12 @@
  * The lane removes it. Every corpus batch transaction holds the lane SHARED
  * for its duration: `createIngestionDb` (the write boundary every worker
  * goes through) and the operator scripts' write door both run their
- * transactions through `runUnderCorpusSchemaLane`. The migrate entrypoint
+ * transactions through `runUnderCorpusSchemaLane`. So do the readers on the
+ * API's root pool that hold a corpus table for seconds while another is
+ * almost always in flight: the public sitemap shard read
+ * (`caseLawPublicReadUnderSchemaLane`, whose route answers a refusal with
+ * a retryable 503) and the scheduled sitemap and coverage refreshes, which
+ * yield to a later run. The migrate entrypoint
  * takes the lane EXCLUSIVE for the schema migrations
  * (`CORPUS_SCHEMA_LANE_LOCK_SQL`), which waits for the batches in flight;
  * once it is granted no corpus transaction is open, so DDL wins its table
@@ -61,6 +66,15 @@ const KEY_SQL = `hashtext('${CORPUS_SCHEMA_LANE.domain}'), hashtext('${CORPUS_SC
  */
 export const CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL = `SELECT pg_try_advisory_xact_lock_shared(${KEY_SQL}) AS "granted"`;
 
+/**
+ * Whether a `pg_locks` row is this lane held SHARED: the lock a batch holds
+ * for its whole transaction. A two-`int4` advisory key is the row's `classid`
+ * and `objid` (`objsubid` 2), each `hashtext` half cast to `oid`; shared mode
+ * is `ShareLock`. The lane held exclusive (`ExclusiveLock`) does not match.
+ * Reads the row's own columns, unqualified.
+ */
+export const CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL = `(locktype = 'advisory' AND mode = 'ShareLock' AND objsubid = 2 AND classid = hashtext('${CORPUS_SCHEMA_LANE.domain}')::oid AND objid = hashtext('${CORPUS_SCHEMA_LANE.lane}')::oid)`;
+
 /** How long a refused batch sleeps, outside any transaction, before trying again. */
 export const CORPUS_SCHEMA_LANE_RETRY_MS = 250;
 
@@ -85,15 +99,18 @@ export const CORPUS_SCHEMA_LANE_UNLOCK_SQL = `SELECT pg_advisory_unlock(${KEY_SQ
  * The exclusive wait is a long wait by design: it drains every shared holder,
  * and one corpus batch may run for minutes. A server statement timeout would
  * cancel the wait before the longest batch ends and fail the upgrade without
- * touching a table, so the lock statement runs with the timeout off, and the
- * session default is restored once the lane is held so the upgrade's own
- * statements keep it. Run in order on the one reserved connection.
+ * touching a table. A lock timeout cancels it the same way: the online phase
+ * leaves a one-second one on the session, and a deferred run takes the lane
+ * again on that session. So the lock statement runs with both timeouts off,
+ * and the session defaults are restored once the lane is held so the
+ * upgrade's own statements keep them. Run in order on the one reserved
+ * connection.
  */
-export const CORPUS_SCHEMA_LANE_LOCK_STATEMENTS = [
-  "SET statement_timeout = '0'",
-  CORPUS_SCHEMA_LANE_LOCK_SQL,
-  "RESET statement_timeout",
-] as const;
+export const CORPUS_SCHEMA_LANE_LOCK_STATEMENTS = {
+  lift: ["SET statement_timeout = '0'", "SET lock_timeout = '0'"],
+  lock: CORPUS_SCHEMA_LANE_LOCK_SQL,
+  restore: ["RESET statement_timeout", "RESET lock_timeout"],
+} as const;
 
 /** Whether a try-lock result (either driver shape) reports the lane granted. */
 export const isCorpusSchemaLaneGranted = (result: unknown): boolean => {

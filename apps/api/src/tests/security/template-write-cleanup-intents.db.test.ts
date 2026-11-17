@@ -11,7 +11,7 @@ import { bufferObjectCleanupIntents, templates } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
@@ -20,6 +20,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -68,7 +69,7 @@ const readInsertPolicyExpression = async (): Promise<string> => {
 };
 
 const reserve = async (objectKey: string) =>
-  await reserveObjectCleanupIntents({
+  await reserveObjectCleanupIntentsForKey({
     objectKey,
     organizationId,
     safeDb: scopedSafeDb,
@@ -190,10 +191,8 @@ afterAll(async () => {
     .where(eq(bufferObjectCleanupIntents.organizationId, organizationId));
   await testDb.delete(templates).where(eq(templates.id, templateId));
   await testDb.delete(templates).where(eq(templates.id, otherTemplateId));
-  await testDb.delete(organization).where(eq(organization.id, organizationId));
-  await testDb
-    .delete(organization)
-    .where(eq(organization.id, otherOrganizationId));
+  await deleteOrganizationsForTest(testDb, [organizationId]);
+  await deleteOrganizationsForTest(testDb, [otherOrganizationId]);
   await testDb.delete(user).where(eq(user.id, userId));
   await testDb.delete(user).where(eq(user.id, otherUserId));
   await releaseTestDb();

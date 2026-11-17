@@ -49,7 +49,9 @@
     "flowRunAwaitingApproval": "Un flux de travail attend votre approbation",
     "flowRunCompleted": "Un flux de travail est terminé",
     "flowRunFailed": "Un flux de travail a échoué",
-    "mention": "Vous avez été mentionné dans un commentaire"
+    "localRunLimitReset": "L’agent de code de votre ordinateur peut reprendre votre discussion",
+    "mention": "Vous avez été mentionné dans un commentaire",
+    "taskAssigned": "Une tâche vous a été attribuée"
   },
   "reportExportStatus": {
     "action": "Ouvrir stella",

@@ -77,7 +77,7 @@ const playbook: PinnedPlaybook = {
   definitionId: toSafeId<"playbookDefinition">(Bun.randomUUIDv7()),
   versionId: toSafeId<"playbookDefinitionVersion">(Bun.randomUUIDv7()),
   provenance: "approved",
-  definitionSnapshot: { name: "Approved playbook", positions },
+  definitionSnapshot: { name: "Approved playbook", positions, scope: null },
 };
 
 const reference: PinnedReference = {
@@ -135,6 +135,7 @@ describe("planReviewRun", () => {
           definitionSnapshot: {
             name: "Positions confirmed for this review",
             positions: { version: 3, items: [] },
+            scope: null,
           },
         },
         references: [],

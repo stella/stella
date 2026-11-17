@@ -5,7 +5,12 @@
  * metric from its final answer.
  */
 import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
-import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+import {
+  classifyFailure,
+  failureGradeOf,
+  sanitizeErrorAttributesForOutput,
+} from "@stll/errors";
+import type { FailureGrade, FailureReason } from "@stll/errors";
 
 import type { RequestContext } from "@/api/http/context";
 import { setResponseHeaders } from "@/api/http/headers";
@@ -24,17 +29,23 @@ import {
   httpFailureAnswer,
   httpFailureBody,
 } from "@/api/lib/errors/http-failure-answer";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
-import { identityFields } from "@/api/lib/observability/failure";
+import type { FailureGrading } from "@/api/lib/observability/failure";
+import { failureSink, identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import {
+  answeredFailureSeverity,
+  countFailureObservation,
   legacyChannelOf,
   observeShadow,
-  observeUnobserved5xx,
   SHADOW_SINKS,
 } from "@/api/lib/observability/failure-shadow";
 import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
+import { captureUnobservedAnswerFailure } from "@/api/lib/observability/observe-failure";
+import { NO_ERROR_IDENTITY } from "@/api/lib/observability/release-failures";
 import {
   claimRequestRecord,
   getMountedRequestRoute,
@@ -82,7 +93,7 @@ const buildRequestLogDetails = ({
     statusCode,
     ...(failureKind === undefined ? {} : { failureKind }),
     ...(errorType === undefined ? {} : { errorType }),
-    ...(reqCtx?.requestId === undefined ? {} : { requestId: reqCtx.requestId }),
+    ...(reqCtx?.requestId !== undefined ? { requestId: reqCtx.requestId } : {}),
     ...(reqCtx?.clientAddressSource
       ? { clientAddressSource: reqCtx.clientAddressSource }
       : {}),
@@ -107,7 +118,6 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const logged = shouldLogRequest(ctx.path);
   const captured = statusCode >= 500;
   const routeName = getRouteName(ctx.route);
-  const failedSeverity = captured ? "ERROR" : "WARN";
   const scope = {
     type: "request",
     method: ctx.request.method,
@@ -132,10 +142,13 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
-    channel: legacyChannelOf({
-      severity: logged ? failedSeverity : undefined,
-      capture: captured,
-    }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: logged
+          ? answeredFailureSeverity(statusCode, grade)
+          : undefined,
+        capture: captured,
+      }),
     request: ctx.request,
     route: routeName,
     requestState: {
@@ -162,7 +175,7 @@ const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
         : {}),
       failure: grading,
       message: "request.failed",
-      severity: failedSeverity,
+      severity: answeredFailureSeverity(statusCode, grading?.grade),
     });
     logger.request({
       durationMs: 0,
@@ -214,20 +227,100 @@ export const errorBoundary: Middleware = async (ctx, inner) => {
   }
 };
 
+const COMPLETION_SINK = failureSink({
+  event: "request.completed",
+  expected: [],
+});
+
+// A 5xx answered with no failure observed on the way to it: built outside the
+// answer owners (`server-error-answer.ts`), so its cause was never recorded.
+const UNOBSERVED_5XX_GRADING = {
+  grade: failureGradeOf("unobserved_5xx"),
+  reason: "unobserved_5xx",
+  rule: "unobserved",
+  evidenceDepth: 0,
+} as const satisfies FailureGrading;
+
+const UNOBSERVED_5XX_POLICY = failureOutputPolicy(UNOBSERVED_5XX_GRADING.grade);
+
+type CompletionFailure = {
+  readonly grade: FailureGrade;
+  readonly reason: FailureReason;
+  /** Set when the record follows the grade's policy instead of shadowing it. */
+  readonly policy?: "grade";
+};
+
+/**
+ * Grade a 5xx no observation accounts for by the owner's policy rather than
+ * in shadow: the record takes the grade's severity, and the answer is
+ * captured, so the gap reports itself with its route and request id.
+ */
+const observeUnobserved5xx = (
+  request: Request,
+  route: string,
+  statusCode: number,
+): CompletionFailure => {
+  countFailureObservation({
+    sink: COMPLETION_SINK,
+    grading: UNOBSERVED_5XX_GRADING,
+    channel: legacyChannelOf(UNOBSERVED_5XX_POLICY),
+    degradation: undefined,
+    route,
+    identity: NO_ERROR_IDENTITY,
+  });
+  if (UNOBSERVED_5XX_POLICY.capture) {
+    captureUnobservedAnswerFailure(
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "A server error answer was built without its cause",
+        }),
+        UNOBSERVED_5XX_GRADING.reason,
+      ),
+      {
+        scope: {
+          type: "request",
+          method: request.method,
+          routeTemplate: route,
+        },
+        request,
+        context: {
+          route,
+          method: request.method,
+          statusCode: String(statusCode),
+        },
+        observation: UNOBSERVED_5XX_GRADING,
+      },
+    );
+  }
+  return { ...UNOBSERVED_5XX_GRADING, policy: "grade" };
+};
+
 // The completion record grades its answer by the failure the request
-// observed. A 5xx with none observed (a handler that returned the status
-// itself) is counted as such, at the severity it always had.
-const completionFailure = (statusCode: number, route: string | undefined) =>
+// observed, or, for a 5xx with none, as an unobserved 5xx.
+const completionFailure = (
+  request: Request,
+  statusCode: number,
+  route: string | undefined,
+): CompletionFailure | undefined =>
   getRequestFailure() ??
-  (statusCode >= 500 ? observeUnobserved5xx(getRouteName(route)) : undefined);
+  (statusCode >= 500
+    ? observeUnobserved5xx(request, getRouteName(route), statusCode)
+    : undefined);
 
 type CompletionSeverity = "ERROR" | "WARN" | "INFO";
 
-const severityFor = (statusCode: number): CompletionSeverity => {
-  if (statusCode >= 500) {
-    return "ERROR";
+const severityFor = (
+  statusCode: number,
+  failure: CompletionFailure | undefined,
+): CompletionSeverity => {
+  if (failure?.policy === "grade") {
+    return failureOutputPolicy(failure.grade).severity;
   }
-  return statusCode >= 400 ? "WARN" : "INFO";
+  if (statusCode >= 400) {
+    return answeredFailureSeverity(statusCode, failure?.grade);
+  }
+  return "INFO";
 };
 
 /**
@@ -280,7 +373,9 @@ export const requestCompletion: Middleware = async (ctx, inner) => {
     const durationMs = elapsedMs();
     const statusCode = response.status;
     const failure =
-      statusCode >= 400 ? completionFailure(statusCode, ctx.route) : undefined;
+      statusCode >= 400
+        ? completionFailure(ctx.request, statusCode, ctx.route)
+        : undefined;
     if (failure?.reason !== "limiter_store_unavailable") {
       logger.request({
         ...buildRequestLogDetails({
@@ -291,7 +386,7 @@ export const requestCompletion: Middleware = async (ctx, inner) => {
         }),
         ...(failure === undefined ? {} : { failure }),
         message: "request.completed",
-        severity: severityFor(statusCode),
+        severity: severityFor(statusCode, failure),
       });
     }
     emitRequestDurationMetric({

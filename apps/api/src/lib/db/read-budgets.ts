@@ -29,6 +29,18 @@ export type ScheduledJobReadBudgetId = {
   ]: (typeof READ_BUDGETS)[Id]["surface"] extends "scheduled-job" ? Id : never;
 }[ReadBudgetId];
 
+/** The read pages a budget allows: per call for a statement, per run for a job. */
+export const readBudgetPages = (id: ReadBudgetId) => {
+  const budget = READ_BUDGETS[id];
+  return budget.surface === "scheduled-job" ? budget.reads.pages : budget.pages;
+};
+
+/** SELECT-callable routines whose effects make their whole statement a write. */
+export const QUERY_PERF_WRITING_FUNCTIONS: ReadonlySet<string> = new Set([
+  "ensure_case_law_provision_extraction_state",
+  "run_case_law_provision_scope_transition_page",
+]);
+
 /**
  * Pages one run of a scheduled job may read outside the shared load governor.
  * Work that needs more per run batches through `backfill-runtime`, which

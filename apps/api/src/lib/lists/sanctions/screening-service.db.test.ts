@@ -88,6 +88,12 @@ const FRESH_NOW = new Date(VERIFIED_AT.getTime() + HOUR_MS);
 // Past the 48-hour limit most lists carry, within the 14 days of the Czech one.
 const STALE_NOW = new Date(VERIFIED_AT.getTime() + 72 * HOUR_MS);
 const TRUNCATED_ENTRIES = SANCTIONS_MATCH_LIMIT + 5;
+/** The fields these tests read from an emitted metric line. */
+type MetricLine = {
+  SanctionsScreeningListCompletion?: unknown;
+  source?: unknown;
+  outcome?: unknown;
+};
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -436,7 +442,10 @@ describe("sanctions screening service", () => {
         // A capped scan that found matches stays a possible match.
         expect(result.unwrap().status).toBe("possible-match");
         const metrics = metricLines
-          .map((line) => JSON.parse(line))
+          .map((line) => {
+            const metric: MetricLine = JSON.parse(line);
+            return metric;
+          })
           .filter(({ SanctionsScreeningListCompletion }) =>
             Number.isInteger(SanctionsScreeningListCompletion),
           );
@@ -1984,7 +1993,10 @@ test("a bounded scan with no matches is incomplete and keeps its screened editio
       expect(list.editionId).not.toBeNull();
       expect(list.verifiedAt).not.toBeNull();
     }
-    const metrics = metricLines.map((line) => JSON.parse(line));
+    const metrics = metricLines.map((line) => {
+      const metric: MetricLine = JSON.parse(line);
+      return metric;
+    });
     expect(metrics).toHaveLength(sanctionsSourceIds().length);
     expect(metrics.map(({ source, outcome }) => [source, outcome])).toEqual(
       sanctionsSourceIds().map((source) => [source, "incomplete"]),

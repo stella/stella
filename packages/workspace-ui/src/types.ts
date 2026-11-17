@@ -103,6 +103,58 @@ export type FieldContent =
       citation?: string;
       jurisdiction?: string;
       sourceType?: string;
+    }
+  | {
+      /**
+       * Typed records from a data source or a structured AI answer. The
+       * column's schema names the fields; the cell holds their values.
+       */
+      type: "record";
+      version: 1;
+      schemaVersion: number;
+      state: RecordFieldState;
+    };
+
+export type RecordFieldScalar =
+  string | number | boolean | { amountMinor: number; currency: string } | null;
+
+export type RecordFieldRecord = Record<string, RecordFieldScalar>;
+
+export type RecordFieldProvenance = {
+  url: string;
+  retrievedAt: string;
+  sha256: string;
+  sourceDataAsOf?: string;
+};
+
+export type RecordFieldState =
+  | {
+      /** The tool refused its input; the source was not called. */
+      status: "input-needs-review";
+      input: RecordFieldRecord;
+      issues: {
+        key: string;
+        code: "missing" | "invalid" | "uncertain";
+        message: string;
+      }[];
+    }
+  | {
+      status: "not-found";
+      input: RecordFieldRecord;
+      provenance: RecordFieldProvenance;
+    }
+  | {
+      status: "resolved";
+      input?: RecordFieldRecord;
+      provenance?: RecordFieldProvenance;
+      result:
+        | { kind: "one"; record: RecordFieldRecord }
+        | {
+            /** Ambiguous for `candidates` until a person selects one. */
+            kind: "many" | "candidates";
+            records: RecordFieldRecord[];
+            selected: number | null;
+          };
     };
 
 const fieldContentTypes = [
@@ -118,6 +170,7 @@ const fieldContentTypes = [
   "money",
   "person",
   "clip",
+  "record",
 ] as const;
 
 type CompleteFieldContentTypes<T extends readonly FieldContent["type"][]> =
@@ -138,7 +191,9 @@ export type WorkspaceFieldContent = FieldContent & { truncated?: true };
  */
 export type GenericProperty = {
   content:
-    | { type: "file" | "text" | "date" | "int" | "money" | "person" }
+    | {
+        type: "file" | "text" | "date" | "int" | "money" | "person" | "record";
+      }
     | {
         type: "single-select" | "multi-select";
         options: {

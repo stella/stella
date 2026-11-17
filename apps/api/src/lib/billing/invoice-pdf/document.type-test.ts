@@ -10,11 +10,11 @@ import { buildInvoiceTemplateData } from "./typst/data";
 
 const renderWithoutPaymentSnapshot = async (
   loaded: InvoiceDocumentSource,
-  invoice: Omit<RenderInvoicePdfOptions, "paymentAmountMinor">,
+  invoice: Omit<RenderInvoicePdfOptions, "settlement">,
 ) => {
-  // @ts-expect-error Document rendering requires the caller's remaining balance.
+  // @ts-expect-error Document rendering requires the caller's payment ledger.
   const rendered = await renderInvoiceDocumentPdf({ loaded });
-  // @ts-expect-error Mapping document totals cannot choose a payment amount.
+  // @ts-expect-error Mapping document totals cannot omit the payment ledger.
   invoiceDocumentRenderOptions(loaded);
   // @ts-expect-error Templates cannot silently fall back to the gross total.
   const templateData = buildInvoiceTemplateData(invoice);

@@ -1,0 +1,6 @@
+{
+  "add-column": "The nullable text column has no default, so adding it changes catalog metadata only and rewrites no decision rows; lock acquisition is bounded by 1s and the statement by 30s.",
+  "add-constraint": "The CHECK is added NOT VALID, so PostgreSQL records it without scanning existing decision rows and enforces it only on new writes; validation runs later under SHARE UPDATE EXCLUSIVE, after the backfill derives every row. Lock acquisition is bounded by 1s and the statement by 30s.",
+  "create-trigger": "Creating the row trigger updates catalog metadata only and scans no decision rows; lock acquisition is bounded by 1s and the statement by 30s.",
+  "replace-view": "The two decision views re-expand their existing SELECT * definitions to include parsed_input_state while preserving the redaction and listing filters; replacement updates view metadata without scanning corpus rows, under 1s lock_timeout and 30s statement_timeout."
+}

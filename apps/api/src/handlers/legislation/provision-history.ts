@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -187,12 +188,15 @@ export const readProvisionHistoryHandler = async ({
     limit: LIMITS.legislationProvisionReadConcurrency,
     operation: async (version) =>
       extractProvisionText(
-        await readVersionBlocks({
-          surface,
-          row: version,
-          legislationDb,
-          step: HISTORY_READ_STEP,
-        }),
+        {
+          blocks: await readVersionBlocks({
+            surface,
+            row: version,
+            legislationDb,
+            step: HISTORY_READ_STEP,
+          }),
+          scheme: statuteAnchorSchemeFor(version.country),
+        },
         anchor,
       ),
   });

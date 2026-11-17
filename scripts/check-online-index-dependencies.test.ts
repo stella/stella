@@ -7,7 +7,10 @@ import {
   onlineIndexColumnTarget,
   onlineUniqueIndexTarget,
 } from "../apps/api/src/db/online-unique-indexes";
-import { checkOnlineIndexDependencySource } from "./check-online-index-dependencies";
+import {
+  checkOnlineIndexDependencySource,
+  PENDING_INDEX_DEPENDENCY_REASON,
+} from "./check-online-index-dependencies";
 
 const index = {
   name: "chat_turns_org_run_id_uidx",
@@ -76,6 +79,20 @@ test("detects namespace dependencies in schema modules too", () => {
   expect(findings.at(0)?.reason).toBe(
     `depends on newest migration ${index.introducedBy}`,
   );
+});
+
+test("refuses a dependency on an index its entry still leaves pending", () => {
+  const findings = checkOnlineIndexDependencySource({
+    file: "apps/api/src/handlers/example.ts",
+    source:
+      'import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "../db/online-unique-indexes"; query.onConflictDoNothing({ target: onlineUniqueIndexTarget(CHAT_TURNS_ORG_RUN_ID_UIDX) });',
+    indexes: [{ ...index, introducedBy: "20261001000000_older" }],
+    newestMigration: "20261017000000_latest",
+    pendingIndexes: new Set([index.name]),
+  });
+  expect(findings.map(({ reason }) => reason)).toEqual([
+    PENDING_INDEX_DEPENDENCY_REASON,
+  ]);
 });
 
 test("detects nested expression conflict targets", () => {
@@ -199,4 +216,26 @@ error.constraint_name === ACTIVE_INDEX;`,
     newestMigration: index.introducedBy,
   });
   expect(findings.map(({ line }) => line)).toEqual([2]);
+});
+
+test("entry modules require exported constants for unique index dependencies", () => {
+  const source = `export default { type: "replacements", values: [{ replacementNames: ["${index.name}"] }] };`;
+  const options = {
+    file: "apps/api/src/db/online-migration-entries/replacements-example.ts",
+    indexes: [{ ...index, introducedBy: "20261016000000_prior" }],
+    newestMigration: index.introducedBy,
+  };
+  expect(
+    checkOnlineIndexDependencySource({ ...options, source }).map(
+      ({ reason }) => reason,
+    ),
+  ).toEqual(["raw index name; use the exported index constant"]);
+  const named = source.replace(
+    `"${index.name}"`,
+    "ONLINE_UNIQUE_INDEX_NAMES.CHAT_TURNS_ORG_RUN_ID_UIDX",
+  );
+  expect(named).not.toBe(source);
+  expect(
+    checkOnlineIndexDependencySource({ ...options, source: named }),
+  ).toEqual([]);
 });

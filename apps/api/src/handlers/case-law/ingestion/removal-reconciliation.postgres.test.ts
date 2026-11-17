@@ -9,7 +9,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawBrowseFacetCounts,
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawCitations,
@@ -28,6 +27,7 @@ import {
   caseLawDecisionSupplements,
   caseLawIndexJobs,
   caseLawJudges,
+  caseLawPopulationCountsLive,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawProvisionExtractionScopes,
@@ -600,13 +600,12 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ),
       ).not.toEqual([]);
-      await db.insert(caseLawBrowseFacetCounts).values({
-        kind: "country",
-        country: "GBR",
-        sourceId,
-        value: "GBR",
-        total: 1,
-      });
+      expect(
+        await db
+          .select()
+          .from(caseLawPopulationCountsLive)
+          .where(eq(caseLawPopulationCountsLive.sourceId, sourceId)),
+      ).not.toEqual([]);
       await db.insert(caseLawSourceArrivals).values({
         sourceId,
         addedLastWeek: 1,
@@ -1021,9 +1020,9 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual([]);
       expect(
         await db
-          .select({ sourceId: caseLawBrowseFacetCounts.sourceId })
-          .from(caseLawBrowseFacetCounts)
-          .where(eq(caseLawBrowseFacetCounts.sourceId, sourceId)),
+          .select({ sourceId: caseLawPopulationCountsLive.sourceId })
+          .from(caseLawPopulationCountsLive)
+          .where(eq(caseLawPopulationCountsLive.sourceId, sourceId)),
       ).toEqual([]);
       expect(
         await db

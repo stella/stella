@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -13,6 +12,8 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
+import { OPAQUE_ORGANIZATION_SLUG_PATTERN } from "@stll/auth-model";
+import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -33,7 +34,7 @@ import { oauthClient, organization, user } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { withoutContentEncryptionKeyForTesting } from "@/api/env-content-encryption";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -52,8 +53,13 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -61,15 +67,6 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 // stubbed `globalThis.fetch` for the issuer's well-known URL. A
 // trusted-issuer row is inserted so the (empty-by-default) allow-list
 // accepts it; every other issuer stays rejected.
-
-let priorStorageSetting = false;
-beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
-});
 
 type Json = Record<string, unknown>;
 
@@ -99,13 +96,13 @@ let issuerPublicJwk: JWK;
 const realFetch = globalThis.fetch;
 
 const enableFeature = () => {
-  env.FEATURE_AGENT_ID_JAG = true;
+  testState.setConfig("FEATURE_AGENT_ID_JAG", true);
 };
 const disableFeature = () => {
-  env.FEATURE_AGENT_ID_JAG = false;
+  testState.setConfig("FEATURE_AGENT_ID_JAG", false);
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   await initAgentAuthTestDb();
   const { privateKey, publicKey } = await generateKeyPair("ES256", {
     extractable: true,
@@ -113,7 +110,10 @@ beforeAll(async () => {
   issuerPrivateKey = privateKey;
   issuerKid = "test-issuer-key";
   issuerPublicJwk = { ...(await exportJWK(publicKey)), kid: issuerKid };
+});
 
+beforeEach(() => {
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -134,21 +134,19 @@ beforeAll(async () => {
     }
     return await realFetch(input, init);
   };
-  globalThis.fetch = asFetchMock(fetchStub);
+  testFetchState.set(asFetchMock(fetchStub));
 });
 
 afterAll(async () => {
   await server.stop();
-  globalThis.fetch = realFetch;
-  disableFeature();
   await releaseAgentAuthTestDb();
 });
 
 afterEach(async () => {
+  testFetchState.restore();
   await rootDb
     .delete(agentTrustedIssuer)
     .where(eq(agentTrustedIssuer.issuer, ISSUER));
-  disableFeature();
 });
 
 const trustIssuer = async (attestationPolicy?: unknown) => {
@@ -239,7 +237,10 @@ const decodeJwt = (jwt: string): Json => {
   if (!segment) {
     throw new Error("malformed jwt");
   }
-  return JSON.parse(Buffer.from(segment, "base64url").toString());
+  const payload: Json = JSON.parse(
+    Buffer.from(segment, "base64url").toString(),
+  );
+  return payload;
 };
 
 /** Create a verified user with a password-less email, plus an org. */
@@ -351,8 +352,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
       sub: `sub-stepup-${Bun.randomUUIDv7()}`,
     };
     await createHumanSession(stepUpIdentity.email);
-    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    const restoreKey = withoutContentEncryptionKeyForTesting();
     try {
       for (const identity of [readyIdentity, stepUpIdentity]) {
         const response = await postIdentity(
@@ -365,7 +365,7 @@ describe("agent-auth ID-JAG storage configuration", () => {
         expect(body["claim_token"]).toBeUndefined();
       }
     } finally {
-      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+      restoreKey();
     }
   });
 });
@@ -456,9 +456,7 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
         .where(eq(organization.id, delegation.organizationId))
         .limit(1)
     ).at(0);
-    expect(createdOrganization?.slug).toMatch(
-      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-    );
+    expect(createdOrganization?.slug).toMatch(OPAQUE_ORGANIZATION_SLUG_PATTERN);
   });
 });
 
@@ -636,7 +634,7 @@ describe("agent-auth ID-JAG full exchange", () => {
     enableFeature();
     await trustIssuer();
     for (const mode of ["error", "no_change"] as const) {
-      env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+      testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
       const assertion = await mintIdJag({
         email: `idjag-deferred-${Bun.randomUUIDv7()}@external.test`,
         sub: `sub-deferred-${Bun.randomUUIDv7()}`,
@@ -674,7 +672,7 @@ describe("agent-auth ID-JAG full exchange", () => {
         records.push(record);
       });
       try {
-        env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+        testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
         const token = await postToken({
           grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
           assertion: String(identityBody["identity_assertion"]),

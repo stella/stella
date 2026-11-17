@@ -8,7 +8,7 @@ import {
   toChatResourceHref,
   toChatSourceCitationHref,
 } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -30,7 +30,8 @@ describe("chat ref registry", () => {
     const contactRef = registry.toContactRef(contactId);
     const refs = [matterRef, entityRef, propertyRef, contactRef];
 
-    fc.assert(
+    assertProperty(
+      "never infers ref semantics from structured field names",
       fc.property(
         fc.constantFrom(...refs),
         fc.constantFrom(
@@ -51,7 +52,7 @@ describe("chat ref registry", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -284,7 +285,8 @@ describe("chat ref registry", () => {
   test("mints distinct refs for arbitrary opaque entity identity tuples", () => {
     const segment = fc.stringMatching(/^[a-z0-9]{1,12}$/u);
 
-    fc.assert(
+    assertProperty(
+      "mints distinct refs for arbitrary opaque entity identity tuples",
       fc.property(segment, segment, segment, (a, b, c) => {
         const registry = createChatRefRegistry();
         const firstTarget = {
@@ -304,7 +306,7 @@ describe("chat ref registry", () => {
           Result.ok([firstTarget, secondTarget]),
         );
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

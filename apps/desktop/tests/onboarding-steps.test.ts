@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  INTRODUCED_FEATURES,
   ONBOARDING_NAVIGATION,
   ONBOARDING_STEPS,
 } from "../src/onboarding/onboarding-types";
@@ -12,6 +13,12 @@ describe("native onboarding contract", () => {
   test("steps match the native enum in flow order", () => {
     expect(rustEnumVariants(NATIVE_ONBOARDING, "Step")).toEqual([
       ...ONBOARDING_STEPS,
+    ]);
+  });
+
+  test("introduced features match the native enum", () => {
+    expect(rustEnumVariants(NATIVE_ONBOARDING, "Introduction")).toEqual([
+      ...INTRODUCED_FEATURES,
     ]);
   });
 

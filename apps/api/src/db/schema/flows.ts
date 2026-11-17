@@ -18,6 +18,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { stateFieldsCheck } from "../state-fields";
 import {
   jsonb,
   organization,
@@ -113,6 +114,28 @@ export const flowRuns = p.pgTable(
         sql`, `,
       )})`,
     ),
+    // A pending run's `started_at` is still written at enqueue by older
+    // writers, so only the states after it constrain the column. Terminal
+    // states leave `error` open: settlement races fixed in #4596 left a
+    // completed or cancelled run holding the error of a failure it overwrote.
+    stateFieldsCheck({
+      name: "flow_runs_state_fields_check",
+      state: table.status,
+      rules: {
+        pending: { absent: [table.error, table.finishedAt] },
+        running: {
+          required: [table.startedAt],
+          absent: [table.error, table.finishedAt],
+        },
+        awaiting_review: {
+          required: [table.startedAt],
+          absent: [table.error, table.finishedAt],
+        },
+        completed: { required: [table.finishedAt] },
+        failed: { required: [table.error, table.finishedAt] },
+        cancelled: { required: [table.finishedAt] },
+      },
+    }),
     p
       .index("flow_runs_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc(), table.id),
@@ -170,6 +193,33 @@ export const flowRunSteps = p.pgTable(
         sql`, `,
       )})`,
     ),
+    // `review_task_entity_id` is left out: deleting the task nulls it. Terminal
+    // steps leave `error` open for the same settlement races as their runs.
+    stateFieldsCheck({
+      name: "flow_run_steps_state_fields_check",
+      state: table.status,
+      rules: {
+        pending: {
+          absent: [
+            table.startedAt,
+            table.finishedAt,
+            table.error,
+            table.output,
+          ],
+        },
+        running: {
+          required: [table.startedAt],
+          absent: [table.finishedAt, table.error],
+        },
+        awaiting_review: {
+          required: [table.startedAt],
+          absent: [table.finishedAt, table.error],
+        },
+        completed: { required: [table.finishedAt] },
+        failed: { required: [table.error, table.finishedAt] },
+        skipped: { required: [table.finishedAt] },
+      },
+    }),
     p
       .foreignKey({
         columns: [table.runId, table.workspaceId],

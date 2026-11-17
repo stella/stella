@@ -1,4 +1,5 @@
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
+import type { PublisherCensus } from "@/api/lib/case-law/completeness-census-contract";
 
 type CoverageResponse = Exclude<
   Awaited<ReturnType<typeof readCaseLawCoverageHandler>>,
@@ -7,10 +8,32 @@ type CoverageResponse = Exclude<
 
 const asOf = "2026-10-01T12:00:00.000Z";
 const storedAsOf = "2026-09-30T12:00:00.000Z";
+
+const publisherCensus = {
+  type: "unknown",
+  measurement: {
+    aggregateUnit: "slice-memberships",
+    verdict: "unmeasured",
+    scopeStatus: "partial-publisher",
+    outcome: "none-exposed",
+    evidenceRef: "synthetic-fixture",
+    measuredSlices: 0,
+    expectedSlices: null,
+    shortSlices: 0,
+    publisher: null,
+    stored: 0,
+    withText: 0,
+    observedAt: null,
+    years: [],
+    worstSlices: [],
+  },
+} satisfies PublisherCensus;
 const base = {
+  censusVerdict: "unmeasured",
   health: "current",
   stored: { decisions: 150, asOf: storedAsOf },
   addedLastWeek: 5,
+  unreadParts: [],
   completeness: {
     measuredSources: 1,
     stored: 150,
@@ -32,6 +55,7 @@ const base = {
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
+      publisherCensus,
       storedDecisions: 150,
       publishedDecisions: 100,
       courts: [{ court: "Nejvyšší soud", decisions: 100 }],
@@ -48,6 +72,7 @@ const base = {
 /** The answer as the refresh stores it. */
 export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
   generatedAt: asOf,
+  unreadParts: [],
   provisionProcessing: [],
   totals: {
     addedLastWeek: 10,
@@ -59,6 +84,7 @@ export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
       ...base,
       country: "CZE",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       searchable: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -91,6 +117,7 @@ export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
       stored: { decisions: 0, asOf: null },
       country: "EU",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       searchable: 0,
       decisionYearFrom: null,
       decisionYearTo: null,
@@ -114,6 +141,7 @@ const expectedSources = [
     decisionYearFrom: 1993,
     decisionYearTo: 2026,
     pendingTextCount: 3,
+    publisherCensus,
     knownGaps: {
       type: "not_reconciled",
       reason: "The source listing is not date-sliced.",
@@ -128,6 +156,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
     {
       country: "CZE",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       decisions: 100,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -141,6 +170,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
     {
       country: "SVK",
       availability: "in-preparation",
+      censusVerdict: "unmeasured",
       decisions: 150,
       decisionYearFrom: null,
       decisionYearTo: null,
@@ -150,6 +180,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
     {
       country: "EU",
       availability: "searchable",
+      censusVerdict: "unmeasured",
       decisions: 0,
       decisionYearFrom: null,
       decisionYearTo: null,

@@ -53,7 +53,7 @@ export const prepareLinkedInvoiceFile = async ({
   if (file === "pdf") {
     const pdf = await renderInvoiceDocumentPdf({
       loaded: document,
-      paymentAmountMinor: linked.amountDue,
+      ledger: linked.ledger,
       renderInvoice,
     });
     return pdf.map((body) => ({
@@ -71,6 +71,7 @@ export const prepareLinkedInvoiceFile = async ({
     return Result.err(
       new HandlerError({
         status: 404,
+        code: "invoice_e_invoice_unavailable",
         message: "This invoice has no e-invoice file.",
       }),
     );

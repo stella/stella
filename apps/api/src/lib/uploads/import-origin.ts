@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { Temporal } from "@stll/time";
 
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import {
   type ImportDocumentSource,
   ORIGINAL_AUTHOR_NAME_MAX_LENGTH,
@@ -32,9 +33,7 @@ export const importOriginSchema = v.pipe(
     ),
     authorName: v.optional(
       v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(ORIGINAL_AUTHOR_NAME_MAX_LENGTH),
+        displayNameSchema({ maxLength: ORIGINAL_AUTHOR_NAME_MAX_LENGTH }),
         v.description(
           "The author as the source system recorded them, for authors who are not stella users",
         ),

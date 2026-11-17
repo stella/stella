@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { CSV_PARSE_STATUS, escapeCSV, parseCSV } from "@/api/lib/csv";
 
@@ -70,30 +70,33 @@ const csvText = fc.oneof(
 
 describe("escapeCSV (properties)", () => {
   test("a flagged formula value always gets the tab guard", () => {
-    fc.assert(
+    assertProperty(
+      "a flagged formula value always gets the tab guard",
       fc.property(csvText, (value) => {
         if (FORMULA_PREFIX_RE.test(value)) {
           expect(escapeCSV(value).startsWith('"\t')).toBe(true);
         }
       }),
-      propertyConfig({ numRuns: 1000 }),
+      { numRuns: 1000 },
     );
   });
 
   test("roundtrips through an RFC-4180 reader without data loss", () => {
-    fc.assert(
+    assertProperty(
+      "roundtrips through an RFC-4180 reader without data loss",
       fc.property(csvText, (value) => {
         // Formula values intentionally gain a leading tab (the neutralizer);
         // every other character must survive verbatim.
         const expected = FORMULA_PREFIX_RE.test(value) ? `\t${value}` : value;
         expect(readCsvField(escapeCSV(value))).toBe(expected);
       }),
-      propertyConfig({ numRuns: 1000 }),
+      { numRuns: 1000 },
     );
   });
 
   test("roundtrips exported cells through the import parser", () => {
-    fc.assert(
+    assertProperty(
+      "roundtrips exported cells through the import parser",
       fc.property(
         csvText.filter((value) => value.length > 0),
         (value) => {
@@ -103,18 +106,19 @@ describe("escapeCSV (properties)", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 1000 }),
+      { numRuns: 1000 },
     );
   });
 
   test("the decoded cell never begins with a live formula character", () => {
-    fc.assert(
+    assertProperty(
+      "the decoded cell never begins with a live formula character",
       fc.property(csvText, (value) => {
         expect(LIVE_FORMULA_RE.test(readCsvField(escapeCSV(value)))).toBe(
           false,
         );
       }),
-      propertyConfig({ numRuns: 1000 }),
+      { numRuns: 1000 },
     );
   });
 });

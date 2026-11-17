@@ -12,9 +12,16 @@ import {
   type DocumentPropertyValue,
   isAuthoredDocumentPropertyKey,
 } from "@stll/api-contract";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -216,21 +223,26 @@ export const DocumentPropertiesSection = ({
     <div className="flex flex-col gap-px px-2 pb-2">
       {headline.map((property) => row(property))}
       {rest.length > 0 && (
-        <details
-          className="group/all"
-          onToggle={(event) => setIsAllOpen(event.currentTarget.open)}
-          open={isAllOpen}
-        >
-          <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-1 rounded-md px-2 py-2 text-xs font-medium">
-            <DirectionalIcon
-              className="size-3 shrink-0 transition-transform group-open/all:rotate-90"
-              flip={!isAllOpen}
-              icon={ChevronRightIcon}
-            />
-            {t("common.showAll")}
-          </summary>
-          {rest.map((property) => row(property))}
-        </details>
+        <Collapsible onOpenChange={setIsAllOpen} open={isAllOpen}>
+          <CollapsibleTrigger
+            render={<Button className="flex w-full" variant="plain" />}
+          >
+            <span className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 rounded-md px-2 py-2 text-xs font-medium">
+              <DirectionalIcon
+                className={cn(
+                  "size-3 shrink-0 transition-transform",
+                  isAllOpen && "rotate-90",
+                )}
+                flip={!isAllOpen}
+                icon={ChevronRightIcon}
+              />
+              {t("common.showAll")}
+            </span>
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            {rest.map((property) => row(property))}
+          </CollapsiblePanel>
+        </Collapsible>
       )}
     </div>
   );

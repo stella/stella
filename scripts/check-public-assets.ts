@@ -107,12 +107,46 @@ export const findDuplicateRasterAssets = async ({
 const PUBLIC_ASSET = /^apps\/[^/]+\/public\/(?<publicPath>.+)$/u;
 const CONSUMER_TEXT =
   /\.(?:astro|cjs|css|html|js|json|jsonc|jsx|md|mdx|mjs|mts|svg|ts|tsx|txt|webmanifest|xml)$/u;
+// An app's root HTML, bundler config, or XML manifest (an Office add-in
+// manifest names its icons by public path) is a consumer too.
 const CONSUMER_LOCATION =
-  /^(?:apps\/[^/]+\/(?:src|public)\/|apps\/[^/]+\/[^/]+\.(?:html|config\.[cm]?[jt]s)$|packages\/[^/]+\/src\/)/u;
+  /^(?:apps\/[^/]+\/(?:src|public)\/|apps\/[^/]+\/[^/]+\.(?:html|xml|config\.[cm]?[jt]s)$|packages\/[^/]+\/src\/)/u;
 
 // Fetched by convention, never named by a consumer. Each entry says who reads
 // it; anything else unreferenced is dead weight and fails the check.
 export const PUBLIC_ASSET_EXCEPTIONS: ReadonlyMap<RegExp, string> = new Map([
+  [
+    /^apps\/web\/public\/seed-avatars\/1\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/2\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/3\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/4\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/5\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/6\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/7\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/8\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
   [
     /^apps\/landing\/public\/[0-9a-f]{32}\.txt$/u,
     "IndexNow key file, fetched by search engines to verify the site's pings",
@@ -124,6 +158,10 @@ export const PUBLIC_ASSET_EXCEPTIONS: ReadonlyMap<RegExp, string> = new Map([
   [
     /^apps\/landing\/public\/media\/products\/(?:case-law-search|contacts|import-export|invoicing|templates|time-tracking)(?:-dark)?\.png$/u,
     "product captures from #5964 for product pages not built yet; wire them into a page or delete them",
+  ],
+  [
+    /^apps\/landing\/public\/media\/changelog\/[^/]+\.(?:mp4|webm)$/u,
+    "release demo videos embedded by docs/changelog/*.md notes, which the changelog page and GitHub release notes render",
   ],
 ]);
 

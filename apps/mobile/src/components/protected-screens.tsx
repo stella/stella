@@ -2,6 +2,7 @@ import { Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import type { Href } from "expo-router";
 import { useTranslations } from "use-intl";
 
+import { ActiveChatRunsProvider } from "@/components/active-chat-runs";
 import { ChangesProvider } from "@/components/changes";
 import {
   HeaderSearchProvider,
@@ -10,7 +11,14 @@ import {
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
+import { RoleProvider, useCan } from "@/components/role";
+import { RunBanners } from "@/components/run-banner";
 import { SelectionProvider, useSelection } from "@/components/selection";
+import {
+  TasksViewProvider,
+  useTasksFilterMenu,
+  useTasksView,
+} from "@/components/tasks-view";
 import { TimerActivitySync } from "@/components/timer-activity-sync";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { useSession } from "@/connection/session-provider";
@@ -29,13 +37,20 @@ export const ProtectedScreens = () => {
     <LayoutMetricsProvider>
       <HeaderSearchProvider activeTab={activeTab}>
         <MattersViewProvider>
-          <ChangesProvider>
-            <SelectionProvider>
-              <TimerActivitySync />
-              <PushRegistration />
-              <Screens />
-            </SelectionProvider>
-          </ChangesProvider>
+          <TasksViewProvider>
+            <ChangesProvider>
+              <RoleProvider>
+                <SelectionProvider>
+                  <ActiveChatRunsProvider>
+                    <TimerActivitySync />
+                    <PushRegistration />
+                    <Screens />
+                    <RunBanners />
+                  </ActiveChatRunsProvider>
+                </SelectionProvider>
+              </RoleProvider>
+            </ChangesProvider>
+          </TasksViewProvider>
         </MattersViewProvider>
       </HeaderSearchProvider>
     </LayoutMetricsProvider>
@@ -50,8 +65,9 @@ export const ProtectedScreens = () => {
  * action is the tab's "+": a new conversation over the chats, a new task over
  * the tasks and a new matter over the matters, which also offer how to group
  * them. Search is the system's field, which the list under it filters by;
- * More has nothing to search. Every button draws a lucide glyph from the
- * asset catalog (`barGlyph`), which the bar has as it is built.
+ * More, which has no list to filter, searches all of stella instead, on its
+ * own screen. Every button draws a lucide glyph from the asset catalog
+ * (`barGlyph`), which the bar has as it is built.
  */
 const Screens = () => {
   const { state } = useSession();
@@ -59,11 +75,13 @@ const Screens = () => {
   const navigationTheme = useNavigationTheme();
   const tabs = useTranslations("tabs");
   const header = useTranslations("header");
+  const search = useTranslations("search");
   const matters = useTranslations("matters");
   const signedIn = state.status === "signed-in";
   const router = useRouter();
   const { searchBar, setQuery, setSearching, tab } = useHeaderSearch();
   const { groupBy, setGroupBy } = useMattersView();
+  const tasksFilterMenu = useTasksFilterMenu(useTasksView());
   const tabAction = useTabAction(tab);
 
   // A screen opened from a tab has GitHub's bar: the bare back chevron and a
@@ -78,7 +96,7 @@ const Screens = () => {
     headerTitleStyle: { color: colors.text },
   } as const;
 
-  const shortcuts = useShortcuts(tabAction);
+  const shortcuts = useShortcuts(tab, tabAction);
 
   return (
     <ThemeProvider value={navigationTheme}>
@@ -129,12 +147,25 @@ const Screens = () => {
                 </Stack.Toolbar.Button>
               </Stack.Toolbar>
               <Stack.Toolbar placement="right">
+                {tab === "more" ? (
+                  <Stack.Toolbar.Button
+                    onPress={() => {
+                      router.push("/search");
+                    }}
+                  >
+                    {barGlyph("search")}
+                    <Stack.Toolbar.Label>
+                      {search("placeholder")}
+                    </Stack.Toolbar.Label>
+                  </Stack.Toolbar.Button>
+                ) : null}
                 {tabAction === undefined ? null : (
                   <Stack.Toolbar.Button onPress={tabAction.onPress}>
                     {barGlyph("plus")}
                     <Stack.Toolbar.Label>{tabAction.label}</Stack.Toolbar.Label>
                   </Stack.Toolbar.Button>
                 )}
+                {tab === "tasks" ? tasksFilterMenu : null}
                 {tab === "matters" ? (
                   <Stack.Toolbar.Menu title={matters("groupBy")}>
                     {barGlyph("sliders-horizontal")}
@@ -153,6 +184,13 @@ const Screens = () => {
                       }}
                     >
                       {matters("noGrouping")}
+                    </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      onPress={() => {
+                        router.push("/archived-matters");
+                      }}
+                    >
+                      {matters("archivedMatters")}
                     </Stack.Toolbar.MenuAction>
                   </Stack.Toolbar.Menu>
                 ) : null}
@@ -179,6 +217,13 @@ const Screens = () => {
             </Stack.Screen>
             <Stack.Screen name="thread/[threadId]" />
             <Stack.Screen
+              name="search"
+              options={{
+                animation: "fade",
+                contentStyle: { backgroundColor: colors.background },
+              }}
+            />
+            <Stack.Screen
               name="palette"
               options={{
                 contentStyle: { backgroundColor: colors.background },
@@ -192,7 +237,7 @@ const Screens = () => {
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",
-                sheetAllowedDetents: [0.5, 1],
+                sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
             />
@@ -212,6 +257,10 @@ const Screens = () => {
                 sheetAllowedDetents: [0.75, 1],
                 sheetGrabberVisible: true,
               }}
+            />
+            <Stack.Screen
+              name="share/[shareId]"
+              options={{ ...pushedScreen, presentation: "modal" }}
             />
             <Stack.Screen name="timers/index" options={pushedScreen} />
             <Stack.Screen
@@ -245,6 +294,20 @@ const Screens = () => {
               options={pushedScreen}
             />
             <Stack.Screen
+              name="matter/[workspaceId]/info"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
+              name="matter/[workspaceId]/tasks"
+              options={pushedScreen}
+            />
+            <Stack.Screen name="archived-matters" options={pushedScreen} />
+            <Stack.Screen
               name="document/[workspaceId]/[entityId]"
               options={pushedScreen}
             />
@@ -277,11 +340,15 @@ const TAB_ROUTES: ReadonlyMap<string, Href> = new Map([
 
 /**
  * A hardware keyboard's shortcuts, as t3code gives an iPad: ⌘N for the
- * open tab's "+", ⌘F to search it, ⌘K for the command palette, ⌘\ to put
- * the list beside a selection away, ⌘1 to ⌘4 for the tabs, ⌘, for the
- * settings and Escape to close what is open over them.
+ * open tab's "+", ⌘F to search it (all of stella from More), ⌘K for the
+ * command palette, ⌘\ to put the list beside a selection away, ⌘1 to ⌘4
+ * for the tabs, ⌘, for the settings and Escape to close what is open over
+ * them.
  */
-function useShortcuts(primary: TabAction | undefined): {
+function useShortcuts(
+  tab: string,
+  primary: TabAction | undefined,
+): {
   commands: readonly KeyCommand[];
   run: (id: string) => void;
 } {
@@ -332,7 +399,11 @@ function useShortcuts(primary: TabAction | undefined): {
     if (id === "new") {
       primary?.onPress();
     } else if (id === "search") {
-      searchBar.current?.focus();
+      if (tab === "more") {
+        router.push("/search");
+      } else {
+        searchBar.current?.focus();
+      }
     } else if (id === "list") {
       selection.toggleList();
     } else if (id === "palette") {
@@ -357,18 +428,23 @@ function useShortcuts(primary: TabAction | undefined): {
 /** A tab's "+": what it starts, and starting it. */
 type TabAction = { label: string; onPress: () => void };
 
-/** The header's "+" for a tab, if it has one; ⌘N presses it too. */
+/**
+ * The header's "+" for a tab, if it has one and the person's role may add
+ * there, as the web hides its own; ⌘N presses it too.
+ */
 function useTabAction(tab: string): TabAction | undefined {
   const chat = useTranslations("chat");
   const matters = useTranslations("matters");
   const tasks = useTranslations("tasks");
   const router = useRouter();
   const newChat = useNewChat();
+  const canAddTask = useCan({ entity: ["create"] });
+  const canAddMatter = useCan({ workspace: ["create"] });
 
   if (tab === "index") {
     return { label: chat("newChat"), onPress: newChat };
   }
-  if (tab === "tasks") {
+  if (tab === "tasks" && canAddTask) {
     return {
       label: tasks("newTask"),
       onPress: () => {
@@ -376,7 +452,7 @@ function useTabAction(tab: string): TabAction | undefined {
       },
     };
   }
-  if (tab === "matters") {
+  if (tab === "matters" && canAddMatter) {
     return {
       label: matters("newMatter"),
       onPress: () => {

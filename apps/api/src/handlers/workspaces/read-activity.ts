@@ -19,6 +19,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/chat/artefact-provenance";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
@@ -187,6 +188,7 @@ const readWorkspaceActivity = createSafeHandler(
               id: chatThreads.id,
               title: chatThreads.title,
               titleSource: chatThreads.titleSource,
+              ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
               subjectDecisionId: chatThreads.subjectDecisionId,
             })
             .from(chatThreads)

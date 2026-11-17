@@ -2,8 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { fakeRenderTask } from "@/lib/pdf/render-task.test-fixtures";
 
 import type {
   CropPanelPage,
@@ -97,17 +99,12 @@ const makePage = ({
           }),
         render: () => {
           calls.renders += 1;
-          return {
-            _internalRenderTask: null,
-            onContinue: () => undefined,
-            onError: () => undefined,
+          return fakeRenderTask({
             promise: renderPromise,
             cancel: () => {
               calls.cancels += 1;
             },
-            separateAnnots: false,
-            imageCoordinates: {},
-          };
+          });
         },
       },
     },

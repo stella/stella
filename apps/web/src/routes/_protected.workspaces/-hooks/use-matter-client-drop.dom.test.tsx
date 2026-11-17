@@ -4,9 +4,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AcceptedMatterClientDrop } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { act } = await import("react");

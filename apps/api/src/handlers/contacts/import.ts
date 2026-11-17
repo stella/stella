@@ -4,11 +4,12 @@ import {
   importContactRows,
   importContactsBodySchema,
 } from "@/api/handlers/contacts/import-contacts";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 
 const config = {
@@ -63,11 +64,16 @@ const importContacts = createSafeRootHandler(
         : [],
     );
     if (writtenContactIds.length > 0) {
-      flushContactSearchRepairs(writtenContactIds).catch(
-        createErrorCapture(
-          handlerErrorContext("importContacts.flushContactSearchRepairs"),
-        ),
+      detached(
+        async () =>
+          flushContactSearchRepairs(writtenContactIds).catch(
+            createErrorCapture(
+              handlerErrorContext("importContacts.flushContactSearchRepairs"),
+            ),
+          ),
+        "contacts-import.flush-contact-search-repairs",
       );
+      announceContactSetChanged(session.activeOrganizationId);
     }
 
     return Result.ok({

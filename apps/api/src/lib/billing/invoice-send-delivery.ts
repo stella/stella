@@ -67,6 +67,7 @@ export const completeInvoiceSendDelivery = async (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: "invoice_send_state_changed",
           message: "The invoice email delivery state changed before completion",
         }),
       );

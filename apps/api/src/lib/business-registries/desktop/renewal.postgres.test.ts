@@ -40,6 +40,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import {
@@ -651,9 +652,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
           .where(eq(auditLogs.resourceId, fixture.keyId));
         await db.delete(apikey).where(eq(apikey.id, fixture.keyId));
         await db.delete(member).where(eq(member.id, fixture.memberId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, fixture.organizationId));
+        await deleteOrganizationsForTest(db, [fixture.organizationId]);
         await cleanProofFixture(fixture);
         await db.delete(user).where(eq(user.id, fixture.userId));
       }
@@ -837,9 +836,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
             .where(eq(auditLogs.resourceId, fixture.keyId));
           await db.delete(apikey).where(eq(apikey.id, fixture.keyId));
           await db.delete(member).where(eq(member.id, fixture.memberId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, fixture.organizationId));
+          await deleteOrganizationsForTest(db, [fixture.organizationId]);
           await cleanProofFixture(fixture);
           await db.delete(user).where(eq(user.id, fixture.userId));
         }
@@ -943,9 +940,7 @@ describe.skipIf(!enabled)(
               .delete(apikey)
               .where(eq(apikey.referenceId, fixture.userId));
             await db.delete(member).where(eq(member.userId, fixture.userId));
-            await db
-              .delete(organization)
-              .where(eq(organization.id, fixture.organizationId));
+            await deleteOrganizationsForTest(db, [fixture.organizationId]);
             await db.delete(user).where(eq(user.id, fixture.userId));
           }
         });

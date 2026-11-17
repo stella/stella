@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -272,7 +273,7 @@ const selectRepairPage = async (
           entityVersions.createdAt,
           new Date(Temporal.Now.instant().epochMilliseconds - SETTLE_MS),
         ),
-        eq(workspaces.status, "active"),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         sql`${fields.content}->>'type' = 'file'`,
         DERIVATIVE_UNSETTLED,
       ),

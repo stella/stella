@@ -11,7 +11,7 @@ import {
   test,
 } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
@@ -267,8 +267,8 @@ test("restore refresh retry never resubmits a committed restore", async () => {
   await waitFor(() => {
     expect(refreshAttempts).toBe(2);
     expect(
-      view.queryByRole("button", { name: messages.common.refresh }),
-    ).toBeNull();
+      view.queryByRole("button", { name: messages.common.refresh }) === null,
+    ).toBe(true);
   });
   fireEvent.click(view.getByRole("button", { name: "Change 3" }));
   await waitFor(() =>

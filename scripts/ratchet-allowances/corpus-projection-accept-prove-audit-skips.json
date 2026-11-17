@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "Recording an accepted projection append and writing a proof's outcome replace the single apply transaction in apps/api/src/lib/legal-search/corpus-index-projection-store.ts, whose unaudited intent and state writes were budgeted in the audit mutation ledger; that ledger row is removed in the same change. The writes are bookkeeping on the derived public corpus projection, with no tenant data and no user actor."
+}
