@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq, isNull, lt, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -25,26 +25,33 @@ type RecordImportSnapshotOptions = {
  * a rerun of an older snapshot cannot make the page claim an older edition
  * than the corpus already holds.
  *
- * Returns false when no source row carries `adapterKey`, or when it already
- * states this snapshot or a later one.
+ * Resolves to `Ok(false)` when no source row carries `adapterKey`, or when it
+ * already states this snapshot or a later one, and to `Err` when the key is
+ * not a bulk import source or the date is not an ISO calendar day.
  */
 export const recordImportSnapshot = async ({
   scopedDb,
   adapterKey,
   snapshotDate,
-}: RecordImportSnapshotOptions): Promise<boolean> => {
+}: RecordImportSnapshotOptions): Promise<
+  Result<boolean, ImportSnapshotError>
+> => {
   if (sourceRegistryMembership(adapterKey).type !== "import") {
-    throw new ImportSnapshotError({
-      message: `not a bulk import source: ${adapterKey}`,
-    });
+    return Result.err(
+      new ImportSnapshotError({
+        message: `not a bulk import source: ${adapterKey}`,
+      }),
+    );
   }
   if (isoCalendarDay(snapshotDate) !== snapshotDate) {
-    throw new ImportSnapshotError({
-      message: `import snapshot must be an ISO calendar day, got: ${snapshotDate}`,
-    });
+    return Result.err(
+      new ImportSnapshotError({
+        message: `import snapshot must be an ISO calendar day, got: ${snapshotDate}`,
+      }),
+    );
   }
 
-  return await scopedDb(async (tx) => {
+  const recorded = await scopedDb(async (tx) => {
     // audit: skip — public case-law corpus bookkeeping, no workspace data
     const updated = await tx
       .update(caseLawSources)
@@ -61,4 +68,5 @@ export const recordImportSnapshot = async ({
       .returning({ id: caseLawSources.id });
     return updated.length > 0;
   });
+  return Result.ok(recorded);
 };
