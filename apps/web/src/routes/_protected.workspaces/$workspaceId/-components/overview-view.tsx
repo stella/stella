@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -188,10 +188,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
           .length
       : 0;
-  const findViewByType = useCallback(
-    (type: string) => views?.find((v) => v.layout.type === type),
-    [views],
-  );
+  const findViewByType = (type: string) =>
+    views?.find((v) => v.layout.type === type);
 
   const createTask = useCreateTask();
   const createTaskOnce = useSingleFlight();
@@ -202,7 +200,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const taskStatusAction = useTaskStatusAction(workspaceId);
 
-  const handleTaskContextMenu = useCallback(
+  const handleTaskContextMenu =
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -214,18 +212,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
         task,
       });
-    },
-    [],
-  );
+    };
 
   const menuTaskStatus = upcomingMenu.task?.status ?? null;
   const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
     ? menuTaskStatus
     : "open";
-  const recentEntities = useMemo(
-    () => data.recentEntities.filter((e) => e.kind !== "folder"),
-    [data.recentEntities],
-  );
+  const recentEntities = data.recentEntities.filter((e) => e.kind !== "folder");
   const hasActivity = recentEntities.length > 0;
 
   // Re-compute the current date when the user returns to the
@@ -255,11 +248,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
-  const weekStart = useMemo(
-    () => getWeekStart(locale, Temporal.PlainDate.from(today)),
-    [today, locale],
-  );
-  const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
+  const weekStart = getWeekStart(locale, Temporal.PlainDate.from(today));
+  const weekEnd = weekStart.add({ days: 6 });
 
   const timeSummaryView = queryView(
     useQuery({
@@ -290,14 +280,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
-  const prevWeekStart = useMemo(
-    () => weekStart.subtract({ days: 7 }),
-    [weekStart],
-  );
-  const prevWeekEnd = useMemo(
-    () => weekStart.subtract({ days: 1 }),
-    [weekStart],
-  );
+  const prevWeekStart = weekStart.subtract({ days: 7 });
+  const prevWeekEnd = weekStart.subtract({ days: 1 });
 
   const previousTimeSummaryView = queryView(
     useQuery({
@@ -327,7 +311,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           : currentTimeView.items.totalMinutes) / 60
       : null;
 
-  const teamHeatmap = useMemo(() => {
+  const teamHeatmap = (() => {
     if (!teamTimeSummary) {
       return [];
     }
@@ -346,7 +330,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         daily,
       };
     });
-  }, [teamTimeSummary, firstWeekday]);
+  })();
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 

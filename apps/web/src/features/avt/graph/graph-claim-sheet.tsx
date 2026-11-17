@@ -87,9 +87,9 @@ export const GraphClaimPane = ({
   const t = useTranslations();
   // The panel takes focus when it opens, so the keyboard reaches its close
   // button and review controls next; it keeps it as another claim opens.
-  const focusOnOpen = React.useCallback((element: HTMLElement | null) => {
+  const focusOnOpen = (element: HTMLElement | null) => {
     element?.focus({ preventScroll: true });
-  }, []);
+  };
   return (
     <aside
       aria-label={t("avt.graph.claimTitle")}

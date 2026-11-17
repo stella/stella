@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { AnyExtension } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -134,10 +134,9 @@ export const AIPromptInput = ({
     activeOrganizationId,
     userId,
   );
-  const slashShortcutRows = useMemo(
-    () =>
-      commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
-    [skillPages, unavailableSkillIds],
+  const slashShortcutRows = commandShortcutRowsFromSkillPages(
+    skillPages?.pages,
+    unavailableSkillIds,
   );
   useExternalSyncEffect(() => {
     if (!hasNextSkillPage || isFetchingNextSkillPage || isNextSkillPageError) {
@@ -150,16 +149,11 @@ export const AIPromptInput = ({
     isFetchingNextSkillPage,
     isNextSkillPageError,
   ]);
-  const slashItems = useMemo<SlashItem[]>(
-    () =>
-      buildChatSlashItems({
-        shortcuts: slashShortcutRows,
-        skillPages:
-          skillPages && skillPagesForChips(skillPages.pages, skillChips),
-        unavailableSkillIds,
-      }),
-    [slashShortcutRows, skillChips, skillPages, unavailableSkillIds],
-  );
+  const slashItems: SlashItem[] = buildChatSlashItems({
+    shortcuts: slashShortcutRows,
+    skillPages: skillPages && skillPagesForChips(skillPages.pages, skillChips),
+    unavailableSkillIds,
+  });
   const getSlashItems = useLatestCallback(() => slashItems);
 
   const readValue = (editor: Editor): string =>

@@ -274,19 +274,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }
 
   const schema = useWorkspaceKanbanSchema(properties);
-  const grouping = useMemo(
-    () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
-    [configuredGroupBy, schema],
-  );
+  const grouping = resolveWorkspaceKanbanGrouping(configuredGroupBy, schema);
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
-  const subgroupDefinition = useMemo(
-    () =>
-      resolveWorkspaceKanbanSubgroup(
-        configuredSubgroupBy,
-        groupByPropertyId,
-        schema,
-      ),
-    [configuredSubgroupBy, groupByPropertyId, schema],
+  const subgroupDefinition = resolveWorkspaceKanbanSubgroup(
+    configuredSubgroupBy,
+    groupByPropertyId,
+    schema,
   );
   const subgroupByPropertyId = getKanbanGroupingPropertyId(subgroupDefinition);
   const isStatusGrouping =
@@ -324,17 +317,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       !hiddenProperties.includes(id),
   );
 
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties,
-        properties,
-        requiredPropertyIds: [groupByProperty, subgroupByProperty]
-          .filter((property) => property !== null)
-          .map((property) => property.id),
-      }),
-    [groupByProperty, hiddenProperties, properties, subgroupByProperty],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties,
+    properties,
+    requiredPropertyIds: [groupByProperty, subgroupByProperty]
+      .filter((property) => property !== null)
+      .map((property) => property.id),
+  });
 
   const { filters, sorts } = view.layout;
   const hasSupportedSubgroup =
@@ -365,6 +354,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const subgroupView = queryView(subgroupQuery);
   const subgroupQueryData =
     subgroupView.type === "items" ? subgroupView.items : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- inlining this conditional pushes the component past the complexity limit
   const subgroupEntities = useMemo(
     () =>
       subgroupQueryData
@@ -372,15 +362,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         : [],
     [subgroupQueryData],
   );
-  const subgroup = useMemo(
-    () =>
-      resolveWorkspaceKanbanDynamicSubgroup(
-        subgroupDefinition,
-        subgroupEntities,
-      ),
-    [subgroupDefinition, subgroupEntities],
+  const subgroup = resolveWorkspaceKanbanDynamicSubgroup(
+    subgroupDefinition,
+    subgroupEntities,
   );
-  const subgroupMatrix = useMemo(() => {
+  const subgroupMatrix = (() => {
     if (
       !hasSupportedSubgroup ||
       !isKanbanGroupingRenderable(subgroup) ||
@@ -405,15 +391,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       resolveGroupValue: ({ grouping: axis, row }) =>
         resolveWorkspaceKanbanGroupValue(axis, row),
     });
-  }, [
-    grouping,
-    hasSupportedSubgroup,
-    isAssigneeSubgroup,
-    subgroup,
-    subgroupByPropertyId,
-    subgroupEntities,
-    t,
-  ]);
+  })();
 
   // A view scoped to a kind (a task list, a message board) only ever shows
   // that kind, so it offers totals only over the properties that kind

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useDeferredValue, useMemo } from "react";
+import { lazy, Suspense, useDeferredValue } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -118,14 +118,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       view: { workspaceId, viewId: view.id },
     }),
   );
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties: view.layout.hiddenProperties,
-        properties,
-      }),
-    [properties, view.layout.hiddenProperties],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties: view.layout.hiddenProperties,
+    properties,
+  });
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useSuspenseInfiniteQuery(
@@ -141,23 +137,16 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       }),
     );
 
-  const treeData = useMemo(
-    () =>
-      toTableEntities(
-        data.pages.flatMap((window) =>
-          window.entities.filter(
-            (entity) =>
-              entity.kind !== "folder" &&
-              (showListItems || entity.kind !== "task"),
-          ),
-        ),
+  const treeData = toTableEntities(
+    data.pages.flatMap((window) =>
+      window.entities.filter(
+        (entity) =>
+          entity.kind !== "folder" && (showListItems || entity.kind !== "task"),
       ),
-    [data.pages, showListItems],
+    ),
   );
-  const justificationEntityIdChunks = useMemo(
-    () =>
-      data.pages.map((page) => page.entities.map((entity) => entity.entityId)),
-    [data.pages],
+  const justificationEntityIdChunks = data.pages.map((page) =>
+    page.entities.map((entity) => entity.entityId),
   );
   useSyncJustificationChunks({
     workspaceId,

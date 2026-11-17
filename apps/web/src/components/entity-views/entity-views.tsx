@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   useInfiniteQuery,
@@ -98,20 +98,16 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       });
     }
   }, [analytics, saved.error]);
-  const defaults = useMemo(
-    () =>
-      defaultEntityViews({
-        table: t("workspaces.views.layouts.table"),
-        kanban: t("workspaces.views.layouts.kanban"),
-      }),
-    [t],
-  );
-  const savedViews = useMemo(() => {
+  const defaults = defaultEntityViews({
+    table: t("workspaces.views.layouts.table"),
+    kanban: t("workspaces.views.layouts.kanban"),
+  });
+  const savedViews = (() => {
     if (!saved.data) {
       return [];
     }
     return saved.data.items;
-  }, [saved.data]);
+  })();
   const views = [
     ...savedViews,
     ...defaults.filter(
@@ -509,13 +505,9 @@ const EntityViewContent = ({
   );
   // The server orders and pages tasks and signals as one window; rows render
   // in the order they arrive.
-  const rows = useMemo(
-    () =>
-      records.data
-        ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
-        : [],
-    [records.data],
-  );
+  const rows = records.data
+    ? records.data.pages.flatMap((page) => page.items.map(toEntityViewRow))
+    : [];
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({

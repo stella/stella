@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
@@ -90,47 +90,32 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   const openChat = useInspectorTabsStore((s) => s.openChat);
   const shortcutGroups = useEffectiveShortcutGroups();
 
-  const context: CommandActionContext = useMemo(
-    () => ({
-      canCreateMatter,
-      canLogTime,
-      canUploadDocument: canCreateEntity,
-      canCreateTask,
-      openLogTime: () =>
-        openQuickEntry({
-          userId: user.id,
-          organizationId: user.activeOrganizationId,
-        }),
-      openUploadDocument: () => setUploadRequest({ type: "open", workspaceId }),
-      createTask: () => {
-        if (workspaceId === undefined) {
-          panic("Task action requires a matter");
-        }
-        createTask(workspaceId);
-      },
-      openCreateMatterDialog: () => {
-        openCreateMatterDialog();
-      },
-      openNewChat: () => {
-        openChat(newChatMatterScope(workspaceId));
-      },
-    }),
-    [
-      canCreateMatter,
-      canCreateEntity,
-      canCreateTask,
-      canLogTime,
-      openQuickEntry,
-      user.id,
-      user.activeOrganizationId,
-      createTask,
-      openChat,
-      openCreateMatterDialog,
-      workspaceId,
-    ],
-  );
+  const context: CommandActionContext = {
+    canCreateMatter,
+    canLogTime,
+    canUploadDocument: canCreateEntity,
+    canCreateTask,
+    openLogTime: () =>
+      openQuickEntry({
+        userId: user.id,
+        organizationId: user.activeOrganizationId,
+      }),
+    openUploadDocument: () => setUploadRequest({ type: "open", workspaceId }),
+    createTask: () => {
+      if (workspaceId === undefined) {
+        panic("Task action requires a matter");
+      }
+      createTask(workspaceId);
+    },
+    openCreateMatterDialog: () => {
+      openCreateMatterDialog();
+    },
+    openNewChat: () => {
+      openChat(newChatMatterScope(workspaceId));
+    },
+  };
 
-  const effectiveHotkeys = useMemo(() => {
+  const effectiveHotkeys = (() => {
     const hotkeys = new Map<CommandAction["shortcutId"], HotkeyChord>();
     for (const group of shortcutGroups) {
       for (const shortcut of group.shortcuts) {
@@ -140,40 +125,36 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
       }
     }
     return hotkeys;
-  }, [shortcutGroups]);
+  })();
 
-  const resolvedActions = useMemo(
-    () =>
-      COMMAND_ACTIONS.filter(
-        (action) =>
-          action.isAvailable(context) &&
-          (action.capability === null ||
-            capabilities[action.capability].type === "available" ||
-            role === "admin"),
-      ).map((action) => {
-        const resolved: ResolvedCommandAction = {
-          id: action.id,
-          capability: action.capability,
-          group: action.group,
-          titleKey: action.titleKey,
-          icon: action.icon,
-          isAvailable: action.isAvailable,
-          run: action.run,
-          title: t(action.titleKey),
-        };
-        if (action.shortcutId === undefined) {
-          return resolved;
-        }
-        resolved.shortcutId = action.shortcutId;
-        const hotkey = effectiveHotkeys.get(action.shortcutId);
-        if (!hotkey) {
-          panic(`No effective hotkey for command action "${action.id}"`);
-        }
-        resolved.hotkey = hotkey;
-        return resolved;
-      }),
-    [capabilities, context, effectiveHotkeys, role, t],
-  );
+  const resolvedActions = COMMAND_ACTIONS.filter(
+    (action) =>
+      action.isAvailable(context) &&
+      (action.capability === null ||
+        capabilities[action.capability].type === "available" ||
+        role === "admin"),
+  ).map((action) => {
+    const resolved: ResolvedCommandAction = {
+      id: action.id,
+      capability: action.capability,
+      group: action.group,
+      titleKey: action.titleKey,
+      icon: action.icon,
+      isAvailable: action.isAvailable,
+      run: action.run,
+      title: t(action.titleKey),
+    };
+    if (action.shortcutId === undefined) {
+      return resolved;
+    }
+    resolved.shortcutId = action.shortcutId;
+    const hotkey = effectiveHotkeys.get(action.shortcutId);
+    if (!hotkey) {
+      panic(`No effective hotkey for command action "${action.id}"`);
+    }
+    resolved.hotkey = hotkey;
+    return resolved;
+  });
 
   const executeAction = (actionId: string) => {
     const action = resolvedActions.find((a) => a.id === actionId);

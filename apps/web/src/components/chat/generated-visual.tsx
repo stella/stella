@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -84,22 +84,16 @@ const GeneratedVisualFrame = ({
     retry: false,
   });
   const now = useLatestCallback(() => performance.now());
-  const actionGate = useMemo(
-    () =>
-      page.data === undefined
-        ? null
-        : createVisualActionGate({
-            data: page.data.data,
-            links: page.data.links,
-            literalLinks: page.data.literalLinks,
-            now,
-          }),
-    [page.data, now],
-  );
-  const shell = useMemo(
-    () => createVisualShellSession({ url: sandboxUrl.href }),
-    [sandboxUrl.href],
-  );
+  const actionGate =
+    page.data === undefined
+      ? null
+      : createVisualActionGate({
+          data: page.data.data,
+          links: page.data.links,
+          literalLinks: page.data.literalLinks,
+          now,
+        });
+  const shell = createVisualShellSession({ url: sandboxUrl.href });
   const attachFrame = useLatestCallback((element: HTMLIFrameElement | null) => {
     frame.current = element;
     if (element !== null) {

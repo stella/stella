@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -87,10 +85,7 @@ export const useOnboardingProgress = (
   useQueryViewError(dataView, "useOnboardingProgress:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const stored = useMemo(
-    () => parseGuideProgress(data?.user.guideProgress),
-    [data?.user.guideProgress],
-  );
+  const stored = parseGuideProgress(data?.user.guideProgress);
   const mutation = useMutation({
     mutationFn: async ({
       tourId,

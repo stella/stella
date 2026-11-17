@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
@@ -168,78 +168,58 @@ export const ExistingFileOrganizerDialog = ({
     suggestionStatus !== "generating" &&
     (rows.length > 0 || selectedDeleteFolders.length > 0);
 
-  const folderByEntityId = useMemo(
-    () => new Map(existingFolders.map((folder) => [folder.entityId, folder])),
-    [existingFolders],
+  const folderByEntityId = new Map(
+    existingFolders.map((folder) => [folder.entityId, folder]),
   );
-  const fileByEntityId = useMemo(
-    () => new Map(files.map((file) => [file.entityId, file])),
-    [files],
-  );
-  const initialRows = useMemo(
-    () =>
-      buildFileNameSuggestions(
-        files.map((file) => ({
-          id: file.entityId,
-          originalName: file.originalName,
-        })),
-      ).map((suggestion) => {
-        const file = fileByEntityId.get(suggestion.id);
-        const parentFolder = file?.parentId
-          ? folderByEntityId.get(file.parentId)
-          : undefined;
-        return {
-          detectedDate: suggestion.detectedDate,
-          documentType: suggestion.documentType,
-          entityId: suggestion.id,
-          folderPath: parentFolder ? parentFolder.path : "",
-          id: suggestion.id,
-          mimeType: file?.mimeType ?? null,
-          parentId: file?.parentId ?? null,
-          originalName: suggestion.originalName,
-          suggestedName: suggestion.suggestedName,
-        };
-      }),
-    [files, fileByEntityId, folderByEntityId],
-  );
-  const requestKey = useMemo(
-    () =>
-      JSON.stringify({
-        existingFolders: existingFolders.map((folder) => ({
-          id: folder.entityId,
-          name: folder.name,
-          path: folder.path,
-          parentId: folder.parentId,
-        })),
-        files: files.map((file) => ({
-          id: file.entityId,
-          name: file.originalName,
-          parentId: file.parentId,
-        })),
-      }),
-    [existingFolders, files],
-  );
+  const fileByEntityId = new Map(files.map((file) => [file.entityId, file]));
+  const initialRows = buildFileNameSuggestions(
+    files.map((file) => ({
+      id: file.entityId,
+      originalName: file.originalName,
+    })),
+  ).map((suggestion) => {
+    const file = fileByEntityId.get(suggestion.id);
+    const parentFolder = file?.parentId
+      ? folderByEntityId.get(file.parentId)
+      : undefined;
+    return {
+      detectedDate: suggestion.detectedDate,
+      documentType: suggestion.documentType,
+      entityId: suggestion.id,
+      folderPath: parentFolder ? parentFolder.path : "",
+      id: suggestion.id,
+      mimeType: file?.mimeType ?? null,
+      parentId: file?.parentId ?? null,
+      originalName: suggestion.originalName,
+      suggestedName: suggestion.suggestedName,
+    };
+  });
+  const requestKey = JSON.stringify({
+    existingFolders: existingFolders.map((folder) => ({
+      id: folder.entityId,
+      name: folder.name,
+      path: folder.path,
+      parentId: folder.parentId,
+    })),
+    files: files.map((file) => ({
+      id: file.entityId,
+      name: file.originalName,
+      parentId: file.parentId,
+    })),
+  });
   const getSuggestionRequestState = useLatestCallback(() => ({
     open,
     requestKey,
   }));
-  const suggestionRequestFolders = useMemo(
-    () =>
-      existingFolders.map((folder) => ({
-        entityId: toSafeId<"entity">(folder.entityId),
-        name: folder.name,
-        path: folder.path,
-      })),
-    [existingFolders],
-  );
-  const suggestionRequestFiles = useMemo(
-    () =>
-      files.map((file) => ({
-        entityId: toSafeId<"entity">(file.entityId),
-        originalName: file.originalName,
-      })),
-    [files],
-  );
+  const suggestionRequestFolders = existingFolders.map((folder) => ({
+    entityId: toSafeId<"entity">(folder.entityId),
+    name: folder.name,
+    path: folder.path,
+  }));
+  const suggestionRequestFiles = files.map((file) => ({
+    entityId: toSafeId<"entity">(file.entityId),
+    originalName: file.originalName,
+  }));
 
   // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
   // editable rows on each open. Cached AI results for the same files are reshown
@@ -370,7 +350,7 @@ export const ExistingFileOrganizerDialog = ({
     );
   };
 
-  const summary = useMemo<RowChangeSummary>(() => {
+  const summary: RowChangeSummary = (() => {
     // Move and rename are counted independently: a file that both
     // moves and renames increments both "moved" and "renamed". Only
     // files that neither move nor rename count as "unchanged". The
@@ -405,7 +385,7 @@ export const ExistingFileOrganizerDialog = ({
       renamedCount: renamed,
       unchangedCount: unchanged,
     };
-  }, [fileByEntityId, folderByEntityId, rows]);
+  })();
 
   const handleApply = () => {
     const rowsSnapshot = rows;
@@ -1008,7 +988,7 @@ const OrganizerTreePreview = ({
 }: OrganizerTreePreviewProps) => {
   const t = useTranslations();
   const locale = useI18nStore((s) => s.loadedLang);
-  const root = useMemo(() => buildOrganizerTree(rows, locale), [rows, locale]);
+  const root = buildOrganizerTree(rows, locale);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
   const handleMoveFile = useLatestCallback(onMoveFile);

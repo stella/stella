@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
 import { panic, Result } from "better-result";
@@ -111,7 +111,7 @@ export const PageOrganizerCrop = ({
   const first = pages.at(0) ?? panic("Crop panel requires selected pages");
   // The smallest displayed width and height bound one physical margin draft
   // for every selected page. Measure once, rather than for each drag event.
-  const selectionGeometry = useMemo(() => {
+  const selectionGeometry = (() => {
     let width = Number.POSITIVE_INFINITY;
     let height = Number.POSITIVE_INFINITY;
     for (const entry of pages) {
@@ -123,7 +123,7 @@ export const PageOrganizerCrop = ({
       height = Math.min(height, viewport.height);
     }
     return { width, height, rotation: 0 as const };
-  }, [pages]);
+  })();
   const [margins, setMargins] = useState(() =>
     clampCropMarginsMm(
       cropToMarginsMm(first.page.crop, geometryFor(first)),
