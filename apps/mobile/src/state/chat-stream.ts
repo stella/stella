@@ -654,6 +654,50 @@ export const chatRegenerateBody = ({
   };
 };
 
+/**
+ * Replaces one of the person's stored messages with its edit and answers it
+ * again ("Edit from here", as the web sends it): the edited message goes
+ * under the same id, naming itself as where the thread is cut, so the
+ * server drops it and every later turn before the model runs. A thread
+ * whose turns run on the person's computer names its target, as a
+ * regeneration does.
+ */
+export const chatEditBody = ({
+  anonymized,
+  matterId,
+  messageId,
+  parts,
+  runId,
+  runTarget,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly matterId: string | undefined;
+  readonly messageId: string;
+  readonly parts: readonly unknown[];
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly threadId: string;
+}) => {
+  const forwarded = {
+    ...turnScope({ anonymized, matterId, runId, threadId }),
+    ...(runTarget === undefined ? {} : { runTarget }),
+    message: { id: messageId, role: "user", parts },
+    turnIntent: CHAT_TURN_INTENT.edit,
+    truncateAfterMessageId: messageId,
+  };
+  return {
+    threadId,
+    runId,
+    state: {},
+    messages: [{ id: messageId, role: "user" }],
+    tools: [],
+    context: [],
+    forwardedProps: forwarded,
+    data: forwarded,
+  };
+};
+
 /** The paused message an answer continues, and what the answer carries. */
 type ChatContinuation = {
   readonly messageId: string;
@@ -1010,6 +1054,55 @@ export const regenerateChatTurn = async ({
   await readChatStream({
     body: JSON.stringify(
       chatRegenerateBody({ anonymized, matterId, retry, runId, threadId }),
+    ),
+    fetch,
+    method: "POST",
+    onEvent,
+    onTurn,
+    path: "/v1/chat",
+    signal,
+    source,
+  });
+
+/** Sends the edit of a stored message and streams the new answer, as a send does. */
+export const editChatTurn = async ({
+  anonymized,
+  fetch,
+  matterId,
+  messageId,
+  onEvent,
+  onTurn,
+  parts,
+  runId,
+  runTarget,
+  signal,
+  source,
+  threadId,
+}: {
+  readonly anonymized: boolean;
+  readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
+  readonly messageId: string;
+  readonly onEvent: (event: ChatEvent) => void;
+  readonly onTurn: (turnId: string) => void;
+  readonly parts: readonly unknown[];
+  readonly runId: string;
+  readonly runTarget: LocalRunTarget | undefined;
+  readonly signal: AbortSignal;
+  readonly source: AccessTokenSource;
+  readonly threadId: string;
+}): Promise<Result<StreamEnd, StreamBreak>> =>
+  await readChatStream({
+    body: JSON.stringify(
+      chatEditBody({
+        anonymized,
+        matterId,
+        messageId,
+        parts,
+        runId,
+        runTarget,
+        threadId,
+      }),
     ),
     fetch,
     method: "POST",
