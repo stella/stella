@@ -1,3 +1,5 @@
+import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+
 import {
   ownNativeClientResourceLinks,
   ownNativeClientResources,
@@ -58,3 +60,11 @@ export const isApiResourceClient = (clientId: string): boolean =>
 /** The REST API's resource identifier, the audience its access tokens carry. */
 export const getApiOAuthResourceIdentifier = () =>
   buildApiOAuthResource(getMcpBaseUrl()).identifier;
+
+/**
+ * Whether a REST API token was issued to the phone app: its metadata
+ * document client, or on a local development server any client, since the
+ * app registers itself there.
+ */
+export const isMobileAppClient = (clientId: string): boolean =>
+  isLocalDevOpen() || clientId === mobileClientMetadataUrl(getMcpBaseUrl());

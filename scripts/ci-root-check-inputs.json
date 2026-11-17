@@ -826,6 +826,7 @@
       "scripts/check-ci-job-names.ts"
     ],
     "CI network step retries and timeouts": ["**"],
+    "Workspace test gating ledger": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
       ".github/actions/**",

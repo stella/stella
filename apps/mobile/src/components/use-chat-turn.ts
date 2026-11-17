@@ -33,13 +33,18 @@ import type {
 import { sentEntry, steeringAfterPageRead } from "@/state/chat-messages";
 import type { ChatEntry, ChatRetry } from "@/state/chat-messages";
 import { continuationOf } from "@/state/chat-pending-input";
-import type { PendingAnswer, PendingInput } from "@/state/chat-pending-input";
+import type {
+  LocalRunTarget,
+  PendingAnswer,
+  PendingInput,
+} from "@/state/chat-pending-input";
 import { enqueueChatMessage, queuesInstead } from "@/state/chat-queue";
 import type { QueuedChatItem } from "@/state/chat-queue";
 import {
   applyChatEvent,
   cancelChatTurn,
   continueChatTurn,
+  editChatTurn,
   EMPTY_ANSWER,
   joinChatTurn,
   probeChatTurn,
@@ -61,7 +66,9 @@ import type {
  * answer so far, and the stored message it continues, when it resumes a
  * paused turn. That message stays on screen above what the new run adds.
  * A turn that answers the latest message again `replaces` the stored
- * answer that failed, which leaves the screen while it runs.
+ * answer that failed, which leaves the screen while it runs. An edit
+ * `truncates` the thread at the stored message it replaces: that message
+ * and every later one leave the screen while it runs.
  */
 export type LiveTurn = {
   readonly question: ChatEntry | undefined;
@@ -69,12 +76,27 @@ export type LiveTurn = {
   readonly startedAt: string;
   readonly continues: string | undefined;
   readonly replaces: string | undefined;
+  readonly truncates: string | undefined;
 };
 
-/** How a new turn stands to a stored message: adding to it, or in its place. */
+/**
+ * How a new turn stands to a stored message: adding to it, in its place, or
+ * in its place and every later one's.
+ */
 type StoredLink = {
-  readonly type: "continues" | "replaces";
+  readonly type: "continues" | "replaces" | "truncates";
   readonly messageId: string;
+};
+
+/**
+ * An edit of a stored message: the message as the thread shows it while
+ * the edit runs, the parts it is sent with, and the computer target of a
+ * thread whose turns run on the person's computer.
+ */
+type ChatEdit = {
+  readonly question: ChatEntry;
+  readonly parts: readonly unknown[];
+  readonly runTarget: LocalRunTarget | undefined;
 };
 
 /**
@@ -354,6 +376,7 @@ export const useChatTurn = ({
     busy: turn.busy,
     // Before the server names the turn too: the stop then waits for it.
     canStop: turn.turnId !== undefined || turn.busy,
+    edit: turnEdit({ accept, anonymized, setSendError, start, thread, turn }),
     follow,
     live: turn.live,
     queue,
@@ -718,6 +741,75 @@ type QueuedSteer = {
 };
 
 /**
+ * Replaces a stored message with its edit and answers it again, unless a
+ * turn is still answering. `onAccepted` runs once the server named the turn,
+ * when the message and every later one are gone from the stored thread;
+ * `onRefused` with why when the server did not take the edit, and the
+ * stored thread is as it was.
+ */
+function turnEdit({
+  accept,
+  anonymized,
+  setSendError,
+  start,
+  thread,
+  turn,
+}: {
+  /** Names the turn on its connection; a Stop pressed before then reaches it. */
+  accept: ReturnType<typeof turnStreams>["accept"];
+  anonymized: boolean;
+  setSendError: (refusal: SendRefusal | undefined) => void;
+  start: ReturnType<typeof turnStreams>["start"];
+  thread: {
+    matterId: string | undefined;
+    source: AccessTokenSource;
+    threadId: string;
+  };
+  turn: ReturnType<typeof useLiveTurn>;
+}) {
+  return (
+    { parts, question, runTarget }: ChatEdit,
+    {
+      onAccepted,
+      onRefused,
+    }: {
+      readonly onAccepted: () => void;
+      readonly onRefused: (error: ApiError) => void;
+    },
+  ): boolean => {
+    if (turn.connection.current !== null) {
+      return false;
+    }
+    setSendError(undefined);
+    const opened = turn.open(question, {
+      type: "truncates",
+      messageId: question.id,
+    });
+    start(
+      opened,
+      async () =>
+        await editChatTurn({
+          ...thread,
+          anonymized,
+          fetch: streamingFetch,
+          messageId: question.id,
+          onEvent: turn.applyEvent,
+          onTurn: (accepted) => {
+            accept(opened, accepted);
+            onAccepted();
+          },
+          parts,
+          runId: randomUUID(),
+          runTarget,
+          signal: opened.controller.signal,
+        }),
+      onRefused,
+    );
+    return true;
+  };
+}
+
+/**
  * The stream side of a turn: settling a stream that ended, rejoining one
  * that broke or that the app left, and starting a request whose stream
  * becomes the live turn. A request the server refused before it named a
@@ -878,6 +970,7 @@ function useLiveTurn(
           startedAt: nowIso(),
           continues: undefined,
           replaces: undefined,
+          truncates: undefined,
         },
   );
   const [busy, setBusy] = useState(activeTurnId !== null);
@@ -969,6 +1062,7 @@ function useLiveTurn(
         startedAt: nowIso(),
         continues: link?.type === "continues" ? link.messageId : undefined,
         replaces: link?.type === "replaces" ? link.messageId : undefined,
+        truncates: link?.type === "truncates" ? link.messageId : undefined,
       });
       setBusy(true);
       setTurnId(undefined);
@@ -988,6 +1082,7 @@ function useLiveTurn(
         startedAt: nowIso(),
         continues,
         replaces: undefined,
+        truncates: undefined,
       });
       setBusy(true);
       setTurnId(known);

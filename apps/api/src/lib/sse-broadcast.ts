@@ -13,7 +13,10 @@ import {
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import { createRedisClient } from "@/api/lib/redis-client";
+import {
+  createLazyRedisClient,
+  createRedisClient,
+} from "@/api/lib/redis-client";
 
 /**
  * Redis pub/sub channel for cross-instance SSE broadcasts. A channel is not a
@@ -221,14 +224,16 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
 const PUBLISH_CONNECT_TIMEOUT_MS = 2000;
 
 /**
- * The connection timeout only covers reaching a peer. A peer that accepts the
+ * Readiness and PUBLISH have separate bounds. A peer that accepts the
  * connection and then stops replying (a partitioned node, a paused process)
- * leaves the PUBLISH itself outstanding forever, which is the same unbounded
- * wait by a different route, so the command is raced too.
+ * leaves the PUBLISH itself outstanding forever, so the command is raced too.
  */
 const PUBLISH_COMMAND_TIMEOUT_MS = 2000;
 
-type PublisherClient = Pick<ReturnType<typeof createRedisClient>, "publish">;
+type PublisherClient = Pick<
+  ReturnType<typeof createRedisClient>,
+  "publish" | "connect" | "close" | "onClose"
+>;
 type CreatePublisherClient = (
   options: Parameters<typeof createRedisClient>[0],
 ) => PublisherClient;
@@ -236,22 +241,26 @@ type CreatePublisherClient = (
 export const createSseBroadcastPublisher = ({
   createClient = createRedisClient,
 }: { createClient?: CreatePublisherClient | undefined } = {}) => {
-  let publisher: PublisherClient | null = null;
-  const getPublisher = (): PublisherClient => {
-    publisher ??= createClient({
-      storeClass: "cache",
-      overrides: {
-        connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
-        enableOfflineQueue: false,
-      },
-    });
-    return publisher;
-  };
+  const publisher = createLazyRedisClient(
+    () =>
+      createClient({
+        storeClass: "cache",
+        overrides: {
+          connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
+          enableOfflineQueue: false,
+        },
+      }),
+    {
+      connectPolicy: "once",
+      connectTimeout: { timeoutMs: PUBLISH_CONNECT_TIMEOUT_MS },
+    },
+  );
 
   const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
     try {
+      const client = await publisher.ready();
       await withCommandTimeout({
-        command: getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload)),
+        command: client.publish(REDIS_CHANNEL, JSON.stringify(payload)),
         commandTimeoutMs: PUBLISH_COMMAND_TIMEOUT_MS,
         label: "SSE broadcast publish",
       });

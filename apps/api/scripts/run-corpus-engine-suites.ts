@@ -64,6 +64,10 @@ export const CORPUS_ENGINE_TEST_SUITES = [
     metastore: CORPUS_ENGINE_METASTORE.file,
   },
   {
+    file: "src/handlers/case-law/decisions/search-applied-copy.contract.test.ts",
+    metastore: CORPUS_ENGINE_METASTORE.file,
+  },
+  {
     file: "src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
     metastore: CORPUS_ENGINE_METASTORE.file,
   },
