@@ -73,6 +73,7 @@ export const FAILURE_REASON_GRADE = {
   // destination; a refused connection alone cannot tell an outage from a
   // wrong address.
   upstream_connection_refused: "transient",
+  // parser-output-unchanged: a failure grade for refused projection writes; no parser reads it.
   // A process of an older release met a search-index generation that a newer
   // release registered and refused to write without it. A process of the
   // newer release takes the same write.
