@@ -527,7 +527,7 @@ describe("secondary decision reads", () => {
           await new Promise<Response>((_resolve, reject) => {
             const signal = init?.signal;
             signal?.addEventListener("abort", () => {
-              reject(signal.reason);
+              reject(new Error("Read cancelled", { cause: signal.reason }));
             });
           }),
         { preconnect: () => undefined },
