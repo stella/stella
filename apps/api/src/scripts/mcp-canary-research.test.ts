@@ -23,6 +23,7 @@ type Observed = { method: string; path: string; body: string; cookie: string };
 const researchFetcher = (
   cells: readonly Cell[],
   observed: Observed[],
+  runResponse: () => Response = () => Response.json({ queued: 1 }),
 ): CanaryFetcher => {
   let lookups = 0;
   return async (input, init) => {
@@ -53,7 +54,7 @@ const researchFetcher = (
       case "POST /api/v1/case/research/columns":
         return Response.json({ id: COLUMN_ID });
       case "POST /api/v1/case/research/answers/run":
-        return Response.json({ queued: 1 });
+        return runResponse();
       case "POST /api/v1/case/research/answers/lookup": {
         const cell = cells[Math.min(lookups, cells.length - 1)];
         lookups += 1;
@@ -76,7 +77,10 @@ const researchFetcher = (
   };
 };
 
-const runJourney = async (cells: readonly Cell[]) => {
+const runJourney = async (
+  cells: readonly Cell[],
+  runResponse?: () => Response,
+) => {
   const observed: Observed[] = [];
   const waits: number[] = [];
   let clock = 0;
@@ -96,7 +100,7 @@ const runJourney = async (cells: readonly Cell[]) => {
       },
       now: () => clock,
     },
-    researchFetcher(cells, observed),
+    researchFetcher(cells, observed, runResponse),
   );
   return { results, observed, waits };
 };
@@ -143,6 +147,44 @@ describe("case-law research column journey", () => {
           method === "DELETE" && path.endsWith(`/columns/${COLUMN_ID}`),
       ),
     ).toBe(true);
+  });
+
+  test("warns, without failing, when the review organization has no model", async () => {
+    const { results, observed } = await runJourney([], () =>
+      Response.json(
+        { code: "ai_role_not_configured", message: "Configure a key." },
+        { status: 403 },
+      ),
+    );
+    expect(failures(results)).toEqual([]);
+    expect(
+      results.find(({ name }) => name === "case-law research column: run"),
+    ).toEqual({
+      name: "case-law research column: run",
+      status: "warned",
+      detail:
+        "the review organization has no model for this task, so no research question was asked",
+    });
+    expect(
+      observed.some(
+        ({ method, path }) =>
+          method === "DELETE" && path.endsWith(`/columns/${COLUMN_ID}`),
+      ),
+    ).toBe(true);
+  });
+
+  test("fails a run refused for any other reason, naming its code", async () => {
+    const { results } = await runJourney([], () =>
+      Response.json(
+        { code: "ai_provider_unavailable", message: "Try again." },
+        { status: 403 },
+      ),
+    );
+    expect(failures(results)).toEqual(["case-law research column: run"]);
+    expect(
+      results.find(({ name }) => name === "case-law research column: run")
+        ?.detail,
+    ).toContain("envelope code ai_provider_unavailable");
   });
 
   test("fails a cell that never settles within the deadline", async () => {

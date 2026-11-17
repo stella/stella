@@ -2855,6 +2855,7 @@
     "refresh": "Frissítés",
     "regenerate": "Újragenerálás",
     "reload": "Újratöltés",
+    "reloadDiscardChanges": "Az újratöltéskor elvesznek a nem mentett módosításai.",
     "removalComplete": "Eltávolítás befejezve",
     "remove": "Eltávolítás",
     "removeMember": "Tag eltávolítása",

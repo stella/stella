@@ -2855,6 +2855,7 @@
     "refresh": "Värskenda",
     "regenerate": "Genereeri uuesti",
     "reload": "Laadi uuesti",
+    "reloadDiscardChanges": "Uuesti laadimisel lähevad salvestamata muudatused kaotsi.",
     "removalComplete": "Eemaldamine lõpetatud",
     "remove": "Eemalda",
     "removeMember": "Eemalda liige",

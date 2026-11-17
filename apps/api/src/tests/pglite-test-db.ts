@@ -17,6 +17,7 @@ import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -31,6 +32,7 @@ import {
   installPgliteAccountAuditRls,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteAiMemoryActiveUserGuard,
+  installPgliteCaseLawContentChangedAt,
   installPgliteCaseLawCountryShape,
   installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
@@ -283,6 +285,7 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "stored_total_next_refresh_at",
   "stored_total_held_since",
   "stored_total_warned_slot",
+  "import_snapshot_date",
 ] as const;
 
 /**
@@ -350,9 +353,12 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    publicLawColumnPairs(
-      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-    ).map(({ relation, column }) => `${relation}.${column}`),
+    [
+      ...publicLawColumnPairs(
+        CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+      ),
+      ...publicLawColumnPairs(IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION),
+    ].map(({ relation, column }) => `${relation}.${column}`),
   );
 
 const decisionColumnNames = new Set(
@@ -488,6 +494,9 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT SELECT ("removal_checkpoint") ON TABLE "case_law_sources" TO stella_ingestion
+  `,
+  `
+    GRANT SELECT ("import_snapshot_date") ON TABLE "case_law_sources" TO stella_ingestion
   `,
   // Ingestion-owned case-law tables the migrations grant one by one, as they
   // were added. `pglite-role-grants.test.ts` holds this list and the
@@ -923,6 +932,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
+  await installPgliteCaseLawContentChangedAt(db);
   await installPgliteCaseLawSitemapChanges(db);
   await installPgliteCaseLawRankingSignalChanges(db);
   await installPgliteCaseLawPopulationCounts(db);

@@ -428,7 +428,7 @@ const ThreadMessages = ({
         ListHeaderComponent={
           <View style={styles.live}>
             {live === null ? null : (
-              <LiveTurnView accepted={turn.canStop} turn={live} />
+              <LiveTurnView accepted={turn.accepted} turn={live} />
             )}
             {showsPendingInput(
               live === null

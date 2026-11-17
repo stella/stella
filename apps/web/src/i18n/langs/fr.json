@@ -2855,6 +2855,7 @@
     "refresh": "Actualiser",
     "regenerate": "Régénérer",
     "reload": "Recharger",
+    "reloadDiscardChanges": "Le rechargement supprimera vos modifications non enregistrées.",
     "removalComplete": "Retrait terminé",
     "remove": "Supprimer",
     "removeMember": "Retirer le membre",

@@ -51,6 +51,7 @@ export { default as indexes_agent_skills_bound_workspace_idx } from "./online-mi
 export { default as indexes_apikey_personal_owner_keyset_idx } from "./online-migration-entries/indexes-apikey-personal-owner-keyset-idx";
 export { default as indexes_audit_logs_org_people_created_id_idx } from "./online-migration-entries/indexes-audit-logs-org-people-created-id-idx";
 export { default as indexes_case_law_citations_doctrine_cited_idx } from "./online-migration-entries/indexes-case-law-citations-doctrine-cited-idx";
+export { default as indexes_case_law_citations_polarity_pending_idx } from "./online-migration-entries/indexes-case-law-citations-polarity-pending-idx";
 export { default as indexes_case_law_court_date_published_index } from "./online-migration-entries/indexes-case-law-court-date-published-index";
 export { default as indexes_case_law_coverage_index } from "./online-migration-entries/indexes-case-law-coverage-index";
 export { default as indexes_case_law_decisions_citation_candidate_published_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-candidate-published-idx";
@@ -65,6 +66,7 @@ export { default as indexes_case_law_decisions_search_candidate_published_idx } 
 export { default as indexes_case_law_decisions_sitemap_month_published_idx } from "./online-migration-entries/indexes-case-law-decisions-sitemap-month-published-idx";
 export { default as indexes_case_law_decisions_sitemap_shard_published_idx } from "./online-migration-entries/indexes-case-law-decisions-sitemap-shard-published-idx";
 export { default as indexes_case_law_decisions_source_arrivals_published_idx } from "./online-migration-entries/indexes-case-law-decisions-source-arrivals-published-idx";
+export { default as indexes_case_law_decisions_source_content_changed_idx } from "./online-migration-entries/indexes-case-law-decisions-source-content-changed-idx";
 export { default as indexes_case_law_ingestion_failures_source_record_uidx } from "./online-migration-entries/indexes-case-law-ingestion-failures-source-record-uidx";
 export { default as indexes_case_law_parse_pending_index } from "./online-migration-entries/indexes-case-law-parse-pending-index";
 export { default as indexes_case_law_population_counts_source_kind_idx } from "./online-migration-entries/indexes-case-law-population-counts-source-kind-idx";
@@ -213,6 +215,7 @@ export { default as repairs_search_history_country_repair } from "./online-migra
 export { default as repairs_time_entry_submitted_constraint_validation } from "./online-migration-entries/repairs-time-entry-submitted-constraint-validation";
 export { default as repairs_usage_action_type_constraint_validation } from "./online-migration-entries/repairs-usage-action-type-constraint-validation";
 export { default as replacements_account_issuer_account_id_uidx } from "./online-migration-entries/replacements-account-issuer-account-id-uidx";
+export { default as replacements_case_law_citations_polarity_null_idx } from "./online-migration-entries/replacements-case-law-citations-polarity-null-idx";
 export { default as replacements_case_law_decisions_country_date_idx } from "./online-migration-entries/replacements-case-law-decisions-country-date-idx";
 export { default as replacements_case_law_decisions_document_pending_date_idx } from "./online-migration-entries/replacements-case-law-decisions-document-pending-date-idx";
 export { default as replacements_case_law_decisions_search_candidate_idx } from "./online-migration-entries/replacements-case-law-decisions-search-candidate-idx";

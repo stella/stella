@@ -1402,6 +1402,36 @@ export const caseLawParsedInputStateStatements = (): string[] => {
 };
 
 /**
+ * Install the content-change stamp's function and trigger from the production
+ * migration after schema push, which already holds the column.
+ */
+export const installPgliteCaseLawContentChangedAt = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261117160000_case_law_content_changed_at",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION stamp_case_law_content_change") ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_decisions_zy_content_changed_at",
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the content-change stamp function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
  * Install the sitemap change-log functions and triggers from the production
  * migration after schema push.
  */

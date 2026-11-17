@@ -1,16 +1,20 @@
 import { EventType, RUN_CANCEL_REASON } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import {
   CHAT_TURN_STEERING,
   CHAT_TURN_STEERING_EVENT,
 } from "@stll/api-contract/chat-send-intent";
+import { waitFor } from "@stll/test-kit";
 
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   createComputer,
+  harnessChunks,
   localSource,
 } from "@/api/tests/helpers/fake-local-computer";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   CHAT_TURN_OWNER_LOST_REASON,
@@ -19,6 +23,7 @@ import {
   type ChatTurnRunCut,
   chatTurnRunCutOf,
 } from "./chat-turn-run-cut";
+import { isChatTurnReleasedChunk } from "./local-run-chunks";
 
 /** An abort reason each kind of cut carries in production. */
 const REASON_OF_CUT = {
@@ -35,7 +40,9 @@ const REASON_OF_CUT = {
 /** How many interrupts a cut of each kind queues for the computer. */
 const INTERRUPTS_OF_CUT = {
   "member-stop": 1,
-  "owner-lost": 1,
+  // A lost owner's turn is another task's now, or ended: the adopter reads
+  // the run on, and the run of an ended turn is cancelled from the rows.
+  "owner-lost": 0,
   "production-failed": 1,
   "admission-lost": 1,
   other: 1,
@@ -93,6 +100,148 @@ describe("a cut of a local turn", () => {
     await read.return?.(undefined);
 
     expect(computer.queued.interrupts).toBe(1);
+  });
+});
+
+/** Run reads a read makes in one go only when it does not wait between them. */
+const SPINNING_READS = 50;
+
+/** A read of a new turn's run that its turn can release to another task. */
+const startReleasableRead = () => {
+  const computer = createComputer();
+  const handOver = new AbortController();
+  const read = localSource(computer)(
+    new AbortController().signal,
+    handOver.signal,
+  )[Symbol.asyncIterator]();
+  return { computer, handOver, read };
+};
+
+const readRest = async (read: AsyncIterator<StreamChunk>) => {
+  const chunks: StreamChunk[] = [];
+  for (let step = await read.next(); step.done !== true;) {
+    chunks.push(step.value);
+    step = await read.next();
+  }
+  return chunks;
+};
+
+describe("a local turn released to another task", () => {
+  test("ends its read after the last event, where it records it, and leaves the computer running", async () => {
+    const { computer, handOver, read } = startReleasableRead();
+    const events = await harnessChunks([
+      { type: "text.delta", messageId: "answer", delta: "Reading the files." },
+    ]);
+    computer.events(events);
+    const content = events.findIndex(
+      (chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT,
+    );
+    expect(content).toBeGreaterThan(-1);
+    let step = await read.next();
+    while (
+      step.done !== true &&
+      step.value.type !== EventType.TEXT_MESSAGE_CONTENT
+    ) {
+      step = await read.next();
+    }
+    // Released while the read is on the text's event, with more stored.
+    computer.events(
+      await harnessChunks([
+        { type: "text.delta", messageId: "answer", delta: " Done." },
+      ]),
+    );
+    handOver.abort();
+    const rest = await readRest(read);
+
+    expect(rest).toHaveLength(1);
+    expect(rest.findIndex(isChatTurnReleasedChunk)).toBe(0);
+    expect(computer.chatReadSeq()).toBe(content + 1);
+    expect(computer.queued.interrupts).toBe(0);
+  });
+
+  test("emits its run start before it releases, however early", async () => {
+    const { computer, handOver, read } = startReleasableRead();
+    handOver.abort();
+    const chunks = await readRest(read);
+
+    expect(chunks.at(0)).toMatchObject({ type: EventType.RUN_STARTED });
+    expect(chunks.findLastIndex(isChatTurnReleasedChunk)).toBe(
+      chunks.length - 1,
+    );
+    expect(computer.queued.interrupts).toBe(0);
+  });
+
+  test("reads on to the run's end once its harness finished", async () => {
+    const { computer, handOver, read } = startReleasableRead();
+    computer.events(
+      await harnessChunks([
+        { type: "text.delta", messageId: "answer", delta: "Done." },
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    );
+    let step = await read.next();
+    while (step.done !== true && step.value.type !== EventType.RUN_FINISHED) {
+      step = await read.next();
+    }
+    handOver.abort();
+    computer.finish();
+    const rest = await readRest(read);
+
+    expect(rest.some(isChatTurnReleasedChunk)).toBe(false);
+    expect(computer.queued.interrupts).toBe(0);
+  });
+
+  test("waits for the run's end at its poll pace while it may not release", async () => {
+    const computer = createComputer();
+    // Reads of the run's state once the hand-over is asked for; a read
+    // that spun on them ends the run itself, so the test cannot hang.
+    const held = { asked: false, reads: 0, spun: false };
+    const { control } = computer.context;
+    computer.context.control = {
+      ...control,
+      readRun: async (options) => {
+        if (held.asked) {
+          held.reads += 1;
+          if (held.reads === SPINNING_READS) {
+            held.spun = true;
+            computer.finish();
+          }
+        }
+        return await control.readRun(options);
+      },
+    };
+    const handOver = new AbortController();
+    const read = localSource(computer)(
+      new AbortController().signal,
+      handOver.signal,
+    )[Symbol.asyncIterator]();
+    computer.events(
+      await harnessChunks([
+        { type: "text.delta", messageId: "answer", delta: "Done." },
+        { type: "turn.completed", usage: null, boundary: null },
+      ]),
+    );
+    let step = await read.next();
+    while (step.done !== true && step.value.type !== EventType.RUN_FINISHED) {
+      step = await read.next();
+    }
+    handOver.abort();
+    held.asked = true;
+    const waiting = read.next();
+    await waitFor(
+      async () => await Promise.resolve(held.reads >= 3 || undefined),
+      {
+        description: "three polls of the run while the read may not release",
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+      },
+    );
+    if (!held.spun) {
+      computer.finish();
+    }
+    await waiting;
+    await readRest(read);
+
+    expect(held.spun).toBe(false);
   });
 });
 
