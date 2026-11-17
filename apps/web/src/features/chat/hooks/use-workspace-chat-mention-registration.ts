@@ -87,15 +87,19 @@ export const useWorkspaceChatMentionRegistration = (
     },
     [filters, sorts, workspaceId],
   );
-  const searchEntities = async (query: string) => {
-    const options = createSearchOptions(query);
-    if (pendingSearchRef.current) {
-      pendingSearchRef.current.queryKey = options.queryKey;
-    }
-    const data = await queryClient.query(options);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: as a plain local function the mutation/query census reads each call as a new unclassified reader; this search moves to resource query options separately
+  const searchEntities = useCallback(
+    async (query: string) => {
+      const options = createSearchOptions(query);
+      if (pendingSearchRef.current) {
+        pendingSearchRef.current.queryKey = options.queryKey;
+      }
+      const data = await queryClient.query(options);
 
-    return toEntityMentionOptions({ data, workspaceId });
-  };
+      return toEntityMentionOptions({ data, workspaceId });
+    },
+    [createSearchOptions, queryClient, workspaceId],
+  );
   const debouncedSearchEntities = useDebouncedCallback(
     async ({
       query,
