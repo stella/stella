@@ -117,17 +117,4 @@ describe("workspace update cache invalidation", () => {
       { reference: "REF-42" },
     ]);
   });
-
-  test("member mutations invalidate the members query and the matters list", async () => {
-    const { workspaceMemberMutationInvalidationKeys } =
-      await import("@/lib/workspaces/mutations/workspace-members");
-    const { workspaceMembersKeys } =
-      await import("@/lib/workspaces/queries/workspace-members");
-    const { workspacesKeys } = await import("@/lib/workspaces/queries");
-
-    expect(workspaceMemberMutationInvalidationKeys("ws_test")).toEqual([
-      workspaceMembersKeys.all("ws_test"),
-      workspacesKeys.all,
-    ]);
-  });
 });

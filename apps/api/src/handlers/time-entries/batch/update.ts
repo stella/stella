@@ -26,6 +26,8 @@ import {
   lockRowsForWrite,
   lockUnbillableRateCandidates,
 } from "@/api/lib/db/aggregate-lock";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -255,45 +257,51 @@ const batchUpdate = createSafeHandler(
             if (hasUnpricedEntry) {
               return { type: "unpriced" as const, rows: [] };
             }
-            // Only the locked rows were checked above; an entry that became
-            // approvable after the lock waits for a later request.
-            const updated =
-              locked.ids.length === 0
-                ? []
-                : await tx
-                    .update(timeEntries)
-                    .set({
-                      status: BILLING_STATUS.APPROVED,
-                      approvedByUserId: user.id,
-                      approvedAt: now,
-                      returnedAt: null,
-                      returnedByUserId: null,
-                      returnComment: null,
-                      updatedAt: now,
-                    })
-                    .where(locked.where(and(condition, approvable)))
-                    .returning({ id: timeEntries.id });
             // The rows were locked when read, so each one's status then is
-            // the status the approval moved it from.
+            // the status the approval moves it from.
             const previousStatus = new Map(
               blockers.map(({ id, status }) => [id, status]),
             );
-            await recordAuditEvent(
+            const updated = await transitionBatch({
               tx,
-              updated.map(({ id }) => ({
-                action: AUDIT_ACTION.UPDATE,
-                resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-                resourceId: id,
-                changes: {
-                  status: {
-                    old:
-                      previousStatus.get(id) ??
-                      panic("An approved entry was not among the locked rows"),
-                    new: BILLING_STATUS.APPROVED,
-                  },
+              spec: TRANSITIONS.timeEntries,
+              ids: locked.ids,
+              options: {
+                from: [BILLING_STATUS.DRAFT, BILLING_STATUS.SUBMITTED],
+                to: BILLING_STATUS.APPROVED,
+                guard:
+                  and(condition, approvable) ??
+                  panic("Batch approval eligibility predicate must exist"),
+                set: {
+                  approvedByUserId: user.id,
+                  approvedAt: now,
+                  returnedAt: null,
+                  returnedByUserId: null,
+                  returnComment: null,
+                  updatedAt: now,
                 },
-              })),
-            );
+              },
+              recordTransitionAuditEvent: async (auditTx, changed) => {
+                await recordAuditEvent(
+                  auditTx,
+                  changed.map(({ id }) => ({
+                    action: AUDIT_ACTION.UPDATE,
+                    resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+                    resourceId: id,
+                    changes: {
+                      status: {
+                        old:
+                          previousStatus.get(id) ??
+                          panic(
+                            "An approved entry was not among the locked rows",
+                          ),
+                        new: BILLING_STATUS.APPROVED,
+                      },
+                    },
+                  })),
+                );
+              },
+            });
             await recordBillingCapCrossings(tx, {
               workspaceId,
               recordAuditEvent,
@@ -349,27 +357,31 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation };
             }
-            const updated =
-              locked.ids.length === 0
-                ? []
-                : await tx
-                    .update(timeEntries)
-                    .set({
-                      status: BILLING_STATUS.DRAFT,
-                      approvedByUserId: null,
-                      approvedAt: null,
-                      updatedAt: now,
-                    })
-                    .where(
-                      locked.where(
-                        and(
-                          condition,
-                          eq(timeEntries.status, BILLING_STATUS.APPROVED),
-                        ),
-                      ),
-                    )
-                    .returning({ id: timeEntries.id });
-            await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            const updated = await transitionBatch({
+              tx,
+              spec: TRANSITIONS.timeEntries,
+              ids: locked.ids,
+              options: {
+                from: [BILLING_STATUS.APPROVED],
+                to: BILLING_STATUS.DRAFT,
+                guard:
+                  and(
+                    condition,
+                    eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                  ) ?? panic("Batch revert eligibility predicate must exist"),
+                set: {
+                  approvedByUserId: null,
+                  approvedAt: null,
+                  updatedAt: now,
+                },
+              },
+              recordTransitionAuditEvent: async (auditTx, changed) => {
+                await recordAuditEvent(
+                  auditTx,
+                  buildBatchEvents([...changed], action),
+                );
+              },
+            });
             await recordBillingCapCrossings(tx, {
               workspaceId,
               recordAuditEvent,

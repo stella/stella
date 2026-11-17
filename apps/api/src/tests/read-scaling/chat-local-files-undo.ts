@@ -1,4 +1,4 @@
-import { readLocalFilesUndo } from "@/api/handlers/chat/turns/local-files-undo";
+import { readLocalFilesUndo } from "@/api/handlers/chat/messages/local-files-undo";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
@@ -8,26 +8,27 @@ type ChatLocalFilesUndoFixture = {
   control: Pick<DesktopRunnerControl, "readFolderRestore">;
   owner: RunOwner;
   threadId: SafeId<"chatThread">;
-  turnId: SafeId<"chatTurn">;
+  messageId: SafeId<"chatMessage">;
 };
 
 /**
- * Where a turn's undo stands reads the turn, its newest run with whether that
- * run saved a checkpoint, and its newest undo: one row each, however many
- * undos were asked before or events the run stored.
+ * What an edit from a message does on the computer reads the message's turn,
+ * the first run from it on with whether it saved a checkpoint, a bounded
+ * count of later checkpoints and the checkpoint's newest undo: one row each,
+ * however many undos were asked before or events the runs stored.
  */
 export const chatLocalFilesUndoScalingScenario = {
-  name: "chat local files undo",
+  name: "chat message local files undo",
   definition: readLocalFilesUndo,
   measure: async ({
     control,
     owner,
     threadId,
-    turnId,
+    messageId,
   }: ChatLocalFilesUndoFixture) =>
     await runWithMeasuredQueryCounter(async (counter) => {
       const read = (
-        await control.readFolderRestore({ owner, threadId, turnId })
+        await control.readFolderRestore({ owner, threadId, messageId })
       ).unwrap();
       return {
         statements: counter.count,

@@ -67,6 +67,7 @@ import { organizationAuditExportScalingScenario } from "./organization-audit-exp
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
 import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
+import { savedSearchReadScalingScenario } from "./saved-searches";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -95,6 +96,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  savedSearchReadScalingScenario,
   ...dataExportReadScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,

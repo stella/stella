@@ -161,6 +161,7 @@
       "FrameTitle",
       "GitHubLogoIcon",
       "HexColorPicker",
+      "HighlightedTextarea",
       "HoverCard",
       "HoverCardContent",
       "HoverCardTrigger",
@@ -385,6 +386,7 @@
       "SortableHead",
       "StellaMark",
       "StellaWordmarkLatin",
+      "TABLE_FIRST_LINE",
       "TOAST_RIGHT_OFFSET_VAR",
       "TOOLBAR_ROW_HEIGHT",
       "TOOLBAR_ROW_HEIGHT_PX",
@@ -955,6 +957,7 @@
     "./components/stella-wordmark": ["StellaWordmarkLatin"],
     "./components/table": [
       "SortableHead",
+      "TABLE_FIRST_LINE",
       "Table",
       "TableBody",
       "TableCaption",
@@ -1135,6 +1138,7 @@
       "FrameTitle"
     ],
     "./hex-color-picker": ["HexColorPicker"],
+    "./highlighted-textarea": ["HighlightedTextarea"],
     "./hooks/use-contained-handler": [
       "containedEventHandler",
       "containedHandler"
@@ -1809,6 +1813,7 @@
     "./switch": ["Switch", "SwitchField"],
     "./table": [
       "SortableHead",
+      "TABLE_FIRST_LINE",
       "Table",
       "TableBody",
       "TableCaption",
@@ -1975,6 +1980,8 @@
     ],
     "ButtonTextRun.layout": ["wrap"],
     "ButtonTextRun.variant": ["link", "plain"],
+    "Checkbox.appearance": ["cell", "default"],
+    "Checkbox.firstLine": ["control", "text"],
     "ColorPicker.align": ["center", "end", "start"],
     "ColorPicker.side": ["bottom", "left", "right", "top"],
     "ColorPickerContent.presentation": ["inline", "popover"],
@@ -2070,6 +2077,7 @@
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
+    "HighlightedTextarea.dir": ["ltr", "rtl"],
     "InlineDropIndicator.position": ["after", "before"],
     "InputGroupAddon.align": [
       "block-end",
@@ -2077,6 +2085,7 @@
       "inline-end",
       "inline-start"
     ],
+    "InputGroupTextarea.appearance": ["composer", "default"],
     "InputGroupTextarea.fieldSizing": ["content", "fixed"],
     "InspectorDock.mount": ["content", "shell-end"],
     "InspectorEntityTab.inactiveIcon": ["dim", "legible"],
@@ -2228,6 +2237,7 @@
     ],
     "TextMark.variant": ["dotted", "fill", "strike", "underline", "wavy"],
     "TextMark.weight": ["inherit", "medium"],
+    "Textarea.appearance": ["composer", "default"],
     "Textarea.fieldSizing": ["content", "fixed"],
     "ToastProvider.position": [
       "bottom-center",

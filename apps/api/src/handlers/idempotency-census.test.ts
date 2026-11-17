@@ -514,8 +514,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "stream",
   },
-  // A repeat answers the turn's undo that is queued, sent or done.
-  "POST /v1/chat/threads/:threadId/turns/:turnId/local-files/undo": {
+  // A repeat answers the undo of the same checkpoint that is queued, sent or done.
+  "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo": {
     type: "non-replay",
     reason: "current-state",
   },

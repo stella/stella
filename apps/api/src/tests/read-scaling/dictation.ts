@@ -176,6 +176,7 @@ export const dictationScalingScenario = {
           Result.ok({ type: "static", apiKey: "recorded-credential" }),
         ),
       limit: async () => await Promise.resolve(Result.ok(undefined)),
+      deployment: () => ({ openRouter: true, elevenLabs: null }),
     });
     return await runWithMeasuredQueryCounter(async (counter) => {
       const response = await endpoint.handler(

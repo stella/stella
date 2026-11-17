@@ -625,8 +625,12 @@
       "unavailableProvider": "El proveedor de IA de su organización no ofrece transcripción.",
       "unavailable": "La transcripción con stella AI no está disponible en este momento.",
       "model": "Modelo de transcripción",
+      "chooseModel": "Elige un modelo",
       "outsideRegion": "Fuera de tu región",
-      "outsideRegionNote": "Este modelo procesa el audio fuera de la región de tu organización."
+      "outsideRegionNote": "Este modelo procesa el audio fuera de la región de tu organización.",
+      "retainsData": "Conserva tu audio",
+      "retainsDataTitle": "{provider} conserva lo que dictas",
+      "retainsDataWarning": "Este modelo funciona con una cuenta sin retención cero de datos. {provider} guarda el audio y la transcripción de todo lo que dictas según sus propias condiciones, fuera del control de stella. No dictes con él información confidencial ni datos de clientes."
     },
     "language": {
       "title": "Idioma del dictado",
@@ -835,9 +839,11 @@
       "storage": "No se pudo leer ni guardar la conexión en este ordenador."
     },
     "callbackConnectedTitle": "ChatGPT está conectado",
-    "callbackConnectedBody": "Vuelve a stella. Las solicitudes de IA ya usan tu plan de ChatGPT.",
+    "callbackConnectedBody": "Las solicitudes de IA en stella ya usan tu plan de ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT no se ha conectado",
-    "callbackNotConnectedBody": "Vuelve a stella para ver qué ha pasado e inténtalo de nuevo.",
+    "callbackNotConnectedBody": "El motivo se muestra en la app de stella. Para intentarlo de nuevo, abre {section} › {group} y haz clic en «{button}».",
+    "callbackAccount": "Cuenta",
+    "callbackPlan": "Plan",
     "callbackCloseTab": "Puedes cerrar esta pestaña.",
     "claudeCode": {
       "title": "Claude Code",

@@ -625,8 +625,12 @@
       "unavailableProvider": "لا يقدّم مزوّد الذكاء الاصطناعي لمؤسستك تحويل الكلام إلى نص.",
       "unavailable": "التحويل باستخدام stella AI غير متاح حاليًا.",
       "model": "نموذج التحويل",
+      "chooseModel": "اختر نموذجًا",
       "outsideRegion": "خارج منطقتك",
-      "outsideRegionNote": "يعالج هذا النموذج الصوت خارج منطقة مؤسستك."
+      "outsideRegionNote": "يعالج هذا النموذج الصوت خارج منطقة مؤسستك.",
+      "retainsData": "يحتفظ بصوتك",
+      "retainsDataTitle": "يحتفظ {provider} بما تمليه",
+      "retainsDataWarning": "يعمل هذا النموذج على حساب بلا احتفاظ صفري بالبيانات. يخزّن {provider} الصوت والنص المكتوب لكل ما تمليه وفق شروطه الخاصة، خارج سيطرة stella. لا تُملِ به معلومات سرية أو بيانات عملاء."
     },
     "language": {
       "title": "لغة الإملاء",
@@ -835,9 +839,11 @@
       "storage": "تعذّرت قراءة الاتصال أو حفظه على هذا الكمبيوتر."
     },
     "callbackConnectedTitle": "تم ربط ChatGPT",
-    "callbackConnectedBody": "عُد إلى stella. تستخدم طلبات الذكاء الاصطناعي الآن خطة ChatGPT الخاصة بك.",
+    "callbackConnectedBody": "تستخدم طلبات الذكاء الاصطناعي في stella الآن خطة ChatGPT الخاصة بك.",
     "callbackNotConnectedTitle": "لم يتم ربط ChatGPT",
-    "callbackNotConnectedBody": "عُد إلى stella لمعرفة ما حدث وحاول مرة أخرى.",
+    "callbackNotConnectedBody": "يظهر السبب في تطبيق stella. لإعادة المحاولة، افتح {section} ثم {group}، وانقر على «{button}».",
+    "callbackAccount": "الحساب",
+    "callbackPlan": "الخطة",
     "callbackCloseTab": "يمكنك إغلاق علامة التبويب هذه.",
     "claudeCode": {
       "title": "Claude Code",

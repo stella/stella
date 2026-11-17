@@ -625,8 +625,12 @@
       "unavailableProvider": "Poskytovatel AI vaší organizace převod řeči nenabízí.",
       "unavailable": "Převod pomocí stella AI teď není k dispozici.",
       "model": "Model převodu",
+      "chooseModel": "Zvolte model",
       "outsideRegion": "Mimo váš region",
-      "outsideRegionNote": "Tento model zpracovává zvuk mimo region vaší organizace."
+      "outsideRegionNote": "Tento model zpracovává zvuk mimo region vaší organizace.",
+      "retainsData": "Uchovává váš zvuk",
+      "retainsDataTitle": "{provider} si ponechává, co diktujete",
+      "retainsDataWarning": "Tento model běží na účtu bez nulového uchovávání dat. {provider} ukládá zvuk i přepis všeho, co nadiktujete, podle vlastních podmínek a mimo kontrolu stella. Nediktujte s ním důvěrné ani klientské informace."
     },
     "language": {
       "title": "Jazyk diktování",
@@ -835,9 +839,11 @@
       "storage": "Připojení se v tomto počítači nepodařilo načíst ani uložit."
     },
     "callbackConnectedTitle": "ChatGPT je připojen",
-    "callbackConnectedBody": "Vraťte se do stelly. Požadavky na AI teď využívají váš tarif ChatGPT.",
+    "callbackConnectedBody": "Požadavky na AI ve stelle teď využívají váš tarif ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
-    "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu.",
+    "callbackNotConnectedBody": "Důvod najdete v aplikaci stella. Chcete-li to zkusit znovu, otevřete {section} › {group} a klikněte na „{button}“.",
+    "callbackAccount": "Účet",
+    "callbackPlan": "Tarif",
     "callbackCloseTab": "Tuto kartu můžete zavřít.",
     "claudeCode": {
       "title": "Claude Code",

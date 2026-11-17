@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { assertProperty } from "@stll/property-testing";
 
 import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
@@ -569,40 +570,45 @@ test("exception identity survives sibling removal and rejects ambiguous covered 
   );
 });
 
-// Scoped like an unrelated pull request: the real inventory must load and
-// validate, but no waiver's date can fail this test on the day it elapses.
-test("check consumes validated tracked files without spawning under the offline preload", () => {
-  const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-tracked-"));
+// The workflow scans every git-tracked file; this CLI fixture checks that its
+// supplied file list is authoritative while registered catalogs still load.
+test("check consumes only supplied tracked files under the offline preload", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const directory = mkdtempSync(path.join(root, ".dated-waiver-tracked-"));
   const trackedFiles = path.join(directory, "tracked-files");
   const changedFiles = path.join(directory, "changed-files");
   const baseFiles = path.join(directory, "base-files");
+  const waiverFile = path.join(directory, "waivers.json");
+  const relativeWaiverFile = repoRelativePath(root, waiverFile);
   try {
-    const git = Bun.spawnSync(["git", "ls-files", "-z"], {
-      cwd: path.resolve(import.meta.dir, ".."),
-    });
-    expect(git.exitCode).toBe(0);
-    writeFileSync(trackedFiles, git.stdout);
+    writeFileSync(waiverFile, JSON.stringify({ expiresAt: "2026-10-01" }));
+    writeFileSync(trackedFiles, "bunfig.toml\0");
     writeFileSync(changedFiles, "apps/web/src/unrelated.ts\0");
     writeFileSync(baseFiles, "{}");
 
-    const checked = Bun.spawnSync(
-      [
-        "bun",
-        "--preload",
-        "./scripts/offline-network-preload.ts",
-        "scripts/dated-waivers.ts",
-        "--check",
-        "--tracked-files",
-        trackedFiles,
-        "--changed-files",
-        changedFiles,
-        "--base-files",
-        baseFiles,
-      ],
-      { cwd: path.resolve(import.meta.dir, "..") },
-    );
+    const command = [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/dated-waivers.ts",
+      "--check",
+      "--tracked-files",
+      trackedFiles,
+      "--changed-files",
+      changedFiles,
+      "--base-files",
+      baseFiles,
+    ];
+    const checked = Bun.spawnSync(command, { cwd: root });
     expect(checked.stderr.toString()).toBe("");
     expect(checked.exitCode).toBe(0);
+
+    writeFileSync(trackedFiles, `bunfig.toml\0${relativeWaiverFile}\0`);
+    const included = Bun.spawnSync(command, { cwd: root });
+    expect(included.exitCode).not.toBe(0);
+    expect(included.stderr.toString()).toContain(
+      `Unregistered dated waiver owners: ${relativeWaiverFile}`,
+    );
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }

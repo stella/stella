@@ -496,6 +496,10 @@ const parseCorpusGenerationCommand = (
   if (name === "status") {
     return Result.ok({ type: "status" });
   }
+  const seedRefusal = seedOptionRefusal(name, values);
+  if (seedRefusal !== null) {
+    return usageError(seedRefusal);
+  }
   const family = parseCorpusFamily(values.family);
   if (family === null) {
     return usageError(`--family must be one of ${CORPUS_FAMILIES.join(", ")}.`);

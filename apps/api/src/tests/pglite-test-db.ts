@@ -16,7 +16,6 @@ import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
-  CENSUS_COLUMN_GRANTS_BY_RELATION,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -61,6 +60,7 @@ import {
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
+  installPgliteMatterTimerPresence,
   installPgliteModelRunBudgets,
   installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
@@ -350,12 +350,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    [
-      CENSUS_COLUMN_GRANTS_BY_RELATION,
+    publicLawColumnPairs(
       CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-    ]
-      .flatMap(publicLawColumnPairs)
-      .map(({ relation, column }) => `${relation}.${column}`),
+    ).map(({ relation, column }) => `${relation}.${column}`),
   );
 
 const decisionColumnNames = new Set(
@@ -401,6 +398,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT INSERT ON TABLE "system_audit_runs" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
   caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
   `
@@ -434,6 +432,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -462,6 +461,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -902,6 +902,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });

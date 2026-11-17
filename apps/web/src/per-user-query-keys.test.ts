@@ -667,6 +667,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "reportExportsKeys.history(key)": KEY_TYPE_HAS_USER },
   },
+  "saved-searches/get.ts": { kind: "not-per-user", reason: READ_FRESH },
   "saved-searches/list.ts": {
     kind: "keyed",
     calls: ['api["saved-searches"].get'],

@@ -85,6 +85,7 @@
     "documentClose": "Fechar",
     "approvalBrowserNote": "Se permitida, a ação roda no navegador do seu computador, pela extensão da stella.",
     "grantFailed": "Não foi possível salvar a aprovação. Tente novamente.",
+    "limitReminderFailed": "Não foi possível salvar a alteração. Tente novamente.",
     "elsewhereBrowser": "Esta etapa roda no navegador do seu computador, pela extensão da stella. Abra esta conversa na stella lá para concluí-la.",
     "elsewhereSecret": "Esta etapa precisa de uma chave. Por segurança, chaves são adicionadas na stella no seu computador, não no app.",
     "elsewhereConnector": "Esta etapa conecta um app. Por segurança, apps são conectados na stella no seu computador, não no app.",
@@ -103,6 +104,8 @@
     "pickFailed": "Não foi possível abrir o seletor de arquivos. Tente novamente.",
     "sendFileRefused": "Não foi possível enviar um arquivo, então a mensagem não foi enviada. Remova o arquivo e tente novamente.",
     "sendFileNotAnonymizable": "Esta conversa é anonimizada e a stella não conseguiu anonimizar um dos arquivos, então nada foi enviado. Remova o arquivo e tente novamente.",
+    "sendLocalRunNotAnonymizable": "Esta conversa é anonimizada e o agente de programação do seu computador lê seus documentos como estão, então nada foi enviado a ele.",
+    "sendWithoutAnonymization": "Enviar sem anonimização",
     "pickTitle": "Escolha uma conversa",
     "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +.",
     "runBanner": {
@@ -248,7 +251,14 @@
       },
       "sessionNotResumed": "O agente de programação do seu computador não conseguiu retomar de onde parou, então continuou a partir das mensagens deste chat.",
       "steered": "Enviado enquanto o agente trabalhava",
-      "desktopSettingsSteps": "No stella desktop do seu computador, abra Configurações › Geral › Assinaturas de IA."
+      "ranOnModel": "Executado com {model}",
+      "desktopSettingsSteps": "No stella desktop do seu computador, abra Configurações › Geral › Assinaturas de IA.",
+      "errorLimitResetsAt": "O agente de programação do seu computador atingiu o limite de uso. Você poderá tentar novamente a partir de {time}.",
+      "limitReminderNotify": "Avise-me quando for renovado",
+      "limitReminderScheduled": "Avisaremos você a partir de {time}.",
+      "limitResumeContinue": "Continuar automaticamente quando for renovado",
+      "limitResumeScheduled": "Continuará automaticamente a partir de {time}.",
+      "limitReminderCancel": "Cancelar"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",

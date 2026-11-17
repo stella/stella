@@ -839,7 +839,7 @@ mechanics, and similar), not gaps in coverage.
 | provider_secret | 34 |
 | public_indexing | 11 |
 | realtime_stream | 10 |
-| search_ui | 21 |
+| search_ui | 22 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 24 |

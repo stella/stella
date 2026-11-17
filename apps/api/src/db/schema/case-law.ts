@@ -12,6 +12,12 @@ import {
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import {
+  DECISION_REVIEW_EVIDENCE_STATUSES,
+  DECISION_REVIEW_OUTCOMES,
+  DECISION_REVIEW_SOURCES,
+} from "@stll/api-contract/case-law-reviews";
+import type { DecisionReviewLink } from "@stll/api-contract/case-law-reviews";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   APPLIED_VERSION_BASES,
@@ -78,6 +84,11 @@ import {
   CITED_PART,
   CITED_PARTS,
 } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CENSUS_COUNTED_OUTCOMES,
+  CENSUS_OUTCOMES,
+  CENSUS_SCOPE_STATUSES,
+} from "@/api/lib/case-law/completeness-census-values";
 import {
   CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   DECISION_COURT_ID_MAX_LENGTH,
@@ -795,6 +806,8 @@ export const caseLawDecisions = p.pgTable(
      * ASTs are re-parsed lazily from sourceRaw in S3.
      */
     parserVersion: p.smallint("parser_version").default(0),
+    /** Version of the header/holding appeal extraction last completed; null means unexamined. */
+    reviewExtractionVersion: p.smallint("review_extraction_version"),
     /**
      * Raw source HTML/JSON from the court website, stored
      * verbatim for future re-parsing without re-downloading.
@@ -2091,6 +2104,88 @@ export const caseLawCoverageSlices = p.pgTable(
   ],
 );
 
+/** Observations from complete publisher walks; retries replace one source/slice. */
+export const caseLawCompletenessCensus = p.pgTable(
+  "case_law_completeness_census",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    slice: p.varchar({ length: 64 }).notNull(),
+    /** Publisher slice year; null for a source with no publisher enumeration. */
+    year: p.integer(),
+    outcome: p.text({ enum: CENSUS_OUTCOMES }).notNull(),
+    /** Extent of the publisher corpus represented by this observation, not a lifecycle. */
+    scopeExtent: p
+      .text("scope_status", { enum: CENSUS_SCOPE_STATUSES })
+      .notNull(),
+    /** Effective completeness denominator; outcome identifies its provenance. */
+    publisherCount: p.integer("publisher_count"),
+    /** Unmodified stated total, retained privately even when enumeration is larger. */
+    publisherStatedCount: p.integer("publisher_stated_count"),
+    /** Distinct listing identities plus entries without a usable identity. */
+    enumeratedCount: p.integer("enumerated_count").notNull(),
+    storedCount: p.integer("stored_count").notNull(),
+    textCount: p.integer("text_count").notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    scopeFirst: p.varchar("scope_first", { length: 64 }).notNull(),
+    scopeLast: p.varchar("scope_last", { length: 64 }).notNull(),
+    expectedSlices: p.integer("expected_slices").notNull(),
+    /** Research evidence for this benchmark and its counting unit. */
+    evidenceRef: p.text("evidence_ref").notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.sourceId, t.slice] }),
+    p
+      .index("case_law_completeness_census_source_year_idx")
+      .on(t.sourceId, t.year),
+    p.check(
+      "case_law_completeness_census_counts",
+      sql`
+      ${t.storedCount} >= 0 AND ${t.textCount} >= 0 AND ${t.textCount} <= ${t.storedCount}
+      AND ${t.enumeratedCount} >= 0
+      AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} >= 0)
+      AND ${t.expectedSlices} > 0
+      AND ${t.scopeExtent} IN (${sql.join(
+        CENSUS_SCOPE_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})
+      AND ((${t.outcome} IN (${sql.join(
+        CENSUS_COUNTED_OUTCOMES.map((outcome) => sql`${outcome}`),
+        sql`, `,
+      )}) AND ${t.publisherCount} >= 0 AND ${t.publisherCount} IS NOT NULL AND (${t.year} IS NOT NULL OR ${t.slice} LIKE '0000%'))
+        OR (${t.outcome} = 'none-exposed' AND ${t.publisherCount} IS NULL))
+      AND (${t.outcome} <> 'identity-unproven' OR ${t.publisherCount} >= ${t.enumeratedCount})
+      AND (${t.outcome} <> 'publisher-count' OR (
+        ${t.publisherStatedCount} IS NOT NULL
+        AND ${t.publisherCount} = ${t.publisherStatedCount}
+        AND ${t.publisherStatedCount} >= ${t.enumeratedCount}
+      ))
+      AND (${t.outcome} <> 'listing-enumerated' OR (
+        ${t.publisherCount} = ${t.enumeratedCount}
+        AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} < ${t.enumeratedCount})
+      ))
+    `,
+    ),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1 FROM ${caseLawSources} AS census_source
+        WHERE census_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`census_source.descriptor`)}
+      )`,
+    }),
+    p.pgPolicy("census_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass)`,
+    }),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 /**
  * Durable retries and deliberate terminal dispositions for listed decisions.
  *
@@ -2247,6 +2342,112 @@ export const caseLawRemovalReconciliationItems = p.pgTable(
       sql`${t.attempts} >= 0`,
     ),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Procedural review edges, independent of precedential citations and authority counts. */
+export const caseLawDecisionReviews = p.pgTable(
+  "case_law_decision_reviews",
+  {
+    reviewingDecisionId: safeUuid<"caseLawDecision">(
+      "reviewing_decision_id",
+    ).notNull(),
+    /** Null while the reviewed judgment is absent or its identity remains ambiguous. */
+    reviewedDecisionId: safeUuid<"caseLawDecision">("reviewed_decision_id"),
+    reviewedCaseNumber: p
+      .varchar("reviewed_case_number", { length: 256 })
+      .notNull(),
+    reviewedCitationKey: p
+      .varchar("reviewed_citation_key", { length: 128 })
+      .notNull(),
+    reviewedDocketFamilyKey: p.text("reviewed_docket_family_key").notNull(),
+    reviewedCourt: p.varchar("reviewed_court", { length: 512 }).notNull(),
+    reviewedDecisionDate: p.date("reviewed_decision_date"),
+    reviewedSheetNumber: p.varchar("reviewed_sheet_number", { length: 32 }),
+    outcome: p.text({ enum: DECISION_REVIEW_OUTCOMES }).notNull(),
+    source: p.text({ enum: DECISION_REVIEW_SOURCES }).notNull(),
+    /** Classification of the retained source evidence, recomputed from parser input. */
+    evidenceClassification: p
+      .text("evidence_classification", {
+        enum: DECISION_REVIEW_EVIDENCE_STATUSES,
+      })
+      .notNull(),
+    /** Opening-formula targets retained when official metadata differs. */
+    openingEvidence: jsonb("opening_evidence")
+      .$type<
+        Pick<
+          DecisionReviewLink,
+          | "reviewedCaseNumber"
+          | "reviewedCourt"
+          | "reviewedDecisionDate"
+          | "outcome"
+        >[]
+      >()
+      .notNull(),
+    parserVersion: p.smallint("parser_version").notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.reviewingDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_reviews_reviewing_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [t.reviewedDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_reviews_reviewed_fk",
+      })
+      .onDelete("set null"),
+    p
+      .uniqueIndex("case_law_decision_reviews_identity_idx")
+      .on(
+        t.reviewingDecisionId,
+        t.reviewedCourt,
+        t.reviewedCaseNumber,
+        sql`COALESCE(${t.reviewedDecisionDate}, '-infinity'::date)`,
+      ),
+    p
+      .index("case_law_decision_reviews_reviewed_idx")
+      .on(
+        t.reviewedDecisionId,
+        t.reviewingDecisionId,
+        t.reviewedCourt,
+        t.reviewedCaseNumber,
+        t.reviewedDecisionDate,
+      ),
+    p
+      .index("case_law_decision_reviews_target_idx")
+      .on(t.reviewedCourt, t.reviewedDocketFamilyKey),
+    p.check(
+      "case_law_decision_reviews_distinct",
+      sql`${t.reviewingDecisionId} IS DISTINCT FROM ${t.reviewedDecisionId}`,
+    ),
+    p.check(
+      "case_law_decision_reviews_outcome_values",
+      sql`${t.outcome} IN (${sql.join(
+        DECISION_REVIEW_OUTCOMES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_reviews_source_values",
+      sql`${t.source} IN (${sql.join(
+        DECISION_REVIEW_SOURCES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_reviews_evidence_classification_values",
+      sql`${t.evidenceClassification} IN (${sql.join(
+        DECISION_REVIEW_EVIDENCE_STATUSES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

@@ -2431,7 +2431,7 @@ for (const language of ["en", "ar"] as const) {
     page,
   }, testInfo) => {
     const messages = language === "ar" ? arMessages : enMessages;
-    await page.setViewportSize({ width: 820, height: 950 });
+    await page.setViewportSize({ width: 560, height: 950 });
     await installNativeBoundary({
       page,
       snapshot: { ...SNAPSHOT, recordingStatus: "off" },
@@ -2452,15 +2452,56 @@ for (const language of ["en", "ar"] as const) {
       path: testInfo.outputPath(`welcome-${language}.png`),
       fullPage: true,
     });
-    await page
-      .getByText(messages.activity.welcomeLearnMore, { exact: true })
-      .click();
+    const disclosure = page.getByRole("button", {
+      name: messages.activity.welcomeLearnMore,
+      exact: true,
+    });
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await disclosure.focus();
+    await disclosure.press("Enter");
+    await expect(disclosure).toBeFocused();
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    const details = page.getByText(messages.activity.welcomeDetails, {
+      exact: true,
+    });
+    await expect(details).toBeVisible();
+    const card = page
+      .getByRole("heading", { name: messages.activity.welcomeTitle })
+      .locator("..");
+    await expect
+      .poll(
+        async () =>
+          await details.evaluate((element) => {
+            const section = element.closest("section");
+            const content = element.getBoundingClientRect();
+            const bounds = section?.getBoundingClientRect();
+            return (
+              bounds !== undefined &&
+              content.left >= bounds.left &&
+              content.right <= bounds.right &&
+              content.bottom <= bounds.bottom &&
+              element.scrollWidth <= element.clientWidth
+            );
+          }),
+      )
+      .toBe(true);
     await expect(
-      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+      card.getByRole("button", { name: messages.activity.welcomeStart }),
     ).toBeVisible();
-    expect(await tauriInvocations(page)).not.toContainEqual(
-      expect.objectContaining({ command: "activity_set_recording_status" }),
-    );
+    await disclosure.press("Space");
+    await expect(disclosure).toBeFocused();
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    await expect(details).toBeHidden();
+    await disclosure.click();
+    await expect(details).toBeVisible();
+    for (const command of [
+      "activity_set_recording_status",
+      "activity_set_capture_details",
+    ]) {
+      expect(await tauriInvocations(page)).not.toContainEqual(
+        expect.objectContaining({ command }),
+      );
+    }
   });
 }
 

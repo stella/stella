@@ -1,20 +1,18 @@
 import { panic } from "better-result";
-import { inArray, lte, sql } from "drizzle-orm";
-
-import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { chatLimitReminders, chatThreads, chatTurns } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
-import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
+import { chatLimitReminders } from "@/api/db/schema";
+import { notifyChatLimitResetOnTx } from "@/api/lib/chat/limit-reset-notification";
 import { withSkipLockedBatch } from "@/api/lib/db/aggregate-lock";
 import {
-  createNotificationsInTransaction,
-  type NewNotification,
+  dueChatLimitNotificationsSelect,
+  type DueChatLimitReminder,
+} from "@/api/lib/db/chat-limit-reminder-system";
+import {
   type NotificationPing,
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const SEND_CHAT_LIMIT_REMINDERS_TASK =
@@ -22,13 +20,6 @@ export const SEND_CHAT_LIMIT_REMINDERS_TASK =
 
 /** Reminders handled per run; a larger backlog continues on the next run. */
 const REMINDER_BATCH_SIZE = 200;
-
-type DueReminder = {
-  threadId: SafeId<"chatThread">;
-  turnId: SafeId<"chatTurn">;
-  organizationId: SafeId<"organization">;
-  userId: string;
-};
 
 type ReminderSweepResult = {
   due: number;
@@ -38,7 +29,7 @@ type ReminderSweepResult = {
 
 const fileDueReminders = async (
   tx: Transaction,
-  due: readonly DueReminder[],
+  due: readonly DueChatLimitReminder[],
 ): Promise<ReminderSweepResult> => {
   // audit: skip - delivers a reminder the member asked for; the notification it files is the record.
   if (due.length === 0) {
@@ -50,67 +41,18 @@ const fileDueReminders = async (
       due.map(({ threadId }) => threadId),
     ),
   );
-  // The newest turn of each chat, ordered as readLimitedLatestTurn orders it;
-  // DISTINCT ON keeps exactly one row per chat, so the limit is exact.
-  const latest = await tx
-    .selectDistinctOn([chatTurns.threadId], {
-      threadId: chatTurns.threadId,
-      turnId: chatTurns.id,
-    })
-    .from(chatTurns)
-    .where(
-      inArray(
-        chatTurns.threadId,
-        due.map(({ threadId }) => threadId),
-      ),
-    )
-    .orderBy(chatTurns.threadId, ...NEWEST_CHAT_TURN_FIRST)
-    .limit(due.length);
-  const latestTurnOf = new Map(
-    latest.map(({ threadId, turnId }) => [threadId, turnId]),
-  );
-  const waiting = due.filter(
-    ({ threadId, turnId }) => latestTurnOf.get(threadId) === turnId,
-  );
-  if (waiting.length === 0) {
-    return { due: due.length, notified: 0, pings: [] };
-  }
-  const threads = await tx
-    .select({ id: chatThreads.id, workspaceId: chatThreads.workspaceId })
-    .from(chatThreads)
-    .where(
-      inArray(
-        chatThreads.id,
-        waiting.map(({ threadId }) => threadId),
-      ),
-    );
-  const workspaceOf = new Map(threads.map((row) => [row.id, row.workspaceId]));
-  const rows = waiting.map(
-    (reminder) =>
-      ({
-        kind: NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET,
-        metadata: {},
-        userId: brandPersistedUserId(reminder.userId),
-        organizationId: reminder.organizationId,
-        idempotencyKey: `local-run-limit-reset:${reminder.turnId}`,
-        entityType: "chat_thread",
-        entityId: reminder.threadId,
-        workspaceId: workspaceOf.get(reminder.threadId) ?? null,
-      }) satisfies NewNotification,
-  );
-  return {
-    due: due.length,
-    notified: rows.length,
-    pings: await createNotificationsInTransaction(rows, tx),
-  };
+  const pings = await notifyChatLimitResetOnTx(tx, due);
+  return { due: due.length, notified: pings.length, pings };
 };
 
 /**
  * Take the reminders due at `now` and file one notification per chat whose
  * latest turn is still the one that hit the limit. A chat the member already
- * continued gets nothing. Taking the rows and filing the notifications commit
- * together, so a crash between them neither loses a reminder nor sends it
- * twice (the idempotency key is the turn).
+ * continued gets nothing. A request to continue the chat is taken only once
+ * its window passed without the chat continuing (the limit resumer tries it
+ * until then), so it ends in the notification. Taking the rows and filing
+ * the notifications commit together, so a crash between them neither loses a
+ * reminder nor sends it twice (the idempotency key is the turn).
  */
 export const takeDueChatLimitReminders = async ({
   database,
@@ -126,21 +68,7 @@ export const takeDueChatLimitReminders = async ({
   await withSkipLockedBatch({
     database,
     limit: REMINDER_BATCH_SIZE,
-    select: (tx) =>
-      tx
-        .select({
-          threadId: chatLimitReminders.threadId,
-          turnId: chatLimitReminders.turnId,
-          organizationId: chatLimitReminders.organizationId,
-          userId: chatLimitReminders.userId,
-        })
-        .from(chatLimitReminders)
-        .where(
-          lte(
-            chatLimitReminders.remindAt,
-            sql`${now.toISOString()}::timestamptz`,
-          ),
-        ),
+    select: (tx) => dueChatLimitNotificationsSelect(tx, now),
     run: fileDueReminders,
   });
 

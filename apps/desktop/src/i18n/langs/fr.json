@@ -625,8 +625,12 @@
       "unavailableProvider": "Le fournisseur d’IA de votre organisation ne propose pas de transcription.",
       "unavailable": "La transcription par stella AI n’est pas disponible pour le moment.",
       "model": "Modèle de transcription",
+      "chooseModel": "Choisissez un modèle",
       "outsideRegion": "Hors de votre région",
-      "outsideRegionNote": "Ce modèle traite l’audio hors de la région de votre organisation."
+      "outsideRegionNote": "Ce modèle traite l’audio hors de la région de votre organisation.",
+      "retainsData": "Conserve votre audio",
+      "retainsDataTitle": "{provider} conserve ce que vous dictez",
+      "retainsDataWarning": "Ce modèle fonctionne avec un compte sans conservation nulle des données. {provider} stocke l’audio et la transcription de tout ce que vous dictez selon ses propres conditions, hors du contrôle de stella. N’y dictez aucune information confidentielle ni aucune donnée client."
     },
     "language": {
       "title": "Langue de dictée",
@@ -835,9 +839,11 @@
       "storage": "La connexion n’a pas pu être lue ni enregistrée sur cet ordinateur."
     },
     "callbackConnectedTitle": "ChatGPT est connecté",
-    "callbackConnectedBody": "Revenez à stella. Les requêtes d’IA utilisent désormais votre forfait ChatGPT.",
+    "callbackConnectedBody": "Les requêtes d’IA dans stella utilisent désormais votre forfait ChatGPT.",
     "callbackNotConnectedTitle": "ChatGPT n’a pas été connecté",
-    "callbackNotConnectedBody": "Revenez à stella pour voir ce qui s’est passé et réessayez.",
+    "callbackNotConnectedBody": "La raison s’affiche dans l’application stella. Pour réessayer, ouvrez {section} › {group} et cliquez sur « {button} ».",
+    "callbackAccount": "Compte",
+    "callbackPlan": "Forfait",
     "callbackCloseTab": "Vous pouvez fermer cet onglet.",
     "claudeCode": {
       "title": "Claude Code",

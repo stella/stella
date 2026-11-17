@@ -62,6 +62,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           let providerRequests = 0;
           let credentialRequests = 0;
           const endpoint = createDictationTranscribeEndpoint({
+            // Served through OpenRouter, whatever this environment configures.
+            deployment: () => ({ openRouter: true, elevenLabs: null }),
             transcribe: async () => {
               providerRequests += 1;
               return panic(
@@ -204,6 +206,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               modelId,
             } satisfies TranscriptionResult;
             const endpoint = createDictationTranscribeEndpoint({
+              // Served through OpenRouter, whatever this environment configures.
+              deployment: () => ({ openRouter: true, elevenLabs: null }),
               transcribe: async () => {
                 providerRequests += 1;
                 return await Promise.resolve(
@@ -433,6 +437,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             let upstreamRequests = 0;
             let credentialRequests = 0;
             const endpoint = createDictationTranscribeEndpoint({
+              // Served through OpenRouter, whatever this environment configures.
+              deployment: () => ({ openRouter: true, elevenLabs: null }),
               transcribe: async (options) =>
                 await transcribeAudio({
                   ...options,
