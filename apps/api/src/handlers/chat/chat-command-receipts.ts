@@ -58,8 +58,12 @@ export class ChatCommandReplayedError extends TaggedError(
   "ChatCommandReplayedError",
 )<{
   message: string;
-  /** The turn the first attempt started or continued. */
-  turnId: SafeId<"chatTurn">;
+  /**
+   * The turn the first attempt started or continued, or null once that turn
+   * left the thread (an edit from an earlier message removed it): the
+   * command was still taken, and is not run again.
+   */
+  turnId: SafeId<"chatTurn"> | null;
 }> {}
 
 const commandConflict = () =>
@@ -133,13 +137,11 @@ export const insertChatCommandReceiptOnTx = async ({
   turnId,
   tx,
   userId,
-  workspaceId,
 }: ChatCommandScope & {
   organizationId: SafeId<"organization">;
   turnId: SafeId<"chatTurn">;
   tx: Transaction;
   userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace"> | null;
 }): Promise<void> => {
   // audit: skip — a retry key of a command whose own writes are audited in this transaction
   const inserted = await tx
@@ -151,7 +153,6 @@ export const insertChatCommandReceiptOnTx = async ({
       threadId,
       turnId,
       userId,
-      workspaceId,
     })
     .onConflictDoNothing()
     .returning({ commandId: chatCommandReceipts.commandId });
@@ -163,13 +164,17 @@ export const insertChatCommandReceiptOnTx = async ({
 /**
  * The answer to a replayed command: a 409 a client reads as success (see
  * `chatCommandOutcomeOf`), naming the turn the first attempt started or
- * continued in the turn header, so the client joins that turn.
+ * continued in the turn header, so the client joins that turn. A receipt
+ * whose turn has since left the thread names none: the client reads that as
+ * a refusal and keeps the member's text, and nothing runs twice.
  */
 export const chatCommandReplayResponse = (
   replayed: ChatCommandReplayedError,
   headers: ResponseHeaders,
 ): HandlerError<409> => {
-  headers[CHAT_TURN_ID_HEADER] = replayed.turnId;
+  if (replayed.turnId !== null) {
+    headers[CHAT_TURN_ID_HEADER] = replayed.turnId;
+  }
   return new HandlerError({
     status: 409,
     code: CHAT_COMMAND_ERROR_CODE.replayed,

@@ -1049,10 +1049,6 @@ export const chatCommandReceipts = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: safeWorkspaceId("workspace_id").references(
-      () => workspaces.id,
-      { onDelete: "restrict" },
-    ),
     userId: p
       .text("user_id")
       .notNull()
@@ -1060,22 +1056,19 @@ export const chatCommandReceipts = p.pgTable(
     threadId: safeUuid<"chatThread">("thread_id")
       .notNull()
       .references(() => chatThreads.id, { onDelete: "cascade" }),
-    /** The turn the command started (a send) or continued (an answer). */
-    turnId: safeUuid<"chatTurn">("turn_id")
-      .notNull()
-      .references(() => chatTurns.id, { onDelete: "cascade" }),
+    /**
+     * The turn the command started (a send) or continued (an answer); null
+     * once that turn was removed from the thread (an edit from an earlier
+     * message), when the receipt still answers that the command was taken.
+     */
+    turnId: safeUuid<"chatTurn">("turn_id").references(() => chatTurns.id, {
+      onDelete: "set null",
+    }),
     /** `send` or `answer` (`CHAT_COMMAND_TYPES`). */
     commandType: p.text("command_type").$type<ChatCommandType>().notNull(),
     acceptedAt: timestamptz("accepted_at").notNull().defaultNow(),
   },
   (table) => [
-    p
-      .foreignKey({
-        columns: [table.workspaceId, table.organizationId],
-        foreignColumns: [workspaces.id, workspaces.organizationId],
-        name: "chat_command_receipts_workspace_organization_fk",
-      })
-      .onDelete("restrict"),
     p.check(
       "chat_command_receipts_command_type_check",
       sql`${table.commandType} IN (${sql.join(

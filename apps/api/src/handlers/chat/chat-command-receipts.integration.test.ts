@@ -237,6 +237,40 @@ describe("a send retried under its command id", () => {
     }
   });
 
+  test("after an edit removed its first attempt's turn, starts nothing and names no turn", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = newThreadId();
+    const commandId = Bun.randomUUIDv7();
+    const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    try {
+      harness.script(threadId, [
+        { finishReason: "stop", text: "It runs for a year.", type: "text" },
+      ]);
+      expect(
+        await harness.send(
+          commandSend({ commandId, harness, messageId, threadId }),
+        ),
+      ).toEqual({ status: "streamed" });
+      // An edit from an earlier message deletes the messages after it, and
+      // their turns go with them.
+      await testDb
+        .delete(chatMessages)
+        .where(eq(chatMessages.threadId, threadId));
+      expect(await turnsOf(threadId)).toEqual([]);
+      expect(await receiptOf(commandId)).toEqual([
+        { commandType: "send", threadId, turnId: null },
+      ]);
+
+      const retry = commandSend({ commandId, harness, messageId, threadId });
+      expect(await harness.send(retry)).toEqual(replayed);
+      expect(retry.set.headers[CHAT_TURN_ID_HEADER]).toBeUndefined();
+      expect(await turnsOf(threadId)).toEqual([]);
+      expect(await messagesOf(threadId)).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
   test("under an id another thread's receipt holds is refused and changes nothing", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = newThreadId();
