@@ -33,7 +33,8 @@ const {
 } = await import("@/lib/workspace-realtime");
 const { applyWorkspaceRealtimeQueryActions, createWorkspaceQueryActionBatch } =
   await import("@/lib/workspace-sse");
-const { useRenameEntity } = await import("@/lib/workspaces/mutations/entities");
+const { useRenameEntity, useMoveEntity } =
+  await import("@/lib/workspaces/mutations/entities");
 const { invalidateDeletedEntityQueries } =
   await import("@/lib/workspaces/mutations/entities.logic");
 const entityQueries = await import("@/lib/workspaces/queries/entities");
@@ -464,5 +465,128 @@ for (const [name, mutate] of Object.entries(entityMutationCases)) {
     console.info(
       `${name} at 10N: ${before.total} -> ${after.total} fetch starts`,
     );
+  });
+}
+
+for (const scenario of [
+  { name: "mounted success", unmount: false, success: true },
+  { name: "unmounted success", unmount: true, success: true },
+  { name: "unmounted refusal", unmount: true, success: false },
+]) {
+  test(`entity move ${scenario.name}: completion owns hierarchy refresh without a stream`, async () => {
+    const { client, starts, close } = createMeasuredClient();
+    const targetParentId = otherEntityId(20);
+    const otherWorkspaceId = otherEntityId(21);
+    const foldersOptions = entityQueries.workspaceFoldersOptions(WORKSPACE_ID);
+    client.setQueryData(foldersOptions.queryKey, [
+      { entityId: ENTITY_ID, name: "Folder", parentId: null },
+    ]);
+    const foldersObserver = new QueryObserver(client, foldersOptions);
+    const stopFolders = foldersObserver.subscribe(() => undefined);
+    const movedKey = entitiesKeys.detail(WORKSPACE_ID, ENTITY_ID);
+    const unrelatedKey = entitiesKeys.detail(WORKSPACE_ID, otherEntityId(22));
+    const foreignKey = entitiesKeys.folders(otherWorkspaceId);
+    const stopMoved = observe(client, movedKey, 1);
+    const stopUnrelated = observe(client, unrelatedKey, 1);
+    const stopForeign = observe(client, foreignKey, 1);
+    const reached = Promise.withResolvers<undefined>();
+    const answer = Promise.withResolvers<Response>();
+    let folderReads = 0;
+    const transport = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          const method =
+            init?.method ?? (input instanceof Request ? input.method : "GET");
+          if (
+            url.pathname.endsWith(`/entities/${WORKSPACE_ID}/move`) &&
+            method === "PATCH"
+          ) {
+            expect(
+              JSON.parse(typeof init?.body === "string" ? init.body : "null"),
+            ).toEqual({
+              entityId: ENTITY_ID,
+              parentId: targetParentId,
+            });
+            expect(
+              new Headers(init?.headers).get("Idempotency-Key"),
+            ).toBeNull();
+            reached.resolve(undefined);
+            return await answer.promise;
+          }
+          if (
+            url.pathname.endsWith(`/entities/${WORKSPACE_ID}/folders`) &&
+            method === "GET"
+          ) {
+            folderReads += 1;
+            return Response.json({
+              items: [
+                { id: ENTITY_ID, name: "Folder", parentId: targetParentId },
+              ],
+              nextCursor: null,
+            });
+          }
+          throw new Error(
+            `Unexpected move transport: ${method} ${url.pathname}`,
+          );
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    const hook = renderHook(() => useMoveEntity(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>
+          <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+            {children}
+          </IntlProvider>
+        </QueryClientProvider>
+      ),
+    });
+    try {
+      await act(async () => {
+        const completion = hook.result.current
+          .mutateAsync({
+            workspaceId: WORKSPACE_ID,
+            entityId: ENTITY_ID,
+            parentId: targetParentId,
+          })
+          .then(
+            () => ({ type: "success" as const }),
+            (error: unknown) => ({ type: "failure" as const, error }),
+          );
+        await reached.promise;
+        expect(folderReads).toBe(0);
+        if (scenario.unmount) {
+          hook.unmount();
+        }
+        answer.resolve(
+          scenario.success
+            ? Response.json({ entityId: ENTITY_ID, parentId: targetParentId })
+            : Response.json({ message: "Move refused" }, { status: 409 }),
+        );
+        const outcome = await completion;
+        expect(outcome.type).toBe(scenario.success ? "success" : "failure");
+      });
+      expect(
+        client.getQueryData(foldersOptions.queryKey)?.at(0)?.parentId,
+      ).toBe(scenario.success ? targetParentId : null);
+      expect(folderReads).toBe(scenario.success ? 1 : 0);
+      expect(starts.get(hashKey(movedKey)) ?? 0).toBe(scenario.success ? 1 : 0);
+      expect(starts.get(hashKey(unrelatedKey)) ?? 0).toBe(0);
+      expect(starts.get(hashKey(foreignKey)) ?? 0).toBe(0);
+    } finally {
+      answer.resolve(
+        Response.json({ message: "Fixture cleanup" }, { status: 409 }),
+      );
+      hook.unmount();
+      stopFolders();
+      stopMoved();
+      stopUnrelated();
+      stopForeign();
+      transport.mockRestore();
+      close();
+    }
   });
 }

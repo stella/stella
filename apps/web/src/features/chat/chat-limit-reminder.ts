@@ -61,7 +61,14 @@ export const chatLimitReminderOptions = ({
       staleTime: STALE_TIME.FIVE.MINUTES,
     }),
     // The member's own reminder on a chat; set and cancel refresh it.
-    { resources: [RESOURCE_TYPE.CHAT_THREAD], scope: { type: "organization" } },
+    {
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: {
+        type: "organization",
+        organizationId: activeOrganizationId,
+        userId,
+      },
+    },
   );
 
 /**

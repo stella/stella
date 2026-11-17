@@ -45,7 +45,7 @@ export const organizationListOptions = (userId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
+      scope: { type: "user", userId },
     },
   );
 
@@ -70,6 +70,6 @@ export const organizationOptions = (organizationId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );

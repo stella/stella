@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
+
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
@@ -32,7 +34,7 @@ export default createSafeHandler(
     session,
     workspaceId,
   }) {
-    const evidence = yield* Result.await(
+    const lookup = yield* Result.await(
       Result.tryPromise(
         async () =>
           await findOfficeEvidenceBlock({
@@ -43,6 +45,17 @@ export default createSafeHandler(
             scopedDb,
             workspaceId,
           }),
+      ),
+    );
+    const evidence = yield* lookup.mapError((failure) =>
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          code: "internal_error",
+          message: "Office citation is unavailable",
+          cause: failure.cause,
+        }),
+        "tagged_failure",
       ),
     );
     if (!evidence) {
