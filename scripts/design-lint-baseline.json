@@ -614,7 +614,6 @@
     "packages/property-testing/src/pinned-seeds.ts": 1,
     "packages/scripts/src/agent-session.ts": 1,
     "packages/scripts/src/auth-md-spec-drift.ts": 1,
-    "packages/scripts/src/dev-runner.ts": 3,
     "packages/ui/src/data-table/schema.ts": 1,
     "packages/ui/src/lib/slot.tsx": 1,
     "scripts/check-cli-release-coupling.ts": 1,
