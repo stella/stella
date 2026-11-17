@@ -4,8 +4,6 @@
  * taken here is the one the review shows.
  */
 
-import * as React from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
