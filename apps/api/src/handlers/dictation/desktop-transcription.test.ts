@@ -82,8 +82,14 @@ const withholdCloud = () => {
   });
 };
 
+const OPENROUTER_ONLY = { openRouter: true, elevenLabs: null } as const;
+const listModels = (
+  settings: Parameters<typeof listDictationModels>[0],
+  options: Parameters<typeof listDictationModels>[1] = {},
+) => listDictationModels(settings, { deployment: OPENROUTER_ONLY, ...options });
+
 test("only the models offered in the organization's region are listed", () => {
-  const listed = listDictationModels({
+  const listed = listModels({
     orgAIConfig: null,
     managedAIResidency: "eu",
   });
@@ -91,6 +97,7 @@ test("only the models offered in the organization's region are listed", () => {
     .filter(isTranscriptionModelId)
     .filter(
       (modelId) =>
+        TRANSCRIPTION_MODELS[modelId].route === "openrouter" &&
         TRANSCRIPTION_MODELS[modelId].residency.eu.status === "available",
     );
   expect(offered.length).toBeGreaterThan(0);
@@ -108,8 +115,8 @@ test("only the models offered in the organization's region are listed", () => {
 
 test("a labeling desktop also gets the models outside its region, after the regional ones and marked", () => {
   const settings = { orgAIConfig: null, managedAIResidency: "eu" } as const;
-  const regional = listDictationModels(settings);
-  const labeled = listDictationModels(settings, { labeled: true });
+  const regional = listModels(settings);
+  const labeled = listModels(settings, { labeled: true });
   const outside = Object.keys(TRANSCRIPTION_MODELS)
     .filter(isTranscriptionModelId)
     .filter(
@@ -142,30 +149,130 @@ test("a labeling desktop also gets the models outside its region, after the regi
   expect(v.parse(desktopDictationModelsSchema, labeled)).toEqual(labeled);
 });
 
+test("the deployment's ElevenLabs key offers Scribe v3 in its environment's region, and elsewhere only labeled as outside it", () => {
+  const direct = "elevenlabs-direct/scribe-v3";
+  const withKey = (environment: "default" | "us" | "eu") => ({
+    openRouter: true,
+    elevenLabs: {
+      apiKey: "elevenlabs-fixture",
+      environment,
+      zeroRetention: true,
+    },
+  });
+  const ids = (listed: { models: readonly { id: string }[] }) =>
+    listed.models.map(({ id }) => id);
+  const eu = { orgAIConfig: null, managedAIResidency: "eu" } as const;
+  const us = { orgAIConfig: null, managedAIResidency: "us" } as const;
+  expect(ids(listModels(eu, { deployment: withKey("eu") }))).toContain(direct);
+  expect(ids(listModels(us, { deployment: withKey("default") }))).toContain(
+    direct,
+  );
+  expect(ids(listModels(eu, { deployment: withKey("us") }))).not.toContain(
+    direct,
+  );
+  expect(
+    listModels(eu, { deployment: withKey("us"), labeled: true }).models,
+  ).toContainEqual({
+    id: direct,
+    displayName: "Scribe v3",
+    provider: "ElevenLabs",
+    outsideRegion: true,
+  });
+  // An organization on its own AI provider pays its provider itself.
+  expect(
+    ids(
+      listModels(
+        { orgAIConfig: OWN_OPENROUTER, managedAIResidency: "eu" },
+        { deployment: withKey("eu"), labeled: true },
+      ),
+    ),
+  ).not.toContain(direct);
+  // A deployment with only an ElevenLabs key offers it alone, as default.
+  expect(
+    listModels(eu, {
+      deployment: { ...withKey("eu"), openRouter: false },
+      labeled: true,
+    }),
+  ).toEqual({
+    models: [
+      {
+        id: direct,
+        displayName: "Scribe v3",
+        provider: "ElevenLabs",
+        outsideRegion: false,
+      },
+    ],
+    defaultModelId: direct,
+    unavailable: null,
+  });
+  expect(
+    listModels(eu, { deployment: { openRouter: false, elevenLabs: null } }),
+  ).toEqual({ models: [], defaultModelId: null, unavailable: "provider" });
+});
+
+test("a key without zero retention is listed only to a desktop that warns, marked, and never as the default", () => {
+  const direct = "elevenlabs-direct/scribe-v3";
+  const deployment = {
+    openRouter: true,
+    elevenLabs: {
+      apiKey: "elevenlabs-fixture",
+      environment: "eu",
+      zeroRetention: false,
+    },
+  } as const;
+  const eu = { orgAIConfig: null, managedAIResidency: "eu" } as const;
+  const ids = (listed: { models: readonly { id: string }[] }) =>
+    listed.models.map(({ id }) => id);
+  expect(ids(listModels(eu, { deployment }))).not.toContain(direct);
+  expect(ids(listModels(eu, { deployment, labeled: true }))).not.toContain(
+    direct,
+  );
+  const warned = listModels(eu, { deployment, labeled: true, retention: true });
+  expect(warned.models).toContainEqual({
+    id: direct,
+    displayName: "Scribe v3",
+    provider: "ElevenLabs",
+    outsideRegion: false,
+    retainsData: true,
+  });
+  expect(warned.defaultModelId).not.toBe(direct);
+  for (const model of warned.models) {
+    expect(model).toHaveProperty("retainsData", model.id === direct);
+  }
+  // Only the key without zero retention: listed with its warning, no default.
+  expect(
+    listModels(eu, {
+      deployment: { ...deployment, openRouter: false },
+      labeled: true,
+      retention: true,
+    }),
+  ).toMatchObject({ defaultModelId: null, unavailable: null });
+});
+
 test("a region without a model and a provider that does not transcribe list nothing, with the reason", () => {
   // Read as a plain status: the catalog may offer no model in the region.
   const offeredIn = (status: string) => status === "available";
   const usOffers = Object.values(TRANSCRIPTION_MODELS).some(({ residency }) =>
     offeredIn(residency.us.status),
   );
-  expect(
-    listDictationModels({ orgAIConfig: null, managedAIResidency: "us" }),
-  ).toEqual(
+  expect(listModels({ orgAIConfig: null, managedAIResidency: "us" })).toEqual(
     usOffers
       ? expect.objectContaining({ unavailable: null })
       : { models: [], defaultModelId: null, unavailable: "region" },
   );
+  expect(listModels({ orgAIConfig: null, managedAIResidency: null })).toEqual({
+    models: [],
+    defaultModelId: null,
+    unavailable: "region",
+  });
   expect(
-    listDictationModels({ orgAIConfig: null, managedAIResidency: null }),
-  ).toEqual({ models: [], defaultModelId: null, unavailable: "region" });
-  expect(
-    listDictationModels({
+    listModels({
       orgAIConfig: OWN_OTHER_PROVIDER,
       managedAIResidency: "eu",
     }),
   ).toEqual({ models: [], defaultModelId: null, unavailable: "provider" });
   expect(
-    listDictationModels({
+    listModels({
       orgAIConfig: OWN_OPENROUTER,
       managedAIResidency: "eu",
     }).unavailable,
@@ -237,18 +344,26 @@ const serveTranscribe = (
 
 test("a granted desktop reads its region's models", async () => {
   const server = serveModels(
-    createDesktopDictationModelsEndpoint({ authorizeAccount, loadSettings }),
+    createDesktopDictationModelsEndpoint({
+      authorizeAccount,
+      loadSettings,
+      readDeployment: () => OPENROUTER_ONLY,
+    }),
   );
   const response = await server.fetch(new Request("http://localhost/models"));
   expect(response.status).toBe(200);
   expect(v.parse(desktopDictationModelsSchema, await response.json())).toEqual(
-    listDictationModels({ orgAIConfig: null, managedAIResidency: "eu" }),
+    listModels({ orgAIConfig: null, managedAIResidency: "eu" }),
   );
 });
 
 test("a desktop that asks for labels reads the labeled list", async () => {
   const server = serveModels(
-    createDesktopDictationModelsEndpoint({ authorizeAccount, loadSettings }),
+    createDesktopDictationModelsEndpoint({
+      authorizeAccount,
+      loadSettings,
+      readDeployment: () => OPENROUTER_ONLY,
+    }),
   );
   const response = await server.fetch(
     new Request(
@@ -257,7 +372,7 @@ test("a desktop that asks for labels reads the labeled list", async () => {
   );
   expect(response.status).toBe(200);
   expect(v.parse(desktopDictationModelsSchema, await response.json())).toEqual(
-    listDictationModels(
+    listModels(
       { orgAIConfig: null, managedAIResidency: "eu" },
       { labeled: true },
     ),
@@ -314,6 +429,7 @@ const exerciseTranscribe = async ({
     readAccountEmail: async () => await Promise.resolve(email),
     dependencies: asTestRaw<Partial<DictationDependencies>>({
       transcribe,
+      deployment: () => OPENROUTER_ONLY,
       credential: async () => await Promise.resolve(Result.ok({ apiKey: "k" })),
       limit: async () => await Promise.resolve(Result.ok(undefined)),
       preflight: async () => await Promise.resolve(Result.ok(undefined)),

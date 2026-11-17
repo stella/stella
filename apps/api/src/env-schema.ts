@@ -208,6 +208,29 @@ export const envApiServerSchema = {
   GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
   GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
   /**
+   * ElevenLabs key for stella AI transcription straight to ElevenLabs
+   * (Scribe). Requests ask for zero retention unless
+   * ELEVENLABS_ZERO_RETENTION is "0".
+   */
+  ELEVENLABS_API_KEY: v.optional(v.string()),
+  /**
+   * The ElevenLabs environment the key belongs to: "default" and "us" serve
+   * organizations in the US region, "eu" (the EU data residency
+   * environment) those in the EU region. Organizations elsewhere see the
+   * model as outside their region.
+   */
+  ELEVENLABS_ENVIRONMENT: v.optional(
+    v.picklist(["default", "us", "eu"]),
+    "default",
+  ),
+  /**
+   * "1" when the key's account has ElevenLabs zero retention, so every
+   * request asks for it. "0" offers Scribe v3 only to desktops that warn
+   * the member that ElevenLabs keeps the audio and transcript, never as a
+   * default and never on the web.
+   */
+  ELEVENLABS_ZERO_RETENTION: v.optional(v.picklist(["0", "1"]), "1"),
+  /**
    * Force orgs to supply their own AI key (BYOK) even if the
    * instance has provisioned provider keys. Useful for shared
    * deployments without metering where the operator wants
