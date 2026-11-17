@@ -178,6 +178,12 @@ export const verifyActionPins = async ({
   return Result.ok(pins.length);
 };
 
+// An empty argument (an unset base in CI) means the same as no argument.
+export const actionPinBase = (
+  argument: string | undefined,
+  mergeBase: () => string,
+) => (argument ? argument : mergeBase());
+
 if (import.meta.main) {
   const git = (args: string[]) => {
     const result = Bun.spawnSync(["git", ...args], {
@@ -191,8 +197,9 @@ if (import.meta.main) {
     }
     return result.stdout.toString();
   };
-  const base =
-    process.argv.at(2) ?? git(["merge-base", "origin/main", "HEAD"]).trim();
+  const base = actionPinBase(process.argv.at(2), () =>
+    git(["merge-base", "origin/main", "HEAD"]).trim(),
+  );
   if (!/^[a-f0-9]{40}$/u.test(base) || process.argv.length > 3) {
     process.stderr.write("Usage: check-action-commit-pins.ts [base-sha]\n");
     process.exit(1);
