@@ -380,7 +380,6 @@ const main = async (): Promise<void> => {
       }
       if (outcome.status === "admission-refused") {
         refuseAdmission(outcome.refusal, argv);
-        return;
       }
     }
   }

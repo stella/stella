@@ -1175,7 +1175,8 @@
       "minutes": 5,
       "samples": 0,
       "p95Seconds": 0,
-      "p99Seconds": 0
+      "p99Seconds": 0,
+      "peakRssMiB": 4096
     }
   },
   "code-quality-web-rest": {
