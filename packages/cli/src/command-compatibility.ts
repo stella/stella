@@ -1,4 +1,4 @@
-import type { Result } from "better-result";
+import { Result } from "better-result";
 
 import { argumentsBeforeTerminator } from "./command-locality.js";
 import {
@@ -58,15 +58,20 @@ export const checkCommandCompatibility = async ({
   ) {
     return validateCompatibility(evidence.metadata, serverUrl);
   }
+  // The cached evidence only saves a later discovery request: a cache that
+  // cannot be written must not refuse a command whose server is compatible.
   return checkServerCompatibility(serverUrl, async (metadata) => {
-    await writeCacheFile(filePath, {
-      ...(cached ?? {
-        version: CACHE_SCHEMA_VERSION,
-        serverOrigin: serverUrl,
-        fetchedAt: new Date(0).toISOString(),
-        ttlSeconds: DEFAULT_TTL_SECONDS,
-      }),
-      compatibility: { checkedAt: now, metadata },
-    });
+    await Result.tryPromise(
+      async () =>
+        await writeCacheFile(filePath, {
+          ...(cached ?? {
+            version: CACHE_SCHEMA_VERSION,
+            serverOrigin: serverUrl,
+            fetchedAt: new Date(0).toISOString(),
+            ttlSeconds: DEFAULT_TTL_SECONDS,
+          }),
+          compatibility: { checkedAt: now, metadata },
+        }),
+    );
   });
 };

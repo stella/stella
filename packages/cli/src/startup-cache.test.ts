@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
+import { respondToCompatibilityDiscovery } from "../tests/compatibility-discovery.js";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { writeCredentialFile } from "./auth/credential-store.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
@@ -27,6 +28,10 @@ test("separate invocations reuse registry and token caches while tracing only du
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
+      const discovery = respondToCompatibilityDiscovery(request);
+      if (discovery !== null) {
+        return discovery;
+      }
       if (request.method !== "POST") {
         return new Response(null, { status: 405 });
       }
@@ -163,6 +168,10 @@ test.each([
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
+        const discovery = respondToCompatibilityDiscovery(request);
+        if (discovery !== null) {
+          return discovery;
+        }
         if (request.method !== "POST") {
           return new Response(null, { status: 405 });
         }
@@ -338,6 +347,10 @@ test("server grants override JWT claims in native and advanced capability execut
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
+      const discovery = respondToCompatibilityDiscovery(request);
+      if (discovery !== null) {
+        return discovery;
+      }
       if (request.method !== "POST") {
         return new Response(null, { status: 405 });
       }
@@ -487,6 +500,10 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
     const server = Bun.serve({
       port: 0,
       fetch: async (request) => {
+        const discovery = respondToCompatibilityDiscovery(request);
+        if (discovery !== null) {
+          return discovery;
+        }
         if (request.method !== "POST") {
           return new Response(null, { status: 405 });
         }
