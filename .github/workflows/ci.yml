@@ -4247,7 +4247,8 @@ jobs:
                   || (needs.ci-plan.outputs.suite_depth == 'fast'
                       && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
-    runs-on: ubuntu-24.04
+    # The corpus engine image is arm64 only (QUICKWIT_V09_RUNTIME).
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     permissions:
       contents: read
