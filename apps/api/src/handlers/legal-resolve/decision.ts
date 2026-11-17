@@ -3,7 +3,6 @@ import { panic } from "better-result";
 import { normalizeCountry } from "@stll/agent-input";
 import {
   exactDecisionMatches,
-  parseDecisionQuery,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
@@ -26,6 +25,7 @@ import {
   admitResolvedDecision,
   atNamedCourt,
   decisionConstraints,
+  decisionResolveIntent,
   type DecisionResolveResponse,
   namesCourt,
   namesUnrecognizedCourt,
@@ -245,14 +245,10 @@ const resolveConstrainedDecision = async ({
   }
   const grammar = decisionDocketGrammarForCountry(country);
   const reporters = decisionReporterGrammarForJurisdiction(country);
-  const parsed = parseDecisionQuery(identifier, { grammar, reporters });
-  if (parsed.type !== "identifier") {
-    return { status: "not_found", reason: "no_exact_identity" };
-  }
   const { intent, courtText } = readDecisionCitation({
     country,
     identifier,
-    intent: parsed,
+    intent: decisionResolveIntent(identifier, { grammar, reporters }),
     grammar,
     reporters,
   });
