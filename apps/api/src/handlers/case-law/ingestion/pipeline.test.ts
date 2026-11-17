@@ -2013,7 +2013,7 @@ describe("processDecision — corpus storage off", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/1/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",
@@ -2272,7 +2272,7 @@ describe("processDecision — fields on an existing row", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/1/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           decisionDate,
@@ -2416,7 +2416,7 @@ describe("processDecision — source raw upload failure", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/2/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",
@@ -2507,7 +2507,7 @@ describe("processDecision — source raw upload failure", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/3/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",

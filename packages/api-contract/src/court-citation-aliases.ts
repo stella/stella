@@ -307,6 +307,26 @@ export const courtCitationIndex = (
   return { country, ...index };
 };
 
+/**
+ * The directory courts a whole court name answers to, by the same folded
+ * aliases a citation is read through: none for a name no directory court
+ * answers to, several for an alias more than one court shares. Stored names
+ * are not consulted, so a name the corpus holds but the directory does not
+ * carry reads as no court.
+ */
+export const directoryCourtsNamed = (
+  country: string,
+  name: string,
+): readonly DirectoryCourt[] => {
+  const keys = directoryIndex(country).byAlias.get(foldedKey(name));
+  if (keys === undefined) {
+    return [];
+  }
+  return grammarFor(country).courts.filter((court) =>
+    keys.has(`${country}:${court.name}`),
+  );
+};
+
 const ECLI_COURT_SEGMENT_RE =
   /^ECLI:(?<jurisdiction>[A-Z]{2}):(?<code>[A-Za-z0-9]{1,10}):/u;
 
