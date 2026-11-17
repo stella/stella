@@ -45,7 +45,7 @@ export default eslintCompatPlugin({
         type: "suggestion",
         messages: {
           memoHook:
-            "Drop {{name}}: the React Compiler memoizes this file. Write the plain value or function; use useLatestCallback only where a handler must keep one identity across renders.",
+            "Drop {{name}}: the React Compiler memoizes this file. Write the plain value or function; use useLatestCallback only where a handler must keep one identity across renders. Keep the memo only where an effect dependency must stay stable, a library needs the value's identity, or it is the hook call that keeps a hook compiled, and say which in the suppression reason.",
           memoDirective:
             'Drop "use memo": restructure so the compiler caches this on its own, for example move plain uses of a value before the hook call that splits its scope, or inline the helper.',
           optOutDirective:

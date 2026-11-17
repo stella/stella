@@ -102,16 +102,6 @@
   issued it. Wait for the product's visible completion state before asserting settled
   UI or navigating away. [review]
 
-## Memoization
-
-- The React Compiler memoizes every web function it compiles, so web code
-  leaves memoization to it instead of the gradual cleanup above, and
-  `no-manual-memo` rejects `useMemo`, `useCallback` and memo directives in
-  compiled files. Keep a manual memo only where an effect dependency must stay
-  stable, a library needs item identity, or it keeps a hook compiled, and name
-  which in the suppression reason. Files with a compiler bailout keep their
-  memoization until it is fixed.
-
 ## Typed Query Cache Access
 
 - Keep named `*Options` exports and `*Keys` prefixes for family invalidation.
