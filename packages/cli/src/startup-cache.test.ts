@@ -606,6 +606,9 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
         expect(stderr).toContain(
           "Registry cache could not be saved; a later command may fetch it again.",
         );
+        expect(stderr).toContain(
+          "Compatibility cache could not be saved; a later command checks the server again.",
+        );
         expect(stderr).not.toContain("999.0.0");
       }
       expect((await readCacheFile(filePath))?.cliMinimum).toBe("999.0.0");

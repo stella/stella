@@ -61,7 +61,7 @@ export const checkCommandCompatibility = async ({
   // The cached evidence only saves a later discovery request: a cache that
   // cannot be written must not refuse a command whose server is compatible.
   return checkServerCompatibility(serverUrl, async (metadata) => {
-    await Result.tryPromise(
+    const saved = await Result.tryPromise(
       async () =>
         await writeCacheFile(filePath, {
           ...(cached ?? {
@@ -73,5 +73,10 @@ export const checkCommandCompatibility = async ({
           compatibility: { checkedAt: now, metadata },
         }),
     );
+    if (saved.isErr()) {
+      process.stderr.write(
+        "Compatibility cache could not be saved; a later command checks the server again.\n",
+      );
+    }
   });
 };
