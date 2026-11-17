@@ -4,8 +4,9 @@ import {
   type PublicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
+  type CaseLawSearchPaginationOutcome,
   SEARCH_PAGINATION_COMPLETE,
-  type SearchPaginationOutcome,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
 } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -147,8 +148,16 @@ export const corpusCountryQuotas = <TCountry>(
 };
 
 /**
- * Three states, as in `search_case_law`: a string continues this country, an
- * absent entry is its first page, and `null` means it ended on an earlier one.
+ * A country whose first page runs again: its partial matches were due and
+ * unread. Carried explicitly, since an absent entry beside ended ones would
+ * read as a finished search.
+ */
+export const COUNTRY_FIRST_PAGE_PENDING = "";
+
+/**
+ * Four states, as in `search_case_law`: a string continues this country, an
+ * absent entry or `COUNTRY_FIRST_PAGE_PENDING` is its first page, and `null`
+ * means it ended on an earlier one.
  */
 export const subCursorArgument = (
   cursors: CorpusSubCursors,
@@ -158,7 +167,7 @@ export const subCursorArgument = (
   if (cursor === null) {
     return { exhausted: true };
   }
-  return cursor === undefined
+  return cursor === undefined || cursor === COUNTRY_FIRST_PAGE_PENDING
     ? { exhausted: false }
     : { exhausted: false, cursor };
 };
@@ -235,7 +244,7 @@ export type CaseLawMultiCountryOutcome =
         hits: readonly CaseLawSearchHit[];
       }[];
       cursors: Record<string, string | null>;
-      paginationOutcome: SearchPaginationOutcome;
+      paginationOutcome: CaseLawSearchPaginationOutcome;
     }
   | {
       /**
@@ -330,7 +339,8 @@ export const searchCaseLawCountries = async ({
     hits: CaseLawSearchHit[];
   }[] = [];
   const nextCursors: [PublicCaseLawCountry, string | null][] = [];
-  let paginationOutcome: SearchPaginationOutcome = SEARCH_PAGINATION_COMPLETE;
+  let paginationOutcome: CaseLawSearchPaginationOutcome =
+    SEARCH_PAGINATION_COMPLETE;
   for (const { country, result } of outcomes) {
     if (result === null) {
       nextCursors.push([country, null]);
@@ -339,7 +349,16 @@ export const searchCaseLawCountries = async ({
     if (!isSearchCaseLawSuccess(result)) {
       return { type: "failed", country, answer: result };
     }
-    nextCursors.push([country, result.nextCursor]);
+    // The partial phase runs on a first page only, so running the page again
+    // is what reads it.
+    nextCursors.push([
+      country,
+      result.paginationOutcome.type === "truncated" &&
+      result.paginationOutcome.reason ===
+        SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.reason
+        ? COUNTRY_FIRST_PAGE_PENDING
+        : result.nextCursor,
+    ]);
     if (result.paginationOutcome.type === "truncated") {
       paginationOutcome = result.paginationOutcome;
     }

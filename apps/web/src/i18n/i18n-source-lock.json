@@ -1144,6 +1144,7 @@
   "caseLaw.searchWarnings.noHitsFiltered.hint": "Drop or widen a filter and search again.",
   "caseLaw.searchWarnings.noHitsFiltered.message": "Nothing matched under the filters you narrowed with.",
   "caseLaw.searchWarnings.partialMatch": "Partial match",
+  "caseLaw.searchWarnings.partialMatchMissing": "Missing words: {terms}",
   "caseLaw.searchWarnings.partialMatches": "Partial matches for: <bdi>{query}</bdi>",
   "caseLaw.searchWarnings.resultsFor": "Results for: <bdi>{query}</bdi>",
   "caseLaw.searchWarnings.searchEveryWord": "Search every word",

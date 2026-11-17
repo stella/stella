@@ -1462,6 +1462,7 @@
         "message": "Miski ei vasta valitud filtritele."
       },
       "partialMatch": "Osaline vaste",
+      "partialMatchMissing": "Puuduvad sõnad: {terms}",
       "partialMatches": "Osalised vasted päringule: <bdi>{query}</bdi>",
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"

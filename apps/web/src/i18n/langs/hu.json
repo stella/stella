@@ -1462,6 +1462,7 @@
         "message": "Semmi nem felel meg a beállított szűrőknek."
       },
       "partialMatch": "Részleges találat",
+      "partialMatchMissing": "Hiányzó szavak: {terms}",
       "partialMatches": "Részleges találatok erre: <bdi>{query}</bdi>",
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"

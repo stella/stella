@@ -1462,6 +1462,7 @@
         "message": "Zvoleným filtrům nic neodpovídá."
       },
       "partialMatch": "Částečná shoda",
+      "partialMatchMissing": "Chybějící slova: {terms}",
       "partialMatches": "Částečné shody pro: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"

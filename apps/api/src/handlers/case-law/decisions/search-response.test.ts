@@ -68,6 +68,8 @@ const responseWithText = (text: string): SearchResponse => {
     textAvailability: "available",
     matchingPassages: Number.MAX_SAFE_INTEGER,
     match: "all_terms",
+    matchedTerms: [],
+    missingTerms: [],
     createdAt: text,
   } as const satisfies SearchResponse["hits"][number];
   return {
@@ -91,6 +93,7 @@ const responseWithText = (text: string): SearchResponse => {
     },
     total: SEARCH_TOTAL_NOT_COUNTED,
     relaxedHitCount: 0,
+    termDecisionCounts: null,
     nextCursor: text,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,

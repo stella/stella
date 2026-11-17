@@ -1462,6 +1462,7 @@
         "message": "Nic nie odpowiada wybranym filtrom."
       },
       "partialMatch": "Częściowe dopasowanie",
+      "partialMatchMissing": "Brakujące słowa: {terms}",
       "partialMatches": "Częściowe dopasowania dla: <bdi>{query}</bdi>",
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
