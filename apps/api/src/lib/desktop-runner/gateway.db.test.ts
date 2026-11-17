@@ -3444,6 +3444,7 @@ describe("chat turns on a computer", () => {
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+          handOverSignal: new AbortController().signal,
         }),
       );
       const start = await desktop.receive("run.start");
