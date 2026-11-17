@@ -141,6 +141,18 @@ export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
+/**
+ * The edition a bulk import source states: the publisher snapshot its last
+ * completed run read. Permitted in the release that adds the column, granted
+ * and required in the next, so the release serving during that grant's
+ * rollout reads it as permitted rather than over-privilege.
+ */
+export const IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION = {
+  case_law_sources: {
+    import_snapshot_date: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 const PROVISION_LINK_STATUS_GRANT = "permitted";
 
 /** Columns the provision link status capability requires after its grants land. */
@@ -596,6 +608,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   // observation orders and the source's own configuration stay on the
   // ingestion side: they are how the crawl works, not what the corpus holds.
   case_law_sources: {
+    ...IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION.case_law_sources,
     id: "required",
     name: "required",
     adapter_key: "required",

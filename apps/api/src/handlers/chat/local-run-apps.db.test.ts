@@ -254,6 +254,7 @@ const readTurn = async ({
     instructions: "",
     resume: undefined,
     abortSignal: new AbortController().signal,
+    handOverSignal: new AbortController().signal,
   })) {
     read.push(chunk);
   }
