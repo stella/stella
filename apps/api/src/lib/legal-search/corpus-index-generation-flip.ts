@@ -65,6 +65,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
@@ -104,9 +105,9 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** How long the flip waits for any one lock before it refuses. */
-const FLIP_LOCK_TIMEOUT = "2s";
+const FLIP_LOCK_TIMEOUT_MS = 2000;
 /** How long any one statement under the fence may run before it refuses. */
-const FLIP_STATEMENT_TIMEOUT = "20s";
+const FLIP_STATEMENT_TIMEOUT_MS = 20_000;
 
 /** Registry rows one family holds: a handful. */
 const REGISTRY_READ_LIMIT = 64;
@@ -210,8 +211,8 @@ export const corpusIndexFlipBusyReasonOf = (
 };
 
 const BUSY_LINES: Record<BusyReason, string> = {
-  lock_unavailable: `a lock was not granted within ${FLIP_LOCK_TIMEOUT}`,
-  statement_timeout: `a statement ran past ${FLIP_STATEMENT_TIMEOUT} or was cancelled`,
+  lock_unavailable: `a lock was not granted within ${String(FLIP_LOCK_TIMEOUT_MS)} ms`,
+  statement_timeout: `a statement ran past ${String(FLIP_STATEMENT_TIMEOUT_MS)} ms or was cancelled`,
   deadlock_victim: "it was chosen as a deadlock victim",
   lane_budget_spent: "the operator lane's time budget ran out",
 };
@@ -818,7 +819,6 @@ const recordFlipTx = async (
   const recorded = { ...evidence, auditRun };
   const receiptId = createSafeId<"corpusIndexGenerationFlip">();
   const flips = corpusIndexGenerationFlips;
-  // audit: skip - the system audit run below records this flip, and the receipt names it
   const inserted = executedRows(
     await tx.execute(sql`
       WITH receipt AS (
@@ -934,10 +934,10 @@ const commitCorpusIndexGenerationFlipTx = async (
   Result<CorpusIndexFlipOutcome, CorpusIndexGenerationFlipRefusedError>
 > => {
   const { family, candidate, exemptMinutes } = plan.request;
-  await tx.execute(
-    sql`SELECT set_config('lock_timeout', ${FLIP_LOCK_TIMEOUT}, true),
-      set_config('statement_timeout', ${FLIP_STATEMENT_TIMEOUT}, true)`,
-  );
+  await setSharedTransactionTimeouts(tx, {
+    statementTimeoutMs: FLIP_STATEMENT_TIMEOUT_MS,
+    lockTimeoutMs: FLIP_LOCK_TIMEOUT_MS,
+  });
   // In the order canonical writers take their side of each: source lock,
   // then the projection fence. Under both, no projection state, intent or
   // registry row can change until this transaction ends.
