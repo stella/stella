@@ -184,7 +184,7 @@ const readWithEndedSession = async (
   await act(async () => {
     const read = await Result.tryPromise(
       async () =>
-        await queryClient.fetchQuery({
+        await queryClient.query({
           queryKey: ["ended-session-read"],
           queryFn: async () =>
             await Promise.reject(
