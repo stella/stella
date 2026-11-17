@@ -814,11 +814,6 @@
     "owner": "concurrency",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/concurrency/src/with-timeout.test.ts": {
-    "count": 5,
-    "owner": "concurrency",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/errors/src/detached.test.ts": {
     "count": 1,
     "owner": "errors",

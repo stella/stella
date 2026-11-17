@@ -61,8 +61,15 @@ import {
   workspaceWorkflowQueryRoot,
 } from "@/lib/workspaces/queries/workspace.logic";
 
-type ResourceQueryScopeIdentity =
+type ResourceChangeScopeIdentity =
   { type: "workspace"; workspaceId: string } | { type: "organization" };
+
+type ResourceQueryScopeIdentity =
+  | ResourceChangeScopeIdentity
+  | {
+      type: "workspace-set";
+      workspaceIds: readonly string[];
+    };
 
 type ResourceReads =
   | {
@@ -1017,7 +1024,7 @@ export const coalesceWorkspaceQueryActions = (
 type RegisteredResourceQueryActionsOptions = {
   queryClient: QueryClient;
   resources: readonly ResourceType[];
-  scope: ResourceQueryScopeIdentity;
+  scope: ResourceChangeScopeIdentity;
   /** This client's committed write, when the change is one; a realtime
    *  event names none. */
   mutation?: ResourceMutationName;
@@ -1048,7 +1055,9 @@ const registeredResourceQueryActions = ({
             reads.scope.type === "organization") ||
           (scope.type === "workspace" &&
             (reads.scope.type === "organization" ||
-              scope.workspaceId === reads.scope.workspaceId))
+              (reads.scope.type === "workspace"
+                ? scope.workspaceId === reads.scope.workspaceId
+                : reads.scope.workspaceIds.includes(scope.workspaceId))))
         );
       },
     })

@@ -176,6 +176,7 @@ const TABLE_CLASSIFICATIONS = {
   caseLawDecisionIdentifierBackfills: RESEARCH_CORPUS_EXCLUSION,
   caseLawDecisionIdentifiers: RESEARCH_CORPUS_EXCLUSION,
   caseLawDecisionJudges: RESEARCH_CORPUS_EXCLUSION,
+  caseLawDecisionReviews: RESEARCH_CORPUS_EXCLUSION,
   caseLawDecisionSourceIdentities: RESEARCH_CORPUS_EXCLUSION,
   caseLawDecisionSupplements: RESEARCH_CORPUS_EXCLUSION,
   caseLawDecisions: RESEARCH_CORPUS_EXCLUSION,

@@ -30,6 +30,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { ownEntry } from "@stll/api-contract/own-key";
 import type { Cheerio } from "@stll/html";
 import {
   loadEmailDocument,
@@ -45,7 +46,7 @@ import { EMAIL_SENDER_CLASS_CSS } from "@/api/lib/files/email-sender-styles";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 import { isRecord } from "@/api/lib/type-guards";
 
-const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
+const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES = {
   gif: "image/gif",
   jpeg: "image/jpeg",
   jpg: "image/jpeg",
@@ -53,13 +54,13 @@ const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
   png: "image/png",
   txt: "text/plain",
   webp: "image/webp",
-};
+} as const;
 
 const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
   "": null,
   "application/octet-stream": null,
   "binary/octet-stream": null,
-} as const satisfies Record<string, null>;
+} as const;
 
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,
@@ -273,7 +274,10 @@ export const resolveEmailAttachmentMimeType = ({
     return mimeType;
   }
   const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES[extension] ?? mimeType;
+  return (
+    ownEntry(EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES, extension) ??
+    mimeType
+  );
 };
 
 export const parseEmail = async (
@@ -518,7 +522,7 @@ const formatAddress = (address: Address): string => {
 
 // ── .msg parsing (narrow in-repo CFB/MAPI reader) ───────
 
-const IMAGE_EXTENSION_MIME: Record<string, string> = {
+const IMAGE_EXTENSION_MIME = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -527,9 +531,9 @@ const IMAGE_EXTENSION_MIME: Record<string, string> = {
   webp: "image/webp",
   tif: "image/tiff",
   tiff: "image/tiff",
-};
+} as const;
 
-const SAFE_INLINE_IMAGE_MIME_TYPES = new Set(
+const SAFE_INLINE_IMAGE_MIME_TYPES = new Set<string>(
   Object.values(IMAGE_EXTENSION_MIME),
 );
 const GENERIC_ATTACHMENT_MIME_TYPES = new Set([
@@ -613,7 +617,9 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
 
 const guessImageMime = (fileName: string | undefined): string => {
   const extension = (fileName ?? "").split(".").pop()?.toLowerCase() ?? "";
-  return IMAGE_EXTENSION_MIME[extension] ?? "application/octet-stream";
+  return (
+    ownEntry(IMAGE_EXTENSION_MIME, extension) ?? "application/octet-stream"
+  );
 };
 
 const resolveAttachmentMimeType = (
@@ -848,8 +854,9 @@ const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
   const bodyDirection = $("body").attr("dir")?.trim().toLowerCase();
   return (
     (htmlDirection !== undefined &&
-      htmlDirection in EMAIL_WRITING_DIRECTIONS) ||
-    (bodyDirection !== undefined && bodyDirection in EMAIL_WRITING_DIRECTIONS)
+      Object.hasOwn(EMAIL_WRITING_DIRECTIONS, htmlDirection)) ||
+    (bodyDirection !== undefined &&
+      Object.hasOwn(EMAIL_WRITING_DIRECTIONS, bodyDirection))
   );
 };
 
@@ -1585,13 +1592,13 @@ const normalizeExtractedText = (value: string): string =>
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
 
-const HTML_ESCAPES: Record<string, string> = {
+const HTML_ESCAPES = {
   "&": "&amp;",
   "<": "&lt;",
   ">": "&gt;",
   '"': "&quot;",
   "'": "&#39;",
-};
+} as const;
 
 const escapeHtml = (value: string): string =>
-  value.replace(/[&<>"']/gu, (char) => HTML_ESCAPES[char] ?? char);
+  value.replace(/[&<>"']/gu, (char) => ownEntry(HTML_ESCAPES, char) ?? char);

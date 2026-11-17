@@ -85,6 +85,7 @@
     "documentClose": "Cerrar",
     "approvalBrowserNote": "Si lo permites, se ejecuta en tu navegador del ordenador, mediante la extensión de stella.",
     "grantFailed": "No se pudo guardar la aprobación. Inténtalo de nuevo.",
+    "limitReminderFailed": "No se ha podido guardar el cambio. Inténtalo de nuevo.",
     "elsewhereBrowser": "Este paso se ejecuta en tu navegador del ordenador, mediante la extensión de stella. Abre esta conversación allí en stella para terminarlo.",
     "elsewhereSecret": "Este paso necesita una clave. Por seguridad, las claves se añaden en stella en tu ordenador, no en la app.",
     "elsewhereConnector": "Este paso conecta una app. Por seguridad, las apps se conectan en stella en tu ordenador, no en la app.",
@@ -251,7 +252,13 @@
       "sessionNotResumed": "El agente de programación de tu ordenador no pudo retomar donde lo había dejado, así que continuó a partir de los mensajes de este chat.",
       "steered": "Enviado mientras el agente trabajaba",
       "ranOnModel": "Ejecutado con {model}",
-      "desktopSettingsSteps": "En stella desktop, en tu ordenador, abre Configuración › General › Suscripciones de IA."
+      "desktopSettingsSteps": "En stella desktop, en tu ordenador, abre Configuración › General › Suscripciones de IA.",
+      "errorLimitResetsAt": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Puedes volver a intentarlo a partir del {time}.",
+      "limitReminderNotify": "Avísame cuando se restablezca",
+      "limitReminderScheduled": "Te avisaremos a partir del {time}.",
+      "limitResumeContinue": "Continuar automáticamente cuando se restablezca",
+      "limitResumeScheduled": "Continuará automáticamente a partir del {time}.",
+      "limitReminderCancel": "Cancelar"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}",

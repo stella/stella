@@ -33,7 +33,6 @@ const REPLACE_CONTRACT_DEBT_IDS = [
   "apps/api/src/handlers/playbooks/update.ts",
   "apps/api/src/handlers/properties/update.ts",
   "apps/api/src/handlers/rates/arrangement/update.ts",
-  "apps/api/src/handlers/saved-searches/update.ts",
   "apps/api/src/handlers/skills/proposals/update.ts",
   "apps/api/src/handlers/skills/resources/update.ts",
   "apps/api/src/handlers/skills/update.ts",

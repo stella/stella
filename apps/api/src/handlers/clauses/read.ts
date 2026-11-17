@@ -41,6 +41,7 @@ export const listClausesQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
       v.description(
         "Filter clauses by a text query over title and body (list mode)",
       ),

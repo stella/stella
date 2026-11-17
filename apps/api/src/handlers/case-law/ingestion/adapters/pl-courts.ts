@@ -1,3 +1,5 @@
+// parser-output-unchanged: [pl-courts] Bounded publisher body reads preserve successful response text, raw payloads and parsed decisions.
+// parser-output-unchanged: [pl-ncourt] Only SAOS transport reads change; imported ruling decision-type constants are unchanged.
 // parser-output-unchanged: The day listing and reconciliation page carry the existing totalResults count for the census; decision parsing and listed records are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
@@ -13,6 +15,10 @@ import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { classifyFailure } from "@stll/errors";
+import {
+  readBodyJsonWithIdleDeadline,
+  readBodyTextWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -34,6 +40,7 @@ import {
 import type { WalkKind } from "@/api/handlers/case-law/ingestion/adapters/pagination";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -1061,7 +1068,12 @@ const fetchDetail = async (
   }
 
   const body = await Result.tryPromise({
-    try: async () => await response.text(),
+    try: async () =>
+      await readBodyTextWithIdleDeadline(response, {
+        maxBytes: PUBLISHER_BODY_MAX_BYTES,
+        idleMs: ADAPTER_TIMEOUT.REQUEST,
+        signal,
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(body)) {
@@ -1942,7 +1954,11 @@ export const listPlCourtsDayPage = async ({
     });
   }
 
-  const json: unknown = await response.json();
+  const json = await readBodyJsonWithIdleDeadline(response, {
+    maxBytes: PUBLISHER_BODY_MAX_BYTES,
+    idleMs: SLICE_LIST_TIMEOUT_MS,
+    signal,
+  });
   if (!isSaosSliceResponse(json)) {
     throw new AdapterFetchError({
       message: "SAOS search API returned an invalid payload",
@@ -2645,7 +2661,11 @@ export const plCourtsAdapter = defineSourceAdapter({
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
-      const json: unknown = await response.json();
+      const json = await readBodyJsonWithIdleDeadline(response, {
+        maxBytes: PUBLISHER_BODY_MAX_BYTES,
+        idleMs: ADAPTER_TIMEOUT.LIST,
+        signal,
+      });
       if (!isSaosSearchResponse(json)) {
         return sourceTotalProbeFailed(
           SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
@@ -2727,7 +2747,7 @@ export const plCourtsAdapter = defineSourceAdapter({
     pageSize: PAGE_SIZE,
     legacyPageSize: LEGACY_PAGE_SIZE,
     firstPage: FIRST_PAGE,
-    listTimeoutMs: 60_000,
+    listTimeoutMs: SLICE_LIST_TIMEOUT_MS,
     itemConcurrency: ITEM_CONCURRENCY,
 
     // The plain walk, for a source that configures none.
@@ -2738,7 +2758,10 @@ export const plCourtsAdapter = defineSourceAdapter({
     // page, so the cursor holds and the shard is asked again next cycle
     // instead of being abandoned half-read.
     parseResponse: async (response) => {
-      const json: unknown = await response.json();
+      const json = await readBodyJsonWithIdleDeadline(response, {
+        maxBytes: PUBLISHER_BODY_MAX_BYTES,
+        idleMs: SLICE_LIST_TIMEOUT_MS,
+      });
       return isSaosDumpPage(json)
         ? Result.ok(json)
         : Result.err(

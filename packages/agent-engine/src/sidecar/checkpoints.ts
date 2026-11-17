@@ -23,6 +23,7 @@ import * as v from "valibot";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   type DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS,
+  DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   type DesktopRunnerCheckpointEvent,
 } from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
@@ -111,7 +112,7 @@ export const CHECKPOINT_LIMITS: CheckpointLimits = {
   // under 0.1 s, so 5 s fails only a folder too slow to save in time.
   maxCaptureMs: 5000,
   maxRestoreWalkMs: 15_000,
-  maxManifests: 20,
+  maxManifests: DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   maxStoredBytes: 2 * 1024 * 1024 * 1024,
   maxManifestBytes: 16 * 1024 * 1024,
   lockWaitMs: 30_000,

@@ -11,7 +11,6 @@
     "flow_run_steps_state_fields_check": "No writer seed yet: registered after the census was introduced.",
     "flow_runs_state_fields_check": "No writer seed yet: registered after the census was introduced.",
     "folio_collab_rooms_checkpoint_size_check": "No writer seed yet: registered after the census was introduced.",
-    "function-dependent-index-reindex:public.decision_docket_filing_year(text,text)": "No writer seed yet: registered after the census was introduced.",
     "invoices_client_id_contacts_id_fk": "The repair validates a foreign key into contacts. No client invoice row can pass it without a product change to how online validation reaches contacts, and a null client proves nothing.",
     "invoices_client_organization_fk": "The repair validates a foreign key into contacts. No client invoice row can pass it without a product change to how online validation reaches contacts, and a null client proves nothing.",
     "legal-graph-edges": "No writer seed yet: registered after the census was introduced.",

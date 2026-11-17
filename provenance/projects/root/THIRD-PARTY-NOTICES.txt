@@ -204,6 +204,7 @@ Project: root
 - ssf 0.11.2 — Apache-2.0
 - streamdown 2.7.1 — Apache-2.0
 - tailwind-merge 3.7.0 — MIT
+- tailwindcss 4.3.5 — MIT
 - temporal-polyfill 1.0.8 — MIT
 - tldts 7.4.19 — MIT
 - tsrs 0.23.0-ts7.1.0-beta — Apache-2.0

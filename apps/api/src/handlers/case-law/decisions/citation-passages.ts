@@ -148,7 +148,11 @@ export type DecisionCitationsPage = {
 
 /** An invalid cursor, told apart from "no such public decision" (null). */
 export type DecisionCitationsRead =
-  | { type: "page"; page: DecisionCitationsPage }
+  | {
+      type: "page";
+      decisionId: SafeId<"caseLawDecision">;
+      page: DecisionCitationsPage;
+    }
   | { type: "invalid_cursor" }
   | { type: "doctrine_unavailable" };
 
@@ -1131,6 +1135,7 @@ export const completeDecisionCitations = async ({
   });
 
   return {
+    decisionId: gated.resolvedDecisionId,
     page: {
       items:
         passageFilter === undefined
