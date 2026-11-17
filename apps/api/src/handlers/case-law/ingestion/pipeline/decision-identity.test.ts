@@ -77,9 +77,9 @@ test("two publishers' spellings of one court reach the write path as one court",
     expect(written.courtId).toBe("KSHKPA");
   }
   // The printed name stays beside the official one.
-  expect(String(regional.metadata["court"])).toBe(
-    "Krajský soud v Hradci Králové, pobočka Pardubice",
-  );
+  expect(regional.metadata).toMatchObject({
+    court: "Krajský soud v Hradci Králové, pobočka Pardubice",
+  });
 });
 
 test("a printed name the adapter did not keep is kept by the boundary", () => {
@@ -88,7 +88,7 @@ test("a printed name the adapter did not keep is kept by the boundary", () => {
   ).unwrap().observed;
   expect(String(written.court)).toBe("Okresný súd Žiar nad Hronom");
   expect(written.courtId).toBe("OSZH");
-  expect(String(written.metadata["court"])).toBe("Okresný súd Žiar n/H");
+  expect(written.metadata).toMatchObject({ court: "Okresný súd Žiar n/H" });
 });
 
 test("a printed name the directory cannot place is the decision's rejection", () => {
