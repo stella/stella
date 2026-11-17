@@ -3115,7 +3115,10 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBe(404);
     },
     expectPositive: (result) =>
-      expect(result).toEqual({ remindAt: chatLimitResetsAt.toISOString() }),
+      expect(result).toEqual({
+        remindAt: chatLimitResetsAt.toISOString(),
+        onReset: "notify",
+      }),
   },
   {
     // Asking again for the same stopped turn keeps the stored reminder, so
@@ -3125,6 +3128,7 @@ const isolationCases: IsolationCase[] = [
       response: await runHandler(setChatLimitReminder, workspaceA, {
         params: { threadId: chatLimitThreadB },
         query: {},
+        body: { onReset: "continue" },
       }),
       reminders: await chatLimitRemindersOf(chatLimitThreadB),
     }),
@@ -3132,6 +3136,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(setChatLimitReminder, sameUserWorkspaceB, {
         params: { threadId: chatLimitThreadB },
         query: {},
+        body: { onReset: "notify" },
       }),
     expectDenied: (result) => {
       expect(getStatusCode(recordField(result, "response"))).toBe(404);
@@ -3140,7 +3145,10 @@ const isolationCases: IsolationCase[] = [
       ]);
     },
     expectPositive: (result) =>
-      expect(result).toEqual({ remindAt: chatLimitResetsAt.toISOString() }),
+      expect(result).toEqual({
+        remindAt: chatLimitResetsAt.toISOString(),
+        onReset: "notify",
+      }),
   },
   {
     name: "chat limit reminder cancel",

@@ -13,6 +13,7 @@ import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import { startChatLimitResumer } from "@/api/handlers/chat/limit-reminder/limit-resume-sender";
 import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
 import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
@@ -264,6 +265,7 @@ const startServer = async (): Promise<void> => {
   // Before the listener opens, so no runner upgrade finds the gateway absent.
   await startDesktopRunnerGateway();
   const stopChatQueueSender = startChatQueueSender();
+  const stopChatLimitResumer = startChatLimitResumer();
   const stopChatTurnAdopter = startChatTurnAdopter();
 
   const server = Bun.serve({
@@ -320,6 +322,7 @@ const startServer = async (): Promise<void> => {
       },
       relinquishChatTurnRuns,
       stopChatQueueSender,
+      stopChatLimitResumer,
       stopChatTurnAdopter,
       stopHttp: async () => {
         // Runner sockets are asked to reconnect elsewhere before the

@@ -29,6 +29,7 @@ import type { ChatDraft, SentFile } from "@/state/chat-attachments";
 import { draftDocumentsOf } from "@/state/chat-documents";
 import type { ChatDraftDocument } from "@/state/chat-documents";
 import { storedTurnFailure } from "@/state/chat-failure";
+import { storedLimitResetsAt } from "@/state/chat-limit-reminder";
 import { localRunTargetOf, pendingInputOf } from "@/state/chat-pending-input";
 import type { LocalRunTarget, PendingInput } from "@/state/chat-pending-input";
 
@@ -95,6 +96,11 @@ export type ChatEntry = {
   readonly drafts: readonly ChatDraftDocument[];
   /** Why the answer's turn failed; absent for one that did not. */
   readonly failure?: AIErrorKind;
+  /**
+   * When the usage limit of the agent on the person's computer that stopped
+   * the answer's turn resets; absent for any other answer.
+   */
+  readonly limitResetsAt?: string;
   /** What the answer's context left out, as the web says it too. */
   readonly contextNotice: ChatContextNotice | null;
   /**
@@ -186,6 +192,10 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     message.role === "assistant"
       ? storedTurnFailure(message.metadata)
       : undefined;
+  const limitResetsAt =
+    message.role === "assistant"
+      ? storedLimitResetsAt(message.metadata)
+      : undefined;
   const ranOnModel =
     message.role === "assistant"
       ? chatLocalRunReroutedModel(message.metadata)
@@ -212,6 +222,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
         ? (contextNoticeIn(message.metadata) ?? null)
         : null,
     ...(failure === undefined ? {} : { failure }),
+    ...(limitResetsAt === undefined ? {} : { limitResetsAt }),
     ...(ranOnModel === null ? {} : { ranOnModel }),
   };
 };

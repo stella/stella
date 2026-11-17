@@ -1954,6 +1954,8 @@
       "folderStateUnreadable": "Illisible",
       "limitReminderNotify": "Me prévenir une fois réinitialisée",
       "limitReminderScheduled": "Nous vous préviendrons à partir du {time}.",
+      "limitResumeContinue": "Continuer automatiquement une fois réinitialisée",
+      "limitResumeScheduled": "Reprendra automatiquement à partir du {time}.",
       "permissionAboveLimit": "Non autorisé par votre organisation",
       "permissionAskDescription": "Modifie seul les fichiers du dossier de la conversation ; demande avant tout le reste.",
       "permissionAutoDescription": "Fait seul ce qu’il juge sûr ; demande pour le reste.",

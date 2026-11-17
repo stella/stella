@@ -1954,6 +1954,8 @@
       "folderStateUnreadable": "Nevar nolasīt",
       "limitReminderNotify": "Paziņot, kad tiks atjaunots",
       "limitReminderScheduled": "Mēs jums paziņosim pēc {time}.",
+      "limitResumeContinue": "Turpināt automātiski, kad tiks atjaunots",
+      "limitResumeScheduled": "Automātiski turpināsies pēc {time}.",
       "permissionAboveLimit": "Jūsu organizācija to neatļauj",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",

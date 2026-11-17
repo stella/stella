@@ -1954,6 +1954,8 @@
       "folderStateUnreadable": "Nem olvasható",
       "limitReminderNotify": "Értesítsen, amikor visszaáll",
       "limitReminderScheduled": "{time} után értesítjük.",
+      "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
+      "limitResumeScheduled": "{time} után automatikusan folytatódik.",
       "permissionAboveLimit": "A szervezete nem engedélyezi",
       "permissionAskDescription": "A csevegés mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
       "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",

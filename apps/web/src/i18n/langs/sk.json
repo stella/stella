@@ -1954,6 +1954,8 @@
       "folderStateUnreadable": "Nedá sa prečítať",
       "limitReminderNotify": "Upozorniť ma, keď sa obnoví",
       "limitReminderScheduled": "Upozorníme vás po {time}.",
+      "limitResumeContinue": "Pokračovať automaticky, keď sa obnoví",
+      "limitResumeScheduled": "Automaticky pokračuje po {time}.",
       "permissionAboveLimit": "Vaša organizácia to nepovoľuje",
       "permissionAskDescription": "Súbory v priečinku chatu upravuje sám; na všetko ostatné sa opýta.",
       "permissionAutoDescription": "Čo považuje za bezpečné, urobí sám; na zvyšok sa opýta.",

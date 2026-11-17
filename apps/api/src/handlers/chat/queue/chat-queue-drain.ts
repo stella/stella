@@ -282,7 +282,8 @@ const sendNextQueuedChatMessage = async ({
     ...caller,
     session: {
       ...caller.session,
-      startedFromQueue: {
+      serverStartedTurn: {
+        type: "queue",
         queuedMessageId: head.id,
         revision: head.revision,
       },

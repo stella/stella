@@ -1954,6 +1954,8 @@
       "folderStateUnreadable": "تتعذر قراءته",
       "limitReminderNotify": "أبلغني عند إعادة ضبطه",
       "limitReminderScheduled": "سنبلغك بعد {time}.",
+      "limitResumeContinue": "المتابعة تلقائيًا عند إعادة ضبطه",
+      "limitResumeScheduled": "ستُستأنف تلقائيًا بعد {time}.",
       "permissionAboveLimit": "غير مسموح به في مؤسستك",
       "permissionAskDescription": "يعدّل الملفات في مجلد الدردشة من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
       "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
