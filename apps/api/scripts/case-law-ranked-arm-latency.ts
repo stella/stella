@@ -16,8 +16,8 @@
  * so a failed split fails the measurement instead of shortening it.
  *
  * Usage (from apps/api):
- *   bun run bench:case-law-ranked-arms -- \
- *     --endpoint=http://127.0.0.1:7291 --index=case_law_v11_cze \
+ *   CORPUS_INDEX_Q09_SEARCH_ENDPOINT=http://127.0.0.1:7291 \
+ *   bun run bench:case-law-ranked-arms -- --index=case_law_v11_cze \
  *     --language=cs --queries=queries.txt [--field=decision_terms] \
  *     [--scope='is_opening:true'] [--warm=5] [--size=20] [--boost=2] [--json]
  *
@@ -26,10 +26,7 @@
 import { panic } from "better-result";
 import { parseArgs } from "node:util";
 
-import {
-  elasticAnswerHasFailedShards,
-  STRICT_ELASTIC_READ,
-} from "@/api/lib/legal-search/corpus-index-client";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
@@ -49,7 +46,6 @@ import {
 
 const { values } = parseArgs({
   options: {
-    endpoint: { type: "string" },
     index: { type: "string" },
     language: { type: "string" },
     queries: { type: "string" },
@@ -69,7 +65,6 @@ const required = (name: string, value: string | undefined): string =>
 const isMorphologyLanguage = (value: string): value is MorphologyLanguage =>
   (MORPHOLOGY_LANGUAGES as readonly string[]).includes(value);
 
-const endpoint = required("endpoint", values.endpoint).replace(/\/$/u, "");
 const indexId = required("index", values.index);
 const languageArg = required("language", values.language);
 const language = isMorphologyLanguage(languageArg)
@@ -107,42 +102,25 @@ const search = async (
   arm: DecisionRankingArm,
 ): Promise<Sample> => {
   const startedAt = performance.now();
-  const response = await fetch(
-    `${endpoint}/api/v1/_elastic/${indexId}/_search?_source_includes=document_id&${STRICT_ELASTIC_READ}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        query: rankedDecisionQuery({
-          scope: values.scope,
-          words,
-          arm,
-          boost,
-        }),
-        size,
-        sort: [{ _score: { order: "desc" } }],
-        track_total_hits: true,
-      }),
+  // Through the corpus client: the same strict request the search sends,
+  // with its failed-split check, so a lost split fails the run.
+  const answer = await getCorpusIndexClient("q09").scoredSearch({
+    observer: "unobserved",
+    indexId,
+    query: {
+      type: "dsl",
+      query: rankedDecisionQuery({ scope: values.scope, words, arm, boost }),
     },
-  );
+    from: 0,
+    size,
+    fields: ["document_id"],
+    requiredFields: ["document_id"],
+  });
   const ms = performance.now() - startedAt;
-  const body: unknown = await response.json();
-  if (!response.ok || elasticAnswerHasFailedShards(body)) {
-    return panic(`${arm} failed with ${String(response.status)}`, body);
+  if (answer.isErr()) {
+    return panic(`${arm} failed`, answer.error);
   }
-  const total =
-    typeof body === "object" &&
-    body !== null &&
-    "hits" in body &&
-    typeof body.hits === "object" &&
-    body.hits !== null &&
-    "total" in body.hits &&
-    typeof body.hits.total === "object" &&
-    body.hits.total !== null &&
-    "value" in body.hits.total &&
-    typeof body.hits.total.value === "number"
-      ? body.hits.total.value
-      : panic("The engine answered without a hit count", body);
+  const total = answer.value.numHits;
   return { ms, hits: total };
 };
 
