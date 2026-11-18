@@ -24,7 +24,9 @@
 //   in `route-pending-component-policy.json`. Because the set is closed, the
 //   per-file check guarantees the whole pending graph. No dynamic import,
 //   no `lazy`, no `useTranslations` (use `PendingText`), no query, navigation
-//   or route hooks.
+//   or route hooks, except the loose URL reads `useParams({ strict: false })`
+//   and `useSearch({ strict: false })` and the named synchronous cache
+//   readers in the policy file.
 // - `page-module-shell` (`*.page.tsx`): the page imports its sibling
 //   `.pending` module, where its shell lives.
 
@@ -45,6 +47,40 @@ const EXCEPTED_FILES: ReadonlySet<string> = new Set(exceptionList);
 const PENDING_SAFE_MODULES: ReadonlySet<string> = new Set(
   policy.pendingSafeModules,
 );
+const PENDING_SAFE_NAMED_IMPORTS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map(
+  Object.entries(policy.pendingSafeNamedImports).map(([source, names]) => [
+    source,
+    new Set(names),
+  ]),
+);
+const SYNC_CACHE_READERS: ReadonlySet<string> = new Set(
+  policy.syncCacheReaders,
+);
+
+// URL reads a pending half may make: the router context is there at every
+// pending level, but only a loose read (`strict: false`), since the pending
+// match is not always the one the hook would bind to.
+const LOOSE_URL_HOOKS: ReadonlySet<string> = new Set([
+  "useParams",
+  "useSearch",
+]);
+
+const isLooseCall = (node) => {
+  const [options] = node.arguments ?? [];
+  return (
+    options?.type === "ObjectExpression" &&
+    options.properties.some(
+      (property) =>
+        property?.type === "Property" &&
+        getPropertyName(property.key) === "strict" &&
+        property.value?.type === "Literal" &&
+        property.value.value === false,
+    )
+  );
+};
 
 const DEFAULT_PENDING = "DefaultPendingComponent";
 const REDIRECT_MARKER = "redirectRouteComponent";
@@ -139,6 +175,29 @@ const isPendingSafeSource = (source: string) => {
     bare.endsWith(".pending") ||
     bare.endsWith(".logic") ||
     PENDING_SAFE_MODULES.has(source)
+  );
+};
+
+// Named imports the policy allows one by one: a module's pending-safe exports
+// (the router's loose URL hooks) and the synchronous cache readers.
+const importsOnlySafeNames = (node) => {
+  const specifiers = node.specifiers ?? [];
+  const safeHere = PENDING_SAFE_NAMED_IMPORTS.get(node.source.value);
+  return (
+    specifiers.length > 0 &&
+    specifiers.every((specifier) => {
+      if (specifier.type !== "ImportSpecifier") {
+        return false;
+      }
+      if (specifier.importKind === "type") {
+        return true;
+      }
+      const name = getPropertyName(specifier.imported);
+      return (
+        name !== null &&
+        (SYNC_CACHE_READERS.has(name) || safeHere?.has(name) === true)
+      );
+    })
   );
 };
 
@@ -300,7 +359,11 @@ const pendingModuleImports = {
   createOnce(context) {
     return {
       ImportDeclaration(node) {
-        if (isTypeOnlyImport(node) || isPendingSafeSource(node.source.value)) {
+        if (
+          isTypeOnlyImport(node) ||
+          isPendingSafeSource(node.source.value) ||
+          importsOnlySafeNames(node)
+        ) {
           return;
         }
         context.report({ node, messageId: "closedImport" });
@@ -310,6 +373,13 @@ const pendingModuleImports = {
       },
       CallExpression(node) {
         const callee = node.callee;
+        if (
+          callee?.type === "Identifier" &&
+          LOOSE_URL_HOOKS.has(callee.name) &&
+          isLooseCall(node)
+        ) {
+          return;
+        }
         const name =
           callee?.type === "Identifier"
             ? callee.name

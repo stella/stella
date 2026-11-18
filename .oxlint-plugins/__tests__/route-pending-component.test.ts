@@ -146,6 +146,30 @@ test("a pending half calls no context hooks and loads nothing lazily", async () 
   ).toEqual([1, 2, 3, 3, 4]);
 });
 
+test("a pending half may read the URL loosely and the cache synchronously", async () => {
+  expect(
+    await pendingRule(
+      [
+        'import { useParams, useSearch } from "@tanstack/react-router";',
+        'import { cachedRoleGrants } from "@/lib/permissions/cached-role-grants";',
+        "const A = () => useParams({ strict: false });",
+        "const B = () => useSearch({ strict: false, select: (s) => s.q });",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+  expect(
+    await pendingRule(
+      [
+        'import { useNavigate, useParams } from "@tanstack/react-router";',
+        'import { cachedRoleGrants, roleOptions } from "@/lib/permissions";',
+        "const A = () => useParams({ from: '/x' });",
+        "const B = () => Route.useParams({ strict: false });",
+        "const C = () => useSearch();",
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2, 3, 4, 5]);
+});
+
 test("a page module renders the shell from its sibling pending module", async () => {
   expect(
     await lintSingleRule(
