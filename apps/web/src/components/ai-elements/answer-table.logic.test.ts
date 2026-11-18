@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import type { Element, ElementContent } from "hast";
 
-import { answerTableShape } from "@/components/ai-elements/answer-table.logic";
+import {
+  answerTableEdges,
+  answerTableShape,
+} from "@/components/ai-elements/answer-table.logic";
 
 const element = (tagName: string, children: ElementContent[]): Element => ({
   type: "element",
@@ -45,4 +48,52 @@ test("anything but a parsed table has no shape", () => {
   expect(answerTableShape(undefined)).toBeNull();
   expect(answerTableShape(element("div", []))).toBeNull();
   expect(answerTableShape(element("table", []))).toBeNull();
+});
+
+const box = {
+  clientHeight: 300,
+  clientWidth: 400,
+  scrollHeight: 900,
+  scrollLeft: 0,
+  scrollTop: 0,
+  scrollWidth: 1000,
+};
+
+test("a table at rest has more below and at its end only", () => {
+  expect(answerTableEdges(box)).toEqual({
+    above: false,
+    below: true,
+    start: false,
+    end: true,
+  });
+});
+
+test("a table scrolled to its far corner has more only above and at its start", () => {
+  expect(answerTableEdges({ ...box, scrollLeft: 600, scrollTop: 600 })).toEqual(
+    { above: true, below: false, start: true, end: false },
+  );
+});
+
+test("a right-to-left table reads its negative offset from the start", () => {
+  // Scrolling towards the inline end of a right-to-left box goes negative.
+  expect(answerTableEdges({ ...box, scrollLeft: -600 })).toMatchObject({
+    start: true,
+    end: false,
+  });
+  expect(answerTableEdges({ ...box, scrollLeft: -200 })).toMatchObject({
+    start: true,
+    end: true,
+  });
+});
+
+test("a table that fits shows no fades, whatever sub-pixel slack it has", () => {
+  expect(
+    answerTableEdges({
+      ...box,
+      scrollHeight: 300.5,
+      scrollWidth: 400.5,
+      scrollTop: 0.5,
+      scrollLeft: 0.5,
+    }),
+  ).toEqual({ above: false, below: false, start: false, end: false });
 });

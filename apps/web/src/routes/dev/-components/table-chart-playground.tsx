@@ -15,7 +15,7 @@ const fixture = {
     columns: [
       { index: 0, role: "label" },
       { index: 1, role: "y" },
-      { index: 2, role: "y" },
+      { index: 2, role: "ignore" },
     ],
     sort: "none",
     title: "Hours billed",
@@ -35,7 +35,7 @@ const components = {
 };
 
 const answer = [
-  "The supply agreement has four provisions worth negotiating before signature:",
+  "The supply agreement has eight provisions worth negotiating before signature:",
   "",
   "| Provision | What it requires | Risk and recommended position |",
   "| --- | --- | --- |",
@@ -43,6 +43,10 @@ const answer = [
   "| Termination for convenience (clause 18.1) | Lets either party end the agreement on 30 days' written notice without giving a reason. | Medium. Thirty days is short for finding a replacement supplier. Propose 90 days and an obligation to keep supplying at the agreed prices during the notice period. |",
   "| Governing law and jurisdiction (clause 22) | Puts the agreement under the law of the supplier's seat and gives its courts exclusive jurisdiction. | Medium. Litigating abroad raises costs. Seek the buyer's law or arbitration seated in a neutral place. |",
   "| Price adjustment (clause 7.4) | Allows the supplier to raise prices once a year by the change in the consumer price index plus two percentage points. | Low to medium. Accept the index but drop the extra two points, or cap any single increase at 5 %. |",
+  "| Confidentiality (clause 16) | Binds both parties for two years after the agreement ends and excludes information that becomes public. | Medium. Two years is short for pricing and technical data. Ask for five years, and for trade secrets for as long as they stay secret. |",
+  "| Warranty (clause 11.3) | Warrants the goods for six months from delivery; the only remedy is repair or replacement at the supplier's choice. | High. Latent defects often show later. Ask for twelve months from acceptance and a right to a price reduction or to terminate if repair fails twice. |",
+  "| Assignment (clause 24.1) | Lets the supplier assign the agreement to any company in its group without consent. | Low. Accept group assignment if the assignee takes over all obligations and the supplier stays jointly liable. |",
+  "| Force majeure (clause 19) | Suspends obligations for events beyond a party's control, with no time limit and no duty to mitigate. | Medium. Add a duty to mitigate and a right to terminate if the event lasts longer than 60 days. |",
   "",
   "Hours recorded on the matter so far:",
   "",

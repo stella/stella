@@ -1,5 +1,10 @@
 import { useContext, useRef, useState } from "react";
-import type { ComponentProps, ReactNode, RefObject } from "react";
+import type {
+  ComponentProps,
+  PropsWithChildren,
+  ReactNode,
+  RefObject,
+} from "react";
 
 import type { Element } from "hast";
 import { StreamdownContext } from "streamdown";
@@ -15,10 +20,6 @@ import {
   WrapTextIcon,
 } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import {
-  fadeScrollEdges,
-  SCROLL_EDGE_FADE_CLASS,
-} from "@stll/ui/scroll-edge-fade";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { Separator } from "@stll/ui/separator";
 import {
@@ -37,6 +38,7 @@ import {
   useAnswerTableTextModeStore,
 } from "@/components/ai-elements/answer-table-text-mode-store";
 import {
+  answerTableEdges,
   answerTableShape,
   answerTableText,
   type AnswerTableTextFormat,
@@ -96,7 +98,7 @@ export const AnswerTable = ({
   ...props
 }: AnswerTableProps) => {
   const t = useTranslations();
-  const { isAnimating, tableMaxHeight } = useContext(StreamdownContext);
+  const { isAnimating } = useContext(StreamdownContext);
   const mode = useAnswerTableTextModeStore((state) => state.mode);
   const [fullscreen, setFullscreen] = useState(false);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -104,37 +106,8 @@ export const AnswerTable = ({
   const shape = answerTableShape(node);
   const label =
     shape === null ? null : t("chat.answerTable.size", { ...shape });
-  const maxHeight = cssLength(tableMaxHeight);
   const showsView = view !== undefined && view !== null;
   const streaming = useLatestCallback(() => isAnimating);
-  // While the answer streams into a table taller than its frame, the frame
-  // follows the newest row unless the reader scrolled away from it.
-  const scrollerRef = (scroller: HTMLDivElement | null) => {
-    const stopFading = fadeScrollEdges(scroller);
-    if (scroller === null) {
-      return undefined;
-    }
-    let atEnd = true;
-    const onScroll = () => {
-      atEnd =
-        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <
-        END_TOLERANCE_PX;
-    };
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    const resizes = new ResizeObserver(() => {
-      if (atEnd && streaming()) {
-        scroller.scrollTop = scroller.scrollHeight;
-      }
-    });
-    if (scroller.firstElementChild !== null) {
-      resizes.observe(scroller.firstElementChild);
-    }
-    return () => {
-      stopFading?.();
-      scroller.removeEventListener("scroll", onScroll);
-      resizes.disconnect();
-    };
-  };
 
   return (
     <div
@@ -154,12 +127,7 @@ export const AnswerTable = ({
       {notice}
       {view}
       <div hidden={showsView}>
-        <div
-          className={cn("overflow-auto", SCROLL_EDGE_FADE_CLASS)}
-          data-slot="answer-table-scroller"
-          ref={scrollerRef}
-          style={maxHeight === undefined ? undefined : { maxHeight }}
-        >
+        <AnswerTableFrame followsStream={streaming} placement="inline">
           <Table
             cellText={mode}
             data-streamdown="table"
@@ -170,7 +138,7 @@ export const AnswerTable = ({
           >
             {children}
           </Table>
-        </div>
+        </AnswerTableFrame>
       </div>
       <Dialog onOpenChange={setFullscreen} open={fullscreen}>
         <DialogPopup
@@ -184,13 +152,7 @@ export const AnswerTable = ({
             mode={mode}
             tableRef={dialogTableRef}
           />
-          <div
-            className={cn(
-              "min-h-0 flex-1 overflow-auto",
-              SCROLL_EDGE_FADE_CLASS,
-            )}
-            ref={fadeScrollEdges}
-          >
+          <AnswerTableFrame followsStream={streaming} placement="fullscreen">
             {/* The second rendering of the answer's links takes ids of its
                 own, so the open dialog repeats none of the answer's. */}
             <AnswerTreeIds prefix={undefined}>
@@ -205,7 +167,7 @@ export const AnswerTable = ({
                 {children}
               </Table>
             </AnswerTreeIds>
-          </div>
+          </AnswerTableFrame>
         </DialogPopup>
       </Dialog>
     </div>
@@ -236,11 +198,17 @@ export const AnswerTableRow = ({
 }: MarkdownProps<"tr">) => <TableRow data-streamdown="table-row" {...props} />;
 
 export const AnswerTableHeaderCell = ({
+  children,
   className: _className,
   node: _node,
   ...props
 }: MarkdownCellProps<"th">) => (
-  <TableHead data-streamdown="table-header-cell" {...props} />
+  <TableHead data-streamdown="table-header-cell" {...props}>
+    {/* The label holds to the visible start of its column while the table
+        scrolls sideways, so a wide column never shows an empty header. It
+        stays inside its own cell, which takes its width from the column. */}
+    <span className="sticky start-3 inline-block max-w-full">{children}</span>
+  </TableHead>
 );
 
 export const AnswerTableCell = ({
@@ -422,13 +390,149 @@ const AnswerTableHeader = ({
   );
 };
 
-/** Within this distance of the end, a scroller counts as at its end. */
-const END_TOLERANCE_PX = 4;
+/**
+ * Where a frame sits: `inline` in the answer, capped to a comfortable height
+ * with full screen as the way to see everything; `fullscreen` fills the
+ * dialog.
+ */
+type FramePlacement = "inline" | "fullscreen";
 
-/** Streamdown's table height setting as a CSS length, or none for no cap. */
-const cssLength = (value: number | string): string | undefined => {
-  if (typeof value === "number") {
-    return Number.isFinite(value) && value > 0 ? `${value}px` : undefined;
+const FRAME_CLASS = {
+  inline: "relative",
+  fullscreen: "relative flex min-h-0 flex-1 flex-col",
+} as const satisfies Record<FramePlacement, string>;
+
+const SCROLLER_CLASS = {
+  inline: "max-h-[min(60svh,32rem)] overflow-auto",
+  fullscreen: "min-h-0 flex-1 overflow-auto",
+} as const satisfies Record<FramePlacement, string>;
+
+// The fades are painted in the surface behind the table: the answer's card,
+// or the dialog.
+const FADE_FROM_CLASS = {
+  inline: "from-card",
+  fullscreen: "from-popover",
+} as const satisfies Record<FramePlacement, string>;
+
+const FADE_CLASS =
+  "pointer-events-none absolute opacity-0 transition-opacity duration-150 ease-out motion-reduce:transition-none";
+
+type AnswerTableFrameProps = PropsWithChildren<{
+  /** Whether the answer is still streaming rows into the table. */
+  followsStream: () => boolean;
+  placement: FramePlacement;
+}>;
+
+/**
+ * The table's scroller and its edge fades. Each fade shows only while there
+ * is more of the table past that edge; the top and side fades start below the
+ * sticky header, so a column heading is never faded out.
+ */
+const AnswerTableFrame = ({
+  children,
+  followsStream,
+  placement,
+}: AnswerTableFrameProps) => {
+  const scrollerRef = (scroller: HTMLDivElement | null) => {
+    const frame = scroller?.parentElement;
+    if (scroller === null || frame === null || frame === undefined) {
+      return undefined;
+    }
+    let frameRequest = 0;
+    let atEnd = true;
+    const measure = () => {
+      frameRequest = 0;
+      writeFrameEdges(frame, scroller);
+    };
+    const schedule = () => {
+      if (frameRequest === 0) {
+        frameRequest = requestAnimationFrame(measure);
+      }
+    };
+    const onScroll = () => {
+      atEnd = !answerTableEdges(scroller).below;
+      schedule();
+    };
+    // While the answer streams into a table taller than its frame, the frame
+    // follows the newest row unless the reader scrolled away from it.
+    const resizes = new ResizeObserver(() => {
+      if (atEnd && followsStream()) {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+      schedule();
+    });
+    resizes.observe(scroller);
+    if (scroller.firstElementChild !== null) {
+      resizes.observe(scroller.firstElementChild);
+    }
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    measure();
+    return () => {
+      cancelAnimationFrame(frameRequest);
+      scroller.removeEventListener("scroll", onScroll);
+      resizes.disconnect();
+    };
+  };
+  const from = FADE_FROM_CLASS[placement];
+  return (
+    <div className={cn("group/frame", FRAME_CLASS[placement])}>
+      <div
+        className={cn(SCROLLER_CLASS[placement])}
+        data-slot="answer-table-scroller"
+        ref={scrollerRef}
+      >
+        {children}
+      </div>
+      <div
+        aria-hidden="true"
+        className={cn(
+          FADE_CLASS,
+          from,
+          "inset-x-0 top-(--answer-table-head,0px) h-6 bg-linear-to-b group-data-[more-above]/frame:opacity-100",
+        )}
+        data-slot="answer-table-fade-above"
+      />
+      <div
+        aria-hidden="true"
+        className={cn(
+          FADE_CLASS,
+          from,
+          "inset-x-0 bottom-0 h-8 bg-linear-to-t group-data-[more-below]/frame:opacity-100",
+        )}
+        data-slot="answer-table-fade-below"
+      />
+      <div
+        aria-hidden="true"
+        className={cn(
+          FADE_CLASS,
+          from,
+          "start-0 top-(--answer-table-head,0px) bottom-0 w-6 group-data-[more-start]/frame:opacity-100 ltr:bg-linear-to-r rtl:bg-linear-to-l",
+        )}
+        data-slot="answer-table-fade-start"
+      />
+      <div
+        aria-hidden="true"
+        className={cn(
+          FADE_CLASS,
+          from,
+          "end-0 top-(--answer-table-head,0px) bottom-0 w-6 group-data-[more-end]/frame:opacity-100 ltr:bg-linear-to-l rtl:bg-linear-to-r",
+        )}
+        data-slot="answer-table-fade-end"
+      />
+    </div>
+  );
+};
+
+/** Writes which edges have more table past them, only when that changes. */
+const writeFrameEdges = (frame: HTMLElement, scroller: HTMLElement) => {
+  const edges = answerTableEdges(scroller);
+  frame.toggleAttribute("data-more-above", edges.above);
+  frame.toggleAttribute("data-more-below", edges.below);
+  frame.toggleAttribute("data-more-start", edges.start);
+  frame.toggleAttribute("data-more-end", edges.end);
+  const head = scroller.querySelector("thead");
+  const headHeight = `${head?.offsetHeight ?? 0}px`;
+  if (frame.style.getPropertyValue("--answer-table-head") !== headHeight) {
+    frame.style.setProperty("--answer-table-head", headHeight);
   }
-  return value === "" || value === "0" || value === "none" ? undefined : value;
 };

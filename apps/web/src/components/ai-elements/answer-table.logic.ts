@@ -9,6 +9,42 @@ import {
 
 export type AnswerTableShape = { rows: number; columns: number };
 
+/** Which edges of a scrolled table have more of it past them. */
+export type AnswerTableEdges = {
+  above: boolean;
+  below: boolean;
+  start: boolean;
+  end: boolean;
+};
+
+type ScrollBox = Pick<
+  HTMLElement,
+  | "clientHeight"
+  | "clientWidth"
+  | "scrollHeight"
+  | "scrollLeft"
+  | "scrollTop"
+  | "scrollWidth"
+>;
+
+/** Sub-pixel layout leaves this much slack at an edge that is reached. */
+const EDGE_SLACK_PX = 1;
+
+/**
+ * Where a table's scroller can still go. Sideways it reads inline start and
+ * end: a right-to-left scroller runs from 0 at its start to a negative
+ * `scrollLeft`, so the distance from the start is the same either way.
+ */
+export const answerTableEdges = (box: ScrollBox): AnswerTableEdges => {
+  const fromStart = Math.abs(box.scrollLeft);
+  return {
+    above: box.scrollTop > EDGE_SLACK_PX,
+    below: box.scrollHeight - box.clientHeight - box.scrollTop > EDGE_SLACK_PX,
+    start: fromStart > EDGE_SLACK_PX,
+    end: box.scrollWidth - box.clientWidth - fromStart > EDGE_SLACK_PX,
+  };
+};
+
 /** The text formats a table copies or downloads as. */
 export type AnswerTableTextFormat = "md" | "csv" | "tsv";
 

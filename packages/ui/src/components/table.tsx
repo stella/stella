@@ -116,6 +116,10 @@ const TableHeader = ({
       "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[density=prose]:*:[tr]:hover:bg-transparent in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
       surface === "muted" && "bg-muted/50",
       sticky && "bg-muted/80 sticky top-0 z-10 backdrop-blur",
+      // A prose header is opaque: wrapped rows scrolling under it would
+      // otherwise read through the band.
+      sticky &&
+        "in-data-[density=prose]:bg-card in-data-[density=prose]:backdrop-blur-none",
       className,
     )}
     data-slot="table-header"
@@ -216,7 +220,7 @@ const TableHead = ({
       "in-data-[density=compact]:h-auto in-data-[density=compact]:px-0 in-data-[density=compact]:py-1 in-data-[density=compact]:pe-3 in-data-[density=compact]:text-xs",
       "in-data-[density=compact]:[tbody_&]:py-1.5 in-data-[density=compact]:[tbody_&]:text-sm in-data-[density=compact]:[tbody_&]:leading-6 in-data-[density=compact]:[tbody_&]:font-normal in-data-[density=compact]:[tbody_&]:whitespace-normal in-data-[density=compact]:[tbody_&]:text-inherit",
       PROSE_CELL_CLASS,
-      "in-data-[density=prose]:font-normal",
+      "in-data-[density=prose]:[thead_&]:bg-muted in-data-[density=prose]:font-normal",
       TABLE_ALIGN_CLASS[resolveTableAlign(align, numeric) ?? "start"],
       numeric && "tabular-nums",
       className,
