@@ -101,6 +101,7 @@ const ARTICLE_ANCHORS = {
   restatementSuffix: null,
   segmentSeparator: "-",
   unnumberedAnchor: null,
+  unnumberedSegment: /^frag_\d+$/u,
 } as const satisfies StatuteAnchorScheme;
 
 const articleGrammar = createProvisionCitationGrammar({
