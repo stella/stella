@@ -1881,6 +1881,7 @@
     "@tanstack/ai-bedrock@1.2.1": "patches/@tanstack%2Fai-bedrock@1.2.1.patch",
     "@emnapi/runtime@1.11.3": "patches/@emnapi%2Fruntime@1.11.3.patch",
     "@tanstack/ai-anthropic@1.1.1": "patches/@tanstack%2Fai-anthropic@1.1.1.patch",
+    "@vscode/markdown-editor@0.0.2-123": "patches/@vscode%2Fmarkdown-editor@0.0.2-123.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
