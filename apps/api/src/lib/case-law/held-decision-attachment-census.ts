@@ -17,6 +17,13 @@ import {
   HELD_DECISION_ATTACHMENTS,
   type HeldDecisionAttachment,
 } from "@/api/lib/legal-search/held-decision-attachment";
+import {
+  HELD_DECISION_ATTACHING_BASES,
+  HELD_DECISION_MATCH_BASIS,
+  HELD_DECISION_REVIEW,
+  type HeldDecisionMatchBasis,
+  type HeldDecisionReview,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
 
 /** Rows each finding lists at most; the counts are exact. */
 const HELD_DECISION_ATTACHMENT_CENSUS_SAMPLE = 20;
@@ -41,9 +48,33 @@ export type HeldDecisionAttachmentCensus = {
     count: number;
     sample: { decisionId: string; hostDecisionId: string }[];
   };
-  /** Records parked because several held decisions matched. */
-  ambiguous: number;
+  /**
+   * Records parked for a reader, per typed review: several held decisions
+   * matched, or the court and docket are held only under another date. Never
+   * silent: each is counted exactly and listed with its candidates.
+   */
+  review: Record<HeldDecisionReview, HeldDecisionReviewFinding>;
 };
+
+type HeldDecisionReviewFinding = {
+  count: number;
+  sample: {
+    sourceDocumentId: string;
+    matchBasis: HeldDecisionMatchBasis;
+    candidateDecisionIds: string[];
+  }[];
+};
+
+/** The bases a parked record of each review is stored under. */
+const REVIEW_BASES = {
+  [HELD_DECISION_REVIEW.SEVERAL_HELD]: HELD_DECISION_ATTACHING_BASES,
+  [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: [
+    HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
+  ],
+} as const satisfies Record<
+  HeldDecisionReview,
+  readonly HeldDecisionMatchBasis[]
+>;
 
 const countRows = async (tx: Transaction, rows: Subquery): Promise<number> =>
   (await tx.select({ count: sql<number>`count(*)::int` }).from(rows)).at(0)
@@ -155,13 +186,41 @@ const censusOf = async (
   const duplicateCount = await countRows(tx, duplicatesFrom().as("duplicates"));
   const duplicateSample = await sampleOf(duplicatesFrom().orderBy(sql`1`));
 
-  const ambiguous = await tx.$count(
-    caseLawHeldDecisionAttachments,
-    and(
+  const reviewOf = async (
+    review: HeldDecisionReview,
+  ): Promise<HeldDecisionReviewFinding> => {
+    const parked = and(
       inArray(caseLawHeldDecisionAttachments.sourceId, sourceIds),
       isNull(caseLawHeldDecisionAttachments.hostDecisionId),
+      inArray(caseLawHeldDecisionAttachments.matchBasis, [
+        ...REVIEW_BASES[review],
+      ]),
+    );
+    const count = await tx.$count(caseLawHeldDecisionAttachments, parked);
+    const parkedFrom = () =>
+      tx
+        .select({
+          sourceDocumentId: caseLawHeldDecisionAttachments.sourceDocumentId,
+          matchBasis: caseLawHeldDecisionAttachments.matchBasis,
+          candidateDecisionIds: sql<
+            string[]
+          >`${caseLawHeldDecisionAttachments.candidateDecisionIds}::text[]`,
+        })
+        .from(caseLawHeldDecisionAttachments)
+        .where(parked);
+    const sample = await sampleOf(
+      parkedFrom().orderBy(caseLawHeldDecisionAttachments.sourceDocumentId),
+    );
+    return { count, sample };
+  };
+  const review = {
+    [HELD_DECISION_REVIEW.SEVERAL_HELD]: await reviewOf(
+      HELD_DECISION_REVIEW.SEVERAL_HELD,
     ),
-  );
+    [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: await reviewOf(
+      HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE,
+    ),
+  };
   return {
     adapterKey,
     hostVanished: { count: vanishedCount, sample: vanishedSample },
@@ -169,7 +228,7 @@ const censusOf = async (
       count: duplicateCount,
       sample: duplicateSample,
     },
-    ambiguous,
+    review,
   };
 };
 
