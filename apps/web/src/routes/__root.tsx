@@ -11,7 +11,6 @@ import {
   Outlet,
   redirect,
   Scripts,
-  useNavigate,
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
@@ -155,6 +154,31 @@ const enterPublicDocument = async ({
   await router.navigate({ ...cause.options, replace: true });
 };
 
+/**
+ * A handoff captured before a server-rendered document hydrated is redeemed
+ * in place for the same reason; only its outcome navigates.
+ */
+const enterHandoffDocument = async ({
+  router,
+  queryClient,
+  href,
+}: {
+  router: ReturnType<typeof useRouter>;
+  queryClient: QueryClient;
+  href: string;
+}) => {
+  const handoffRedirect = await loadMcpHandoff();
+  if (handoffRedirect) {
+    await router.navigate({ ...handoffRedirect.options, replace: true });
+    return;
+  }
+  if (isPublicSsrPath(router.state.location.pathname)) {
+    await enterPublicDocument({ router, queryClient });
+    return;
+  }
+  await router.navigate({ href, replace: true });
+};
+
 function RootNotFoundComponent() {
   const appContext = Route.useRouteContext({
     select: (context) => ({
@@ -195,7 +219,6 @@ function RootComponent() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  const navigate = useNavigate();
   const router = useRouter();
   const { analyticsValue, queryClient } = Route.useRouteContext({
     select: (context) => ({
@@ -210,10 +233,7 @@ function RootComponent() {
     const href = pendingHandoffPath();
     if (href) {
       detached(
-        navigate({
-          href,
-          replace: true,
-        }),
+        enterHandoffDocument({ router, queryClient, href }),
         "mcp-handoff.route-entry",
       );
       return;
