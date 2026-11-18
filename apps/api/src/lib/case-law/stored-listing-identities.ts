@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
@@ -19,7 +19,6 @@ import {
   rowHoldsDocumentFor,
   supplementIsMergedFor,
 } from "@/api/lib/case-law/stored-payload";
-import { HELD_DECISION_ATTACHMENT_STATUS } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
@@ -145,10 +144,7 @@ export const readStoredListingIdentities = async ({
       caseLawHeldDecisionAttachments,
       and(
         eq(caseLawHeldDecisionAttachments.sourceId, sourceId),
-        eq(
-          caseLawHeldDecisionAttachments.status,
-          HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
-        ),
+        isNull(caseLawHeldDecisionAttachments.hostWithdrawnAt),
         sql`${caseLawHeldDecisionAttachments.sourceDocumentId} = incoming."documentId"`,
       ),
     )

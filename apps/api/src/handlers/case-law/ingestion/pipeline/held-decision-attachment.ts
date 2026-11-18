@@ -52,7 +52,6 @@ import {
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import {
   HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
-  HELD_DECISION_ATTACHMENT_STATUS,
   HELD_DECISION_MATCH_BASIS,
   type HeldDecisionDeclaredIdentifier,
   type HeldDecisionMatchBasis,
@@ -63,22 +62,19 @@ import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 /** A record attached to, or refreshed on, the held decision it names. */
-export const HELD_DECISION_ATTACHED =
-  "case_law.ingestion.held_decision_attached";
+const HELD_DECISION_ATTACHED = "case_law.ingestion.held_decision_attached";
 
 /**
  * Several held decisions match a record, so it is parked with no row of its
  * own: an operator reads the candidates off its attachment row.
  */
-export const HELD_DECISION_AMBIGUOUS =
-  "case_law.ingestion.held_decision_ambiguous";
+const HELD_DECISION_AMBIGUOUS = "case_law.ingestion.held_decision_ambiguous";
 
 /** A record's host was erased or redacted, so the record is parked. */
-export const HELD_DECISION_WITHDRAWN =
-  "case_law.ingestion.held_decision_withdrawn";
+const HELD_DECISION_WITHDRAWN = "case_law.ingestion.held_decision_withdrawn";
 
 /** What became of one record of a declaring source. */
-export type HeldDecisionAttachmentDisposition =
+type HeldDecisionAttachmentDisposition =
   | {
       type: "attached";
       hostDecisionId: SafeId<"caseLawDecision">;
@@ -120,8 +116,6 @@ type HostMatch =
       basis: HeldDecisionMatchBasis;
       candidateDecisionIds: SafeId<"caseLawDecision">[];
     };
-
-type StoredAttachment = typeof caseLawHeldDecisionAttachments.$inferSelect;
 
 export type AttachToHeldDecisionOptions = {
   declaration: HeldDecisionAttachment<string>;
@@ -338,7 +332,7 @@ const readAttachmentTx = async (
   tx: Transaction,
   sourceId: SafeId<"caseLawSource">,
   sourceDocumentId: string,
-): Promise<StoredAttachment | undefined> =>
+) =>
   (
     await tx
       .select()
@@ -346,6 +340,10 @@ const readAttachmentTx = async (
       .where(attachmentKey(sourceId, sourceDocumentId))
       .limit(1)
   ).at(0);
+
+type StoredAttachment = NonNullable<
+  Awaited<ReturnType<typeof readAttachmentTx>>
+>;
 
 /**
  * Park an attachment whose host is gone or redacted. Its metadata and raw
@@ -365,8 +363,8 @@ const parkWithdrawnTx = async (
   const write = replayWrite(
     caseLawHeldDecisionAttachments,
     {
-      status: HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN,
       hostDecisionId,
+      hostWithdrawnAt: new Date(),
       metadata: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -433,7 +431,10 @@ const declaredIdentifiersOf = (
 ): HeldDecisionDeclaredIdentifier[] => {
   const types = new Set<string>(declaration.declaredIdentifierTypes);
   const byKey = new Map<string, HeldDecisionDeclaredIdentifier>();
-  for (const identifier of observed.identifiers ?? []) {
+  if (observed.identifiers === undefined) {
+    return [];
+  }
+  for (const identifier of observed.identifiers) {
     if (!types.has(identifier.type)) {
       continue;
     }
@@ -492,7 +493,7 @@ const planAttachmentTx = async (
     return { type: "settled", step: { type: "own-row" } };
   }
   const stored = await readAttachmentTx(tx, sourceId, sourceDocumentId);
-  if (stored?.status === HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN) {
+  if (stored !== undefined && stored.hostWithdrawnAt !== null) {
     const { hostDecisionId } = stored;
     return {
       type: "settled",
@@ -504,9 +505,8 @@ const planAttachmentTx = async (
   if (stored !== undefined && stored.observationOrder >= observationOrder) {
     return { type: "settled", step: settled({ type: "stale" }) };
   }
-  if (stored?.status === HELD_DECISION_ATTACHMENT_STATUS.ATTACHED) {
-    const hostDecisionId =
-      stored.hostDecisionId ?? panic("An attached record names no host");
+  if (stored !== undefined && stored.hostDecisionId !== null) {
+    const { hostDecisionId } = stored;
     const host = await readHostTx(tx, hostDecisionId);
     if (host === undefined || host.redactedAt !== null) {
       return {
@@ -538,9 +538,9 @@ const planAttachmentTx = async (
     }
     case "several": {
       const parked = {
-        status: HELD_DECISION_ATTACHMENT_STATUS.AMBIGUOUS,
         matchBasis: match.basis,
         hostDecisionId: null,
+        hostWithdrawnAt: null,
         candidateDecisionIds: match.candidateDecisionIds,
         metadata: { ...metadata },
         declaredIdentifiers: [],
@@ -589,9 +589,9 @@ const planAttachmentTx = async (
         // A takedown covers every publisher's copy of the decision: record
         // that this one belongs to it, and keep nothing of it.
         const withdrawn = {
-          status: HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN,
           matchBasis: match.basis,
           hostDecisionId: match.host.id,
+          hostWithdrawnAt: observedAt,
           candidateDecisionIds: [],
           metadata: null,
           declaredIdentifiers: [],
@@ -699,11 +699,12 @@ const writeAttachmentTx = async (
     liveHost === undefined ||
     liveHost.redactedAt !== null ||
     current?.observationOrder !== planned?.observationOrder ||
-    current?.status !== planned?.status
+    current?.hostDecisionId !== planned?.hostDecisionId ||
+    (current !== undefined && current.hostWithdrawnAt !== null)
   ) {
     return { type: "contention" };
   }
-  const previous = current?.declaredIdentifiers ?? [];
+  const previous = current === undefined ? [] : current.declaredIdentifiers;
   const incoming = new Set(declared.map(identifierKey));
   const withdrawn = previous.filter(
     (identifier) => !incoming.has(identifierKey(identifier)),
@@ -728,9 +729,9 @@ const writeAttachmentTx = async (
   }
 
   const values = {
-    status: HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
     matchBasis: basis,
     hostDecisionId: host.id,
+    hostWithdrawnAt: null,
     candidateDecisionIds: [],
     metadata: { ...metadata },
     declaredIdentifiers: declared,
@@ -762,28 +763,23 @@ const writeAttachmentTx = async (
 
   // An identifier this record no longer states leaves the host, unless the
   // host derives it itself or another record still declares it.
-  for (const identifier of withdrawn) {
-    // db-await-in-loop: a record declares a handful of identifiers at most
+  if (withdrawn.length > 0) {
     // audit: skip — background case-law ingestion; public case-law data
     await tx.delete(caseLawDecisionIdentifiers).where(
       and(
         eq(caseLawDecisionIdentifiers.decisionId, host.id),
-        eq(caseLawDecisionIdentifiers.type, identifier.type),
-        eq(
-          caseLawDecisionIdentifiers.normalizedValue,
-          identifier.normalizedValue,
-        ),
         isNotNull(caseLawDecisionIdentifiers.declaredAt),
+        sql`(${caseLawDecisionIdentifiers.type}, ${caseLawDecisionIdentifiers.normalizedValue}) IN (
+          SELECT withdrawn.type, withdrawn."normalizedValue"
+          FROM jsonb_to_recordset(${JSON.stringify(withdrawn)}::text::jsonb)
+            AS withdrawn(type text, "normalizedValue" text))`,
         sql`NOT EXISTS (SELECT 1 FROM ${caseLawHeldDecisionAttachments} other
           WHERE other.host_decision_id = ${host.id}
-            AND other.status = ${HELD_DECISION_ATTACHMENT_STATUS.ATTACHED}
+            AND other.host_withdrawn_at IS NULL
             AND NOT (other.source_id = ${sourceId} AND other.source_document_id = ${sourceDocumentId})
-            AND other.declared_identifiers @> ${JSON.stringify([
-              {
-                type: identifier.type,
-                normalizedValue: identifier.normalizedValue,
-              },
-            ])}::text::jsonb)`,
+            AND other.declared_identifiers @> jsonb_build_array(jsonb_build_object(
+              'type', ${caseLawDecisionIdentifiers.type},
+              'normalizedValue', ${caseLawDecisionIdentifiers.normalizedValue})))`,
       ),
     );
   }
@@ -896,7 +892,8 @@ export const attachToHeldDecision = async (
   const raw = rawWrite.andThen((written) => written);
   if (Result.isError(raw)) {
     signal?.throwIfAborted();
-    logger.error("case_law.ingestion.held_decision_raw_write_failed", {
+    // Retryable: the record is not held yet, so the cursor holds it.
+    logger.warn("case_law.ingestion.held_decision_raw_write_failed", {
       sourceId,
       hostDecisionId: host.id,
       ...errorSystemFields(raw.error),

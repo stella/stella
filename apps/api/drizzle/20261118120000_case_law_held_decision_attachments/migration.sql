@@ -11,9 +11,9 @@ SET statement_timeout = '30s';--> statement-breakpoint
 CREATE TABLE "case_law_held_decision_attachments" (
   "source_id" uuid NOT NULL,
   "source_document_id" varchar(256) NOT NULL,
-  "status" varchar(16) NOT NULL,
   "match_basis" varchar(32) NOT NULL,
   "host_decision_id" uuid,
+  "host_withdrawn_at" timestamptz,
   "candidate_decision_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
   "metadata" jsonb,
   "declared_identifiers" jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -29,15 +29,13 @@ CREATE TABLE "case_law_held_decision_attachments" (
     PRIMARY KEY ("source_id", "source_document_id"),
   CONSTRAINT "case_law_held_decision_attachments_source_fk"
     FOREIGN KEY ("source_id") REFERENCES "case_law_sources"("id") ON DELETE CASCADE,
-  CONSTRAINT "case_law_held_decision_attachments_status_values"
-    CHECK ("status" IN ('attached', 'ambiguous', 'host-withdrawn')),
   CONSTRAINT "case_law_held_decision_attachments_basis_values"
     CHECK ("match_basis" IN ('ecli', 'court-docket-date')),
   CONSTRAINT "case_law_held_decision_attachments_host_shape"
-    CHECK (("status" = 'ambiguous') = ("host_decision_id" IS NULL)
-      AND ("status" <> 'ambiguous' OR cardinality("candidate_decision_ids") >= 2)),
+    CHECK (("host_decision_id" IS NULL) = (cardinality("candidate_decision_ids") >= 2)
+      AND ("host_decision_id" IS NULL OR cardinality("candidate_decision_ids") = 0)),
   CONSTRAINT "case_law_held_decision_attachments_withdrawn_shape"
-    CHECK ("status" <> 'host-withdrawn' OR ("metadata" IS NULL AND "source_raw_s3_key" IS NULL))
+    CHECK ("host_withdrawn_at" IS NULL OR ("host_decision_id" IS NOT NULL AND "metadata" IS NULL AND "source_raw_s3_key" IS NULL))
 );--> statement-breakpoint
 
 CREATE INDEX "case_law_held_decision_attachments_host_idx"

@@ -1,36 +1,15 @@
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
 /**
- * The states and match bases of a record that enriches a decision another
- * source holds (`case_law_held_decision_attachments`). The table's CHECKs
- * and the pipeline read these lists, so both sides are the same values.
+ * The match bases of a record that enriches a decision another source holds
+ * (`case_law_held_decision_attachments`). The table's CHECK and the pipeline
+ * read this list, so both sides are the same values.
+ *
+ * A record is attached when it names a host and that host is not withdrawn,
+ * ambiguous when it names candidates and no host, and parked behind a
+ * takedown once `host_withdrawn_at` is set. These are facts of the row, not
+ * a stored status.
  */
-
-export const HELD_DECISION_ATTACHMENT_STATUS = {
-  /** The record enriches the one held decision it names. */
-  ATTACHED: "attached",
-  /**
-   * Several held decisions match the record. None is chosen and no row of
-   * its own is written: a duplicate is worse than a gap. Parked until an
-   * operator settles it.
-   */
-  AMBIGUOUS: "ambiguous",
-  /**
-   * The decision it enriched was erased or redacted. A takedown covers every
-   * publisher's copy of the decision, so the record is parked and never
-   * written as a decision of its own.
-   */
-  HOST_WITHDRAWN: "host-withdrawn",
-} as const;
-
-export type HeldDecisionAttachmentStatus =
-  (typeof HELD_DECISION_ATTACHMENT_STATUS)[keyof typeof HELD_DECISION_ATTACHMENT_STATUS];
-
-export const HELD_DECISION_ATTACHMENT_STATUSES = [
-  HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
-  HELD_DECISION_ATTACHMENT_STATUS.AMBIGUOUS,
-  HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN,
-] as const satisfies readonly HeldDecisionAttachmentStatus[];
 
 /** What named the held decision. */
 export const HELD_DECISION_MATCH_BASIS = {

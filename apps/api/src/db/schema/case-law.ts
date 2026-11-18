@@ -120,11 +120,7 @@ import {
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
-import {
-  HELD_DECISION_ATTACHMENT_STATUS,
-  HELD_DECISION_ATTACHMENT_STATUSES,
-  HELD_DECISION_MATCH_BASES,
-} from "@/api/lib/legal-search/held-decision-attachment-values";
+import { HELD_DECISION_MATCH_BASES } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { HeldDecisionDeclaredIdentifier } from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   storedObservationHasDetail,
@@ -1921,16 +1917,22 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
     sourceDocumentId: p
       .varchar("source_document_id", { length: 256 })
       .notNull(),
-    /** Attached, or parked as ambiguous or because its host was withdrawn. */
-    status: p
-      .varchar({ length: 16, enum: HELD_DECISION_ATTACHMENT_STATUSES })
-      .notNull(),
     /** What named the host: the stated ECLI, or court, docket and date. */
     matchBasis: p
       .varchar("match_basis", { length: 32, enum: HELD_DECISION_MATCH_BASES })
       .notNull(),
-    /** The decision the record enriches; null only while it is ambiguous. */
+    /**
+     * The decision the record enriches. Null while it is ambiguous: several
+     * held decisions matched, they are listed in `candidate_decision_ids`,
+     * and the record is parked with no row of its own.
+     */
     hostDecisionId: safeUuid<"caseLawDecision">("host_decision_id"),
+    /**
+     * When the host was found erased or redacted. A takedown covers every
+     * publisher's copy of the decision, so the record stays parked and is
+     * never written as a decision of its own.
+     */
+    hostWithdrawnAt: timestamptz("host_withdrawn_at"),
     /** The held decisions an ambiguous record matched, for its operator. */
     candidateDecisionIds: p
       .uuid("candidate_decision_ids")
@@ -1980,29 +1982,23 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
       .on(t.hostDecisionId)
       .where(isNotNull(t.hostDecisionId)),
     p.check(
-      "case_law_held_decision_attachments_status_values",
-      sql`${t.status} IN (${sql.join(
-        HELD_DECISION_ATTACHMENT_STATUSES.map((status) => sql`${status}`),
-        sql`, `,
-      )})`,
-    ),
-    p.check(
       "case_law_held_decision_attachments_basis_values",
       sql`${t.matchBasis} IN (${sql.join(
         HELD_DECISION_MATCH_BASES.map((basis) => sql`${basis}`),
         sql`, `,
       )})`,
     ),
-    // An ambiguous record names candidates and no host; every other state
-    // names its host.
+    // An ambiguous record names its candidates and no host; an attached or
+    // withdrawn one names its host and no candidates.
     p.check(
       "case_law_held_decision_attachments_host_shape",
-      sql`(${t.status} = ${HELD_DECISION_ATTACHMENT_STATUS.AMBIGUOUS}) = (${t.hostDecisionId} IS NULL)
-        AND (${t.status} <> ${HELD_DECISION_ATTACHMENT_STATUS.AMBIGUOUS} OR cardinality(${t.candidateDecisionIds}) >= 2)`,
+      sql`(${t.hostDecisionId} IS NULL) = (cardinality(${t.candidateDecisionIds}) >= 2)
+        AND (${t.hostDecisionId} IS NULL OR cardinality(${t.candidateDecisionIds}) = 0)`,
     ),
+    // A withdrawn host's takedown leaves nothing of the record but its key.
     p.check(
       "case_law_held_decision_attachments_withdrawn_shape",
-      sql`${t.status} <> ${HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN} OR (${t.metadata} IS NULL AND ${t.sourceRawS3Key} IS NULL)`,
+      sql`${t.hostWithdrawnAt} IS NULL OR (${t.hostDecisionId} IS NOT NULL AND ${t.metadata} IS NULL AND ${t.sourceRawS3Key} IS NULL)`,
     ),
     ...caseLawIngestionOnlyPolicies(),
   ],

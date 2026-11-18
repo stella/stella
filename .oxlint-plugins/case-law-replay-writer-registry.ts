@@ -54,17 +54,17 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 446,
+    line: 444,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 794,
+    line: 757,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 804,
+    line: 767,
     kind: "pending",
   },
   {

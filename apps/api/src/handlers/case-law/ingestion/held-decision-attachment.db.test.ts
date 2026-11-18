@@ -37,10 +37,7 @@ import { selectAttachmentDocumentIds } from "@/api/lib/case-law/held-attachment-
 import { readHeldDecisionAttachmentCensus } from "@/api/lib/case-law/held-decision-attachment-census";
 import { readStoredListingIdentities } from "@/api/lib/case-law/stored-listing-identities";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
-import {
-  HELD_DECISION_ATTACHMENT_STATUS,
-  HELD_DECISION_MATCH_BASIS,
-} from "@/api/lib/legal-search/held-decision-attachment-values";
+import { HELD_DECISION_MATCH_BASIS } from "@/api/lib/legal-search/held-decision-attachment-values";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -308,7 +305,7 @@ if (!databaseUrl || !runPostgresTests) {
       const attachment = await onlyAttachment(collection);
       expect(attachment).toMatchObject({
         sourceDocumentId: "9586",
-        status: HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
+        hostWithdrawnAt: null,
         matchBasis: HELD_DECISION_MATCH_BASIS.ECLI,
         hostDecisionId: before.id,
         metadata: { number: 9, year: 1971, legalSentence: "Právní věta." },
@@ -381,7 +378,7 @@ if (!databaseUrl || !runPostgresTests) {
       );
       expect(await rowsOf(collection)).toEqual([]);
       expect(await onlyAttachment(collection)).toMatchObject({
-        status: HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
+        hostWithdrawnAt: null,
         matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
         hostDecisionId: held.id,
       });
@@ -416,7 +413,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await rowsOf(collection)).toEqual([]);
       const parked = await onlyAttachment(collection);
       expect(parked).toMatchObject({
-        status: HELD_DECISION_ATTACHMENT_STATUS.AMBIGUOUS,
+        hostWithdrawnAt: null,
         hostDecisionId: null,
         matchBasis: HELD_DECISION_MATCH_BASIS.ECLI,
       });
@@ -553,7 +550,7 @@ if (!databaseUrl || !runPostgresTests) {
       );
       expect(await rowsOf(collection)).toEqual([]);
       expect(await onlyAttachment(collection)).toMatchObject({
-        status: HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN,
+        hostWithdrawnAt: expect.any(Date),
         hostDecisionId: held.id,
         metadata: null,
         sourceRawS3Key: null,
@@ -577,9 +574,11 @@ if (!databaseUrl || !runPostgresTests) {
         .where(eq(caseLawDecisions.id, held.id));
       await store(collection, collectionEntry(), collectionContract);
       expect(await rowsOf(collection)).toEqual([]);
-      expect((await onlyAttachment(collection)).status).toBe(
-        HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN,
-      );
+      expect(await onlyAttachment(collection)).toMatchObject({
+        hostDecisionId: held.id,
+        hostWithdrawnAt: expect.any(Date),
+        metadata: null,
+      });
     });
 
     test("a record with a row of its own stays one when its host arrives", async () => {
@@ -667,7 +666,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await rowsOf(collection)).toEqual([]);
       expect(await onlyAttachment(collection)).toMatchObject({
         hostDecisionId: held.id,
-        status: HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
+        hostWithdrawnAt: null,
       });
       const reporters = await db
         .select({ value: caseLawDecisionIdentifiers.value })

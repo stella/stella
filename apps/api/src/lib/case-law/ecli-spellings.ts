@@ -31,8 +31,7 @@ const docketYearSpellings = (year: string): string[] => {
   }
   // A two-digit docket year is read in the century Czech courts printed
   // it in: two-digit years were left behind around the turn of the century.
-  const value = Number(year);
-  return [year, String(value >= 50 ? 1900 + value : 2000 + value)];
+  return [year, `${year >= "50" ? "19" : "20"}${year}`];
 };
 
 /**
