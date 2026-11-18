@@ -15,6 +15,10 @@ import {
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import {
+  adapterParkOf,
+  readAdapterFailureRunIn,
+} from "@/api/handlers/case-law/ingestion/adapter-park";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -100,6 +104,22 @@ type SourceStatus = {
   } | null;
   topErrors: { errorType: string; count: number }[];
   reconciliation: SourceReconciliationStatus | null;
+  /**
+   * Set while the source is parked: its last cycles failed the same way with
+   * nothing stored for long enough that it asks its publisher only once a day,
+   * so it ingests nothing in between. Null when it runs on its own cadence.
+   * No error text, for the reason `lastEvent` carries none.
+   */
+  park: SourcePark | null;
+};
+
+type SourcePark = {
+  /** When the run of identical failed cycles began. */
+  failingSince: string;
+  /** Cycles in that run, the daily attempts included. */
+  sameFailureCycles: number;
+  /** When the source next asks its publisher. */
+  nextAttemptAt: string;
 };
 
 type IngestionStatus = {
@@ -126,6 +146,7 @@ type SourceAggregate = {
   failures24h: number;
   topErrors: SourceStatus["topErrors"];
   lastEvent: SourceStatus["lastEvent"];
+  park: SourcePark | null;
   slices: number;
   shortSlices: number;
   failedSlices: number;
@@ -136,7 +157,7 @@ type SourceAggregate = {
   unprobeable: number;
 };
 
-type SourceAggregates = Map<string, SourceAggregate>;
+type SourceAggregates = Map<SafeId<"caseLawSource">, SourceAggregate>;
 
 const emptyAggregate = (): SourceAggregate => ({
   insertedLastHour: 0,
@@ -144,6 +165,7 @@ const emptyAggregate = (): SourceAggregate => ({
   failures24h: 0,
   topErrors: [],
   lastEvent: null,
+  park: null,
   slices: 0,
   shortSlices: 0,
   failedSlices: 0,
@@ -246,6 +268,36 @@ export const reconciliationCountsQuery = (
  * callback holds a single transaction connection, which carries one in-flight
  * statement at a time.
  */
+/**
+ * The park of each source whose last event failed; any other source cannot be
+ * parked, so only those few read their failure run. One read at a time: the
+ * transaction holds a single connection.
+ */
+const readSourceParks = async (
+  db: Transaction,
+  aggregates: SourceAggregates,
+  now: Date,
+): Promise<void> => {
+  const failing = [...aggregates].filter(
+    ([, aggregate]) => aggregate.lastEvent?.failed === true,
+  );
+  for (const [sourceId, aggregate] of failing) {
+    // oxlint-disable-next-line no-await-in-loop -- one transaction connection carries one statement at a time
+    const park = adapterParkOf(
+      await readAdapterFailureRunIn(db, sourceId),
+      now.getTime(),
+    );
+    aggregate.park =
+      park === null
+        ? null
+        : {
+            failingSince: new Date(park.failingSinceMs).toISOString(),
+            sameFailureCycles: park.cycles,
+            nextAttemptAt: new Date(park.untilMs).toISOString(),
+          };
+  }
+};
+
 const readSourceAggregates = async ({
   db,
   oneDayAgo,
@@ -436,6 +488,7 @@ export const getIngestionStatus = async (
       oneHourAgo,
       sourceIds: sources.map((source) => source.id),
     });
+    await readSourceParks(db, aggregates, now);
 
     const sourceStatuses: SourceStatus[] = [];
     const reportUnrecognizedSource = createUnrecognizedSourceReporter(
@@ -483,6 +536,7 @@ export const getIngestionStatus = async (
         lastEvent: aggregate.lastEvent,
         topErrors: aggregate.topErrors,
         reconciliation,
+        park: aggregate.park,
       });
     }
 
@@ -529,7 +583,9 @@ const config = {
     "reports, decisions inserted in the last hour and last day, failures and " +
     "the top error types in the last day, the last ingestion event, and " +
     "standing reconciliation counts (slices surveyed, short slices, parked " +
-    "and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database " +
+    "and terminal items, pending removals and unprobeable identities), and " +
+    "whether the source is parked: failing the same way for so long that it " +
+    "asks its publisher once a day, since when, and its next attempt. The fleet event total is an estimate from database " +
     "statistics and may lag recent writes. Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
