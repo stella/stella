@@ -777,7 +777,7 @@ const ToolCallCardComponent = ({
           rawErrorDetails={rawErrorDetails}
         />
       )}
-      <UnrestoredFieldsNotice output={part.output} />
+      <UnrestoredFieldsNotice output={part.output as unknown} />
     </div>
   );
 };
