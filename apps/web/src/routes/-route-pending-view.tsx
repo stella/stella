@@ -88,7 +88,7 @@ const MAX_REDIRECT_HOPS = 4;
  * The root never counts (its pending view is the frame), and neither does a
  * layout's delegation to its leaf.
  */
-export const leafPendingView = (
+const leafPendingView = (
   routesById: object,
   matches: readonly { routeId: string }[],
 ): RouteComponent | undefined => {
