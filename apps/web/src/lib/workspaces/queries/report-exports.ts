@@ -115,7 +115,7 @@ type ReportExportRecoveryKey = {
   workspaceId: string;
 };
 
-export const reportExportRecoveryKeys = {
+const reportExportRecoveryKeys = {
   all: (workspaceId: string) =>
     ["report-export-recovery", workspaceId] as const,
   detail: ({ exportId, userId, workspaceId }: ReportExportRecoveryKey) =>

@@ -20,8 +20,7 @@ import { cn } from "@stll/ui/utils";
 // one that stays.
 
 /** Column headers on a tight row, one line each. */
-export const HEAD_CLASS =
-  "h-8 text-xs whitespace-normal leading-snug wrap-break-word";
+const HEAD_CLASS = "h-8 text-xs whitespace-normal leading-snug wrap-break-word";
 
 /**
  * Source, decisions, new in seven days, completeness.

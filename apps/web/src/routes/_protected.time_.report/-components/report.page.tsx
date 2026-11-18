@@ -71,7 +71,7 @@ export const TimeReportPage = () => {
   );
 };
 
-export const ReportPage = ({
+const ReportPage = ({
   organizationId,
   userId,
   filter,

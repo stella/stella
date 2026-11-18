@@ -23,7 +23,7 @@ import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
-import { cachedRoleGrants } from "@/lib/cached-permissions.logic";
+import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
 
 export type ContactFilter = "all" | ContactType;
 

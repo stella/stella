@@ -44,7 +44,7 @@ export const ViewChromeRowFace = ({
 );
 
 /** A view's tab icon, the same in the switcher and its face. */
-export const ViewLayoutTabIcon = ({ view }: { view: WorkspaceView }) => {
+const ViewLayoutTabIcon = ({ view }: { view: WorkspaceView }) => {
   const Icon = VIEW_LAYOUT_ICONS[view.layout.type];
   return <Icon className="size-3.5 shrink-0" />;
 };

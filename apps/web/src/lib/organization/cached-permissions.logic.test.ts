@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { PermissionInput } from "@stll/permissions";
 
 import { roleOptions } from "@/lib/auth-queries";
-import { cachedRoleGrants } from "@/lib/cached-permissions.logic";
+import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
 
 const CREATE_CONTACT: PermissionInput = { contact: ["create"] };
 

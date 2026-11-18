@@ -5,6 +5,7 @@ import nodePath from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 const SCRIPT_EXTENSION = /\.[cm]?[jt]sx?$/u;
+const PAGE_MODULE = /\.page\.tsx$/u;
 const CANDIDATE_SUFFIXES = [
   "",
   ".ts",
@@ -75,6 +76,13 @@ export const walkEagerGraph = ({
     )) {
       const file = resolveImport(specifier, next.file);
       if (file === undefined) {
+        continue;
+      }
+      // A route's page module is its `component`: the router's code
+      // splitter moves it behind the route's lazy chunk, so it is not part
+      // of the eager graph. The startup bundle gate checks the built graph
+      // keeps it out.
+      if (PAGE_MODULE.test(file)) {
         continue;
       }
       const chain = [...next.chain, repoRelativePath(root, file)];

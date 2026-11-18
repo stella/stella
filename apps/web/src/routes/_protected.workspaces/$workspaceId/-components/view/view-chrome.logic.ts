@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { cachedRoleGrants } from "@/lib/cached-permissions.logic";
+import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
 import { callerFeatureEnabled } from "@/lib/organization/feature-access/access.logic";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type { WorkspaceView } from "@/lib/types";

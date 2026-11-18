@@ -54,7 +54,7 @@ export const PublicLawSearchInput = (
  * The entry the address carries (`?q=`), read without the route's API so a
  * loading view can show it while the page that owns the box loads.
  */
-export const useAddressSearchEntry = (): string =>
+const useAddressSearchEntry = (): string =>
   useSearch({
     strict: false,
     select: (search) => (typeof search.q === "string" ? search.q : ""),
