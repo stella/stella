@@ -82,7 +82,7 @@ export const ReportTiles = ({ children }: { children: ReactNode }) => (
 const PendingField = ({
   labelKey,
 }: {
-  labelKey: keyof typeof REPORT_LABELS;
+  labelKey: "from" | "to" | "rows" | "columns";
 }) => {
   const t = useTranslations();
   return (
