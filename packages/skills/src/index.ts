@@ -28,13 +28,15 @@ export type { BuiltInSkillId, SkillResource, StellaSkill } from "./loader";
 export {
   hashSkillEntrypoint,
   hashSkillPackage,
-  isAllowedFirstPartySkillPackageSkip,
+  isKnownBinaryResourcePath,
+  isOsMetadataPath,
   SKILL_FILE_NAME,
   SKILL_METADATA_REGISTRY,
   SKILL_NAME_PATTERN,
   SKILL_PACKAGE_LIMITS,
   SKILL_RESOURCE_EXTENSIONS,
   SKILL_RESOURCE_FOLDERS,
+  SKILL_PACKAGE_RESOURCE_PATH_PATTERN,
   isSkillResourceFolder,
   validateSkillPackage,
 } from "./format";

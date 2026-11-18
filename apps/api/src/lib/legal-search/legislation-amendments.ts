@@ -32,7 +32,15 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 export const LEGISLATION_AMENDMENT_PAGE_MAX = 500;
-export const LEGISLATION_AMENDMENT_SNAPSHOT_MAX = 50_000;
+/**
+ * The most relations one observation of a work may carry. Not a page size:
+ * the relations are written in batches and read back in pages, so this only
+ * bounds one ingestion's memory and transaction. Set well above the largest
+ * work a publisher states (134/1998 Sb.: 56,958 consolidation links), so every
+ * stated relation is stored; an observation past it is refused and the
+ * adapter records a typed `partial` coverage that reads show.
+ */
+export const LEGISLATION_AMENDMENT_SNAPSHOT_MAX = 250_000;
 const AMENDMENT_INSERT_BATCH_SIZE = 1000;
 // An accepted observation that cannot be stored would roll back the statute it
 // arrived with. The identities are bounded in UTF-8 bytes by their columns'

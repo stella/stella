@@ -18,7 +18,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { resolveDecisionIdentity } from "@stll/api-contract/decision-query-intent";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 
 import {
   decisionIdentityLocatorOf,

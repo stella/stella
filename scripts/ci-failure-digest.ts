@@ -16,9 +16,10 @@
  *     one `<job id>.log` per failed job. Prints `::error` annotations, writes
  *     the JSON digest and appends a short Markdown summary. Cancelled jobs
  *     without a failed step are listed apart: they are never a cause.
- *   tail <test-output.log>
+ *   tail <test-output.log> [--summary <file>]
  *     Prints the failing tests of a test run (with their error lines) so a
- *     failing step's log ends with its failures.
+ *     failing step's log ends with its failures, and appends them to the
+ *     job's summary so the job names them even when its run is cancelled.
  *   show <run id or URL> [--repo <owner/repo>]
  *     Prints a run's digest: its `ci-failures` artifact, or, when the run has
  *     none (still running, or the gate passed), one built from the jobs API
@@ -1483,6 +1484,52 @@ export const inert = (line: string): string => {
     : line;
 };
 
+/** GitHub rejects a step summary over 1 MiB whole, so the tail's section
+ *  stays well inside it; the job log keeps the full tail. */
+export const TAIL_SUMMARY_MAX_BYTES = 256 * 1024;
+
+/** A test run's tail as a job summary section, fenced longer than any
+ *  backtick run inside it so no test output can close the fence, and cut at
+ *  a line to at most `maxBytes` of UTF-8 with a note pointing to the log. */
+export const tailSummaryMarkdown = (
+  tail: string,
+  maxBytes: number = TAIL_SUMMARY_MAX_BYTES,
+): string => {
+  const encoder = new TextEncoder();
+  const bytes = (text: string): number => encoder.encode(text).length;
+  const fenceFor = (body: string): string =>
+    "`".repeat(
+      Math.max(
+        3,
+        1 +
+          Math.max(0, ...[...body.matchAll(/`+/gu)].map(([run]) => run.length)),
+      ),
+    );
+  const render = (body: string, marker: string, note: string): string =>
+    `### Failing tests\n\n${marker}text\n${body}\n${marker}\n${note}`;
+  const marker = fenceFor(tail);
+  const whole = render(tail, marker, "");
+  if (bytes(whole) <= maxBytes) {
+    return whole;
+  }
+  const lines = tail.split("\n");
+  const note = (kept: number): string =>
+    `\nThe summary shows ${kept} of ${lines.length} lines; the job log has the full list.\n`;
+  // A kept part's fence is never longer than the whole tail's.
+  let used = bytes(render("", marker, note(lines.length)));
+  const kept: string[] = [];
+  for (const line of lines) {
+    const cost = bytes(line) + 1;
+    if (used + cost > maxBytes) {
+      break;
+    }
+    kept.push(line);
+    used += cost;
+  }
+  const body = kept.join("\n");
+  return render(body, fenceFor(body), note(kept.length));
+};
+
 /** The failures of a test run, printed last so the log ends with them. */
 export const renderTail = (rawLines: readonly string[]): string => {
   const failures = testFailures(rawLines);
@@ -1741,18 +1788,26 @@ const flagValue = (
 
 const USAGE =
   "Usage: bun scripts/ci-failure-digest.ts digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>] [--gate <job>]\n" +
-  "       bun scripts/ci-failure-digest.ts tail <test-output.log>\n" +
+  "       bun scripts/ci-failure-digest.ts tail <test-output.log> [--summary <file>]\n" +
   "       bun scripts/ci-failure-digest.ts show <run id or URL> [--repo <owner/repo>]";
 
 const main = (args: readonly string[]): number => {
   const [command, ...rest] = args;
-  if (command === "tail" && rest.length === 1 && rest[0] !== undefined) {
+  if (
+    command === "tail" &&
+    (rest.length === 1 || (rest.length === 3 && rest[1] === "--summary")) &&
+    rest[0] !== undefined
+  ) {
     if (!existsSync(rest[0])) {
       return 0;
     }
     const tail = renderTail(readFileSync(rest[0], "utf-8").split("\n"));
     if (tail !== "") {
       process.stdout.write(`\n${tail}\n`);
+      const summary = flagValue(rest, "--summary");
+      if (summary !== undefined) {
+        appendFileSync(summary, tailSummaryMarkdown(tail));
+      }
     }
     return 0;
   }

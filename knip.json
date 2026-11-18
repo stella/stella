@@ -98,7 +98,9 @@
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "src/**/*.test.ts",
-        "scripts/**/*.test.ts"
+        "src/**/*.test.tsx",
+        "scripts/**/*.test.ts",
+        "evals/**/*.test.ts"
       ]
     },
     "apps/web": {

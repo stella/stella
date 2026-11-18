@@ -2478,26 +2478,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    id: "prepaint-locales",
-    outputKind: "committed",
-    outputs: CI_GENERATED_OUTPUTS.prepaintLocale,
-    blocks: [
-      {
-        path: "apps/web/public/prepaint-init.js",
-        begin: "// <generated:ui-locales>",
-        end: "// </generated:ui-locales>",
-      },
-    ],
-    inputs: [
-      "packages/locales/**",
-      "apps/web/scripts/sync-prepaint-locales.ts",
-    ],
-    write: ["bun", "apps/web/scripts/sync-prepaint-locales.ts"],
-    check: ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
-    autofix: true,
-    after: [],
-  },
-  {
     id: "env-examples",
     outputKind: "committed",
     outputs: [
@@ -2609,6 +2589,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/catalogue/scripts/pinned-content-upstream.ts",
       "packages/skills/src/**",
       "packages/skills/package.json",
+      "packages/text-normalize/src/**",
     ],
     write: ["bun", "--filter", "@stll/catalogue", "refresh-pinned"],
     check: ["bun", "--filter", "@stll/catalogue", "check-pinned"],
@@ -2687,6 +2668,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/skills/src/required-tools.ts",
       "packages/portable-path/src/**",
       "packages/sha256/src/**",
+      "packages/text-normalize/src/**",
     ],
     checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["skill-manifests"]],
     write: ["bun", "--filter", "@stll/skills", "generate"],

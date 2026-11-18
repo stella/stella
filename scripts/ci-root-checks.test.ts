@@ -378,7 +378,9 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/main-heavy.test.ts",
     "scripts/validate-main-heavy-sha.test.ts",
   ],
-  "ci-checks-rest/Test cancellation evidence": [],
+  "ci-checks-rest/Test cancellation evidence": [
+    "scripts/ci-cancellation-contract.test.ts",
+  ],
   "ci-checks-rest/Test thin merge queue contracts": [
     "scripts/ci-expression-context.ts",
     "scripts/ci-plan-variables.ts",

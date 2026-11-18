@@ -1889,9 +1889,14 @@ export type MemberCleanupDisposition =
 /**
  * Every column organization removal changes for the departing member, in this
  * module or in the credential revocation it runs in the same transaction. The
- * schema coverage guard derives its census from this list.
+ * schema coverage guard derives its census from this list. Annotated rather
+ * than `as const`: a literal tuple of every column type is a union the
+ * type-aware lint cannot represent (TS2590).
  */
-export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
+export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
+  PgColumn,
+  MemberCleanupDisposition,
+])[] = [
   [billingDraftUserSettings.userId, "cleared"],
   [requestIdempotencyReceipts.userId, "cleared"],
   [requestIdempotencyReceipts.responseBody, "cleared"],
@@ -1939,13 +1944,16 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [agentRegistration.boundUserId, "cleared"],
   [agentDelegation.userId, "cleared"],
   [folioCollabRoomTokens.userId, "cleared"],
-] as const satisfies readonly (readonly [PgColumn, MemberCleanupDisposition])[];
+];
 
 /**
  * Every column matter removal (`handlers/workspaces/members/remove.ts` with
  * `clearMemberAssignments`) changes for the departing member. The schema coverage guard derives from this list.
  */
-export const WORKSPACE_MEMBER_CLEANUP_COLUMNS = [
+export const WORKSPACE_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
+  PgColumn,
+  MemberCleanupDisposition,
+])[] = [
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],
   [workObligations.ownerUserId, "reassigned"],
@@ -1956,4 +1964,4 @@ export const WORKSPACE_MEMBER_CLEANUP_COLUMNS = [
   [desktopEditSessions.takeoverRequestedBy, "cleared"],
   [desktopEditHandoffs.createdBy, "cleared"],
   [pdfSigningSessions.createdBy, "cleared"],
-] as const satisfies readonly (readonly [PgColumn, MemberCleanupDisposition])[];
+];

@@ -32,7 +32,10 @@ import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
 } from "@/api/mcp/gateway/external-tools";
-import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
+import {
+  modeAllowsGatewayTools,
+  modeAllowsSkillTools,
+} from "@/api/mcp/gateway/mode-policy";
 import {
   readSkillTool,
   resolveSkillTool,
@@ -157,10 +160,7 @@ export const dispatchGatewayToolCall = async ({
     };
   }
 
-  if (!isSkillToolName(toolName)) {
-    return null;
-  }
-  if (!modeAllowsGatewayTools(mode)) {
+  if (!isSkillToolName(toolName) || !modeAllowsSkillTools(mode, context)) {
     return null;
   }
 

@@ -46,6 +46,7 @@
   "dependencies": {
     "@stll/portable-path": "workspace:*",
     "@stll/sha256": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

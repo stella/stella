@@ -1159,13 +1159,13 @@ const managedProviderCheckInvariantViolation = ({
   }
   // The free floor runs on the fast tier's own credential and never on the
   // standard one, so a managed free tier without it would refuse every
-  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
-  // deployment may still resolve to OpenRouter from its standard credential.
-  const openRouterMayServe =
-    AI_PROVIDER === "openrouter" ||
-    (AI_PROVIDER === undefined && standardCredential);
+  // request; refuse the configuration at boot instead. A standard credential
+  // serves OpenRouter whatever AI_PROVIDER says: without AI_PROVIDER the
+  // deployment resolves to it, and transcription offers its models under any
+  // provider.
+  const openRouterMayServe = AI_PROVIDER === "openrouter" || standardCredential;
   if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
-    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
+    return "FEATURE_FREE_TIER with a managed OpenRouter credential requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {

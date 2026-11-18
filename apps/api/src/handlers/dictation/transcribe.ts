@@ -8,7 +8,6 @@ import {
   transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
 import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
-import { AI_FAILURE_CODES } from "@stll/api-contract";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
@@ -34,6 +33,7 @@ import {
   readTranscriptionDeployment,
   transcriptionRetainsData,
   transcriptionServed,
+  transcriptionServedAnywhere,
 } from "@/api/handlers/dictation/transcription-deployment";
 import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -322,20 +322,12 @@ export const executeDictation = async (
         );
       }
     }
+    // The organization's own OpenRouter key, when it brings one; otherwise,
+    // even on another AI provider of its own, it transcribes on stella's
+    // credential as stella usage.
     const ownKey = ctx.orgAIConfig?.providers.find(
       ({ provider }) => provider === "openrouter",
     )?.apiKey;
-    if (ctx.orgAIConfig !== null && ownKey === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          code: AI_FAILURE_CODES.own_key_required,
-          message:
-            "Transcription is not available with your organization's AI provider.",
-          hint: "Configure an organization OpenRouter key in organization AI settings.",
-        }),
-      );
-    }
     const deployment = dependencies.deployment();
     // The member's grant decides only a named model whose provider keeps the
     // audio, so a default or any other model never waits on reading it.
@@ -369,6 +361,21 @@ export const executeDictation = async (
               ctx.allowOutsideRegion === true && body.modelId !== undefined,
             served,
           });
+    if (residency !== null && !transcriptionServedAnywhere(served)) {
+      // No credential this organization can transcribe with, in any region.
+      return Result.err(
+        classifyFailure(
+          new HandlerError({
+            status: 503,
+            code: "transcription_model_unavailable",
+            message:
+              "No transcription provider is available to your organization",
+            hint: "Configure an organization OpenRouter key in organization AI settings, or ask your server administrator to configure transcription.",
+          }),
+          "model_unavailable",
+        ),
+      );
+    }
     if (modelId === undefined || endpoint === undefined) {
       return Result.err(
         classifyFailure(
