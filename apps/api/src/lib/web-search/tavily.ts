@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import { JURISDICTION_ALLOWLIST_DOMAINS } from "@/api/lib/web-search/allowlists";
 import {
@@ -22,6 +23,8 @@ const VALIDATE_TIMEOUT_MS = 10_000;
 // is a backstop matching that caller's WEB_SEARCH_TIMEOUT_MS budget.
 const SEARCH_TIMEOUT_MS = 10_000;
 const ERROR_PREFIX_MAX_CHARS = 200;
+// Local buffering policy for successful JSON, not a provider payload guarantee.
+const TAVILY_SUCCESS_JSON_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
  * Probe a Tavily key with a minimal search before persisting it.
@@ -42,7 +45,7 @@ export const validateTavilyKey = async (apiKey: string): Promise<void> => {
       search_depth: "basic",
       include_answer: false,
     }),
-    timeoutMs: VALIDATE_TIMEOUT_MS,
+    timeout: { type: "total", ms: VALIDATE_TIMEOUT_MS },
   });
   discardResponseBody(response);
   if (!response.ok) {
@@ -128,7 +131,7 @@ export const createTavilyProvider = ({
         ...(timeRange ? { time_range: timeRange } : {}),
       }),
       signal,
-      timeoutMs: SEARCH_TIMEOUT_MS,
+      timeout: { type: "total", ms: SEARCH_TIMEOUT_MS },
     });
     if (!response.ok) {
       const { content } = await readResponseTextPrefix(response, {
@@ -142,7 +145,15 @@ export const createTavilyProvider = ({
         message: `Tavily search failed (${response.status}): ${content}`,
       });
     }
-    const json = v.parse(tavilyResponseSchema, await response.json());
+    const json = v.parse(
+      tavilyResponseSchema,
+      await readBodyJsonWithIdleDeadline(response, {
+        maxBytes: TAVILY_SUCCESS_JSON_MAX_BYTES,
+        // The transport's existing total deadline remains authoritative.
+        idleMs: SEARCH_TIMEOUT_MS,
+        signal,
+      }),
+    );
     const results: WebSearchResult[] = [];
     for (const [index, result] of json.results.slice(0, maxResults).entries()) {
       const entry: WebSearchResult = {

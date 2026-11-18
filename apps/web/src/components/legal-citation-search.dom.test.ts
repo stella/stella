@@ -66,6 +66,8 @@ const decision = {
   citationAuthority: 0,
   matchingPassages: 1,
   match: "all_terms",
+  matchedTerms: [],
+  missingTerms: [],
   anchorId: null,
   citationCount: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -113,6 +115,7 @@ const decisionPage = (hits: DecisionSearchResponse["hits"]) =>
     pageReach: SEARCH_PAGE_REACH.REACHED,
     total: { type: "exact", count: hits.length },
     relaxedHitCount: 0,
+    termDecisionCounts: null,
     queryUsed: "fixture query",
     warnings: [],
   }) satisfies DecisionSearchResponse;

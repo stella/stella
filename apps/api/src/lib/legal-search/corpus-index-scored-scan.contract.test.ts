@@ -14,7 +14,9 @@ import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
   type CorpusIndexHit,
+  elasticAnswerHasFailedShards,
   getCorpusIndexClient,
+  STRICT_ELASTIC_READ,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
@@ -1082,6 +1084,52 @@ describe.skipIf(!runEngineTests)(
           : null;
 
       expect(Array.isArray(splits) ? splits.length : 0).toBeGreaterThan(1);
+    });
+
+    test("strict ES reads are accepted and report every split answered", async () => {
+      // The ES endpoint defaults to answering with the splits it could read;
+      // the client asks for failure instead, and reads `_shards.failed` as a
+      // second net. Both must be what this engine speaks: an unknown
+      // parameter or a missing count would make the guard a no-op.
+      const response = await fetch(
+        `${String(envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT ?? envBase.CORPUS_INDEX_Q09_ENDPOINT)}/api/v1/_elastic/${INDEX_ID}/_search?${STRICT_ELASTIC_READ}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ size: 0, query: { match_all: {} } }),
+        },
+      );
+      expect(response.ok).toBe(true);
+      const body: unknown = await response.json();
+      const shards =
+        typeof body === "object" && body !== null && "_shards" in body
+          ? body._shards
+          : null;
+      expect(shards).toMatchObject({ failed: 0 });
+      expect(elasticAnswerHasFailedShards(body)).toBe(false);
+      expect(
+        elasticAnswerHasFailedShards({
+          ...(typeof body === "object" && body !== null ? body : {}),
+          _shards: { failed: 1 },
+        }),
+      ).toBe(true);
+
+      // Both client reads through the ES endpoint answer under strict mode.
+      const scored = await readScored({ query: "*", from: 0, size: 1 });
+      expect(scored.numHits).toBeGreaterThan(0);
+      const aggregated = await client.aggregate({
+        observer: "unobserved",
+        indexId: INDEX_ID,
+        query: "*",
+        filter: "*",
+        aggs: { decisions: { cardinality: { field: "document_id" } } },
+      });
+      if (aggregated.isErr()) {
+        throw aggregated.error;
+      }
+      expect(aggregated.value["decisions"]).toMatchObject({
+        value: expect.any(Number),
+      });
     });
 
     test("the split census reports each index it is asked about", async () => {

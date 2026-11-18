@@ -108,6 +108,12 @@ export type ChatEntry = {
    * away from the one asked for; absent when it ran on that one.
    */
   readonly ranOnModel?: string;
+  /**
+   * A stored message of the person's: its parts as the thread stores them,
+   * which an edit sends back. Absent on an answer and on a message still
+   * being sent from here.
+   */
+  readonly parts?: readonly unknown[];
 };
 
 const contextNoticeMetadataSchema = v.object({
@@ -160,6 +166,11 @@ export type ChatMessagesPage = {
   readonly retry: ChatRetry | null;
   /** Where the thread's turns run: on stella's model path, or a computer. */
   readonly runTargetKind: ChatRunTarget["kind"];
+  /**
+   * The computer target the thread's turns run on, when they run on the
+   * person's computer: what an edit names, as a regeneration does.
+   */
+  readonly localRunTarget: LocalRunTarget | undefined;
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
@@ -224,6 +235,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     ...(failure === undefined ? {} : { failure }),
     ...(limitResetsAt === undefined ? {} : { limitResetsAt }),
     ...(ranOnModel === null ? {} : { ranOnModel }),
+    ...(message.role === "user" ? { parts: message.parts } : {}),
   };
 };
 
@@ -293,6 +305,7 @@ const toPage = (
   runTargetKind: v.is(chatRunTargetSchema, page.runTarget)
     ? page.runTarget.kind
     : CHAT_RUN_TARGET_KIND.cloud,
+  localRunTarget: localRunTargetOf(page.runTarget),
   pendingInput: latest
     ? pendingInputOf({
         message: page.messages.at(-1),
@@ -324,6 +337,27 @@ export const prependOlderPage = (
 ): ChatEntry[] => {
   const seen = new Set(loaded.map((entry) => entry.id));
   return [...older.filter((entry) => !seen.has(entry.id)), ...loaded];
+};
+
+/**
+ * The loaded thread once its latest page is read again, as the server holds
+ * it now: that page, after the loaded messages known to come before it (the
+ * ones before the page's oldest message). A message the server no longer
+ * holds, such as one an edit elsewhere replaced, leaves. When the page's
+ * oldest message is not loaded, nothing loaded is known to come before it:
+ * the page stands alone (`standalone`), and paging starts again from its
+ * cursor.
+ */
+export const withLatestPage = (
+  loaded: readonly ChatEntry[],
+  latest: readonly ChatEntry[],
+): { readonly entries: readonly ChatEntry[]; readonly standalone: boolean } => {
+  const oldest = latest[0];
+  const index =
+    oldest === undefined ? -1 : loaded.findIndex(({ id }) => id === oldest.id);
+  return index === -1
+    ? { entries: latest, standalone: true }
+    : { entries: [...loaded.slice(0, index), ...latest], standalone: false };
 };
 
 const threadPath = (threadId: string) =>

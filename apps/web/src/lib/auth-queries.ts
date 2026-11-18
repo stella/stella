@@ -91,7 +91,7 @@ export const roleOptions = resourceQueryOptions(
   }),
   {
     resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
-    scope: { type: "organization" },
+    scope: { type: "current-session" },
   },
 );
 
@@ -122,7 +122,7 @@ export const activeMemberOptions = resourceQueryOptions(
   }),
   {
     resources: [RESOURCE_TYPE.USER, RESOURCE_TYPE.ORGANIZATION],
-    scope: { type: "organization" },
+    scope: { type: "current-session" },
   },
 );
 

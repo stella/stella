@@ -341,6 +341,7 @@ import {
   getDefaultClientResourceIdentifiers,
   getOwnNativeClientResources,
   isApiResourceClient,
+  isMobileAppClient,
 } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -3875,6 +3876,7 @@ const resolveAccessTokenIdentity = async ({
     return { ok: false, statusCode: 401 };
   }
   const admission = admitApiAccessTokenRoute({
+    client: isMobileAppClient(tokenSession.clientId) ? "mobile" : undefined,
     method: request.method,
     route,
     scopes: tokenSession.scopes,

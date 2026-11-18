@@ -762,7 +762,7 @@ export const playbookDetailOptions = (
     }),
     {
       resources: [RESOURCE_TYPE.PLAYBOOK],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 
@@ -851,7 +851,7 @@ export const skillsOptions = (organizationId: string, userId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.AGENT_SKILL],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId, userId },
     },
   );
 
@@ -1029,7 +1029,7 @@ export const mcpConnectorsOptions = (organizationId: string) =>
     }),
     {
       resources: [RESOURCE_TYPE.MCP_CONNECTOR],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 

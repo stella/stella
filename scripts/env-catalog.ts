@@ -167,12 +167,14 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
+  "FEATURE_CHAT_TURN_HANDOVER",
   "FEATURE_CONFLICT_CHECK",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_FREE_TIER",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_GENERATED_VIEWS",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
+  "FEATURE_INVOICE_LINKS",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MANAGED_PROVIDER_CHECKS",
   "FEATURE_MCP_READ_FENCE",
@@ -523,10 +525,14 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "S3 bucket the SES receipt rule stores raw messages in, in S3_REGION.",
   INBOUND_MAIL_KEY_PREFIX:
     "Object key prefix of the SES receipt rule's S3 action, for example mail/.",
+  FEATURE_CHAT_TURN_HANDOVER:
+    "Release each local chat turn to another API task when this one stops, instead of ending it. Defaults off; enable only once every task runs a release that adopts released turns.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
     "Enable model-backed inbox producers that read processed documents and review runs.",
+  FEATURE_INVOICE_LINKS:
+    "Kill switch for sending and opening invoice links. Off by default, including local development; also requires the organization invoice-links invitation grant and time-billing access. History and revocation use normal invoice access.",
   FEATURE_GOVERNED_WORKFLOW:
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
@@ -534,7 +540,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     "Parameter Store name holding API_FEATURE_ACCESS_GRANTS. When set, the API checks the parameter version every minute and reloads the grants only when it changed; unset keeps the grants read at startup.",
   API_FEATURE_ACCESS_GRANTS:
-    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
+    "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Authenticated decisions require current membership and verified email. Invoice-links accepts only organization grants and requires its deployment flag; public recipients use the invoice organization decision. Unknown feature ids are dropped with an error count; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FREE_TIER:
@@ -908,6 +914,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
     ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CHAT_TURN_HANDOVER: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
@@ -918,6 +925,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_GENERATED_VIEWS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_INVOICE_LINKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_MCP_READ_FENCE: ENV_CREDENTIAL_KIND.notCredential,

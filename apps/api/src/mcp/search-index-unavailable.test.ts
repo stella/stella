@@ -964,6 +964,7 @@ describe("public corpus statement budgets", () => {
               queryUsed: body.query,
               warnings: [],
               relaxedHitCount: 0,
+              termDecisionCounts: null,
             };
           },
         },

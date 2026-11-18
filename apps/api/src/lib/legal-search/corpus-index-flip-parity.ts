@@ -60,7 +60,38 @@
  * state applied after its page was read is still one the walk counted, all of
  * which only overstates. In the other order a decision seeded between the two
  * reads would be reported by neither.
- * `readCorpusIndexFlipParity` owns that order; it is the only way to a verdict.
+ * `walkCorpusIndexFlipCoverage` and `decideCorpusIndexFlipParityTx` own that
+ * order: a verdict is decided only from a walk, in the transaction that reads
+ * the regressions (`readCorpusIndexFlipParity` runs both).
+ *
+ * What the decision re-reads, and why that is enough. The walk is long (one
+ * page per serving state, about 10,000 pages at 10 M states), so it runs in
+ * short transactions and no fence can be held across it. The decision runs
+ * in one transaction, which a flip holds under the exclusive projection
+ * fence, and re-reads everything that could have moved since:
+ *
+ * - the pair, by its registry rows' identity (status and update time): a
+ *   rebuild, the only thing that deletes projection states, changes them, so
+ *   every candidate state the walk counted is still there;
+ * - the tail: every serving state after the last one the walk read, exactly.
+ *   Decision ids are time ordered, so this is where new decisions land;
+ * - behind the cursor: every serving state created after its page was read,
+ *   and every serving state the walk saw with no candidate state that has
+ *   come to want an upsert since. The walk keeps each page's bounds and count
+ *   and lists the serving states it found with no candidate state that wanted
+ *   no upsert; the decision counts every page again (one index-only range
+ *   count per page) and re-reads the pages whose count moved and the listed
+ *   states, by primary key. Nothing deletes a state of an active generation
+ *   (a database trigger allows it only once the generation is retired), so a
+ *   page whose count did not move holds exactly the states the walk read, and
+ *   a page whose count fell refuses as undecided. No writer contract is
+ *   trusted for this: a writer that gives the serving generation a state and
+ *   the candidate none is caught however it came to do so. Measured on 2 M
+ *   serving states, the recount takes 0.1 to 0.3 s (all-visible or not), so
+ *   about 1 to 1.5 s at 10 M, under the fence.
+ *
+ * The other order, holding writers back for the whole walk, would pause every
+ * projection writer for tens of minutes at 10 M states.
  */
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, or, type SQL, sql } from "drizzle-orm";
@@ -105,6 +136,16 @@ type CorpusIndexFlipPair = {
   candidate: string;
 };
 
+/**
+ * The pair as the registry held it: each row's status and last update, in
+ * epoch microseconds. Every lifecycle transition rewrites both, so an equal
+ * identity means neither generation moved in between.
+ */
+type CorpusIndexFlipPairIdentity = CorpusIndexFlipPair & {
+  servingUpdatedAtUs: string;
+  candidateUpdatedAtUs: string;
+};
+
 const CORPUS_INDEX_FLIP_REGRESSION_KINDS = ["not_shown", "stale"] as const;
 type CorpusIndexFlipRegressionKind =
   (typeof CORPUS_INDEX_FLIP_REGRESSION_KINDS)[number];
@@ -123,6 +164,31 @@ const CORPUS_INDEX_FLIP_SAMPLE_MAX = 50;
 /** Serving copies one coverage page reads at most. */
 const CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX = 5000;
 
+/**
+ * Serving states the decision re-reads after the walk's last one, at most.
+ * The tail holds what arrived since the walk ended (minutes of inflow); a
+ * longer tail leaves the verdict undecided, and walking again shortens it.
+ */
+const CORPUS_INDEX_FLIP_TAIL_MAX = 5000;
+
+/**
+ * Serving states the walk lists for the decision to probe again: those it
+ * found with no candidate state while they wanted no upsert (erased or
+ * withheld before the candidate was seeded). Past this many the walk cannot
+ * prove coverage. Probing 100,000 by primary key took 3 to 4 s on 2 M states.
+ */
+const CORPUS_INDEX_FLIP_UNCOVERED_MAX = 50_000;
+
+/**
+ * Serving states the decision re-reads in pages whose count moved behind the
+ * walk's cursor, at most; past it the verdict is undecided and walking again
+ * (when the inflow behind the cursor is quieter) settles it.
+ */
+const CORPUS_INDEX_FLIP_RECHECK_MAX = 50_000;
+
+/** The smallest uuid: the first page's lower bound, inclusive. */
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
 export class CorpusIndexFlipPairRefusedError extends TaggedError(
   "CorpusIndexFlipPairRefusedError",
 )<{
@@ -133,6 +199,7 @@ export class CorpusIndexFlipPairRefusedError extends TaggedError(
     | "generation_not_active"
     | "partial_generation"
     | "serving_changed"
+    | "generation_changed"
     | "jurisdiction_serving_pointer";
 }> {
   static {
@@ -485,6 +552,38 @@ const readRows = async (
     catch: (cause) => readError(pair, cause),
   });
 
+type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
+
+/**
+ * One read in its own transaction. A failed read rolls the transaction back
+ * and comes back as its Err: a statement the database cut short has aborted
+ * the transaction, so it must never be asked to commit.
+ */
+const readInTransaction = async <T, E>(
+  runInTransaction: ProjectionTransactionRunner,
+  read: (tx: Transaction) => Promise<Result<T, E>>,
+): Promise<Result<T, E>> => {
+  const failed: { error?: E } = {};
+  const ran = await Result.tryPromise({
+    try: async () =>
+      await runInTransaction(async (tx) => {
+        const result = await read(tx);
+        if (result.isErr()) {
+          failed.error = result.error;
+          tx.rollback();
+        }
+        return result;
+      }),
+    catch: (cause) => cause,
+  });
+  if (failed.error !== undefined) {
+    return Result.err(failed.error);
+  }
+  return ran.isOk()
+    ? ran.value
+    : panic("A flip parity read failed outside its statements", ran.error);
+};
+
 const refused = (
   message: string,
   reason: CorpusIndexFlipPairRefusedError["reason"],
@@ -501,7 +600,7 @@ const refused = (
 const readComparablePairTx = async (
   tx: Transaction,
   { family, candidate }: { family: CorpusFamily; candidate: string },
-): Promise<Result<CorpusIndexFlipPair, CorpusIndexFlipParityError>> => {
+): Promise<Result<CorpusIndexFlipPairIdentity, CorpusIndexFlipParityError>> => {
   const failed = (cause: unknown) =>
     readError({ family, serving: "(serving)", candidate }, cause);
   if (
@@ -519,6 +618,7 @@ const readComparablePairTx = async (
           .select({
             generation: corpusIndexGenerations.generation,
             status: corpusIndexGenerations.status,
+            updatedAtUs: sql<string>`${epochMicros(sql`${corpusIndexGenerations.updatedAt}`)}::text`,
           })
           .from(corpusIndexGenerations)
           .where(
@@ -578,7 +678,13 @@ const readComparablePairTx = async (
       "jurisdiction_serving_pointer",
     );
   }
-  return Result.ok({ family, serving: serving.generation, candidate });
+  return Result.ok({
+    family,
+    serving: serving.generation,
+    candidate,
+    servingUpdatedAtUs: serving.updatedAtUs,
+    candidateUpdatedAtUs: candidateRow.updatedAtUs,
+  });
 };
 
 const readRegressionsTx = async (
@@ -635,7 +741,9 @@ const readRegressionsTx = async (
  * upsert while the candidate has no state at all. Every such state counts,
  * shown or not yet: one the serving generation applies after its page was
  * read would otherwise reach readers with nothing in the candidate, and the
- * regression statement, which walks candidate states, could not see it.
+ * regression statement, which walks candidate states, could not see it. The
+ * ones with no candidate state that want no upsert are listed (`uncovered`):
+ * they are no loss now, and the decision probes them again under the fence.
  */
 export const corpusIndexFlipCoveragePageQuery = (
   pair: CorpusIndexFlipPair,
@@ -656,8 +764,9 @@ export const corpusIndexFlipCoveragePageQuery = (
       ORDER BY ${states.entityId}
       LIMIT ${limit}
     ),
-    missing AS (
-      SELECT walked.entity_id::text AS entity_id
+    probed AS MATERIALIZED (
+      SELECT walked.entity_id::text AS entity_id,
+        walked.desired_action = 'upsert' AS wants_upsert
       FROM walked
       -- One primary-key probe per state: as an anti-join the planner may
       -- read the candidate's states whole.
@@ -668,8 +777,7 @@ export const corpusIndexFlipCoveragePageQuery = (
           AND ${states.entityId} = walked.entity_id
         LIMIT 1
       ) candidate_presence ON true
-      WHERE walked.desired_action = 'upsert'
-        AND candidate_presence.present IS NULL
+      WHERE candidate_presence.present IS NULL
     )
     SELECT
       (SELECT count(*) FROM walked)::int AS walked,
@@ -678,11 +786,137 @@ export const corpusIndexFlipCoveragePageQuery = (
         ORDER BY walked.entity_id DESC
         LIMIT 1
       ) AS last_entity_id,
-      (SELECT count(*) FROM missing)::int AS missing,
+      (SELECT count(*) FROM probed WHERE probed.wants_upsert)::int AS missing,
       coalesce((
         SELECT json_agg(sampled.entity_id ORDER BY sampled.entity_id)
         FROM (
-          SELECT entity_id FROM missing
+          SELECT entity_id FROM probed
+          WHERE probed.wants_upsert
+          ORDER BY entity_id
+          LIMIT ${CORPUS_INDEX_FLIP_SAMPLE_MAX}
+        ) AS sampled
+      ), '[]'::json) AS sample,
+      coalesce((
+        SELECT json_agg(probed.entity_id ORDER BY probed.entity_id)
+        FROM probed
+        WHERE NOT probed.wants_upsert
+      ), '[]'::json) AS uncovered`;
+};
+
+/** One walked page as the decision counts it again: its bounds and count. */
+type CorpusIndexFlipCoveragePageBound = {
+  /** Exclusive lower bound; null for the first page (from the start). */
+  after: string | null;
+  /** Inclusive upper bound: the last state the page read. */
+  last: string;
+  walked: number;
+};
+
+/** The serving states of `pages`, as a range join over their bounds. */
+const pageRanges = (
+  pages: readonly { after: string | null; last: string }[],
+): SQL =>
+  sql`jsonb_to_recordset(${JSON.stringify(
+    pages.map(({ after, last }) => ({ after_id: after, last_id: last })),
+  )}::text::jsonb) AS page(after_id uuid, last_id uuid)`;
+
+/** The serving states one page's bounds hold, read through the primary key. */
+const inPage = (family: CorpusFamily, serving: string): SQL => sql`
+          ${generationOf(states, family, serving)}
+          AND ${states.entityId} >= coalesce(page.after_id, ${NIL_UUID}::uuid)
+          AND ${states.entityId} <= page.last_id
+          AND (page.after_id IS NULL OR ${states.entityId} <> page.after_id)`;
+
+/**
+ * Every walked page counted again: one index-only range count per page, and
+ * only the pages whose count moved come back. Under the fence, a page whose
+ * count did not move holds exactly the states the walk read there.
+ */
+export const corpusIndexFlipPageRecountQuery = (
+  pair: CorpusIndexFlipPair,
+  pages: readonly CorpusIndexFlipCoveragePageBound[],
+): SQL => {
+  const { family, serving } = pair;
+  return sql`
+    SELECT page.after_id::text AS after_id, page.last_id::text AS last_id,
+      page.walked, counted.states
+    FROM jsonb_to_recordset(${JSON.stringify(
+      pages.map(({ after, last, walked }) => ({
+        after_id: after,
+        last_id: last,
+        walked,
+      })),
+    )}::text::jsonb) AS page(after_id uuid, last_id uuid, walked int)
+    CROSS JOIN LATERAL (
+      SELECT count(*)::int AS states
+      FROM ${states}
+      WHERE ${inPage(family, serving)}
+    ) counted
+    WHERE counted.states <> page.walked`;
+};
+
+/**
+ * The serving states of the pages whose count moved, and the listed states
+ * the walk found with no candidate state, read again: each probed by primary
+ * key in both generations. A state that wants an upsert with no candidate
+ * state is missing; a listed state with no serving state left was removed.
+ */
+export const corpusIndexFlipBehindCursorQuery = (
+  pair: CorpusIndexFlipPair,
+  {
+    pages,
+    listed,
+  }: {
+    pages: readonly { after: string | null; last: string }[];
+    listed: readonly string[];
+  },
+): SQL => {
+  const { family, serving, candidate } = pair;
+  return sql`
+    WITH reread AS MATERIALIZED (
+      SELECT in_page.entity_id
+      FROM ${pageRanges(pages)}
+      CROSS JOIN LATERAL (
+        SELECT ${states.entityId} AS entity_id
+        FROM ${states}
+        WHERE ${inPage(family, serving)}
+      ) in_page
+      UNION
+      SELECT listed.entity_id::uuid
+      FROM jsonb_array_elements_text(${JSON.stringify(listed)}::text::jsonb) AS listed(entity_id)
+    ),
+    probed AS MATERIALIZED (
+      SELECT reread.entity_id::text AS entity_id,
+        serving_now.desired_action,
+        candidate_presence.present
+      FROM reread
+      LEFT JOIN LATERAL (
+        SELECT ${states.desiredAction} AS desired_action
+        FROM ${states}
+        WHERE ${generationOf(states, family, serving)}
+          AND ${states.entityId} = reread.entity_id
+        LIMIT 1
+      ) serving_now ON true
+      LEFT JOIN LATERAL (
+        SELECT true AS present
+        FROM ${states}
+        WHERE ${generationOf(states, family, candidate)}
+          AND ${states.entityId} = reread.entity_id
+        LIMIT 1
+      ) candidate_presence ON true
+    )
+    SELECT
+      (SELECT count(*) FROM probed)::int AS reread,
+      (SELECT count(*) FROM probed WHERE probed.desired_action IS NULL)::int AS removed,
+      (
+        SELECT count(*) FROM probed
+        WHERE probed.desired_action = 'upsert' AND probed.present IS NULL
+      )::int AS missing,
+      coalesce((
+        SELECT json_agg(sampled.entity_id ORDER BY sampled.entity_id)
+        FROM (
+          SELECT entity_id FROM probed
+          WHERE probed.desired_action = 'upsert' AND probed.present IS NULL
           ORDER BY entity_id
           LIMIT ${CORPUS_INDEX_FLIP_SAMPLE_MAX}
         ) AS sampled
@@ -713,24 +947,65 @@ type CorpusIndexFlipCoverage =
     };
 
 /**
+ * The serving states the walk found with no candidate state that wanted no
+ * upsert, listed for the decision to probe again; or only their number, once
+ * past `CORPUS_INDEX_FLIP_UNCOVERED_MAX`.
+ */
+type CorpusIndexFlipUncovered =
+  | { type: "listed"; entityIds: readonly string[] }
+  | { type: "too_many"; count: number };
+
+/** Why the decision cannot prove what changed behind the walk's cursor. */
+type CorpusIndexFlipBehindCursorUnprovable =
+  "states_removed" | "too_many_changed" | "too_many_uncovered";
+
+/** What the decision read behind the walk's cursor. */
+type CorpusIndexFlipBehindCursor =
+  | {
+      type: "read";
+      /** Pages counted again. */
+      pages: number;
+      /** Pages whose count moved since the walk read them. */
+      changedPages: number;
+      /** Serving states probed again: the moved pages' and the listed ones. */
+      reread: number;
+      /** Of those, the ones that want an upsert with no candidate state. */
+      missing: number;
+      sample: readonly string[];
+    }
+  /** The walk did not reach the end, so there is nothing behind it to prove. */
+  | { type: "not_read" }
+  | { type: "unprovable"; reason: CorpusIndexFlipBehindCursorUnprovable };
+
+/**
  * The one verdict a caller acts on. `no_regression` only when the coverage
- * walk read every serving state and found none missing, and the regression
- * statement was exact and empty.
+ * walk read every serving state and found none missing, nothing behind its
+ * cursor is missing, and the regression statement was exact and empty.
  */
 type CorpusIndexFlipVerdict =
   | { type: "no_regression" }
   | { type: "regressions"; missing: number; regressions: number }
   | {
       type: "undecided";
-      reason: "walk_capped" | "coverage_incomplete";
+      reason:
+        | "walk_capped"
+        | "coverage_incomplete"
+        | "coverage_tail_long"
+        | CorpusIndexFlipBehindCursorUnprovable;
       knownMissing: number;
       knownRegressions: number;
     };
 
 export type CorpusIndexFlipParity = {
-  pair: CorpusIndexFlipPair;
+  pair: CorpusIndexFlipPairIdentity;
   watermark: Temporal.Instant;
+  /**
+   * The walk's coverage, with what the decision found missing in the tail
+   * and behind the cursor added to it.
+   */
   coverage: CorpusIndexFlipCoverage;
+  tail: CorpusIndexFlipTail;
+  behindCursor: CorpusIndexFlipBehindCursor;
   regressions: CorpusIndexFlipRegressionReading;
   verdict: CorpusIndexFlipVerdict;
 };
@@ -782,21 +1057,31 @@ type CoverageWalkOptions = {
   resumeFrom: CorpusIndexFlipCoverageCursor | null;
 };
 
-type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
-
 type CoveragePage = {
   walked: number;
   missing: number;
   sample: readonly string[];
+  /** States read with no candidate state that wanted no upsert. */
+  uncovered: readonly string[];
+  /** The last serving state the page read; null when it read none. */
+  last: string | null;
   next: string | null;
 };
+
+const entityIdsOf = (row: unknown, key: string): string[] =>
+  requiredArray(row, key).map((entry) =>
+    typeof entry === "string"
+      ? entry
+      : panic(`Malformed flip parity row: ${key}`),
+  );
 
 const readCoveragePage = async (
   runInTransaction: ProjectionTransactionRunner,
   pair: CorpusIndexFlipPair,
   { after, limit }: { after: string | null; limit: number },
 ): Promise<Result<CoveragePage, CorpusIndexFlipParityReadError>> => {
-  const rows = await runInTransaction(
+  const rows = await readInTransaction(
+    runInTransaction,
     async (tx) =>
       await readRows(
         tx,
@@ -812,35 +1097,53 @@ const readCoveragePage = async (
   return Result.ok({
     walked,
     missing: requiredCount(row, "missing"),
-    sample: requiredArray(row, "sample").map((entry) =>
-      typeof entry === "string"
-        ? entry
-        : panic("Malformed flip parity row: coverage sample"),
-    ),
+    sample: entityIdsOf(row, "sample"),
+    uncovered: entityIdsOf(row, "uncovered"),
+    last: nullableText(row, "last_entity_id"),
     next: walked < limit ? null : nullableText(row, "last_entity_id"),
   });
 };
 
+type WalkedCoverage = {
+  coverage: CorpusIndexFlipCoverage;
+  last: string | null;
+  pages: readonly CorpusIndexFlipCoveragePageBound[];
+  uncovered: CorpusIndexFlipUncovered;
+};
+
 /**
  * Walk the serving generation's states, one short read-only transaction per
- * page, within the page budget.
+ * page, within the page budget, keeping each page's bounds and count and the
+ * states it found with no candidate state that wanted no upsert.
  */
 const walkCoverage = async (
   runInTransaction: ProjectionTransactionRunner,
   pair: CorpusIndexFlipPair,
   { pageSize, pageBudget, resumeFrom }: CoverageWalkOptions,
-): Promise<Result<CorpusIndexFlipCoverage, CorpusIndexFlipParityReadError>> => {
+): Promise<Result<WalkedCoverage, CorpusIndexFlipParityReadError>> => {
   const sample: string[] = [];
-  const tally = { walked: 0, missing: 0, sample, pages: 0 };
+  const pages: CorpusIndexFlipCoveragePageBound[] = [];
+  const uncovered: string[] = [];
+  const tally = { walked: 0, missing: 0, uncovered: 0, pages: 0 };
+  const listedUncovered = (): CorpusIndexFlipUncovered =>
+    tally.uncovered > CORPUS_INDEX_FLIP_UNCOVERED_MAX
+      ? { type: "too_many", count: tally.uncovered }
+      : { type: "listed", entityIds: uncovered };
   let after = resumeFrom?.after ?? null;
+  let last = after;
   for (;;) {
     if (tally.pages >= pageBudget) {
       return Result.ok({
-        type: "incomplete",
-        walked: tally.walked,
-        missing: tally.missing,
-        sample: tally.sample,
-        next: { after },
+        coverage: {
+          type: "incomplete",
+          walked: tally.walked,
+          missing: tally.missing,
+          sample,
+          next: { after },
+        },
+        last,
+        pages,
+        uncovered: listedUncovered(),
       });
     }
     // db-await-in-loop: a keyset walk; each page's cursor comes from the one before it
@@ -852,12 +1155,20 @@ const walkCoverage = async (
       return page;
     }
     tally.pages += 1;
+    if (page.value.last !== null) {
+      pages.push({ after, last: page.value.last, walked: page.value.walked });
+    }
+    last = page.value.last ?? last;
     tally.walked += page.value.walked;
     tally.missing += page.value.missing;
-    tally.sample.push(
+    tally.uncovered += page.value.uncovered.length;
+    if (tally.uncovered <= CORPUS_INDEX_FLIP_UNCOVERED_MAX) {
+      uncovered.push(...page.value.uncovered);
+    }
+    sample.push(
       ...page.value.sample.slice(
         0,
-        Math.max(0, CORPUS_INDEX_FLIP_SAMPLE_MAX - tally.sample.length),
+        Math.max(0, CORPUS_INDEX_FLIP_SAMPLE_MAX - sample.length),
       ),
     );
     if (page.value.next === null) {
@@ -865,22 +1176,26 @@ const walkCoverage = async (
     }
     after = page.value.next;
   }
-  return Result.ok(
-    resumeFrom === null
-      ? {
-          type: "complete",
-          walked: tally.walked,
-          missing: tally.missing,
-          sample: tally.sample,
-        }
-      : {
-          type: "incomplete",
-          walked: tally.walked,
-          missing: tally.missing,
-          sample: tally.sample,
-          next: null,
-        },
-  );
+  return Result.ok({
+    coverage:
+      resumeFrom === null
+        ? {
+            type: "complete",
+            walked: tally.walked,
+            missing: tally.missing,
+            sample,
+          }
+        : {
+            type: "incomplete",
+            walked: tally.walked,
+            missing: tally.missing,
+            sample,
+            next: null,
+          },
+    last,
+    pages,
+    uncovered: listedUncovered(),
+  });
 };
 
 /** The watermark `exemptMinutes` before the database clock. */
@@ -898,17 +1213,318 @@ const readWatermarkTx = async (
   });
 };
 
+const COVERAGE_WALK = Symbol("corpus-index-flip-coverage-walk");
+
+/**
+ * A finished coverage walk. Only `walkCorpusIndexFlipCoverage` makes one, so a
+ * verdict is never decided from a walk that did not happen first.
+ */
+export type CorpusIndexFlipCoverageWalk = {
+  readonly [COVERAGE_WALK]: true;
+  pair: CorpusIndexFlipPairIdentity;
+  coverage: CorpusIndexFlipCoverage;
+  /** The last serving state the walk read; the decision's tail starts after it. */
+  last: string | null;
+  /** Every page the walk read a state in, with its bounds and count. */
+  pages: readonly CorpusIndexFlipCoveragePageBound[];
+  uncovered: CorpusIndexFlipUncovered;
+};
+
+const requireValidOptions = (
+  exemptMinutes: number,
+  coverage: CoverageWalkOptions | null,
+): void => {
+  if (!Number.isSafeInteger(exemptMinutes) || exemptMinutes < 0) {
+    panic(`Invalid flip watermark: ${exemptMinutes} minutes`);
+  }
+  if (
+    coverage !== null &&
+    (!Number.isSafeInteger(coverage.pageSize) ||
+      coverage.pageSize < 1 ||
+      coverage.pageSize > CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX ||
+      !Number.isSafeInteger(coverage.pageBudget) ||
+      coverage.pageBudget < 0)
+  ) {
+    panic("Invalid flip coverage walk options");
+  }
+};
+
+/**
+ * The first half of a parity read: the pair, then the coverage walk over the
+ * serving generation's states, one short transaction per page (read-only
+ * ones will do). No fence is held; `decideCorpusIndexFlipParityTx` makes the
+ * result valid in the transaction that decides.
+ */
+export const walkCorpusIndexFlipCoverage = async ({
+  runInTransaction,
+  family,
+  candidate,
+  coverage,
+}: {
+  runInTransaction: ProjectionTransactionRunner;
+  family: CorpusFamily;
+  candidate: string;
+  coverage: CoverageWalkOptions;
+}): Promise<
+  Result<CorpusIndexFlipCoverageWalk, CorpusIndexFlipParityError>
+> => {
+  requireValidOptions(0, coverage);
+  const pair = await readInTransaction(
+    runInTransaction,
+    async (tx) => await readComparablePairTx(tx, { family, candidate }),
+  );
+  if (Result.isError(pair)) {
+    return pair;
+  }
+  const walked = await walkCoverage(runInTransaction, pair.value, coverage);
+  if (Result.isError(walked)) {
+    return walked;
+  }
+  return Result.ok({
+    [COVERAGE_WALK]: true,
+    pair: pair.value,
+    ...walked.value,
+  });
+};
+
+/** What the decision read after the walk's last serving state. */
+type CorpusIndexFlipTail =
+  | { type: "read"; walked: number; missing: number; sample: readonly string[] }
+  | { type: "too_long" }
+  /** The walk did not reach the end, so there is no tail to read. */
+  | { type: "not_read" };
+
+const readTailTx = async (
+  tx: Transaction,
+  walk: CorpusIndexFlipCoverageWalk,
+): Promise<Result<CorpusIndexFlipTail, CorpusIndexFlipParityReadError>> => {
+  if (walk.coverage.type !== "complete") {
+    return Result.ok({ type: "not_read" });
+  }
+  const rows = await readRows(
+    tx,
+    corpusIndexFlipCoveragePageQuery(walk.pair, {
+      after: walk.last,
+      limit: CORPUS_INDEX_FLIP_TAIL_MAX + 1,
+    }),
+    walk.pair,
+  );
+  if (Result.isError(rows)) {
+    return rows;
+  }
+  const row = rows.value.at(0);
+  const walked = requiredCount(row, "walked");
+  return Result.ok(
+    walked > CORPUS_INDEX_FLIP_TAIL_MAX
+      ? { type: "too_long" }
+      : {
+          type: "read",
+          walked,
+          missing: requiredCount(row, "missing"),
+          sample: entityIdsOf(row, "sample"),
+        },
+  );
+};
+
+/**
+ * Behind the walk's cursor, under the decision's fence: every page counted
+ * again, the pages whose count moved and the listed uncovered states probed
+ * again. Refuses to prove anything when a count fell (a state removed, which
+ * only a retired generation allows) or when more moved than it re-reads.
+ */
+const readBehindCursorTx = async (
+  tx: Transaction,
+  walk: CorpusIndexFlipCoverageWalk,
+): Promise<
+  Result<CorpusIndexFlipBehindCursor, CorpusIndexFlipParityReadError>
+> => {
+  if (walk.coverage.type !== "complete") {
+    return Result.ok({ type: "not_read" });
+  }
+  if (walk.uncovered.type === "too_many") {
+    return Result.ok({ type: "unprovable", reason: "too_many_uncovered" });
+  }
+  const recounted =
+    walk.pages.length === 0
+      ? Result.ok([])
+      : await readRows(
+          tx,
+          corpusIndexFlipPageRecountQuery(walk.pair, walk.pages),
+          walk.pair,
+        );
+  if (Result.isError(recounted)) {
+    return recounted;
+  }
+  const moved = recounted.value.map((row) => ({
+    after: nullableText(row, "after_id"),
+    last: requiredText(row, "last_id"),
+    walked: requiredCount(row, "walked"),
+    states: requiredCount(row, "states"),
+  }));
+  if (moved.some(({ walked, states: counted }) => counted < walked)) {
+    return Result.ok({ type: "unprovable", reason: "states_removed" });
+  }
+  const movedStates = moved.reduce(
+    (total, { states: counted }) => total + counted,
+    0,
+  );
+  if (movedStates > CORPUS_INDEX_FLIP_RECHECK_MAX) {
+    return Result.ok({ type: "unprovable", reason: "too_many_changed" });
+  }
+  const listed = walk.uncovered.entityIds;
+  if (moved.length === 0 && listed.length === 0) {
+    return Result.ok({
+      type: "read",
+      pages: walk.pages.length,
+      changedPages: 0,
+      reread: 0,
+      missing: 0,
+      sample: [],
+    });
+  }
+  const rows = await readRows(
+    tx,
+    corpusIndexFlipBehindCursorQuery(walk.pair, { pages: moved, listed }),
+    walk.pair,
+  );
+  if (Result.isError(rows)) {
+    return rows;
+  }
+  const row = rows.value.at(0);
+  if (requiredCount(row, "removed") > 0) {
+    return Result.ok({ type: "unprovable", reason: "states_removed" });
+  }
+  return Result.ok({
+    type: "read",
+    pages: walk.pages.length,
+    changedPages: moved.length,
+    reread: requiredCount(row, "reread"),
+    missing: requiredCount(row, "missing"),
+    sample: entityIdsOf(row, "sample"),
+  });
+};
+
+/**
+ * The walk's coverage with what the decision found missing in the tail and
+ * behind the cursor added to it.
+ */
+const coverageWithDecision = (
+  coverage: CorpusIndexFlipCoverage,
+  tail: CorpusIndexFlipTail,
+  behind: CorpusIndexFlipBehindCursor,
+): CorpusIndexFlipCoverage => {
+  if (coverage.type !== "complete") {
+    return coverage;
+  }
+  const found = [tail, behind].flatMap((read) =>
+    read.type === "read" ? [read] : [],
+  );
+  return {
+    ...coverage,
+    walked: coverage.walked + (tail.type === "read" ? tail.walked : 0),
+    missing: found.reduce(
+      (total, { missing }) => total + missing,
+      coverage.missing,
+    ),
+    sample: [
+      ...coverage.sample,
+      ...found.flatMap(({ sample }) => sample),
+    ].slice(0, CORPUS_INDEX_FLIP_SAMPLE_MAX),
+  };
+};
+
+/** Why a walk found complete still cannot prove coverage, or null. */
+const unprovenCoverage = (
+  tail: CorpusIndexFlipTail,
+  behind: CorpusIndexFlipBehindCursor,
+): Extract<CorpusIndexFlipVerdict, { type: "undecided" }>["reason"] | null => {
+  if (tail.type === "too_long") {
+    return "coverage_tail_long";
+  }
+  return behind.type === "unprovable" ? behind.reason : null;
+};
+
+/**
+ * The second half: decide the verdict from a walk, in `tx`. A flip calls it
+ * under the exclusive projection fence, so nothing it reads can change before
+ * the flip commits; the module comment says why the walk's result holds there
+ * too. It re-reads the pair and refuses one that moved (`serving_changed`,
+ * `generation_changed`), reads every serving state after the walk's last one
+ * (the tail), what changed behind the walk's cursor, then the regression
+ * statement.
+ */
+export const decideCorpusIndexFlipParityTx = async (
+  tx: Transaction,
+  walk: CorpusIndexFlipCoverageWalk,
+  { exemptMinutes }: { exemptMinutes: number },
+): Promise<Result<CorpusIndexFlipParity, CorpusIndexFlipParityError>> => {
+  requireValidOptions(exemptMinutes, null);
+  const { family, candidate } = walk.pair;
+  const again = await readComparablePairTx(tx, { family, candidate });
+  if (Result.isError(again)) {
+    return Result.err(again.error);
+  }
+  if (again.value.serving !== walk.pair.serving) {
+    return refused(
+      `${family} changed its serving generation during the read`,
+      "serving_changed",
+    );
+  }
+  if (
+    again.value.servingUpdatedAtUs !== walk.pair.servingUpdatedAtUs ||
+    again.value.candidateUpdatedAtUs !== walk.pair.candidateUpdatedAtUs
+  ) {
+    return refused(
+      `${family}/${walk.pair.serving} or ${family}/${candidate} changed its registration during the read`,
+      "generation_changed",
+    );
+  }
+  const tail = await readTailTx(tx, walk);
+  if (Result.isError(tail)) {
+    return tail;
+  }
+  const behind = await readBehindCursorTx(tx, walk);
+  if (Result.isError(behind)) {
+    return behind;
+  }
+  const watermark = await readWatermarkTx(tx, exemptMinutes);
+  const regressions = await readRegressionsTx(tx, again.value, watermark);
+  if (Result.isError(regressions)) {
+    return regressions;
+  }
+  const coverage = coverageWithDecision(
+    walk.coverage,
+    tail.value,
+    behind.value,
+  );
+  const verdict = verdictOf(coverage, regressions.value);
+  const unproven =
+    verdict.type === "no_regression"
+      ? unprovenCoverage(tail.value, behind.value)
+      : null;
+  return Result.ok({
+    pair: walk.pair,
+    watermark,
+    coverage,
+    tail: tail.value,
+    behindCursor: behind.value,
+    regressions: regressions.value,
+    verdict:
+      unproven === null
+        ? verdict
+        : {
+            type: "undecided",
+            reason: unproven,
+            knownMissing: 0,
+            knownRegressions: 0,
+          },
+  });
+};
+
 /**
  * What a flip of `candidate` would lose against the family's serving
- * generation: the coverage walk first, then the regression statement, in that
- * order (see the module comment), and the verdict decided from both.
- *
- * `runInTransaction` should open read-only transactions. Each coverage page
- * and the regression statement are separate snapshots, which the order above
- * makes sound. The pair checks and the regression statement share the last
- * transaction; a flip that acts on the verdict must hold the exclusive
- * projection fence (or run REPEATABLE READ) across that transaction and its
- * own write, so nothing the checks read changes before it flips.
+ * generation, read without a fence: the walk, then the decision in one more
+ * transaction. `runInTransaction` should open read-only transactions.
  */
 export const readCorpusIndexFlipParity = async ({
   runInTransaction,
@@ -923,55 +1539,19 @@ export const readCorpusIndexFlipParity = async ({
   exemptMinutes: number;
   coverage: CoverageWalkOptions;
 }): Promise<Result<CorpusIndexFlipParity, CorpusIndexFlipParityError>> => {
-  if (!Number.isSafeInteger(exemptMinutes) || exemptMinutes < 0) {
-    return panic(`Invalid flip watermark: ${exemptMinutes} minutes`);
+  requireValidOptions(exemptMinutes, coverage);
+  const walk = await walkCorpusIndexFlipCoverage({
+    runInTransaction,
+    family,
+    candidate,
+    coverage,
+  });
+  if (Result.isError(walk)) {
+    return walk;
   }
-  if (
-    !Number.isSafeInteger(coverage.pageSize) ||
-    coverage.pageSize < 1 ||
-    coverage.pageSize > CORPUS_INDEX_FLIP_COVERAGE_PAGE_MAX ||
-    !Number.isSafeInteger(coverage.pageBudget) ||
-    coverage.pageBudget < 0
-  ) {
-    return panic("Invalid flip coverage walk options");
-  }
-  const pair = await runInTransaction(
-    async (tx) => await readComparablePairTx(tx, { family, candidate }),
+  return await readInTransaction(
+    runInTransaction,
+    async (tx) =>
+      await decideCorpusIndexFlipParityTx(tx, walk.value, { exemptMinutes }),
   );
-  if (Result.isError(pair)) {
-    return pair;
-  }
-  const walked = await walkCoverage(runInTransaction, pair.value, coverage);
-  if (Result.isError(walked)) {
-    return walked;
-  }
-  const read = await runInTransaction(async (tx) => {
-    // The pair is checked again where the regression statement reads, so a
-    // registry or pointer change during the walk is not compared past.
-    const again = await readComparablePairTx(tx, { family, candidate });
-    if (Result.isError(again)) {
-      return Result.err(again.error);
-    }
-    if (again.value.serving !== pair.value.serving) {
-      return refused(
-        `${family} changed its serving generation during the read`,
-        "serving_changed",
-      );
-    }
-    const watermark = await readWatermarkTx(tx, exemptMinutes);
-    const regressions = await readRegressionsTx(tx, again.value, watermark);
-    return Result.isError(regressions)
-      ? regressions
-      : Result.ok({ watermark, regressions: regressions.value });
-  });
-  if (Result.isError(read)) {
-    return read;
-  }
-  return Result.ok({
-    pair: pair.value,
-    watermark: read.value.watermark,
-    coverage: walked.value,
-    regressions: read.value.regressions,
-    verdict: verdictOf(walked.value, read.value.regressions),
-  });
 };

@@ -260,8 +260,15 @@ const createRecordedServer = (
     }
     if (exchange.response.status !== 200) {
       settle(exchange);
+      // A refusal that names a turn (a replayed command) names it here.
+      const refusedTurnId = exchange.response.turnId;
       return new Response(exchange.response.body, {
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(refusedTurnId === null
+            ? {}
+            : { [CHAT_TURN_ID_HEADER]: refusedTurnId }),
+        },
         status: exchange.response.status,
       });
     }

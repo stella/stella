@@ -2736,7 +2736,7 @@
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "fingerprint": "f1478ef9e6ed075774fe03a6eccdf93090599ce271bf7b1450ea87bdc523bb70",
-    "count": 2,
+    "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
     "holder": "stella_ingestion"
   },
@@ -3974,36 +3974,6 @@
   {
     "file": "apps/api/src/scripts/corpus-generation.ts",
     "fingerprint": "7cebb16ec97e3f1fc48b0a551e001db65f0ea404f6989fa2326a41f26208a18a",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "8b716c07aebbf7cbf8daf28e3f08ef84ec5cc7699bd326da1faec1a4e86c36f4",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "9d902dfa7f0db759a46fc9e5fb93f46ed29d2eaf65b9d66223aad65c4293f1e0",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "afcada2c96cb9cc82cc09ee88a3a175823518243aea85a16ae3e55d3138ae7e3",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "e87f3cf7b320fd8049a37b17f19611e315735b4e609894b536e04f2fc17e1ac6",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "f5000330083e1d1a65682bee7eed29ea1f39ba1f0abcd413cb1c792d6992d5dc",
     "count": 1,
     "reason": "offline corpus script; predates the owner; migrate in a later slice"
   },

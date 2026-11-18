@@ -223,9 +223,59 @@ export const SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET = {
   reason: "time_budget",
 } as const;
 
+/**
+ * A case-law first page whose phase for decisions holding only some of the
+ * words was due and did not finish. The page holds what the finished phases
+ * found, which is not the whole answer: it never ends `complete`, and the
+ * agent tools rerun the phrasing from its next cursor.
+ */
+export const SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET = {
+  type: "truncated",
+  reason: "partial_matches_budget",
+} as const;
+
 export type SearchPaginationOutcome =
   | typeof SEARCH_PAGINATION_COMPLETE
   | typeof SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET;
+
+/** A case-law page: a scan outcome, or partial matches due and unread. */
+export type CaseLawSearchPaginationOutcome =
+  | SearchPaginationOutcome
+  | typeof SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET;
+
+/**
+ * How each phase a search was due to run ended. A phase that was not due
+ * says so (`not_due`) rather than being left out, so a search that adds a
+ * phase cannot report a page end without deciding what that phase did.
+ */
+export const SEARCH_PHASE_STATES = ["not_due", "finished", "skipped"] as const;
+
+export type SearchPhaseState = (typeof SEARCH_PHASE_STATES)[number];
+
+/**
+ * The outcome a case-law page reports, from the scan's own outcome and every
+ * later phase. The one place a skipped phase turns into a truncated page: a
+ * page whose partial-match phase did not finish is never complete, however
+ * the strict scan ended.
+ */
+export const caseLawPageOutcome = ({
+  scan,
+  partialMatches,
+}: {
+  scan: SearchPaginationOutcome;
+  partialMatches: SearchPhaseState;
+}): CaseLawSearchPaginationOutcome => {
+  switch (partialMatches) {
+    case "skipped":
+      return SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET;
+    case "not_due":
+    case "finished":
+      return scan;
+    default:
+      partialMatches satisfies never;
+      return panic("Unhandled search phase state");
+  }
+};
 
 /**
  * What follows a page of search results, read from everything the search

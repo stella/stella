@@ -15,6 +15,10 @@ import { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { emitAdmissionStorePolicyMetric } from "@/api/lib/observability/request-metrics";
+import {
+  type ScheduleTimeout,
+  withCommandTimeout,
+} from "@/api/lib/rate-limit/redis-command-timeout";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 
 // Re-exported so existing consumers keep one import site for "is this Valkey
@@ -293,7 +297,10 @@ export const connectWithColdStartRetries = async (
     if (result.isOk()) {
       return;
     }
-    if (StoreUnavailableError.is(result.error)) {
+    if (
+      StoreUnavailableError.is(result.error) ||
+      RedisClientClosedError.is(result.error)
+    ) {
       await Promise.reject(result.error);
     }
     logger.warn(
@@ -315,6 +322,34 @@ type ManagedRedisClient = {
   onClose: (handler: () => void) => () => void;
 };
 
+type LazyRedisClientOptions = ColdStartRetryOptions & {
+  connectPolicy?: "cold-start" | "once";
+  connectTimeout?: {
+    timeoutMs: number;
+    scheduleTimeout?: ScheduleTimeout;
+  };
+};
+
+/** A connect deadline belongs to one invocation, not the whole retry ladder. */
+const connectManagedClient = async (
+  client: ManagedRedisClient,
+  timeout: LazyRedisClientOptions["connectTimeout"],
+): Promise<void> => {
+  const command = client.connect();
+  if (timeout === undefined) {
+    await command;
+    return;
+  }
+  await withCommandTimeout({
+    command,
+    commandTimeoutMs: timeout.timeoutMs,
+    label: "Redis client connect",
+    ...(timeout.scheduleTimeout === undefined
+      ? {}
+      : { scheduleTimeout: timeout.scheduleTimeout }),
+  });
+};
+
 type LazyRedisClient<Client> = {
   close: () => void;
   ready: () => Promise<Client>;
@@ -322,23 +357,24 @@ type LazyRedisClient<Client> = {
 
 /** One client, and the readiness of the connect attempt that built it. */
 type ClientAttempt<Client> = {
-  /**
-   * Settle `ready` as a failure without waiting for the connect to return,
-   * so a close during the ladder rejects the callers waiting on it.
-   */
-  abandon: (error: RedisClientClosedError) => void;
-  client: Client;
   ready: Promise<Client>;
+  closed: Promise<never>;
+  isOpen: () => boolean;
+  dispose: () => void;
 };
 
 /**
  * A client that owns its own readiness. It is reachable only through
- * `ready()`, which builds it on first use and connects it through the
- * retry ladder above before handing it out, so no caller can issue a
+ * `ready()`, which builds it on first use and connects it before handing
+ * it out, so no caller can issue a
  * command on a client that is still connecting. That matters for clients
  * built with the offline queue disabled, where such a command rejects
  * immediately instead of waiting for the socket.
  *
+ * The default cold-start policy retains the retry ladder above; bounded
+ * fail-fast callers can select one connect attempt and an explicit deadline.
+ * Bun's per-connection timeout does not bound its reconnect ladder; the
+ * optional deadline bounds the actual connect promise owned by this attempt.
  * The connect runs once per client while it succeeds, and a failed attempt is
  * discarded so the next caller builds and connects a fresh client rather than
  * inheriting a cached rejection. The attempt is also discarded when the
@@ -352,29 +388,65 @@ type ClientAttempt<Client> = {
  */
 export const createLazyRedisClient = <Client extends ManagedRedisClient>(
   createClient: () => Client,
-  retryOptions: ColdStartRetryOptions = {},
+  options: LazyRedisClientOptions = {},
 ): LazyRedisClient<Client> => {
   let current: ClientAttempt<Client> | null = null;
 
   const startAttempt = (): ClientAttempt<Client> => {
     const client = createClient();
     const abandoned = Promise.withResolvers<never>();
-    const connected = connectWithColdStartRetries(async () => {
-      await client.connect();
-    }, retryOptions).then(() => client);
-    const attempt: ClientAttempt<Client> = {
-      abandon: abandoned.reject,
-      client,
-      // Whichever settles first wins, so a close is what rejects a waiting
-      // caller, at the close itself rather than through a check after the
-      // connect has run its course.
-      ready: Promise.race([connected, abandoned.promise]),
+    let open = true;
+    const invalidate = () => {
+      if (!open) {
+        return false;
+      }
+      open = false;
+      abandoned.reject(
+        new RedisClientClosedError({
+          message: "Redis client closed while connecting",
+        }),
+      );
+      return true;
     };
-    // A closed Bun client cannot be reopened, so the attempt goes with it and
-    // the next caller builds a replacement. Guarded on identity: a close
-    // arriving after this attempt was already replaced must not drop its
-    // successor, which would leave the new client connecting twice over.
+    const isOpen = () => open;
+    const connect = async () => {
+      if (!isOpen()) {
+        await abandoned.promise;
+      }
+      const connecting = connectManagedClient(client, options.connectTimeout);
+      const outcome = await Result.tryPromise({
+        try: async () => await connecting,
+        catch: (cause: unknown) => cause,
+      });
+      if (!isOpen()) {
+        await abandoned.promise;
+      }
+      if (Result.isError(outcome)) {
+        await connecting;
+      }
+    };
+    // Install the attempt and its close listener before a client can close
+    // synchronously from connect(). The holder remains the readiness owner.
+    const connected = Promise.resolve().then(async () => {
+      if (options.connectPolicy === "once") {
+        await connect();
+      } else {
+        await connectWithColdStartRetries(connect, options);
+      }
+      return client;
+    });
+    const attempt: ClientAttempt<Client> = {
+      ready: Promise.race([connected, abandoned.promise]),
+      closed: abandoned.promise,
+      isOpen,
+      dispose: () => {
+        if (invalidate()) {
+          client.close();
+        }
+      },
+    };
     client.onClose(() => {
+      invalidate();
       if (current === attempt) {
         current = null;
       }
@@ -389,12 +461,7 @@ export const createLazyRedisClient = <Client extends ManagedRedisClient>(
       if (closing === null) {
         return;
       }
-      closing.abandon(
-        new RedisClientClosedError({
-          message: "Redis client closed while connecting",
-        }),
-      );
-      closing.client.close();
+      closing.dispose();
     },
     ready: async () => {
       current ??= startAttempt();
@@ -404,7 +471,7 @@ export const createLazyRedisClient = <Client extends ManagedRedisClient>(
         catch: (cause: unknown) => cause,
       });
       if (Result.isOk(outcome)) {
-        return outcome.value;
+        return attempt.isOpen() ? outcome.value : await attempt.closed;
       }
       // A failure is not memoized: the next caller builds and connects a
       // fresh client instead of inheriting this one's rejection. Re-awaiting
@@ -412,6 +479,7 @@ export const createLazyRedisClient = <Client extends ManagedRedisClient>(
       if (current === attempt) {
         current = null;
       }
+      attempt.dispose();
       return await attempt.ready;
     },
   };

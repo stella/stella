@@ -1694,6 +1694,8 @@ const CONTRACT_CORPUS = {
               textAvailability: "available",
               matchingPassages: 3,
               match,
+              matchedTerms: [],
+              missingTerms: [],
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1707,6 +1709,7 @@ const CONTRACT_CORPUS = {
           queryUsed: "dobré mravy",
           warnings: [],
           relaxedHitCount: 0,
+          termDecisionCounts: null,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],
@@ -1775,6 +1778,8 @@ const CONTRACT_CORPUS = {
               textAvailability: "available",
               matchingPassages: 3,
               match: "all_terms",
+              matchedTerms: [],
+              missingTerms: [],
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               languageAlternates: [],
@@ -1788,6 +1793,7 @@ const CONTRACT_CORPUS = {
           queryUsed: "dobré mravy",
           warnings: [],
           relaxedHitCount: 0,
+          termDecisionCounts: null,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
       },
       expectRefPaths: [],

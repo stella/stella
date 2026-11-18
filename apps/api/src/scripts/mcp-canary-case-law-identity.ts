@@ -168,8 +168,10 @@ const probeCountry = async (
   callTool: CallCaseLawTool,
   country: ProbeCountry,
 ): Promise<CaseLawIdentityProbeOutcome> => {
+  // Facets are opt-in: a search that does not name them returns none.
   const seeded = await searchOf(callTool, {
     country,
+    facets: ["court"],
     limit: 1,
     queries: [FACET_SEED_QUERY[country]],
   });

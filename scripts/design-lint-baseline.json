@@ -471,8 +471,7 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
-    "apps/api/src/lib/files/gotenberg.ts": 1,
-    "apps/api/src/lib/web-search/tavily.ts": 1
+    "apps/api/src/lib/files/gotenberg.ts": 1
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
     "apps/api/scripts/ai-provider-canary-chat-toolsets.ts": 1,
@@ -510,13 +509,9 @@
     "apps/api/src/handlers/chat/skill-availability/offered-tools.ts": 1,
     "apps/api/src/handlers/chat/stream-chat.ts": 1,
     "apps/api/src/handlers/chat/stream-message-identity.ts": 1,
-    "apps/api/src/handlers/chat/third-party-boundary.ts": 2,
-    "apps/api/src/handlers/chat/tool-read-scope.ts": 2,
     "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 1,
     "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
     "apps/api/src/handlers/chat/tools/external-mcp-tools-normalization.ts": 1,
-    "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 2,
-    "apps/api/src/handlers/chat/tools/registry-adapter/ref-mediation.ts": 2,
     "apps/api/src/handlers/chat/tools/registry-write-tools.ts": 1,
     "apps/api/src/handlers/document-reviews/reference-position-normalizer.ts": 1,
     "apps/api/src/handlers/invoices/update.ts": 1,
@@ -762,7 +757,7 @@
     "apps/api/src/handlers/invoices/entries/remove.ts": 2,
     "apps/api/src/handlers/invoices/lines/create.ts": 1,
     "apps/api/src/handlers/invoices/lines/delete.ts": 2,
-    "apps/api/src/handlers/invoices/transition.ts": 2,
+    "apps/api/src/handlers/invoices/transition.ts": 1,
     "apps/api/src/handlers/invoices/update.ts": 1,
     "apps/api/src/handlers/legislation/ingestion.ts": 1,
     "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts": 3,

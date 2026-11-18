@@ -69,6 +69,7 @@
     "scripts/check-tracked-cloud-reports.test.ts": ["**"],
     "scripts/check-tracked-symlinks.test.ts": ["**"],
     "scripts/check-workflow-pr-write-token.test.ts": ["**"],
+    "scripts/check-workspace-test-gating.test.ts": ["apps/**", "packages/**"],
     "scripts/child-output-buffer.test.ts": ["**"],
     "scripts/ci-affected-selection.test.ts": ["**"],
     "scripts/ci-api-bootstrap.test.ts": ["**"],
@@ -294,6 +295,9 @@
     "scripts/typescript-compiler-api-imports.test.ts": ["**"],
     "scripts/ui-playground-selection.test.ts": ["**"],
     "scripts/undeclared-api-client-writes.test.ts": ["**"],
+    "scripts/upload-release-assets.test.ts": [
+      "scripts/upload-release-assets.sh"
+    ],
     "scripts/verify-release-candidate-tree.test.ts": ["**"],
     "scripts/verify-release-tree-proof.test.ts": ["**"],
     "scripts/workflow-api-probes.test.ts": [

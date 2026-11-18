@@ -228,6 +228,9 @@ export const ENUM_COLUMN_ROLES = {
     contract_version: ATTRIBUTE,
     family: ATTRIBUTE,
   },
+  corpus_index_generation_flips: {
+    family: ATTRIBUTE,
+  },
   corpus_index_generation_seeding_passes: {
     family: ATTRIBUTE,
   },
@@ -419,6 +422,9 @@ export const ENUM_COLUMN_ROLES = {
   invoice_payments: {
     method: ATTRIBUTE,
     origin: ATTRIBUTE,
+  },
+  invoice_sends: {
+    language: ATTRIBUTE,
   },
   invoices: {
     billing_mode: ATTRIBUTE,

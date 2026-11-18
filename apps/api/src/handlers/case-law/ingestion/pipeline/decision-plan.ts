@@ -619,7 +619,11 @@ const preparedCitationMetadata = (
 };
 
 /** The decision's identifiers, and the rows that store them. */
-const plannedIdentifiers = (
+/**
+ * The identifier rows a decision is written with, each keyed by the function
+ * every reader normalizes a reference with.
+ */
+export const plannedIdentifiers = (
   result: IngestionResult,
   caseNumberType: ReturnType<typeof parsePrimaryReferenceType>,
 ) => {

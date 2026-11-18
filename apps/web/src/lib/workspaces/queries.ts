@@ -164,8 +164,7 @@ export type WorkspacesData = Awaited<ReturnType<typeof readWorkspaces>>;
 
 export const workspacesOptions = (activeOrganizationId: string) =>
   queryOptions({
-    queryKey: workspacesKeys.list(activeOrganizationId),
-    queryFn: async ({ signal }) => await readWorkspaces(signal),
+    ...workspacesRouteOptions(activeOrganizationId),
     staleTime: 0,
     refetchOnMount: "always",
   });
@@ -174,14 +173,27 @@ export const workspacesRouteOptions = (
   activeOrganizationId: string,
   status: MatterListStatus = WORKSPACE_STATUS.active,
 ) =>
-  queryOptions({
-    queryKey:
-      status === WORKSPACE_STATUS.active
-        ? workspacesKeys.list(activeOrganizationId)
-        : [...workspacesKeys.list(activeOrganizationId), status],
-    queryFn: async ({ signal }) => await readWorkspaces(signal, status),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey:
+        status === WORKSPACE_STATUS.active
+          ? workspacesKeys.list(activeOrganizationId)
+          : [...workspacesKeys.list(activeOrganizationId), status],
+      queryFn: async ({ signal }) => await readWorkspaces(signal, status),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.WORKSPACE,
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.ENTITY_VERSION,
+        RESOURCE_TYPE.CONTACT,
+        RESOURCE_TYPE.USER,
+      ],
+      scope: { type: "organization", organizationId: activeOrganizationId },
+    },
+  );
 
 export const workspacesNavigationOptions = (
   caller: WorkspaceNavigationCaller,
