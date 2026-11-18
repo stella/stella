@@ -19,12 +19,11 @@
  * time, and the operator reading the report must see that rather than infer
  * it from a failed last event.
  */
-import { and, desc, eq, inArray, min, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, min, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -36,8 +35,6 @@ export const ADAPTER_PARK_MIN_CYCLES = 5;
 export const ADAPTER_PARK_MIN_DURATION_MS = 6 * HOUR_IN_MS;
 /** How often a parked adapter asks the publisher again. */
 export const ADAPTER_PARK_ATTEMPT_INTERVAL_MS = DAY_IN_MS;
-/** How often a parked loop wakes to keep its health and heartbeat current. */
-export const ADAPTER_PARK_RECHECK_MS = 15 * 60 * 1000;
 
 export type AdapterFailureRun = {
   errorMessage: string;
@@ -129,8 +126,11 @@ export const readAdapterFailureRunsIn = async (
     .where(
       and(
         eq(events.sourceId, caseLawSources.id),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are columns compared inside Postgres; no Date is round-tripped
-        sql`(${lastOther.finishedAt} IS NULL OR ${events.finishedAt} > ${lastOther.finishedAt})`,
+        or(
+          isNull(lastOther.finishedAt),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement; no Date is round-tripped
+          gt(events.finishedAt, lastOther.finishedAt),
+        ),
       ),
     )
     .as("failure_run");
@@ -170,13 +170,3 @@ export const readAdapterFailureRunsIn = async (
   }
   return runs;
 };
-
-/** The failure run of one source; see {@link readAdapterFailureRunsIn}. */
-export const readAdapterFailureRun = async (
-  scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-): Promise<AdapterFailureRun | null> =>
-  await scopedDb(
-    async (tx) =>
-      (await readAdapterFailureRunsIn(tx, [sourceId])).get(sourceId) ?? null,
-  );
