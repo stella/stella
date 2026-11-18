@@ -93,7 +93,7 @@ export const readRetainingModelsGrant = async ({
     organizationId: session.activeOrganizationId,
     userId: user.id,
   };
-  const snapshot =
+  const snapshot: Result<FeatureAccessSnapshot, SafeDbError> =
     featureAccessSnapshot !== undefined &&
     isFeatureAccessSnapshotForPrincipal(featureAccessSnapshot, principal)
       ? Result.ok(featureAccessSnapshot)
