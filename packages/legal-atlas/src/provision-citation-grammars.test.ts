@@ -102,6 +102,7 @@ const ARTICLE_ANCHORS = {
   segmentSeparator: "-",
   unnumberedAnchor: null,
   unnumberedSegment: /^frag_\d+$/u,
+  annexAnchors: [],
 } as const satisfies StatuteAnchorScheme;
 
 const articleGrammar = createProvisionCitationGrammar({
