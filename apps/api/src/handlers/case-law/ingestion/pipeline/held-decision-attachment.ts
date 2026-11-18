@@ -51,8 +51,10 @@ import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decisio
 import {
   HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
   HELD_DECISION_MATCH_BASIS,
+  HELD_DECISION_REVIEW,
   type HeldDecisionDeclaredIdentifier,
   type HeldDecisionMatchBasis,
+  type HeldDecisionReview,
 } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -69,6 +71,13 @@ const HELD_DECISION_ATTACHED = "case_law.ingestion.held_decision_attached";
  * own: an operator reads the candidates off its attachment row.
  */
 const HELD_DECISION_AMBIGUOUS = "case_law.ingestion.held_decision_ambiguous";
+
+/**
+ * A record's court and docket are held only under another decision date, so
+ * it is parked for review; the declaration chose that over a row of its own.
+ */
+const HELD_DECISION_DOCKET_OTHER_DATE =
+  "case_law.ingestion.held_decision_docket_other_date";
 
 /** A record's host was erased or redacted, so the record is parked. */
 const HELD_DECISION_WITHDRAWN = "case_law.ingestion.held_decision_withdrawn";
@@ -90,7 +99,8 @@ type HeldDecisionAttachmentDisposition =
   | { type: "unchanged"; hostDecisionId: SafeId<"caseLawDecision"> }
   | { type: "stale" }
   | {
-      type: "ambiguous";
+      type: "review";
+      review: HeldDecisionReview;
       basis: HeldDecisionMatchBasis;
       candidateDecisionIds: SafeId<"caseLawDecision">[];
     }
@@ -118,7 +128,8 @@ type HostMatch =
   | { type: "none" }
   | { type: "one"; basis: HeldDecisionMatchBasis; host: HostDecision }
   | {
-      type: "several";
+      type: "review";
+      review: HeldDecisionReview;
       basis: HeldDecisionMatchBasis;
       candidateDecisionIds: SafeId<"caseLawDecision">[];
     };
@@ -189,7 +200,12 @@ const matchHostDecisionsTx = async (
     if (read.type === "overflow") {
       // More matches than an operator is listed: still several, and none is
       // chosen.
-      return { type: "several", basis, candidateDecisionIds: [] };
+      return {
+        type: "review",
+        review: HELD_DECISION_REVIEW.SEVERAL_HELD,
+        basis,
+        candidateDecisionIds: [],
+      };
     }
     const hosts = read.rows;
     const [first, second] = hosts;
@@ -199,7 +215,8 @@ const matchHostDecisionsTx = async (
     return second === undefined
       ? { type: "one", basis, host: first }
       : {
-          type: "several",
+          type: "review",
+          review: HELD_DECISION_REVIEW.SEVERAL_HELD,
           basis,
           candidateDecisionIds: hosts.map(({ id }) => id),
         };
@@ -243,40 +260,71 @@ const matchHostDecisionsTx = async (
       return answer(HELD_DECISION_MATCH_BASIS.ECLI, byEcli);
     }
   }
-  const decisionDate = persistedDecisionDate ?? undefined;
-  if (decisionDate === undefined || observed.caseNumber.length === 0) {
+  if (observed.caseNumber.length === 0) {
     return { type: "none" };
   }
-  const byDocket = await readBounded(
+  const atCourtAndDocket = and(
+    eq(caseLawDecisions.caseNumber, observed.caseNumber),
+    eq(caseLawDecisions.country, observed.country),
+    sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
+    republishedRulingCourtPredicate(
+      {
+        // Typed, so the comparison's bare `IS NOT NULL` reads a text.
+        court: sql`${observed.court}::text`,
+        courtId:
+          observed.courtId === undefined
+            ? null
+            : sql`${observed.courtId}::text`,
+      },
+      {
+        court: caseLawDecisions.court,
+        courtId: caseLawDecisions.courtId,
+      },
+    ),
+  );
+  const decisionDate = persistedDecisionDate ?? undefined;
+  if (decisionDate !== undefined) {
+    const byDocket = await readBounded(
+      tx
+        .select(HOST_COLUMNS)
+        .from(caseLawDecisions)
+        .where(
+          and(
+            atCourtAndDocket,
+            eq(caseLawDecisions.decisionDate, decisionDate),
+          ),
+        )
+        .orderBy(caseLawDecisions.id),
+      HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
+    );
+    if (byDocket.type === "overflow" || byDocket.rows.length > 0) {
+      return answer(HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE, byDocket);
+    }
+  }
+  if (declaration.docketHeldUnderOtherDate === "own-row") {
+    return { type: "none" };
+  }
+  // The court and docket are held, under another date (or the record states
+  // none): a further decision of the same file, or the same decision dated
+  // differently by one publisher. A reader decides; nothing is written.
+  const otherDates = await readBounded(
     tx
       .select(HOST_COLUMNS)
       .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.caseNumber, observed.caseNumber),
-          eq(caseLawDecisions.decisionDate, decisionDate),
-          eq(caseLawDecisions.country, observed.country),
-          sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
-          republishedRulingCourtPredicate(
-            {
-              // Typed, so the comparison's bare `IS NOT NULL` reads a text.
-              court: sql`${observed.court}::text`,
-              courtId:
-                observed.courtId === undefined
-                  ? null
-                  : sql`${observed.courtId}::text`,
-            },
-            {
-              court: caseLawDecisions.court,
-              courtId: caseLawDecisions.courtId,
-            },
-          ),
-        ),
-      )
+      .where(atCourtAndDocket)
       .orderBy(caseLawDecisions.id),
     HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
   );
-  return answer(HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE, byDocket);
+  if (otherDates.type === "complete" && otherDates.rows.length === 0) {
+    return { type: "none" };
+  }
+  return {
+    type: "review",
+    review: HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE,
+    basis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
+    candidateDecisionIds:
+      otherDates.type === "complete" ? otherDates.rows.map(({ id }) => id) : [],
+  };
 };
 
 /** The host a stored attachment names, through any alias it was retired into. */
@@ -554,7 +602,7 @@ const planAttachmentTx = async (
       }
       return { type: "settled", step: { type: "own-row" } };
     }
-    case "several": {
+    case "review": {
       const parked = {
         matchBasis: match.basis,
         hostDecisionId: null,
@@ -587,16 +635,23 @@ const planAttachmentTx = async (
           set: write.set,
           setWhere: write.setWhere,
         });
-      logger.warn(HELD_DECISION_AMBIGUOUS, {
-        sourceId,
-        sourceDocumentId,
-        basis: match.basis,
-        candidates: match.candidateDecisionIds.length,
-      });
+      logger.warn(
+        match.review === HELD_DECISION_REVIEW.SEVERAL_HELD
+          ? HELD_DECISION_AMBIGUOUS
+          : HELD_DECISION_DOCKET_OTHER_DATE,
+        {
+          sourceId,
+          sourceDocumentId,
+          review: match.review,
+          basis: match.basis,
+          candidates: match.candidateDecisionIds.length,
+        },
+      );
       return {
         type: "settled",
         step: settled({
-          type: "ambiguous",
+          type: "review",
+          review: match.review,
           basis: match.basis,
           candidateDecisionIds: match.candidateDecisionIds,
         }),

@@ -93,7 +93,8 @@ export type CzNsCollectionEntry<Url = EntryUrl> = {
 const nullableString = v.nullable(v.string());
 
 /** The entry as a stored row reads back: URLs are plain strings in JSON. */
-const storedCzNsCollectionEntrySchema = v.object({
+/** The stored entry's shape, which the attach step validates a record's metadata by. */
+export const storedCzNsCollectionEntrySchema = v.object({
   postId: v.string(),
   title: v.string(),
   kind: nullableString,
