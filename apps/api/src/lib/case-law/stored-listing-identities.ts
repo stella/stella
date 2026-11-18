@@ -7,6 +7,7 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawDecisionSupplements,
+  caseLawHeldDecisionAttachments,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
@@ -18,6 +19,7 @@ import {
   rowHoldsDocumentFor,
   supplementIsMergedFor,
 } from "@/api/lib/case-law/stored-payload";
+import { HELD_DECISION_ATTACHMENT_STATUS } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { CensusListingIdentity } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
@@ -53,6 +55,9 @@ export const readStoredListingIdentities = async ({
     panic("Census identity batch exceeds its bound");
   }
   const judgment = alias(caseLawDecisions, "census_supplement_judgment");
+  // A record held as an attachment to another source's decision is stored
+  // as that decision.
+  const host = alias(caseLawDecisions, "census_attachment_host");
   const merged = and(
     supplementIsMergedFor(caseLawDecisionSupplements),
     isNotNull(judgment.id),
@@ -96,6 +101,7 @@ export const readStoredListingIdentities = async ({
       decisions: sql<StoredListingDecision[]>`(
         coalesce(jsonb_agg(DISTINCT jsonb_build_object('id', ${caseLawDecisions.id}, 'withText', ${rowHoldsDocumentFor(caseLawDecisions)})) FILTER (WHERE ${caseLawDecisions.id} IS NOT NULL), '[]'::jsonb)
         || coalesce(jsonb_agg(DISTINCT jsonb_build_object('id', ${judgment.id}, 'withText', ${rowHoldsDocumentFor(judgment)})) FILTER (WHERE ${merged}), '[]'::jsonb)
+        || coalesce(jsonb_agg(DISTINCT jsonb_build_object('id', ${host.id}, 'withText', ${rowHoldsDocumentFor(host)})) FILTER (WHERE ${host.id} IS NOT NULL), '[]'::jsonb)
       )`,
     })
     .from(incomingRows)
@@ -133,6 +139,24 @@ export const readStoredListingIdentities = async ({
       and(
         eq(judgment.id, caseLawDecisionSupplements.decisionId),
         eq(judgment.sourceId, sourceId),
+      ),
+    )
+    .leftJoin(
+      caseLawHeldDecisionAttachments,
+      and(
+        eq(caseLawHeldDecisionAttachments.sourceId, sourceId),
+        eq(
+          caseLawHeldDecisionAttachments.status,
+          HELD_DECISION_ATTACHMENT_STATUS.ATTACHED,
+        ),
+        sql`${caseLawHeldDecisionAttachments.sourceDocumentId} = incoming."documentId"`,
+      ),
+    )
+    .leftJoin(
+      host,
+      eq(
+        host.id,
+        canonicalDecisionIdSql(caseLawHeldDecisionAttachments.hostDecisionId),
       ),
     )
     .groupBy(sql`incoming.key`, sql`incoming.kind`, sql`incoming.evidence`)

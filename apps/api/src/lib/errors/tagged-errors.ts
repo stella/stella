@@ -368,6 +368,7 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
   FALLBACK_IDENTITY: "fallback-identity",
+  HELD_DECISION_ATTACHMENT: "held-decision-attachment",
 } as const;
 
 export type UnpersistableDecisionField =

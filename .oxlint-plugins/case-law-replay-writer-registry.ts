@@ -54,17 +54,17 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 443,
+    line: 446,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 752,
+    line: 794,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/erasure.ts",
-    line: 762,
+    line: 804,
     kind: "pending",
   },
   {
@@ -204,7 +204,7 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 946,
+    line: 959,
     kind: "pending",
   },
   {

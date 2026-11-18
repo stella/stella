@@ -11,11 +11,13 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawDecisionSupplements,
+  caseLawHeldDecisionAttachments,
   caseLawIndexJobs,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawDecisionRows,
   lockCaseLawRepublication,
@@ -45,6 +47,7 @@ import {
   CORPUS_TOMBSTONE_REASON,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneWriter } from "@/api/lib/legal-search/corpus-tombstones";
+import { HELD_DECISION_ATTACHMENT_STATUS } from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   classifyCaseLawRawKey,
   deleteRawKeys,
@@ -488,6 +491,45 @@ export const redactCaseLawDecision = async ({
             .delete(caseLawCitationDoctrineReviews)
             .where(
               eq(caseLawCitationDoctrineReviews.citingDecisionId, decision.id),
+            );
+          // Another publisher's copy of this decision, held as an
+          // attachment to it, goes with the same takedown: parked, never
+          // written as a decision of its own, its metadata and raw pointer
+          // dropped. Its payload sits under this decision's raw prefix, which
+          // the sweep below deletes. Covered by this fence's redaction
+          // exemption, recorded in case_law_index_jobs below.
+          const parkAttachments = replayWrite(
+            caseLawHeldDecisionAttachments,
+            {
+              status: HELD_DECISION_ATTACHMENT_STATUS.HOST_WITHDRAWN,
+              metadata: null,
+              sourceRawS3Key: null,
+              sourceRawContentType: null,
+            },
+            {
+              modifiedAt: {
+                column: caseLawHeldDecisionAttachments.updatedAt,
+                value: new Date(),
+              },
+            },
+          );
+          // Its own id and every id retired into it, which an attachment
+          // made before the merge still names.
+          const retiredIds = await tx
+            .select({ id: caseLawDecisionAliases.retiredDecisionId })
+            .from(caseLawDecisionAliases)
+            .where(eq(caseLawDecisionAliases.canonicalDecisionId, decision.id));
+          await tx
+            .update(caseLawHeldDecisionAttachments)
+            .set(parkAttachments.set)
+            .where(
+              and(
+                inArray(caseLawHeldDecisionAttachments.hostDecisionId, [
+                  decision.id,
+                  ...retiredIds.map(({ id }) => id),
+                ]),
+                parkAttachments.setWhere,
+              ),
             );
           const supplementRawKeys = erasedSupplements.flatMap(({ key }) =>
             key !== null &&
