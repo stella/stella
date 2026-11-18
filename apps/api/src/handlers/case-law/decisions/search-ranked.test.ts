@@ -16,10 +16,11 @@ import {
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 
+import { aggregationsApplyEveryFilter } from "./search";
 import {
+  pageWordsRefusal,
   planRankedSearch,
   rankedCursorTarget,
-  rankedPageWordsRefusal,
   rankedSearchShape,
 } from "./search-ranked";
 
@@ -141,7 +142,7 @@ describe("the ranked plan", () => {
 
 describe("a ranked page whose words could not be read", () => {
   test("answers a budget-ended read as the public-read timeout the tools continue", () => {
-    const answer = rankedPageWordsRefusal(
+    const answer = pageWordsRefusal(
       publicReadTimeoutRefusal(new Error("budget")),
     );
     expect(answer.code).toBe(503);
@@ -152,7 +153,7 @@ describe("a ranked page whose words could not be read", () => {
   });
 
   test("answers any other failure as the index being unavailable, never a page without its words", () => {
-    const answer = rankedPageWordsRefusal(
+    const answer = pageWordsRefusal(
       new HandlerError({
         status: 502,
         code: "internal_error",
@@ -163,5 +164,28 @@ describe("a ranked page whose words could not be read", () => {
     expect(answer.response).toMatchObject({
       code: SEARCH_INDEX_UNAVAILABLE_CODE,
     });
+  });
+});
+
+describe("which counts the engine may take", () => {
+  const body = { country: "CZE", query: "nájem kauce" } as const;
+
+  test("a request filtered only by corpus fields is counted", () => {
+    expect(aggregationsApplyEveryFilter({ ...body, court: "NS" })).toBe(true);
+  });
+
+  test("a filter only the rows apply is not", () => {
+    // Category, legal sentence, docket registers, senate: each is decided per
+    // row, so an engine count under the request would count past it.
+    expect(aggregationsApplyEveryFilter({ ...body, category: "civil" })).toBe(
+      false,
+    );
+    expect(
+      aggregationsApplyEveryFilter({ ...body, hasLegalSentence: true }),
+    ).toBe(false);
+    expect(
+      aggregationsApplyEveryFilter({ ...body, docketRegisters: ["Cdo"] }),
+    ).toBe(false);
+    expect(aggregationsApplyEveryFilter({ ...body, senate: 29 })).toBe(false);
   });
 });

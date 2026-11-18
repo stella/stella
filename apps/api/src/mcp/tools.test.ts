@@ -6171,6 +6171,103 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_statute keeps every annex in a bounded outline, and an annex reads by its number", async () => {
+    // A long act: more section headings than the outline holds, then the
+    // annexes, as 134/2016 Sb. stores them.
+    const sections = Array.from(
+      { length: LIMITS.legislationOutlineHeadingsMax + 40 },
+      (_, index) => ({
+        id: `s${String(index)}`,
+        anchorId: `par_${String(index + 1)}`,
+        type: "heading" as const,
+        level: 3 as const,
+        inlines: [{ type: "text" as const, text: `§ ${String(index + 1)}` }],
+        plainText: `§ ${String(index + 1)}`,
+      }),
+    );
+    const annexes = [1, 2, 3].map((number) => ({
+      id: `a${String(number)}`,
+      anchorId: `pril_${String(number)}`,
+      type: "heading" as const,
+      level: 1 as const,
+      inlines: [
+        { type: "text" as const, text: `Příloha č. ${String(number)}` },
+      ],
+      plainText: `Příloha č. ${String(number)}`,
+    }));
+    const annexBody = {
+      id: "a3-body",
+      anchorId: "pril_3-frag_8775881",
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text: "Trestné činy" }],
+      plainText: "Trestné činy",
+    };
+    const documentAst = {
+      ...createStatuteAst(),
+      blocks: [...sections, ...annexes, annexBody],
+    };
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      documentAst,
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_statute",
+      }),
+    );
+    const statute = isRecord(payload) ? payload["statute"] : undefined;
+    const outline =
+      isRecord(statute) && Array.isArray(statute["outline"])
+        ? statute["outline"].flatMap((entry) =>
+            isRecord(entry) && typeof entry["anchorId"] === "string"
+              ? [entry["anchorId"]]
+              : [],
+          )
+        : [];
+    expect(isRecord(statute) && statute["outlineTruncated"]).toBe(true);
+    expect(outline).toHaveLength(LIMITS.legislationOutlineHeadingsMax);
+    expect(outline.slice(-3)).toEqual(["pril_1", "pril_2", "pril_3"]);
+    expect(outline.at(0)).toBe("par_1");
+
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(documentAst.blocks);
+    const provisions = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            { eli: STATUTE_ELI, anchor: "priloha_3" },
+            { eli: STATUTE_ELI, anchor: "příloha č. 9" },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+    expect(provisions).toMatchObject({
+      items: [
+        { status: "found", text: "Příloha č. 3\nTrestné činy" },
+        {
+          status: "provision_not_found",
+          message: expect.stringContaining(
+            "Its annex anchors: pril_1, pril_2, pril_3.",
+          ),
+        },
+      ],
+    });
+  });
+
   test("read_statute emits navigation once and reassembles every text window", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
       type: "expression",
@@ -6803,6 +6900,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6814,6 +6912,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6854,6 +6953,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           nextTextCursor: null,
           truncated: false,
           versionValidFrom: "2014-01-01",
@@ -6868,6 +6968,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2012-03-22",
           nextTextCursor: null,
@@ -6893,6 +6994,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6906,6 +7008,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: false,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6934,6 +7037,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2014-01-01",
           nextTextCursor: null,
@@ -6974,6 +7078,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text,
+          governingText: [],
           versionValidFrom: null,
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,

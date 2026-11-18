@@ -1791,6 +1791,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
+  // The dispatched cancel-after-job run: the failed job it waits for.
+  "JOB_ID",
   // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
   // and the clock and busy windows file the coverage check reads (fixtures pin them).
   "JOURNEY_BUSY_WINDOWS_FILE",
@@ -1932,6 +1934,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RETRY_PASSTHROUGH_EXIT_CODES",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  // The dispatched cancel-after-job run: the run attempt whose job failed.
+  "RUN_ATTEMPT",
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",

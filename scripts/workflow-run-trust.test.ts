@@ -1421,6 +1421,41 @@ test("npm and desktop fail on an unreadable receipt instead of skipping", () => 
   }
 });
 
+test("npm and desktop ignore a release run whose jobs were all skipped", () => {
+  const gates = [
+    ["publish-npm.yml", "release-trigger"],
+    ["release-desktop.yml", "resolve"],
+  ] as const;
+  for (const [file, jobName] of gates) {
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(new URL(file, WORKFLOWS_URL), "utf-8"),
+    );
+    const jobs =
+      isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+    const job = jobs[jobName];
+    const condition = isRecord(job) ? conditionOf(job) : "";
+    expect(condition, `${file}/${jobName}`).not.toBe("");
+    const runsFor = (conclusion: string) =>
+      !definitelyFalse(condition, {
+        values: {
+          "github.event_name": "workflow_run",
+          "github.repository": "owner/repo",
+          [`${RUN}.head_repository.full_name`]: "owner/repo",
+          [`${RUN}.path`]: ".github/workflows/release.yml",
+          [`${RUN}.event`]: "workflow_dispatch",
+          [`${RUN}.conclusion`]: conclusion,
+        },
+        status: { always: true, success: true },
+      });
+    expect(runsFor("skipped"), `${file}/${jobName}`).toBe(false);
+    for (const conclusion of ["success", "failure"]) {
+      expect(runsFor(conclusion), `${file}/${jobName} ${conclusion}`).toBe(
+        true,
+      );
+    }
+  }
+});
+
 test("npm and desktop consume the production receipt guard", () => {
   for (const file of ["publish-npm.yml", "release-desktop.yml"]) {
     const source = readFileSync(

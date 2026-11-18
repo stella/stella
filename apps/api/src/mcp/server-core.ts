@@ -92,6 +92,7 @@ import {
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
+import type { SkillToolSession } from "@/api/mcp/gateway/mode-policy";
 import {
   getSkillPrompt,
   listSkillPrompts,
@@ -237,6 +238,7 @@ type McpServerDependencies = {
   getMcpToolRequiredScopesHint: (
     toolName: string,
     mode?: McpMode,
+    session?: SkillToolSession,
   ) => readonly ToolScope[] | undefined;
   handleMcpToolCall: ({
     args,
@@ -1081,7 +1083,7 @@ export const createMcpHttpRequestHandler = ({
       id: toolName,
       featureId: staticTool?.featureId,
     })
-      ? getMcpToolRequiredScopesHint(toolName, mode)
+      ? getMcpToolRequiredScopesHint(toolName, mode, context)
       : undefined;
     const missingHintedScope = requiredScopesHint?.find(
       (scope) => !hasGrantedScope(session.scopes, scope),

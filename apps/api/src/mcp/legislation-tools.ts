@@ -19,12 +19,17 @@ import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-scheme
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import {
+  annexDesignator,
+  requestedAnnexDesignator,
+} from "@stll/legal-ast/statute-anchor-scheme";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { anchorProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { readProvision } from "@/api/handlers/legislation/provision-text";
 import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
@@ -689,8 +694,18 @@ const isStatuteVersionsPage = (
 ): value is StatuteVersionsPage =>
   typeof value === "object" && "items" in value && Array.isArray(value.items);
 
-/** The heading blocks a consolidation carries, in document order, bounded. */
-const buildStatuteOutline = (blocks: readonly Block[]) => {
+/**
+ * The heading blocks a consolidation carries, in document order, bounded.
+ *
+ * Annexes come last in an act and are cited by number, so a bound that kept
+ * only the first headings would hide every annex anchor of a long act. Every
+ * annex heading is kept (up to half the bound) and the other headings fill
+ * the rest, still in document order.
+ */
+const buildStatuteOutline = (
+  blocks: readonly Block[],
+  scheme: StatuteAnchorScheme,
+) => {
   const headings = blocks.flatMap((block) =>
     block.type === "heading"
       ? [
@@ -702,14 +717,22 @@ const buildStatuteOutline = (blocks: readonly Block[]) => {
         ]
       : [],
   );
-  const outlineTruncated =
-    headings.length > LIMITS.legislationOutlineHeadingsMax;
-
+  const max = LIMITS.legislationOutlineHeadingsMax;
+  if (headings.length <= max) {
+    return { outline: headings, outlineTruncated: false };
+  }
+  const isAnnex = (heading: { anchorId: string }) =>
+    annexDesignator(scheme, heading.anchorId) !== null;
+  const annexes = headings.filter(isAnnex).slice(0, Math.floor(max / 2));
+  const kept = new Set([
+    ...headings
+      .filter((heading) => !isAnnex(heading))
+      .slice(0, max - annexes.length),
+    ...annexes,
+  ]);
   return {
-    outline: outlineTruncated
-      ? headings.slice(0, LIMITS.legislationOutlineHeadingsMax)
-      : headings,
-    outlineTruncated,
+    outline: headings.filter((heading) => kept.has(heading)),
+    outlineTruncated: true,
   };
 };
 
@@ -746,7 +769,10 @@ const readStatutePageContext = async ({
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
   const navigation = hasUsableAst(document.documentAst)
-    ? buildStatuteOutline(document.documentAst.blocks)
+    ? buildStatuteOutline(
+        document.documentAst.blocks,
+        statuteAnchorSchemeFor(document.country),
+      )
     : { outline: [], outlineTruncated: false };
   return {
     ...navigation,
@@ -1019,16 +1045,17 @@ const provisionItemResult = ({
       const blocks =
         blocksByDocumentId.get(String(version.id)) ??
         panic(`No block list was read for consolidation ${version.id}`);
-      const text = extractProvisionText(
-        { blocks, scheme: statuteAnchorSchemeFor(version.country) },
-        item.anchor,
-      );
-      if (text === null) {
+      const scheme = statuteAnchorSchemeFor(version.country);
+      const reading = readProvision({ blocks, scheme }, item.anchor);
+      if (reading === null) {
         return {
           type: "item",
           item: {
             ...subject,
-            message: `This consolidation carries no such anchor. ${PICK_AN_ANCHOR_HINT}`,
+            message: `This consolidation carries no such anchor. ${annexAnchorHint(
+              { blocks, scheme },
+              item.anchor,
+            )}${PICK_AN_ANCHOR_HINT}`,
             status: PROVISION_STATUS.provisionNotFound,
           },
         };
@@ -1038,7 +1065,7 @@ const provisionItemResult = ({
         ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
         limit: LIMITS.legislationProvisionTextChars,
         subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
-        text,
+        text: reading.text,
       });
       if (window.type === "invalid-cursor") {
         return { type: "invalid-cursor" };
@@ -1049,6 +1076,12 @@ const provisionItemResult = ({
           ...subject,
           ...cited,
           text: window.text,
+          // Once per read: a continuation window carries on the same text.
+          governingText:
+            item.text_cursor === undefined ? reading.governing : [],
+          ...(item.text_cursor === undefined && reading.governingTruncated
+            ? { governingTextTruncated: true as const }
+            : {}),
           truncated: window.truncated,
           nextTextCursor: window.nextTextCursor,
           documentId: version.id,
@@ -1063,6 +1096,30 @@ const provisionItemResult = ({
       resolution satisfies never;
       return panic("Unhandled statute expression resolution");
   }
+};
+
+/** Annex anchors a not-found hint names at most. */
+const ANNEX_HINT_MAX = 20;
+
+/**
+ * For a request that names an annex this consolidation does not resolve,
+ * the annex anchors it does carry, so the next call can name one.
+ */
+const annexAnchorHint = (
+  { blocks, scheme }: { blocks: readonly Block[]; scheme: StatuteAnchorScheme },
+  requested: string,
+): string => {
+  if (requestedAnnexDesignator(requested) === null) {
+    return "";
+  }
+  const annexes = blocks.flatMap((block) =>
+    block.type === "heading" && annexDesignator(scheme, block.anchorId) !== null
+      ? [block.anchorId]
+      : [],
+  );
+  return annexes.length === 0
+    ? "This consolidation carries no annex anchor. "
+    : `Its annex anchors: ${annexes.slice(0, ANNEX_HINT_MAX).join(", ")}. `;
 };
 
 /** One requested entry: either it parsed, or it is answered on its own. */
@@ -1389,6 +1446,10 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
           item: {
             ...version,
             text: window.text,
+            governingText: textCursor === undefined ? item.governingText : [],
+            ...(textCursor === undefined && item.governingTextTruncated === true
+              ? { governingTextTruncated: true as const }
+              : {}),
             truncated: window.truncated,
             nextTextCursor: window.nextTextCursor,
             status: PROVISION_STATUS.found,

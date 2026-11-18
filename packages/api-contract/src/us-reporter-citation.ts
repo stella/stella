@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+// parser-output-unchanged: the query-side grammar switch moves to decision-reporter-grammar.ts; nothing ingestion reads changes.
 
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -372,15 +373,6 @@ export const isUsReporterReferenceStart = (
   );
 };
 
-const US_REPORTER_GRAMMAR: DecisionReporterGrammar = {
+export const US_REPORTER_GRAMMAR: DecisionReporterGrammar = {
   canonicalCitation: canonicalUsReporterCitation,
 };
-
-/**
- * The reporter grammar a query entry is read with in `jurisdiction`, or null
- * where reporter citations are not read.
- */
-export const decisionReporterGrammarForJurisdiction = (
-  jurisdiction: string | null | undefined,
-): DecisionReporterGrammar | null =>
-  readsUsReporterCitations(jurisdiction) ? US_REPORTER_GRAMMAR : null;
