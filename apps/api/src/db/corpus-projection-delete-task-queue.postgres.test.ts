@@ -244,8 +244,8 @@ const connectionOver = ({
     execute: async (query, params = []) => {
       await client.unsafe(query, [...params]);
     },
-    query: async (query, params = []) =>
-      (await client.unsafe(query, [...params])) as unknown[],
+    query: async (query, params = []): Promise<readonly unknown[]> =>
+      await client.unsafe(query, [...params]),
     release: () => {},
   }) satisfies OnlineMigrationConnection;
 
@@ -354,13 +354,17 @@ class Run {
   async apply(op: Op): Promise<void> {
     switch (op.kind) {
       case "record":
-        return await this.record(op);
+        await this.record(op);
+        return;
       case "backfill":
-        return await this.backfill(op.size);
+        await this.backfill(op.size);
+        return;
       case "claim":
-        return await this.claim(op);
+        await this.claim(op);
+        return;
       case "finish":
-        return await this.finish(op);
+        await this.finish(op);
+        return;
       default: {
         op satisfies never;
         return panic("Unknown op");
@@ -827,7 +831,9 @@ if (!databaseUrl || !runPostgresTests) {
             .from(corpusIndexProjectionDeleteTasks)
             .where(eq(corpusIndexProjectionDeleteTasks.indexId, indexId));
           expect(
-            queued.map(({ deleteOpstamp }) => deleteOpstamp).toSorted(),
+            queued
+              .map(({ deleteOpstamp }) => deleteOpstamp)
+              .toSorted((left, right) => (left < right ? -1 : 1)),
           ).toEqual([1n, 2n, 3n, 4n, 5n]);
           expect(
             queued.every(
