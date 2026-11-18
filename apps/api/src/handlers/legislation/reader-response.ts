@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import { statuteChangeCountsSchema } from "@stll/api-contract/statute-version-changes";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 
 import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
@@ -231,6 +232,22 @@ const provisionHistoryItemSchema = v.object({
   allowsDerivedAi: v.boolean(),
   ...windowFields,
   text: boundedString(readerTextBytes.provisionText),
+  /**
+   * Wording outside the read subdivision that governs it; see
+   * `governingWording` in `@stll/legal-ast/provision-preview`.
+   */
+  governingText: v.pipe(
+    v.array(
+      v.object({
+        anchor: boundedString(readerTextBytes.anchor),
+        position: v.picklist(GOVERNING_WORDING_POSITIONS),
+        text: boundedString(readerTextBytes.provisionText),
+      }),
+    ),
+    v.maxLength(LIMITS.legislationGoverningTextMax),
+  ),
+  /** Present when governing wording past the bound was left out. */
+  governingTextTruncated: v.optional(v.literal(true)),
 });
 export const provisionHistorySuccessResponseSchema = v.object({
   items: v.pipe(
@@ -365,6 +382,17 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
     readerTextBytes.versionValidTo,
   ),
   text: truncateTextBytes(row.text, readerTextBytes.provisionText),
+  ...(row.governingTextTruncated === true ||
+  row.governingText.length > LIMITS.legislationGoverningTextMax
+    ? { governingTextTruncated: true as const }
+    : {}),
+  governingText: row.governingText
+    .slice(0, LIMITS.legislationGoverningTextMax)
+    .map((wording) => ({
+      anchor: truncateTextBytes(wording.anchor, readerTextBytes.anchor),
+      position: wording.position,
+      text: truncateTextBytes(wording.text, readerTextBytes.provisionText),
+    })),
 });
 
 type PreviewTransport = v.InferOutput<

@@ -168,6 +168,7 @@ test("provision history pages keep each preview wording inside its byte budget",
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
       const item = projectProvisionHistoryItem({
         ...row,
+        governingText: [{ anchor: text, position: "closing", text }],
         country: "CZE",
         slug: "89-2012-sb",
         sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
@@ -288,6 +289,7 @@ test("reader plain text keeps literal markup and entities as text", () => {
           windowDisposition: "effective",
           windowDispositionBasis: null,
           text,
+          governingText: [],
         }).text;
         for (const [projected, maxBytes] of [
           [preview, readerTextBytes.previewText],

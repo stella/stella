@@ -7,6 +7,7 @@ import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-t
 import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PHASE_NOT_DUE,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
@@ -15,13 +16,16 @@ import { LIMITS } from "@/api/lib/limits";
 import { escapeSearchHtml } from "@/api/lib/search/highlight";
 import { responseByteBound } from "@/api/lib/search/response-byte-bound";
 
-import { projectCaseLawSearchResponse } from "./search-response";
+import {
+  type CaseLawSearchAnswer,
+  projectCaseLawSearchResponse,
+} from "./search-response";
 import { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
 type SearchResponse = v.InferOutput<
   typeof searchDecisionsSuccessResponseSchema
 >;
-const responseWithText = (text: string): SearchResponse => {
+const responseWithText = (text: string): CaseLawSearchAnswer => {
   const bucket = { value: text, label: text, count: Number.MAX_SAFE_INTEGER };
   const hit = {
     decisionId: text,
@@ -96,7 +100,10 @@ const responseWithText = (text: string): SearchResponse => {
     relaxedHitCount: 0,
     termDecisionCounts: null,
     nextCursor: text,
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    phases: {
+      scan: SEARCH_PAGINATION_COMPLETE,
+      partialMatches: SEARCH_PHASE_NOT_DUE,
+    },
     pageReach: SEARCH_PAGE_REACH.REACHED,
     queryUsed: text,
     warnings: [{ code: "function_words_optional", message: text, hint: text }],
