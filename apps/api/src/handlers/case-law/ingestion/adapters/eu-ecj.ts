@@ -3422,6 +3422,12 @@ type EcjCrawledVariants =
   /** A failure no variant carries, which stops the page where it is seen. */
   | { type: "failed"; error: unknown };
 
+/**
+ * Whether the page's budget has run out, read afresh: it can run out while a
+ * variant is in flight, after the loop last looked.
+ */
+const budgetSpent = (signal: AbortSignal): boolean => signal.aborted;
+
 type CrawlEcjVariantsOptions = {
   variants: readonly EcjPendingVariant[];
   signal: AbortSignal;
@@ -3476,7 +3482,7 @@ const crawlEcjVariants = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(attempted)) {
-      if (signal.aborted) {
+      if (budgetSpent(signal)) {
         return crawled(false);
       }
       const unread = ecjUnreadVariant(variant, attempted.error);

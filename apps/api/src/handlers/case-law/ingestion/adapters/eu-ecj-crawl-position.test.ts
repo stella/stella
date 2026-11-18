@@ -210,17 +210,19 @@ describe("eu-ecj crawl position within a date", () => {
         return undefined;
       }
       // The budget runs out while this variant's document is in flight.
-      budget.abort(
-        new DOMException("The operation timed out.", "TimeoutError"),
+      const timedOut = new DOMException(
+        "The operation timed out.",
+        "TimeoutError",
       );
-      return Promise.reject(budget.signal.reason);
+      budget.abort(timedOut);
+      return Promise.reject(timedOut);
     });
 
     const cut = await fetchPage(DATE, budget.signal);
 
     expect(cut.decisions).toHaveLength(settledBeforeCut);
-    const settled = cut.decisions.map(
-      ({ sourceDocumentId }) => sourceDocumentId,
+    const settled = cut.decisions.flatMap(({ sourceDocumentId }) =>
+      sourceDocumentId === undefined ? [] : [sourceDocumentId],
     );
     expect(parseEcjCrawlCursor(cut.nextCursor ?? "")).toMatchObject({
       date: DATE,
@@ -239,10 +241,12 @@ describe("eu-ecj crawl position within a date", () => {
   test("a page that settles nothing fails instead of reporting an empty page", async () => {
     const budget = new AbortController();
     installCellar(() => {
-      budget.abort(
-        new DOMException("The operation timed out.", "TimeoutError"),
+      const timedOut = new DOMException(
+        "The operation timed out.",
+        "TimeoutError",
       );
-      return Promise.reject(budget.signal.reason);
+      budget.abort(timedOut);
+      return Promise.reject(timedOut);
     });
 
     const result = await euEcjAdapter.fetchPage(DATE, {}, budget.signal);
