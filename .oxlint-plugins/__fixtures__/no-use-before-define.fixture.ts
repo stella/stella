@@ -8,8 +8,7 @@ export function localRead() {
 }
 
 export function blockRead() {
-  // oxlint-disable-next-line no-lone-blocks -- fixture: the nested block is the block-scope case
-  {
+  { // oxlint-disable-line no-lone-blocks -- fixture: the nested block is the block-scope case
     let blockValue = blockLater;
     blockValue++;
     let blockLater = 1;
