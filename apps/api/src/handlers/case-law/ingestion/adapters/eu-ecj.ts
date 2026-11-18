@@ -1403,6 +1403,18 @@ const ECJ_VERBATIM_RAW_CONTENT_TYPE =
 const UNKNOWN_DECISION_TYPE = "unknown";
 
 /**
+ * The decision type a listing binding's class names. One reader for every
+ * binding, so the crawl's built rows and its listing-only rows cannot type the
+ * same variant differently.
+ */
+const ecjDecisionType = (binding: SparqlResult): string => {
+  const type = binding.type.value;
+  return Object.hasOwn(CDM_TYPE_MAP, type)
+    ? (CDM_TYPE_MAP[type] ?? UNKNOWN_DECISION_TYPE)
+    : UNKNOWN_DECISION_TYPE;
+};
+
+/**
  * The envelope part each response the Office serves for one language variant
  * is kept as.
  *
@@ -2387,8 +2399,7 @@ export const buildDecision = async (
   const celex = binding.celex.value;
   const ecli = binding.ecli.value;
   const date = binding.date.value;
-  const decisionType =
-    CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
+  const decisionType = ecjDecisionType(binding);
   const lang = toEcjLanguage(binding.language.value);
   const manifestationId = toCellarManifestationId(binding.manifestation.value);
 
@@ -3319,8 +3330,7 @@ const ecjListingOnlyRow = (
     return undefined;
   }
   const decisionDate = binding.date.value;
-  const decisionType =
-    CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
+  const decisionType = ecjDecisionType(binding);
   const listing = JSON.stringify(binding);
   const sourceUrl = eurLexSourceUrl(lang, celex);
   return {
