@@ -14,6 +14,7 @@ const { QueryClient, QueryClientProvider } =
 const router = await import("@tanstack/react-router");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
 const { RootPendingComponent } = await import("@/routes/-root-pending");
+const { framePendingView } = await import("@/routes/-pending-view.logic");
 const { LeafPendingView, redirectRouteComponent } =
   await import("@/routes/-route-pending-view");
 
@@ -24,13 +25,17 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const PagePending = () => <p data-testid="page-pending" />;
+const PagePending = framePendingView(() => <p data-testid="page-pending" />);
+// A pending view outside the contract (it may read app context), which the
+// frame must not draw before the providers mount.
+const ContextPending = () => <p data-testid="context-pending" />;
 const Page = () => <p data-testid="page" />;
 
 /**
  * A member-frame app whose guard has not put a user in context yet, so the
  * frame host shows its pending skeleton: `/chat` declares its pending view,
- * `/plain` does not, `/go` only redirects to `/chat`, and `/section` is a
+ * `/plain` declares one outside the contract, `/go` only redirects to
+ * `/chat`, and `/section` is a
  * layout delegating to its page.
  */
 const renderAt = async (
@@ -56,6 +61,7 @@ const renderAt = async (
   const plainRoute = router.createRoute({
     getParentRoute: () => memberRoute,
     path: "/plain",
+    pendingComponent: ContextPending,
     component: Page,
   });
   const redirectRoute = router.createRoute({
@@ -104,9 +110,9 @@ test("the frame's pending skeleton shows the page's own pending view", async () 
   expect(view.queryByTestId("page")).toBeNull();
 });
 
-test("a page without a pending view gets the generic body", async () => {
+test("a pending view outside the contract leaves the frame its generic body", async () => {
   const view = await renderAt("/plain");
-  expect(view.queryByTestId("page-pending")).toBeNull();
+  expect(view.queryByTestId("context-pending")).toBeNull();
   expect(view.queryByTestId("page")).toBeNull();
   // The frame still stands: its sidebar's primary nav renders for real.
   expect(

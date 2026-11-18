@@ -16,6 +16,7 @@ import {
 } from "@stll/ui/landing-shell";
 
 import { PendingText } from "@/components/pending-text";
+import { framePendingView } from "@/routes/-pending-view.logic";
 
 /** The top courts column heading's label; the loaded page makes it a link. */
 export const LawHomeTopCourtsLabel = () => (
@@ -82,7 +83,7 @@ export const LawHomeShell = ({
 );
 
 /** The law home in its pending phase. */
-export const LawHomePending = () => (
+const LawHomePendingView = () => (
   <LawHomeShell
     placeholder
     entry={<LandingBoxPending box="search" />}
@@ -116,3 +117,5 @@ export const LawHomePending = () => (
     }}
   />
 );
+
+export const LawHomePending = framePendingView(LawHomePendingView);

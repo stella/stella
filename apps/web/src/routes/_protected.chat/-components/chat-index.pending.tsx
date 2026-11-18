@@ -13,6 +13,7 @@ import {
 import { StellaMark } from "@stll/ui/stella-mark";
 
 import { PendingText } from "@/components/pending-text";
+import { framePendingView } from "@/routes/-pending-view.logic";
 
 /** The skills column heading's label; the loaded page makes it a link. */
 export const ChatLandingSkillsLabel = () => (
@@ -84,7 +85,7 @@ export const ChatIndexShell = ({
  * The chat home in its pending phase. The matters heading waits as well:
  * whether it reads "pinned" or "last accessed" depends on the member's pins.
  */
-export const ChatIndexPending = () => (
+const ChatIndexPendingView = () => (
   <ChatIndexShell
     placeholder
     composer={<LandingBoxPending box="composer" />}
@@ -110,3 +111,5 @@ export const ChatIndexPending = () => (
     }}
   />
 );
+
+export const ChatIndexPending = framePendingView(ChatIndexPendingView);

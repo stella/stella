@@ -4,6 +4,7 @@ import { Navigate, useRouter, useRouterState } from "@tanstack/react-router";
 import type { AnyRoute, RouteComponent } from "@tanstack/react-router";
 
 import { DefaultPendingComponent } from "@/components/route-components";
+import { isFramePendingView } from "@/routes/-pending-view.logic";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 /*
@@ -11,8 +12,9 @@ import type { FileRouteTypes } from "@/routeTree.gen";
  * a pending phase, from two sibling modules:
  *
  * - `-x.pending.tsx` exports the page's shell (its layout, with slots for
- *   what waits on data) and `XPending`, the shell with the paired pending
- *   pieces in those slots. It is context-free: the server paints it on a
+ *   what waits on data) and `XPending = framePendingView(...)`, the shell
+ *   with the paired pending pieces in those slots; only a view marked so is
+ *   drawn by the cold-load frame. It is context-free: the server paints it on a
  *   cold load before any provider mounts, so it reads no query, store, route
  *   API or app context; labels go through `PendingText`, which shows the
  *   text where the app's intl is mounted and a bar on the label's line where
@@ -104,7 +106,8 @@ const leafPendingView = (
       route = routeByPath(routesById, component.redirectTarget);
       continue;
     }
-    return pendingComponent === LeafPendingView ? undefined : pendingComponent;
+    // Only a view that keeps the contract is safe before the providers.
+    return isFramePendingView(pendingComponent) ? pendingComponent : undefined;
   }
   return undefined;
 };
