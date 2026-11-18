@@ -12,11 +12,12 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-import { Temporal } from "@stll/time";
 
 import {
   caseLawBrowseCourtSegment,
   type CaseLawBrowseListing,
+  caseLawBrowseMonthLabel,
+  caseLawBrowsePeriodLabel,
   type CaseLawBrowseTarget,
   createCaseLawBrowsePath,
   hasSearch,
@@ -192,7 +193,7 @@ export const Route = createFileRoute("/law/$country/courts/$")({
     const format = getFormatter();
     const { court, page, scope } = loaderData;
     const country = caseLawCountryName(format, scope);
-    const period = periodLabel(format, page.target);
+    const period = caseLawBrowsePeriodLabel(format, page.target);
     const title = period === null ? court : `${court} · ${period}`;
     const description =
       period === null
@@ -239,20 +240,6 @@ export const Route = createFileRoute("/law/$country/courts/$")({
   component: CourtBrowsePage,
 });
 
-type Formatter = ReturnType<typeof getFormatter>;
-
-/** A calendar day as the instant its UTC midnight is, for the formatter. */
-const utcDay = (year: number, month: number, day = 1): number =>
-  Temporal.PlainDate.from({ year, month, day }).toZonedDateTime("UTC")
-    .epochMilliseconds;
-
-const monthLabel = (format: Formatter, year: number, month: number) =>
-  format.dateTime(utcDay(year, month), {
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric",
-  });
-
 /** What a level lists below it, as its section heading names it. */
 const PERIOD_HEADING_KEYS = {
   court: "workspaces.views.calendar.year",
@@ -294,29 +281,6 @@ const childTarget = (
   }
 };
 
-/** The period a page covers, as the page's language names it. */
-const periodLabel = (
-  format: Formatter,
-  target: CaseLawBrowseTarget,
-): string | null => {
-  switch (target.level) {
-    case "court":
-      return null;
-    case "year":
-      return String(target.year);
-    case "month":
-      return monthLabel(format, target.year, target.month);
-    case "day":
-      return format.dateTime(utcDay(target.year, target.month, target.day), {
-        dateStyle: "long",
-        timeZone: "UTC",
-      });
-    default:
-      target satisfies never;
-      return panic("Unhandled browse level");
-  }
-};
-
 function CourtBrowsePage() {
   const t = useTranslations();
   const format = useFormatter();
@@ -324,7 +288,7 @@ function CourtBrowsePage() {
   const countryParam = toCaseLawCountryParam(scope);
   const country = caseLawCountryName(format, scope);
   const { target } = page;
-  const period = periodLabel(format, target);
+  const period = caseLawBrowsePeriodLabel(format, target);
   const segment = target.court;
 
   const crumbs = [
@@ -385,7 +349,7 @@ function CourtBrowsePage() {
                   page: 1,
                 }}
               >
-                {monthLabel(format, target.year, target.month)}
+                {caseLawBrowseMonthLabel(format, target.year, target.month)}
               </CaseLawBrowseLink>
             ),
           },
@@ -415,7 +379,7 @@ function CourtBrowsePage() {
             return (
               <PublicLawHubItem key={value} meta={countLabel(count)}>
                 <CaseLawBrowseLink countryParam={countryParam} target={next}>
-                  {periodLabel(format, next) ?? String(value)}
+                  {caseLawBrowsePeriodLabel(format, next) ?? String(value)}
                 </CaseLawBrowseLink>
               </PublicLawHubItem>
             );

@@ -5,6 +5,8 @@ import { CASE_LAW_BROWSE_MAX_PAGES } from "@stll/api-contract/case-law-browse-hu
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 import { Temporal } from "@stll/time";
 
+import type { getFormatter } from "@/i18n/i18n-store";
+
 import {
   publicCaseLawPageCountryFromParam,
   toCaseLawCountryParam,
@@ -187,4 +189,46 @@ export const caseLawBrowseDateRange = (
     dateFrom: `${prefix}-01`,
     dateTo: `${prefix}-${pad2(daysInMonth(target.year, target.month))}`,
   };
+};
+
+type Formatter = ReturnType<typeof getFormatter>;
+
+/** A calendar day as the instant its UTC midnight is, for the formatter. */
+const utcDay = (year: number, month: number, day = 1): number =>
+  Temporal.PlainDate.from({ year, month, day }).toZonedDateTime("UTC")
+    .epochMilliseconds;
+
+/** A month as the page's language names it, with its year. */
+export const caseLawBrowseMonthLabel = (
+  format: Formatter,
+  year: number,
+  month: number,
+) =>
+  format.dateTime(utcDay(year, month), {
+    month: "long",
+    timeZone: "UTC",
+    year: "numeric",
+  });
+
+/** The period a page covers, as the page's language names it. */
+export const caseLawBrowsePeriodLabel = (
+  format: Formatter,
+  target: CaseLawBrowseTarget,
+): string | null => {
+  switch (target.level) {
+    case "court":
+      return null;
+    case "year":
+      return String(target.year);
+    case "month":
+      return caseLawBrowseMonthLabel(format, target.year, target.month);
+    case "day":
+      return format.dateTime(utcDay(target.year, target.month, target.day), {
+        dateStyle: "long",
+        timeZone: "UTC",
+      });
+    default:
+      target satisfies never;
+      return panic("Unhandled browse level");
+  }
 };
