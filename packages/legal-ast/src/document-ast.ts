@@ -1,3 +1,4 @@
+// parser-output-unchanged: an annex is also resolved by its number in statute anchor resolution; no decision parser resolves anchors, so parser output is unchanged.
 // parser-output-unchanged: adds the opening-formula paragraph role to the vocabulary; only the Czech and Slovak readers that emit it change their output, and each carries its own parser version bump.
 // parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).

@@ -2,6 +2,7 @@
 // parser-output-unchanged: Minting and nesting provision anchors moved here serve provision keys and previews; decision parsers still call none of this module.
 // parser-output-unchanged: Unnumbered statute wording is read only by provision reads and previews; decision parsers still call none of this module.
 // parser-output-unchanged: Governing wording, unnumbered segments and ancestor paths serve statute provision reads only; decision parsers still call none of this module.
+// parser-output-unchanged: Annex anchor grammars and the reading of a requested annex number serve statute reads only; decision parsers still call none of this module.
 /**
  * The grammar a publisher writes statute anchors in, and every reading of an
  * anchor's path that the readers, previews and provision reads make.
