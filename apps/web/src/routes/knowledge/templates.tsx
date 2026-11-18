@@ -4,8 +4,8 @@ import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues"
 import { routePresentation } from "@/routes/-route-presentation";
 import { turnAwaySignedOutVisitor } from "@/routes/knowledge/-knowledge-member-route";
 import { TemplatesPage } from "@/routes/knowledge/-member/templates.page";
+import { TemplatesPending } from "@/routes/knowledge/-member/templates.pending";
 import { templatesSearchSchema } from "@/routes/knowledge/-templates-search";
-import { TemplatesPending } from "@/routes/knowledge/-templates/templates.pending";
 
 // The organization's template library. The published catalogue has its own
 // address, so this page is only ever a member's and its code is preloaded

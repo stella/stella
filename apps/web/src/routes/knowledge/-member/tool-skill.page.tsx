@@ -2,11 +2,11 @@ import { getRouteApi } from "@tanstack/react-router";
 
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 import { MemberSkillEditorPage } from "@/routes/knowledge/-member/member-skill-editor-page";
-import { ToolEntryNotFound } from "@/routes/knowledge/-tool-entry-not-found";
 import {
   ToolSkillPending,
   ToolSkillShell,
-} from "@/routes/knowledge/-tools/tool-skill.pending";
+} from "@/routes/knowledge/-member/tool-skill.pending";
+import { ToolEntryNotFound } from "@/routes/knowledge/-tool-entry-not-found";
 
 const skillRouteApi = getRouteApi("/knowledge/tools_/skills/$skillId");
 

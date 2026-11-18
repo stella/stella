@@ -2,7 +2,7 @@ import { getRouteApi } from "@tanstack/react-router";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
-import { ToolEntryShell } from "@/routes/knowledge/-tools/tool-entry.pending";
+import { ToolEntryShell } from "@/routes/knowledge/-public/tool-entry.pending";
 
 const toolEntryRouteApi = getRouteApi("/knowledge/tools_/$entry");
 

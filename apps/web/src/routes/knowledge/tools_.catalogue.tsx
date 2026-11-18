@@ -7,7 +7,7 @@ import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ToolsCataloguePage } from "@/routes/knowledge/-public/tools-catalogue.page";
-import { ToolsCataloguePending } from "@/routes/knowledge/-tools/tools-catalogue.pending";
+import { ToolsCataloguePending } from "@/routes/knowledge/-public/tools-catalogue.pending";
 
 /** The published tools' list: the same for every visitor, members included. */
 export const Route = createFileRoute("/knowledge/tools_/catalogue")({

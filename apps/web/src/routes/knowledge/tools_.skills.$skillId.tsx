@@ -5,8 +5,8 @@ import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
 import { turnAwaySignedOutVisitor } from "@/routes/knowledge/-knowledge-member-route";
 import { ToolSkillPage } from "@/routes/knowledge/-member/tool-skill.page";
+import { ToolSkillPending } from "@/routes/knowledge/-member/tool-skill.pending";
 import { ToolEntryNotFound } from "@/routes/knowledge/-tool-entry-not-found";
-import { ToolSkillPending } from "@/routes/knowledge/-tools/tool-skill.pending";
 
 /** An organization's own skill, by its id. Without an account there is
  *  nothing here, and nothing is asked for. */

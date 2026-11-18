@@ -6,7 +6,7 @@ import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
 import { turnAwaySignedOutVisitor } from "@/routes/knowledge/-knowledge-member-route";
 import { PlaybooksPage } from "@/routes/knowledge/-member/playbooks.page";
-import { PlaybooksPending } from "@/routes/knowledge/-playbooks/playbooks.pending";
+import { PlaybooksPending } from "@/routes/knowledge/-member/playbooks.pending";
 
 // The organization's playbooks; the ready-made ones every visitor reads live
 // at `/knowledge/playbooks/catalogue`.

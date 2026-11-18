@@ -8,7 +8,7 @@ import { routePresentation } from "@/routes/-route-presentation";
 import "@/routes/knowledge/-components/catalogue/tool-detail-inspector-registration";
 import { turnAwaySignedOutVisitor } from "@/routes/knowledge/-knowledge-member-route";
 import { ToolsPage } from "@/routes/knowledge/-member/tools.page";
-import { ToolsPending } from "@/routes/knowledge/-tools/tools.pending";
+import { ToolsPending } from "@/routes/knowledge/-member/tools.pending";
 
 const KIND_VALUES = ["all", "skill", "mcp"] as const;
 

@@ -210,9 +210,15 @@ const MEMBER_DIRECTORIES = [
   "routes/knowledge/-member",
 ].map((path) => `${fromSource(path)}${nodePath.sep}`);
 
+// A page's pending half sits beside it but is not member code: its imports
+// are closed to light, context-free pieces (the route-pending-component lint
+// rule), and a test below walks each one to hold that here too.
+const isPendingHalf = (module: string) => module.endsWith(".pending.tsx");
+
 const isMemberModule = (module: string) =>
-  MEMBER_MODULES.includes(module) ||
-  MEMBER_DIRECTORIES.some((directory) => module.startsWith(directory));
+  !isPendingHalf(module) &&
+  (MEMBER_MODULES.includes(module) ||
+    MEMBER_DIRECTORIES.some((directory) => module.startsWith(directory)));
 
 /**
  * The switches that still pick a container from the session. Each may reach
@@ -331,6 +337,16 @@ describe("Knowledge section routes", () => {
       ).toEqual([]);
     },
   );
+
+  test.each(
+    [
+      ...new Bun.Glob("**/*.pending.tsx").scanSync({
+        cwd: fromSource("routes/knowledge"),
+      }),
+    ].map((file) => [file, fromSource(`routes/knowledge/${file}`)]),
+  )("the pending half %s reaches no member module", async (_name, file) => {
+    expect(memberReach(await collectGraph(file))).toEqual([]);
+  });
 
   test.each(PUBLIC_ROUTES.map((file) => [relative(file), file]))(
     "%s reaches no member module, even lazily",

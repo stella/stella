@@ -21,7 +21,7 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
-import { PlaybooksPending } from "@/routes/knowledge/-playbooks/playbooks.pending";
+import { PlaybooksPending } from "@/routes/knowledge/-member/playbooks.pending";
 
 const LazyPlaybookEditor = lazy(async () => {
   const module =

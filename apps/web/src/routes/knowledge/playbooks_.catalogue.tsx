@@ -9,8 +9,8 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
 import { routePresentation } from "@/routes/-route-presentation";
-import { PlaybooksCataloguePending } from "@/routes/knowledge/-playbooks/playbooks-catalogue.pending";
 import { PlaybooksCataloguePage } from "@/routes/knowledge/-public/playbooks-catalogue.page";
+import { PlaybooksCataloguePending } from "@/routes/knowledge/-public/playbooks-catalogue.pending";
 
 /** The ready-made playbooks: the same for every visitor, members included. */
 export const Route = createFileRoute("/knowledge/playbooks_/catalogue")({

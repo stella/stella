@@ -18,8 +18,8 @@ import {
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ToolEntryPage } from "@/routes/knowledge/-public/tool-entry.page";
+import { ToolEntryPending } from "@/routes/knowledge/-public/tool-entry.pending";
 import { ToolEntryNotFound } from "@/routes/knowledge/-tool-entry-not-found";
-import { ToolEntryPending } from "@/routes/knowledge/-tools/tool-entry.pending";
 
 // A bad `?install=` value degrades to "no install intent" rather than
 // throwing into the router's error boundary.

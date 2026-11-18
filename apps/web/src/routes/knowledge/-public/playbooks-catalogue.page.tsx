@@ -1,5 +1,5 @@
 import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
-import { PlaybooksCataloguePending } from "@/routes/knowledge/-playbooks/playbooks-catalogue.pending";
+import { PlaybooksCataloguePending } from "@/routes/knowledge/-public/playbooks-catalogue.pending";
 import { PublicPlaybooksCatalogue } from "@/routes/knowledge/-public/public-playbooks-catalogue";
 
 /** The ready-made playbooks, the same for every visitor: the pending phase

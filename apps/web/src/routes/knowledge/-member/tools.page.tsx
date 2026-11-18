@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
 import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 import { MemberToolsPage } from "@/routes/knowledge/-member/member-tools-page";
-import { ToolsPending } from "@/routes/knowledge/-tools/tools.pending";
+import { ToolsPending } from "@/routes/knowledge/-member/tools.pending";
 
 /** The organization's tools; a visitor without an account reads the
  *  published list instead. */
