@@ -6,7 +6,10 @@
     "@stll/ui/landing-shell",
     "@stll/ui/stella-mark",
     "@stll/ui/utils",
-    "@/components/pending-text"
+    "@/components/pending-text",
+    "@/features/knowledge/views/playbooks/playbooks-page-shape",
+    "@/features/knowledge/views/templates/template-list-shape",
+    "@/routes/knowledge/-tools/tools-page-shape"
   ],
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
   "pendingSafeNamedImports": {

@@ -14,7 +14,6 @@ import {
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
-import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -22,6 +21,7 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
+import { PlaybooksPending } from "@/routes/knowledge/-playbooks/playbooks.pending";
 
 const LazyPlaybookEditor = lazy(async () => {
   const module =
@@ -198,7 +198,7 @@ export function MemberPlaybooksPage({
   }
 
   if (isLoading) {
-    return <PlaybooksPageSkeleton />;
+    return <PlaybooksPending />;
   }
 
   if (isError) {

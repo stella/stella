@@ -16,6 +16,7 @@ import {
   authFixtureResponse,
 } from "@/__fixtures__/route-shell/route-shell-auth-fixtures";
 import {
+  KNOWLEDGE_FIXTURE_SKILL_ID,
   knowledgeFixtureResponse,
   knowledgeFixtureLoaderData,
   knowledgeFixtureReadyText,
@@ -737,6 +738,7 @@ const loadFixtureRuntime = async (
     version: "2026-01-01",
     registry: "ares",
     entry: KNOWLEDGE_FIXTURE_TOOL_SLUG,
+    skillId: KNOWLEDGE_FIXTURE_SKILL_ID,
     exportId: "00000000-0000-4000-8000-000000000005",
     invitationId: "00000000-0000-4000-8000-000000000006",
     invoiceId: "00000000-0000-4000-8000-000000000007",

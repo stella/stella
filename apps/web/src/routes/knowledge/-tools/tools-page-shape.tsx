@@ -1,30 +1,41 @@
-import { useTranslations } from "use-intl";
+import type { ReactNode } from "react";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
-// The page's own chrome, kept apart from the catalogue view so a route can
-// render it while the catalogue loads behind React.lazy.
+import { PendingText } from "@/components/pending-text";
 
-export const ToolsPageHeader = () => {
-  const t = useTranslations();
-  return (
+// The Tools page's shape: light presentational pieces only (a pending-safe
+// module, see .oxlint-plugins/route-pending-component-policy.json), so the
+// pending views draw them before any provider mounts.
+
+/**
+ * The Tools page's one layout: its heading and description over the list.
+ * The organization's page, the published list and their pending phase all
+ * draw it, so the heading stays put while the list loads behind it.
+ */
+export const ToolsPageShell = ({ children }: { children: ReactNode }) => (
+  <div className="flex flex-col p-6">
     <div className="mb-6 flex flex-col gap-1">
       <h1 className="text-foreground text-xl font-semibold">
-        {t("knowledge.sections.tools.title")}
+        <PendingText barClassName="w-16" id="knowledge.sections.tools.title" />
       </h1>
       <p className="text-muted-foreground text-sm">
-        {t("knowledge.sections.tools.description")}
+        <PendingText
+          barClassName="w-80 max-w-full"
+          id="knowledge.sections.tools.description"
+        />
       </p>
     </div>
-  );
-};
+    {children}
+  </div>
+);
 
 const CATALOGUE_FILTER_KEYS = ["all", "skill", "mcp"];
 const CATALOGUE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 
 // Mirrors the catalogue view body (toolbar row, filter pills, then a stack of
-// bordered entry cards) so the Tools page chrome stays put and only the
-// catalogue values stream in.
+// bordered entry cards) so the page's chrome stays put and only the catalogue
+// values stream in.
 export const ToolsCatalogueSkeleton = () => (
   <div className="flex flex-col gap-6">
     <div className="flex items-center gap-2">

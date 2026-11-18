@@ -1,10 +1,8 @@
-import { lazy, Suspense } from "react";
-
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { getAnalytics } from "@/lib/analytics/provider";
+import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
 import {
   isPublicKnowledgeCrawlAllowed,
   isPublicKnowledgeEnabled,
@@ -19,15 +17,9 @@ import {
 } from "@/lib/public-tools-seo";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
-import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
-import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
+import { ToolEntryPage } from "@/routes/knowledge/-public/tool-entry.page";
 import { ToolEntryNotFound } from "@/routes/knowledge/-tool-entry-not-found";
-
-const LazyMemberSkillEditorPage = lazy(async () => {
-  const module =
-    await import("@/routes/knowledge/-member/member-skill-editor-page");
-  return { default: module.MemberSkillEditorPage };
-});
+import { ToolEntryPending } from "@/routes/knowledge/-tools/tool-entry.pending";
 
 // A bad `?install=` value degrades to "no install intent" rather than
 // throwing into the router's error boundary.
@@ -36,22 +28,19 @@ const searchSchema = routeSearchSchema({
 });
 
 /**
- * One address for two kinds of page: an organization's skill (by its UUID)
- * or a published tool (by its slug). The entry is resolved before anything is
- * read, so a skill id is never looked up in the catalogue and a slug never
- * opens the skill editor.
+ * A published tool, by its slug: the same page for every visitor. An
+ * organization's skill has its own address; a skill id here, which this page
+ * once served, is sent there for good. The entry is resolved before anything
+ * is read, so a skill id is never looked up in the catalogue.
  */
 export const Route = createFileRoute("/knowledge/tools_/$entry")({
   staticData: {
     presentation: routePresentation(
-      {
-        type: "knowledge-detail",
-        detail: "skill",
-      },
+      { type: "knowledge-detail", detail: "tool" },
       {
         type: "label",
         labelKey: "knowledge.sections.tools.title",
-        to: "/knowledge/tools",
+        to: KNOWLEDGE_CATALOGUE_PATHS.tools,
       },
     ),
   },
@@ -70,10 +59,16 @@ export const Route = createFileRoute("/knowledge/tools_/$entry")({
         notFound({ throw: true });
         return panic("TanStack Router did not throw a not-found response.");
       case "skill":
-        return page;
+        redirect({
+          to: "/knowledge/tools/skills/$skillId",
+          params: { skillId: page.skillId },
+          replace: true,
+          statusCode: 301,
+          throw: true,
+        });
+        return panic("TanStack Router did not throw the skill redirect.");
       case "catalogue":
         return {
-          page: page.page,
           displayName: page.detail.displayName,
           entry: page.detail.entry,
           markdown: page.detail.markdown,
@@ -85,7 +80,7 @@ export const Route = createFileRoute("/knowledge/tools_/$entry")({
     }
   },
   head: ({ loaderData }) => {
-    if (loaderData?.page !== "catalogue") {
+    if (loaderData === undefined) {
       return {};
     }
     const { entry } = loaderData;
@@ -111,45 +106,5 @@ export const Route = createFileRoute("/knowledge/tools_/$entry")({
   },
   notFoundComponent: ToolEntryNotFound,
   component: ToolEntryPage,
+  pendingComponent: ToolEntryPending,
 });
-
-function ToolEntryPage() {
-  const page = Route.useLoaderData();
-  const installIntent = Route.useSearch({ select: (s) => s.install === "1" });
-  const navigate = Route.useNavigate();
-
-  if (page.page === "catalogue") {
-    return (
-      <PublicToolDetail
-        entry={page.entry}
-        installIntent={installIntent}
-        markdown={page.markdown}
-        onClearInstallIntent={() => {
-          navigate({ replace: true, search: {} }).catch((error: unknown) => {
-            getAnalytics().captureError(error, {
-              fingerprintKey: "ToolEntryPage:failure",
-              scope: { type: "handler", handlerId: "ToolEntryPage:failure" },
-            });
-          });
-        }}
-      />
-    );
-  }
-
-  // A skill belongs to an organization: without an account there is nothing
-  // to show, and nothing is asked for.
-  return (
-    <KnowledgeAudienceGate
-      anonymous={() => <ToolEntryNotFound />}
-      checking={null}
-      member={(organizationId) => (
-        <Suspense fallback={null}>
-          <LazyMemberSkillEditorPage
-            organizationId={organizationId}
-            skillId={page.skillId}
-          />
-        </Suspense>
-      )}
-    />
-  );
-}

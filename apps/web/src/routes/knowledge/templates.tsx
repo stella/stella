@@ -1,24 +1,15 @@
-import { lazy, Suspense } from "react";
-
 import { createFileRoute } from "@tanstack/react-router";
 
-import {
-  TEMPLATE_LIST_LAYOUT,
-  TemplateListSkeleton,
-} from "@/features/knowledge/views/templates/template-list-view";
+import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
 import { routePresentation } from "@/routes/-route-presentation";
-import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
-import { PublicTemplatesCatalogue } from "@/routes/knowledge/-public/public-templates-catalogue";
+import { turnAwaySignedOutVisitor } from "@/routes/knowledge/-knowledge-member-route";
+import { TemplatesPage } from "@/routes/knowledge/-member/templates.page";
 import { templatesSearchSchema } from "@/routes/knowledge/-templates-search";
+import { TemplatesPending } from "@/routes/knowledge/-templates/templates.pending";
 
-// The organization's library loads only for a member, after the session is
-// known; a visitor without an account never evaluates it.
-const LazyMemberTemplatesPage = lazy(async () => {
-  const module =
-    await import("@/routes/knowledge/-member/member-templates-page");
-  return { default: module.MemberTemplatesPage };
-});
-
+// The organization's template library. The published catalogue has its own
+// address, so this page is only ever a member's and its code is preloaded
+// with it.
 export const Route = createFileRoute("/knowledge/templates")({
   staticData: {
     presentation: routePresentation({
@@ -27,23 +18,12 @@ export const Route = createFileRoute("/knowledge/templates")({
     }),
   },
   validateSearch: templatesSearchSchema,
-  component: TemplatesSection,
+  beforeLoad: async ({ context: { queryClient } }) => {
+    await turnAwaySignedOutVisitor({
+      queryClient,
+      visitor: { kind: "catalogue", to: KNOWLEDGE_CATALOGUE_PATHS.templates },
+    });
+  },
+  component: TemplatesPage,
+  pendingComponent: TemplatesPending,
 });
-
-function TemplatesSection() {
-  return (
-    <KnowledgeAudienceGate
-      anonymous={() => <PublicTemplatesCatalogue />}
-      checking={<TemplateListSkeleton layout={TEMPLATE_LIST_LAYOUT.library} />}
-      member={(organizationId) => (
-        <Suspense
-          fallback={
-            <TemplateListSkeleton layout={TEMPLATE_LIST_LAYOUT.library} />
-          }
-        >
-          <LazyMemberTemplatesPage organizationId={organizationId} />
-        </Suspense>
-      )}
-    />
-  );
-}

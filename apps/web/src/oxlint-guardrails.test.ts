@@ -235,12 +235,22 @@ describe("custom oxlint guardrails", () => {
     const memberToolsSource = readRootFixture(
       "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
     );
+    const registrationSource = readRootFixture(
+      "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
+    );
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-static-catalogue-route-import.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
 
-    expect(toolsRouteSource).toContain("const LazyMemberToolsPage = lazy");
+    // The route renders its page statically (so the manifest preloads it) and
+    // keeps the inspector registration eager; neither holds the catalogue UI.
+    expect(toolsRouteSource).toContain(
+      'import { ToolsPage } from "@/routes/knowledge/-member/tools.page";',
+    );
+    expect(toolsRouteSource).toContain(
+      'import "@/routes/knowledge/-components/catalogue/tool-detail-inspector-registration";',
+    );
     expect(memberToolsSource).toContain("const LazyCatalogueBrowser = lazy");
     expect(memberToolsSource).toContain("catalogue/catalogue-browser");
     expect(memberToolsSource).toContain(
@@ -250,11 +260,12 @@ describe("custom oxlint guardrails", () => {
     expect(memberToolsSource).toContain("canManageCustomTools");
     expect(memberToolsSource).toContain("practiceJurisdictions");
     expect(memberToolsSource).not.toContain("import { CatalogueBrowser");
-    expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
-    expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
+    expect(registrationSource).toContain("const LazyToolDetailView = lazy");
+    expect(registrationSource).toContain("const LazyToolDetailRailIcon = lazy");
     expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
-    expect(toolsRouteSource).not.toContain("ToolDetailView,");
-    expect(toolsRouteSource).not.toContain("ToolDetailRailIcon,");
+    expect(registrationSource).not.toContain("import { CatalogueBrowser");
+    expect(registrationSource).not.toContain("ToolDetailView,");
+    expect(registrationSource).not.toContain("ToolDetailRailIcon,");
 
     expect(pluginSource).toContain("CATALOGUE_BROWSER_MODULE");
     expect(pluginSource).toContain('node.importKind === "type"');
@@ -268,6 +279,9 @@ describe("custom oxlint guardrails", () => {
     expect(configSource).toContain("apps/web/src/routes/knowledge/tools.tsx");
     expect(configSource).toContain(
       "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+    );
+    expect(configSource).toContain(
+      "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
     );
   });
 
