@@ -1,37 +1,12 @@
 {
   "startupPageCode": [
     {
-      "kind": "route-component",
-      "module": "src/routes/law/$country/statutes/index.tsx",
-      "reason": "The pendingComponent renders PublicStatutesIndex, so the page it shares with the component stays in the route file."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.contacts/index.tsx?tsr-shared=1",
-      "reason": "ContactsPendingComponent and ContactsPage share the contact table features and columns."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/law/$country/statutes/index.tsx?tsr-shared=1",
-      "reason": "The pending and loaded PublicStatutesIndex share the filter chips, row phases and list heading."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.settings/organization.members.tsx?tsr-shared=1",
-      "reason": "MembersPendingComponent and Members share MEMBER_COLUMNS and MembersTableHeader."
-    },
-    {
       "kind": "tsr-shared",
       "module": "src/routes/law/index.tsx?tsr-shared=1",
       "reason": "LawHomePending and LawHome share LawHomeGreeting."
     }
   ],
   "coldLoadHops": [
-    {
-      "route": "/law/cases/",
-      "module": "src/routes/law/cases/-case-law-index-page.tsx",
-      "reason": "component and pendingComponent load -case-law-index-page through a hand-written lazyRouteComponent import."
-    },
     {
       "route": "/knowledge/playbooks",
       "module": "src/routes/knowledge/-member/member-playbooks-page.tsx",
