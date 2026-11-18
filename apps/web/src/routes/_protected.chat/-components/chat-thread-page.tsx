@@ -113,7 +113,10 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
-import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import {
+  offeredSuggestedSkills,
+  useSuggestedSkills,
+} from "@/lib/prompts/use-suggested-skills";
 import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
@@ -159,7 +162,7 @@ export const ChatThreadPage = ({
   const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });

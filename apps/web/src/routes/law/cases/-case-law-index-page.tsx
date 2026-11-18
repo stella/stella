@@ -27,7 +27,6 @@ import {
   queryAnsweredByRows,
   rowsAnswerRequestedSearch,
 } from "@/components/public-law-table/public-law-results-state.logic";
-import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
   PublicLawResultsToolbar,
@@ -130,6 +129,7 @@ import {
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { queryView, queryViewError } from "@/lib/query-view.logic";
+import type { RouteState } from "@/lib/route-state";
 import {
   PublicLawListFailure,
   PublicLawResultsBoundary,
@@ -245,7 +245,7 @@ const SearchStillBusyNotice = ({
 
 type PublicCaseLawIndexProps = {
   /** Whether the router has this page's rows yet. */
-  routeState: PublicLawRouteState;
+  routeState: RouteState;
 };
 
 export const PublicCaseLawIndexPending = () => (

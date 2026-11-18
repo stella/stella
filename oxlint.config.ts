@@ -2236,6 +2236,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
+    "./.oxlint-plugins/route-pending-component.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
     "./.oxlint-plugins/require-write-contract.ts",
@@ -5928,6 +5929,21 @@ const config = defineConfig({
         "no-beforeload-redirect/no-beforeload-redirect": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
         "require-loader-prefetch/require-loader-prefetch": "error",
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      // A route's pending half ships in the entry chunk and renders before
+      // any provider: its imports are closed (see the rule's policy file).
+      files: ["apps/web/src/**/*.pending.tsx"],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.page.tsx"],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
       },
     },
     {

@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 
+import type { RouteComponent } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -55,17 +56,23 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // and the page body. Cookie preferences and the request locale already exist
 // during SSR, so the pending frame uses the same geometry and nav labels. It
 // also tracks the viewport and the saved inspector tabs, so it resizes with
-// the frame it stands in for.
+// the frame it stands in for. `body` is the leaf route's own pending view
+// (`useLeafPendingView`), so the page that loads replaces placeholders
+// already sitting where its content will; a route without one gets the
+// generic column.
 export function ProtectedPendingSkeleton({
+  body,
   content,
   inspectorScope,
 }: {
+  body?: RouteComponent | undefined;
   content?: ReactElement | undefined;
   inspectorScope?: InspectorStorageScope;
 }) {
   if (inspectorScope !== undefined) {
     return (
       <ProtectedPendingSkeletonContent
+        body={body}
         content={content}
         inspectorScope={inspectorScope}
       />
@@ -75,6 +82,7 @@ export function ProtectedPendingSkeleton({
     <ProtectedPendingInspectorScopeContext.Consumer>
       {(contextScope) => (
         <ProtectedPendingSkeletonContent
+          body={body}
           content={content}
           inspectorScope={contextScope}
         />
@@ -83,10 +91,33 @@ export function ProtectedPendingSkeleton({
   );
 }
 
+function PendingPageBody({ body: Body }: { body: RouteComponent | undefined }) {
+  if (Body === undefined) {
+    return (
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
+        <Skeleton className="h-7 w-1/3" />
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
+    );
+  }
+  // Inert: the page's own pending tree may hold its real links and headings,
+  // and nothing in a placeholder frame takes focus or a click.
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" inert>
+      <Body />
+    </div>
+  );
+}
+
 function ProtectedPendingSkeletonContent({
+  body,
   content,
   inspectorScope,
 }: {
+  body: RouteComponent | undefined;
   content: ReactElement | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
@@ -206,13 +237,7 @@ function ProtectedPendingSkeletonContent({
           <Skeleton className="h-4 w-40" />
         </div>
         {content === undefined ? (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
-            <Skeleton className="h-7 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-          </div>
+          <PendingPageBody body={body} />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{content}</div>
         )}

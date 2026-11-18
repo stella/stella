@@ -198,7 +198,7 @@
     "memos": 1,
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
   },
-  "apps/web/src/routes/_protected.chat/index.tsx::ChatIndex": {
+  "apps/web/src/routes/_protected.chat/-components/chat-index.page.tsx::ChatIndexPage": {
     "memos": 4,
     "reasons": [
       "Cannot access refs during render",

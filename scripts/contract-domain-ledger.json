@@ -1820,10 +1820,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/routes/law/index.tsx::PENDING_ROW_KEYS::domain:[\"a\",\"b\",\"c\"]::1",
-    "reason": "Existing PENDING_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/law/index.tsx::searchSchema::maxLength:3::1",
     "reason": "Existing searchSchema UI validation or presentation bound; contract migration pending."
   },

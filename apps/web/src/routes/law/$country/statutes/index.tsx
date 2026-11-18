@@ -41,7 +41,6 @@ import {
 } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
 import { publicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
-import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
   PublicLawResultsToolbar,
@@ -99,6 +98,7 @@ import {
 } from "@/lib/public-law-seo";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import type { RouteState } from "@/lib/route-state";
 import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -228,11 +228,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
   pendingComponent: () => <PublicStatutesIndex routeState="pending" />,
 });
 
-function PublicStatutesIndex({
-  routeState,
-}: {
-  routeState: PublicLawRouteState;
-}) {
+function PublicStatutesIndex({ routeState }: { routeState: RouteState }) {
   const country = Route.useParams({
     select: ({ country: routeCountry }) => routeCountry,
   });
@@ -476,7 +472,7 @@ const statuteRowsPhase = (
     isLoading: boolean;
     isPlaceholderData: boolean;
   },
-  routeState: PublicLawRouteState,
+  routeState: RouteState,
 ) =>
   publicLawRowsPhase({
     isLoading: query.isLoading,
@@ -491,11 +487,7 @@ const statuteRowsPhase = (
     routeState,
   });
 
-function PublicStatuteList({
-  routeState,
-}: {
-  routeState: PublicLawRouteState;
-}) {
+function PublicStatuteList({ routeState }: { routeState: RouteState }) {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });

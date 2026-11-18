@@ -1,0 +1,30 @@
+{
+  "$comment": "What a route's pending half (*.pending.tsx) may import, besides other *.pending modules, *.logic modules and type-only imports. Pending halves ship in the entry chunk, so each entry here must stay small and context-free; __tests__/route-pending-component-closure.test.ts walks every entry's import closure and fails on closureBanned.",
+  "pendingSafeModules": [
+    "react",
+    "@stll/ui/icons",
+    "@stll/ui/landing-shell",
+    "@stll/ui/stella-mark",
+    "@stll/ui/utils",
+    "@/components/pending-text"
+  ],
+  "closureBanned": [
+    "menu",
+    "alert-dialog",
+    "dialog",
+    "popover",
+    "@tanstack/react-query",
+    "@/lib/api",
+    "form",
+    "table-core",
+    "@tanstack/react-table",
+    "@atlaskit/pragmatic-",
+    "@dnd-kit",
+    "@tiptap",
+    "prosemirror",
+    "@stll/folio",
+    "chat-runtime",
+    "@ai-sdk",
+    "editor"
+  ]
+}

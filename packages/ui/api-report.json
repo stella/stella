@@ -9955,6 +9955,11 @@
           "space": "value"
         },
         {
+          "name": "LandingBoxPending",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "LandingButton",
           "kind": "variable",
           "space": "value"
@@ -9985,7 +9990,68 @@
           "space": "value"
         },
         {
+          "name": "LandingRowsPending",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "LandingSection",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingSectionHeadingPending",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./landing-shell": {
+      "type": "module",
+      "file": "./src/components/landing-shell.d.ts",
+      "exports": [
+        {
+          "name": "LANDING_ROW_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LANDING_SECTION_HEADING_CLASS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingBox",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LandingBoxPending",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingGreeting",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingLayout",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingRowsPending",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingSection",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LandingSectionHeadingPending",
           "kind": "variable",
           "space": "value"
         }
@@ -12643,7 +12709,8 @@
     "./src/components/input.d.ts": "import type * as React from \"react\";\nimport { Input as InputPrimitive } from \"@base-ui/react/input\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype InputProps = Omit<InputPrimitive.Props & React.RefAttributes<HTMLInputElement>, \"size\" | \"style\" | \"type\"> & {\n    inline?: boolean;\n    nativeInput?: boolean;\n    size?: ControlSize | number;\n    style?: React.CSSProperties;\n    type?: Exclude<React.HTMLInputTypeAttribute, \"file\"> | undefined;\n    unstyled?: boolean;\n};\ndeclare const Input: ({ className, size, unstyled, inline, nativeInput, dir, onChange, ...props }: InputProps) => React.JSX.Element;\nexport { Input, type InputProps };\n",
     "./src/components/kbd.d.ts": "import type * as React from \"react\";\ndeclare const Kbd: ({ className, children, keys, variant, ...props }: KbdProps) => React.JSX.Element;\ntype KbdNamedKey = \"alt\" | \"backspace\" | \"ctrl\" | \"delete\" | \"down\" | \"enter\" | \"escape\" | \"left\" | \"mod\" | \"right\" | \"shift\" | \"tab\" | \"up\";\ntype KbdKey = string;\ntype KbdKeys = readonly [\n    KbdKey,\n    ...KbdKey[]\n];\ntype KbdPlatform = \"apple\" | \"other\";\ntype KbdVariant = \"cap\" | \"plain\";\ntype KbdProps = React.ComponentProps<\"kbd\"> & {\n    keys?: KbdKeys | undefined;\n    variant?: KbdVariant | undefined;\n};\ndeclare function formatKeys(keys: readonly KbdKey[], platform: KbdPlatform): string;\ntype KbdNavigator = Pick<Navigator, \"platform\"> & {\n    userAgentData?: undefined | {\n        platform?: string | undefined;\n    };\n};\ndeclare function kbdPlatformOf(nav: KbdNavigator): KbdPlatform;\ndeclare function useKbdPlatform(): KbdPlatform;\nexport { Kbd, formatKeys, kbdPlatformOf, useKbdPlatform };\nexport type { KbdKey, KbdKeys, KbdNamedKey, KbdNavigator, KbdPlatform, KbdProps, KbdVariant, };\n",
     "./src/components/label.d.ts": "import { useRender } from \"@base-ui/react/use-render\";\ndeclare const LABEL_VARIANT_CLASS_NAME: {\n    readonly \"choice-card\": \"has-checked:border-primary has-checked:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-disabled:cursor-not-allowed has-disabled:opacity-50\";\n    readonly choice: \"hover:bg-muted/60 has-focus-visible:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-1 py-1.5 text-sm has-focus-visible:ring-2 has-disabled:cursor-not-allowed has-disabled:opacity-64\";\n    readonly default: \"text-foreground inline-flex items-center gap-2 text-base/4.5 font-medium sm:text-sm/4\";\n    readonly muted: \"text-muted-foreground inline-flex items-center gap-2 text-xs/4 font-medium\";\n};\ntype LabelVariant = keyof typeof LABEL_VARIANT_CLASS_NAME;\ndeclare function Label({ className, render, variant, ...props }: useRender.ComponentProps<\"label\"> & {\n    variant?: LabelVariant;\n}): import(\"react\").ReactElement<unknown, import(\"react\").JSXElementConstructor<any> | string>;\nexport { Label, type LabelVariant };\n",
-    "./src/components/landing.d.ts": "import type { ReactElement, ReactNode } from \"react\";\ntype LandingLayoutProps = {\n    actions?: ReactNode | undefined;\n    children: ReactNode;\n    footer?: ReactNode | undefined;\n    hero: ReactNode;\n};\nexport declare const LandingLayout: ({ actions, hero, children, footer, }: LandingLayoutProps) => import(\"react\").JSX.Element;\ntype LandingGreetingProps = {\n    children: ReactNode;\n    icon: ReactNode;\n};\nexport declare const LandingGreeting: ({ icon, children }: LandingGreetingProps) => import(\"react\").JSX.Element;\nexport declare const LANDING_SECTION_HEADING_CLASS = \"text-foreground hover:bg-accent/50 focus-visible:ring-ring [&>svg]:text-muted-foreground flex items-center gap-2 rounded-md px-2 py-0.5 text-sm font-semibold outline-none focus-visible:ring-2\";\nexport declare const LANDING_ROW_CLASS = \"group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2\";\ntype LandingSectionProps = {\n    children: ReactNode;\n    heading: ReactNode;\n};\nexport declare const LandingSection: ({ children, heading }: LandingSectionProps) => import(\"react\").JSX.Element;\ntype LandingButtonProps = {\n    icon?: ReactElement;\n    meta?: ReactNode | undefined;\n    onClick: () => void;\n    title: ReactNode;\n};\nexport declare const LandingButton: ({ icon, meta, onClick, title, }: LandingButtonProps) => import(\"react\").JSX.Element;\ntype LandingItemTextProps = {\n    icon?: ReactElement;\n    iconTone?: \"matter\" | \"muted\" | undefined;\n    meta?: ReactNode | undefined;\n    title: ReactNode;\n};\nexport declare const LandingItemText: ({ icon, iconTone, meta, title, }: LandingItemTextProps) => import(\"react\").JSX.Element;\ntype LandingRowIconProps = {\n    children: ReactElement;\n    tone?: \"matter\" | \"muted\" | undefined;\n};\nexport declare const LandingRowIcon: ({ children, tone, }: LandingRowIconProps) => import(\"react\").JSX.Element;\ntype LandingEmptyProps = {\n    children: ReactNode;\n};\nexport declare const LandingEmpty: ({ children }: LandingEmptyProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/landing-shell.d.ts": "import type { ReactElement, ReactNode } from \"react\";\ntype LandingLayoutProps = {\n    actions?: ReactNode | undefined;\n    children: ReactNode;\n    footer?: ReactNode | undefined;\n    hero: ReactNode;\n    placeholder?: boolean | undefined;\n};\nexport declare const LandingLayout: ({ actions, placeholder, hero, children, footer, }: LandingLayoutProps) => import(\"react\").JSX.Element;\ntype LandingGreetingProps = {\n    children: ReactNode;\n    icon: ReactNode;\n};\nexport declare const LandingGreeting: ({ icon, children }: LandingGreetingProps) => import(\"react\").JSX.Element;\nexport declare const LANDING_SECTION_HEADING_CLASS = \"text-foreground hover:bg-accent/50 focus-visible:ring-ring [&>svg]:text-muted-foreground flex items-center gap-2 rounded-md px-2 py-0.5 text-sm font-semibold outline-none focus-visible:ring-2\";\nexport declare const LANDING_ROW_CLASS = \"group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2\";\nexport declare const LandingRowsPending: ({ label, }: {\n    label?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport declare const LandingSectionHeadingPending: ({ icon, }: {\n    icon?: ReactElement | undefined;\n}) => import(\"react\").JSX.Element;\nexport type LandingBox = \"composer\" | \"search\";\nexport declare const LandingBoxPending: ({ box }: {\n    box: LandingBox;\n}) => import(\"react\").JSX.Element;\ntype LandingSectionProps = {\n    children: ReactNode;\n    heading: ReactNode;\n};\nexport declare const LandingSection: ({ children, heading }: LandingSectionProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/components/landing.d.ts": "import type { ReactElement, ReactNode } from \"react\";\nexport { LANDING_ROW_CLASS, LANDING_SECTION_HEADING_CLASS, LandingBoxPending, LandingGreeting, LandingLayout, LandingRowsPending, LandingSection, LandingSectionHeadingPending, } from \"./landing-shell\";\ntype LandingButtonProps = {\n    icon?: ReactElement;\n    meta?: ReactNode | undefined;\n    onClick: () => void;\n    title: ReactNode;\n};\nexport declare const LandingButton: ({ icon, meta, onClick, title, }: LandingButtonProps) => import(\"react\").JSX.Element;\ntype LandingItemTextProps = {\n    icon?: ReactElement;\n    iconTone?: \"matter\" | \"muted\" | undefined;\n    meta?: ReactNode | undefined;\n    title: ReactNode;\n};\nexport declare const LandingItemText: ({ icon, iconTone, meta, title, }: LandingItemTextProps) => import(\"react\").JSX.Element;\ntype LandingRowIconProps = {\n    children: ReactElement;\n    tone?: \"matter\" | \"muted\" | undefined;\n};\nexport declare const LandingRowIcon: ({ children, tone, }: LandingRowIconProps) => import(\"react\").JSX.Element;\ntype LandingEmptyProps = {\n    children: ReactNode;\n};\nexport declare const LandingEmpty: ({ children }: LandingEmptyProps) => import(\"react\").JSX.Element;\n",
     "./src/components/list.d.ts": "import type * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport type { VariantProps } from \"class-variance-authority\";\nimport type { TruncatedTextLines } from \"./truncated-text\";\ndeclare const ListGroup: ({ className, ...props }: React.ComponentProps<\"section\">) => React.JSX.Element;\ndeclare const ListGroupHeader: ({ className, ...props }: React.ComponentProps<\"header\">) => React.JSX.Element;\ndeclare const ListGroupHeading: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const ListGroupTitle: ({ className, children, ...props }: React.ComponentProps<\"h2\">) => React.JSX.Element;\ndeclare const ListGroupCount: ({ className, count, ...props }: Omit<React.ComponentProps<\"span\">, \"children\"> & {\n    count: string;\n}) => React.JSX.Element;\ndeclare const ListGroupDescription: ({ className, ...props }: React.ComponentProps<\"p\">) => React.JSX.Element;\ndeclare const ListGroupAction: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const List: ({ className, ...props }: React.ComponentProps<\"ul\">) => React.JSX.Element;\ndeclare const ListItem: ({ className, render, children, ...props }: useRender.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const listItemMediaVariants: (props?: ({\n    variant?: \"icon\" | \"initial\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const ListItemMedia: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & VariantProps<typeof listItemMediaVariants>) => React.JSX.Element;\ndeclare const ListItemContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const listItemTitleVariants: (props?: ({\n    variant?: \"name\" | \"statement\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const ListItemTitle: ({ className, variant, ...props }: React.ComponentProps<\"span\"> & VariantProps<typeof listItemTitleVariants>) => React.JSX.Element;\ndeclare const listItemDescriptionVariants: (props?: ({\n    variant?: \"code\" | \"paragraph\" | \"text\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const ListItemDescription: ({ className, variant, lines, ...props }: React.ComponentProps<\"span\"> & VariantProps<typeof listItemDescriptionVariants> & {\n    lines?: TruncatedTextLines;\n}) => React.JSX.Element;\ndeclare const ListItemActions: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const ListEmpty: ({ className, ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ntype StatusTone = \"destructive\" | \"neutral\" | \"success\" | \"warning\";\ndeclare const ListItemStatus: ({ tone, className, children, ...props }: React.ComponentProps<\"span\"> & {\n    tone?: StatusTone;\n}) => React.JSX.Element;\nexport { List, ListEmpty, ListGroup, ListGroupAction, ListGroupCount, ListGroupDescription, ListGroupHeader, ListGroupHeading, ListGroupTitle, ListItem, ListItemActions, ListItemContent, ListItemDescription, ListItemMedia, ListItemStatus, ListItemTitle, };\nexport type { StatusTone };\n",
     "./src/components/loader.native.d.ts": "import type { ActivityIndicatorProps } from \"react-native\";\nimport type { LoaderContract, LoaderSize } from \"./loader.shared\";\ntype LoaderProps = Omit<ActivityIndicatorProps, \"size\"> & {\n    accessibilityLabel?: never;\n    className?: string | undefined;\n    color?: never;\n    size?: LoaderSize | undefined;\n} & ({\n    label?: never;\n    variant: \"decorative\";\n} | {\n    label?: string | undefined;\n    variant?: \"status\";\n});\nexport declare const Loader: ({ label, size, variant, ...props }: LoaderProps) => import(\"react\").JSX.Element;\nexport type { LoaderContract };\n",
     "./src/components/loader.shared.d.ts": "export declare const LOADER_SIZES: readonly [\n    \"sm\",\n    \"md\",\n    \"lg\"\n];\nexport type LoaderSize = (typeof LOADER_SIZES)[number];\nexport type LoaderContract = {\n    size?: LoaderSize;\n} & ({\n    label: string;\n    variant?: \"status\";\n} | {\n    label?: never;\n    variant: \"decorative\";\n});\n",
