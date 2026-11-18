@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Badge } from "@stll/ui/badge";
 import { TriangleAlertIcon } from "@stll/ui/icons";
 import {
   Select,
@@ -12,6 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
+
+import { SettingsRow, settingsRowIds } from "./settings-layout";
 
 export type DictationDestinationValue = "local" | "cloud";
 
@@ -53,7 +57,8 @@ const DESTINATIONS = [
 
 /** Where dictation is transcribed: this computer (the default) or stella AI,
  *  with a model the organization's region offers. stella AI is offered only
- *  when the region has a model, and says why otherwise. */
+ *  when the region has a model, and says why otherwise. Renders the rows of
+ *  the Transcription group. */
 export const DictationDestination = ({
   cloudModel,
   destination,
@@ -133,9 +138,8 @@ export const DictationDestination = ({
       : null;
   const chosen =
     modelChoice?.models.find(({ id }) => id === modelChoice.selected) ?? null;
-  const selectedOutsideRegion = chosen?.outsideRegion === true;
   /** The name, who runs it, whether it leaves the region, and whether its
-   *  provider keeps the audio. */
+   *  provider keeps the audio: what the list says about each model. */
   const modelLabel = ({
     displayName,
     outsideRegion,
@@ -150,74 +154,68 @@ export const DictationDestination = ({
     ]
       .filter((part): part is string => typeof part === "string" && part !== "")
       .join(" · ");
+  const destinationIds = settingsRowIds("dictation-destination");
+  const modelIds = settingsRowIds("dictation-cloud-model");
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium" id="dictation-destination-label">
-            {t("title")}
-          </p>
-          {destination === "cloud" && (
-            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t("cloudDescription")}
-            </p>
-          )}
-          {reason !== null && (
-            <p
-              className="text-muted-foreground mt-1 text-sm leading-relaxed"
-              role="note"
-            >
-              {reason}
-            </p>
-          )}
-        </div>
-        <Select
-          onValueChange={(value) => {
-            if (value === "local" || value === "cloud") {
-              onDestinationChange(value);
+    <>
+      <SettingsRow
+        description={
+          <>
+            {destination === "cloud"
+              ? t("cloudDescription")
+              : t("localDescription")}
+            {reason === null ? null : (
+              <span className="mt-0.5 block" role="note">
+                {reason}
+              </span>
+            )}
+          </>
+        }
+        id="dictation-destination"
+        title={t("title")}
+      >
+        <ToggleGroup
+          aria-describedby={destinationIds.description}
+          aria-labelledby={destinationIds.label}
+          onValueChange={(values) => {
+            // The pressed item can be clicked off; one is always chosen.
+            const next = values.at(0);
+            if (next !== undefined && next !== destination) {
+              onDestinationChange(next);
             }
           }}
-          value={destination}
+          size="sm"
+          value={[destination]}
         >
-          <SelectTrigger
-            aria-labelledby="dictation-destination-label"
-            className="w-40"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            {DESTINATIONS.map((value) => (
-              <SelectItem
-                disabled={
-                  value === "cloud" &&
-                  offered === null &&
-                  destination !== "cloud"
-                }
-                key={value}
-                value={value}
-              >
-                {label(value)}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </div>
+          {DESTINATIONS.map((value) => (
+            <ToggleGroupItem
+              disabled={
+                value === "cloud" && offered === null && destination !== "cloud"
+              }
+              key={value}
+              value={value}
+            >
+              {label(value)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingsRow>
       {modelChoice !== null && (
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium" id="dictation-cloud-model-label">
-              {t("model")}
-            </p>
-            {selectedOutsideRegion ? (
-              <p
-                className="text-muted-foreground mt-1 text-sm leading-relaxed"
-                role="note"
-              >
-                {t("outsideRegionNote")}
-              </p>
-            ) : null}
-          </div>
+        <SettingsRow
+          description={
+            chosen === null ? null : <DictationModelTags model={chosen} />
+          }
+          footer={
+            chosen?.retainsData === true ? (
+              <RetentionWarning
+                provider={chosen.provider ?? chosen.displayName}
+              />
+            ) : null
+          }
+          id="dictation-cloud-model"
+          title={t("model")}
+        >
           <Select
             onValueChange={(value) => {
               // Compared with what is stored, not what is shown: the shown
@@ -228,11 +226,13 @@ export const DictationDestination = ({
             }}
             value={modelChoice.selected}
           >
-            <SelectTrigger
-              aria-labelledby="dictation-cloud-model-label"
-              className="w-64"
-            >
-              <SelectValue placeholder={t("chooseModel")} />
+            <SelectTrigger aria-labelledby={modelIds.label} className="w-44">
+              <SelectValue>
+                {(value: unknown) =>
+                  modelChoice.models.find(({ id }) => id === value)
+                    ?.displayName ?? t("chooseModel")
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectPopup>
               {modelChoice.models.map((model) => (
@@ -242,28 +242,45 @@ export const DictationDestination = ({
               ))}
             </SelectPopup>
           </Select>
-        </div>
+        </SettingsRow>
       )}
-      {chosen?.retainsData === true ? (
-        <div
-          className="border-destructive/36 bg-destructive/10 text-destructive flex gap-3 rounded-lg border p-3"
-          role="alert"
-        >
-          <TriangleAlertIcon aria-hidden className="mt-0.5 size-5 shrink-0" />
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-sm font-semibold">
-              {t("retainsDataTitle", {
-                provider: chosen.provider ?? chosen.displayName,
-              })}
-            </p>
-            <p className="text-sm leading-relaxed">
-              {t("retainsDataWarning", {
-                provider: chosen.provider ?? chosen.displayName,
-              })}
-            </p>
-          </div>
-        </div>
+    </>
+  );
+};
+
+/** Who runs the chosen model, whether it leaves the region, and whether its
+ *  provider keeps the audio. */
+const DictationModelTags = ({ model }: { model: CloudModel }) => {
+  const t = useTranslations("dictation.destination");
+  return (
+    <span className="mt-1 flex flex-wrap gap-1.5">
+      {model.provider ? <Badge>{model.provider}</Badge> : null}
+      {model.outsideRegion === true ? (
+        <Badge>{t("outsideRegion")}</Badge>
       ) : null}
+      {model.retainsData === true ? (
+        <Badge dot tone="warning">
+          {t("retainsData")}
+        </Badge>
+      ) : null}
+    </span>
+  );
+};
+
+/** The page's one accent: the chosen model's provider keeps what is
+ *  dictated. */
+const RetentionWarning = ({ provider }: { provider: string }) => {
+  const t = useTranslations("dictation.destination");
+  return (
+    <div
+      className="border-warning/32 bg-warning/8 text-warning-foreground flex gap-2.5 rounded-lg border px-3 py-2.5"
+      role="alert"
+    >
+      <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
+      <div className="flex min-w-0 flex-col gap-0.5 text-xs text-pretty">
+        <p className="font-semibold">{t("retainsDataTitle", { provider })}</p>
+        <p>{t("retainsDataWarning", { provider })}</p>
+      </div>
     </div>
   );
 };

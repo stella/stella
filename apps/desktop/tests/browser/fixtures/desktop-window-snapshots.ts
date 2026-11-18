@@ -1,4 +1,5 @@
 import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
+import type { DictationSnapshot as DictationSettingSnapshot } from "../../../src/mainview/DictationSetting";
 import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
 import type { PermissionsSnapshot } from "../../../src/shared/permissions";
 import type {
@@ -50,6 +51,56 @@ export const DICTATION_READY = {
   phase: "idle",
   shortcutTaken: false,
 } as const satisfies DictationSnapshot;
+
+/** Dictation in Settings at its tallest: stella AI with a model whose
+ *  provider keeps the audio, cleanup with both context switches, and the
+ *  speech model still on this computer. */
+export const SETTINGS_DICTATION = {
+  available: true,
+  cleanup: true,
+  cloudAvailable: true,
+  cloudModel: "elevenlabs-direct/scribe-v3",
+  destination: "cloud",
+  enabled: true,
+  failure: null,
+  failureKeptInHistory: false,
+  keepsInHistory: true,
+  keys: { code: "Space", modifiers: ["control", "alt"] },
+  language: {
+    choice: "auto",
+    inferred: ["cs", "en"],
+    supported: ["cs", "en", "sk"],
+  },
+  model: { status: "ready" },
+  modelBytes: 740_363_168,
+  phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
+  shortcutTaken: false,
+  textBeforeCursorAvailable: true,
+} as const satisfies DictationSettingSnapshot;
+
+/** The region's stella AI transcription models. */
+export const CLOUD_MODELS = {
+  defaultModelId: "mistralai/voxtral-mini-transcribe",
+  models: [
+    {
+      displayName: "Voxtral Mini Transcribe",
+      id: "mistralai/voxtral-mini-transcribe",
+      outsideRegion: false,
+      provider: "Mistral AI",
+      retainsData: false,
+    },
+    {
+      displayName: "Scribe v3",
+      id: "elevenlabs-direct/scribe-v3",
+      outsideRegion: true,
+      provider: "ElevenLabs",
+      retainsData: true,
+    },
+  ],
+  unavailable: null,
+};
 
 export const ACCOUNT = {
   account: {

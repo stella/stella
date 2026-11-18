@@ -1803,7 +1803,11 @@ test("foreground Settings interactions record use without passing event data", a
   await installNativeBoundary(page, connected(), { settings: true });
   await page.goto("/#general");
   await page
-    .getByRole("tab", { name: enMessages.settings.general, exact: true })
+    .getByRole("navigation")
+    .getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    })
     .click();
   await expect
     .poll(async () =>
