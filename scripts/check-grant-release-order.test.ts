@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  censusColumnGrants,
   findPrematureRequiredGrants,
+  findUndeclaredNewGrants,
   formatPrematureRequiredGrant,
+  formatUndeclaredNewGrant,
   relativeImports,
   selectProductionTag,
   staleAllowances,
@@ -94,6 +97,97 @@ describe("findPrematureRequiredGrants", () => {
         allowances,
       ),
     ).toEqual(allowances);
+  });
+});
+
+describe("findUndeclaredNewGrants", () => {
+  const releasedGranted = new Set(["case_law_citations.id"]);
+
+  test("a new grant of a column the release never declared fails, even if permitted at HEAD", () => {
+    expect(
+      findUndeclaredNewGrants(
+        new Set(["case_law_citations.id", "case_law_citations.kind"]),
+        releasedGranted,
+        RELEASED,
+      ),
+    ).toEqual([{ relation: "case_law_citations", column: "kind" }]);
+  });
+
+  test("a new grant of a column the release permits passes", () => {
+    expect(
+      findUndeclaredNewGrants(
+        new Set(["case_law_citations.id", "case_law_citations.cited_part"]),
+        releasedGranted,
+        RELEASED,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a grant the release already held, or a revoked grant, passes", () => {
+    expect(
+      findUndeclaredNewGrants(releasedGranted, releasedGranted, RELEASED),
+    ).toEqual([]);
+    expect(
+      findUndeclaredNewGrants(new Set(), releasedGranted, RELEASED),
+    ).toEqual([]);
+  });
+
+  test("an allowance excuses only its column", () => {
+    expect(
+      findUndeclaredNewGrants(
+        new Set(["case_law_judges.id", "case_law_judges.slug"]),
+        releasedGranted,
+        RELEASED,
+        [
+          {
+            relation: "case_law_judges",
+            column: "id",
+            pr: 1,
+            reason: "fixture",
+          },
+        ],
+      ),
+    ).toEqual([{ relation: "case_law_judges", column: "slug" }]);
+  });
+
+  test("the failure names the column and the declare-first fix", () => {
+    const message = formatUndeclaredNewGrant(
+      { relation: "case_law_citations", column: "kind" },
+      "v1.2.3",
+    );
+    expect(message).toContain("case_law_citations.kind");
+    expect(message).toContain(
+      'Declare it as "permitted" without the grant first',
+    );
+  });
+});
+
+describe("censusColumnGrants", () => {
+  const census = {
+    roles: [
+      {
+        role: "stella_public_law_reader",
+        privileges: [
+          "column:public.case_law_citations.id:SELECT:EFFECTIVE",
+          "column:public.case_law_citations.id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
+          "table:public.case_law_citations:RLS_ENABLED:true",
+        ],
+      },
+      {
+        role: "stella_ingestion",
+        privileges: ["column:public.case_law_sources.cursor:SELECT:EFFECTIVE"],
+      },
+    ],
+  };
+
+  test("reads the effective column grants of the governed role only", () => {
+    expect([...censusColumnGrants(census)]).toEqual(["case_law_citations.id"]);
+  });
+
+  test("a census without the role fails instead of reading as no grants", () => {
+    expect(() => censusColumnGrants({ roles: [] })).toThrow(
+      "has no privileges for stella_public_law_reader",
+    );
   });
 });
 

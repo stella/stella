@@ -1,22 +1,35 @@
 import { panic } from "better-result";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 /**
- * A public-law column grant must reach production as `permitted` before any
- * release declares it `required`.
+ * A public-law column grant reaches production as a declaration before it
+ * reaches it as a grant: one release declares the column `permitted` with no
+ * grant, and a later one adds the grant migration and may make it `required`.
  *
  * The runtime grant attestation holds the reader role to the running
  * release's own map and reads every grant outside it as over-privilege. A
  * migration that grants a column the production release has never declared
- * stops that release's tasks from starting while the rollout is in flight.
- * Production is promoted from final releases, so a column first permitted in
- * a release candidate still reaches production in one step: the comparison
- * is against the newest final release tag, never a candidate.
+ * stops that release's tasks from starting while the rollout is in flight,
+ * whether HEAD calls the column `required` or `permitted`. Production is
+ * promoted from final releases, so a column first declared in a release
+ * candidate still reaches production in one step: the comparison is against
+ * the newest final release tag, never a candidate.
  */
 export const GRANT_MAP_ENTRY = "apps/api/src/lib/public-law-relations.ts";
 export const GRANT_MAP_EXPORT = "PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION";
+/** What the migrations grant, regenerated from a migrated database. */
+export const ROLE_PRIVILEGE_CENSUS =
+  "apps/api/src/lib/db/role-privilege-census.json";
+/** The role the grant map governs. */
+export const GRANT_MAP_ROLE = "stella_public_law_reader";
 
 const LABEL = "grant-release-order";
 const PRODUCTION_TAG = /^v(\d+)\.(\d+)\.(\d+)$/u;
@@ -29,13 +42,14 @@ export type ColumnGrants = Readonly<
 export type GrantReleaseOrderAllowance = {
   relation: string;
   column: string;
-  /** The pull request that made the column required early. */
+  /** The pull request that made or granted the column early. */
   pr: number;
   reason: string;
 };
 
 /**
- * Required columns accepted without a production release that permits them.
+ * Columns accepted as required or granted without a production release that
+ * declares them.
  * Each entry names its pull request and why it is safe; an entry goes away
  * once a production release carries the column.
  */
@@ -43,6 +57,15 @@ export const GRANT_RELEASE_ORDER_ALLOWANCES: readonly GrantReleaseOrderAllowance
   [];
 
 export type GrantColumn = { relation: string; column: string };
+
+const compareGrantColumns = (left: GrantColumn, right: GrantColumn): number => {
+  const leftKey = `${left.relation}.${left.column}`;
+  const rightKey = `${right.relation}.${right.column}`;
+  if (leftKey === rightKey) {
+    return 0;
+  }
+  return leftKey < rightKey ? -1 : 1;
+};
 
 /** Columns required at HEAD that the production release does not declare. */
 export const findPrematureRequiredGrants = (
@@ -64,14 +87,75 @@ export const findPrematureRequiredGrants = (
         )
         .map(([column]) => ({ relation, column })),
     )
-    .toSorted((left, right) => {
-      const leftKey = `${left.relation}.${left.column}`;
-      const rightKey = `${right.relation}.${right.column}`;
-      if (leftKey === rightKey) {
-        return 0;
-      }
-      return leftKey < rightKey ? -1 : 1;
-    });
+    .toSorted(compareGrantColumns);
+};
+
+const CENSUS_COLUMN_GRANT =
+  /^column:public\.([a-z0-9_]+)\.([a-z0-9_]+):SELECT:EFFECTIVE$/u;
+
+/**
+ * The `relation.column` pairs a census says `role` can select. Throws when
+ * the census has no entry for the role, so a renamed role cannot read as a
+ * role without grants.
+ */
+export const censusColumnGrants = (
+  census: unknown,
+  role: string = GRANT_MAP_ROLE,
+): Set<string> => {
+  const roles =
+    typeof census === "object" && census !== null && "roles" in census
+      ? census.roles
+      : undefined;
+  const entry = Array.isArray(roles)
+    ? roles.find(
+        (candidate: unknown) =>
+          typeof candidate === "object" &&
+          candidate !== null &&
+          "role" in candidate &&
+          candidate.role === role,
+      )
+    : undefined;
+  const privileges: unknown =
+    typeof entry === "object" && entry !== null && "privileges" in entry
+      ? entry.privileges
+      : undefined;
+  if (!Array.isArray(privileges)) {
+    return panic(`the role privilege census has no privileges for ${role}`);
+  }
+  return new Set(
+    privileges.flatMap((privilege: unknown) => {
+      const match =
+        typeof privilege === "string"
+          ? CENSUS_COLUMN_GRANT.exec(privilege)
+          : null;
+      return match === null ? [] : [`${match[1]}.${match[2]}`];
+    }),
+  );
+};
+
+/**
+ * Columns HEAD's migrations grant that the production release neither
+ * granted nor declares: that release would read the new grant as
+ * over-privilege, `permitted` at HEAD or not.
+ */
+export const findUndeclaredNewGrants = (
+  headGranted: ReadonlySet<string>,
+  releasedGranted: ReadonlySet<string>,
+  released: ColumnGrants,
+  allowances: readonly GrantReleaseOrderAllowance[] = [],
+): GrantColumn[] => {
+  const allowed = new Set(
+    allowances.map(({ relation, column }) => `${relation}.${column}`),
+  );
+  return [...headGranted]
+    .filter((key) => !releasedGranted.has(key) && !allowed.has(key))
+    .flatMap((key) => {
+      const [relation = "", column = ""] = key.split(".");
+      return released[relation]?.[column] === undefined
+        ? [{ relation, column }]
+        : [];
+    })
+    .toSorted(compareGrantColumns);
 };
 
 /** Allowances whose column the production release now declares. */
@@ -89,6 +173,13 @@ export const formatPrematureRequiredGrant = (
 ): string =>
   `${LABEL}: ${relation}.${column} is "required" in ${GRANT_MAP_EXPORT}, but production release ${tag} does not declare it. ` +
   `Ship it as "permitted" first, and switch it to "required" in a pull request after the next production release.`;
+
+export const formatUndeclaredNewGrant = (
+  { relation, column }: GrantColumn,
+  tag: string,
+): string =>
+  `${LABEL}: ${relation}.${column} is newly granted to ${GRANT_MAP_ROLE} (${ROLE_PRIVILEGE_CENSUS}), but production release ${tag} does not declare it in ${GRANT_MAP_EXPORT}. ` +
+  `Declare it as "permitted" without the grant first, and add the grant migration in a pull request after the next production release.`;
 
 const compareVersionsDescending = (left: string, right: string): number => {
   const leftParts = PRODUCTION_TAG.exec(left)?.slice(1).map(Number) ?? [];
@@ -233,6 +324,14 @@ const releasedGrantMap = async (tag: string): Promise<ColumnGrants> => {
   }
 };
 
+const releasedCensusGrants = (tag: string): Set<string> => {
+  const source = git(["show", `${tag}:${ROLE_PRIVILEGE_CENSUS}`]);
+  // A release before the census existed is judged by its map alone.
+  return source === undefined
+    ? new Set()
+    : censusColumnGrants(JSON.parse(source));
+};
+
 const main = async (): Promise<number> => {
   if (git(["rev-parse", "--is-shallow-repository"])?.trim() !== "false") {
     console.error(
@@ -272,12 +371,29 @@ const main = async (): Promise<number> => {
   for (const grant of premature) {
     console.error(formatPrematureRequiredGrant(grant, tag));
   }
-  if (premature.length === 0) {
+  const ungranted = findUndeclaredNewGrants(
+    censusColumnGrants(
+      JSON.parse(
+        readFileSync(
+          path.join(REPOSITORY_ROOT, ROLE_PRIVILEGE_CENSUS),
+          "utf-8",
+        ),
+      ),
+    ),
+    releasedCensusGrants(tag),
+    released,
+    GRANT_RELEASE_ORDER_ALLOWANCES,
+  );
+  for (const grant of ungranted) {
+    console.error(formatUndeclaredNewGrant(grant, tag));
+  }
+  const failures = premature.length + ungranted.length;
+  if (failures === 0) {
     console.log(
-      `${LABEL}: every required column grant is declared by production release ${tag}`,
+      `${LABEL}: every required or newly granted column is declared by production release ${tag}`,
     );
   }
-  return premature.length === 0 ? 0 : 1;
+  return failures === 0 ? 0 : 1;
 };
 
 if (import.meta.main) {
