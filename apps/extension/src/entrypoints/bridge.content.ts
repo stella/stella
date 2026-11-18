@@ -6,6 +6,7 @@ import {
   type BrowserExtensionResponse,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
+  parseBrowserWebPeerVersion,
 } from "@stll/api-contract/browser-control";
 
 import {
@@ -15,17 +16,48 @@ import {
 
 export default defineContentScript({
   matches: [...STELLA_CONTENT_SCRIPT_MATCHES],
-  main() {
+  main(ctx) {
     if (trustedStellaOriginFromUrl(window.location.href) === null) {
       return;
     }
-    window.addEventListener("message", ({ data, origin, source }) => {
-      if (source !== window || origin !== window.location.origin) {
+    const announce = () => {
+      window.postMessage(
+        {
+          allSitesGranted: false,
+          controlledTabId: null,
+          controllerId: null,
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          requestId: "extension-ready",
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "pong",
+        } satisfies BrowserExtensionResponse,
+        window.location.origin,
+      );
+    };
+
+    // Registered through the context, so a script left behind when the
+    // extension is updated or disabled stops answering this tab.
+    ctx.addEventListener(window, "message", ({ data, origin, source }) => {
+      if (
+        !ctx.isValid ||
+        source !== window ||
+        origin !== window.location.origin
+      ) {
         return;
       }
 
       const request = parseBrowserExtensionRequest(data);
       if (!request) {
+        // A tab on another protocol version hears this one, so it shows an
+        // update or a reload rather than an install. Same-version requests
+        // never get here, so the answer cannot loop.
+        const webVersion = parseBrowserWebPeerVersion(data);
+        if (
+          webVersion !== null &&
+          webVersion !== BROWSER_CONTROL_PROTOCOL_VERSION
+        ) {
+          announce();
+        }
         return;
       }
 
@@ -40,17 +72,6 @@ export default defineContentScript({
       window.postMessage(response, window.location.origin);
     });
 
-    window.postMessage(
-      {
-        allSitesGranted: false,
-        controlledTabId: null,
-        controllerId: null,
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        requestId: "extension-ready",
-        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
-        type: "pong",
-      } satisfies BrowserExtensionResponse,
-      window.location.origin,
-    );
+    announce();
   },
 });
