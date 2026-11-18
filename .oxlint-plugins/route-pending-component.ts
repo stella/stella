@@ -31,6 +31,7 @@
 //   `.pending` module, where its shell lives.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import path from "node:path";
 
 import exceptionList from "./route-pending-component-exceptions.json" with { type: "json" };
 import policy from "./route-pending-component-policy.json" with { type: "json" };
@@ -160,13 +161,44 @@ const isDefaultPending = (value) =>
 const stripExtension = (source: string) =>
   source.replace(/\.(?:tsx?|jsx?)$/u, "").replace(/\.fixture$/u, "");
 
+// An import or re-export erased at build time: `import type`, `export type`,
+// or one whose every specifier is marked `type`.
 const isTypeOnlyImport = (node) =>
   node.importKind === "type" ||
+  node.exportKind === "type" ||
   (node.specifiers?.length > 0 &&
     node.specifiers.every(
       (specifier) =>
-        specifier.type === "ImportSpecifier" && specifier.importKind === "type",
+        (specifier.type === "ImportSpecifier" &&
+          specifier.importKind === "type") ||
+        (specifier.type === "ExportSpecifier" &&
+          specifier.exportKind === "type"),
     ));
+
+const WEB_SOURCE_ROOT = "apps/web/src/";
+
+// Whether `source` names the `.pending` module beside the page at
+// `filename`: `./x.pending`, or the same file through the `@/` alias. A
+// path into another directory with the same file name is another page's.
+const isSiblingPending = (
+  filename: string,
+  source: string,
+  stem: string,
+): boolean => {
+  const bare = stripExtension(source);
+  const sibling = `${stem}.pending`;
+  if (bare.startsWith(".")) {
+    return path.posix.normalize(bare) === sibling;
+  }
+  const rootAt = filename.lastIndexOf(`/${WEB_SOURCE_ROOT}`);
+  if (!bare.startsWith("@/") || rootAt === -1) {
+    return false;
+  }
+  const directory = path.posix.dirname(
+    filename.slice(rootAt + WEB_SOURCE_ROOT.length + 1),
+  );
+  return path.posix.join(directory, sibling) === bare.slice("@/".length);
+};
 
 const isPendingSafeSource = (source: string) => {
   const bare = stripExtension(source);
@@ -373,7 +405,6 @@ const pendingModuleImports = {
     const checkSource = (node) => {
       if (
         isTypeOnlyImport(node) ||
-        node.exportKind === "type" ||
         isPendingSafeSource(node.source.value) ||
         importsOnlySafeNames(node)
       ) {
@@ -459,7 +490,11 @@ const pageModuleShell = {
         if (
           stem === null ||
           node.importKind === "type" ||
-          !stripExtension(node.source.value).endsWith(`/${stem}.pending`)
+          !isSiblingPending(
+            filenameForContext(context),
+            node.source.value,
+            stem,
+          )
         ) {
           return;
         }

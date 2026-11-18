@@ -181,6 +181,7 @@ test("an aliased URL hook and a re-export are checked like the originals", async
         'export * from "@tanstack/react-query";',
         'export { RowsPending } from "./rows.pending";',
         'export type { Props } from "@stll/ui/menu";',
+        'export { type MenuProps } from "@stll/ui/menu";',
       ].join("\n"),
     ),
   ).toEqual([3, 4, 5]);
@@ -217,12 +218,42 @@ test("a page module that imports and renders its sibling shell passes", async ()
     await lintSingleRule(
       "page-module-shell",
       [
-        'import { ChatIndexShell } from "@/routes/_protected.chat/-components/chat-index.pending";',
+        'import { ChatIndexShell } from "./chat-index.pending";',
         "export const ChatIndexPage = () => <ChatIndexShell rows={null} />;",
       ].join("\n"),
       { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
     ),
   ).toEqual([]);
+});
+
+// The `@/` alias names the same sibling; another directory's module of the
+// same name is another page's shell.
+test("the sibling shell is the same file through either import form", async () => {
+  const nestedPage =
+    "apps/web/src/routes/_protected.chat/-components/chat-index.page.tsx";
+  const sources = [
+    "@/routes/_protected.chat/-components/chat-index.pending",
+    "@/routes/law/-components/chat-index.pending",
+    "../../law/-components/chat-index.pending",
+  ];
+  expect(
+    await Promise.all(
+      sources.map(
+        async (source) =>
+          await lintSingleRule(
+            "page-module-shell",
+            [
+              `import { ChatIndexShell } from "${source}";`,
+              "export const ChatIndexPage = () => <ChatIndexShell />;",
+            ].join("\n"),
+            { plugin: PLUGIN, sourcePath: nestedPage },
+          ),
+      ),
+    ),
+  ).toEqual([[], [1], [1]]);
+});
+
+test("a page module that renders another module's shell fails", async () => {
   expect(
     await lintSingleRule(
       "page-module-shell",

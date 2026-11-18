@@ -852,12 +852,9 @@ test("a site that moved with its file keeps its committed entry", () => {
     "apps/web/src/routes/chat.tsx:Chat:useMutation:mutation": "Pending.",
     "apps/web/src/routes/chat.tsx:Route/loader:prefetch:reader": "Pending.",
   };
-  const moved = followMovedFiles(
-    committed,
-    new Map([
-      ["apps/web/src/routes/-chat.page.tsx", "apps/web/src/routes/chat.tsx"],
-    ]),
-  );
+  const movedFrom = new Map([
+    ["apps/web/src/routes/-chat.page.tsx", "apps/web/src/routes/chat.tsx"],
+  ]);
   const recorded = {
     "apps/web/src/routes/-chat.page.tsx:Chat:useMutation:mutation": "Pending.",
     "apps/web/src/routes/chat.tsx:Route/loader:prefetch:reader": "Pending.",
@@ -868,6 +865,11 @@ test("a site that moved with its file keeps its committed entry", () => {
     reason: "Pending.",
     disposition: "legacy" as const,
   }));
+  const moved = followMovedFiles(
+    committed,
+    movedFrom,
+    new Set(Object.keys(recorded)),
+  );
   expect(
     checkBaseline({ observed, recorded, committed: moved, write: false }).ok,
   ).toBe(true);
@@ -881,9 +883,38 @@ test("a site that moved with its file keeps its committed entry", () => {
       followMovedFiles(
         { "apps/web/src/other.tsx:X:useQuery:reader": "Pending." },
         new Map([["apps/web/src/-x.page.tsx", "apps/web/src/routes/chat.tsx"]]),
+        new Set(["apps/web/src/-x.page.tsx:X:useQuery:reader"]),
       ),
     ),
   ).toEqual(["apps/web/src/other.tsx:X:useQuery:reader"]);
+});
+
+test("a copied site that stays in both files is funded once", () => {
+  const committed = {
+    "apps/web/src/routes/chat.tsx:Chat:useMutation:mutation": "Pending.",
+  };
+  const both = [
+    "apps/web/src/routes/-chat.page.tsx:Chat:useMutation:mutation",
+    "apps/web/src/routes/chat.tsx:Chat:useMutation:mutation",
+  ];
+  const moved = followMovedFiles(
+    committed,
+    new Map([
+      ["apps/web/src/routes/-chat.page.tsx", "apps/web/src/routes/chat.tsx"],
+    ]),
+    new Set(both),
+  );
+  expect(moved).toEqual(committed);
+  const recorded = Object.fromEntries(both.map((id) => [id, "Pending."]));
+  const observed = both.map((id) => ({
+    id,
+    file: id.slice(0, id.indexOf(":")),
+    reason: "Pending.",
+    disposition: "legacy" as const,
+  }));
+  expect(
+    checkBaseline({ observed, recorded, committed: moved, write: false }).ok,
+  ).toBe(false);
 });
 
 test("check mode fails for new and stale entries", () => {
