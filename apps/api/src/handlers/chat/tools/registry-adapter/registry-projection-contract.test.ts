@@ -2175,6 +2175,7 @@ const CONTRACT_CORPUS = {
               windowDisposition: "effective" as const,
               windowDispositionBasis: null,
               text: "§ 1729\nSnoubenci...",
+              governingText: [],
             },
           ],
           nextCursor: null,

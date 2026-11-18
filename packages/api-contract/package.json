@@ -197,6 +197,8 @@
     "./us-courts": "./src/us-courts.ts",
     "./time-entries": "./src/time-entries.ts",
     "./us-reporter-citation": "./src/us-reporter-citation.ts",
+    "./decision-reporter-grammar": "./src/decision-reporter-grammar.ts",
+    "./cz-ns-collection-citation": "./src/cz-ns-collection-citation.ts",
     "./user-file-url": "./src/user-file-url.ts",
     "./signals": "./src/signals.ts",
     "./spot": "./src/spot.ts",

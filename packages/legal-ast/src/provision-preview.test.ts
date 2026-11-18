@@ -2,10 +2,16 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "./document-ast.js";
+import {
+  section5Filed,
+  section5Text,
+  section5Unfiled,
+} from "./fixtures/cz-435-2004-section-5.js";
 import { section15LetterBPoint1Blocks } from "./fixtures/sk-595-2003-section-15.js";
 import {
   blocksNestedUnder,
   enclosingHeadingAnchor,
+  governingWording,
   provisionBlocks,
   provisionHeadingAnchor,
   provisionHeadingChain,
@@ -414,5 +420,71 @@ describe("provisionHeadingChain", () => {
 
   test("has no chain for an anchor the document does not carry", () => {
     expect(provisionHeadingChain(czech(nested), "par_9")).toBeNull();
+  });
+});
+
+describe("the wording that governs a cited letter", () => {
+  const read = (stream: readonly Block[], citedAnchorId: string) => {
+    const target = { provisionAnchorId: "par_5", citedAnchorId };
+    return {
+      text: (provisionPreviewBlocks(czech(stream), target) ?? []).map(
+        (block) => block.plainText,
+      ),
+      governing: governingWording(czech(stream), target).map(
+        ({ block, position }) => [position, block.plainText],
+      ),
+    };
+  };
+
+  test("a closing sentence filed under the letter is read with it", () => {
+    const letter = read(section5Filed, "par_5-pism_e");
+    expect(letter.text.at(-1)).toBe(section5Text.closing);
+    expect(letter.governing).toEqual([["lead-in", section5Text.leadIn]]);
+  });
+
+  test("a sibling letter is neither given nor governed by it", () => {
+    for (const anchor of ["par_5-pism_d", "par_5-pism_f"]) {
+      const sibling = read(section5Filed, anchor);
+      expect(sibling.text).not.toContain(section5Text.closing);
+      expect(sibling.governing).toEqual([["lead-in", section5Text.leadIn]]);
+    }
+  });
+
+  test("a point is governed by the letter it is in and by its closing sentence", () => {
+    expect(read(section5Filed, "par_5-pism_e-bod_2").governing).toEqual([
+      ["lead-in", section5Text.leadIn],
+      [
+        "lead-in",
+        section5Filed.find(({ anchorId }) => anchorId === "par_5-pism_e")
+          ?.plainText ?? panic("No letter e)"),
+      ],
+      ["closing", section5Text.closing],
+    ]);
+  });
+
+  test("an unfiled closing sentence is surfaced beside the letter it follows", () => {
+    // Rows stored before the parser filed the sentence under its letter end
+    // the letter's range at point 3; the sentence must still reach a reader
+    // of the letter rather than vanish.
+    const letter = read(section5Unfiled, "par_5-pism_e");
+    expect(letter.text).not.toContain(section5Text.closing);
+    expect(letter.governing).toEqual([
+      ["lead-in", section5Text.leadIn],
+      ["closing", section5Text.closing],
+    ]);
+    for (const anchor of ["par_5-pism_d", "par_5-pism_f"]) {
+      expect(read(section5Unfiled, anchor).governing).toEqual([
+        ["lead-in", section5Text.leadIn],
+      ]);
+    }
+  });
+
+  test("a whole provision is governed by nothing outside it", () => {
+    expect(
+      governingWording(czech(section5Filed), {
+        provisionAnchorId: "par_5",
+        citedAnchorId: "par_5",
+      }),
+    ).toEqual([]);
   });
 });

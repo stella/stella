@@ -3,7 +3,11 @@ import type * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
-import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  caseLawPageOutcome,
+  type CaseLawPagePhases,
+} from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
 import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
@@ -134,8 +138,18 @@ const projectBucket = (bucket: FacetBucket) => ({
 });
 
 // Both backends pass their entire successful envelope through this boundary.
+/**
+ * A search answer before projection: everything the response carries except
+ * its pagination outcome, which is derived here from every phase the search
+ * ran. No producer states `complete` itself; a page is complete only when
+ * `caseLawPageOutcome` says every phase let it be.
+ */
+export type CaseLawSearchAnswer = Omit<SearchResponse, "paginationOutcome"> & {
+  phases: CaseLawPagePhases;
+};
+
 export const projectCaseLawSearchResponse = (
-  response: SearchResponse,
+  response: CaseLawSearchAnswer,
   headnoteMaxChars: DecisionHeadnoteMaxChars = LIMITS.caseLawHeadnoteMaxChars,
 ): SearchResponse => ({
   hits: response.hits
@@ -196,7 +210,7 @@ export const projectCaseLawSearchResponse = (
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),
-  paginationOutcome: response.paginationOutcome,
+  paginationOutcome: caseLawPageOutcome(response.phases),
   pageReach: response.pageReach,
   queryUsed: truncateTextBytes(response.queryUsed, bytes.queryUsed),
   warnings: response.warnings

@@ -8,7 +8,7 @@ import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-scheme
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { readProvision } from "@/api/handlers/legislation/provision-text";
 import { projectProvisionHistoryItem } from "@/api/handlers/legislation/reader-response";
 import {
   selectWorkKey,
@@ -187,7 +187,7 @@ export const readProvisionHistoryHandler = async ({
     items: versions,
     limit: LIMITS.legislationProvisionReadConcurrency,
     operation: async (version) =>
-      extractProvisionText(
+      readProvision(
         {
           blocks: await readVersionBlocks({
             surface,
@@ -214,7 +214,7 @@ export const readProvisionHistoryHandler = async ({
       expressionKind: version.expressionKind,
       windowDisposition: version.windowDisposition,
       windowDispositionBasis: version.windowDispositionBasis,
-      text: texts[index] ?? null,
+      reading: texts[index] ?? null,
     })),
     limit,
     cursorForItem: (item) =>
@@ -224,8 +224,19 @@ export const readProvisionHistoryHandler = async ({
       ]),
   });
 
-  const items = page.items.flatMap(({ text, ...item }) =>
-    text === null ? [] : [projectProvisionHistoryItem({ ...item, text })],
+  const items = page.items.flatMap(({ reading, ...item }) =>
+    reading === null
+      ? []
+      : [
+          projectProvisionHistoryItem({
+            ...item,
+            text: reading.text,
+            governingText: reading.governing,
+            ...(reading.governingTruncated
+              ? { governingTextTruncated: true as const }
+              : {}),
+          }),
+        ],
   );
 
   // Only a first page can establish that no consolidation of the Work carries

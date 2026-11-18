@@ -134,6 +134,9 @@ const sendMessage = createSendMessage({
     webSearchProvider: null,
   }),
   localRunRuntime: { control, runBell: createLocalRunBell() },
+  // What the run's own MCP session lists is covered by
+  // local-run-skills.integration.test.ts; here the run is a stub.
+  loadLocalRunSkillTools: async () => await Promise.resolve(Result.ok([])),
   rollbackSideEffects: rollbackUnpersistedChatSideEffects,
   streamResponse: streamChatMock,
   uploadMessageFiles: uploadMessageFilesWithRollback,
