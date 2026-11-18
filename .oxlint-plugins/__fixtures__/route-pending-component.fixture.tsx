@@ -10,8 +10,8 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { LeafPendingView } from "@/routes/-route-pending-view";
 
-import { FixturePage } from "./route-pending-component.fixture.clean.page";
-import { FixturePending } from "./route-pending-component.fixture.clean.pending";
+import { FixturePage } from "./route-pending-component.fixture.shell.page.fixture";
+import { FixturePending } from "./route-pending-component.fixture.shell.pending.fixture";
 
 const LocalPage = () => null;
 

@@ -3181,7 +3181,7 @@ const config = defineConfig({
     },
     {
       files: [
-        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.clean.pending.tsx",
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.pending.fixture.tsx",
       ],
       rules: {
         "route-pending-component/pending-module-imports": "error",
@@ -3189,8 +3189,8 @@ const config = defineConfig({
     },
     {
       files: [
-        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.clean.page.tsx",
-        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.page.tsx",
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.page.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.unpaired.page.fixture.tsx",
       ],
       rules: {
         "route-pending-component/page-module-shell": "error",

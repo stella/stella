@@ -156,8 +156,9 @@ const isDefaultPending = (value) =>
   isIdentifier(value, DEFAULT_PENDING) ||
   elementName(renderedElement(value)) === DEFAULT_PENDING;
 
+// A fixture copy of a module (`x.pending.fixture.tsx`) stands for the module.
 const stripExtension = (source: string) =>
-  source.replace(/\.(?:tsx?|jsx?)$/u, "");
+  source.replace(/\.(?:tsx?|jsx?)$/u, "").replace(/\.fixture$/u, "");
 
 const isTypeOnlyImport = (node) =>
   node.importKind === "type" ||
@@ -199,9 +200,12 @@ const importsOnlySafeNames = (node) => {
   );
 };
 
-const fileStem = (context, suffix: string) => {
+// The page a `x.page.tsx` module (or its fixture copy) is named for.
+const pageStem = (context): string | null => {
   const name = filenameForContext(context).split("/").at(-1) ?? "";
-  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : null;
+  return (
+    /^(?<stem>.+)\.page(?:\.fixture)?\.tsx$/u.exec(name)?.groups?.stem ?? null
+  );
 };
 
 const routePendingComponent = {
@@ -403,14 +407,16 @@ const pageModuleShell = {
   },
   createOnce(context) {
     let importsSibling = false;
-    let program: unknown = null;
+    let firstStatement: unknown = null;
     return {
       Program(node) {
         importsSibling = false;
-        program = node;
+        // Reported on the module's first statement, where a reader looks for
+        // its imports.
+        firstStatement = node.body?.[0] ?? node;
       },
       ImportDeclaration(node) {
-        const stem = fileStem(context, ".page.tsx");
+        const stem = pageStem(context);
         if (
           stem !== null &&
           stripExtension(node.source.value).endsWith(`/${stem}.pending`)
@@ -419,10 +425,10 @@ const pageModuleShell = {
         }
       },
       "Program:exit"() {
-        const stem = fileStem(context, ".page.tsx");
-        if (stem !== null && !importsSibling && isAstNode(program)) {
+        const stem = pageStem(context);
+        if (stem !== null && !importsSibling && isAstNode(firstStatement)) {
           context.report({
-            node: program,
+            node: firstStatement,
             messageId: "missingShellImport",
             data: { stem },
           });
