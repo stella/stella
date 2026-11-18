@@ -904,9 +904,13 @@ const StickyUserTurn = ({
             data-chat-message-id={headerMessage.id}
           >
             <MessageContent className={cn(messageEdit.editing && "hidden")}>
-              <div className="group-data-[stuck=true]/sticky:hidden">
-                <MessageAttachments parts={fileParts} />
-              </div>
+              {/* Only a turn with files draws the row: an empty one would
+                  still take the bubble's gap above the text. */}
+              {fileParts.length > 0 && (
+                <div className="group-data-[stuck=true]/sticky:hidden">
+                  <MessageAttachments parts={fileParts} />
+                </div>
+              )}
               {!hasVisibleText && fileParts.length > 0 && (
                 <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
                   <PaperclipIcon aria-hidden="true" className="size-3" />
@@ -915,16 +919,17 @@ const StickyUserTurn = ({
               )}
               <div
                 className={cn(
-                  // Anchors the idle edit action, which sits in this text box
-                  // as it does in the flat layout's `EditableUserMessage`.
-                  "relative",
-                  "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
+                  // The idle edit action is anchored to the bubble itself
+                  // (`MessageContent`), as in the flat layout's
+                  // `EditableUserMessage`, so it sits outside the text.
+                  // Two of the bubble's 24px lines.
+                  "group-data-[stuck=true]/sticky:max-h-12 group-data-[stuck=true]/sticky:overflow-hidden",
                   // Fade the clipped overflow so a long pinned message dissolves
                   // instead of ending in a hard mid-glyph cut. The absolute-length
-                  // stop (~one line-height) keeps a single-line message wholly
+                  // stop (one line-height) keeps a single-line message wholly
                   // inside the opaque zone so it stays fully visible; the fade only
                   // bites once a second line overflows.
-                  "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.25rem,transparent)]",
+                  "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.5rem,transparent)]",
                 )}
               >
                 {headerMessage.parts.map((part, partIndex) =>
@@ -2456,6 +2461,9 @@ const AssistantMessageParts = ({
       return (
         <AssistantTextPart
           className={cn(
+            // An answer is read, not scanned: body text one step up from the
+            // UI's, with the line height a paragraph of prose needs.
+            assistantTextDensity === "default" && "text-base/6.5",
             assistantTextDensity === "compact" &&
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
