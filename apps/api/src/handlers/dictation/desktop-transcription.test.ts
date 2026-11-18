@@ -179,15 +179,18 @@ test("the deployment's ElevenLabs key offers Scribe v3 in its environment's regi
     provider: "ElevenLabs",
     outsideRegion: true,
   });
-  // An organization on its own AI provider pays its provider itself.
-  expect(
-    ids(
-      listModels(
-        { orgAIConfig: OWN_OPENROUTER, managedAIResidency: "eu" },
-        { deployment: withKey("eu"), labeled: true },
+  // An organization on its own AI provider still gets the direct model, on
+  // stella's key as stella usage.
+  for (const orgAIConfig of [OWN_OPENROUTER, OWN_OTHER_PROVIDER]) {
+    expect(
+      ids(
+        listModels(
+          { orgAIConfig, managedAIResidency: "eu" },
+          { deployment: withKey("eu"), labeled: true },
+        ),
       ),
-    ),
-  ).not.toContain(direct);
+    ).toContain(direct);
+  }
   // A deployment with only an ElevenLabs key offers it alone, as default.
   expect(
     listModels(eu, {
@@ -260,7 +263,7 @@ test("a key without zero retention is listed only to a desktop that warns, marke
   ).toMatchObject({ defaultModelId: null, unavailable: null });
 });
 
-test("a region without a model and a provider that does not transcribe list nothing, with the reason", () => {
+test("a region without a model lists nothing, with the reason, and an own AI provider still lists stella's models", () => {
   // Read as a plain status: the catalog may offer no model in the region.
   const offeredIn = (status: string) => status === "available";
   const usOffers = Object.values(TRANSCRIPTION_MODELS).some(({ residency }) =>
@@ -276,12 +279,13 @@ test("a region without a model and a provider that does not transcribe list noth
     defaultModelId: null,
     unavailable: "region",
   });
+  // Another AI provider of the organization's own transcribes with stella.
   expect(
     listModels({
       orgAIConfig: OWN_OTHER_PROVIDER,
       managedAIResidency: "eu",
-    }),
-  ).toEqual({ models: [], defaultModelId: null, unavailable: "provider" });
+    }).unavailable,
+  ).toBeNull();
   expect(
     listModels({
       orgAIConfig: OWN_OPENROUTER,
