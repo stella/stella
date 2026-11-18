@@ -1,11 +1,22 @@
 import { expect, test } from "bun:test";
 import { Script } from "node:vm";
+import * as v from "valibot";
 
-import { CANCEL_FAILURE_SCRIPT } from "./ci-cancellation-contract";
+import {
+  CANCEL_AFTER_JOB_POLL_MS,
+  CANCEL_AFTER_JOB_POLLS,
+  CANCEL_AFTER_JOB_SCRIPT,
+  CANCEL_AFTER_JOB_STEP,
+  CANCEL_AFTER_JOB_WORKFLOW,
+  CANCEL_FAILURE_SCRIPT,
+} from "./ci-cancellation-contract";
 
 type Job = {
+  id?: number;
   name: string;
   html_url: string;
+  status?: string;
+  runner_name?: string;
   steps?: { number: number; name: string; conclusion: string }[];
 };
 
@@ -35,6 +46,8 @@ type ExecutionOptions = {
   lookupFails?: boolean;
   lookupStalls?: boolean;
   summaryFails?: boolean;
+  runnerName?: string;
+  dispatchFails?: boolean;
 };
 
 const execute = async ({
@@ -43,7 +56,10 @@ const execute = async ({
   lookupFails = false,
   lookupStalls = false,
   summaryFails = false,
+  runnerName = "fixture-runner",
+  dispatchFails = false,
 }: ExecutionOptions = {}) => {
+  const dispatches: unknown[] = [];
   const annotations: string[] = [];
   const summaries: string[] = [];
   const events: string[] = [];
@@ -69,8 +85,12 @@ const execute = async ({
       runId: 42,
       job: "ci-tests",
     },
-    process: { env: { GITHUB_RUN_ATTEMPT: "3" } },
+    process: { env: { GITHUB_RUN_ATTEMPT: "3", RUNNER_NAME: runnerName } },
     core: {
+      notice: (message: string) => {
+        annotations.push(message);
+        events.push("notice");
+      },
       error: (message: string) => {
         annotations.push(message);
         events.push("annotation");
@@ -106,11 +126,19 @@ const execute = async ({
             cancellations.push(parameters);
             events.push("cancel");
           },
+          createWorkflowDispatch: async (parameters: unknown) => {
+            events.push("dispatch");
+            if (dispatchFails) {
+              throw new Error("fixture dispatch failure");
+            }
+            dispatches.push(parameters);
+          },
         },
       },
     },
   });
   return {
+    dispatches,
     annotations,
     summaries,
     events,
@@ -257,4 +285,297 @@ test("request contract detects a mutation dropping current-attempt identity", as
   const baseline = await execute();
   const mutated = await execute({ source });
   expect(mutated.requests).not.toEqual(baseline.requests);
+});
+
+// This job, still running on its runner, with the step that failed it.
+const ownFailedJob = (runner: string): Job => ({
+  id: 77,
+  name: "ci-tests (rest-web)",
+  html_url: "https://example.test/jobs/77",
+  status: "in_progress",
+  runner_name: runner,
+  steps: [
+    { number: 17, name: "Test web", conclusion: "failure" },
+    { number: 18, name: "Upload failed web test output", conclusion: "" },
+  ],
+});
+
+test("a job whose own step failed hands the cancellation off and keeps its failure conclusion", async () => {
+  const result = await execute({
+    runnerName: "runner-7",
+    jobs: [[ownFailedJob("runner-7")], ...pages],
+  });
+  expect(result.cancellations).toEqual([]);
+  expect(result.dispatches).toEqual([
+    {
+      owner: "fixture-owner",
+      repo: "fixture-repo",
+      workflow_id: CANCEL_AFTER_JOB_WORKFLOW,
+      ref: "main",
+      inputs: { run_id: "42", job_id: "77" },
+    },
+  ]);
+  // The failed step is named before the hand-off, as before a cancellation.
+  expect(result.summaries.at(0)).toStartWith(
+    "Merge group failed: ci-tests (rest-web) / 17: Test web (https://example.test/jobs/77);",
+  );
+  expect(result.events.indexOf("summary-written")).toBeLessThan(
+    result.events.indexOf("dispatch"),
+  );
+  expect(result.events.at(-1)).toBe("notice");
+});
+
+test("a refused hand-off, a helper job and an unknown runner cancel the run at once", async () => {
+  const refused = await execute({
+    runnerName: "runner-7",
+    jobs: [[ownFailedJob("runner-7")]],
+    dispatchFails: true,
+  });
+  expect(refused.annotations.join("\n")).toContain("could not be handed off");
+  expect(refused.events.slice(-3)).toEqual([
+    "dispatch",
+    "annotation",
+    "cancel",
+  ]);
+  expect(refused.cancellations).toHaveLength(1);
+
+  // A helper job runs after the failed job ended: its own steps passed.
+  const helper = await execute({
+    runnerName: "runner-8",
+    jobs: [
+      [
+        { ...ownFailedJob("runner-7"), status: "completed" },
+        {
+          id: 78,
+          name: "marketing-screenshots-cancel",
+          html_url: "https://example.test/jobs/78",
+          status: "in_progress",
+          runner_name: "runner-8",
+          steps: [{ number: 1, name: "Set up job", conclusion: "success" }],
+        },
+      ],
+    ],
+  });
+  expect(helper.dispatches).toEqual([]);
+  expect(helper.cancellations).toHaveLength(1);
+
+  const unknown = await execute({
+    runnerName: "runner-9",
+    jobs: [[ownFailedJob("runner-7")]],
+  });
+  expect(unknown.events).not.toContain("dispatch");
+  expect(unknown.cancellations).toHaveLength(1);
+});
+
+type AfterJobOptions = {
+  runId?: string;
+  jobId?: string;
+  runPath?: string;
+  jobRunId?: number;
+  /** The job's states, one per poll; the last one repeats. */
+  jobStates?: {
+    status: string;
+    conclusion: string | null;
+    failedStep: boolean;
+  }[];
+  runStatus?: string;
+};
+
+const executeAfterJob = async ({
+  runId = "42",
+  jobId = "77",
+  runPath = ".github/workflows/ci.yml",
+  jobRunId = 42,
+  jobStates = [
+    { status: "in_progress", conclusion: null, failedStep: true },
+    { status: "in_progress", conclusion: null, failedStep: true },
+    { status: "completed", conclusion: "failure", failedStep: true },
+  ],
+  runStatus = "in_progress",
+}: AfterJobOptions = {}) => {
+  const events: string[] = [];
+  const failures: string[] = [];
+  const cancellations: unknown[] = [];
+  const delays: number[] = [];
+  let polls = 0;
+  let runReads = 0;
+  await new Script(
+    `(async () => { ${CANCEL_AFTER_JOB_SCRIPT} })()`,
+  ).runInNewContext({
+    setTimeout: (callback: () => void, delay: number) => {
+      delays.push(delay);
+      queueMicrotask(callback);
+    },
+    context: { repo: { owner: "fixture-owner", repo: "fixture-repo" } },
+    process: { env: { RUN_ID: runId, JOB_ID: jobId } },
+    core: {
+      setFailed: (message: string) => {
+        failures.push(message);
+        events.push("failed");
+      },
+      notice: () => {
+        events.push("notice");
+      },
+      summary: {
+        addRaw: () => ({
+          write: async () => {
+            events.push("summary");
+          },
+        }),
+      },
+    },
+    github: {
+      rest: {
+        actions: {
+          getWorkflowRun: async ({ run_id }: { run_id: number }) => {
+            runReads += 1;
+            events.push("run");
+            return {
+              data: {
+                id: run_id,
+                path: runPath,
+                status: runReads === 1 ? "in_progress" : runStatus,
+              },
+            };
+          },
+          getJobForWorkflowRun: async ({ job_id }: { job_id: number }) => {
+            const state = jobStates[Math.min(polls, jobStates.length - 1)];
+            if (state === undefined) {
+              throw new TypeError("The fixture has no job state");
+            }
+            polls += 1;
+            events.push(`job:${state.status}`);
+            return {
+              data: {
+                id: job_id,
+                run_id: jobRunId,
+                name: "ci-tests (rest-web)",
+                html_url: "https://example.test/jobs/77",
+                status: state.status,
+                conclusion: state.conclusion,
+                steps: [
+                  {
+                    name: "Test web",
+                    conclusion: state.failedStep ? "failure" : "success",
+                  },
+                ],
+              },
+            };
+          },
+          cancelWorkflowRun: async (parameters: unknown) => {
+            cancellations.push(parameters);
+            events.push("cancel");
+          },
+        },
+      },
+    },
+  });
+  return { events, failures, cancellations, delays, polls };
+};
+
+test("the dispatched run cancels only after the failed job has ended", async () => {
+  const result = await executeAfterJob();
+  expect(result.failures).toEqual([]);
+  expect(result.cancellations).toEqual([
+    { owner: "fixture-owner", repo: "fixture-repo", run_id: 42 },
+  ]);
+  expect(result.events.indexOf("job:completed")).toBeLessThan(
+    result.events.indexOf("cancel"),
+  );
+  expect(result.delays).toEqual([
+    CANCEL_AFTER_JOB_POLL_MS,
+    CANCEL_AFTER_JOB_POLL_MS,
+  ]);
+});
+
+test("the dispatched run cancels nothing it cannot tie to a failed CI job", async () => {
+  for (const [label, options] of [
+    ["empty run id", { runId: "" }],
+    ["zero job id", { jobId: "0" }],
+    ["exponent run id", { runId: "1e3" }],
+    ["suffixed job id", { jobId: "77abc" }],
+    ["another workflow", { runPath: ".github/workflows/release.yml" }],
+    ["a job of another run", { jobRunId: 41 }],
+    [
+      "a job that passed",
+      {
+        jobStates: [
+          { status: "completed", conclusion: "success", failedStep: false },
+        ],
+      },
+    ],
+    [
+      "a running job with no failed step at the deadline",
+      {
+        jobStates: [
+          { status: "in_progress", conclusion: null, failedStep: false },
+        ],
+      },
+    ],
+  ] as const) {
+    const result = await executeAfterJob(options);
+    expect(result.cancellations, label).toEqual([]);
+    expect(result.failures, label).toHaveLength(1);
+  }
+});
+
+test("the dispatched run gives up waiting at its deadline and still cancels a failed job's run", async () => {
+  const result = await executeAfterJob({
+    jobStates: [{ status: "in_progress", conclusion: null, failedStep: true }],
+  });
+  expect(result.polls).toBe(CANCEL_AFTER_JOB_POLLS);
+  expect(result.cancellations).toHaveLength(1);
+  // Polls x interval stays inside the job's five-minute limit.
+  expect(CANCEL_AFTER_JOB_POLLS * CANCEL_AFTER_JOB_POLL_MS).toBeLessThan(
+    4 * 60_000,
+  );
+});
+
+test("a run that already ended is left alone", async () => {
+  const result = await executeAfterJob({ runStatus: "completed" });
+  expect(result.cancellations).toEqual([]);
+  expect(result.failures).toEqual([]);
+  expect(result.events.at(-1)).toBe("notice");
+});
+
+test("the dispatched workflow runs the pinned script from main with only the actions grant", async () => {
+  const workflow = v.parse(
+    v.object({
+      on: v.object({
+        workflow_dispatch: v.object({
+          inputs: v.record(
+            v.string(),
+            v.looseObject({ required: v.boolean() }),
+          ),
+        }),
+      }),
+      permissions: v.record(v.string(), v.string()),
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          if: v.string(),
+          permissions: v.record(v.string(), v.string()),
+          "timeout-minutes": v.number(),
+          steps: v.array(v.unknown()),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      await Bun.file(
+        `${import.meta.dir}/../.github/workflows/${CANCEL_AFTER_JOB_WORKFLOW}`,
+      ).text(),
+    ),
+  );
+  expect(Object.keys(workflow.on.workflow_dispatch.inputs).toSorted()).toEqual([
+    "job_id",
+    "run_id",
+  ]);
+  expect(workflow.permissions).toEqual({});
+  const jobs = Object.values(workflow.jobs);
+  expect(jobs).toHaveLength(1);
+  const [job] = jobs;
+  expect(job?.if).toBe("github.ref == 'refs/heads/main'");
+  expect(job?.permissions).toEqual({ actions: "write" });
+  expect(job?.["timeout-minutes"]).toBe(5);
+  expect(job?.steps).toEqual([CANCEL_AFTER_JOB_STEP]);
 });

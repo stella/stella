@@ -51,6 +51,7 @@ import {
   splitSteps,
   stripAnsi,
   summaryMarkdown,
+  tailSummaryMarkdown,
   testFailures,
 } from "./ci-failure-digest";
 
@@ -162,6 +163,20 @@ test("a test run's tail lists only the failures, after everything else", () => {
   expect(tail).toContain("    Expected: 3");
   expect(tail).not.toContain("(pass)");
   expect(renderTail(["(pass) a [1ms]", " 1 pass"])).toBe("");
+});
+
+test("a tail summary fence outlasts any backtick run in the test output", () => {
+  for (const tail of ["(fail) a", "expected ``` got ````", "`"]) {
+    const markdown = tailSummaryMarkdown(tail);
+    const fence = /^(`{3,})text$/mu.exec(markdown)?.[1] ?? "";
+    expect(markdown.startsWith("### Failing tests\n\n")).toBe(true);
+    expect(markdown.endsWith(`\n${fence}\n`)).toBe(true);
+    const longest = Math.max(
+      0,
+      ...[...tail.matchAll(/`+/gu)].map(([run]) => run.length),
+    );
+    expect(fence.length).toBeGreaterThan(longest);
+  }
 });
 
 test("a test run's tail lists every failure name and package count", () => {
@@ -1164,6 +1179,29 @@ test("the digest command writes JSON, a summary and annotations", () => {
     );
     expect(tail.exitCode).toBe(0);
     expect(tail.stdout.toString()).toContain("(fail) math > adds");
+
+    // The job summary names the failing tests too: a job whose run is
+    // cancelled still says which tests failed.
+    const jobSummary = path.join(directory, "job-summary.md");
+    const summarized = Bun.spawnSync(
+      [
+        process.execPath,
+        path.join(ROOT, "scripts/ci-failure-digest.ts"),
+        "tail",
+        path.join(directory, "test.log"),
+        "--summary",
+        jobSummary,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(summarized.exitCode).toBe(0);
+    expect(summarized.stdout.toString()).toBe(tail.stdout.toString());
+    expect(readFileSync(jobSummary, "utf-8")).toBe(
+      tailSummaryMarkdown(renderTail(BUN_FAILURE)),
+    );
+    expect(readFileSync(jobSummary, "utf-8")).toContain(
+      "@stll/api: (fail) math > adds (apps/api/src/math.test.ts:12)",
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1241,7 +1279,7 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   expect(testSteps.length).toBeGreaterThan(0);
   for (const step of testSteps) {
     expect(step.run, step.name).toContain(
-      'timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true',
+      'timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || true',
     );
   }
 });

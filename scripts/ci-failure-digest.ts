@@ -16,9 +16,10 @@
  *     one `<job id>.log` per failed job. Prints `::error` annotations, writes
  *     the JSON digest and appends a short Markdown summary. Cancelled jobs
  *     without a failed step are listed apart: they are never a cause.
- *   tail <test-output.log>
+ *   tail <test-output.log> [--summary <file>]
  *     Prints the failing tests of a test run (with their error lines) so a
- *     failing step's log ends with its failures.
+ *     failing step's log ends with its failures, and appends them to the
+ *     job's summary so the job names them even when its run is cancelled.
  *   show <run id or URL> [--repo <owner/repo>]
  *     Prints a run's digest: its `ci-failures` artifact, or, when the run has
  *     none (still running, or the gate passed), one built from the jobs API
@@ -1484,6 +1485,17 @@ export const inert = (line: string): string => {
 };
 
 /** The failures of a test run, printed last so the log ends with them. */
+/** A test run's tail as a job summary section, fenced longer than any
+ *  backtick run inside it so no test output can close the fence. */
+export const tailSummaryMarkdown = (tail: string): string => {
+  const longest = Math.max(
+    0,
+    ...[...tail.matchAll(/`+/gu)].map(([run]) => run.length),
+  );
+  const marker = "`".repeat(Math.max(3, longest + 1));
+  return `### Failing tests\n\n${marker}text\n${tail}\n${marker}\n`;
+};
+
 export const renderTail = (rawLines: readonly string[]): string => {
   const failures = testFailures(rawLines);
   if (failures.length === 0) {
@@ -1741,18 +1753,26 @@ const flagValue = (
 
 const USAGE =
   "Usage: bun scripts/ci-failure-digest.ts digest --jobs <jobs.json> --logs <dir> --json <out.json> [--summary <file>] [--gate <job>]\n" +
-  "       bun scripts/ci-failure-digest.ts tail <test-output.log>\n" +
+  "       bun scripts/ci-failure-digest.ts tail <test-output.log> [--summary <file>]\n" +
   "       bun scripts/ci-failure-digest.ts show <run id or URL> [--repo <owner/repo>]";
 
 const main = (args: readonly string[]): number => {
   const [command, ...rest] = args;
-  if (command === "tail" && rest.length === 1 && rest[0] !== undefined) {
+  if (
+    command === "tail" &&
+    (rest.length === 1 || (rest.length === 3 && rest[1] === "--summary")) &&
+    rest[0] !== undefined
+  ) {
     if (!existsSync(rest[0])) {
       return 0;
     }
     const tail = renderTail(readFileSync(rest[0], "utf-8").split("\n"));
     if (tail !== "") {
       process.stdout.write(`\n${tail}\n`);
+      const summary = flagValue(rest, "--summary");
+      if (summary !== undefined) {
+        appendFileSync(summary, tailSummaryMarkdown(tail));
+      }
     }
     return 0;
   }
