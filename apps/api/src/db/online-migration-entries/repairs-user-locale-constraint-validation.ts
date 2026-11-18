@@ -3,7 +3,7 @@ import { USER_LOCALE_CONSTRAINT_VALIDATION } from "../user-locale-constraint-val
 
 export default {
   id: "repairs-user-locale-constraint-validation",
-  revision: 1491,
+  revision: 1492,
   lifecycle: "pending",
   type: "repairs",
   values: [USER_LOCALE_CONSTRAINT_VALIDATION],
