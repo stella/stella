@@ -885,6 +885,31 @@ const deleteDrainedLockedDeleteTasksTx = async (
   return removed.map(({ deleteOpstamp }) => deleteOpstamp);
 };
 
+/** Give up a turn's lease on its task, unless another turn took it over. */
+const releaseCorpusProjectionDeleteTaskLeaseTx = async (
+  tx: Transaction,
+  {
+    deleteOpstamp,
+    leaseToken,
+    ...key
+  }: CorpusProjectionDeleteTaskKey & {
+    deleteOpstamp: bigint;
+    leaseToken: string;
+  },
+): Promise<void> => {
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionDeleteTasks)
+    .set({ leaseToken: null, leaseExpiresAt: null })
+    .where(
+      and(
+        deleteTaskKeyPredicate(key),
+        eq(corpusIndexProjectionDeleteTasks.deleteOpstamp, deleteOpstamp),
+        eq(corpusIndexProjectionDeleteTasks.leaseToken, leaseToken),
+      ),
+    );
+};
+
 type FinishCorpusProjectionDeleteTaskTurnOptions =
   CorpusProjectionDeleteTaskKey & {
     deleteOpstamp: number;
@@ -906,10 +931,6 @@ const finishCorpusProjectionDeleteTaskTurnTx = async (
   }: FinishCorpusProjectionDeleteTaskTurnOptions,
 ): Promise<void> => {
   const opstamp = BigInt(deleteOpstamp);
-  const thisTask = and(
-    deleteTaskKeyPredicate(key),
-    eq(corpusIndexProjectionDeleteTasks.deleteOpstamp, opstamp),
-  );
   const locked = await lockCorpusProjectionDeleteTask(tx, {
     ...key,
     deleteOpstamp: opstamp,
@@ -921,16 +942,11 @@ const finishCorpusProjectionDeleteTaskTurnTx = async (
   if (removed.length > 0) {
     return;
   }
-  // audit: skip - scheduling bookkeeping on the derived public corpus projection
-  await tx
-    .update(corpusIndexProjectionDeleteTasks)
-    .set({ leaseToken: null, leaseExpiresAt: null })
-    .where(
-      and(
-        thisTask,
-        eq(corpusIndexProjectionDeleteTasks.leaseToken, leaseToken),
-      ),
-    );
+  await releaseCorpusProjectionDeleteTaskLeaseTx(tx, {
+    ...key,
+    deleteOpstamp: opstamp,
+    leaseToken,
+  });
 };
 
 /**
@@ -1491,20 +1507,13 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
-  // audit: skip - scheduling bookkeeping on the derived public corpus projection
-  await tx
-    .update(corpusIndexProjectionDeleteTasks)
-    .set({ leaseToken: null, leaseExpiresAt: null })
-    .where(
-      and(
-        deleteTaskKeyPredicate(lease),
-        eq(
-          corpusIndexProjectionDeleteTasks.deleteOpstamp,
-          BigInt(lease.deleteOpstamp),
-        ),
-        eq(corpusIndexProjectionDeleteTasks.leaseToken, lease.leaseToken),
-      ),
-    );
+  await releaseCorpusProjectionDeleteTaskLeaseTx(tx, {
+    family: lease.family,
+    generation: lease.generation,
+    indexId: lease.indexId,
+    deleteOpstamp: BigInt(lease.deleteOpstamp),
+    leaseToken: lease.leaseToken,
+  });
   if (rows.length === lease.intentIds.length) {
     return rows.length;
   }

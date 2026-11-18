@@ -126,6 +126,8 @@ export const corpusProjectionLegacyFixture = (
       ),
     ]
       .filter((migration) => !migration.includes("projection_revision"))
+      // The test database build installs the delete task queue's triggers.
+      .filter((migration) => !migration.includes("projection_delete_tasks"))
       .filter(
         (migration) => withServedCopyGuard || migration < SERVED_COPY_MIGRATION,
       )
