@@ -562,25 +562,41 @@ const connect = async ({
   );
 };
 
+/** The sign-in method a release that leaves out `tokenSource` stands for. */
+const SUBSCRIPTION_SIGN_IN = "claude.ai";
+
+/** A field's value, unless it is missing, blank or `none`. */
+const given = (value: string | undefined): string | null =>
+  value === undefined || value.trim() === "" || value === "none" ? null : value;
+
 /**
  * Only a subscription sign-in runs a turn. An API key in use (one created by
  * a Console sign-in, say) would bill the API, so it reads as signed out.
+ *
+ * Older releases name the subscription sign-in in `tokenSource`; 2.1.309
+ * leaves `tokenSource` out for one and reports the first-party account
+ * (`email`, `subscriptionType`) instead, while a signed-out CLI still says
+ * `tokenSource: "none"`.
  */
 const authOf = ({ account }: Initialized): HarnessAuth => {
-  const apiKey =
-    account.apiKeySource !== undefined && account.apiKeySource !== "none";
-  if (
-    apiKey ||
-    account.tokenSource === undefined ||
-    account.tokenSource === "none"
-  ) {
+  if (given(account.apiKeySource) !== null || account.tokenSource === "none") {
     return { type: "signed_out" };
   }
-  return {
-    type: "signed_in",
-    method: account.tokenSource,
-    plan: account.subscriptionType ?? null,
-  };
+  const plan = given(account.subscriptionType);
+  const tokenSource = given(account.tokenSource);
+  if (tokenSource !== null) {
+    return { type: "signed_in", method: tokenSource, plan };
+  }
+  const firstParty =
+    account.apiProvider === undefined || account.apiProvider === "firstParty";
+  if (
+    account.tokenSource === undefined &&
+    firstParty &&
+    (plan !== null || given(account.email) !== null)
+  ) {
+    return { type: "signed_in", method: SUBSCRIPTION_SIGN_IN, plan };
+  }
+  return { type: "signed_out" };
 };
 
 /**
