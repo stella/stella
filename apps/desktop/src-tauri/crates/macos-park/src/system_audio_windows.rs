@@ -171,16 +171,16 @@ impl SystemAudioReader {
     if !data.is_null() {
       // SAFETY: while locked, `data` points at `length` readable bytes.
       let bytes = unsafe { std::slice::from_raw_parts(data, length as usize) };
-      let frame_bytes = self.channels * size_of::<f32>();
-      out.extend(bytes.chunks_exact(frame_bytes).map(|frame| {
-        let total = frame
-          .chunks_exact(size_of::<f32>())
-          .map(|sample| {
-            f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]])
-          })
-          .sum::<f32>();
-        total / self.channels as f32
-      }));
+      let (encoded, _) = bytes.as_chunks::<{ size_of::<f32>() }>();
+      let samples = encoded
+        .iter()
+        .map(|sample| f32::from_le_bytes(*sample))
+        .collect::<Vec<_>>();
+      out.extend(
+        samples
+          .chunks_exact(self.channels)
+          .map(|frame| frame.iter().sum::<f32>() / self.channels as f32),
+      );
     }
     // SAFETY: balances the successful `Lock` above.
     unsafe { buffer.Unlock() }.map_err(|_error| SystemAudioError::Unreadable)?;
