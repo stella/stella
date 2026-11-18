@@ -1791,6 +1791,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
+  // The dispatched cancel-after-job run: the failed job it waits for.
+  "JOB_ID",
   // Scheduled journey checks: endpoint overrides, bounded request/retry timing,
   // and the clock and busy windows file the coverage check reads (fixtures pin them).
   "JOURNEY_BUSY_WINDOWS_FILE",

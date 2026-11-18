@@ -373,7 +373,7 @@ type AfterJobOptions = {
   runPath?: string;
   jobRunId?: number;
   /** The job's states, one per poll; the last one repeats. */
-  jobStates?: {
+  jobStates?: readonly {
     status: string;
     conclusion: string | null;
     failedStep: boolean;
