@@ -400,6 +400,39 @@ export const genericTypeProbe = (
   return undefined;
 };
 
+/** `type` with each reference to an omitted type parameter replaced by its default. */
+const withOmittedDefaults = (
+  type: ts.TypeNode,
+  omitted: ReadonlyMap<string, ts.TypeNode>,
+): ts.TypeNode => {
+  if (omitted.size === 0) {
+    return type;
+  }
+  const transformed = ts.transform(type, [
+    (context) => {
+      const visit = (node: ts.Node): ts.Node => {
+        if (
+          ts.isTypeReferenceNode(node) &&
+          ts.isIdentifier(node.typeName) &&
+          node.typeArguments === undefined
+        ) {
+          const replacement = omitted.get(node.typeName.text);
+          if (replacement !== undefined) {
+            return ts.factory.createParenthesizedType(replacement);
+          }
+        }
+        return ts.visitEachChild(node, visit, context);
+      };
+      return (node) => ts.visitNode(node, visit, ts.isTypeNode) ?? node;
+    },
+  ]);
+  const result =
+    transformed.transformed.at(0) ??
+    panic("Omitted type parameter substitution produced no type");
+  transformed.dispose();
+  return result;
+};
+
 /**
  * Each declaration tree has its own type parameters, so a generic type is
  * never assignable to its unchanged self: `T` before is not `T` after. Beside
@@ -434,6 +467,18 @@ export const withGenericTypeProbes = (
     provided = declaration.typeParameters.length,
   ): string => {
     const parameters = declaration.typeParameters.slice(0, provided);
+    // A supplied parameter's constraint or default can name a later one
+    // (`<T extends Box<U>, U = string>`). The probe omits that later one, so
+    // it stands for its default there, as it does for a consumer omitting it.
+    const omitted = new Map<string, ts.TypeNode>();
+    for (const parameter of declaration.typeParameters.slice(provided)) {
+      if (parameter.default !== undefined) {
+        omitted.set(
+          parameter.name.text,
+          withOmittedDefaults(parameter.default, omitted),
+        );
+      }
+    }
     const arguments_ =
       parameters.length === 0
         ? undefined
@@ -457,8 +502,10 @@ export const withGenericTypeProbes = (
                 ts.factory.createTypeParameterDeclaration(
                   undefined,
                   parameter.name,
-                  parameter.constraint,
-                  parameter.default,
+                  parameter.constraint &&
+                    withOmittedDefaults(parameter.constraint, omitted),
+                  parameter.default &&
+                    withOmittedDefaults(parameter.default, omitted),
                 ),
               ),
           parameters.map((parameter, position) =>

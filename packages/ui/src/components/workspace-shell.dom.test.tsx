@@ -45,7 +45,8 @@ test("the first tab stop skips the navigation and moves focus into main", () => 
 
   const main = view.container.querySelector("main");
   expect(main).not.toBeNull();
-  expect(skipLink.getAttribute("href")).toBe(`#${main?.id}`);
+  expect(main?.id).toBeTruthy();
+  expect(skipLink.getAttribute("href")).toBe(`#${main?.id ?? ""}`);
 
   fireEvent.click(skipLink);
   expect(document.activeElement).toBe(main);
