@@ -1,5 +1,7 @@
 import { useTranslations } from "use-intl";
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 import {
   CalendarClockIcon,
   CalendarIcon,
@@ -18,11 +20,9 @@ import {
 import type { PublicLawSkeletonColumn } from "@/components/public-law-table/public-law-table.pending";
 import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/table-schema";
 import {
-  STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MODEL,
 } from "@/features/statutes/statute-columns.logic";
-import type { StatuteColumnId } from "@/features/statutes/statute-columns.logic";
 
 // The statute columns' faces and the statute table before its rows: what the
 // loading view draws, and what the table's headers and chooser wear.
