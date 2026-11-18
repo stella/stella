@@ -2632,26 +2632,6 @@ export const inspectMutationQueryInvalidation = (
   return findings.toSorted((left, right) => compareCodeUnit(left.id, right.id));
 };
 
-const reasonFor = (finding: Finding) => finding.reason;
-const git = (args: readonly string[]) => {
-  const result = Bun.spawnSync(["git", ...args], { cwd: ROOT });
-  return result.exitCode === 0 ? result.stdout.toString().trim() : null;
-};
-const committedBaseline = (revision: string) => {
-  const listed = git(["ls-tree", "--name-only", revision, "--", BASELINE]);
-  if (listed === null) {
-    return panic("Cannot inspect the committed mutation/query baseline");
-  }
-  if (!listed) {
-    return null;
-  }
-  const content = git(["show", `${revision}:${BASELINE}`]);
-  if (content === null) {
-    return panic("Cannot read the committed mutation/query baseline");
-  }
-  return v.parse(committedBaselineSchema, JSON.parse(content));
-};
-
 /**
  * What a finding's hook reads or writes, independent of the module and the
  * function it sits in: a reader by its primitive and query key (the key's
@@ -2725,6 +2705,26 @@ const movedEntries = (
     }
   }
   return moved;
+};
+
+const reasonFor = (finding: Finding) => finding.reason;
+const git = (args: readonly string[]) => {
+  const result = Bun.spawnSync(["git", ...args], { cwd: ROOT });
+  return result.exitCode === 0 ? result.stdout.toString().trim() : null;
+};
+const committedBaseline = (revision: string) => {
+  const listed = git(["ls-tree", "--name-only", revision, "--", BASELINE]);
+  if (listed === null) {
+    return panic("Cannot inspect the committed mutation/query baseline");
+  }
+  if (!listed) {
+    return null;
+  }
+  const content = git(["show", `${revision}:${BASELINE}`]);
+  if (content === null) {
+    return panic("Cannot read the committed mutation/query baseline");
+  }
+  return v.parse(committedBaselineSchema, JSON.parse(content));
 };
 
 export const checkBaseline = ({
