@@ -304,24 +304,52 @@ export const SEARCH_PHASE_STATES = ["not_due", "finished", "skipped"] as const;
 export type SearchPhaseState = (typeof SEARCH_PHASE_STATES)[number];
 
 /**
- * The outcome a case-law page reports, from the scan's own outcome and every
- * later phase. The one place a skipped phase turns into a truncated page: a
- * page whose partial-match phase did not finish is never complete, however
- * the strict scan ended.
+ * A later phase's end with what its own scan reported: a phase that finished
+ * may still have stopped on a budget of its own, and that stop is the page's
+ * too.
+ */
+export type SearchPhaseCompletion =
+  | { readonly state: "not_due" }
+  | { readonly state: "finished"; readonly outcome: SearchPaginationOutcome }
+  | { readonly state: "skipped" };
+
+export const SEARCH_PHASE_NOT_DUE = {
+  state: "not_due",
+} as const satisfies SearchPhaseCompletion;
+
+/**
+ * Every phase's stop, by phase. What a page's outcome is derived from, and
+ * only from: `caseLawPageOutcome` is the one function that turns these into
+ * a page outcome, and the search response is built from its answer, so no
+ * path can call a page complete that a phase did not finish.
+ */
+export type CaseLawPagePhases = {
+  /** How the scan that placed the page ended. */
+  readonly scan: SearchPaginationOutcome;
+  /** The partial-match pass of the passage generations. */
+  readonly partialMatches: SearchPhaseCompletion;
+};
+
+/**
+ * The outcome a case-law page reports, from every phase. `complete` only
+ * when the scan completed and the partial-match pass either was not due or
+ * finished complete; any phase's truncation, or a phase skipped, is the
+ * page's.
  */
 export const caseLawPageOutcome = ({
   scan,
   partialMatches,
-}: {
-  scan: SearchPaginationOutcome;
-  partialMatches: SearchPhaseState;
-}): CaseLawSearchPaginationOutcome => {
-  switch (partialMatches) {
+}: CaseLawPagePhases): CaseLawSearchPaginationOutcome => {
+  switch (partialMatches.state) {
     case "skipped":
       return SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET;
     case "not_due":
-    case "finished":
       return scan;
+    case "finished":
+      // The scan's own stop leads: it is the first one the page met.
+      return scan.type === SEARCH_PAGINATION_COMPLETE.type
+        ? partialMatches.outcome
+        : scan;
     default:
       partialMatches satisfies never;
       return panic("Unhandled search phase state");

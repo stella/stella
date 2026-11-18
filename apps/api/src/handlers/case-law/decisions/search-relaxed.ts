@@ -12,6 +12,11 @@ import { classifyFailure } from "@stll/errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  type CorpusProjectionRevision,
+  type CorpusProjectionRevisionField,
+  corpusRevisionClause,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { readCardinality } from "@/api/lib/legal-search/corpus-index-search-facets";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
@@ -38,12 +43,27 @@ export type RelaxedExclusions = {
   languageGroupKeys: ReadonlySet<string>;
 };
 
+type QueryTerm = { type: string; value: string };
+
+/**
+ * Whether a query has words to check one by one: at least two distinct ones,
+ * and no more than one search checks. Counted on distinct terms, so a word
+ * repeated in the query counts once, as it does in every query built from it.
+ */
+export const checksWordsOneByOne = (terms: readonly QueryTerm[]): boolean => {
+  const distinct = new Set(terms.map(({ value }) => value)).size;
+  return distinct >= 2 && distinct <= LIMITS.caseLawSearchTermCountsMax;
+};
+
 type ShouldRelaxOptions = {
   body: { strict?: boolean | undefined };
   intentType: string;
   isFirstPage: boolean;
-  /** Distinct content terms the strict query required (a quoted phrase counts once). */
-  requiredTermCount: number;
+  /**
+   * The content terms the strict query required, as typed: the bounds below
+   * count the distinct ones, here, so no caller can pass a count of repeats.
+   */
+  requiredTerms: readonly QueryTerm[];
   sort: string;
   strictHitCount: number;
   limit: number;
@@ -64,7 +84,7 @@ export const shouldRelaxCaseLawSearch = ({
   body,
   intentType,
   isFirstPage,
-  requiredTermCount,
+  requiredTerms,
   sort,
   strictHitCount,
   limit,
@@ -74,8 +94,7 @@ export const shouldRelaxCaseLawSearch = ({
   sort === "relevance" &&
   body.strict !== true &&
   intentType !== "identifier" &&
-  requiredTermCount >= 2 &&
-  requiredTermCount <= LIMITS.caseLawSearchTermCountsMax &&
+  checksWordsOneByOne(requiredTerms) &&
   strictEnd === SEARCH_PAGE_END.COMPLETE &&
   strictHitCount < limit;
 
@@ -104,8 +123,8 @@ export const distinctRequiredTerms = <Term extends { value: string }>(
 type FewDecisionsHoldEveryWordOptions = {
   intentType: string;
   isFirstPage: boolean;
-  /** Distinct content terms the strict query required. */
-  requiredTermCount: number;
+  /** The content terms the strict query required, as typed. */
+  requiredTerms: readonly QueryTerm[];
   strictHitCount: number;
   limit: number;
   strictEnd: SearchPageEnd;
@@ -121,15 +140,14 @@ type FewDecisionsHoldEveryWordOptions = {
 export const fewDecisionsHoldEveryWord = ({
   intentType,
   isFirstPage,
-  requiredTermCount,
+  requiredTerms,
   strictHitCount,
   limit,
   strictEnd,
 }: FewDecisionsHoldEveryWordOptions): boolean =>
   isFirstPage &&
   intentType !== "identifier" &&
-  requiredTermCount >= 2 &&
-  requiredTermCount <= LIMITS.caseLawSearchTermCountsMax &&
+  checksWordsOneByOne(requiredTerms) &&
   strictEnd === SEARCH_PAGE_END.COMPLETE &&
   strictHitCount < limit;
 
@@ -447,3 +465,111 @@ export const readTermDecisionCounts = async ({
   }
   return Result.ok(counts);
 };
+
+/** The words a decision holds, and the copy of it they were read off. */
+export type WordsAtCopy = {
+  revision: CorpusProjectionRevision;
+  held: ReadonlySet<number>;
+};
+
+export type WordsRead = ReadonlyMap<string, WordsAtCopy>;
+
+type ReadWordsAtCopiesOptions = {
+  aggregate: CorpusIndexClient["aggregate"];
+  observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
+  indexId: string;
+  revisionField: CorpusProjectionRevisionField;
+  /** One query per distinct word, in the order hits report them. */
+  wordQueries: readonly string[];
+  /** Each decision and the copy of it the words are read off. */
+  copies: readonly { id: string; revision: CorpusProjectionRevision }[];
+};
+
+/**
+ * The one reader of which words decisions hold: each word's membership over
+ * the named copies, each decision's answer tagged with the copy it came
+ * from. A hit's matched and missing words go through `wordsHeldAt`, which
+ * refuses an answer read off a copy other than the one the hit shows.
+ */
+export const readWordsAtCopies = async ({
+  aggregate,
+  observer,
+  signal,
+  indexId,
+  revisionField,
+  wordQueries,
+  copies,
+}: ReadWordsAtCopiesOptions): Promise<
+  Result<WordsRead, HandlerError<400 | 502 | 503>>
+> => {
+  if (copies.length === 0) {
+    return Result.ok(new Map());
+  }
+  const named = copies
+    .map(({ id, revision }) =>
+      corpusRevisionClause({
+        clause: `document_id:${quoteCorpusValue(id)}`,
+        field: revisionField,
+        revision,
+      }),
+    )
+    .join(" OR ");
+  const held = await readTermCoverage({
+    aggregate,
+    observer,
+    signal,
+    indexId,
+    ids: copies.map(({ id }) => id),
+    queries: wordQueries.map((query) => `(${query}) AND (${named})`),
+  });
+  return held.map(
+    (byId) =>
+      new Map(
+        copies.map(({ id, revision }) => [
+          id,
+          {
+            revision,
+            held: byId.get(id) ?? panic("Missing word membership for a copy"),
+          },
+        ]),
+      ),
+  );
+};
+
+/** Several reads as one, the later one answering for a copy it re-read. */
+export const mergeWordsRead = (
+  earlier: WordsRead,
+  later: WordsRead,
+): WordsRead => new Map([...earlier, ...later]);
+
+/**
+ * The words a hit's decision holds in the copy the hit shows. A read off any
+ * other copy is a defect in the caller, not an answer: the words of an older
+ * copy are not the words of the one on the page.
+ */
+export const wordsHeldAt = (
+  read: WordsRead,
+  id: string,
+  shown: CorpusProjectionRevision | null,
+): ReadonlySet<number> => {
+  const words = read.get(id) ?? panic("No words read for a hit");
+  return shown !== null && words.revision === shown
+    ? words.held
+    : panic("A hit's words were read off another copy than the one shown");
+};
+
+/**
+ * The decisions whose shown copy is not the one their words were read off,
+ * with the copy they show: what a second read must cover.
+ */
+export const copiesShownSinceRead = (
+  read: WordsRead,
+  shownRevisionOf: (id: string) => CorpusProjectionRevision | null,
+): { id: string; revision: CorpusProjectionRevision }[] =>
+  [...read].flatMap(([id, { revision }]) => {
+    const shown = shownRevisionOf(id);
+    return shown === null || shown === revision
+      ? []
+      : [{ id, revision: shown }];
+  });
