@@ -39,7 +39,7 @@ import type { Sort, SortKey } from "./-organization.members.pending";
 const routeApi = getRouteApi("/_protected/settings/organization/members");
 
 /** /settings/organization/members: the organization's members and invitations. */
-export const MembersPage = () => {
+const Members = () => {
   // Re-read the clock so an invitation that expires while the page stays
   // open moves from Pending to Past invitations.
   const now = useNow({ updateInterval: 60_000 });
@@ -196,3 +196,7 @@ export const MembersPage = () => {
     </MembersShell>
   );
 };
+
+// Exported under the page name; the function keeps the name its audited
+// query and mutation sites are recorded under.
+export { Members as MembersPage };

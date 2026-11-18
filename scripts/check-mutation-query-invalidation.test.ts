@@ -846,6 +846,73 @@ test("a committed baseline cannot gain sites or rewrite reasons, and can shrink"
   ).toEqual({ ok: true, entries: {}, errors: [] });
 });
 
+test("a committed entry may move to another module, one for one, with its reason", () => {
+  const committed = {
+    "apps/web/src/routes/a.tsx:Page:useQuery:reader": "Pending migration.",
+  };
+  const movedTo = "apps/web/src/routes/-a.page.tsx:Page:useQuery:reader";
+  const observed = [
+    {
+      id: movedTo,
+      file: "apps/web/src/routes/-a.page.tsx",
+      reason: "Pending migration.",
+      disposition: "legacy" as const,
+    },
+  ];
+  expect(
+    checkBaseline({
+      observed,
+      recorded: { [movedTo]: "Pending migration." },
+      committed,
+      write: false,
+    }),
+  ).toEqual({
+    ok: true,
+    entries: { [movedTo]: "Pending migration." },
+    errors: [],
+  });
+  // Kept under its old path as well, the entry is growth, not a move.
+  expect(
+    checkBaseline({
+      observed,
+      recorded: { ...committed, [movedTo]: "Pending migration." },
+      committed,
+      write: false,
+    }).errors,
+  ).toContain(`Added baseline entry: ${movedTo}`);
+  // A different site, or the same site with a new reason, is not a move.
+  const otherSite = "apps/web/src/routes/-a.page.tsx:Other:useQuery:reader";
+  expect(
+    checkBaseline({
+      observed: [{ ...observed[0]!, id: otherSite }],
+      recorded: { [otherSite]: "Pending migration." },
+      committed,
+      write: false,
+    }).errors,
+  ).toContain(`Added baseline entry: ${otherSite}`);
+  expect(
+    checkBaseline({
+      observed,
+      recorded: { [movedTo]: "Reworded." },
+      committed,
+      write: false,
+    }).errors,
+  ).toContain(`Added baseline entry: ${movedTo}`);
+  // One committed entry accounts for one moved entry.
+  const second = "apps/web/src/routes/-b.page.tsx:Page:useQuery:reader";
+  expect(
+    checkBaseline({
+      observed: [...observed, { ...observed[0]!, id: second }],
+      recorded: {
+        [movedTo]: "Pending migration.",
+        [second]: "Pending migration.",
+      },
+      committed,
+      write: false,
+    }).ok,
+  ).toBe(false);
+});
+
 test("check mode fails for new and stale entries", () => {
   const result = checkBaseline({
     observed: [

@@ -2651,6 +2651,42 @@ const committedBaseline = (revision: string) => {
   return v.parse(committedBaselineSchema, JSON.parse(content));
 };
 
+/** A finding's site within its module: its ID without the file it lives in. */
+const siteInModule = (id: string) => id.slice(id.indexOf(":") + 1);
+
+/**
+ * Recorded entries that are a committed entry moved to another module: the
+ * committed entry is gone from the recording, the new one names the same
+ * site, primitive and kind under another file, keeps its reason, and each
+ * committed entry accounts for one moved entry. Moving code is not new debt,
+ * so these do not count as growth; any other new entry still does.
+ */
+const movedEntries = (
+  recorded: Record<string, string>,
+  committed: Record<string, string>,
+): Set<string> => {
+  const movedAway = new Map<string, string[]>();
+  for (const [id, reason] of Object.entries(committed)) {
+    if (id in recorded) {
+      continue;
+    }
+    const key = `${siteInModule(id)}\u0000${reason}`;
+    movedAway.set(key, [...(movedAway.get(key) ?? []), id]);
+  }
+  const moved = new Set<string>();
+  for (const [id, reason] of Object.entries(recorded)) {
+    if (id in committed) {
+      continue;
+    }
+    const sources = movedAway.get(`${siteInModule(id)}\u0000${reason}`);
+    if (sources !== undefined && sources.length > 0) {
+      sources.pop();
+      moved.add(id);
+    }
+  }
+  return moved;
+};
+
 export const checkBaseline = ({
   observed,
   recorded,
@@ -2694,10 +2730,14 @@ export const checkBaseline = ({
   const byId = new Map(observed.map((finding) => [finding.id, finding]));
   const additions = [...byId.keys()].filter((id) => !(id in recorded));
   const stale = Object.keys(recorded).filter((id) => !byId.has(id));
+  const moved =
+    committed === null ? new Set<string>() : movedEntries(recorded, committed);
   const growth =
     committed === null
       ? []
-      : Object.keys(recorded).filter((id) => !(id in committed));
+      : Object.keys(recorded).filter(
+          (id) => !(id in committed) && !moved.has(id),
+        );
   const reworded =
     committed === null
       ? []
