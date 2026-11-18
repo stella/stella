@@ -18,6 +18,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import {
   PublicLawContentModeToggle,
   PublicLawResultsToolbarFace,
+  PublicLawToolbarSelectLabel,
 } from "@/components/public-law-table/public-law-results-toolbar.pending";
 import type {
   PublicLawTableLayout,
@@ -120,9 +121,7 @@ export const ToolbarSelect = <TValue extends string>({
   value,
 }: ToolbarSelectProps<TValue>) => (
   <>
-    <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
-      {label}
-    </span>
+    <PublicLawToolbarSelectLabel>{label}</PublicLawToolbarSelectLabel>
     <Select
       onValueChange={(next: string | null) => {
         const chosen = options.find((option) => option.value === next);

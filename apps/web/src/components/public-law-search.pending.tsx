@@ -1,6 +1,10 @@
 import type { ComponentProps, ReactNode } from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
+import { AiActionIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 // The public-law box's frame and its loading face. A route's pending view
@@ -53,10 +57,13 @@ export const PublicLawSearchInput = (
 export const PublicLawSearchFace = ({
   maxLength,
   placeholder,
+  refine = false,
   searchLabel,
 }: {
   maxLength: number;
   placeholder: string;
+  /** Whether the box offers the AI rewrite, whose wand then waits beside it. */
+  refine?: boolean | undefined;
   searchLabel: string;
 }) => (
   <PublicLawSearchFrame>
@@ -67,5 +74,27 @@ export const PublicLawSearchFace = ({
       readOnly
       value=""
     />
+    {refine && <PublicLawRefineFace />}
   </PublicLawSearchFrame>
 );
+
+/**
+ * The wand beside an empty box: there is nothing to rewrite yet, so it waits
+ * disabled, as the live wand does over an empty entry.
+ */
+const PublicLawRefineFace = () => {
+  const t = useTranslations();
+
+  return (
+    <Button
+      aria-label={t("search.aiRefine")}
+      disabled
+      size="icon-sm"
+      title={t("search.aiRefine")}
+      type="button"
+      variant="muted"
+    >
+      <AiActionIcon aria-hidden="true" className="size-4" />
+    </Button>
+  );
+};

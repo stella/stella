@@ -11,6 +11,7 @@ import {
   WrapTextIcon,
 } from "@stll/ui/icons";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -232,6 +233,28 @@ export const PublicLawColumnsFace = () => {
     </Button>
   );
 };
+
+/** A toolbar choice's caption, drawn beside the control from `sm` up. */
+export const PublicLawToolbarSelectLabel = ({
+  children,
+}: {
+  children: ReactNode;
+}) => (
+  <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
+    {children}
+  </span>
+);
+
+/**
+ * A toolbar choice (an order, an excerpt length) before its page is there:
+ * the caption reads, and the value the address holds waits in place.
+ */
+export const PublicLawToolbarSelectFace = ({ label }: { label: string }) => (
+  <>
+    <PublicLawToolbarSelectLabel>{label}</PublicLawToolbarSelectLabel>
+    <Skeleton className="h-7 w-28 rounded-md" />
+  </>
+);
 
 /** The density toggle before the page is there, at the default density. */
 export const PublicLawContentModeFace = () => (
