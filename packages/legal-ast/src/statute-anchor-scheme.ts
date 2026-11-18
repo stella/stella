@@ -94,8 +94,12 @@ export const E_SBIRKA_ANCHORS = {
   segmentSeparator: "-",
   unnumberedAnchor: /^frag_\d+$/u,
   unnumberedSegment: /^frag_\d+$/u,
-  // `pril_3`, `pril_2A`, `pril_A/1`, `pril_4:2`.
-  annexAnchors: [/^pril_(?<designator>[^-]+)$/u],
+  // `pril_3`, `pril_2A`, `pril_A/1`, `pril_4:2`, and in a few older acts
+  // `priloha_27`.
+  annexAnchors: [
+    /^pril_(?<designator>[^-]+)$/u,
+    /^priloha_(?<designator>[^-]+)$/u,
+  ],
 } as const satisfies StatuteAnchorScheme;
 
 const SLOV_LEX_KINDS = {
@@ -122,10 +126,10 @@ export const SLOV_LEX_ANCHORS = {
   // one annex `…priloha_k_zakonu_c_106_2024_z_z`. The first pattern that
   // matches decides; the last names an annex whose number the id omits.
   annexAnchors: [
-    /^prilohy\.priloha-priloha_(?:k|ku|vyhlasky|vyhlasce|zakona|zakonu|nariadenia|nariadeniu|opatrenia|opatreniu)_[^.]*$/u,
-    /^prilohy\.priloha-priloha_(?:c_)?(?<designator>[0-9]+[a-z]{0,2}|[a-z]|[ivx]+)(?:_[^.]*)?$/u,
-    /^prilohy\.priloha-(?<designator>[0-9]+[a-z]{0,2})$/u,
-    /^prilohy\.priloha-[^.]+$/u,
+    /^(?:prilohy|predpis)\.priloha-priloha_(?:k|ku|vyhlasky|vyhlasce|zakona|zakonu|nariadenia|nariadeniu|opatrenia|opatreniu)_[^.]*$/u,
+    /^(?:prilohy|predpis)\.priloha-priloha_(?:c_)?(?<designator>[0-9]+[a-z]{0,2}|[a-z]|[ivx]+)(?:_[^.]*)?$/u,
+    /^(?:prilohy|predpis)\.priloha-(?<designator>[0-9]+[a-z]{0,2})$/u,
+    /^(?:prilohy|predpis)\.priloha-[^.]+$/u,
   ],
 } as const satisfies StatuteAnchorScheme;
 

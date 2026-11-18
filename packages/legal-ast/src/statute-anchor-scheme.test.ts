@@ -249,10 +249,11 @@ describe("annex anchors", () => {
         "pril_2A",
         "pril_A/1",
         "pril_4:2",
+        "priloha_27",
         "pril_3-frag_8775881",
         "par_3",
       ].map((anchor) => annexDesignator(E_SBIRKA_ANCHORS, anchor)),
-    ).toEqual(["3", "2a", "a/1", "4:2", null, null]);
+    ).toEqual(["3", "2a", "a/1", "4:2", "27", null, null]);
     expect(
       [
         "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z",
@@ -262,10 +263,12 @@ describe("annex anchors", () => {
         "prilohy.priloha-priloha_ii_k_vyhlasce_ministra_ochrany_prace_c_164_sb",
         "prilohy.priloha-priloha_a",
         "prilohy.priloha-priloha_vyhlasky_c_72_1945_sb",
+        "predpis.priloha-priloha_c_3_k_vyhlasce_c_130_1975_sb",
+        "predpis.clanok-1.prilohy.priloha-priloha_c_1_znie",
         "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z.bod-1",
         "paragraf-3",
       ].map((anchor) => annexDesignator(SLOV_LEX_ANCHORS, anchor)),
-    ).toEqual(["3", "1a", "1", "", "ii", "a", "", null, null]);
+    ).toEqual(["3", "1a", "1", "", "ii", "a", "", "3", null, null, null]);
     expect(annexDesignator(US_CODE_ANCHORS, "pril_3")).toBeNull();
   });
 
