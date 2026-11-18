@@ -27,7 +27,7 @@
 // (oxlint.config.ts); so is a role a component sets for its own popup, which
 // never appears at a product call site.
 
-import type { CreateOnceRule } from "@oxlint/plugins";
+import type { CreateOnceRule, ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
@@ -37,7 +37,12 @@ import {
   type NativeRuleEntry,
   REACT_NATIVE_MODULE,
 } from "./no-native-ui-registry.ts";
-import { isAstNode, jsxName } from "./utils.ts";
+import {
+  isAstNode,
+  jsxName,
+  resolveVariable,
+  type ScopeContext,
+} from "./utils.ts";
 
 /** Elements that forward `type` to a native `<input>`. */
 const INPUT_ELEMENTS = new Set(["input", "Input"]);
@@ -198,23 +203,40 @@ const recordReactNativeImports = (
   }
 };
 
+/**
+ * Whether a tag's identifier binds, lexically, to an import from
+ * "react-native": a parameter or local named `Text` shadows the import.
+ */
+const bindsReactNativeImport = (
+  context: ScopeContext,
+  identifier: ESTree.JSXIdentifier,
+): boolean => {
+  const definition = resolveVariable(context, identifier)?.defs.at(0);
+  return (
+    definition?.type === "ImportBinding" &&
+    isAstNode(definition.parent) &&
+    isAstNode(definition.parent.source) &&
+    definition.parent.source.value === REACT_NATIVE_MODULE
+  );
+};
+
 /** The React Native component a JSX tag renders, or null for any other tag. */
 const reactNativeComponent = (
-  name: unknown,
+  context: ScopeContext,
+  name: ESTree.JSXElementName,
   imports: ReactNativeImports,
 ): string | null => {
-  if (!isAstNode(name)) {
-    return null;
-  }
-  if (name.type === "JSXIdentifier" && typeof name.name === "string") {
-    return imports.named.get(name.name) ?? null;
+  if (name.type === "JSXIdentifier") {
+    const component = imports.named.get(name.name);
+    return component !== undefined && bindsReactNativeImport(context, name)
+      ? component
+      : null;
   }
   if (
     name.type === "JSXMemberExpression" &&
-    isAstNode(name.object) &&
     name.object.type === "JSXIdentifier" &&
-    typeof name.object.name === "string" &&
-    imports.namespaces.has(name.object.name)
+    imports.namespaces.has(name.object.name) &&
+    bindsReactNativeImport(context, name.object)
   ) {
     return jsxName(name.property);
   }
@@ -323,7 +345,7 @@ const nativeRule = (module: string): CreateOnceRule => {
           if (element === null) {
             return;
           }
-          const component = reactNativeComponent(node.name, imports);
+          const component = reactNativeComponent(context, node.name, imports);
           if (
             component !== null &&
             reactNative.some((selector) =>

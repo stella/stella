@@ -140,7 +140,7 @@ const MoreRowView = ({ last, row }: { last: boolean; row: MoreRow }) => {
       className="w-full"
       variant="plain"
     >
-      <View className="flex-1 flex-row items-center gap-3 pl-4">
+      <View className="flex-row items-center gap-3 pl-4">
         <View
           className="size-8 items-center justify-center rounded-lg"
           style={{ backgroundColor: ui[`option${row.tile}Bg`] }}

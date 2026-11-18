@@ -126,6 +126,23 @@ describe("no-native-ui edge cases", () => {
   );
 
   test.concurrent(
+    "a local binding that shadows a react-native import is not reported",
+    async () => {
+      const source = [
+        'import { Pressable, Text } from "react-native";',
+        'import * as RN from "react-native";',
+        "export const a = (Pressable) => <Pressable onPress={go} />;",
+        "export const b = ({ RN }) => <RN.Pressable onPress={go} />;",
+        "export function c(Text) { return <Text>Hi</Text>; }",
+        "export const d = <Pressable onPress={go} />;",
+        "export const e = <RN.Pressable onPress={go} />;",
+      ].join("\n");
+      expect(await lint("button", source)).toEqual([6, 7]);
+      expect(await lint("text", source)).toEqual([]);
+    },
+  );
+
+  test.concurrent(
     "a multi-line TextInput is the textarea's, a single-line one the input's",
     async () => {
       const source = [
