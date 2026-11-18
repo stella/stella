@@ -29,7 +29,7 @@ export const CZ_NS_COLLECTION_METADATA_KEY = "czNsCollection";
  * criminal parts as separate numbered series; `Stanoviska` and an absent
  * `Druh` name neither.
  */
-export const CZ_NS_COLLECTION_KIND_OF_PART = {
+const CZ_NS_COLLECTION_KIND_OF_PART = {
   civil: "Rozhodnutí ve věcech občanskoprávních, obchodních a správních",
   criminal: "Rozhodnutí ve věcech trestních",
 } as const satisfies Record<CzNsCollectionPart, string>;
@@ -126,7 +126,15 @@ export const readStoredCzNsCollectionEntry = (
     storedCzNsCollectionEntrySchema,
     metadata[CZ_NS_COLLECTION_METADATA_KEY],
   );
-  return parsed.success ? parsed.output : null;
+  return parsed.success
+    ? {
+        ...parsed.output,
+        exports: {
+          pdf: parsed.output.exports.pdf,
+          epub: parsed.output.exports.epub,
+        },
+      }
+    : null;
 };
 
 /** URL fields of the entry, for the metadata URL contract. */

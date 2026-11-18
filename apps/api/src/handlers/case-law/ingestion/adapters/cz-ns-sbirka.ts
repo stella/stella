@@ -43,6 +43,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   czNsCollectionIdentifierValues,
   formatCzNsCollectionCitation,
@@ -174,7 +175,7 @@ const POST_ID_PATTERN = /^\d{1,9}$/u;
 const ENTRY_URL_PATTERN =
   /^https:\/\/sbirka\.nsoud\.cz\/sbirka\/(?<postId>\d{1,9})\/$/u;
 const COLLECTION_SITEMAP_PATTERN =
-  /^https:\/\/sbirka\.nsoud\.cz\/collection-sitemap(?<number>\d*)\.xml$/u;
+  /^https:\/\/sbirka\.nsoud\.cz\/collection-sitemap(?<number>\d{0,4})\.xml$/u;
 
 export const czNsSbirkaEntryUrl = (postId: string): string =>
   `${ORIGIN}/sbirka/${postId}/`;
@@ -190,8 +191,10 @@ const postIdOfUrl = (url: string): string | undefined =>
  * or `sen. zn.`, and a few interwar headings leave it out; the ECLI is absent
  * from some older entries.
  */
-const TITLE_PATTERN =
-  /^(?<head>.*?)\s+ze dne\s+(?<date>\d{1,2}\.\s?\d{1,2}\.\s?\d{4})\s*,\s*(?:(?:sp|sen)\.\s?zn\.\s*)?(?<docket>.+?)(?:,\s*(?<ecli>ECLI:\S+))?$/u;
+const TITLE_DATE_MARK = " ze dne ";
+const TITLE_DATE = /^\d{1,2}\. ?\d{1,2}\. ?\d{4}$/u;
+const TITLE_DOCKET_MARK = /^(?:sp|sen)\. ?zn\. ?/u;
+const ECLI_PREFIX = "ECLI:";
 
 type TitleParts = {
   head: string | undefined;
@@ -200,14 +203,37 @@ type TitleParts = {
   ecli: string | undefined;
 };
 
+const NO_TITLE_PARTS: TitleParts = {
+  head: undefined,
+  date: undefined,
+  docket: undefined,
+  ecli: undefined,
+};
+
+/** The heading's parts, read off its comma-separated statements in order. */
 const titleParts = (title: string | undefined): TitleParts => {
-  const groups =
-    title === undefined ? undefined : TITLE_PATTERN.exec(title)?.groups;
+  const at = title?.indexOf(TITLE_DATE_MARK) ?? -1;
+  if (title === undefined || at < 0) {
+    return NO_TITLE_PARTS;
+  }
+  const [date, ...rest] = title
+    .slice(at + TITLE_DATE_MARK.length)
+    .split(",")
+    .map((part) => part.trim());
+  if (date === undefined || !TITLE_DATE.test(date)) {
+    return NO_TITLE_PARTS;
+  }
+  const last = rest.at(-1);
+  const ecli = last?.startsWith(ECLI_PREFIX) === true ? last : undefined;
+  const docket = (ecli === undefined ? rest : rest.slice(0, -1))
+    .join(", ")
+    .replace(TITLE_DOCKET_MARK, "")
+    .trim();
   return {
-    head: groups?.["head"],
-    date: groups?.["date"],
-    docket: groups?.["docket"]?.trim(),
-    ecli: groups?.["ecli"]?.trim(),
+    head: title.slice(0, at).trim(),
+    date,
+    docket: docket === "" ? undefined : docket,
+    ecli,
   };
 };
 
@@ -240,17 +266,28 @@ const decisionTypeOfTitle = (head: string | undefined): string | undefined =>
  * rest of the name (the seat, `ČSSR`) does not decline. Read only for an
  * entry whose page states no `Soud` row.
  */
-const COURT_IN_HEADING =
-  /(?<adjective>\p{Lu}\p{Ll}+?)(?<ending>ého|ího)\s+soudu(?<rest>(?:\s+\S+)*)$/u;
+const CAPITALISED = /^\p{Lu}/u;
+const GENITIVE_ENDINGS = { ého: "ý", ího: "í" } as const;
 
 const courtOfTitle = (head: string | undefined): string | undefined => {
-  const groups =
-    head === undefined ? undefined : COURT_IN_HEADING.exec(head)?.groups;
-  const adjective = groups?.["adjective"];
-  if (adjective === undefined) {
+  const words = head === undefined ? [] : head.split(" ");
+  const noun = words.lastIndexOf("soudu");
+  const adjective = noun > 0 ? words[noun - 1] : undefined;
+  if (adjective === undefined || !CAPITALISED.test(adjective)) {
     return undefined;
   }
-  return `${adjective}${groups?.["ending"] === "ého" ? "ý" : "í"} soud${groups?.["rest"] ?? ""}`;
+  const ending = Object.entries(GENITIVE_ENDINGS).find(([genitive]) =>
+    adjective.endsWith(genitive),
+  );
+  if (ending === undefined) {
+    return undefined;
+  }
+  const [genitive, nominative] = ending;
+  return [
+    `${adjective.slice(0, -genitive.length)}${nominative}`,
+    "soud",
+    ...words.slice(noun + 1),
+  ].join(" ");
 };
 
 /** "Rok 1971" and "Sešit č. 1/1971" in the breadcrumb. */
@@ -269,6 +306,12 @@ const breadcrumbValue = (
     }
   }
   return undefined;
+};
+
+/** A row's lines; none where the page states no such row. */
+const rowLines = (page: CzNsSbirkaPage, label: string): string[] => {
+  const lines = page.fields.get(label);
+  return lines === undefined ? [] : [...lines];
 };
 
 /** A single-valued row's text: its lines joined. */
@@ -392,7 +435,7 @@ export const czNsSbirkaLanguageOf = (texts: readonly string[]): string => {
   let czech = 0;
   let slovak = 0;
   for (const text of texts) {
-    for (const word of text.toLocaleLowerCase("cs").match(/\p{L}+/gu) ?? []) {
+    for (const [word] of text.toLocaleLowerCase("cs").matchAll(/\p{L}+/gu)) {
       if (CS_STOPWORDS.has(word)) {
         czech += 1;
       } else if (SK_STOPWORDS.has(word)) {
@@ -406,15 +449,30 @@ export const czNsSbirkaLanguageOf = (texts: readonly string[]): string => {
 const NUMBER_PATTERN = /^\d{1,4}$/u;
 const YEAR_PATTERN = /^\d{4}$/u;
 
+/**
+ * A run of digits as its number. Every caller has matched the text against a
+ * bounded digit pattern first, so a failed parse is an impossible state.
+ */
+const integerOf = (digits: string): number => {
+  const parsed = parseIntegerToken(digits, { sign: "unsigned" });
+  return Result.isOk(parsed)
+    ? parsed.value
+    : panic(`validated digits did not parse: ${digits}`);
+};
+
 /** The reporter citations an entry is stored under, where it has a number. */
 const collectionIdentifiers = (
   entry: Pick<CzNsCollectionEntry, "part" | "number" | "year">,
 ): DecisionIdentifier[] => {
   const { part, number, year } = entry;
-  if (number === null || year === null || !NUMBER_PATTERN.test(number)) {
+  const numbered =
+    number === null || !NUMBER_PATTERN.test(number)
+      ? undefined
+      : integerOf(number);
+  if (numbered === undefined || year === null) {
     return [];
   }
-  const place = { number: Number(number), year };
+  const place = { number: numbered, year };
   const values =
     part === null
       ? [formatCzNsCollectionCitation({ ...place, part: null })]
@@ -504,7 +562,7 @@ export const buildCzNsSbirkaDecision = ({
     rowText(page, "Rok") ??
     breadcrumbValue(page.breadcrumb, BREADCRUMB_YEAR, "year");
   const keywords = keywordsOf(page);
-  const citedProvisions = [...(page.fields.get("Předpisy") ?? [])];
+  const citedProvisions = rowLines(page, "Předpisy");
   const legalSentence = rowParagraphs(page, "Právní věta");
   const entry: CzNsCollectionEntry = {
     postId,
@@ -514,7 +572,7 @@ export const buildCzNsSbirkaDecision = ({
     number: rowText(page, "Číslo rozhodnutí") ?? null,
     year:
       yearText !== undefined && YEAR_PATTERN.test(yearText)
-        ? Number(yearText)
+        ? integerOf(yearText)
         : null,
     issue:
       rowText(page, "Sešit") ??
@@ -523,12 +581,18 @@ export const buildCzNsSbirkaDecision = ({
     legalSentence: legalSentence ?? null,
     keywords,
     citedProvisions,
-    affectedDecisions: [...(page.fields.get("Dotčená rozhodnutí") ?? [])],
+    affectedDecisions: rowLines(page, "Dotčená rozhodnutí"),
     constitutionalComplaint: rowParagraphs(page, "Ústavní stížnost") ?? null,
     statedCourt: statedCourt ?? null,
     exports: {
-      pdf: toMetadataUrl(page.exports.pdf, "decoded"),
-      epub: toMetadataUrl(page.exports.epub, "decoded"),
+      pdf:
+        page.exports.pdf === undefined
+          ? undefined
+          : toMetadataUrl(page.exports.pdf, "decoded"),
+      epub:
+        page.exports.epub === undefined
+          ? undefined
+          : toMetadataUrl(page.exports.epub, "decoded"),
     },
   };
 
@@ -614,22 +678,31 @@ export const buildCzNsSbirkaDecision = ({
 
 // ── Reads ────────────────────────────────────────────────
 
-/** A listing read (sitemap or archive page) as text, or the page's error. */
+type ListingRead = { type: "present"; body: string } | { type: "absent" };
+
+const listingError = (message: string, cursor: string | null) =>
+  new AdapterFetchError({ message, adapterKey: KEY, cursor });
+
+/**
+ * A listing read (sitemap or archive page) as text, or the error that fails
+ * the page. A sitemap's address is one the index handed back: it is held to
+ * the publisher's own hosts like every address read here.
+ */
 const readListing = async (
   url: string,
   cursor: string | null,
   signal: AbortSignal | undefined,
-): Promise<{ type: "present"; body: string } | { type: "absent" }> => {
-  // A sitemap's address is one the index handed back: held to the
-  // publisher's own hosts like every address read here.
+): Promise<Result<ListingRead, AdapterFetchError>> => {
   const target = publisherTarget(KEY, url);
   if (Result.isError(target)) {
-    throw new AdapterFetchError({
-      message: target.error.message,
-      adapterKey: KEY,
-      cursor,
-      cause: target.error,
-    });
+    return Result.err(
+      new AdapterFetchError({
+        message: target.error.message,
+        adapterKey: KEY,
+        cursor,
+        cause: target.error,
+      }),
+    );
   }
   const read = await readPublisherText(target.value, {
     fetchStage: "listing",
@@ -641,17 +714,19 @@ const readListing = async (
   });
   switch (read.type) {
     case "present":
-      return { type: "present", body: read.value };
+      return Result.ok({ type: "present", body: read.value });
     case "absent":
-      return { type: "absent" };
+      return Result.ok({ type: "absent" });
     case "refused":
     case "unavailable":
-      throw unreadPublisherError({
-        outcome: read,
-        message: `Collection listing ${url} could not be read`,
-        adapterKey: KEY,
-        cursor,
-      });
+      return Result.err(
+        unreadPublisherError({
+          outcome: read,
+          message: `Collection listing ${url} could not be read`,
+          adapterKey: KEY,
+          cursor,
+        }),
+      );
     default:
       read satisfies never;
       return panic(
@@ -673,16 +748,16 @@ export type CzNsSbirkaEntryRead =
   | { type: "unread"; read: UnreadPublisherOutcome };
 
 /**
- * Read and build one entry. A page that could not be read throws: the crawl
- * and the reconciliation each stop rather than store or skip an entry nobody
- * has seen.
+ * Read and build one entry. A page that could not be read is an error: the
+ * crawl and the reconciliation each stop rather than store or skip an entry
+ * nobody has seen.
  */
 export const readCzNsSbirkaEntry = async (
   postId: string,
   cursor: string | null,
   signal: AbortSignal | undefined,
-): Promise<CzNsSbirkaEntryRead> => {
-  const read = await readPublisherText(czNsSbirkaEntryUrl(postId), {
+): Promise<Result<CzNsSbirkaEntryRead, AdapterFetchError>> => {
+  const read = await readPublisherText(`${ORIGIN}/sbirka/${postId}/`, {
     fetchStage: "document",
     adapterKey: KEY,
     signal,
@@ -702,22 +777,29 @@ export const readCzNsSbirkaEntry = async (
         decisionOf: (decision) => decision ?? undefined,
       });
       if (attempted.type === "item_build_failed") {
-        return { type: "build-failed", decision: attempted.decision };
+        return Result.ok({
+          type: "build-failed",
+          decision: attempted.decision,
+        });
       }
-      return attempted.value === null
-        ? { type: "unkeyable" }
-        : { type: "built", decision: attempted.value };
+      return Result.ok(
+        attempted.value === null
+          ? { type: "unkeyable" }
+          : { type: "built", decision: attempted.value },
+      );
     }
     case "absent":
     case "refused":
-      return { type: "unread", read };
+      return Result.ok({ type: "unread", read });
     case "unavailable":
-      throw unreadPublisherError({
-        outcome: read,
-        message: `Collection entry ${postId} could not be read`,
-        adapterKey: KEY,
-        cursor,
-      });
+      return Result.err(
+        unreadPublisherError({
+          outcome: read,
+          message: `Collection entry ${postId} could not be read`,
+          adapterKey: KEY,
+          cursor,
+        }),
+      );
     default:
       read satisfies never;
       return panic(`Unhandled collection entry read: ${JSON.stringify(read)}`);
@@ -727,16 +809,27 @@ export const readCzNsSbirkaEntry = async (
 // ── Sitemaps ─────────────────────────────────────────────
 
 /** One entry as a sitemap lists it. */
-export type CzNsSbirkaSitemapEntry = {
+type CzNsSbirkaSitemapEntry = {
   postId: string;
   /** `lastmod` as the sitemap states it. */
   lastmod: string;
 };
 
-const URL_BLOCK = /<url>([\s\S]*?)<\/url>/gu;
-const SITEMAP_BLOCK = /<sitemap>([\s\S]*?)<\/sitemap>/gu;
-const LOC = /<loc>\s*([^<]*?)\s*<\/loc>/u;
-const LASTMOD = /<lastmod>\s*([^<]*?)\s*<\/lastmod>/u;
+/** The text of each `<tag>…</tag>` element, in order. */
+const elementsOf = (xml: string, tag: string): string[] => {
+  const close = `</${tag}>`;
+  return xml
+    .split(`<${tag}>`)
+    .slice(1)
+    .map((chunk) => {
+      const end = chunk.indexOf(close);
+      return end === -1 ? chunk : chunk.slice(0, end);
+    });
+};
+
+/** The trimmed text of the first `<tag>` inside `block`, if any. */
+const fieldOf = (block: string, tag: string): string | undefined =>
+  elementsOf(block, tag).at(0)?.trim();
 
 const instantOf = (lastmod: string): Temporal.Instant | null =>
   Result.try(() => Temporal.Instant.from(lastmod)).unwrapOr(null);
@@ -747,13 +840,17 @@ const instantOf = (lastmod: string): Temporal.Instant | null =>
  */
 export const readCzNsSbirkaSitemapIndex = (xml: string): string[] => {
   const sitemaps: { url: string; number: number }[] = [];
-  for (const [, block = ""] of xml.matchAll(SITEMAP_BLOCK)) {
-    const url = LOC.exec(block)?.[1];
-    const match =
-      url === undefined ? null : COLLECTION_SITEMAP_PATTERN.exec(url);
-    if (url !== undefined && match !== null) {
-      const number = match.groups?.["number"] ?? "";
-      sitemaps.push({ url, number: number === "" ? 1 : Number(number) });
+  for (const block of elementsOf(xml, "sitemap")) {
+    const url = fieldOf(block, "loc");
+    const number =
+      url === undefined
+        ? undefined
+        : COLLECTION_SITEMAP_PATTERN.exec(url)?.groups?.["number"];
+    if (url !== undefined && number !== undefined) {
+      sitemaps.push({
+        url,
+        number: number === "" ? 1 : integerOf(number),
+      });
     }
   }
   return sitemaps
@@ -769,26 +866,27 @@ export const readCzNsSbirkaSitemapIndex = (xml: string): string[] => {
 export const readCzNsSbirkaSitemap = (
   xml: string,
   url: string,
-): CzNsSbirkaSitemapEntry[] => {
+): Result<CzNsSbirkaSitemapEntry[], AdapterFetchError> => {
   const entries: CzNsSbirkaSitemapEntry[] = [];
-  for (const [, block = ""] of xml.matchAll(URL_BLOCK)) {
-    const loc = LOC.exec(block)?.[1] ?? "";
-    const lastmod = LASTMOD.exec(block)?.[1];
-    const postId = postIdOfUrl(loc);
+  for (const block of elementsOf(xml, "url")) {
+    const loc = fieldOf(block, "loc");
+    const lastmod = fieldOf(block, "lastmod");
+    const postId = loc === undefined ? undefined : postIdOfUrl(loc);
     if (
       postId === undefined ||
       lastmod === undefined ||
       instantOf(lastmod) === null
     ) {
-      throw new AdapterFetchError({
-        message: `Collection sitemap ${url} lists an entry this reader cannot place: ${loc}`,
-        adapterKey: KEY,
-        cursor: null,
-      });
+      return Result.err(
+        listingError(
+          `Collection sitemap ${url} lists an entry this reader cannot place: ${loc ?? "no address"}`,
+          null,
+        ),
+      );
     }
     entries.push({ postId, lastmod });
   }
-  return entries;
+  return Result.ok(entries);
 };
 
 /** Walk order: `lastmod`, then post id, as the publisher orders its sitemaps. */
@@ -800,7 +898,9 @@ const compareEntries = (
     Temporal.Instant.from(left.lastmod),
     Temporal.Instant.from(right.lastmod),
   );
-  return byTime === 0 ? Number(left.postId) - Number(right.postId) : byTime;
+  return byTime === 0
+    ? integerOf(left.postId) - integerOf(right.postId)
+    : byTime;
 };
 
 // ── Cursor ───────────────────────────────────────────────
@@ -834,28 +934,95 @@ const START_CURSOR: CzNsSbirkaCursor = {
   after: null,
 };
 
-const parseCursor = (cursor: string | null): CzNsSbirkaCursor => {
+const parseCursor = (
+  cursor: string | null,
+): Result<CzNsSbirkaCursor, AdapterFetchError> => {
   if (cursor === null) {
-    return START_CURSOR;
+    return Result.ok(START_CURSOR);
   }
   const parsed = v.safeParse(
     cursorSchema,
     Result.try((): unknown => JSON.parse(cursor)).unwrapOr(null),
   );
-  if (!parsed.success) {
-    throw new AdapterFetchError({
-      message: "Collection cursor is not one this adapter writes",
-      adapterKey: KEY,
-      cursor,
-    });
-  }
-  return parsed.output;
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(
+        listingError(
+          "Collection cursor is not one this adapter writes",
+          cursor,
+        ),
+      );
 };
 
 const isAfter = (
   entry: CzNsSbirkaSitemapEntry,
   after: CzNsSbirkaCursor["after"],
 ): boolean => after === null || compareEntries(entry, after) > 0;
+
+type PendingEntries = {
+  position: number;
+  sitemapUrl: string;
+  pending: CzNsSbirkaSitemapEntry[];
+};
+
+/**
+ * The entries after the cursor, from the sitemap it sits in, or from the
+ * next ones once that one lists nothing after it.
+ */
+const pendingEntries = async (
+  cursor: CzNsSbirkaCursor,
+  cursorText: string | null,
+  signal: AbortSignal | undefined,
+): Promise<Result<PendingEntries, AdapterFetchError>> => {
+  const index = await readListing(SITEMAP_INDEX_URL, cursorText, signal);
+  if (Result.isError(index)) {
+    return Result.err(index.error);
+  }
+  const sitemaps =
+    index.value.type === "present"
+      ? readCzNsSbirkaSitemapIndex(index.value.body)
+      : [];
+  const lastPosition = sitemaps.length - 1;
+  if (lastPosition < 0) {
+    return Result.err(
+      listingError(
+        "Collection sitemap index lists no collection sitemap",
+        cursorText,
+      ),
+    );
+  }
+  for (
+    let position = Math.min(cursor.sitemap, lastPosition);
+    position <= lastPosition;
+    position += 1
+  ) {
+    const sitemapUrl =
+      sitemaps[position] ?? panic("sitemap position out of range");
+    const sitemap = await readListing(sitemapUrl, cursorText, signal);
+    if (Result.isError(sitemap)) {
+      return Result.err(sitemap.error);
+    }
+    if (sitemap.value.type === "absent") {
+      return Result.err(
+        listingError(
+          `Collection sitemap ${sitemapUrl} is listed and not served`,
+          cursorText,
+        ),
+      );
+    }
+    const listed = readCzNsSbirkaSitemap(sitemap.value.body, sitemapUrl);
+    if (Result.isError(listed)) {
+      return Result.err(listed.error);
+    }
+    const pending = listed.value
+      .filter((entry) => isAfter(entry, cursor.after))
+      .toSorted(compareEntries);
+    if (pending.length > 0 || position === lastPosition) {
+      return Result.ok({ position, sitemapUrl, pending });
+    }
+  }
+  return panic("the sitemap walk ended past the last sitemap");
+};
 
 /**
  * One page of the walk: the next entries after the cursor, read and built.
@@ -868,80 +1035,62 @@ const isAfter = (
 const crawlPage = async (
   cursorText: string | null,
   signal: AbortSignal | undefined,
-): Promise<SyncPage> => {
+): Promise<Result<SyncPage, AdapterFetchError>> => {
   const cursor = parseCursor(cursorText);
-  const index = await readListing(SITEMAP_INDEX_URL, cursorText, signal);
-  const sitemaps =
-    index.type === "present" ? readCzNsSbirkaSitemapIndex(index.body) : [];
-  if (sitemaps.length === 0) {
-    throw new AdapterFetchError({
-      message: "Collection sitemap index lists no collection sitemap",
-      adapterKey: KEY,
-      cursor: cursorText,
-    });
+  if (Result.isError(cursor)) {
+    return Result.err(cursor.error);
   }
-  let position = Math.min(cursor.sitemap, sitemaps.length - 1);
-  let pending: CzNsSbirkaSitemapEntry[] = [];
-  let sitemapUrl = "";
-  for (; position < sitemaps.length; position += 1) {
-    sitemapUrl = sitemaps[position] ?? panic("sitemap position out of range");
-    const sitemap = await readListing(sitemapUrl, cursorText, signal);
-    if (sitemap.type === "absent") {
-      throw new AdapterFetchError({
-        message: `Collection sitemap ${sitemapUrl} is listed and not served`,
-        adapterKey: KEY,
-        cursor: cursorText,
-      });
-    }
-    pending = readCzNsSbirkaSitemap(sitemap.body, sitemapUrl)
-      .filter((entry) => isAfter(entry, cursor.after))
-      .toSorted(compareEntries);
-    if (pending.length > 0 || position === sitemaps.length - 1) {
-      break;
-    }
+  const listed = await pendingEntries(cursor.value, cursorText, signal);
+  if (Result.isError(listed)) {
+    return Result.err(listed.error);
   }
-
+  const { position, sitemapUrl, pending } = listed.value;
   const batch = pending.slice(0, CZ_NS_SBIRKA_PAGE_SIZE);
   const decisions: IngestionResult[] = [];
   let failed = 0;
   for (const entry of batch) {
     const read = await readCzNsSbirkaEntry(entry.postId, cursorText, signal);
-    switch (read.type) {
+    if (Result.isError(read)) {
+      return Result.err(read.error);
+    }
+    switch (read.value.type) {
       case "built":
-        decisions.push(read.decision);
+        decisions.push(read.value.decision);
         break;
       case "build-failed":
         failed += 1;
-        decisions.push(read.decision);
+        decisions.push(read.value.decision);
         break;
       case "unkeyable":
         failed += 1;
         logger.warn("case_law.ingestion.cz_ns_sbirka_entry_unbuilt", {
           adapterKey: KEY,
           sourceDocumentId: entry.postId,
-          outcome: read.type,
+          outcome: read.value.type,
         });
         break;
       case "unread":
         // A withdrawn entry (listed, then 404 or 410) has nothing to store,
         // and the next sitemap read no longer lists it. A refusal of this
         // one page is counted; the reconciliation's walk meets it again.
-        if (read.read.type === "refused") {
+        if (read.value.read.type === "refused") {
           failed += 1;
           logger.warn("case_law.ingestion.cz_ns_sbirka_entry_unbuilt", {
             adapterKey: KEY,
             sourceDocumentId: entry.postId,
-            outcome: read.read.type,
+            outcome: read.value.read.type,
           });
         }
         break;
       default:
-        read satisfies never;
-        return panic(`Unhandled collection entry: ${JSON.stringify(read)}`);
+        read.value satisfies never;
+        return panic(
+          `Unhandled collection entry: ${JSON.stringify(read.value)}`,
+        );
     }
   }
   const last = batch.at(-1);
-  return {
+  return Result.ok({
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     publisherRequest: PUBLISHER_REQUEST.ANSWERED,
@@ -950,41 +1099,55 @@ const crawlPage = async (
       sitemap: position,
       after:
         last === undefined
-          ? cursor.after
+          ? cursor.value.after
           : { postId: last.postId, lastmod: last.lastmod },
     }),
     sourceUrl: sitemapUrl,
-  };
+  });
 };
 
 // ── Count ────────────────────────────────────────────────
 
-/** Every entry the collection sitemaps list. */
+/** Every entry the collection sitemaps list; null where one is not served. */
+const countEntries = async (
+  signal: AbortSignal,
+): Promise<Result<number | null, AdapterFetchError>> => {
+  const index = await readListing(SITEMAP_INDEX_URL, null, signal);
+  if (Result.isError(index) || index.value.type === "absent") {
+    return Result.isError(index) ? Result.err(index.error) : Result.ok(null);
+  }
+  let total = 0;
+  for (const url of readCzNsSbirkaSitemapIndex(index.value.body)) {
+    const sitemap = await readListing(url, null, signal);
+    if (Result.isError(sitemap)) {
+      return Result.err(sitemap.error);
+    }
+    if (sitemap.value.type === "absent") {
+      return Result.ok(null);
+    }
+    const entries = readCzNsSbirkaSitemap(sitemap.value.body, url);
+    if (Result.isError(entries)) {
+      return Result.err(entries.error);
+    }
+    total += entries.value.length;
+  }
+  return Result.ok(total);
+};
+
 const totalCount = async (signal: AbortSignal): Promise<SourceTotalCount> => {
   const counted = await Result.tryPromise({
-    try: async () => {
-      const index = await readListing(SITEMAP_INDEX_URL, null, signal);
-      if (index.type === "absent") {
-        return null;
-      }
-      let total = 0;
-      for (const url of readCzNsSbirkaSitemapIndex(index.body)) {
-        const sitemap = await readListing(url, null, signal);
-        if (sitemap.type === "absent") {
-          return null;
-        }
-        total += readCzNsSbirkaSitemap(sitemap.body, url).length;
-      }
-      return total;
-    },
+    try: async () => await countEntries(signal),
     catch: (error) => error,
   });
   if (Result.isError(counted)) {
     return { type: "probe-failed", errorTag: errorTag(counted.error) };
   }
-  return counted.value === null
+  if (Result.isError(counted.value)) {
+    return { type: "probe-failed", errorTag: errorTag(counted.value.error) };
+  }
+  return counted.value.value === null
     ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS)
-    : sourceTotalRead(counted.value);
+    : sourceTotalRead(counted.value.value);
 };
 
 // ── Reconciliation ───────────────────────────────────────
@@ -1002,7 +1165,7 @@ const TIP_WINDOW_SLICES = 2;
 
 const yearOfSlice = (slice: string): number =>
   YEAR_SLICE.test(slice)
-    ? Number(slice)
+    ? integerOf(slice)
     : panic(`cz-ns-sbirka slice is not a collection year: ${slice}`);
 
 const sliceOf = (now: Date): string =>
@@ -1038,6 +1201,8 @@ export const czNsSbirkaSliceUrl = (slice: string, page: number): string => {
   return page === 0 ? base : `${base}strana/${String(page + 1)}/`;
 };
 
+const PAGE_NUMBER = /^\d{1,4}$/u;
+
 /** The entries one archive page lists, and how many pages the slice has. */
 export const readCzNsSbirkaArchivePage = (
   html: string,
@@ -1050,7 +1215,8 @@ export const readCzNsSbirkaArchivePage = (
     .toArray()
     .flatMap((node) => {
       const text = visibleHtmlText($(node)).trim();
-      return /^\d+$/u.test(text) ? [Number(text)] : [];
+      const number = PAGE_NUMBER.test(text) ? integerOf(text) : undefined;
+      return number === undefined ? [] : [number];
     });
   return { postIds, lastPage: Math.max(1, ...pages) };
 };
@@ -1072,23 +1238,21 @@ const listSlicePage = async ({
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
   const url = czNsSbirkaSliceUrl(slice, page);
   const read = await readListing(url, slice, signal);
-  if (read.type === "absent") {
-    if (page === 0) {
-      return { items: [], totalPages: 0 };
-    }
-    throw new AdapterFetchError({
-      message: `Collection archive ${url} is no longer served`,
-      adapterKey: KEY,
-      cursor: slice,
-    });
+  if (Result.isError(read)) {
+    return await Promise.reject(read.error);
   }
-  const { postIds, lastPage } = readCzNsSbirkaArchivePage(read.body);
+  if (read.value.type === "absent") {
+    return page === 0
+      ? { items: [], totalPages: 0 }
+      : await Promise.reject(
+          listingError(`Collection archive ${url} is no longer served`, slice),
+        );
+  }
+  const { postIds, lastPage } = readCzNsSbirkaArchivePage(read.value.body);
   if (postIds.length === 0) {
-    throw new AdapterFetchError({
-      message: `Collection archive ${url} lists no entry`,
-      adapterKey: KEY,
-      cursor: slice,
-    });
+    return await Promise.reject(
+      listingError(`Collection archive ${url} lists no entry`, slice),
+    );
   }
   return {
     items: postIds.map((postId) =>
@@ -1111,17 +1275,20 @@ const buildFromPayload = async (
     return { type: "unkeyable" };
   }
   const read = await readCzNsSbirkaEntry(payload.postId, null, signal);
-  switch (read.type) {
+  if (Result.isError(read)) {
+    return await Promise.reject(read.error);
+  }
+  switch (read.value.type) {
     case "built":
     case "build-failed":
-      return { type: "built", decision: read.decision };
+      return { type: "built", decision: read.value.decision };
     case "unkeyable":
       return { type: "unkeyable" };
     case "unread":
       return { type: "detail-unavailable" };
     default:
-      read satisfies never;
-      return panic(`Unhandled collection entry: ${JSON.stringify(read)}`);
+      read.value satisfies never;
+      return panic(`Unhandled collection entry: ${JSON.stringify(read.value)}`);
   }
 };
 
@@ -1291,10 +1458,12 @@ export const czNsSbirkaFetchPage = async (
   cursor: string | null,
   signal?: AbortSignal,
 ) =>
-  await Result.tryPromise({
-    try: async () => await crawlPage(cursor, signal),
-    catch: adapterCatch(KEY, cursor),
-  });
+  (
+    await Result.tryPromise({
+      try: async () => await crawlPage(cursor, signal),
+      catch: adapterCatch(KEY, cursor),
+    })
+  ).andThen((page) => page);
 
 export const czNsSbirkaAdapter = defineSourceAdapter({
   key: KEY,

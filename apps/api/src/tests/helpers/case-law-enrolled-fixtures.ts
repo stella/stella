@@ -3288,7 +3288,11 @@ export const czNsSbirkaFixture = (): EnrolledAdapterFixture => ({
           ),
       ),
       async () => {
-        const read = await readCzNsSbirkaEntry("18598", null, undefined);
+        const result = await readCzNsSbirkaEntry("18598", null, undefined);
+        if (Result.isError(result)) {
+          return await Promise.reject(result.error);
+        }
+        const read = result.value;
         switch (read.type) {
           case "built":
           case "build-failed":

@@ -105,7 +105,7 @@ describe("the collection's text", () => {
     expect(
       parsed.value.documentAst.blocks.map((block) => [
         block.type,
-        block.type === "paragraph" ? (block.role ?? null) : block.role,
+        "role" in block ? (block.role ?? null) : null,
         block.plainText,
       ]),
     ).toEqual([

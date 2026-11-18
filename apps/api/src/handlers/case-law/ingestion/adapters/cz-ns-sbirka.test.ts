@@ -62,6 +62,9 @@ const recorded = async (name: string): Promise<string> =>
     Bun.gunzipSync(await Bun.file(new URL(name, FIXTURES)).bytes()),
   );
 
+/** A branded row value, compared as the plain value it holds. */
+const observed = (value: unknown): unknown => value;
+
 const built = (postId: CzNsSbirkaRecording): IngestionResult =>
   buildCzNsSbirkaDecision({
     postId,
@@ -90,13 +93,15 @@ const headings = (decision: IngestionResult): string[] =>
 describe("an entry's detail page as a decision", () => {
   test("a pre-1993 Slovak decision: R 9/1971, the case that names this source", () => {
     const decision = built("9586");
-    expect(decision.sourceDocumentId).toBe("9586");
-    expect(decision.caseNumber).toBe("6 Cz 90/70");
-    expect(decision.ecli).toBe("ECLI:CZ:NS:1970:6.CZ.90.1970.1");
-    expect(decision.decisionDate).toBe("1970-10-14");
-    expect(decision.decisionType).toBe("rozsudek");
-    expect(decision.language).toBe("sk");
-    expect(decision.sourceUrl).toBe("https://sbirka.nsoud.cz/sbirka/9586/");
+    expect(observed(decision.sourceDocumentId)).toBe("9586");
+    expect(observed(decision.caseNumber)).toBe("6 Cz 90/70");
+    expect(observed(decision.ecli)).toBe("ECLI:CZ:NS:1970:6.CZ.90.1970.1");
+    expect(observed(decision.decisionDate)).toBe("1970-10-14");
+    expect(observed(decision.decisionType)).toBe("rozsudek");
+    expect(observed(decision.language)).toBe("sk");
+    expect(observed(decision.sourceUrl)).toBe(
+      "https://sbirka.nsoud.cz/sbirka/9586/",
+    );
     expect(reporterCitations(decision)).toEqual(["Rc 9/1971", "R 9/1971"]);
     const entry = entryOf(decision);
     expect(entry).toMatchObject({
@@ -127,7 +132,9 @@ describe("an entry's detail page as a decision", () => {
       "Z odôvodnenia:",
     ]);
     const roles = hasUsableAst(decision.documentAst)
-      ? decision.documentAst.blocks.slice(0, 4).map((block) => block.role)
+      ? decision.documentAst.blocks
+          .slice(0, 4)
+          .map((block) => ("role" in block ? block.role : undefined))
       : [];
     expect(roles).toEqual([
       "publisher-heading",
@@ -139,32 +146,32 @@ describe("an entry's detail page as a decision", () => {
 
   test("a Supreme Court decision the court's database also holds", () => {
     const decision = built("5819");
-    expect(decision.caseNumber).toBe("26 Cdo 4795/2017");
+    expect(observed(decision.caseNumber)).toBe("26 Cdo 4795/2017");
     // Stored as the collection states it, whatever the database spells.
-    expect(decision.ecli).toBe("ECLI:CZ:NS:2019:26.CDO.4795.2017.1");
-    expect(decision.court).toBe("Nejvyšší soud");
-    expect(decision.language).toBe("cs");
+    expect(observed(decision.ecli)).toBe("ECLI:CZ:NS:2019:26.CDO.4795.2017.1");
+    expect(observed(decision.court)).toBe("Nejvyšší soud");
+    expect(observed(decision.language)).toBe("cs");
     const entry = entryOf(decision);
     expect(entry.part).toBe("civil");
     expect(reporterCitations(decision)).toEqual([
       `Rc ${entry.number ?? ""}/${String(entry.year)}`,
       `R ${entry.number ?? ""}/${String(entry.year)}`,
     ]);
-    expect(decision.metadata["caseNumberReading"]).toBe("grammar");
+    expect(observed(decision.metadata["caseNumberReading"])).toBe("grammar");
   });
 
   test("a pre-1993 decision in Czech", () => {
     const decision = built("10001");
-    expect(decision.caseNumber).toBe("1 Cz 34/72");
-    expect(decision.language).toBe("cs");
-    expect(decision.decisionDate).toBe("1972-06-29");
+    expect(observed(decision.caseNumber)).toBe("1 Cz 34/72");
+    expect(observed(decision.language)).toBe("cs");
+    expect(observed(decision.decisionDate)).toBe("1972-06-29");
     expect(entryOf(decision).statedCourt).not.toBeNull();
   });
 
   test("a stanovisko is an opinion, and names no part of the collection", () => {
     const decision = built("19679");
-    expect(decision.caseNumber).toBe("Cpjn 201/2021");
-    expect(decision.decisionType).toBe("stanovisko");
+    expect(observed(decision.caseNumber)).toBe("Cpjn 201/2021");
+    expect(observed(decision.decisionType)).toBe("stanovisko");
     expect(decisionTypeKind(decision.decisionType)).toBe("opinion");
     const entry = entryOf(decision);
     expect(entry.kind).toBe("Stanoviska");
@@ -176,11 +183,11 @@ describe("an entry's detail page as a decision", () => {
 
   test("a page stating only keywords and provisions reads its heading and breadcrumb", () => {
     const decision = built("13914");
-    expect(decision.caseNumber).toBe("6 Tdo 1314/2003");
-    expect(decision.decisionDate).toBe("2003-12-10");
-    expect(decision.decisionType).toBe("usnesení");
-    expect(decision.ecli).toBeUndefined();
-    expect(decision.court).toBe("Nejvyšší soud");
+    expect(observed(decision.caseNumber)).toBe("6 Tdo 1314/2003");
+    expect(observed(decision.decisionDate)).toBe("2003-12-10");
+    expect(observed(decision.decisionType)).toBe("usnesení");
+    expect(observed(decision.ecli)).toBeUndefined();
+    expect(observed(decision.court)).toBe("Nejvyšší soud");
     const entry = entryOf(decision);
     expect(entry).toMatchObject({
       year: 2004,
@@ -194,9 +201,9 @@ describe("an entry's detail page as a decision", () => {
 
   test("the row's decision date is stored; the heading that disagrees is kept", () => {
     const decision = built("4320");
-    expect(decision.decisionDate).toBe("2022-01-14");
+    expect(observed(decision.decisionDate)).toBe("2022-01-14");
     expect(entryOf(decision).title).toContain("ze dne 14.01.2020");
-    expect(decision.caseNumber).toBe("14 To 158/2019");
+    expect(observed(decision.caseNumber)).toBe("14 To 158/2019");
   });
 
   test("the rows only some entries state are kept in the entry", () => {
@@ -214,7 +221,7 @@ describe("an entry's detail page as a decision", () => {
 
   test("the raw is the detail page verbatim, keyed by the post id", () => {
     const decision = built("9586");
-    expect(decision.sourceRawContentType).toBe(
+    expect(observed(decision.sourceRawContentType)).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
     expect(decodeSourceRawEnvelope(decision.sourceRaw ?? "")).toEqual({
@@ -252,9 +259,11 @@ describe("an entry's detail page as a decision", () => {
       detailHtml:
         "<h1>Rozhodnutí Nejvyššího soudu ze dne 23. 11. 1967</h1><table class='content-table'></table>",
     });
-    expect(decision?.caseNumber).toBe("1");
-    expect(decision?.caseNumberIsPlaceholder).toBe(true);
-    expect(decision?.metadata["caseNumberReading"]).toBe("placeholder");
+    expect(observed(decision?.caseNumber)).toBe("1");
+    expect(observed(decision?.caseNumberIsPlaceholder)).toBe(true);
+    expect(observed(decision?.metadata["caseNumberReading"])).toBe(
+      "placeholder",
+    );
     expect(
       buildCzNsSbirkaDecision({ postId: "1", detailHtml: "<p></p>" }),
     ).toBeNull();
@@ -398,10 +407,11 @@ describe("the sitemap walk", () => {
     expect(index.at(-1)).toBe(
       "https://sbirka.nsoud.cz/collection-sitemap10.xml",
     );
-    const sitemap = readCzNsSbirkaSitemap(
+    const read = readCzNsSbirkaSitemap(
       await recorded("cz-ns-sbirka-collection-sitemap10.xml.gz"),
       "https://sbirka.nsoud.cz/collection-sitemap10.xml",
     );
+    const sitemap = Result.isOk(read) ? read.value : panic("unreadable");
     expect(sitemap).toHaveLength(832);
     const times = sitemap.map(({ lastmod }) => Date.parse(lastmod));
     expect(times).toEqual(times.toSorted((left, right) => left - right));

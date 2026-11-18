@@ -92,10 +92,7 @@ const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();
 const LINE_ENDING_ELEMENTS = "p, div, li";
 
 /** A field cell's text, one entry per printed line. */
-const cellLines = (
-  $: cheerio.CheerioAPI,
-  cell: cheerio.Cheerio<AnyNode>,
-): string[] => {
+const cellLines = (cell: cheerio.Cheerio<AnyNode>): string[] => {
   const copy = cell.clone();
   copy.find("br").replaceWith("\n");
   copy.find(LINE_ENDING_ELEMENTS).after("\n");
@@ -133,7 +130,7 @@ export const readCzNsSbirkaPage = (html: string): CzNsSbirkaPage => {
       continue;
     }
     if (label.endsWith(":") && label.length > 1) {
-      fields.set(label.slice(0, -1).trimEnd(), cellLines($, valueCell));
+      fields.set(label.slice(0, -1).trimEnd(), cellLines(valueCell));
     }
   }
   const linkOf = (pattern: string): string | undefined =>
