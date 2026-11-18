@@ -558,7 +558,6 @@ if (!databaseUrl || !runPostgresTests) {
           family: "case_law",
           generation: "case_law_v5",
         } as const;
-        const unrelatedGeneration = `case_law_v${suffix}`;
         const subject = { family: "case_law", entityId: decisionId } as const;
         const releaseWriter = Promise.withResolvers<undefined>();
         const writerLocked = Promise.withResolvers<undefined>();
@@ -593,14 +592,6 @@ if (!databaseUrl || !runPostgresTests) {
             language: "cs",
             contentHash: "a".repeat(64),
           });
-          await writerDb.insert(corpusIndexGenerations).values({
-            family: "case_law",
-            generation: unrelatedGeneration,
-            cluster: "q09",
-            manifestDigest: "a".repeat(64),
-            status: "building",
-          });
-
           const writer = writerDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
             const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
@@ -646,8 +637,8 @@ if (!databaseUrl || !runPostgresTests) {
         } finally {
           releaseWriter.resolve(undefined);
           const createdGenerations = targetGenerationCreated
-            ? [unrelatedGeneration, target.generation]
-            : [unrelatedGeneration];
+            ? [target.generation]
+            : [];
           await writerDb
             .update(corpusIndexGenerations)
             .set({ status: "retired" })

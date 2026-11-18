@@ -6038,9 +6038,20 @@
         }
       ]
     },
-    "./components/stella-mark": {
+    "./components/stella-mark [default]": {
       "type": "module",
       "file": "./src/components/stella-mark.d.ts",
+      "exports": [
+        {
+          "name": "StellaMark",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./components/stella-mark [react-native]": {
+      "type": "module",
+      "file": "./src/components/stella-mark.native.d.ts",
       "exports": [
         {
           "name": "StellaMark",
