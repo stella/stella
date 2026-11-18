@@ -586,6 +586,7 @@ test("a stale equal fingerprint advances its version once without rewriting", as
             metadataUrlSchema: undefined,
             sourceFingerprintVersion: 1,
             statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+            heldDecisionAttachment: null,
             retention: sourceRetentionForAdapter("refresh-writes-fixture"),
           }),
       )
@@ -632,6 +633,7 @@ test("a stale equal hash without stored raw follows the changed path", async () 
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -671,6 +673,7 @@ test("a stale unequal fingerprint follows the changed path", async () => {
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -710,6 +713,7 @@ test("an unavailable stale stored source follows the changed path", async () => 
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -752,6 +756,7 @@ test("a forced refresh does not read a stale stored source", async () => {
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )
@@ -791,6 +796,7 @@ test("unchanged fixture bytes recompute a stale fingerprint without rewriting", 
           metadataUrlSchema: undefined,
           sourceFingerprintVersion: 1,
           statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+          heldDecisionAttachment: null,
           retention: sourceRetentionForAdapter("refresh-writes-fixture"),
         }),
     )

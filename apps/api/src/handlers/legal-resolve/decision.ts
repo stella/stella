@@ -5,13 +5,13 @@ import {
   exactDecisionMatches,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   isPublicCountry,
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";

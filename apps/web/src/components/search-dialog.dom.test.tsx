@@ -127,6 +127,7 @@ const citationResponse = {
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   pageReach: SEARCH_PAGE_REACH.REACHED,
   total: { type: "exact", count: 1 },
+  hitOrder: "all_words_first",
   relaxedHitCount: 0,
   termDecisionCounts: null,
   queryUsed: "22 As 40/2025 - 49",

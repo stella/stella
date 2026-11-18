@@ -99,6 +99,10 @@
       "types": "./src/fixtures/cz-141-1961-section-72a.ts",
       "import": "./src/fixtures/cz-141-1961-section-72a.ts"
     },
+    "./fixtures/cz-435-2004-section-5": {
+      "types": "./src/fixtures/cz-435-2004-section-5.ts",
+      "import": "./src/fixtures/cz-435-2004-section-5.ts"
+    },
     "./fixtures/cz-262-2006-section-51": {
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"

@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/legislation-expression";
 import { statuteChangeCountsSchema } from "@stll/api-contract/statute-version-changes";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
+import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 
 import type { provisionPreviewOutput } from "@/api/lib/chat/decision-reader-projections";
@@ -68,6 +69,16 @@ const statuteAmendmentPageSchema = v.object({
     v.array(
       v.object({
         publisherId: boundedString(8192),
+        /**
+         * Other publisher links that state the same instruction (same
+         * amending act, provision, change and effective day). The publisher
+         * records them separately and they are stored as published; a read
+         * shows the instruction once and names every link.
+         */
+        duplicatePublisherIds: v.pipe(
+          v.array(boundedString(8192)),
+          v.maxLength(LEGISLATION_AMENDMENT_PAGE_MAX),
+        ),
         amendingEli: boundedString(readerTextBytes.eli),
         amendingTitle: nullableBoundedString(readerTextBytes.title),
         affectedAnchor: boundedString(8192),
@@ -120,6 +131,42 @@ const projectedCoverage = (
   }
 };
 
+type AmendmentRow = Awaited<
+  ReturnType<typeof readLegislationAmendments>
+>["items"][number];
+
+/**
+ * One entry per instruction: links that name the same amending act,
+ * provision, change and effective day (or the same stated effective text)
+ * are the publisher restating one instruction. The first link in page order
+ * leads; the others travel as its duplicates, so no link id is dropped. The
+ * change kind is part of the key: two kinds on one day are two instructions.
+ */
+const dedupeAmendments = (
+  rows: readonly AmendmentRow[],
+): { row: AmendmentRow; duplicates: AmendmentRow[] }[] => {
+  const groups = new Map<
+    string,
+    { row: AmendmentRow; duplicates: AmendmentRow[] }
+  >();
+  for (const row of rows) {
+    const key = JSON.stringify([
+      row.amendingEli,
+      row.affectedAnchor,
+      row.changeKind,
+      row.effectiveDate,
+      row.effectiveDate === null ? row.effectiveText : null,
+    ]);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { row, duplicates: [] });
+    } else {
+      group.duplicates.push(row);
+    }
+  }
+  return [...groups.values()];
+};
+
 type ProjectStatuteAmendmentsOptions = {
   page: Awaited<ReturnType<typeof readLegislationAmendments>>;
   snapshot: Awaited<ReturnType<typeof readLegislationAmendmentSnapshot>>;
@@ -133,8 +180,11 @@ export const projectStatuteAmendments = ({
   }
   const coverage = snapshot.coverage;
   return {
-    items: page.items.map((row) => ({
+    items: dedupeAmendments(page.items).map(({ row, duplicates }) => ({
       publisherId: truncateTextBytes(row.publisherId, 8192),
+      duplicatePublisherIds: duplicates.map((duplicate) =>
+        truncateTextBytes(duplicate.publisherId, 8192),
+      ),
       amendingEli: truncateTextBytes(row.amendingEli, readerTextBytes.eli),
       amendingTitle: nullableText(row.amendingTitle, readerTextBytes.title),
       affectedAnchor: truncateTextBytes(row.affectedAnchor, 8192),
@@ -231,6 +281,22 @@ const provisionHistoryItemSchema = v.object({
   allowsDerivedAi: v.boolean(),
   ...windowFields,
   text: boundedString(readerTextBytes.provisionText),
+  /**
+   * Wording outside the read subdivision that governs it; see
+   * `governingWording` in `@stll/legal-ast/provision-preview`.
+   */
+  governingText: v.pipe(
+    v.array(
+      v.object({
+        anchor: boundedString(readerTextBytes.anchor),
+        position: v.picklist(GOVERNING_WORDING_POSITIONS),
+        text: boundedString(readerTextBytes.provisionText),
+      }),
+    ),
+    v.maxLength(LIMITS.legislationGoverningTextMax),
+  ),
+  /** Present when governing wording past the bound was left out. */
+  governingTextTruncated: v.optional(v.literal(true)),
 });
 export const provisionHistorySuccessResponseSchema = v.object({
   items: v.pipe(
@@ -365,6 +431,17 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
     readerTextBytes.versionValidTo,
   ),
   text: truncateTextBytes(row.text, readerTextBytes.provisionText),
+  ...(row.governingTextTruncated === true ||
+  row.governingText.length > LIMITS.legislationGoverningTextMax
+    ? { governingTextTruncated: true as const }
+    : {}),
+  governingText: row.governingText
+    .slice(0, LIMITS.legislationGoverningTextMax)
+    .map((wording) => ({
+      anchor: truncateTextBytes(wording.anchor, readerTextBytes.anchor),
+      position: wording.position,
+      text: truncateTextBytes(wording.text, readerTextBytes.provisionText),
+    })),
 });
 
 type PreviewTransport = v.InferOutput<

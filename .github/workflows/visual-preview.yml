@@ -53,7 +53,7 @@ jobs:
         timeout-minutes: 5
         id: target-base
         uses: ./.github/actions/merge-target-base
-      - uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+      - uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}

@@ -1,6 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock } from "bun:test";
 
+import { requestTest as test } from "@stll/start-runtime/test-request";
 import { waitFor } from "@stll/test-kit";
 
 import { APIError } from "@/lib/errors/api";

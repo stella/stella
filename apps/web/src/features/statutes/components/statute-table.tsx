@@ -8,7 +8,7 @@
  * the table read one column set.
  */
 
-import { createContext, use, useMemo } from "react";
+import { createContext, use } from "react";
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
@@ -16,6 +16,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { STATUTE_LIST_SORT_KEY_KINDS } from "@stll/api-contract/statute-list-sort";
 import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
@@ -37,6 +39,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PublicLawRow } from "@/components/public-law-table/public-law-row";
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
 import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
 import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
@@ -59,20 +62,16 @@ import {
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import {
-  STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MIN_SIZE,
   STATUTE_COLUMN_MODEL,
   STATUTE_COLUMN_SORT_KEYS,
   STATUTE_VALIDITY_LABEL_KEYS,
 } from "@/features/statutes/statute-columns.logic";
-import type {
-  StatuteColumnId,
-  StatuteTableLayout,
-} from "@/features/statutes/statute-columns.logic";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
 import { statuteTableSorting } from "@/features/statutes/statute-order.logic";
 import type { StatuteColumnOrder } from "@/features/statutes/statute-order.logic";
+import type { StatuteTableLayout } from "@/features/statutes/statute-table-layout.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
@@ -103,7 +102,9 @@ type StatuteTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: StatuteTableLayout;
-  onLayoutChange: (layout: StatuteTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<StatuteTableLayout>,
+  ) => void;
   /** The order the rows were read in, as the headers state and change it. */
   order: StatuteColumnOrder;
   statutes: readonly StatuteListItem[];
@@ -122,15 +123,11 @@ export const StatuteTable = ({
   statutes,
 }: StatuteTableProps) => {
   const columns = useStatuteTableColumns();
-  const rows = useMemo(
-    () =>
-      statutes.map((statute): StatuteRowData => ({
-        kind: "statute",
-        statute,
-        children: [],
-      })),
-    [statutes],
-  );
+  const rows = statutes.map((statute): StatuteRowData => ({
+    kind: "statute",
+    statute,
+    children: [],
+  }));
   const rowHost = useStatuteRowHost();
 
   return (
@@ -243,15 +240,12 @@ const useStatuteTableColumns = (): TableColumnDef<StatuteRowData>[] => {
 
   // Rebuilt only when the words change: a controlled table handed new column
   // definitions every render loops.
-  return useMemo(
-    () => [
-      ROW_NUMBER_COLUMN,
-      ...STATUTE_COLUMN_IDS.map((column) =>
-        statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
-      ),
-    ],
-    [t],
-  );
+  return [
+    ROW_NUMBER_COLUMN,
+    ...STATUTE_COLUMN_IDS.map((column) =>
+      statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
+    ),
+  ];
 };
 
 const renderNothing = () => null;

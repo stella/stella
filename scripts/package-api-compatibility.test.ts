@@ -531,6 +531,15 @@ test.each([
       "declare const defaulted: Client; declare const explicit: Client<number>; const strings: readonly string[] = defaulted.second; const numbers: readonly number[] = explicit.second;",
   },
   {
+    name: "a constraint naming a later defaulted parameter",
+    before:
+      "type Box<T> = { id: T }; export type Client<T extends Box<U>, U extends string = string> = { first: T; second: U };",
+    after:
+      "type Box<T> = { id: T }; export type Client<A extends Box<B>, B extends string = string> = { first: A; second: B };",
+    consumer:
+      "declare const client: Client<{ id: string }>; const id: string = client.first.id;",
+  },
+  {
     name: "an added default",
     before: "export interface Client<T> { value: T }",
     after: "export interface Client<T = string> { value: T }",

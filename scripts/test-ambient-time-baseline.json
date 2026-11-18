@@ -2394,11 +2394,6 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/components/sidebar/sidebar-state.dom.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/src/features/chat/components/proxy-chat-link.dom.test.tsx": {
     "count": 1,
     "owner": "web",

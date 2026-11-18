@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -78,7 +78,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { analysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -746,7 +746,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const [panelWidth, setPanelWidth] = useState(220);
   // The same per-browser size the inspector's readers step, so a size chosen
   // in either place holds in both.
-  const textScale = useWebReaderTextScale("decision");
+  const textScale = useWebReaderTextScale();
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -781,7 +781,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       sourceAllowsDerivedAi: decision.source.allowsDerivedAi,
       mode: props.aiMode,
     });
-  const generate = useCallback(async () => {
+  const generate = async () => {
     if (!ensureAIAvailable) {
       return;
     }
@@ -792,14 +792,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     }
 
     generateDecisionAnalysis();
-  }, [ensureAIAvailable, generateDecisionAnalysis]);
+  };
 
   const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
     decisionAnalysisView(analysisState);
 
   // Contents places the sections as they stream in, beside the document's
   // own headings; with AI notes filtered out it is the headings alone.
-  const analysisContents = useAnalysisReaderOutline(
+  const analysisContents = analysisReaderOutline(
     showAiNotes && hasAnalysis ? analysisTree : null,
   );
 

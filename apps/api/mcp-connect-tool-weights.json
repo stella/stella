@@ -424,10 +424,10 @@
     {
       "name": "read_provision_history",
       "nameChars": 22,
-      "descriptionChars": 618,
-      "inputSchemaChars": 1602,
-      "totalChars": 2242,
-      "estimatedTokens": 881
+      "descriptionChars": 677,
+      "inputSchemaChars": 1645,
+      "totalChars": 2344,
+      "estimatedTokens": 919
     },
     {
       "name": "read_statute",
@@ -440,10 +440,10 @@
     {
       "name": "read_statute_provisions",
       "nameChars": 23,
-      "descriptionChars": 703,
-      "inputSchemaChars": 1913,
-      "totalChars": 2639,
-      "estimatedTokens": 1040
+      "descriptionChars": 799,
+      "inputSchemaChars": 1956,
+      "totalChars": 2778,
+      "estimatedTokens": 1089
     },
     {
       "name": "remove_matter_member",
@@ -663,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140372,
-    "estimatedTokens": 55767
+    "characters": 140613,
+    "estimatedTokens": 55854
   }
 }

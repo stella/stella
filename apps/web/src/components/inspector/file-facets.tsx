@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -91,15 +89,8 @@ export const TabFacetBar = ({
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;
   const isDocx = mimeType === DOCX_MIME;
   const isEmail = isEmailFile({ fileName, mimeType });
-  const facets = useMemo(
-    () =>
-      // Document review operates on DOCX structure, so its chip is absent on
-      // every other file type. Review stays enabled before a run because it
-      // also launches the review.
-      baseFacets.filter(
-        (f) => (isDocx || f !== "playbook") && (isEmail || f !== "attachments"),
-      ),
-    [baseFacets, isDocx, isEmail],
+  const facets = baseFacets.filter(
+    (f) => (isDocx || f !== "playbook") && (isEmail || f !== "attachments"),
   );
 
   const labels: Record<Facet, string> = {

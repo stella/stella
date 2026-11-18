@@ -177,16 +177,16 @@ export const OnboardingWizard = () => {
   const [previewAiProviders, setPreviewAiProviders] = useState<
     readonly ProviderPreview[]
   >([]);
-  const unavailableNativeToolBackendSlugs = useMemo<
-    ReadonlySet<string> | undefined
-  >(() => {
-    if (!nativeToolDeployAvailability) {
-      return undefined;
-    }
-    return new Set(
-      nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
-    );
-  }, [nativeToolDeployAvailability]);
+  const unavailableNativeToolBackendSlugs: ReadonlySet<string> | undefined =
+    (() => {
+      if (!nativeToolDeployAvailability) {
+        return undefined;
+      }
+      return new Set(
+        nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
+      );
+    })();
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const onboardingCatalogueEntries = useMemo(
     () =>
       loadCatalogue().filter((entry) =>
@@ -297,6 +297,7 @@ export const OnboardingWizard = () => {
     });
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
       setIsCreating(true);

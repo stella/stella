@@ -76,6 +76,7 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { SafeId } from "@/api/lib/branded-types";
 import { citationEvidenceWindowsValidSql } from "@/api/lib/case-law/citation-evidence";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import {
@@ -119,6 +120,8 @@ import {
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
+import { HELD_DECISION_MATCH_BASES } from "@/api/lib/legal-search/held-decision-attachment-values";
+import type { HeldDecisionDeclaredIdentifier } from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
@@ -1889,6 +1892,116 @@ export const caseLawDecisionSupplements = p.pgTable(
     p.check(
       "case_law_decision_supplements_merged_has_hash",
       sql`${t.decisionId} IS NULL OR ${t.mergedSourceHash} IS NOT NULL`,
+    ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/**
+ * A source's record that enriches a decision another source holds, instead
+ * of becoming a second row of the same decision. See
+ * `HeldDecisionAttachment`.
+ *
+ * Keyed by the record's own publisher identity, so a re-observation finds
+ * it, and naming the host decision by id. `host_decision_id` has no foreign
+ * key: a host retired into another decision keeps resolving through
+ * `case_law_decision_aliases`, and a host erased or deleted leaves the record
+ * parked rather than cleared, so the census can name it. The host decision's
+ * own row is never written by an attachment; the record's reporter citations
+ * reach it only as declared identifier rows.
+ */
+export const caseLawHeldDecisionAttachments = p.pgTable(
+  "case_law_held_decision_attachments",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 256 })
+      .notNull(),
+    /** What named the host: the stated ECLI, or court, docket and date. */
+    matchBasis: p
+      .varchar("match_basis", { length: 32, enum: HELD_DECISION_MATCH_BASES })
+      .notNull(),
+    /**
+     * The decision the record enriches. Null while it is ambiguous: several
+     * held decisions matched, they are listed in `candidate_decision_ids`,
+     * and the record is parked with no row of its own.
+     */
+    hostDecisionId: safeUuid<"caseLawDecision">("host_decision_id"),
+    /**
+     * When the host was found erased or redacted. A takedown covers every
+     * publisher's copy of the decision, so the record stays parked and is
+     * never written as a decision of its own.
+     */
+    hostWithdrawnAt: timestamptz("host_withdrawn_at"),
+    /**
+     * The held decisions an ambiguous record matched, for its operator: up
+     * to `HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX`, none when more matched.
+     */
+    candidateDecisionIds: p
+      .uuid("candidate_decision_ids")
+      .array()
+      .$type<SafeId<"caseLawDecision">>()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    /**
+     * The adapter's typed metadata, as its declared schema validated it.
+     * Null once the host is withdrawn: the takedown covers it.
+     */
+    metadata: jsonb().$type<Record<string, unknown>>(),
+    /** The identifier rows this record declared on its host. */
+    declaredIdentifiers: jsonb("declared_identifiers")
+      .$type<HeldDecisionDeclaredIdentifier[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    sourceHash: p.varchar("source_hash", { length: 64 }).notNull(),
+    /** The record's raw payload, kept under its host decision's raw prefix. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", {
+      length: 128,
+    }),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** The source's observation order of this state; only a later one replaces it. */
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.sourceDocumentId],
+      name: "case_law_held_decision_attachments_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_held_decision_attachments_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("case_law_held_decision_attachments_host_idx")
+      .on(t.hostDecisionId)
+      .where(isNotNull(t.hostDecisionId)),
+    p.check(
+      "case_law_held_decision_attachments_basis_values",
+      sql`${t.matchBasis} IN (${sql.join(
+        HELD_DECISION_MATCH_BASES.map((basis) => sql`${basis}`),
+        sql`, `,
+      )})`,
+    ),
+    // An ambiguous record names no host and lists its candidates (none when
+    // more matched than are listed); an attached or withdrawn one names its
+    // host and no candidates.
+    p.check(
+      "case_law_held_decision_attachments_host_shape",
+      sql`${t.hostDecisionId} IS NULL OR cardinality(${t.candidateDecisionIds}) = 0`,
+    ),
+    // A withdrawn host's takedown leaves nothing of the record but its key.
+    p.check(
+      "case_law_held_decision_attachments_withdrawn_shape",
+      sql`${t.hostWithdrawnAt} IS NULL OR (${t.hostDecisionId} IS NOT NULL AND ${t.metadata} IS NULL AND ${t.sourceRawS3Key} IS NULL)`,
     ),
     ...caseLawIngestionOnlyPolicies(),
   ],

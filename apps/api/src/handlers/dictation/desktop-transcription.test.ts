@@ -10,6 +10,7 @@ import {
 import { DESKTOP_DICTATION_UNTYPED_CHARACTERS } from "@stll/api-contract/desktop-dictation-cleanup";
 import {
   DESKTOP_DICTATION_MODELS_LABELED_QUERY,
+  DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
   desktopDictationModelsSchema,
   MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH,
 } from "@stll/api-contract/desktop-dictation-transcription";
@@ -227,7 +228,16 @@ test("a key without zero retention is listed only to a desktop that warns, marke
   expect(ids(listModels(eu, { deployment, labeled: true }))).not.toContain(
     direct,
   );
-  const warned = listModels(eu, { deployment, labeled: true, retention: true });
+  // A desktop that warns, for a member not granted such models: unlisted.
+  expect(
+    ids(listModels(eu, { deployment, labeled: true, retention: true })),
+  ).not.toContain(direct);
+  const warned = listModels(eu, {
+    deployment,
+    labeled: true,
+    retention: true,
+    retainingModels: true,
+  });
   expect(warned.models).toContainEqual({
     id: direct,
     displayName: "Scribe v3",
@@ -245,6 +255,7 @@ test("a key without zero retention is listed only to a desktop that warns, marke
       deployment: { ...deployment, openRouter: false },
       labeled: true,
       retention: true,
+      retainingModels: true,
     }),
   ).toMatchObject({ defaultModelId: null, unavailable: null });
 });
@@ -379,6 +390,42 @@ test("a desktop that asks for labels reads the labeled list", async () => {
   );
 });
 
+test("a model whose provider keeps the audio is listed only to a member granted such models", async () => {
+  const deployment = {
+    openRouter: true,
+    elevenLabs: {
+      apiKey: "elevenlabs-fixture",
+      environment: "eu",
+      zeroRetention: false,
+    },
+  } as const;
+  const server = serveModels(
+    createDesktopDictationModelsEndpoint({
+      authorizeAccount,
+      loadSettings,
+      readDeployment: () => deployment,
+    }),
+  );
+  const listed = async () => {
+    const response = await server.fetch(
+      new Request(
+        `http://localhost/models?${DESKTOP_DICTATION_MODELS_LABELED_QUERY}=1&${DESKTOP_DICTATION_MODELS_RETENTION_QUERY}=1`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    return v
+      .parse(desktopDictationModelsSchema, await response.json())
+      .models.map(({ id }) => id);
+  };
+  expect(await listed()).not.toContain("elevenlabs-direct/scribe-v3");
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "desktop-dictation": [GRANT],
+    "desktop-dictation-cloud": [GRANT],
+    "desktop-dictation-retaining-models": [GRANT],
+  });
+  expect(await listed()).toContain("elevenlabs-direct/scribe-v3");
+});
+
 test.each([
   [
     "without any dictation decision",
@@ -405,7 +452,15 @@ const exerciseTranscribe = async ({
   withhold = () => undefined,
   email = EMAIL,
   text = "Dobrý den.",
-}: { withhold?: () => void; email?: string | null; text?: string } = {}) => {
+  deployment = OPENROUTER_ONLY,
+  modelId,
+}: {
+  withhold?: () => void;
+  email?: string | null;
+  text?: string;
+  deployment?: ReturnType<DictationDependencies["deployment"]>;
+  modelId?: string;
+} = {}) => {
   withhold();
   const transcribe = mock(
     async (options: Parameters<DictationDependencies["transcribe"]>[0]) =>
@@ -429,7 +484,8 @@ const exerciseTranscribe = async ({
     readAccountEmail: async () => await Promise.resolve(email),
     dependencies: asTestRaw<Partial<DictationDependencies>>({
       transcribe,
-      deployment: () => OPENROUTER_ONLY,
+      transcribeElevenLabs: transcribe,
+      deployment: () => deployment,
       credential: async () => await Promise.resolve(Result.ok({ apiKey: "k" })),
       limit: async () => await Promise.resolve(Result.ok(undefined)),
       preflight: async () => await Promise.resolve(Result.ok(undefined)),
@@ -453,11 +509,46 @@ const exerciseTranscribe = async ({
     }),
   );
   form.set("language", "cs");
+  if (modelId !== undefined) {
+    form.set("modelId", modelId);
+  }
   const response = await server.fetch(
     new Request("http://localhost/transcribe", { method: "POST", body: form }),
   );
   return { response, transcribe };
 };
+
+test("a model whose provider keeps the audio transcribes only for a member granted such models", async () => {
+  const scribe = {
+    modelId: "elevenlabs-direct/scribe-v3",
+    deployment: {
+      openRouter: true,
+      elevenLabs: {
+        apiKey: "elevenlabs-fixture",
+        environment: "eu",
+        zeroRetention: false,
+      },
+    },
+  } as const;
+  const refused = await exerciseTranscribe(scribe);
+  expect(refused.response.status).toBe(503);
+  expect(refused.transcribe).not.toHaveBeenCalled();
+
+  const granted = await exerciseTranscribe({
+    ...scribe,
+    withhold: () => {
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        "desktop-dictation": [GRANT],
+        "desktop-dictation-cloud": [GRANT],
+        "desktop-dictation-retaining-models": [GRANT],
+      });
+    },
+  });
+  expect(granted.response.status).toBe(200);
+  expect(granted.transcribe.mock.calls.at(0)?.[0]).toMatchObject({
+    modelId: scribe.modelId,
+  });
+});
 
 test("a granted desktop's audio is transcribed with the region's default model and its language", async () => {
   const { response, transcribe } = await exerciseTranscribe();

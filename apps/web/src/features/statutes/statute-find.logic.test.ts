@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+
 import { findTableRows } from "@/components/workspaces/table/table-find.logic";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
 import {
   isFindableStatuteColumn,
   statuteFindRowText,

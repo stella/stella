@@ -16,6 +16,7 @@ import {
   corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexDeleteSettlementRead,
   CorpusIndexError,
+  type CorpusIndexQueryDsl,
   corpusIndexScoredSearchRequest,
   type CorpusIndexSettlementSplit,
   getCorpusIndexClient,
@@ -2513,6 +2514,28 @@ test("a scored search projects named stored fields and sorts by score", () => {
       track_total_hits: true,
     },
   });
+});
+
+test("a scored search sends a DSL query as given, through the same strict read", () => {
+  const dsl = {
+    bool: {
+      filter: [{ query_string: { query: "is_opening:true" } }],
+      should: [{ query_string: { query: 'decision_terms:"zisk"' } }],
+      minimum_should_match: 1,
+    },
+  };
+  const { path, body } = corpusIndexScoredSearchRequest({
+    observer: "unobserved",
+    indexId: "case_law_v11_cze",
+    query: { type: "dsl", query: dsl } satisfies CorpusIndexQueryDsl,
+    from: 0,
+    size: 20,
+    fields: ["document_id"],
+    requiredFields: ["document_id"],
+  });
+  expect(path).toEndWith("&allow_partial_search_results=false");
+  expect(body["query"]).toBe(dsl);
+  expect(body["sort"]).toEqual([{ _score: { order: "desc" } }]);
 });
 
 test.each([

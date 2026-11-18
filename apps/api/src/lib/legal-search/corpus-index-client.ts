@@ -296,11 +296,24 @@ type CorpusIndexSearchResponse = {
  * it can do two things that one cannot: project each hit to named stored
  * fields, and report the BM25 score beside the hit.
  */
+/**
+ * A scored read's query as ES DSL rather than a query string: what a ranking
+ * needs when scope must filter without scoring (`filter`) and words must
+ * count toward `minimum_should_match` (`corpus-ranked-decision-query.ts`).
+ */
+export type CorpusIndexQueryDsl = {
+  type: "dsl";
+  query: Readonly<Record<string, unknown>>;
+};
+
 type CorpusIndexScoredSearchInput = {
   observer: RegistryRequestObservation;
   indexId: string;
-  /** Full corpus index query string, read exactly as `search` reads it. */
-  query: string;
+  /**
+   * Full corpus index query string, read exactly as `search` reads it, or a
+   * DSL query sent as given.
+   */
+  query: string | CorpusIndexQueryDsl;
   /** Rank of the first hit returned. */
   from: number;
   size: number;
@@ -388,7 +401,10 @@ export const corpusIndexScoredSearchRequest = ({
   return {
     path: `/api/v1/_elastic/${indexId}/_search?_source_includes=${fields.join(",")}&${STRICT_ELASTIC_READ}`,
     body: {
-      query: { query_string: { query, default_operator: "AND" } },
+      query:
+        typeof query === "string"
+          ? { query_string: { query, default_operator: "AND" } }
+          : query.query,
       from,
       size,
       sort: [{ _score: { order: "desc" } }],

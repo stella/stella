@@ -497,11 +497,14 @@ describe("publisher amendment snapshots", () => {
             throw new Error("Expected same-day version fixtures to exist");
           }
 
+          // These links restate one instruction, so a read shows it once and
+          // names every link: each stored link is still reachable.
           const projected = versions.items.flatMap(({ id, amendedBy }) =>
-            (amendedBy?.items ?? []).map((effect) => ({
-              ownerId: id,
-              publisherId: effect.publisherId,
-            })),
+            (amendedBy?.items ?? []).flatMap((effect) =>
+              [effect.publisherId, ...effect.duplicatePublisherIds].map(
+                (publisherId) => ({ ownerId: id, publisherId }),
+              ),
+            ),
           );
           expect(projected.length).toBeLessThanOrEqual(
             LEGISLATION_AMENDMENT_PAGE_MAX,

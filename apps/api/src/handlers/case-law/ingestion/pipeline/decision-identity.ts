@@ -816,6 +816,26 @@ const findExistingDecisionTx = async (
   return { claimedDecisionId, existing, ecliIdentity };
 };
 
+/**
+ * Take the transaction-scoped locks on a record's publisher identities: every
+ * writer that decides what those identities name (a decision of their own,
+ * or a held decision they enrich) holds them while it decides.
+ */
+export const lockSourceIdentitiesTx = async (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+  sortedIdentities: readonly string[],
+): Promise<void> => {
+  for (const identity of sortedIdentities) {
+    // SAFETY: candidates are hard-capped by `observeDecision`; sorted
+    // sequential acquisition prevents deadlocks between overlapping sets.
+    // db-await-in-loop: bounded identity lock set must be sequential
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
+    );
+  }
+};
+
 type ResolveDecisionIdentityOptions = ObservedDecision & {
   sourceId: SafeId<"caseLawSource">;
   statedEcliIdentity: StatedEcliIdentity;
@@ -849,14 +869,7 @@ export const resolveDecisionIdentityTx = async (
     storedDecisionId,
   }: ResolveDecisionIdentityOptions,
 ) => {
-  for (const identity of sourceIdentityCandidates) {
-    // SAFETY: candidates are hard-capped above; sorted sequential
-    // acquisition prevents deadlocks between overlapping identity sets.
-    // db-await-in-loop: bounded identity lock set must be sequential
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
-    );
-  }
+  await lockSourceIdentitiesTx(tx, sourceId, sourceIdentityCandidates);
 
   const claims =
     sourceIdentityCandidates.length === 0

@@ -1,10 +1,14 @@
 import { createElement } from "react";
 
-import { defineHandlerCallback } from "@tanstack/react-router/ssr/server";
+import {
+  defineHandlerCallback,
+  getSsrStatus,
+} from "@tanstack/react-router/ssr/server";
 import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 import { env } from "@/env";
+import { withRequestI18n } from "@/i18n/request-i18n.server";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   browserApiBaseUrl,
@@ -13,10 +17,13 @@ import {
 } from "@/lib/api-origins";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
 import { withContentSecurityPolicy } from "@/security/content-security-policy.server";
-import { createSsrErrorReporter } from "@/ssr-error-reporter";
+import {
+  createSsrErrorReporter,
+  createSsrRouteFailureReporter,
+} from "@/ssr-error-reporter";
 import { renderSsrResponse } from "@/ssr-renderer";
 import { isSsrDocumentRequest } from "@/ssr-request";
-import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
+import { documentStatus, SSR_STATUS_HEADER } from "@/ssr-response-status";
 import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
@@ -43,87 +50,107 @@ const reportSsrError = createSsrErrorReporter({
   },
 });
 
+const reportSsrRouteFailure = createSsrRouteFailureReporter({
+  writeDiagnostic: (line) => {
+    process.stderr.write(line);
+  },
+});
+
 export default createServerEntry({
   async fetch(request) {
-    return await withContentSecurityPolicy({
-      environment: {
-        apiBase: externalApiOrigin(),
-        browserApiBase: browserApiBaseUrl(),
-        collabUrl: env.VITE_COLLAB_URL,
-        desktopBridgePort: env.VITE_DESKTOP_BRIDGE_PORT,
-        documentsBucket: env.VITE_DOCUMENTS_BUCKET,
-        documentsEndpoint: env.VITE_DOCUMENTS_ENDPOINT,
-        posthogHost: env.VITE_POSTHOG_HOST,
-        sandboxUrl: browserApiRootUrl("/v1/visual-sandbox/browser"),
-      },
-      fetchResponse: async () => {
-        const response = isSsrDocumentRequest(request)
-          ? await fetchBoundedSsrResponse({
-              request,
-              fetchResponse: async (renderRequest, rendererSignal) =>
-                await createStartHandler(
-                  defineHandlerCallback(async ({ router, responseHeaders }) => {
-                    const rendered = await renderSsrResponse({
-                      request: renderRequest,
-                      rendererSignal,
-                      router,
-                      responseHeaders,
-                      children: createElement(StartServer, { router }),
-                      reportError: reportSsrError,
-                    });
-                    if (rendered.isErr()) {
-                      throw rendered.error;
-                    }
-                    return rendered.value;
-                  }),
-                )(renderRequest),
-              reportError: reportSsrError,
-            })
-          : await handler.fetch(request);
-        const headers = new Headers(response.headers);
-        if (new URL(request.url).pathname === "/invoice-link") {
-          headers.set("Referrer-Policy", "no-referrer");
-        }
-        for (const [name, value] of Object.entries(
-          CROSS_ORIGIN_ISOLATION_HEADERS,
-        )) {
-          headers.set(name, value);
-        }
-        // A route that rendered a degraded page names the status it wants; the
-        // marker is consumed here so only the status crosses the wire.
-        const requestedStatus = ssrStatusFromHeader(
-          headers.get(SSR_STATUS_HEADER),
-        );
-        headers.delete(SSR_STATUS_HEADER);
-        const status = requestedStatus ?? response.status;
-        const cacheClass = headers.get(SSR_CACHE_CLASS_HEADER);
-        headers.delete(SSR_CACHE_CLASS_HEADER);
-        const isSuccessful = status >= 200 && status < 300;
-        const isHtml =
-          headers
-            .get("Content-Type")
-            ?.split(";")
-            .at(0)
-            ?.trim()
-            .toLowerCase() === "text/html";
-        if (
-          cacheClass !== "public-anonymous" ||
-          !isSuccessful ||
-          isHtml ||
-          !headers.has("Cache-Control")
-        ) {
-          headers.set("Cache-Control", "private, no-store");
-        }
-        if (cacheClass !== "public-indexable" || !isSuccessful || !isHtml) {
-          headers.set("X-Robots-Tag", "noindex");
-        }
+    return await withRequestI18n(
+      async () =>
+        await withContentSecurityPolicy({
+          environment: {
+            apiBase: externalApiOrigin(),
+            browserApiBase: browserApiBaseUrl(),
+            collabUrl: env.VITE_COLLAB_URL,
+            desktopBridgePort: env.VITE_DESKTOP_BRIDGE_PORT,
+            documentsBucket: env.VITE_DOCUMENTS_BUCKET,
+            documentsEndpoint: env.VITE_DOCUMENTS_ENDPOINT,
+            posthogHost: env.VITE_POSTHOG_HOST,
+            sandboxUrl: browserApiRootUrl("/v1/visual-sandbox/browser"),
+          },
+          fetchResponse: async () => {
+            const response = isSsrDocumentRequest(request)
+              ? await fetchBoundedSsrResponse({
+                  request,
+                  fetchResponse: async (renderRequest, rendererSignal) =>
+                    await createStartHandler(
+                      defineHandlerCallback(
+                        async ({ router, responseHeaders }) => {
+                          const rendered = await renderSsrResponse({
+                            request: renderRequest,
+                            rendererSignal,
+                            router,
+                            responseHeaders,
+                            children: createElement(StartServer, { router }),
+                            reportError: reportSsrError,
+                          });
+                          if (rendered.isErr()) {
+                            throw rendered.error;
+                          }
+                          // A loader failure renders the error component with a
+                          // 500 instead of throwing, so it is reported here, by the
+                          // status the document is sent with.
+                          reportSsrRouteFailure({
+                            matches: router.state.matches,
+                            status: documentStatus(
+                              responseHeaders,
+                              getSsrStatus(router),
+                            ),
+                          });
+                          return rendered.value;
+                        },
+                      ),
+                    )(renderRequest),
+                  reportError: reportSsrError,
+                })
+              : await handler.fetch(request);
+            const headers = new Headers(response.headers);
+            if (new URL(request.url).pathname === "/invoice-link") {
+              headers.set("Referrer-Policy", "no-referrer");
+            }
+            for (const [name, value] of Object.entries(
+              CROSS_ORIGIN_ISOLATION_HEADERS,
+            )) {
+              headers.set(name, value);
+            }
+            // A route that rendered a degraded page names the status it wants; the
+            // marker is consumed here so only the status crosses the wire.
+            const status = documentStatus(headers, response.status);
+            headers.delete(SSR_STATUS_HEADER);
+            const cacheClass = headers.get(SSR_CACHE_CLASS_HEADER);
+            headers.delete(SSR_CACHE_CLASS_HEADER);
+            const isSuccessful = status >= 200 && status < 300;
+            const isHtml =
+              headers
+                .get("Content-Type")
+                ?.split(";")
+                .at(0)
+                ?.trim()
+                .toLowerCase() === "text/html";
+            if (
+              cacheClass !== "public-anonymous" ||
+              !isSuccessful ||
+              isHtml ||
+              !headers.has("Cache-Control")
+            ) {
+              headers.set("Cache-Control", "private, no-store");
+            }
+            if (cacheClass !== "public-indexable" || !isSuccessful || !isHtml) {
+              headers.set("X-Robots-Tag", "noindex");
+            }
 
-        return new Response(response.body, {
-          headers,
-          status,
-          ...(requestedStatus === null && { statusText: response.statusText }),
-        });
-      },
-    });
+            return new Response(response.body, {
+              headers,
+              status,
+              ...(status === response.status && {
+                statusText: response.statusText,
+              }),
+            });
+          },
+        }),
+    );
   },
 });

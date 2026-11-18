@@ -17,7 +17,6 @@ import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-  IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -355,12 +354,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    [
-      ...publicLawColumnPairs(
-        CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-      ),
-      ...publicLawColumnPairs(IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION),
-    ].map(({ relation, column }) => `${relation}.${column}`),
+    publicLawColumnPairs(
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+    ).map(({ relation, column }) => `${relation}.${column}`),
   );
 
 const decisionColumnNames = new Set(
@@ -516,6 +512,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_source_identities",
       "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
+      "case_law_held_decision_attachments",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",

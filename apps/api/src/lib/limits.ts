@@ -838,6 +838,8 @@ export const LIMITS = {
    * whole structure; a read says when it was cut.
    */
   legislationOutlineHeadingsMax: 200,
+  /** Governing wording entries one provision read carries beside its text. */
+  legislationGoverningTextMax: 32,
   /**
    * Characters of a European Legislation Identifier a tool input accepts. An
    * ELI is a path the publisher mints (`/eli/cz/sb/2012/89`), so the bound is
