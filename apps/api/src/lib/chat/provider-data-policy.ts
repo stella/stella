@@ -284,8 +284,7 @@ export const deleteElevenLabsTranscript = async (
     pathPrefixes: [ELEVENLABS_TRANSCRIPTS_PATH],
   });
   if (
-    target === null ||
-    target.search !== "" ||
+    target?.search !== "" ||
     !ELEVENLABS_TRANSCRIPT_ID.test(
       target.pathname.slice(ELEVENLABS_TRANSCRIPTS_PATH.length),
     )
