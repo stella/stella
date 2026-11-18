@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import { SIDEBAR_STATE_COOKIE } from "../../src/components/sidebar/sidebar-state-cookie";
@@ -209,8 +211,15 @@ test.describe("public law hydration", () => {
             `${E2E_API_ORIGIN}/api/auth/get-session`,
           );
           expect(response.ok()).toBe(true);
-          const session = await response.json();
-          return session?.user?.locale ?? null;
+          const session = v.parse(
+            v.nullable(
+              v.object({
+                user: v.object({ locale: v.nullish(v.string(), null) }),
+              }),
+            ),
+            await response.json(),
+          );
+          return session?.user.locale ?? null;
         })
         .toBe("cs");
       await page.goto("/law?country=cze", { waitUntil: "commit" });
