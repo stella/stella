@@ -333,7 +333,9 @@ pub fn run() {
                 onboarding::feature_enabled(app, feature);
               }
             }
-            feature_gate::DesktopFeature::DictationCloud => {
+            // Either decision changes which models the server lists.
+            feature_gate::DesktopFeature::DictationCloud
+            | feature_gate::DesktopFeature::DictationRetainingModels => {
               dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {

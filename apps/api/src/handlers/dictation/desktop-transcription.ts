@@ -62,6 +62,12 @@ import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission"
 const REQUIRED_FEATURE_ID =
   "desktop-dictation-cloud" satisfies DesktopFeatureId;
 
+// A model whose provider keeps the audio is offered to members with this
+// decision only. The API lists and refuses; the desktop only refreshes its
+// model list when the decision changes.
+const RETAINING_MODELS_FEATURE_ID =
+  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
+
 /**
  * The transcription models stella AI offers this organization, none when
  * its own AI provider does not transcribe. A desktop that labels models
@@ -78,12 +84,15 @@ export const listDictationModels = (
   {
     labeled = false,
     retention = false,
+    retainingModels = false,
     deployment = readTranscriptionDeployment(),
   }: {
     labeled?: boolean;
     /** The desktop warns about `retainsData`, so models whose provider
-     *  keeps the audio are listed, marked. */
+     *  keeps the audio may be listed, marked. */
     retention?: boolean;
+    /** The member may use a model whose provider keeps the audio. */
+    retainingModels?: boolean;
     deployment?: TranscriptionDeployment;
   } = {},
 ): DesktopDictationModels => {
@@ -104,7 +113,7 @@ export const listDictationModels = (
     return none("provider");
   }
   const served = transcriptionServed(deployment, orgAIConfig, {
-    retainingData: labeled && retention,
+    retainingData: labeled && retention && retainingModels,
   });
   const offered = Object.keys(TRANSCRIPTION_MODELS)
     .filter(isTranscriptionModelId)
@@ -212,7 +221,16 @@ const authorizeDictation = async (
           }),
       ),
     );
-    return Result.ok({ account, safeDb, settings });
+    return Result.ok({
+      account,
+      safeDb,
+      settings,
+      retainingModels: isFeatureEnabled(
+        account.featureAccessSnapshot,
+        RETAINING_MODELS_FEATURE_ID,
+        account,
+      ),
+    });
   });
 
 export const createDesktopDictationModelsEndpoint = (
@@ -229,7 +247,7 @@ export const createDesktopDictationModelsEndpoint = (
       ),
     },
     async function* ({ request }) {
-      const { settings } = yield* Result.await(
+      const { settings, retainingModels } = yield* Result.await(
         authorizeDictation(request, options),
       );
       const configurationError = orgAIConfigStatusError(
@@ -246,6 +264,7 @@ export const createDesktopDictationModelsEndpoint = (
             searchParams.get(DESKTOP_DICTATION_MODELS_LABELED_QUERY) === "1",
           retention:
             searchParams.get(DESKTOP_DICTATION_MODELS_RETENTION_QUERY) === "1",
+          retainingModels,
         }),
       );
     },
@@ -309,9 +328,8 @@ export const createDesktopDictationTranscribeEndpoint = ({
       },
       async function* (ctx) {
         const { request, body } = ctx;
-        const { account, safeDb, settings } = yield* Result.await(
-          authorizeDictation(request, options),
-        );
+        const { account, safeDb, settings, retainingModels } =
+          yield* Result.await(authorizeDictation(request, options));
         yield* Result.await(admitStandardAccount(account, readAccountEmail));
         const user = { id: account.userId };
         const session = { activeOrganizationId: account.organizationId };
@@ -320,8 +338,8 @@ export const createDesktopDictationTranscribeEndpoint = ({
           // The desktop lists models outside the region only labeled as such.
           allowOutsideRegion: true,
           // The desktop lists a model whose provider keeps the audio only
-          // with its warning.
-          allowRetainingModels: true,
+          // with its warning, and only to a member granted such models.
+          allowRetainingModels: retainingModels,
           user,
           session,
           safeDb,

@@ -548,6 +548,7 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
     DesktopFeature::Dictation if dictation_available(app) => Introduction::Dictation,
     DesktopFeature::Dictation
     | DesktopFeature::DictationCloud
+    | DesktopFeature::DictationRetainingModels
     | DesktopFeature::LocalAgents => return,
   };
   if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {
