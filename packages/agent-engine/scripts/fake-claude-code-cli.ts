@@ -75,7 +75,19 @@ export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
 /** A transcript entry of the resumed session a fork keeps through. */
 export const FAKE_FORK_BOUNDARY = "7c2e9a41-3b5d-4f6e-8a1c-2d3e4f5a6b7c";
 
+/**
+ * A subscription sign-in as 2.1.309 reports it: the account, with no
+ * `tokenSource` and no `apiKeySource`.
+ */
 const SUBSCRIPTION = {
+  email: "user@example.test",
+  organization: "Example Org",
+  subscriptionType: "max",
+  apiProvider: "firstParty",
+};
+
+/** A subscription sign-in as earlier releases report it. */
+const TOKEN_SOURCE_SUBSCRIPTION = {
   email: "user@example.test",
   subscriptionType: "max",
   tokenSource: "claude.ai",
@@ -1215,9 +1227,13 @@ export const FAKE_SCENARIOS = {
     fresh: [...freshTurn(), result()],
   },
   signed_out: [initialize({ tokenSource: "none", apiProvider: "firstParty" })],
-  /** A key from a Console sign-in would bill the API, not the plan. */
+  /** An API key would bill the API, not the plan (2.1.309's shape). */
   api_key: [
-    initialize({ tokenSource: "none", apiKeySource: "/login managed key" }),
+    initialize({
+      tokenSource: "none",
+      apiKeySource: "ANTHROPIC_API_KEY",
+      apiProvider: "firstParty",
+    }),
   ],
   auth_expired: [
     ...freshTurn(),
@@ -1375,6 +1391,23 @@ export const FAKE_SCENARIOS = {
     { exit: 1 },
   ],
   /** A full window whose reset has already passed: the snapshot is stale. */
+  /** An earlier release's subscription sign-in, named in `tokenSource`. */
+  probe_token_source: [
+    initialize(TOKEN_SOURCE_SUBSCRIPTION),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        rate_limits_available: false,
+        rate_limits: null,
+      },
+    },
+  ],
+  /** An API key in use beside a subscription account still bills the API. */
+  probe_api_key_with_subscription: [
+    initialize({ ...SUBSCRIPTION, apiKeySource: "/login managed key" }),
+  ],
+  probe_empty_account: [initialize({})],
   probe_reset_passed: [
     initialize(),
     {
