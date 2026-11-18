@@ -73,6 +73,11 @@ export const FAILURE_REASON_GRADE = {
   // destination; a refused connection alone cannot tell an outage from a
   // wrong address.
   upstream_connection_refused: "transient",
+  // parser-output-unchanged: a failure grade for refused projection writes; no parser reads it.
+  // A process of an older release met a search-index generation that a newer
+  // release registered and refused to write without it. A process of the
+  // newer release takes the same write.
+  corpus_generation_unknown: "transient",
   generation_cancelled: "anticipated",
   work_cancelled: "anticipated",
   publisher_resource_limit: "anticipated",
@@ -139,6 +144,10 @@ export const FAILURE_REASON_GRADE = {
   outbound_action_preview_unreadable: "defect",
   // parser-output-unchanged: invoice renderer failures grade telemetry only.
   invoice_renderer_failed: "defect",
+  // parser-output-unchanged: invoice-link read and delivery grades classify telemetry only.
+  invoice_link_read_failed: "defect",
+  invoice_email_unconfigured: "anticipated",
+  invoice_links_disabled: "anticipated",
   visual_preview_unavailable: "defect",
   visual_preview_timeout: "defect",
   visual_preview_response_invalid: "defect",

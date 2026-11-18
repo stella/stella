@@ -84,3 +84,28 @@ test("a failed breadcrumb refresh keeps the saved name and exposes retry", async
   observer.destroy();
   client.clear();
 });
+
+test("a missing resource leaves the crumb to the page's not-found state", async () => {
+  const { APIError } = await import("@/lib/errors/api");
+  const retry = async () => {
+    throw new Error("A missing resource is not retried from the crumb");
+  };
+  for (const status of [403, 404]) {
+    const missing = mount({
+      type: "error",
+      error: new APIError({ status, message: "Not found" }),
+      retry,
+    });
+    expect(missing.queryByRole("alert")).toBeNull();
+    expect(missing.queryByText(messages.common.somethingWentWrong)).toBeNull();
+    expect(missing.queryByText(savedNameFixture)).toBeNull();
+    missing.unmount();
+  }
+
+  const failed = mount({
+    type: "error",
+    error: new APIError({ status: 500, message: "Server error" }),
+    retry,
+  });
+  expect(failed.getByRole("alert")).toBeDefined();
+});

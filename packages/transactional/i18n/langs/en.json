@@ -7,6 +7,19 @@
     "ignore": "If you didn't expect this invitation, you can safely ignore this email.",
     "subject": "You're invited to join {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {View credit note} advance {View advance invoice} other {View invoice}}",
+    "amountDue": "Amount due: {amount}",
+    "body": "{firmName} sent you {documentType, select, credit_note {a credit note} advance {an advance invoice} other {an invoice}}. Open it to see the details and download the PDF.",
+    "dueDate": "Due date: {date}",
+    "expires": "The link is valid until {date}.",
+    "heading": "{documentType, select, credit_note {Credit note} advance {Advance invoice} other {Invoice}} {invoiceNumber}",
+    "ignore": "stella delivered this email on behalf of {firmName}. If you did not expect it, you can ignore it.",
+    "messageFrom": "Message from {firmName}",
+    "preview": "{firmName} sent you {documentType, select, credit_note {credit note} advance {advance invoice} other {invoice}} {invoiceNumber}",
+    "reply": "Reply to this email to contact {firmName}.",
+    "subject": "{documentType, select, credit_note {Credit note} advance {Advance invoice} other {Invoice}} {invoiceNumber} from {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Review sessions",
     "body": "Your account was signed in to from a new device or location.",

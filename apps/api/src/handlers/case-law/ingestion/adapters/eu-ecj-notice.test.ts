@@ -543,7 +543,9 @@ describe("notice publication outcomes", () => {
               };
             }
             expect(table).toBe(corpusIndexGenerations);
-            return { where: () => ({ limit: async () => [] }) };
+            return {
+              where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+            };
           },
         }),
         update: (table: unknown) => {

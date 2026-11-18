@@ -291,6 +291,7 @@ export const useTemplateStudioSelectionGesture = ({
   });
   const enrichSeqRef = useRef(0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const hideGesture = useCallback(() => {
     enrichSeqRef.current += 1;
     gestureRef.current = null;

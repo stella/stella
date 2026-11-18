@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import type { ComponentProps } from "react";
 
 import { cjk } from "@streamdown/cjk";
@@ -49,26 +49,22 @@ export const MessageResponseImpl = memo(
     // a streamed one names them per block (`AnswerBlock`).
     const parsedWhole = sourceOffsets || props.mode === "static";
     const source = typeof props.children === "string" ? props.children : "";
-    const treeIdPrefix = useMemo(
-      () => (parsedWhole ? answerTreeIdPrefix(0, source) : undefined),
-      [parsedWhole, source],
-    );
+    const treeIdPrefix = parsedWhole
+      ? answerTreeIdPrefix(0, source)
+      : undefined;
     const link = components?.a ?? messageComponents.a;
-    const effectiveRehypePlugins = useMemo(
-      () => [
-        // Streamdown's raw HTML, sanitize and harden chain always runs first:
-        // a caller's `rehypePlugins` only add to it. Replacing it would render
-        // raw HTML as literal text and leave link hardening to the components.
-        // Ids and names from raw HTML then move into the answer namespace.
-        ...Object.values(defaultRehypePlugins),
-        rehypeScopeAnswerIds,
-        ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
-        ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
-        rehypeChatLinks,
-        rehypeNumberAnswerLinks,
-      ],
-      [rehypePlugins, sourceOffsets],
-    );
+    const effectiveRehypePlugins = [
+      // Streamdown's raw HTML, sanitize and harden chain always runs first:
+      // a caller's `rehypePlugins` only add to it. Replacing it would render
+      // raw HTML as literal text and leave link hardening to the components.
+      // Ids and names from raw HTML then move into the answer namespace.
+      ...Object.values(defaultRehypePlugins),
+      rehypeScopeAnswerIds,
+      ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
+      ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
+      rehypeChatLinks,
+      rehypeNumberAnswerLinks,
+    ];
     // Streamdown's internal memo doesn't compare `rehypePlugins`, so
     // a re-render with a new plugin set is silently skipped and the
     // unified processor is never rebuilt. Tying the key to plugin

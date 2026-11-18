@@ -1,11 +1,12 @@
 import { useState } from "react";
 
 import { panic } from "better-result";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { PROCESS_SUMMARY_KINDS } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { keyedBy } from "@/components/keyed";
@@ -54,23 +55,30 @@ export const AnswerSteps = ({
 
   return (
     <View style={styles.run}>
-      <Pressable
-        accessibilityRole="button"
+      <Button
         accessibilityState={{ expanded: open }}
+        className="max-w-full"
         hitSlop={6}
         onPress={() => {
           setOpen((shown) => !shown);
         }}
-        style={[
-          styles.summary,
-          { backgroundColor: colors.card, borderColor: colors.border },
-        ]}
+        variant="plain"
       >
-        <Chevron color={colors.muted} size={14} />
-        <Text numberOfLines={1} style={[styles.label, { color: colors.muted }]}>
-          {summary}
-        </Text>
-      </Pressable>
+        <View
+          style={[
+            styles.summary,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <Chevron color={colors.muted} size={14} />
+          <Text
+            numberOfLines={1}
+            style={[styles.label, { color: colors.muted }]}
+          >
+            {summary}
+          </Text>
+        </View>
+      </Button>
       {open ? <StepList steps={block.steps} /> : null}
     </View>
   );
@@ -150,17 +158,17 @@ export const AnswerSubagent = ({
   return (
     <View style={styles.run}>
       {opens ? (
-        <Pressable
-          accessibilityRole="button"
+        <Button
           accessibilityState={{ expanded: open }}
+          className="self-stretch"
           hitSlop={6}
           onPress={() => {
             setChosen(open ? "closed" : "open");
           }}
-          style={frame}
+          variant="plain"
         >
-          {header}
-        </Pressable>
+          <View style={frame}>{header}</View>
+        </Button>
       ) : (
         <View style={frame}>{header}</View>
       )}
@@ -260,18 +268,18 @@ const StepRow = ({ step, title }: { step: AnswerStep; title: string }) => {
       {contentCallId === null ? (
         label
       ) : (
-        <Pressable
-          accessibilityRole="button"
+        <Button
           accessibilityState={{ expanded: open }}
           hitSlop={6}
           onPress={() => {
             setOpen((shown) => !shown);
           }}
-          style={styles.opens}
+          size="inline"
+          variant="link"
         >
           {label}
           <Chevron color={colors.muted} size={14} />
-        </Pressable>
+        </Button>
       )}
       {detail === null || detail === "" ? null : (
         <Text selectable style={[styles.detail, { color: colors.muted }]}>
@@ -298,11 +306,6 @@ const styles = StyleSheet.create({
   run: {
     alignItems: "flex-start",
     gap: 6,
-  },
-  opens: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 4,
   },
   step: {
     gap: 2,

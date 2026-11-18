@@ -274,11 +274,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }
 
   const schema = useWorkspaceKanbanSchema(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
     [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const subgroupDefinition = useMemo(
     () =>
       resolveWorkspaceKanbanSubgroup(
@@ -324,17 +326,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       !hiddenProperties.includes(id),
   );
 
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties,
-        properties,
-        requiredPropertyIds: [groupByProperty, subgroupByProperty]
-          .filter((property) => property !== null)
-          .map((property) => property.id),
-      }),
-    [groupByProperty, hiddenProperties, properties, subgroupByProperty],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties,
+    properties,
+    requiredPropertyIds: [groupByProperty, subgroupByProperty]
+      .filter((property) => property !== null)
+      .map((property) => property.id),
+  });
 
   const { filters, sorts } = view.layout;
   const hasSupportedSubgroup =
@@ -365,6 +363,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const subgroupView = queryView(subgroupQuery);
   const subgroupQueryData =
     subgroupView.type === "items" ? subgroupView.items : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- inlining this conditional pushes the component past the complexity limit
   const subgroupEntities = useMemo(
     () =>
       subgroupQueryData
@@ -372,6 +371,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         : [],
     [subgroupQueryData],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const subgroup = useMemo(
     () =>
       resolveWorkspaceKanbanDynamicSubgroup(
@@ -380,7 +380,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       ),
     [subgroupDefinition, subgroupEntities],
   );
-  const subgroupMatrix = useMemo(() => {
+  const subgroupMatrix = (() => {
     if (
       !hasSupportedSubgroup ||
       !isKanbanGroupingRenderable(subgroup) ||
@@ -405,15 +405,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       resolveGroupValue: ({ grouping: axis, row }) =>
         resolveWorkspaceKanbanGroupValue(axis, row),
     });
-  }, [
-    grouping,
-    hasSupportedSubgroup,
-    isAssigneeSubgroup,
-    subgroup,
-    subgroupByPropertyId,
-    subgroupEntities,
-    t,
-  ]);
+  })();
 
   // A view scoped to a kind (a task list, a message board) only ever shows
   // that kind, so it offers totals only over the properties that kind

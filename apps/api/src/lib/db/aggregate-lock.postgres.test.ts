@@ -196,6 +196,12 @@ const advisoryAcquisitions = () => {
         id: definitionId,
         tx,
       }),
+    invoiceSendCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "invoiceSendCapacity",
+        id: { organizationId },
+        tx,
+      }),
     contactCapacity: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "contactCapacity",

@@ -50,7 +50,8 @@ export type DecisionIdentifierIntent =
       selector: DecisionDocketSelector;
     } & EmbeddedIn)
   | ({ type: "identifier"; kind: "ecli"; value: string } & EmbeddedIn)
-  | { type: "identifier"; kind: "reporter" | "neutral"; value: string };
+  | { type: "identifier"; kind: "reporter" | "neutral"; value: string }
+  | { type: "identifier"; kind: "reference"; value: string };
 
 /**
  * A jurisdiction's reporter citation grammar, supplied by the caller the way
@@ -71,7 +72,25 @@ export type DecisionReporterGrammar = {
  * never inferred from free text: no grammar declares one, and a catch-all
  * pattern would claim ordinary words, so it only arrives typed explicitly.
  */
-export type DecisionIdentifierKind = "docket" | "ecli" | "reporter" | "neutral";
+export type DecisionIdentifierKind =
+  "docket" | "ecli" | "reporter" | "neutral" | "reference";
+
+/**
+ * An entry read as a decision's own stored reference, exactly as a result
+ * displays it, for the references no grammar claims: an authority's decision
+ * number (`ÚOHS-S0236/2016/KD`), a docket in a form no court grammar reads.
+ * `parseDecisionQuery` never produces it, since a free-text box must keep
+ * words as words; a caller that is handed an identifier by contract (resolve)
+ * reads an unclaimed one this way, so every reference a result shows names
+ * its decision back.
+ */
+export const storedDecisionReferenceIntent = (
+  value: string,
+): Extract<DecisionIdentifierIntent, { kind: "reference" }> => ({
+  type: "identifier",
+  kind: "reference",
+  value: value.trim(),
+});
 
 /**
  * What a case-law box entry asks for: a decision by its identifier (a docket
@@ -414,6 +433,7 @@ export const isWholeEntryIdentifier = (
       return intent.embeddedIn === undefined;
     case "neutral":
     case "reporter":
+    case "reference":
       return true;
     default: {
       intent satisfies never;
@@ -524,7 +544,8 @@ type DecisionHitIdentity = {
 /**
  * The hits that answer to the reference: for a docket, every decision of its
  * case file (siblings, sheets and parts alike); for an ECLI, the decision
- * carrying it. A docket or an ECLI matches by case number, ECLI, or any other
+ * carrying it; for a stored reference, the decisions showing it. A docket, an
+ * ECLI or a stored reference matches by case number, ECLI, or any other
  * identifier the publisher supplied (a second docket, a reporter citation). A
  * reporter or neutral citation matches only an identifier of its own type.
  *
@@ -539,15 +560,21 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
 ): THit[] => {
   switch (identifier.kind) {
     case "docket":
-    case "ecli": {
+    case "ecli":
+    case "reference": {
       // A docket is keyed by the grammar that read it; an ECLI belongs to no
-      // docket grammar, so it is compared unscoped.
+      // docket grammar, so it is compared unscoped. A stored reference is
+      // compared with case, spacing and punctuation folded, at least as
+      // loosely as every per-type key its lookup read rows by, so a row the
+      // lookup found for an equivalent spelling is never dropped here.
       const grammar =
         identifier.kind === "docket"
           ? DECISION_DOCKET_GRAMMARS[identifier.jurisdiction]
           : undefined;
       const keyOf = (value: string): string =>
-        decisionIdentifierComparisonKey(value, grammar);
+        identifier.kind === "reference"
+          ? structuredCitationKey(value)
+          : decisionIdentifierComparisonKey(value, grammar);
       const wanted = keyOf(identifier.value);
       return hits.filter(
         (hit) =>
