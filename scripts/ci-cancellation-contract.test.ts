@@ -4,9 +4,9 @@ import * as v from "valibot";
 
 import {
   CANCEL_AFTER_JOB_POLL_MS,
-  CANCEL_AFTER_JOB_POLLS,
   CANCEL_AFTER_JOB_SCRIPT,
   CANCEL_AFTER_JOB_STEP,
+  CANCEL_AFTER_JOB_WAIT_MS,
   CANCEL_AFTER_JOB_WORKFLOW,
   CANCEL_FAILURE_SCRIPT,
 } from "./ci-cancellation-contract";
@@ -312,7 +312,7 @@ test("a job whose own step failed hands the cancellation off and keeps its failu
       repo: "fixture-repo",
       workflow_id: CANCEL_AFTER_JOB_WORKFLOW,
       ref: "main",
-      inputs: { run_id: "42", job_id: "77" },
+      inputs: { run_id: "42", run_attempt: "3", job_id: "77" },
     },
   ]);
   // The failed step is named before the hand-off, as before a cancellation.
@@ -369,51 +369,75 @@ test("a refused hand-off, a helper job and an unknown runner cancel the run at o
 
 type AfterJobOptions = {
   runId?: string;
+  runAttempt?: string;
   jobId?: string;
   runPath?: string;
   jobRunId?: number;
-  /** The job's states, one per poll; the last one repeats. */
-  jobStates?: readonly {
-    status: string;
-    conclusion: string | null;
-    failedStep: boolean;
-  }[];
+  jobRunAttempt?: number;
+  /** The run's attempt when it is read again before cancelling. */
+  currentRunAttempt?: number;
+  /** The job's states, one per poll; the last one repeats. A number is a
+   *  failed lookup with that HTTP status (0: a network error, no status). */
+  jobStates?: readonly (
+    | {
+        status: string;
+        conclusion: string | null;
+        failedStep: boolean;
+      }
+    | number
+  )[];
+  /** How long each job lookup takes on the fake clock. */
+  lookupMs?: number;
   runStatus?: string;
 };
 
 const executeAfterJob = async ({
   runId = "42",
+  runAttempt = "2",
   jobId = "77",
   runPath = ".github/workflows/ci.yml",
   jobRunId = 42,
+  jobRunAttempt = 2,
+  currentRunAttempt = 2,
   jobStates = [
     { status: "in_progress", conclusion: null, failedStep: true },
     { status: "in_progress", conclusion: null, failedStep: true },
     { status: "completed", conclusion: "failure", failedStep: true },
   ],
+  lookupMs = 0,
   runStatus = "in_progress",
 }: AfterJobOptions = {}) => {
   const events: string[] = [];
   const failures: string[] = [];
+  const notices: string[] = [];
   const cancellations: unknown[] = [];
   const delays: number[] = [];
+  const lookupTimeouts: number[] = [];
+  let clock = 1_000_000;
+  const started = clock;
   let polls = 0;
   let runReads = 0;
   await new Script(
     `(async () => { ${CANCEL_AFTER_JOB_SCRIPT} })()`,
   ).runInNewContext({
+    Date: { now: () => clock },
     setTimeout: (callback: () => void, delay: number) => {
       delays.push(delay);
+      clock += delay;
       queueMicrotask(callback);
     },
     context: { repo: { owner: "fixture-owner", repo: "fixture-repo" } },
-    process: { env: { RUN_ID: runId, JOB_ID: jobId } },
+    process: { env: { RUN_ID: runId, RUN_ATTEMPT: runAttempt, JOB_ID: jobId } },
     core: {
       setFailed: (message: string) => {
         failures.push(message);
         events.push("failed");
       },
-      notice: () => {
+      info: () => {
+        events.push("info");
+      },
+      notice: (message: string) => {
+        notices.push(message);
         events.push("notice");
       },
       summary: {
@@ -434,21 +458,38 @@ const executeAfterJob = async ({
               data: {
                 id: run_id,
                 path: runPath,
+                run_attempt: runReads === 1 ? jobRunAttempt : currentRunAttempt,
                 status: runReads === 1 ? "in_progress" : runStatus,
               },
             };
           },
-          getJobForWorkflowRun: async ({ job_id }: { job_id: number }) => {
+          getJobForWorkflowRun: async ({
+            job_id,
+            request,
+          }: {
+            job_id: number;
+            request: { timeout: number };
+          }) => {
             const state = jobStates[Math.min(polls, jobStates.length - 1)];
             if (state === undefined) {
               throw new TypeError("The fixture has no job state");
             }
             polls += 1;
+            lookupTimeouts.push(request.timeout);
+            clock += lookupMs;
+            if (typeof state === "number") {
+              events.push(`job-error:${state}`);
+              throw Object.assign(
+                new Error("fixture lookup failure"),
+                state === 0 ? {} : { status: state },
+              );
+            }
             events.push(`job:${state.status}`);
             return {
               data: {
                 id: job_id,
                 run_id: jobRunId,
+                run_attempt: jobRunAttempt,
                 name: "ci-tests (rest-web)",
                 html_url: "https://example.test/jobs/77",
                 status: state.status,
@@ -470,7 +511,23 @@ const executeAfterJob = async ({
       },
     },
   });
-  return { events, failures, cancellations, delays, polls };
+  return {
+    events,
+    failures,
+    notices,
+    cancellations,
+    delays,
+    lookupTimeouts,
+    polls,
+    elapsed: clock - started,
+  };
+};
+
+const running = { status: "in_progress", conclusion: null, failedStep: true };
+const failedJob = {
+  status: "completed",
+  conclusion: "failure",
+  failedStep: true,
 };
 
 test("the dispatched run cancels only after the failed job has ended", async () => {
@@ -491,11 +548,14 @@ test("the dispatched run cancels only after the failed job has ended", async () 
 test("the dispatched run cancels nothing it cannot tie to a failed CI job", async () => {
   for (const [label, options] of [
     ["empty run id", { runId: "" }],
+    ["empty run attempt", { runAttempt: "" }],
     ["zero job id", { jobId: "0" }],
     ["exponent run id", { runId: "1e3" }],
     ["suffixed job id", { jobId: "77abc" }],
     ["another workflow", { runPath: ".github/workflows/release.yml" }],
     ["a job of another run", { jobRunId: 41 }],
+    ["a job of an earlier attempt", { jobRunAttempt: 1 }],
+    ["a job that cannot be read", { jobStates: [404] }],
     [
       "a job that passed",
       {
@@ -512,6 +572,7 @@ test("the dispatched run cancels nothing it cannot tie to a failed CI job", asyn
         ],
       },
     ],
+    ["a job never read before the deadline", { jobStates: [502] }],
   ] as const) {
     const result = await executeAfterJob(options);
     expect(result.cancellations, label).toEqual([]);
@@ -519,16 +580,45 @@ test("the dispatched run cancels nothing it cannot tie to a failed CI job", asyn
   }
 });
 
+test("the dispatched run retries a transient job lookup failure", async () => {
+  for (const status of [502, 429, 0]) {
+    const result = await executeAfterJob({
+      jobStates: [running, status, status, failedJob],
+    });
+    expect(result.failures, String(status)).toEqual([]);
+    expect(result.events.filter((event) => event === "info")).toHaveLength(2);
+    expect(result.cancellations, String(status)).toHaveLength(1);
+  }
+});
+
+test("the dispatched run leaves a rerun of the failed run alone", async () => {
+  const result = await executeAfterJob({ currentRunAttempt: 3 });
+  expect(result.cancellations).toEqual([]);
+  expect(result.failures).toEqual([]);
+  expect(result.notices.join("\n")).toContain("attempt 3, not 2");
+});
+
 test("the dispatched run gives up waiting at its deadline and still cancels a failed job's run", async () => {
-  const result = await executeAfterJob({
-    jobStates: [{ status: "in_progress", conclusion: null, failedStep: true }],
-  });
-  expect(result.polls).toBe(CANCEL_AFTER_JOB_POLLS);
-  expect(result.cancellations).toHaveLength(1);
-  // Polls x interval stays inside the job's five-minute limit.
-  expect(CANCEL_AFTER_JOB_POLLS * CANCEL_AFTER_JOB_POLL_MS).toBeLessThan(
-    4 * 60_000,
-  );
+  for (const lookupMs of [0, 1000, 7000]) {
+    const result = await executeAfterJob({ jobStates: [running], lookupMs });
+    expect(result.cancellations, String(lookupMs)).toHaveLength(1);
+    // The deadline is elapsed time, however long each lookup takes.
+    expect(result.elapsed, String(lookupMs)).toBeLessThanOrEqual(
+      CANCEL_AFTER_JOB_WAIT_MS + lookupMs,
+    );
+    expect(result.elapsed, String(lookupMs)).toBeGreaterThanOrEqual(
+      CANCEL_AFTER_JOB_WAIT_MS,
+    );
+    // Each lookup and sleep is bounded by the time left.
+    expect(
+      result.lookupTimeouts.every(
+        (timeout) => timeout > 0 && timeout <= CANCEL_AFTER_JOB_WAIT_MS,
+      ),
+      String(lookupMs),
+    ).toBe(true);
+  }
+  // The wait stays inside the job's five-minute limit.
+  expect(CANCEL_AFTER_JOB_WAIT_MS).toBeLessThan(4 * 60_000);
 });
 
 test("a run that already ended is left alone", async () => {
@@ -568,6 +658,7 @@ test("the dispatched workflow runs the pinned script from main with only the act
   );
   expect(Object.keys(workflow.on.workflow_dispatch.inputs).toSorted()).toEqual([
     "job_id",
+    "run_attempt",
     "run_id",
   ]);
   expect(workflow.permissions).toEqual({});

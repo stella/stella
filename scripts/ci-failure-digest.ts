@@ -1484,18 +1484,53 @@ export const inert = (line: string): string => {
     : line;
 };
 
-/** The failures of a test run, printed last so the log ends with them. */
+/** GitHub rejects a step summary over 1 MiB whole, so the tail's section
+ *  stays well inside it; the job log keeps the full tail. */
+export const TAIL_SUMMARY_MAX_BYTES = 256 * 1024;
+
 /** A test run's tail as a job summary section, fenced longer than any
- *  backtick run inside it so no test output can close the fence. */
-export const tailSummaryMarkdown = (tail: string): string => {
-  const longest = Math.max(
-    0,
-    ...[...tail.matchAll(/`+/gu)].map(([run]) => run.length),
-  );
-  const marker = "`".repeat(Math.max(3, longest + 1));
-  return `### Failing tests\n\n${marker}text\n${tail}\n${marker}\n`;
+ *  backtick run inside it so no test output can close the fence, and cut at
+ *  a line to at most `maxBytes` of UTF-8 with a note pointing to the log. */
+export const tailSummaryMarkdown = (
+  tail: string,
+  maxBytes: number = TAIL_SUMMARY_MAX_BYTES,
+): string => {
+  const encoder = new TextEncoder();
+  const bytes = (text: string): number => encoder.encode(text).length;
+  const fenceFor = (body: string): string =>
+    "`".repeat(
+      Math.max(
+        3,
+        1 +
+          Math.max(0, ...[...body.matchAll(/`+/gu)].map(([run]) => run.length)),
+      ),
+    );
+  const render = (body: string, marker: string, note: string): string =>
+    `### Failing tests\n\n${marker}text\n${body}\n${marker}\n${note}`;
+  const marker = fenceFor(tail);
+  const whole = render(tail, marker, "");
+  if (bytes(whole) <= maxBytes) {
+    return whole;
+  }
+  const lines = tail.split("\n");
+  const note = (kept: number): string =>
+    `\nThe summary shows ${kept} of ${lines.length} lines; the job log has the full list.\n`;
+  // A kept part's fence is never longer than the whole tail's.
+  let used = bytes(render("", marker, note(lines.length)));
+  const kept: string[] = [];
+  for (const line of lines) {
+    const cost = bytes(line) + 1;
+    if (used + cost > maxBytes) {
+      break;
+    }
+    kept.push(line);
+    used += cost;
+  }
+  const body = kept.join("\n");
+  return render(body, fenceFor(body), note(kept.length));
 };
 
+/** The failures of a test run, printed last so the log ends with them. */
 export const renderTail = (rawLines: readonly string[]): string => {
   const failures = testFailures(rawLines);
   if (failures.length === 0) {

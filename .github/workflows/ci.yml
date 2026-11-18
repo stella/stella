@@ -1651,7 +1651,7 @@ jobs:
                   ...context.repo,
                   workflow_id: "cancel-failed-run.yml",
                   ref: "main",
-                  inputs: { run_id: String(context.runId), job_id: String(ownJob.id) },
+                  inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
                 });
                 core.notice(`${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.`);
                 return;
@@ -3192,9 +3192,11 @@ jobs:
           echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
+          # A heavy_only run may check out a digest script without --summary;
+          # it refuses the flag, so the tail is printed again without it.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
@@ -3252,9 +3254,11 @@ jobs:
           echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
+          # A heavy_only run may check out a digest script without --summary;
+          # it refuses the flag, so the tail is printed again without it.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
             status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || true
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
             exit "$status"
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
@@ -3873,7 +3877,7 @@ jobs:
                   ...context.repo,
                   workflow_id: "cancel-failed-run.yml",
                   ref: "main",
-                  inputs: { run_id: String(context.runId), job_id: String(ownJob.id) },
+                  inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
                 });
                 core.notice(`${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.`);
                 return;

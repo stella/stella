@@ -51,6 +51,7 @@ import {
   splitSteps,
   stripAnsi,
   summaryMarkdown,
+  TAIL_SUMMARY_MAX_BYTES,
   tailSummaryMarkdown,
   testFailures,
 } from "./ci-failure-digest";
@@ -177,6 +178,27 @@ test("a tail summary fence outlasts any backtick run in the test output", () => 
     );
     expect(fence.length).toBeGreaterThan(longest);
   }
+});
+
+test("a tail summary stays inside its byte budget and points to the full log", () => {
+  const encoder = new TextEncoder();
+  const tail = Array.from(
+    { length: 5000 },
+    (_, index) => `(fail) suite ${index} > žluťoučký kůň ${"x".repeat(180)}`,
+  ).join("\n");
+  for (const budget of [4096, TAIL_SUMMARY_MAX_BYTES]) {
+    const markdown = tailSummaryMarkdown(tail, budget);
+    expect(encoder.encode(markdown).length).toBeLessThanOrEqual(budget);
+    expect(markdown).toStartWith(
+      "### Failing tests\n\n```text\n(fail) suite 0 >",
+    );
+    expect(markdown).toMatch(
+      /\n```\n\nThe summary shows \d+ of 5000 lines; the job log has the full list\.\n$/u,
+    );
+  }
+  expect(tailSummaryMarkdown("(fail) a", 4096)).not.toContain(
+    "The summary shows",
+  );
 });
 
 test("a test run's tail lists every failure name and package count", () => {
@@ -1279,7 +1301,7 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   expect(testSteps.length).toBeGreaterThan(0);
   for (const step of testSteps) {
     expect(step.run, step.name).toContain(
-      'timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || true',
+      'timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true',
     );
   }
 });
@@ -1334,6 +1356,39 @@ test("a failing test run keeps its exit status through tee and the tail", () => 
       expect(stdout.includes("TAIL-RAN")).toBe(expected !== 0);
       expect(stdout.includes("AFTER")).toBe(expected === 0);
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a checked-out digest script without --summary still prints the failing tests", () => {
+  const step = (ciWorkflow().jobs["ci-tests"]?.steps ?? []).find(
+    ({ run }) => run?.includes('| tee "$output" || {') === true,
+  );
+  const block = wrapperBlock(step?.run ?? "");
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-tests-wrapper-"));
+  try {
+    // An older script refuses the flag with its usage error and prints no tail.
+    const script = [
+      "set -eo pipefail",
+      `output="${directory}/out.log"`,
+      `GITHUB_STEP_SUMMARY="${directory}/summary.md"`,
+      "bun() {",
+      '  if [[ "$1" == scripts/ci-failure-digest.ts ]]; then',
+      '    if [[ "$#" -gt 3 ]]; then echo USAGE >&2; return 2; fi',
+      "    echo TAIL-RAN; return 0",
+      "  fi",
+      '  echo "(fail) a > b"; return 3',
+      "}",
+      'timeout() { shift; "$@"; }',
+      block,
+    ].join("\n");
+    const result = Bun.spawnSync(
+      ["bash", "--noprofile", "--norc", "-c", script],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode).toBe(3);
+    expect(result.stdout.toString().match(/TAIL-RAN/gu)).toHaveLength(1);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

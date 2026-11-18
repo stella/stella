@@ -64,7 +64,7 @@ if (ownJob && (ownJob.steps || []).some((step) => step.conclusion === "failure")
       ...context.repo,
       workflow_id: "${CANCEL_AFTER_JOB_WORKFLOW}",
       ref: "main",
-      inputs: { run_id: String(context.runId), job_id: String(ownJob.id) },
+      inputs: { run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT, job_id: String(ownJob.id) },
     });
     core.notice(\`\${context.job}: the run is cancelled once this job ends, so this job keeps its failure conclusion.\`);
     return;
@@ -125,18 +125,25 @@ export const PR_CODE_QUALITY_CANCEL_IF =
   "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository";
 
 /** How long the dispatched run waits for the failed job to end. */
-export const CANCEL_AFTER_JOB_POLLS = 60;
+export const CANCEL_AFTER_JOB_WAIT_MS = 120_000;
 export const CANCEL_AFTER_JOB_POLL_MS = 2000;
 
-// The dispatched run cancels only a CI Checks run whose named job failed. It
-// waits for that job to end, so the job keeps its failure conclusion; a job
-// still running at the deadline with a failed step is cancelled with the run,
-// so a slow cleanup never costs the fast cancellation.
+// The dispatched run cancels only a CI Checks run attempt whose named job
+// failed. It waits for that job to end, so the job keeps its failure
+// conclusion; a job still running at the deadline with a failed step is
+// cancelled with the run, so a slow cleanup never costs the fast cancellation.
+// The wait is bounded by elapsed time, and a lookup that fails transiently (a
+// 5xx, a rate limit, a network error) is retried until the deadline: the
+// producer has already returned, so nothing else would cancel the run. A rerun
+// keeps the run id, so a later attempt than the one that failed is left alone.
 export const CANCEL_AFTER_JOB_SCRIPT = `const runId = Number(process.env.RUN_ID);
+const runAttempt = Number(process.env.RUN_ATTEMPT);
 const jobId = Number(process.env.JOB_ID);
-if (!/^[1-9][0-9]*$/.test(process.env.RUN_ID || "") || !/^[1-9][0-9]*$/.test(process.env.JOB_ID || "")
-  || !Number.isSafeInteger(runId) || !Number.isSafeInteger(jobId)) {
-  core.setFailed("run_id and job_id must be positive integers.");
+const positive = /^[1-9][0-9]*$/;
+if (!positive.test(process.env.RUN_ID || "") || !positive.test(process.env.RUN_ATTEMPT || "")
+  || !positive.test(process.env.JOB_ID || "")
+  || !Number.isSafeInteger(runId) || !Number.isSafeInteger(runAttempt) || !Number.isSafeInteger(jobId)) {
+  core.setFailed("run_id, run_attempt and job_id must be positive integers.");
   return;
 }
 const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: runId });
@@ -144,17 +151,45 @@ if (run.path !== ".github/workflows/ci.yml") {
   core.setFailed(\`Run \${runId} is not a CI Checks run.\`);
   return;
 }
+const deadline = Date.now() + ${CANCEL_AFTER_JOB_WAIT_MS};
 let job;
-for (let poll = 1; ; poll += 1) {
-  ({ data: job } = await github.rest.actions.getJobForWorkflowRun({ ...context.repo, job_id: jobId }));
-  if (job.run_id !== runId) {
-    core.setFailed(\`Job \${jobId} is not part of run \${runId}.\`);
-    return;
-  }
-  if (job.status === "completed" || poll >= ${CANCEL_AFTER_JOB_POLLS}) {
+for (;;) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
     break;
   }
-  await new Promise((resolve) => setTimeout(resolve, ${CANCEL_AFTER_JOB_POLL_MS}));
+  try {
+    ({ data: job } = await github.rest.actions.getJobForWorkflowRun({
+      ...context.repo,
+      job_id: jobId,
+      request: { timeout: remaining },
+    }));
+  } catch (error) {
+    const status = error && typeof error.status === "number" ? error.status : undefined;
+    if (status !== undefined && status < 500 && status !== 429) {
+      core.setFailed(\`Job \${jobId} could not be read (\${status}); run \${runId} is left running.\`);
+      return;
+    }
+    core.info(\`Job \${jobId} lookup failed transiently (\${status ?? (error && error.message)}); retrying.\`);
+  }
+  if (job !== undefined) {
+    if (job.run_id !== runId || job.run_attempt !== runAttempt) {
+      core.setFailed(\`Job \${jobId} is not part of run \${runId} attempt \${runAttempt}.\`);
+      return;
+    }
+    if (job.status === "completed") {
+      break;
+    }
+  }
+  const wait = Math.min(${CANCEL_AFTER_JOB_POLL_MS}, deadline - Date.now());
+  if (wait <= 0) {
+    break;
+  }
+  await new Promise((resolve) => setTimeout(resolve, wait));
+}
+if (job === undefined) {
+  core.setFailed(\`Job \${jobId} could not be read before the deadline; run \${runId} is left running.\`);
+  return;
 }
 const failed = job.status === "completed"
   ? job.conclusion === "failure"
@@ -164,6 +199,10 @@ if (!failed) {
   return;
 }
 const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: runId });
+if (current.run_attempt !== runAttempt) {
+  core.notice(\`Run \${runId} is on attempt \${current.run_attempt}, not \${runAttempt}; it is left running.\`);
+  return;
+}
 if (current.status === "completed") {
   core.notice(\`Run \${runId} has already ended.\`);
   return;
@@ -178,6 +217,7 @@ export const CANCEL_AFTER_JOB_STEP = {
   uses: CANONICAL_CANCEL_STEP.uses,
   env: {
     RUN_ID: `\${{ inputs.run_id }}`,
+    RUN_ATTEMPT: `\${{ inputs.run_attempt }}`,
     JOB_ID: `\${{ inputs.job_id }}`,
   },
   with: {
