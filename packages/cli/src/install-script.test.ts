@@ -293,6 +293,8 @@ describe("Windows install script", () => {
     );
     expect(script).not.toContain("SetEnvironmentVariable");
   });
+  // timeout: a cold PowerShell start can take longer than the default five
+  // seconds; the test checks parsing, not speed.
   test.skipIf(!Bun.which("pwsh"))(
     "PowerShell parses the script when available",
     () => {
@@ -310,5 +312,6 @@ describe("Windows install script", () => {
       expect(result.stderr.toString()).toBe("");
       expect(result.exitCode).toBe(0);
     },
+    30_000,
   );
 });
