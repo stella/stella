@@ -9,7 +9,7 @@ import { Text } from "@stll/ui/text";
 import { useDictation } from "@/components/use-dictation";
 import type { DictationNotice } from "@/components/use-dictation";
 import { CheckIcon, DictateIcon, XIcon } from "@/icons.gen";
-import { DICTATION_MAX_SECONDS } from "@/state/dictation";
+import { DICTATION_TOTAL_MAX_MS } from "@/state/dictation-chunks";
 import { useUiColors } from "@/theme";
 
 /**
@@ -101,7 +101,7 @@ const useDictationStatus = ({
   if (phase === "recording") {
     return t("dictationListening", {
       elapsed: dictationClock(elapsedMs),
-      limit: dictationClock(DICTATION_MAX_SECONDS * 1000),
+      limit: dictationClock(DICTATION_TOTAL_MAX_MS),
     });
   }
   if (phase === "transcribing") {

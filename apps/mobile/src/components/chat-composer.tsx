@@ -44,7 +44,8 @@ import type {
   DraftSendMode,
   SendRefusal,
 } from "@/state/chat-attachments";
-import { appendDictation, DICTATION_MAX_SECONDS } from "@/state/dictation";
+import { appendDictation } from "@/state/dictation";
+import { DICTATION_TOTAL_MAX_MS } from "@/state/dictation-chunks";
 import { sizeInUnits } from "@/state/scan-pages";
 import { useUiColors } from "@/theme";
 
@@ -328,7 +329,7 @@ export const ChatComposer = ({
                 {dictation.phase === "recording"
                   ? t("dictationListening", {
                       elapsed: dictationClock(dictation.elapsedMs),
-                      limit: dictationClock(DICTATION_MAX_SECONDS * 1000),
+                      limit: dictationClock(DICTATION_TOTAL_MAX_MS),
                     })
                   : t("dictationTranscribing")}
               </Text>
