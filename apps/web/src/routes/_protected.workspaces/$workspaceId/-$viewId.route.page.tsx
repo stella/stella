@@ -20,7 +20,7 @@ import { ViewChromeRowFace } from "./-$viewId.route.pending";
 const routeApi = getRouteApi("/_protected/workspaces/$workspaceId/$viewId");
 
 /** The matter view: its tabs row and toolbar over the view the URL names. */
-function RouteComponent() {
+export function ViewPage() {
   const { workspaceId, viewId } = routeApi.useParams({
     select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
   });
@@ -174,7 +174,3 @@ function ViewChromeRow({
     />
   );
 }
-
-// Exported under the page name; the function keeps the name its audited
-// query sites are recorded under.
-export { RouteComponent as ViewPage };

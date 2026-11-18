@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import {
   checkBaseline,
   checkMigratedMutationTargets,
+  hookIdentities,
   inspectMutationQueryInvalidation,
 } from "./check-mutation-query-invalidation.ts";
 import { inspectMutationQuerySources } from "./mutation-query-census.ts";
@@ -846,71 +847,137 @@ test("a committed baseline cannot gain sites or rewrite reasons, and can shrink"
   ).toEqual({ ok: true, entries: {}, errors: [] });
 });
 
-test("a committed entry may move to another module, one for one, with its reason", () => {
-  const committed = {
-    "apps/web/src/routes/a.tsx:Page:useQuery:reader": "Pending migration.",
+test("a committed entry may move with its hook and reason, one for one", () => {
+  const movedFrom = "apps/web/src/routes/a.tsx:RouteComponent:useQuery:reader";
+  const committed = { [movedFrom]: "Pending migration." };
+  // Moved to another module and renamed: only the hook's identity carries.
+  const movedTo = "apps/web/src/routes/-a.page.tsx:APage:useQuery:reader";
+  const reads = "reader\u0000useQuery\u0000viewsOptions\u0000";
+  const finding = (id: string) => ({
+    id,
+    file: id.slice(0, id.indexOf(":")),
+    reason: "Pending migration.",
+    disposition: "legacy" as const,
+  });
+  const identities = {
+    committed: new Map([[movedFrom, reads]]),
+    current: new Map([[movedTo, reads]]),
   };
-  const movedTo = "apps/web/src/routes/-a.page.tsx:Page:useQuery:reader";
-  const observed = [
-    {
-      id: movedTo,
-      file: "apps/web/src/routes/-a.page.tsx",
-      reason: "Pending migration.",
-      disposition: "legacy" as const,
-    },
-  ];
   expect(
     checkBaseline({
-      observed,
+      observed: [finding(movedTo)],
       recorded: { [movedTo]: "Pending migration." },
       committed,
       write: false,
+      identities,
     }),
   ).toEqual({
     ok: true,
     entries: { [movedTo]: "Pending migration." },
     errors: [],
   });
+  // Without the identities nothing is a move.
+  expect(
+    checkBaseline({
+      observed: [finding(movedTo)],
+      recorded: { [movedTo]: "Pending migration." },
+      committed,
+      write: false,
+    }).errors,
+  ).toContain(`Added baseline entry: ${movedTo}`);
   // Kept under its old path as well, the entry is growth, not a move.
   expect(
     checkBaseline({
-      observed,
+      observed: [finding(movedTo)],
       recorded: { ...committed, [movedTo]: "Pending migration." },
       committed,
       write: false,
+      identities,
     }).errors,
   ).toContain(`Added baseline entry: ${movedTo}`);
-  // A different site, or the same site with a new reason, is not a move.
-  const otherSite = "apps/web/src/routes/-a.page.tsx:Other:useQuery:reader";
+  // A genuinely new entry, reading something else, still fails, even when
+  // an entry left the baseline in the same change.
+  const fresh = "apps/web/src/routes/-a.page.tsx:APage:useQuery#2:reader";
   expect(
     checkBaseline({
-      observed: [{ ...observed[0]!, id: otherSite }],
-      recorded: { [otherSite]: "Pending migration." },
+      observed: [finding(fresh)],
+      recorded: { [fresh]: "Pending migration." },
       committed,
       write: false,
+      identities: {
+        committed: identities.committed,
+        current: new Map([
+          [fresh, "reader\u0000useQuery\u0000contactsOptions\u0000"],
+        ]),
+      },
     }).errors,
-  ).toContain(`Added baseline entry: ${otherSite}`);
+  ).toContain(`Added baseline entry: ${fresh}`);
+  // The same hook under a new reason is not a move.
   expect(
     checkBaseline({
-      observed,
+      observed: [finding(movedTo)],
       recorded: { [movedTo]: "Reworded." },
       committed,
       write: false,
+      identities,
     }).errors,
   ).toContain(`Added baseline entry: ${movedTo}`);
   // One committed entry accounts for one moved entry.
-  const second = "apps/web/src/routes/-b.page.tsx:Page:useQuery:reader";
+  const second = "apps/web/src/routes/-b.page.tsx:BPage:useQuery:reader";
   expect(
     checkBaseline({
-      observed: [...observed, { ...observed[0]!, id: second }],
+      observed: [finding(movedTo), finding(second)],
       recorded: {
         [movedTo]: "Pending migration.",
         [second]: "Pending migration.",
       },
       committed,
       write: false,
+      identities: {
+        committed: identities.committed,
+        current: new Map([
+          [movedTo, reads],
+          [second, reads],
+        ]),
+      },
     }).ok,
   ).toBe(false);
+});
+
+test("hook identities name what a hook reads or writes, not where it sits", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/a.tsx",
+      text: `
+import { queryOptions, useQuery } from "@tanstack/react-query";
+const viewsOptions = () => queryOptions({ queryKey: ["views"], queryFn: async () => [] });
+export function RouteComponent() { return useQuery(viewsOptions()); }
+`,
+    },
+    {
+      file: "apps/web/src/b.tsx",
+      text: `
+import { queryOptions, useQuery } from "@tanstack/react-query";
+const viewsOptions = () => queryOptions({ queryKey: ["views"], queryFn: async () => [] });
+const contactsOptions = () => queryOptions({ queryKey: ["contacts"], queryFn: async () => [] });
+export function ViewPage() { return useQuery(viewsOptions()); }
+export function ContactsPage() { return useQuery(contactsOptions()); }
+`,
+    },
+  ]);
+  const identities = hookIdentities(census);
+  const readerOf = (file: string, scope: string) =>
+    identities.get(
+      [...identities.keys()].find(
+        (id) => id.startsWith(`${file}:${scope}:`) && id.endsWith(":reader"),
+      ) ?? panic(`no reader in ${file} ${scope}`),
+    );
+  expect(readerOf("apps/web/src/a.tsx", "RouteComponent")).toBe(
+    readerOf("apps/web/src/b.tsx", "ViewPage"),
+  );
+  expect(readerOf("apps/web/src/b.tsx", "ContactsPage")).not.toBe(
+    readerOf("apps/web/src/b.tsx", "ViewPage"),
+  );
 });
 
 test("check mode fails for new and stale entries", () => {

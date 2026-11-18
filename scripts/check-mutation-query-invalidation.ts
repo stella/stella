@@ -10,6 +10,7 @@ import { BASELINE_PATHS } from "./baseline-paths";
 import {
   generateMutationQueryCensus,
   type MutationQueryCensus,
+  revisionTree,
 } from "./mutation-query-census.ts";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -2651,34 +2652,73 @@ const committedBaseline = (revision: string) => {
   return v.parse(committedBaselineSchema, JSON.parse(content));
 };
 
-/** A finding's site within its module: its ID without the file it lives in. */
-const siteInModule = (id: string) => id.slice(id.indexOf(":") + 1);
+/**
+ * What a finding's hook reads or writes, independent of the module and the
+ * function it sits in: a reader by its primitive and query key (the key's
+ * factory, else its static prefix, else its expression) and the routes it
+ * reads; a mutation by its hook and the routes it writes. Code moved to
+ * another module or renamed keeps this identity.
+ */
+export type HookIdentities = ReadonlyMap<string, string>;
+
+const routeList = (routes: readonly { method: string; route: string }[]) =>
+  [...new Set(routes.map(({ method, route }) => `${method} ${route}`))]
+    .toSorted(compareCodeUnit)
+    .join(",");
+
+export const hookIdentities = (census: MutationQueryCensus): HookIdentities => {
+  const identities = new Map<string, string>();
+  for (const entry of census.mutations) {
+    identities.set(
+      `${entry.id}:mutation`,
+      ["mutation", entry.callee, routeList(entry.writes)].join("\u0000"),
+    );
+  }
+  for (const entry of census.readers) {
+    const key =
+      entry.key === null
+        ? ""
+        : (entry.key.factory ??
+          (entry.key.staticPrefix.length > 0
+            ? JSON.stringify(entry.key.staticPrefix)
+            : entry.key.expression));
+    identities.set(
+      `${entry.id}:reader`,
+      ["reader", entry.callee, key, routeList(entry.routes)].join("\u0000"),
+    );
+  }
+  return identities;
+};
 
 /**
- * Recorded entries that are a committed entry moved to another module: the
- * committed entry is gone from the recording, the new one names the same
- * site, primitive and kind under another file, keeps its reason, and each
- * committed entry accounts for one moved entry. Moving code is not new debt,
- * so these do not count as growth; any other new entry still does.
+ * Recorded entries that are a committed entry moved elsewhere: the committed
+ * entry is gone from the recording, the new one keeps its reason and its
+ * hook identity (as the base revision's census saw the old one and the
+ * current census sees the new one), and each committed entry accounts for one
+ * moved entry. Moving code is not new debt, so these do not count as growth;
+ * any other new entry still does.
  */
 const movedEntries = (
   recorded: Record<string, string>,
   committed: Record<string, string>,
+  identities: { current: HookIdentities; committed: HookIdentities },
 ): Set<string> => {
   const movedAway = new Map<string, string[]>();
   for (const [id, reason] of Object.entries(committed)) {
-    if (id in recorded) {
+    const identity = identities.committed.get(id);
+    if (id in recorded || identity === undefined) {
       continue;
     }
-    const key = `${siteInModule(id)}\u0000${reason}`;
+    const key = `${identity}\u0000${reason}`;
     movedAway.set(key, [...(movedAway.get(key) ?? []), id]);
   }
   const moved = new Set<string>();
   for (const [id, reason] of Object.entries(recorded)) {
-    if (id in committed) {
+    const identity = identities.current.get(id);
+    if (id in committed || identity === undefined) {
       continue;
     }
-    const sources = movedAway.get(`${siteInModule(id)}\u0000${reason}`);
+    const sources = movedAway.get(`${identity}\u0000${reason}`);
     if (sources !== undefined && sources.length > 0) {
       sources.pop();
       moved.add(id);
@@ -2692,11 +2732,15 @@ export const checkBaseline = ({
   recorded,
   committed,
   write,
+  identities,
 }: {
   observed: readonly Finding[];
   recorded: Record<string, string>;
   committed: Record<string, string> | null;
   write: boolean;
+  /** Hook identities now and at the base revision; without them nothing moves. */
+  identities?:
+    { current: HookIdentities; committed: HookIdentities } | undefined;
 }) => {
   const invalidDeclarations = observed.filter(
     ({ disposition }) => disposition === "invalid-declaration",
@@ -2731,7 +2775,9 @@ export const checkBaseline = ({
   const additions = [...byId.keys()].filter((id) => !(id in recorded));
   const stale = Object.keys(recorded).filter((id) => !byId.has(id));
   const moved =
-    committed === null ? new Set<string>() : movedEntries(recorded, committed);
+    committed === null || identities === undefined
+      ? new Set<string>()
+      : movedEntries(recorded, committed, identities);
   const growth =
     committed === null
       ? []
@@ -2818,11 +2864,26 @@ const main = () => {
     )
   ).trim();
   const committed = committedBaseline(baseRevision);
+  // Only a recording that names entries the base lacks can hold a move; the
+  // base revision's census, which names the old entries' hooks, is built
+  // only then.
+  const committedEntries = committed?.entries;
+  const identities =
+    committedEntries !== undefined &&
+    Object.keys(baseline.entries).some((id) => !(id in committedEntries))
+      ? {
+          current: hookIdentities(census),
+          committed: hookIdentities(
+            generateMutationQueryCensus(ROOT, revisionTree(ROOT, baseRevision)),
+          ),
+        }
+      : undefined;
   const result = checkBaseline({
     observed,
     recorded: baseline.entries,
     committed: committed?.entries ?? null,
     write: process.argv.includes("--write"),
+    identities,
   });
   const errors = [
     ...result.errors,
