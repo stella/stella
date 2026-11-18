@@ -628,10 +628,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   "ci-checks-rest/Check migration identity against the base branch": [
     "scripts/check-migration-order.ts",
   ],
-  // Imports the grant map at HEAD and as the production release wrote it.
-  "ci-checks-rest/Check grant release order against the production release": [
-    "scripts/check-grant-release-order.ts",
-  ],
   "ci-checks-rest/Test dead-columns reference matching": [
     "scripts/check-dead-columns.ts",
   ],
