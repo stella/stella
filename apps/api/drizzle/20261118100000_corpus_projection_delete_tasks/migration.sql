@@ -10,6 +10,14 @@ SELECT "lock_corpus_projection_mutations_exclusive"();--> statement-breakpoint
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
+-- A writer whose statement began before the fence holds its table lock while
+-- it waits for the fence, so waiting for that table lock here would deadlock
+-- with it. Both tables the DDL below locks are taken without waiting: if a
+-- writer holds one, the transaction rolls back, the writer finishes, and the
+-- migration runs again.
+LOCK TABLE "corpus_index_projection_intents", "corpus_index_generations"
+  IN SHARE ROW EXCLUSIVE MODE NOWAIT;--> statement-breakpoint
+
 -- The settlement queue: one row per delete task of one index whose revisions
 -- may still wait in `cleanup_committed`. The revisions' rows stay the truth;
 -- a task row only says where to look, so the settlement claim walks a few

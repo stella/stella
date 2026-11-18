@@ -117,20 +117,10 @@ const RECORD_WALK_COMPLETE_SQL = `
   WHERE name = $2
 `;
 
-const READ_ANY_UNQUEUED_SQL = `
+const READ_ANY_COMMITTED_SQL = `
   SELECT 1
-  FROM public."${INTENTS_TABLE}" revision
-  WHERE revision.status = 'cleanup_committed'
-    AND revision.delete_opstamp IS NOT NULL
-    AND revision.delete_task_created_at IS NOT NULL
-    AND NOT EXISTS (
-      SELECT 1
-      FROM public."${TASKS_TABLE}" task
-      WHERE task.family = revision.family
-        AND task.generation = revision.generation
-        AND task.index_id = revision.index_id
-        AND task.delete_opstamp = revision.delete_opstamp
-    )
+  FROM public."${INTENTS_TABLE}"
+  WHERE status = 'cleanup_committed'
   LIMIT 1
 `;
 
@@ -258,10 +248,12 @@ export const createCorpusProjectionDeleteTaskRepair = (
       await connection.query(READ_CHECKPOINT_SQL, [REPAIR_NAME])
     ).at(0);
     if (checkpoint === undefined) {
-      // Never started. A database with no unqueued task owes nothing, which
-      // is how a fresh one stays complete once the triggers queue every task.
-      const unqueued = await connection.query(READ_ANY_UNQUEUED_SQL);
-      return unqueued.length === 0
+      // Never started. A database with no committed task owes nothing, which
+      // is how a fresh one stays complete. One probe of the settlement index
+      // decides it, however long the backlog: whether every committed task is
+      // queued already is the walk's question, and it answers it in batches.
+      const committed = await connection.query(READ_ANY_COMMITTED_SQL);
+      return committed.length === 0
         ? { type: "complete" }
         : {
             type: "incomplete",
@@ -309,13 +301,7 @@ export const createCorpusProjectionDeleteTaskRepair = (
     // A walk stopped after its last batch, whose tasks settlement has drained
     // since, ends here too: its checkpoint (a fresh database has none) is
     // marked complete like a finished walk's, or it would read pending.
-    if (
-      (
-        await connection.query(
-          `SELECT 1 FROM public."${INTENTS_TABLE}" WHERE status = 'cleanup_committed' LIMIT 1`,
-        )
-      ).length === 0
-    ) {
+    if ((await connection.query(READ_ANY_COMMITTED_SQL)).length === 0) {
       await connection.execute(RECORD_WALK_COMPLETE_SQL, [
         WALK_COMPLETE,
         REPAIR_NAME,
