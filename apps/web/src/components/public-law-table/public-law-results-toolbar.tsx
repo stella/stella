@@ -1,12 +1,11 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
 import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { AlignJustifyIcon, WrapTextIcon, XIcon } from "@stll/ui/icons";
-import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
+import { XIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -16,13 +15,16 @@ import {
 } from "@stll/ui/select";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import {
+  PublicLawContentModeToggle,
+  PublicLawResultsToolbarFace,
+} from "@/components/public-law-table/public-law-results-toolbar.pending";
 import type {
   PublicLawTableLayout,
   PublicLawTableLayoutUpdate,
 } from "@/components/public-law-table/public-law-table-layout.logic";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
-import type { TranslationKey } from "@/i18n/types";
 
 type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
   /**
@@ -57,11 +59,8 @@ type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
 };
 
 /**
- * What the reader does to a public-law result set: read how large it is,
- * narrow it, order it, and choose what each row shows. The reading controls
- * scroll as one row, so a narrow viewport drops none of them; the summary takes
- * a row of its own there; the actions wrap beside the controls instead, because a write affordance that scrolls out of a
- * scrollbar-less row is one the reader cannot find.
+ * The results toolbar with its controls: the frame the pending view shares,
+ * holding the density toggle and the column chooser that act on the layout.
  */
 export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
   actions,
@@ -73,74 +72,33 @@ export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
   onLayoutChange,
   sort,
   summary,
-}: PublicLawResultsToolbarProps<TLayout>) => {
-  const t = useTranslations();
-
-  return (
-    <div
-      className="@container/results-toolbar flex min-w-0 flex-wrap items-center gap-1"
-      data-slot="public-law-results-toolbar"
-    >
-      {filters}
-      {/*
-        The summary never shares a narrow row with the controls: there it took
-        whatever width they left, and a query broke word by word under them.
-        Below the container breakpoint it is a full row of its own above the
-        controls; above it, it keeps a floor width, and the controls wrap to
-        the next row before the summary is squeezed under that floor.
-      */}
-      <div
-        className="text-muted-foreground order-first min-w-0 basis-full text-xs @2xl/results-toolbar:order-0 @2xl/results-toolbar:min-w-56 @2xl/results-toolbar:flex-1 @2xl/results-toolbar:basis-0"
-        data-slot="public-law-results-summary"
-      >
-        {summary}
-      </div>
-      <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        {find}
-        {sort !== undefined && (
-          <>
-            <ToolbarDivider />
-            {sort}
-          </>
-        )}
-        <ToolbarDivider />
-        <SegmentedIconToggle
-          onChange={(contentMode) =>
-            onLayoutChange((latest) => ({ ...latest, contentMode }))
-          }
-          options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
-            value: option.mode,
-            icon: option.icon,
-            label: t(option.labelKey),
-          }))}
-          value={layout.contentMode}
-        />
-        {controls !== undefined && (
-          <>
-            <ToolbarDivider />
-            {controls}
-          </>
-        )}
-        <ColumnToggle
-          groups={columnGroups}
-          hidden={layout.hidden}
-          onChange={(hidden) =>
-            onLayoutChange((latest) => ({ ...latest, hidden }))
-          }
-        />
-      </div>
-      {actions !== undefined && (
-        <div className="flex shrink-0 items-center gap-1">
-          <ToolbarDivider />
-          {actions}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/** The hairline between two groups of controls. */
-const ToolbarDivider = () => <span className="bg-border mx-1 h-4 w-px" />;
+}: PublicLawResultsToolbarProps<TLayout>) => (
+  <PublicLawResultsToolbarFace
+    actions={actions}
+    columns={
+      <ColumnToggle
+        groups={columnGroups}
+        hidden={layout.hidden}
+        onChange={(hidden) =>
+          onLayoutChange((latest) => ({ ...latest, hidden }))
+        }
+      />
+    }
+    contentMode={
+      <PublicLawContentModeToggle
+        onChange={(contentMode) =>
+          onLayoutChange((latest) => ({ ...latest, contentMode }))
+        }
+        value={layout.contentMode}
+      />
+    }
+    controls={controls}
+    filters={filters}
+    find={find}
+    sort={sort}
+    summary={summary}
+  />
+);
 
 type ToolbarSelectProps<TValue extends string> = {
   /** Already translated; drawn beside the control from `sm` up. */
@@ -193,33 +151,6 @@ export const ToolbarSelect = <TValue extends string>({
     </Select>
   </>
 );
-
-/**
- * How much of a prose cell a row shows. The same two modes, icons and words as
- * the workspace table's own density control; the state is the page's, because
- * a public results table has no view to hang it on.
- */
-const TABLE_CONTENT_MODE_OPTIONS = [
-  {
-    mode: "tight",
-    icon: AlignJustifyIcon,
-    labelKey: "workspaces.table.tightContent",
-  },
-  {
-    mode: "fit-content",
-    icon: WrapTextIcon,
-    labelKey: "workspaces.table.wrapContent",
-  },
-] as const satisfies readonly {
-  mode: TableContentMode;
-  icon: ComponentType<{ className?: string }>;
-  labelKey: TranslationKey;
-}[];
-
-// Every mode is offered, always: a control that silently dropped one would be
-// a mode the reader cannot get back to.
-type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["mode"];
-true satisfies TableContentMode extends OfferedContentMode ? true : never;
 
 export type PublicLawFilterChip = {
   /** Stable within the row, so removing one does not remount the rest. */
