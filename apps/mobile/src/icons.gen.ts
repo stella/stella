@@ -119,6 +119,7 @@ export { CircleOffIcon, DollarSignIcon, ScissorsIcon } from "lucide-react-native
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react-native";
 export {
+  AccessibilityIcon,
   ActivityIcon,
   AlarmClockIcon,
   AlertCircleIcon,
