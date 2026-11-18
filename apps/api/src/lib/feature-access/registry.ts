@@ -163,7 +163,8 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   // Transcription models whose provider keeps the audio and transcript, such
   // as ElevenLabs on a key without zero retention: chosen members only.
   // `handlers/dictation/desktop-transcription.ts` lists them, and transcribes
-  // with them, only while this decision is enabled.
+  // with them, only while this decision is enabled; the desktop refreshes
+  // its model list when it changes.
   "desktop-dictation-retaining-models": {
     prerequisites: ["desktop-dictation-cloud"],
     enrolment: "invitation",

@@ -63,8 +63,10 @@ const REQUIRED_FEATURE_ID =
   "desktop-dictation-cloud" satisfies DesktopFeatureId;
 
 // A model whose provider keeps the audio is offered to members with this
-// decision only. The desktop never reads it: the API lists and refuses.
-const RETAINING_MODELS_FEATURE_ID = "desktop-dictation-retaining-models";
+// decision only. The API lists and refuses; the desktop only refreshes its
+// model list when the decision changes.
+const RETAINING_MODELS_FEATURE_ID =
+  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
 
 /**
  * The transcription models stella AI offers this organization, none when
