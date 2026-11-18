@@ -116,6 +116,7 @@ export { default as indexes_invoice_lines_workspace_organization_idx } from "./o
 export { default as indexes_invoices_client_backfill_idx } from "./online-migration-entries/indexes-invoices-client-backfill-idx";
 export { default as indexes_invoices_id_workspace_unique } from "./online-migration-entries/indexes-invoices-id-workspace-unique";
 export { default as indexes_invoices_org_client_created_idx } from "./online-migration-entries/indexes-invoices-org-client-created-idx";
+export { default as indexes_invoices_original_credit_idx } from "./online-migration-entries/indexes-invoices-original-credit-idx";
 export { default as indexes_invoices_ws_original_idx } from "./online-migration-entries/indexes-invoices-ws-original-idx";
 export { default as indexes_legal_list_claims_asserted_on_pending_idx } from "./online-migration-entries/indexes-legal-list-claims-asserted-on-pending-idx";
 export { default as indexes_legal_list_generation_runs_stella_active_idx } from "./online-migration-entries/indexes-legal-list-generation-runs-stella-active-idx";

@@ -678,6 +678,16 @@ const isValidHelperConfig = (
 
 type MutationContract = { resources: string[]; writes: string[] };
 
+const PUBLIC_TOKEN_SCOPE = "public-token";
+const PUBLIC_ROUTE_PREFIX = "/public/";
+
+/** Whether every write of a contract is a public route a link token opens. */
+const isPublicTokenContract = ({ writes }: MutationContract) =>
+  writes.length > 0 &&
+  writes.every(
+    (write) => write.split(" ").at(1)?.startsWith(PUBLIC_ROUTE_PREFIX) === true,
+  );
+
 const parseMutationContract = (
   module: ModuleIndex,
   property: ts.ObjectLiteralElementLike,
@@ -807,6 +817,30 @@ type MutationContractErrorArgs = {
   contracts: ReadonlyMap<string, MutationContract>;
 };
 
+/** Which closed scope a resourceMutation names; a missing scope is a workspace write. */
+const scopeKind = (scope: ts.Expression | undefined) => {
+  if (scope === undefined) {
+    return "workspace";
+  }
+  const type = objectProperty(scope, "type");
+  const scopeType = type && unwrap(type);
+  if (!scopeType || !ts.isStringLiteral(scopeType)) {
+    return "invalid";
+  }
+  if (
+    ["workspace", "organization", PUBLIC_TOKEN_SCOPE].includes(
+      scopeType.text,
+    ) &&
+    hasExactProperties(scope, ["type"])
+  ) {
+    return scopeType.text;
+  }
+  return scopeType.text === "organization-projection" &&
+    hasExactProperties(scope, ["type", "userId", "organizationId"])
+    ? scopeType.text
+    : "invalid";
+};
+
 const mutationContractError = ({
   call,
   mutationFn,
@@ -828,24 +862,11 @@ const mutationContractError = ({
   ) {
     return "resourceMutation options must contain mutation, queryClient, mutationFn, and optionally scope.";
   }
-  const scope = objectProperty(options, "scope");
-  if (scope !== undefined) {
-    const type = objectProperty(scope, "type");
-    const scopeType = type && unwrap(type);
-    const primary =
-      scopeType &&
-      ts.isStringLiteral(scopeType) &&
-      ["workspace", "organization"].includes(scopeType.text) &&
-      hasExactProperties(scope, ["type"]);
-    const projection =
-      scopeType &&
-      ts.isStringLiteral(scopeType) &&
-      scopeType.text === "organization-projection" &&
-      hasExactProperties(scope, ["type", "userId", "organizationId"]);
-    if (!primary && !projection) {
-      return "resourceMutation scope must name a closed primary scope or explicit organization projection identity.";
-    }
+  const scope = scopeKind(objectProperty(options, "scope"));
+  if (scope === "invalid") {
+    return "resourceMutation scope must name a closed primary scope, an explicit organization projection identity, or a public token.";
   }
+  const publicToken = scope === PUBLIC_TOKEN_SCOPE;
   const mutation = objectProperty(options, "mutation");
   if (!mutation) {
     return "resourceMutation mutation key must be a string literal.";
@@ -857,6 +878,13 @@ const mutationContractError = ({
   const contract = contracts.get(mutationValue.text);
   if (!contract) {
     return `resourceMutation names unknown contract ${mutationValue.text}.`;
+  }
+  // A public token write reaches only public routes, and a write to a public
+  // route carries no member session to scope its invalidation.
+  if (publicToken !== isPublicTokenContract(contract)) {
+    return publicToken
+      ? "A public token resourceMutation must name a contract whose writes are all public routes."
+      : "A contract whose writes are public routes must use the public token scope.";
   }
   const normalizedHelperCall = call.getText().replace(/\s+/gu, " ").trim();
   const normalizedMutationFn = mutationFn

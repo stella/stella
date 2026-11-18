@@ -1,0 +1,5 @@
+{
+  "id": "action-commit-pins",
+  "type": "full",
+  "check": ["bun", "scripts/check-action-commit-pins.ts"]
+}

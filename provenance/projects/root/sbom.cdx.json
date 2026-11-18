@@ -734,6 +734,9 @@
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
           },
           {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/use-owner-scoped-state.ts#1"
           },
           {
@@ -773,6 +776,9 @@
             "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
           },
           {
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
           },
           {
@@ -810,6 +816,12 @@
           },
           {
             "location": "apps/web/src/lib/use-query-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/user-events-sse.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspace-sse.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/create-matter-store.ts#1"
@@ -1160,7 +1172,13 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#2"
           },
           {
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/chat-message.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#8"
@@ -1662,12 +1680,6 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -3338,6 +3350,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
           },
           {
@@ -3792,6 +3807,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#2"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-extension-input.tsx#1"
@@ -6463,6 +6481,9 @@
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
           },
           {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/use-owner-scoped-state.ts#1"
           },
           {
@@ -6502,6 +6523,9 @@
             "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
           },
           {
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
           },
           {
@@ -6539,6 +6563,12 @@
           },
           {
             "location": "apps/web/src/lib/use-query-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/user-events-sse.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspace-sse.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/create-matter-store.ts#1"
@@ -6889,7 +6919,13 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#2"
           },
           {
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/chat-message.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#8"
@@ -7391,12 +7427,6 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -9067,6 +9097,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
           },
           {
@@ -9521,6 +9554,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#2"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-extension-input.tsx#1"
@@ -12294,10 +12330,10 @@
             "location": "apps/api/scripts/typst-invoice-spike.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/pdfa.ts#10"
+            "location": "apps/api/src/lib/bbox/generate-b-boxes-shared.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bbox/generate-b-boxes-shared.ts#1"
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/pdfa.ts#10"
           },
           {
             "location": "apps/api/src/lib/files/document-properties.ts#12"
@@ -12874,7 +12910,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/compiler.ts#5"
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/compiler.ts#5"
           }
         ]
       },
@@ -13730,6 +13766,18 @@
           },
           {
             "location": "packages/cli/src/commands/compatibility.ts#2"
+          },
+          {
+            "location": "packages/cli/src/commands/doctor.ts#1"
+          },
+          {
+            "location": "packages/cli/src/commands/doctor.ts#2"
+          },
+          {
+            "location": "packages/cli/src/commands/update.ts#1"
+          },
+          {
+            "location": "packages/cli/src/commands/update.ts#2"
           },
           {
             "location": "packages/cli/src/commands/upload.ts#1"
@@ -15695,7 +15743,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#3"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#3"
@@ -15714,6 +15762,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx#3"
@@ -16475,6 +16526,12 @@
             "location": "apps/web/src/lib/account/update-user.ts#1"
           },
           {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#4"
+          },
+          {
             "location": "apps/web/src/lib/analytics/noop.ts#1"
           },
           {
@@ -16589,10 +16646,10 @@
             "location": "apps/web/src/lib/organization/creation-state.ts#1"
           },
           {
-            "location": "apps/web/src/lib/organization/feature-access/access.ts#1"
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#3"
           },
           {
-            "location": "apps/web/src/lib/organization/feature-access/access.ts#2"
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#4"
           },
           {
             "location": "apps/web/src/lib/organization/mutations.ts#1"
@@ -16631,10 +16688,10 @@
             "location": "apps/web/src/lib/query-view.logic.ts#2"
           },
           {
-            "location": "apps/web/src/lib/react-query.ts#8"
+            "location": "apps/web/src/lib/react-query.ts#9"
           },
           {
-            "location": "apps/web/src/lib/react-query.ts#16"
+            "location": "apps/web/src/lib/react-query.ts#17"
           },
           {
             "location": "apps/web/src/lib/search.ts#1"
@@ -16658,10 +16715,10 @@
             "location": "apps/web/src/lib/use-shortcut-rebinding.ts#2"
           },
           {
-            "location": "apps/web/src/lib/user-events-sse.ts#1"
+            "location": "apps/web/src/lib/user-events-sse.ts#3"
           },
           {
-            "location": "apps/web/src/lib/user-events-sse.ts#2"
+            "location": "apps/web/src/lib/user-events-sse.ts#4"
           },
           {
             "location": "apps/web/src/lib/web-search/queries.ts#1"
@@ -16670,10 +16727,10 @@
             "location": "apps/web/src/lib/workspace-realtime.ts#7"
           },
           {
-            "location": "apps/web/src/lib/workspace-sse.ts#1"
+            "location": "apps/web/src/lib/workspace-sse.ts#3"
           },
           {
-            "location": "apps/web/src/lib/workspace-sse.ts#2"
+            "location": "apps/web/src/lib/workspace-sse.ts#4"
           },
           {
             "location": "apps/web/src/lib/workspaces/delete-matter-queries.ts#1"
@@ -16824,6 +16881,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/resolve-report-export-destination-query.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/resource-query-identity.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/reveal-navigation.ts#1"
@@ -17069,9 +17129,6 @@
             "location": "apps/web/src/components/chat/generated-visual.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#4"
-          },
-          {
             "location": "apps/web/src/components/chat/local-folder-approval.tsx#1"
           },
           {
@@ -17094,6 +17151,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#12"
@@ -17825,6 +17885,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-approval-view.tsx#1"
           },
           {
@@ -17975,6 +18038,12 @@
             "location": "apps/web/src/routes/dev/-components/table-chart-playground.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/invoice-link.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/invoice-link.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/knowledge/-components/blueprint-gallery-sheet.tsx#3"
           },
           {
@@ -17984,7 +18053,7 @@
             "location": "apps/web/src/routes/knowledge/-components/clause-detail.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#3"
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#4"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/import-skill-dialog.tsx#3"
@@ -18356,7 +18425,7 @@
             "location": "apps/web/src/lib/session-cache-guard.ts#3"
           },
           {
-            "location": "apps/web/src/lib/workspace-sse.ts#3"
+            "location": "apps/web/src/lib/workspace-sse.ts#5"
           },
           {
             "location": "apps/web/src/lib/workspaces/mutations.ts#6"
@@ -19107,6 +19176,9 @@
           },
           {
             "location": "apps/web/src/routes/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/invoice-link.tsx#8"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/catalogue/catalogue-browser.tsx#3"
@@ -20556,6 +20628,9 @@
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
           },
           {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/use-owner-scoped-state.ts#1"
           },
           {
@@ -20595,6 +20670,9 @@
             "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
           },
           {
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
           },
           {
@@ -20632,6 +20710,12 @@
           },
           {
             "location": "apps/web/src/lib/use-query-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/user-events-sse.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspace-sse.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/create-matter-store.ts#1"
@@ -20982,7 +21066,13 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#2"
           },
           {
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/chat-message.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#8"
@@ -21484,12 +21574,6 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -23160,6 +23244,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
           },
           {
@@ -23614,6 +23701,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#2"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-extension-input.tsx#1"
@@ -24590,10 +24680,10 @@
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/user-message-edit.tsx#4"
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/user-message-edit.tsx#5"
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#6"
           },
           {
             "location": "apps/web/src/routes/dev/-components/chat-composer-reference-playground.tsx#3"
@@ -25226,7 +25316,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/user-message-edit.tsx#6"
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#7"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#13"
@@ -25351,7 +25441,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat/user-message-edit.tsx#7"
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#21"
@@ -26080,6 +26170,9 @@
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
           },
           {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/use-owner-scoped-state.ts#1"
           },
           {
@@ -26119,6 +26212,9 @@
             "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
           },
           {
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
           },
           {
@@ -26156,6 +26252,12 @@
           },
           {
             "location": "apps/web/src/lib/use-query-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/user-events-sse.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspace-sse.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/create-matter-store.ts#1"
@@ -26506,7 +26608,13 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#2"
           },
           {
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/chat-message.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#8"
@@ -27008,12 +27116,6 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -28684,6 +28786,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
           },
           {
@@ -29138,6 +29243,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#2"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-extension-input.tsx#1"
@@ -31927,7 +32035,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#9"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#11"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-attribute-budget.ts#1"
@@ -32054,6 +32162,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/import-snapshot.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/listing-census.ts#1"
@@ -32482,6 +32593,9 @@
             "location": "apps/api/src/handlers/chat/browser-site-grants/load.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-command-receipts.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-delivery-failure.ts#2"
           },
           {
@@ -32663,6 +32777,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/messages/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/messages/local-files-undo.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/messages/revisions/accept.ts#1"
@@ -33007,9 +33124,6 @@
             "location": "apps/api/src/handlers/chat/turns/cancel.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/turns/local-files-undo.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/chat/turns/resume.ts#2"
           },
           {
@@ -33284,6 +33398,9 @@
           },
           {
             "location": "apps/api/src/handlers/dictation/desktop-transcription.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/dictation/elevenlabs-provider.ts#1"
           },
           {
             "location": "apps/api/src/handlers/dictation/limits.ts#1"
@@ -33730,6 +33847,27 @@
             "location": "apps/api/src/handlers/hosted-usage-webhook/replay.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/invoice-links/delivery.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/document.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/download.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/e-invoice.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/file-preparation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/link-access.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/view.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/invoices/create.ts#1"
           },
           {
@@ -33740,12 +33878,6 @@
           },
           {
             "location": "apps/api/src/handlers/invoices/entries/remove.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/export-file.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/export-records.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/export.ts#1"
@@ -33778,28 +33910,16 @@
             "location": "apps/api/src/handlers/invoices/pdf/export.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/invoices/pdf/render-helpers.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/data.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/pdfa.ts#11"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/render-typst.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/session.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/watchdog.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/worker.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/invoices/prefill.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/revoke.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/transition.ts#1"
@@ -33854,6 +33974,9 @@
           },
           {
             "location": "apps/api/src/handlers/legal-resolve/authorization.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legal-resolve/decision-absence-coverage.ts#14"
           },
           {
             "location": "apps/api/src/handlers/legal-resolve/decision-constraints.ts#1"
@@ -34384,6 +34507,21 @@
             "location": "apps/api/src/handlers/organizations/slug/update.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/outbound-actions/confirm.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/discard.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/executors.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/store.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/applicable/run.ts#1"
           },
           {
@@ -34550,6 +34688,9 @@
           },
           {
             "location": "apps/api/src/handlers/saved-searches/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/saved-searches/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/saved-searches/list.ts#1"
@@ -35773,10 +35914,19 @@
             "location": "apps/api/src/lib/billing/invoice-document-type.ts#1"
           },
           {
+            "location": "apps/api/src/lib/billing/invoice-export-file.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-export-records.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/billing/invoice-issue-readiness.ts#1"
           },
           {
             "location": "apps/api/src/lib/billing/invoice-lines.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-payment-amounts.ts#1"
           },
           {
             "location": "apps/api/src/lib/billing/invoice-payment-backfill.ts#1"
@@ -35785,10 +35935,43 @@
             "location": "apps/api/src/lib/billing/invoice-payments.ts#1"
           },
           {
+            "location": "apps/api/src/lib/billing/invoice-pdf/document.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/payment.test-helpers.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/render-helpers.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/data.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/pdfa.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/render-typst.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/session.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/watchdog.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/worker.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/billing/invoice-prefill-operation.ts#1"
           },
           {
             "location": "apps/api/src/lib/billing/invoice-prefill.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-send-delivery.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-send-sender.ts#1"
           },
           {
             "location": "apps/api/src/lib/billing/number-pattern.ts#1"
@@ -35932,7 +36115,7 @@
             "location": "apps/api/src/lib/case-law/decision-badges.ts#1"
           },
           {
-            "location": "apps/api/src/lib/case-law/decision-court-identity.ts#12"
+            "location": "apps/api/src/lib/case-law/decision-court-identity.ts#15"
           },
           {
             "location": "apps/api/src/lib/case-law/decision-date-order.ts#14"
@@ -37039,7 +37222,13 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#65"
+            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#96"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-flip.ts#55"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-retire.ts#27"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts#1"
@@ -37448,6 +37637,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/source-raw-field.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/source-registry-membership.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/stored-document-replay.ts#1"
@@ -37859,6 +38051,12 @@
           },
           {
             "location": "apps/api/src/lib/rate-limit/execution-admission.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/rate-limit/invoice-email-admission.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/rate-limit/invoice-link-admission.ts#1"
           },
           {
             "location": "apps/api/src/lib/rate-limit/mcp-public-read-admission.ts#1"
@@ -39028,6 +39226,12 @@
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
           },
           {
+            "location": "apps/api/src/scripts/repair-court-identity-plan.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-court-identity.ts#48"
+          },
+          {
             "location": "apps/api/src/scripts/repair-cz-ns-court-plan.ts#11"
           },
           {
@@ -39359,6 +39563,9 @@
           },
           {
             "location": "apps/mobile/src/state/case-law.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/state/chat-edit.ts#1"
           },
           {
             "location": "apps/mobile/src/state/chat-limit-reminder.ts#1"
@@ -40408,6 +40615,9 @@
             "location": "apps/web/src/lib/anonymize/pdf-anonymization-geometry.ts#2"
           },
           {
+            "location": "apps/web/src/lib/api.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/auth-client.ts#11"
           },
           {
@@ -40522,7 +40732,7 @@
             "location": "apps/web/src/lib/organization/feature-access/access.logic.ts#1"
           },
           {
-            "location": "apps/web/src/lib/organization/feature-access/access.ts#3"
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#5"
           },
           {
             "location": "apps/web/src/lib/organization/feature-access/action-capabilities.logic.ts#2"
@@ -40609,7 +40819,7 @@
             "location": "apps/web/src/lib/query-view.logic.ts#3"
           },
           {
-            "location": "apps/web/src/lib/react-query.ts#17"
+            "location": "apps/web/src/lib/react-query.ts#18"
           },
           {
             "location": "apps/web/src/lib/redirect.ts#2"
@@ -40648,7 +40858,7 @@
             "location": "apps/web/src/lib/workspace-realtime.ts#10"
           },
           {
-            "location": "apps/web/src/lib/workspace-sse.ts#4"
+            "location": "apps/web/src/lib/workspace-sse.ts#6"
           },
           {
             "location": "apps/web/src/lib/workspaces/archived-matters.logic.ts#1"
@@ -40691,6 +40901,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/workspace.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/resource-query-identity.ts#2"
           },
           {
             "location": "apps/web/src/lib/workspaces/table-store.ts#7"
@@ -41170,6 +41383,9 @@
             "location": "packages/api-contract/src/court-citation-directory.ts#1"
           },
           {
+            "location": "packages/api-contract/src/court-identity.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/decision-docket-filing-year.fixtures.ts#1"
           },
           {
@@ -41449,6 +41665,9 @@
             "location": "packages/cli/src/cli-main.ts#11"
           },
           {
+            "location": "packages/cli/src/command-compatibility.ts#1"
+          },
+          {
             "location": "packages/cli/src/commands/auth.ts#4"
           },
           {
@@ -41456,6 +41675,12 @@
           },
           {
             "location": "packages/cli/src/commands/compatibility.ts#3"
+          },
+          {
+            "location": "packages/cli/src/commands/doctor.ts#3"
+          },
+          {
+            "location": "packages/cli/src/commands/update.ts#3"
           },
           {
             "location": "packages/cli/src/commands/upload.ts#3"
@@ -41474,6 +41699,9 @@
           },
           {
             "location": "packages/cli/src/generate-route-map.ts#8"
+          },
+          {
+            "location": "packages/cli/src/install-channel.ts#6"
           },
           {
             "location": "packages/cli/src/json-schema-validate.ts#1"
@@ -41537,6 +41765,9 @@
           },
           {
             "location": "packages/concurrency/src/coalesced-drain.ts#1"
+          },
+          {
+            "location": "packages/concurrency/src/hedged-attempts.ts#1"
           },
           {
             "location": "packages/concurrency/src/index.ts#1"
@@ -42265,6 +42496,9 @@
             "location": "scripts/bundle-baseline.ts#33"
           },
           {
+            "location": "scripts/check-action-commit-pins.ts#2"
+          },
+          {
             "location": "scripts/check-actionlint-baseline.ts#3"
           },
           {
@@ -42386,6 +42620,9 @@
           },
           {
             "location": "scripts/check-workflow-yaml.ts#3"
+          },
+          {
+            "location": "scripts/check-workspace-test-gating.ts#29"
           },
           {
             "location": "scripts/check-write-contracts.ts#12"
@@ -42991,7 +43228,10 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#4"
           },
           {
-            "location": "apps/mobile/src/components/chat-message.tsx#3"
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#4"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#10"
@@ -43258,9 +43498,6 @@
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#5"
-          },
-          {
             "location": "apps/web/src/components/chat/local-run-step-output.tsx#4"
           },
           {
@@ -43286,6 +43523,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-code-block.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#10"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#24"
@@ -43502,6 +43742,9 @@
           },
           {
             "location": "apps/web/src/components/route-provider-scope/route-provider-scope.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/saved-searches.tsx#8"
           },
           {
             "location": "apps/web/src/components/search-citation-results.tsx#3"
@@ -43897,6 +44140,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day.tsx#7"
           },
           {
@@ -44002,6 +44248,9 @@
             "location": "apps/web/src/routes/dev/-visual-registry.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/invoice-link.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/knowledge/-components/catalogue/add-mcp-server-sheet.tsx#8"
           },
           {
@@ -44014,7 +44263,7 @@
             "location": "apps/web/src/routes/knowledge/-components/clause-editor.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#4"
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#5"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx#5"
@@ -45822,6 +46071,9 @@
             "location": "apps/api/src/db/schema/organization-creation-requests.ts#2"
           },
           {
+            "location": "apps/api/src/db/schema/outbound-actions.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/reports.ts#1"
           },
           {
@@ -46074,6 +46326,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/get.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/import-snapshot.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/listing-census.ts#38"
           },
           {
@@ -46293,6 +46548,9 @@
             "location": "apps/api/src/handlers/chat/browser-site-grants/load.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-command-receipts.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-interaction-submission.ts#1"
           },
           {
@@ -46318,6 +46576,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#15"
           },
           {
             "location": "apps/api/src/handlers/chat/decision-threads/get.ts#2"
@@ -46369,6 +46630,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/message-page.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/messages/local-files-undo.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/messages/revisions/list.ts#2"
@@ -46509,7 +46773,7 @@
             "location": "apps/api/src/handlers/chat/tools/secret-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/turns/local-files-undo.ts#2"
+            "location": "apps/api/src/handlers/chat/turns/adopt.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/turns/resume.ts#3"
@@ -46902,6 +47166,21 @@
             "location": "apps/api/src/handlers/hosted-usage-webhook/replay.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/invoice-links/delivery.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/document.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/document.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/function-rows.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/function-rows.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/invoices/delete.ts#2"
           },
           {
@@ -46921,6 +47200,15 @@
           },
           {
             "location": "apps/api/src/handlers/invoices/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/revoke.ts#2"
           },
           {
             "location": "apps/api/src/handlers/invoices/transition.ts#2"
@@ -47257,6 +47545,15 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/confirm.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/discard.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/read.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/approve.ts#2"
@@ -48054,6 +48351,9 @@
             "location": "apps/api/src/lib/billing/invoice-lines.ts#2"
           },
           {
+            "location": "apps/api/src/lib/billing/invoice-links.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/billing/invoice-payments.ts#2"
           },
           {
@@ -48070,6 +48370,15 @@
           },
           {
             "location": "apps/api/src/lib/billing/invoice-scope.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-send-delivery.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-send-revocation.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-send-sender.ts#2"
           },
           {
             "location": "apps/api/src/lib/billing/number-series.ts#2"
@@ -48216,10 +48525,10 @@
             "location": "apps/api/src/lib/case-law/decision-citations.ts#2"
           },
           {
-            "location": "apps/api/src/lib/case-law/decision-court-id-sql.ts#7"
+            "location": "apps/api/src/lib/case-law/decision-court-id-sql.ts#8"
           },
           {
-            "location": "apps/api/src/lib/case-law/decision-court-id-sql.ts#8"
+            "location": "apps/api/src/lib/case-law/decision-court-id-sql.ts#9"
           },
           {
             "location": "apps/api/src/lib/case-law/decision-date-order.ts#15"
@@ -48516,6 +48825,12 @@
             "location": "apps/api/src/lib/db/account-row.ts#2"
           },
           {
+            "location": "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/db/aggregate-lock-child.fixture.ts#1"
           },
           {
@@ -48541,6 +48856,12 @@
           },
           {
             "location": "apps/api/src/lib/db/audit-recording.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/audit-recording.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/db/audit-recording.ts#8"
           },
           {
             "location": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts#2"
@@ -48687,7 +49008,10 @@
             "location": "apps/api/src/lib/desktop-runner/app-calls.ts#1"
           },
           {
-            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#13"
+            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#17"
           },
           {
             "location": "apps/api/src/lib/desktop-runner/step-contents.ts#3"
@@ -49008,9 +49332,6 @@
             "location": "apps/api/src/lib/flows/review-gate-task.ts#2"
           },
           {
-            "location": "apps/api/src/lib/flows/sync-flow-schedule-trigger.ts#2"
-          },
-          {
             "location": "apps/api/src/lib/folio-collab-rooms.ts#2"
           },
           {
@@ -49113,10 +49434,19 @@
             "location": "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#66"
+            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#97"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#67"
+            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#98"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-flip-receipt.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-flip.ts#56"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-generation-retire.ts#28"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts#2"
@@ -49689,6 +50019,9 @@
             "location": "apps/api/src/lib/scheduler/jobs.ts#2"
           },
           {
+            "location": "apps/api/src/lib/scheduler/remove-scheduler-job.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/runner.ts#13"
           },
           {
@@ -49722,6 +50055,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/case-law-sitemap-shard-refresh.ts#2"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/chat-command-receipt-retention.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/chat-limit-reminders.ts#2"
           },
           {
@@ -49750,9 +50086,6 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/scheduler/tasks/flow-run.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts#2"
@@ -50286,7 +50619,7 @@
             "location": "apps/api/src/scripts/corpus-column-trim.ts#14"
           },
           {
-            "location": "apps/api/src/scripts/corpus-generation.ts#37"
+            "location": "apps/api/src/scripts/corpus-generation.ts#47"
           },
           {
             "location": "apps/api/src/scripts/cz-regional-repair.ts#2"
@@ -50341,6 +50674,12 @@
           },
           {
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#36"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-court-identity-plan.ts#14"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-court-identity-plan.ts#15"
           },
           {
             "location": "apps/api/src/scripts/repair-cz-ns-court-plan.ts#12"
@@ -50556,6 +50895,9 @@
             "location": "apps/api/src/handlers/chat/chat-revision-context.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#15"
+          },
+          {
             "location": "apps/api/src/handlers/chat/messages/revisions/list.ts#3"
           },
           {
@@ -50655,7 +50997,7 @@
             "location": "apps/api/src/lib/db/aggregate-lock.ts#22"
           },
           {
-            "location": "apps/api/src/lib/db/audit-recording.ts#2"
+            "location": "apps/api/src/lib/db/audit-recording.ts#8"
           },
           {
             "location": "apps/api/src/lib/db/column-storage.ts#3"
@@ -50674,6 +51016,9 @@
           },
           {
             "location": "apps/api/src/lib/db/transitions.ts#23"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-runner/folder-restores.ts#17"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#18"
@@ -50697,7 +51042,7 @@
             "location": "apps/api/src/lib/legal-search/case-law-search-index.ts#4"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#67"
+            "location": "apps/api/src/lib/legal-search/corpus-index-flip-parity.ts#98"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-ranking-signals.ts#2"
@@ -50806,6 +51151,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/function-rows.ts#2"
           },
           {
             "location": "apps/api/src/lib/db/aggregate-lock.ts#26"
@@ -56161,7 +56509,10 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/chat-message.tsx#4"
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#5"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#11"
@@ -56999,6 +57350,9 @@
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
           },
           {
+            "location": "apps/web/src/lib/account/use-observed-session-query-owner.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/account/use-owner-scoped-state.ts#1"
           },
           {
@@ -57038,6 +57392,9 @@
             "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
           },
           {
+            "location": "apps/web/src/lib/organization/feature-access/access.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
           },
           {
@@ -57075,6 +57432,12 @@
           },
           {
             "location": "apps/web/src/lib/use-query-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/user-events-sse.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspace-sse.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/create-matter-store.ts#1"
@@ -57425,7 +57788,13 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#2"
           },
           {
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/chat-message.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#8"
@@ -57927,12 +58296,6 @@
           },
           {
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/local-run-question-card.tsx#1"
@@ -59603,6 +59966,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
           },
           {
@@ -60057,6 +60423,9 @@
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#2"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-extension-input.tsx#1"
@@ -61884,6 +62253,9 @@
             "location": "packages/cli/src/auth/resolve-access-token.ts#14"
           },
           {
+            "location": "packages/cli/src/cli-main.ts#12"
+          },
+          {
             "location": "packages/cli/src/commands/auth.ts#5"
           },
           {
@@ -62044,6 +62416,9 @@
           },
           {
             "location": "packages/cli/src/auth/resolve-access-token.ts#14"
+          },
+          {
+            "location": "packages/cli/src/cli-main.ts#12"
           },
           {
             "location": "packages/cli/src/commands/auth.ts#5"
@@ -62712,7 +63087,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/invoices/pdf/typst/data.ts#2"
+            "location": "apps/api/src/lib/billing/invoice-pdf/typst/data.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#11"
@@ -63169,7 +63544,7 @@
             "location": "apps/web/src/lib/statutes/statute-format.ts#1"
           },
           {
-            "location": "apps/web/src/lib/workspace-sse.ts#5"
+            "location": "apps/web/src/lib/workspace-sse.ts#7"
           },
           {
             "location": "apps/web/src/lib/workspaces/mutations/entities.ts#4"
@@ -63460,7 +63835,10 @@
             "location": "apps/mobile/src/components/chat-limit-reset.tsx#6"
           },
           {
-            "location": "apps/mobile/src/components/chat-message.tsx#5"
+            "location": "apps/mobile/src/components/chat-message-edit.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/chat-message.tsx#6"
           },
           {
             "location": "apps/mobile/src/components/chat-queue-list.tsx#12"
@@ -63862,9 +64240,6 @@
             "location": "apps/web/src/components/chat/legal-citation-link.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/local-files-undo.tsx#6"
-          },
-          {
             "location": "apps/web/src/components/chat/local-folder-approval.tsx#2"
           },
           {
@@ -63916,7 +64291,7 @@
             "location": "apps/web/src/components/chat/unrestored-fields-notice.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/user-message-edit.tsx#9"
+            "location": "apps/web/src/components/chat/user-message-edit.tsx#11"
           },
           {
             "location": "apps/web/src/components/chat/web-search-sources.tsx#3"
@@ -64336,7 +64711,7 @@
             "location": "apps/web/src/components/route-components.tsx#7"
           },
           {
-            "location": "apps/web/src/components/saved-searches.tsx#8"
+            "location": "apps/web/src/components/saved-searches.tsx#9"
           },
           {
             "location": "apps/web/src/components/search-case-law-group.tsx#4"
@@ -65362,7 +65737,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/prompt-caching-card.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-refusal.tsx#1"
@@ -65492,6 +65867,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge.tsx#1"
@@ -65773,6 +66151,9 @@
             "location": "apps/web/src/routes/dev/-components/upload-rejections-playground.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/invoice-link.tsx#10"
+          },
+          {
             "location": "apps/web/src/routes/knowledge/-catalogue-template-actions.tsx#3"
           },
           {
@@ -65815,7 +66196,7 @@
             "location": "apps/web/src/routes/knowledge/-components/condition-builder.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#5"
+            "location": "apps/web/src/routes/knowledge/-components/flow-editor.tsx#6"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/flow-extension-input.tsx#3"
@@ -66611,7 +66992,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#10"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts#12"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts#22"
@@ -66689,6 +67070,9 @@
             "location": "apps/api/src/handlers/chat/browser-site-grants/delete.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-command-receipts.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#7"
           },
           {
@@ -66753,6 +67137,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/messages/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/messages/local-files-undo.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/messages/revisions/accept.ts#2"
@@ -66948,9 +67335,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/turns/cancel.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/turns/local-files-undo.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/turns/resume.ts#4"
@@ -67176,6 +67560,9 @@
           },
           {
             "location": "apps/api/src/handlers/dictation/cleanup-model.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/dictation/elevenlabs-provider.ts#2"
           },
           {
             "location": "apps/api/src/handlers/dictation/provider.ts#2"
@@ -67469,6 +67856,15 @@
             "location": "apps/api/src/handlers/hosted-usage-webhook/routes.ts#8"
           },
           {
+            "location": "apps/api/src/handlers/invoice-links/download.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/function-rows.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/invoice-links/view.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/invoices/entries/add.ts#3"
           },
           {
@@ -67491,6 +67887,12 @@
           },
           {
             "location": "apps/api/src/handlers/invoices/prefill.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/sends/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/invoices/transition.ts#3"
@@ -67905,6 +68307,18 @@
           },
           {
             "location": "apps/api/src/handlers/organizations/slug/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/confirm.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/discard.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/read.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/outbound-actions/store.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/derive-ask.ts#2"
@@ -68714,7 +69128,13 @@
             "location": "apps/api/src/lib/billing/invoice-lines.ts#3"
           },
           {
+            "location": "apps/api/src/lib/billing/invoice-links.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/billing/invoice-payment-backfill.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-send-revocation.ts#3"
           },
           {
             "location": "apps/api/src/lib/billing/narrative-language.ts#1"
@@ -69203,7 +69623,7 @@
             "location": "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts#3"
           },
           {
-            "location": "apps/api/src/lib/scheduler/tasks/flow-run.ts#2"
+            "location": "apps/api/src/lib/scheduler/tasks/flow-run.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/memory-extractor.ts#3"
@@ -69656,6 +70076,9 @@
             "location": "apps/mobile/src/state/chat-documents.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/chat-edit.ts#2"
+          },
+          {
             "location": "apps/mobile/src/state/chat-failure.ts#1"
           },
           {
@@ -70016,6 +70439,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-arrangement-editor.logic.ts#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/use-column-widths.ts#1"
           },
           {
@@ -70316,6 +70742,9 @@
             "location": "packages/api-contract/src/organization-create.ts#1"
           },
           {
+            "location": "packages/api-contract/src/outbound-action.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/outlook-ai.ts#1"
           },
           {
@@ -70346,7 +70775,7 @@
             "location": "packages/api-contract/src/resource-ref.ts#1"
           },
           {
-            "location": "packages/api-contract/src/safe-id.ts#33"
+            "location": "packages/api-contract/src/safe-id.ts#34"
           },
           {
             "location": "packages/api-contract/src/skill-runner.ts#1"

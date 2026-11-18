@@ -29,34 +29,36 @@ import entry27 from "./expenseCapacity";
 import entry28 from "./field";
 import entry29 from "./fileComparisonCapacity";
 import entry30 from "./folioCollabRoom";
-import entry31 from "./legislationAmendmentWork";
-import entry32 from "./mcpOAuthState";
-import entry33 from "./memberCleanup";
-import entry34 from "./memory";
-import entry35 from "./obligation";
-import entry36 from "./orgFeatureAdmission";
-import entry37 from "./organization";
-import entry38 from "./organizationDataBoxes";
-import entry39 from "./organizationObjectIntent";
-import entry40 from "./organizationSettings";
-import entry41 from "./personalCatalog";
-import entry42 from "./processingClaim";
-import entry43 from "./professionalUseAcceptance";
-import entry44 from "./rateTableWorkspace";
-import entry45 from "./readerAnnotation";
-import entry46 from "./readerAnswer";
-import entry47 from "./readerAnswerMessage";
-import entry48 from "./requestReceipt";
-import entry49 from "./run";
-import entry50 from "./sampleCase";
-import entry51 from "./savedSearch";
-import entry52 from "./schedulerClaim";
-import entry53 from "./scoutCensus";
-import entry54 from "./searchHistory";
-import entry55 from "./searchProjectionRepair";
-import entry56 from "./signal";
-import entry57 from "./signingSession";
-import entry58 from "./workspace";
+import entry31 from "./invoiceSendCapacity";
+import entry32 from "./legislationAmendmentWork";
+import entry33 from "./mcpOAuthState";
+import entry34 from "./memberCleanup";
+import entry35 from "./memory";
+import entry36 from "./obligation";
+import entry37 from "./orgFeatureAdmission";
+import entry38 from "./organization";
+import entry39 from "./organizationDataBoxes";
+import entry40 from "./organizationObjectIntent";
+import entry41 from "./organizationSettings";
+import entry42 from "./outboundAction";
+import entry43 from "./personalCatalog";
+import entry44 from "./processingClaim";
+import entry45 from "./professionalUseAcceptance";
+import entry46 from "./rateTableWorkspace";
+import entry47 from "./readerAnnotation";
+import entry48 from "./readerAnswer";
+import entry49 from "./readerAnswerMessage";
+import entry50 from "./requestReceipt";
+import entry51 from "./run";
+import entry52 from "./sampleCase";
+import entry53 from "./savedSearch";
+import entry54 from "./schedulerClaim";
+import entry55 from "./scoutCensus";
+import entry56 from "./searchHistory";
+import entry57 from "./searchProjectionRepair";
+import entry58 from "./signal";
+import entry59 from "./signingSession";
+import entry60 from "./workspace";
 
 export default {
   "account": entry0,
@@ -90,32 +92,34 @@ export default {
   "field": entry28,
   "fileComparisonCapacity": entry29,
   "folioCollabRoom": entry30,
-  "legislationAmendmentWork": entry31,
-  "mcpOAuthState": entry32,
-  "memberCleanup": entry33,
-  "memory": entry34,
-  "obligation": entry35,
-  "orgFeatureAdmission": entry36,
-  "organization": entry37,
-  "organizationDataBoxes": entry38,
-  "organizationObjectIntent": entry39,
-  "organizationSettings": entry40,
-  "personalCatalog": entry41,
-  "processingClaim": entry42,
-  "professionalUseAcceptance": entry43,
-  "rateTableWorkspace": entry44,
-  "readerAnnotation": entry45,
-  "readerAnswer": entry46,
-  "readerAnswerMessage": entry47,
-  "requestReceipt": entry48,
-  "run": entry49,
-  "sampleCase": entry50,
-  "savedSearch": entry51,
-  "schedulerClaim": entry52,
-  "scoutCensus": entry53,
-  "searchHistory": entry54,
-  "searchProjectionRepair": entry55,
-  "signal": entry56,
-  "signingSession": entry57,
-  "workspace": entry58,
+  "invoiceSendCapacity": entry31,
+  "legislationAmendmentWork": entry32,
+  "mcpOAuthState": entry33,
+  "memberCleanup": entry34,
+  "memory": entry35,
+  "obligation": entry36,
+  "orgFeatureAdmission": entry37,
+  "organization": entry38,
+  "organizationDataBoxes": entry39,
+  "organizationObjectIntent": entry40,
+  "organizationSettings": entry41,
+  "outboundAction": entry42,
+  "personalCatalog": entry43,
+  "processingClaim": entry44,
+  "professionalUseAcceptance": entry45,
+  "rateTableWorkspace": entry46,
+  "readerAnnotation": entry47,
+  "readerAnswer": entry48,
+  "readerAnswerMessage": entry49,
+  "requestReceipt": entry50,
+  "run": entry51,
+  "sampleCase": entry52,
+  "savedSearch": entry53,
+  "schedulerClaim": entry54,
+  "scoutCensus": entry55,
+  "searchHistory": entry56,
+  "searchProjectionRepair": entry57,
+  "signal": entry58,
+  "signingSession": entry59,
+  "workspace": entry60,
 } as const;

@@ -48,6 +48,8 @@ const hit = {
   matchingPassages: 1,
   headline: "Fixture <mark>odpovědnost</mark> za <mark>škodu</mark>",
   match: "all_terms",
+  matchedTerms: [],
+  missingTerms: [],
   anchorId: null,
   citationCount: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -74,6 +76,7 @@ const response = (offset: number) =>
     total:
       offset > 0 ? SEARCH_TOTAL_NOT_COUNTED : { type: "estimate", count: 366 },
     relaxedHitCount: 0,
+    termDecisionCounts: null,
     nextCursor: "fixture-next-cursor",
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,

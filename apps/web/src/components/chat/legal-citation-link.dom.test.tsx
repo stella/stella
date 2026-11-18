@@ -235,6 +235,8 @@ const canonicalSearchHit = {
   textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
+  matchedTerms: [],
+  missingTerms: [],
 } satisfies PublicLawData<
   typeof api.case.decisions.search.post
 >["hits"][number];
