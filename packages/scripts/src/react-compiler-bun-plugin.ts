@@ -76,11 +76,10 @@ const cacheKey = (filename: string, source: string) =>
     .update(source)
     .digest("hex");
 
-const compile = (filename: string, source: string): string => {
-  const cached = path.join(CACHE_DIRECTORY, `${cacheKey(filename, source)}.js`);
-  if (existsSync(cached)) {
-    return readFileSync(cached, "utf-8");
-  }
+const cachePath = (filename: string, source: string) =>
+  path.join(CACHE_DIRECTORY, `${cacheKey(filename, source)}.js`);
+
+const compileInto = (cached: string, filename: string, source: string) => {
   const {
     transformSync,
   }: { transformSync: typeof TransformSync } = require("oxc-transform-react");
@@ -99,6 +98,13 @@ const compile = (filename: string, source: string): string => {
   writeFileSync(partial, result.code);
   renameSync(partial, cached);
   return result.code;
+};
+
+const compile = (filename: string, source: string): string => {
+  const cached = cachePath(filename, source);
+  return existsSync(cached)
+    ? readFileSync(cached, "utf-8")
+    : compileInto(cached, filename, source);
 };
 
 const isCompiled = (filename: string) =>
@@ -130,11 +136,20 @@ export const reactCompilerBunPlugin = {
     // A runtime plugin (`Bun.plugin`) must return every module its filter
     // matches, and a dependency returned as source loses Bun's CommonJS
     // interop, so the filter itself leaves dependencies to Bun.
-    builder.onLoad({ filter: SOURCE_FILES }, ({ path: filename }) => {
-      const source = readFileSync(filename, "utf-8");
-      return isCompiled(filename)
-        ? { contents: compile(filename, source), loader: "js" }
-        : { contents: source, loader: loaderOf(filename) };
+    builder.onLoad({ filter: SOURCE_FILES }, async ({ path: filename }) => {
+      const source = await Bun.file(filename).text();
+      if (!isCompiled(filename)) {
+        return { contents: source, loader: loaderOf(filename) };
+      }
+      const cached = Bun.file(cachePath(filename, source));
+      const code = (await cached.exists())
+        ? await cached.text()
+        : compileInto(
+            cached.name ?? panic("cache file has no path"),
+            filename,
+            source,
+          );
+      return { contents: code, loader: "js" };
     });
   },
 } satisfies Bun.BunPlugin;
