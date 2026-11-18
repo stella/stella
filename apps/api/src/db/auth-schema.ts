@@ -26,6 +26,11 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
 
+const USER_LOCALES = [
+  "en",
+  ...UI_LOCALES.filter((locale) => locale !== "en"),
+] as const;
+
 export const user = pgTable(
   "user",
   {
@@ -34,6 +39,9 @@ export const user = pgTable(
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
+    // The UI locale the user picked, shared across devices. Null until they
+    // pick one: the browser's language applies meanwhile.
+    locale: text("locale", { enum: USER_LOCALES }),
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     // Null or document follows the document language; a UI locale overrides it.
@@ -70,6 +78,13 @@ export const user = pgTable(
       .notNull(),
   },
   (table) => [
+    check(
+      "user_locale_supported_check",
+      sql`${table.locale} IN (${sql.join(
+        UI_LOCALES.map((locale) => sql`${locale}`),
+        sql`, `,
+      )})`,
+    ),
     // Keyset pagination over registrations (operator observability)
     // orders by (created_at, id); without this the read is a table scan.
     index("user_createdAt_idx").on(table.createdAt, table.id),
@@ -98,6 +113,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   email: "email",
   emailVerified: "email_verified",
   image: "image",
+  locale: "locale",
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
   readerAnswerLanguage: "reader_answer_language",

@@ -507,6 +507,62 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "corpus_index_projection_intents" },
   },
+  "corpus-projection-delete-tasks": {
+    kind: "row-work",
+    assertPending: async (client, id) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM corpus_index_projection_delete_tasks task
+          JOIN corpus_index_projection_intents revision
+            ON revision.family = task.family
+           AND revision.generation = task.generation
+           AND revision.index_id = task.index_id
+           AND revision.delete_opstamp = task.delete_opstamp
+          WHERE revision.id = ${id}
+        ) AS repaired`;
+      expect(
+        rows.at(0)?.repaired,
+        "corpus-projection-delete-tasks",
+      ).toBeFalse();
+    },
+    assertRepaired: async (client, id) => {
+      const rows = await client<{ repaired: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM corpus_index_projection_delete_tasks task
+          JOIN corpus_index_projection_intents revision
+            ON revision.family = task.family
+           AND revision.generation = task.generation
+           AND revision.index_id = task.index_id
+           AND revision.delete_opstamp = task.delete_opstamp
+          WHERE revision.id = ${id}
+            AND task.task_created_at = revision.delete_task_created_at
+            AND task.cleanup_started_at = revision.cleanup_started_at
+        ) AS repaired`;
+      expect(rows.at(0)?.repaired, "corpus-projection-delete-tasks").toBeTrue();
+    },
+    seed: async (client) => {
+      // Receipts recorded before the queue's triggers existed: the triggers
+      // pause while the rows are written, so no task row exists yet.
+      await withoutFixtureGuards(
+        client,
+        ["corpus_index_generations", "corpus_index_projection_intents"],
+        async () => {
+          await client.unsafe(
+            "INSERT INTO corpus_index_generations (family, generation, cluster, manifest_digest, status) VALUES ('case_law', 'case_law_v1', 'q09', repeat('c', 64), 'serving')",
+          );
+          await client.unsafe(
+            `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'cleanup_committed', now(), now(), now(), now(), 1, now())`,
+          );
+          await client.unsafe(
+            `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_publish_barrier_at, cleanup_not_before, cleanup_started_at, delete_opstamp, delete_task_created_at) VALUES ('${ID_3}', 'case_law', 'case_law_v1', '${ID_2}', 2, repeat('b', 64), 'i2', 'cleanup_committed', now(), now(), now(), now(), 2, now())`,
+          );
+        },
+      );
+    },
+    writerLock: { id: ID, table: "corpus_index_projection_intents" },
+  },
   corpus_index_projection_intents_append_fault_values: noRowSeed(
     "corpus_index_projection_intents",
     "corpus_index_projection_intents_append_fault_values",
@@ -897,6 +953,11 @@ const SEEDS = {
     "user",
     "user_email_undeliverable_check",
     `INSERT INTO "user" (id, name, email, email_undeliverable_address, email_undeliverable_reason, email_undeliverable_at) VALUES ('user', 'User', 'user@example.invalid', 'user@example.invalid', 'hard_bounce', now())`,
+  ),
+  user_locale_supported_check: noRowSeed(
+    "user",
+    "user_locale_supported_check",
+    `INSERT INTO "user" (id, name, email, locale) VALUES ('user', 'User', 'user@example.invalid', 'cs')`,
   ),
   time_entries_internal_shape_check: noRowSeed(
     "time_entries",

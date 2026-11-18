@@ -181,15 +181,14 @@
     "handoffExpired": "Der Dokumentlink ist abgelaufen, bevor stella desktop verbunden war. Starten Sie erneut über stella."
   },
   "settings": {
-    "about": "Über",
-    "accountLinked": "Konto verknüpft",
+    "accountLinked": "Verknüpft",
+    "disconnect": "Trennen",
     "connectionExpired": "Verbindung abgelaufen",
     "reconnectToStella": "Erneut mit stella web verbinden",
     "connectionExpiredDescription": "Die Verbindung ist abgelaufen. Verbinden Sie sich erneut mit stella web.",
     "connectToStella": "Mit stella web verbinden",
     "connectToStellaDescription": "Verknüpfen Sie diesen Computer mit Ihrem aktuellen stella-Konto, ohne ein Dokument zu öffnen.",
     "desktopBenefit": "Office-Dateien und lokaler Zwischenablageverlauf",
-    "disconnectAccount": "Konto trennen",
     "errorDisconnectAccount": "stella desktop konnte Ihr Konto nicht trennen.",
     "errorReadAccount": "stella desktop konnte Ihre Kontoverbindung nicht prüfen.",
     "stellaWebAccount": "stella-web-Konto",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Technische Fehler, Zeitmessungen und Absturzzusammenfassungen; keine Dokumente, Zwischenablageinhalte oder Aktivitätsdaten.",
     "errorReadTelemetry": "Die Berichtseinstellung konnte nicht gelesen werden. Versuchen Sie es erneut.",
     "errorSaveTelemetry": "Die Berichtseinstellung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
-    "general": "Allgemein",
     "lastVerified": "Zuletzt überprüft",
     "language": "Sprache",
-    "languageDescription": "Wählen Sie die Sprache der Desktop-App.",
     "setupGuide": "Einrichtungsassistent",
     "setupGuideDescription": "Die Einrichtung erneut durchgehen: was die App tut, Berechtigungen und das Zwischenablage-Kürzel.",
     "setupGuideAction": "Einrichtung erneut starten",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Support",
     "title": "Einstellungen",
-    "serverLabel": "Server",
+    "pages": {
+      "general": "Allgemein",
+      "dictation": "Diktieren",
+      "clipboard": "Zwischenablage",
+      "agents": "KI und Agenten",
+      "signing": "Signieren",
+      "activity": "Aktivität",
+      "notifications": "Benachrichtigungen",
+      "permissions": "Berechtigungen",
+      "about": "Über"
+    },
+    "account": "Konto",
+    "app": "App",
+    "privacy": "Datenschutz",
+    "pageEmpty": "Hier gibt es auf diesem Computer nichts einzurichten.",
     "connectToHost": "Mit {host} verbinden",
     "connectToHostDescription": "Öffnet {host} im Browser, damit Sie diesen Computer bestätigen können.",
     "reconnectNeeded": "Erneut verbinden erforderlich",
     "reconnect": "Erneut verbinden",
     "reconnectHostDescription": "Die Verbindung zu {host} muss erneuert werden. Bestätigen Sie diesen Computer erneut im Browser.",
-    "permissions": "Berechtigungen",
     "permissionNotificationsDescription": "Informiert Sie, wenn ein Dokument bereit ist oder eine Synchronisierung Aufmerksamkeit braucht.",
     "permissionAccessibility": "Bedienungshilfen",
     "permissionAccessibilityDescription": "Erlaubt der Aktivitätsübersicht, Fenstertitel aufzuzeichnen.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Erlaubt",
     "permissionAllow": "Erlauben",
     "permissionOpenSettings": "Einstellungen öffnen",
-    "permissionDenied": "In den Systemeinstellungen ausgeschaltet.",
+    "permissionTurnedOff": "Ausgeschaltet",
+    "permissionsDescription": "Jede ist Ihre Entscheidung und schaltet eine Sache frei.",
+    "neverRequested": "Nie angefragt",
     "permissionManaged": "Von Ihrer Organisation verwaltet",
     "errorUpdateAutostart": "stella desktop konnte den Start bei der Anmeldung nicht aktualisieren.",
     "errorPermissions": "stella desktop konnte diese Berechtigung nicht lesen oder ändern.",
@@ -600,6 +612,12 @@
     "title": "Diktieren",
     "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
     "descriptionCloud": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird von stella AI umgewandelt und von stella nicht gespeichert.",
+    "lede": "Halten Sie <key>{shortcut}</key> gedrückt und sprechen Sie. Der Text erscheint dort, wo Sie gerade schreiben.",
+    "groups": {
+      "transcription": "Transkription",
+      "cleanup": "Überarbeitung",
+      "thisComputer": "Auf diesem Computer"
+    },
     "cleanup": {
       "title": "Mit KI überarbeiten",
       "description": "Korrigiert Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail. Nur der Text, nicht der Ton, wird über stella an den KI-Anbieter Ihrer Organisation gesendet; stella speichert ihn nicht.",
@@ -607,11 +625,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Fenstertitel mit der KI-Überarbeitung teilen",
+        "title": "Fenstertitel teilen",
         "description": "Hilft, einen Vertrag von einem Memo zu unterscheiden. Fenstertitel können Mandanten- oder Aktennamen enthalten."
       },
       "textBeforeCursor": {
-        "title": "Text vor dem Cursor mit der KI-Überarbeitung teilen",
+        "title": "Text vor dem Cursor teilen",
         "description": "Bis zu {limit, number} Zeichen des Dokuments, in dem Sie arbeiten, damit das Diktat an Ihren Text anschließt."
       }
     },
@@ -620,6 +638,7 @@
       "title": "Umwandeln mit",
       "local": "Diesem Computer",
       "cloud": "stella AI",
+      "localDescription": "Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
       "cloudDescription": "Der Ton verlässt diesen Computer: Er wird zur Umwandlung an stella und über den KI-Anbieter von stella an den Anbieter des ausgewählten Modells gesendet. stella speichert ihn nicht.",
       "unavailableRegion": "stella AI bietet in der Region Ihrer Organisation noch keine Umwandlung an.",
       "unavailableProvider": "Der KI-Anbieter Ihrer Organisation bietet keine Umwandlung an.",
@@ -627,7 +646,6 @@
       "model": "Umwandlungsmodell",
       "chooseModel": "Wählen Sie ein Modell",
       "outsideRegion": "Außerhalb Ihrer Region",
-      "outsideRegionNote": "Dieses Modell verarbeitet Audio außerhalb der Region Ihrer Organisation.",
       "retainsData": "Speichert Ihre Aufnahmen",
       "retainsDataTitle": "{provider} speichert, was Sie diktieren",
       "retainsDataWarning": "Dieses Modell läuft über ein Konto ohne Zero Data Retention. {provider} speichert Audio und Transkript von allem, was Sie diktieren, nach eigenen Bedingungen und außerhalb der Kontrolle von stella. Diktieren Sie damit keine vertraulichen Informationen oder Mandantendaten."
@@ -640,6 +658,7 @@
       "noResults": "Keine Sprachen gefunden"
     },
     "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
+    "speechModel": "Sprachmodell",
     "modelInstalled": "Das Sprachmodell ({size} MB) ist auf diesem Computer.",
     "removeModel": "Entfernen",
     "removeFailed": "Das Sprachmodell konnte nicht entfernt werden. Versuchen Sie es erneut.",

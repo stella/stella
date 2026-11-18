@@ -180,6 +180,21 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
   : never = FIRST_PARTY_MODEL_PROVIDER_VALUES;
 
 /**
+ * Provider IDs for the GPT-6.2 family, kept in one row per member like GPT-6
+ * below.
+ */
+const GPT_62_MODEL_IDS = {
+  astra: { openai: "gpt-6.2-astra", openrouter: "openai/gpt-6.2-astra" },
+  sol: { openai: "gpt-6.2-sol", openrouter: "openai/gpt-6.2-sol" },
+} as const;
+const GPT_62_OPENAI_MODEL_IDS = Object.values(GPT_62_MODEL_IDS).map(
+  ({ openai }) => openai,
+);
+const GPT_62_OPENROUTER_MODEL_IDS = Object.values(GPT_62_MODEL_IDS).map(
+  ({ openrouter }) => openrouter,
+);
+
+/**
  * Provider IDs for the GPT-6.1 family, kept in one row per member like GPT-6
  * below.
  */
@@ -327,6 +342,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-haiku-4-5-20251001",
   ],
   openai: [
+    ...GPT_62_OPENAI_MODEL_IDS,
     ...GPT_61_OPENAI_MODEL_IDS,
     ...GPT_6_OPENAI_MODEL_IDS,
     ...GPT_56_OPENAI_MODEL_IDS,
@@ -337,6 +353,7 @@ export const BYOK_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
+    ...GPT_62_OPENROUTER_MODEL_IDS,
     ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
@@ -417,7 +434,7 @@ export type ModelDisplayMetadata = {
  */
 export const RECOMMENDED_CHAT_MODELS = [
   "claude-opus-5-5",
-  GPT_61_MODEL_IDS.sol.openai,
+  GPT_62_MODEL_IDS.sol.openai,
   // GPT-6.1 has no fast tier yet; GPT-6 Luna is the newest one.
   GPT_6_MODEL_IDS.luna.openai,
   "gemini-3.8-flash",
@@ -535,9 +552,18 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
     supersededBy: "claude-haiku-5-5",
   },
+  [GPT_62_MODEL_IDS.astra.openai]: {
+    displayName: "GPT-6.2 Astra",
+    iconProvider: "openai",
+  },
+  [GPT_62_MODEL_IDS.sol.openai]: {
+    displayName: "GPT-6.2 Sol",
+    iconProvider: "openai",
+  },
   [GPT_61_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openai,
   },
   [GPT_61_MODEL_IDS.terra.openai]: {
     displayName: "GPT-6.1 Terra",
@@ -546,11 +572,12 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_6_MODEL_IDS.astra.openai]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.astra.openai,
   },
   [GPT_6_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6 Sol",
     iconProvider: "openai",
-    supersededBy: GPT_61_MODEL_IDS.sol.openai,
+    supersededBy: GPT_62_MODEL_IDS.sol.openai,
   },
   [GPT_6_MODEL_IDS.luna.openai]: {
     displayName: "GPT-6 Luna",
@@ -561,7 +588,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.sol.openai]: {
     displayName: "GPT-5.6 Sol",
     iconProvider: "openai",
-    supersededBy: GPT_61_MODEL_IDS.sol.openai,
+    supersededBy: GPT_62_MODEL_IDS.sol.openai,
   },
   [GPT_56_MODEL_IDS.terra.openai]: {
     displayName: "GPT-5.6 Terra",
@@ -592,9 +619,18 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "openai",
     supersededBy: "gpt-5.5",
   },
+  [GPT_62_MODEL_IDS.astra.openrouter]: {
+    displayName: "GPT-6.2 Astra",
+    iconProvider: "openai",
+  },
+  [GPT_62_MODEL_IDS.sol.openrouter]: {
+    displayName: "GPT-6.2 Sol",
+    iconProvider: "openai",
+  },
   [GPT_61_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-6.1 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openrouter,
   },
   [GPT_61_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-6.1 Terra",
@@ -603,11 +639,12 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_6_MODEL_IDS.astra.openrouter]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.astra.openrouter,
   },
   [GPT_6_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-6 Sol",
     iconProvider: "openai",
-    supersededBy: GPT_61_MODEL_IDS.sol.openrouter,
+    supersededBy: GPT_62_MODEL_IDS.sol.openrouter,
   },
   [GPT_6_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-6 Luna",
@@ -616,7 +653,7 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-5.6 Sol",
     iconProvider: "openai",
-    supersededBy: GPT_61_MODEL_IDS.sol.openrouter,
+    supersededBy: GPT_62_MODEL_IDS.sol.openrouter,
   },
   [GPT_56_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-5.6 Luna",
@@ -1078,6 +1115,8 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gemini-3.1-pro-preview": "supported",
   "gemini-3.5-flash": "supported",
   "gemini-3.1-flash-lite": "supported",
+  "openai/gpt-6.2-astra": "supported",
+  "openai/gpt-6.2-sol": "supported",
   "openai/gpt-6.1-sol": "supported",
   "openai/gpt-6.1-terra": "supported",
   "openai/gpt-6-astra": "supported",
@@ -1103,6 +1142,8 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-sonnet-4.6": "supported",
   "openai/gpt-5.5": "supported",
   "openai/gpt-5.4-mini": "supported",
+  "gpt-6.2-astra": "supported",
+  "gpt-6.2-sol": "supported",
   "gpt-6.1-sol": "supported",
   "gpt-6.1-terra": "supported",
   "gpt-6-astra": "supported",
@@ -1325,6 +1366,8 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4-mini": 400_000,
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
+  "gpt-6.2-astra": 922_000,
+  "gpt-6.2-sol": 922_000,
   "gpt-6.1-sol": 922_000,
   "gpt-6.1-terra": 922_000,
   "gpt-6-astra": 922_000,
@@ -1370,6 +1413,8 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
+  "openai/gpt-6.2-astra": 922_000,
+  "openai/gpt-6.2-sol": 922_000,
   "openai/gpt-6.1-sol": 922_000,
   "openai/gpt-6.1-terra": 922_000,
   "openai/gpt-6-astra": 922_000,

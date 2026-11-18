@@ -22,6 +22,8 @@ const { memberKnowledgeKeys } = await import("@/lib/knowledge/knowledge-cache");
 const { installSessionCacheGuard, settleAuthTransition } =
   await import("@/lib/session-cache-guard");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
+const { IntlProvider } = await import("use-intl");
+const messages = (await import("@/i18n/langs/en.json")).default;
 
 const member = (organizationId: string) =>
   ({
@@ -127,10 +129,13 @@ test("frame replacement completes cleanup after a delayed route update", async (
     routeTree: rootRoute.addChildren([protectedRoute.addChildren([pageRoute])]),
   });
   await appRouter.load();
+  // The pending frame renders translated navigation labels.
   const view = testing.render(
-    <QueryClientProvider client={queryClient}>
-      <router.RouterProvider router={appRouter} />
-    </QueryClientProvider>,
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <QueryClientProvider client={queryClient}>
+        <router.RouterProvider router={appRouter} />
+      </QueryClientProvider>
+    </IntlProvider>,
   );
   const removalsAfterHiding: boolean[] = [];
   const unsubscribe = queryClient.getQueryCache().subscribe((event) => {

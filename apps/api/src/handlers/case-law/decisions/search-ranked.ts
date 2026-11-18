@@ -11,10 +11,9 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexDecisionTerms } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { CaseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
-import {
-  type CorpusProjectionRevision,
-  type CorpusProjectionRevisionField,
-  corpusRevisionClause,
+import type {
+  CorpusProjectionRevision,
+  CorpusProjectionRevisionField,
 } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   type CorpusQueryToken,
@@ -44,11 +43,13 @@ import {
   distinctRequiredTerms,
   type HitTerms,
   NO_HIT_TERMS,
-  readTermCoverage,
   readTermDecisionCounts,
+  readWordsAtCopies,
   type RelaxedTopUpOutcome,
   spelledTerm,
   type TermDecisionCounts,
+  wordsHeldAt,
+  type WordsRead,
 } from "./search-relaxed";
 
 /**
@@ -318,54 +319,25 @@ type ReadRankedPageWordsOptions = {
   indexId: string;
   plan: RankedSearchPlan;
   revisionField: CorpusProjectionRevisionField;
-  /** The copy of each decision the page was read from. */
-  appliedRevisionOf: (id: string) => CorpusProjectionRevision;
-  ids: readonly string[];
+  /** Each decision and the copy of it the page shows. */
+  copies: readonly { id: string; revision: CorpusProjectionRevision }[];
 };
 
 /**
  * Which of the words each decision on a ranked page holds, read off the
- * decision field in the copy the page shows: for each id, the indexes of the
- * plan's words it holds. Bounded by the page, one aggregation per word.
+ * decision field in the copy the page shows. Bounded by the page, one
+ * aggregation per word.
  */
 export const readRankedPageWords = async ({
-  aggregate,
-  observer,
-  signal,
-  indexId,
   plan,
-  revisionField,
-  appliedRevisionOf,
-  ids,
+  ...read
 }: ReadRankedPageWordsOptions): Promise<
-  Result<
-    ReadonlyMap<string, ReadonlySet<number>>,
-    HandlerError<400 | 502 | 503>
-  >
-> => {
-  if (ids.length === 0) {
-    return Result.ok(new Map());
-  }
-  const copies = ids
-    .map((id) =>
-      corpusRevisionClause({
-        clause: `document_id:${quoteCorpusValue(id)}`,
-        field: revisionField,
-        revision: appliedRevisionOf(id),
-      }),
-    )
-    .join(" OR ");
-  return await readTermCoverage({
-    aggregate,
-    observer,
-    signal,
-    indexId,
-    ids,
-    queries: plan.words.map(
-      (_, index) => `(${plan.wordQuery(index, "")}) AND (${copies})`,
-    ),
+  Result<WordsRead, HandlerError<400 | 502 | 503>>
+> =>
+  await readWordsAtCopies({
+    ...read,
+    wordQueries: plan.words.map((_, index) => plan.wordQuery(index, "")),
   });
-};
 
 const RANKED_PAGE_WORDS_TIMEOUT_SINK = failureSink({
   event: "case_law.search_ranked_words.timed_out",
@@ -373,13 +345,13 @@ const RANKED_PAGE_WORDS_TIMEOUT_SINK = failureSink({
 });
 
 /**
- * The search's answer when a ranked page's words could not be read. A page
+ * The search's answer when a page's words could not be read. A page
  * states every hit's words, so it is not served without them: a read the
  * request's budget ended answers as the public-read timeout, which the agent
  * tools continue; any other failure answers as the index being unavailable,
  * as the search does when it cannot reach the index at all.
  */
-export const rankedPageWordsRefusal = (error: HandlerError) =>
+export const pageWordsRefusal = (error: HandlerError) =>
   error.code === PUBLIC_READ_TIMEOUT_CODE ||
   publicReadTimeoutError(error) !== null
     ? publicReadTimeoutResponse({
@@ -390,25 +362,25 @@ export const rankedPageWordsRefusal = (error: HandlerError) =>
 
 type RankedHitTermsOptions = {
   plan: RankedSearchPlan;
-  held: ReadonlyMap<string, ReadonlySet<number>>;
+  words: WordsRead;
   /** Decisions an identifier named, which the words did not select. */
   pinnedIds: ReadonlySet<string>;
 };
 
 /** Each ranked hit's words: those its decision holds and those it lacks. */
 export const rankedHitTerms =
-  ({ plan, held, pinnedIds }: RankedHitTermsOptions) =>
-  (id: string): HitTerms => {
+  ({ plan, words, pinnedIds }: RankedHitTermsOptions) =>
+  (id: string, shown: CorpusProjectionRevision | null): HitTerms => {
     if (pinnedIds.has(id)) {
       return NO_HIT_TERMS;
     }
-    const words = held.get(id) ?? panic("Ranked hit has no word read");
+    const held = wordsHeldAt(words, id, shown);
     return {
       matchedTerms: plan.words
-        .filter((_, index) => words.has(index))
+        .filter((_, index) => held.has(index))
         .map(({ term }) => term),
       missingTerms: plan.words
-        .filter((_, index) => !words.has(index))
+        .filter((_, index) => !held.has(index))
         .map(({ term }) => term),
     };
   };

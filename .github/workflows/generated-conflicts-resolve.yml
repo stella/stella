@@ -64,7 +64,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           # Always false here: this job never runs on main.
           save: ${{ github.ref == 'refs/heads/main' }}

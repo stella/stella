@@ -1,9 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { IntlProvider } from "use-intl";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import messages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
@@ -77,8 +79,11 @@ const persistOpenChat = () => {
 
 /** Whether the member loading frame reserves the pane for this scope. */
 const loadingFrameReservesPane = () => {
+  // The loading frame names its navigation in the active locale.
   const { container, unmount } = render(
-    <ProtectedPendingSkeleton inspectorScope={scope} />,
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ProtectedPendingSkeleton inspectorScope={scope} />
+    </IntlProvider>,
   );
   const dock =
     container.querySelector('[data-slot="inspector-pending-dock"]') ??

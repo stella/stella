@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -158,6 +159,17 @@ export const PUBLISHER_GATES = {
     publisher: "Nejvyšší soud",
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["rozhodnuti.nsoud.cz"],
+  },
+  /**
+   * The court's collection site, a separate server from its database. It
+   * states no limit; one request a second is the pace a reader browsing the
+   * archive keeps, and a full walk of about ten thousand entries is under
+   * three hours.
+   */
+  "nsoud-sbirka-cz": {
+    publisher: "Nejvyšší soud",
+    intervalMs: 1000,
+    hosts: ["sbirka.nsoud.cz"],
   },
   /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {

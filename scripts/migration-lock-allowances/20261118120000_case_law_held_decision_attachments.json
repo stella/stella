@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The foreign key to case_law_sources is created with the empty attachment table: a catalog-only SHARE ROW EXCLUSIVE on case_law_sources with no row scan, bounded by 1s lock_timeout; a lost wait rolls the migration back for the runner's lock-retry ladder.",
+  "row-level-security": "ENABLE and FORCE RLS apply to the attachment table created empty in the same migration, before anything writes it, under 1s lock_timeout and 30s statement_timeout.",
+  "create-policy": "The ingestion policy applies to the attachment table created empty in the same migration, before anything writes it, under 1s lock_timeout."
+}

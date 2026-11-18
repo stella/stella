@@ -42,6 +42,7 @@ export { default as constraints_sanctions_monitoring_constraints } from "./onlin
 export { default as constraints_search_history_country_constraints } from "./online-migration-entries/constraints-search-history-country-constraints";
 export { default as constraints_time_entry_submitted_constraints } from "./online-migration-entries/constraints-time-entry-submitted-constraints";
 export { default as constraints_usage_action_type_constraints } from "./online-migration-entries/constraints-usage-action-type-constraints";
+export { default as constraints_user_locale_constraints } from "./online-migration-entries/constraints-user-locale-constraints";
 export { default as cutovers_case_law_decisions_updated_id_idx } from "./online-migration-entries/cutovers-case-law-decisions-updated-id-idx";
 export { default as indexes_account_audit_logs_user_event_idx } from "./online-migration-entries/indexes-account-audit-logs-user-event-idx";
 export { default as indexes_account_provider_account_id_uidx } from "./online-migration-entries/indexes-account-provider-account-id-uidx";
@@ -176,6 +177,7 @@ export { default as repairs_contact_vat_id_repair } from "./online-migration-ent
 export { default as repairs_corpus_projection_applied_revision_settled } from "./online-migration-entries/repairs-corpus-projection-applied-revision-settled";
 export { default as repairs_corpus_projection_cleanup_stall_repair } from "./online-migration-entries/repairs-corpus-projection-cleanup-stall-repair";
 export { default as repairs_corpus_projection_delete_receipt_repair } from "./online-migration-entries/repairs-corpus-projection-delete-receipt-repair";
+export { default as repairs_corpus_projection_delete_tasks } from "./online-migration-entries/repairs-corpus-projection-delete-tasks";
 export { default as repairs_corpus_projection_offline_delivery_constraint_validations } from "./online-migration-entries/repairs-corpus-projection-offline-delivery-constraint-validations";
 export { default as repairs_corpus_projection_offline_fault_constraint_validations } from "./online-migration-entries/repairs-corpus-projection-offline-fault-constraint-validations";
 export { default as repairs_data_box_constraint_validations } from "./online-migration-entries/repairs-data-box-constraint-validations";
@@ -215,6 +217,7 @@ export { default as repairs_search_history_country_constraint_validation } from 
 export { default as repairs_search_history_country_repair } from "./online-migration-entries/repairs-search-history-country-repair";
 export { default as repairs_time_entry_submitted_constraint_validation } from "./online-migration-entries/repairs-time-entry-submitted-constraint-validation";
 export { default as repairs_usage_action_type_constraint_validation } from "./online-migration-entries/repairs-usage-action-type-constraint-validation";
+export { default as repairs_user_locale_constraint_validation } from "./online-migration-entries/repairs-user-locale-constraint-validation";
 export { default as replacements_account_issuer_account_id_uidx } from "./online-migration-entries/replacements-account-issuer-account-id-uidx";
 export { default as replacements_case_law_citations_polarity_null_idx } from "./online-migration-entries/replacements-case-law-citations-polarity-null-idx";
 export { default as replacements_case_law_decisions_country_date_idx } from "./online-migration-entries/replacements-case-law-decisions-country-date-idx";

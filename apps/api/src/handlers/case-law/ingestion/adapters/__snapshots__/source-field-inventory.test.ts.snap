@@ -194,6 +194,7 @@ exports[`every registered source has a reviewable exclusion census 1`] = `
     },
   ],
   "cz-ns": [],
+  "cz-ns-sbirka": [],
   "cz-nss": [
     {
       "field": "pravnivetaan",

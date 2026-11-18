@@ -9,7 +9,9 @@ import {
   anchorListDepth,
   anchorListDesignator,
   anchorWithin,
+  annexDesignator,
   E_SBIRKA_ANCHORS,
+  requestedAnnexDesignator,
   SLOV_LEX_ANCHORS,
   US_CODE_ANCHORS,
   wholeStatuteAnchors,
@@ -236,5 +238,71 @@ describe("anchors read whole", () => {
     ).toBe(false);
     expect(anchorListDepth(whole, "par_1-odst_1-pism_a")).toBeNull();
     expect(anchorListDesignator(whole, "par_1-odst_1-pism_a")).toBeNull();
+  });
+});
+
+describe("annex anchors", () => {
+  test("each publisher's annex anchors name their designator", () => {
+    expect(
+      [
+        "pril_3",
+        "pril_2A",
+        "pril_A/1",
+        "pril_4:2",
+        "priloha_27",
+        "pril_3-frag_8775881",
+        "par_3",
+      ].map((anchor) => annexDesignator(E_SBIRKA_ANCHORS, anchor)),
+    ).toEqual(["3", "2a", "a/1", "4:2", "27", null, null]);
+    expect(
+      [
+        "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z",
+        "prilohy.priloha-priloha_c_1a_k_zakonu_c_311_2001_z_z",
+        "prilohy.priloha-1",
+        "prilohy.priloha-priloha_k_zakonu_c_106_2024_z_z",
+        "prilohy.priloha-priloha_ii_k_vyhlasce_ministra_ochrany_prace_c_164_sb",
+        "prilohy.priloha-priloha_a",
+        "prilohy.priloha-priloha_vyhlasky_c_72_1945_sb",
+        "predpis.priloha-priloha_c_3_k_vyhlasce_c_130_1975_sb",
+        "predpis.clanok-1.prilohy.priloha-priloha_c_1_znie",
+        "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z.bod-1",
+        "paragraf-3",
+      ].map((anchor) => annexDesignator(SLOV_LEX_ANCHORS, anchor)),
+    ).toEqual(["3", "1a", "1", "", "ii", "a", "", "3", null, null, null]);
+    expect(annexDesignator(US_CODE_ANCHORS, "pril_3")).toBeNull();
+  });
+
+  test("a caller's spelling of an annex is read whatever grammar it uses", () => {
+    expect(
+      [
+        "priloha_3",
+        "příloha č. 3",
+        "Příloha 3",
+        "PŘÍLOHA Č. 3",
+        "pril_3",
+        "annex-3",
+        "prilohy.priloha-3",
+        "priloha_c_3",
+        "pril_2A",
+        "pril_C",
+        "priloha",
+        "par_3",
+        "frag_3",
+      ].map(requestedAnnexDesignator),
+    ).toEqual([
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "3",
+      "2a",
+      "c",
+      "",
+      null,
+      null,
+    ]);
   });
 });

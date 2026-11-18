@@ -31,6 +31,7 @@ import {
   CASE_LAW_CORPUS_DEPENDENCIES,
   CASE_LAW_JUDGE_DEPENDENCIES,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import { attachToHeldDecision } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
@@ -183,6 +184,51 @@ const unresolvedFallbackIdentity = (
     inserted: false,
     reason: PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY,
   });
+};
+
+/**
+ * A record of a source that enriches decisions other sources hold is
+ * settled before identity resolution would give it a row of its own: the
+ * attempt's step, or null when the record is a decision of its own. A stored
+ * re-parse names its own row, so it is one already.
+ */
+const settleHeldDecisionRecord = async (
+  {
+    heldDecisionAttachment,
+    inputProvenance,
+    sourceId,
+    scopedDb,
+    observedAt,
+    observationOrder,
+    signal,
+    s3Policy,
+  }: ProcessDecisionAttemptOptions,
+  observation: ObservedDecision,
+): Promise<Result<AttemptStep, unknown> | null> => {
+  if (
+    heldDecisionAttachment === null ||
+    inputProvenance.type !== "observation"
+  ) {
+    return null;
+  }
+  const attached = await attachToHeldDecision({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+    declaration: heldDecisionAttachment,
+    observation,
+    sourceId,
+    scopedDb,
+    observedAt,
+    observationOrder,
+    // Opened before the read that proves the host is not erased.
+    rawWindow: openRawSourceWriteWindow(),
+  });
+  if (Result.isError(attached)) {
+    return attached;
+  }
+  return attached.value.type === "settled"
+    ? Result.ok(attached.value.step)
+    : null;
 };
 
 /**
@@ -435,7 +481,9 @@ const processDecisionAttempt = async (
   if (fallbackFailure !== null) {
     return fallbackFailure;
   }
-  const attempted = await runDecisionAttempt(options, observation);
+  const attempted =
+    (await settleHeldDecisionRecord(options, observation)) ??
+    (await runDecisionAttempt(options, observation));
   if (attempted.isErr()) {
     return attempted;
   }
@@ -476,6 +524,7 @@ const processDecisionFromInput = async (
     retention,
     sourceFingerprintVersion,
     statedEcliIdentity,
+    heldDecisionAttachment,
   } = await resolveSourceContract(options.sourceId);
   return await processDecisionAttempt({
     ...options,
@@ -484,6 +533,7 @@ const processDecisionFromInput = async (
     sourceFingerprintVersion,
     sourceFingerprintFromStoredRaw: readStoredFingerprint,
     statedEcliIdentity,
+    heldDecisionAttachment,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
     corpus,

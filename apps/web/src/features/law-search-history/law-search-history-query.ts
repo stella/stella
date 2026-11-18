@@ -20,6 +20,7 @@ import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-
 import { Temporal } from "@stll/time";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -318,9 +319,13 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
 const useLawHistoryState = ({ filter, country }: LawHistoryList) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  // The public server render has no session. A list that hydrates after the
+  // browser read it must render that same unknown visitor first.
+  const hydrated = useHydrated();
   const sessionView = queryView(useQuery(sessionOptions));
   useQueryViewError(sessionView, "useLawHistory:query");
-  const session = sessionView.type === "items" ? sessionView.items : null;
+  const session =
+    hydrated && sessionView.type === "items" ? sessionView.items : null;
   const userId = session?.user.id;
   const organizationId = session?.session.activeOrganizationId;
   const keyScope = { userId, organizationId };
@@ -478,7 +483,7 @@ const useLawHistoryState = ({ filter, country }: LawHistoryList) => {
   // Until the session says who is visiting (always so in the server render),
   // their history is unknown, not empty.
   const visitorList =
-    sessionView.type === "pending"
+    !hydrated || sessionView.type === "pending"
       ? ({ status: "pending" } as const)
       : ({ status: "ready", entries: [] } as const);
   return {

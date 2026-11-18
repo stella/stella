@@ -967,6 +967,54 @@
       }
     },
     {
+      "id": "openai/gpt-6.2-astra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "openai/gpt-oss-120b",
       "reasoning": {
         "default_effort": "medium"

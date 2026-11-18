@@ -252,6 +252,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
   // projection drain consumes; request code never reads them.
   "case_law_ranking_signal_changes",
+  // The settlement queue: owner-run triggers enqueue delete tasks, the
+  // ingestion role's settlement leases and drops them; request code never
+  // reads them.
+  "corpus_index_projection_delete_tasks",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
   "case_law_sitemap_touches",
@@ -338,6 +342,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",
+  // A source's record held as an attachment to another source's decision:
+  // ingestion state only, never read through the request role.
+  "case_law_held_decision_attachments",
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",

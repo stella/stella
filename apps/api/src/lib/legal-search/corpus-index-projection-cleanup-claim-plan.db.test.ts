@@ -9,7 +9,10 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { corpusProjectionCleanupClaimPage } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import {
+  corpusProjectionCleanupClaimPage,
+  corpusProjectionSettlementTaskWalk,
+} from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { legacyServedCopyRetirePageQuery } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
 import {
   CASE_LAW_WAITING_REPLACEMENT_SCAN_CAP,
@@ -221,6 +224,90 @@ test("the cleanup claim reads one page of its queue, however many served revisio
   expect(large.rows).toBe(LIMIT);
   expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
   expect(large.buffers / large.rows).toBeLessThanOrEqual(25);
+}, 600_000);
+
+/**
+ * Delete tasks whose revisions wait in `cleanup_committed`, each with
+ * `perTask` revisions, as receipts leave them: the triggers queue each task.
+ */
+const seedCommittedTasks = async (
+  firstTask: number,
+  tasks: number,
+  perTask: number,
+) => {
+  await db.execute(
+    sql.raw(`
+      INSERT INTO corpus_index_projection_intents
+        (id, family, generation, entity_id, epoch, fingerprint, index_id, status,
+         expected_document_count, append_started_at, append_publish_barrier_at,
+         cleanup_not_before, cleanup_started_at, delete_opstamp,
+         delete_task_created_at, created_at, updated_at)
+      SELECT ${revision("c000", "i")}, 'case_law', '${GENERATION}',
+        ${entity("i")}, 1, lpad(to_hex(i), 64, 'c'), '${INDEX_ID}',
+        'cleanup_committed', 3, '2026-08-01'::timestamptz,
+        '2026-08-01'::timestamptz, '2026-08-01'::timestamptz,
+        ('2026-08-02'::timestamptz + ((i / ${perTask}) || ' seconds')::interval),
+        i / ${perTask},
+        ('2026-08-02'::timestamptz + ((i / ${perTask}) || ' seconds')::interval),
+        '2026-08-01'::timestamptz, '2026-08-01'::timestamptz
+      FROM generate_series(${firstTask * perTask}, ${(firstTask + tasks) * perTask - 1}) AS i
+    `),
+  );
+};
+
+const SETTLEMENT_PLAN = 16;
+
+const settlementPlan = (tx: Transaction) =>
+  corpusProjectionSettlementTaskWalk(tx, {
+    family: "case_law",
+    generation: GENERATION,
+    indexId: INDEX_ID,
+    limit: SETTLEMENT_PLAN,
+    scopedEntityIds: null,
+  }).getSQL();
+
+// timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.
+test("the settlement claim plans one page of tasks, however long the committed backlog", async () => {
+  const PER_TASK = 10;
+  const TASKS = 100;
+  await seedCommittedTasks(0, TASKS, PER_TASK);
+  await analyze();
+  await db.execute(
+    sql.raw("VACUUM ANALYZE corpus_index_projection_delete_tasks"),
+  );
+  const queued = await db.execute<{ count: number }>(
+    sql.raw(
+      "SELECT count(*)::int AS count FROM corpus_index_projection_delete_tasks",
+    ),
+  );
+  // The fixture reaches the queue: every task got its row from the trigger.
+  expect(queued.rows).toEqual([{ count: TASKS }]);
+  // Both backlogs walk the queue's claim index alone: no sequential scan,
+  // no revision lookup.
+  const expectTaskWalk = (plan: Plan) => {
+    const text = plan.lines.join("\n");
+    expect(plan.rows).toBe(SETTLEMENT_PLAN);
+    expect(text).not.toContain("Seq Scan");
+    expect(text).not.toContain("corpus_index_projection_intents");
+    const taskScan =
+      /Index Scan using corpus_index_projection_delete_tasks_claim_idx on corpus_index_projection_delete_tasks \(actual [^)]*rows=(\d+)/u.exec(
+        text,
+      );
+    expect(Number(taskScan?.[1])).toBe(SETTLEMENT_PLAN);
+  };
+  const small = await explain(settlementPlan);
+  expectTaskWalk(small);
+
+  // Ten times the committed backlog costs the plan nothing.
+  await seedCommittedTasks(TASKS, 9 * TASKS, PER_TASK);
+  await analyze();
+  await db.execute(
+    sql.raw("VACUUM ANALYZE corpus_index_projection_delete_tasks"),
+  );
+  const large = await explain(settlementPlan);
+  expectTaskWalk(large);
+  expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
+  expect(large.buffers / large.rows).toBeLessThanOrEqual(3);
 }, 600_000);
 
 // timeout: seeds and vacuums thousands of rows in PGlite, with no signal to await.

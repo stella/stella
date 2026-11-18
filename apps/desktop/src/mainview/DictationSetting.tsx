@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
 import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dictation-cleanup";
@@ -15,8 +15,9 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
-import { Label } from "@stll/ui/label";
+import { Kbd } from "@stll/ui/kbd";
 import { Switch } from "@stll/ui/switch";
+import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { formatShortcut } from "../shared/shortcut-keys";
@@ -27,6 +28,12 @@ import {
 } from "../shared/use-clipboard-shortcut";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
+import {
+  SettingsGroup,
+  SettingsPageHeader,
+  SettingsRow,
+  settingsRowIds,
+} from "./settings-layout";
 
 type DictationModel =
   | { status: "missing" | "failed" | "ready" }
@@ -42,7 +49,7 @@ type DictationLanguage = {
   supported: string[];
 };
 
-type DictationSnapshot = {
+export type DictationSnapshot = {
   available: boolean;
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
@@ -103,18 +110,81 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   "available" in value &&
   typeof value.available === "boolean";
 
-/** Local dictation: the switch, AI cleanup, the speech model and what went
- *  wrong. Renders nothing, group included, for an account without the
- *  feature. */
-export const DictationSetting = ({
-  renderGroup,
-}: {
-  renderGroup: (content: React.JSX.Element) => React.JSX.Element;
-}) => {
+type DictationAvailability = "loading" | "available" | "unavailable";
+
+/**
+ * Whether this build and account offer dictation, which decides the
+ * Dictation page. Reads the snapshot again on every dictation change, which
+ * the native side also sends when the server's decision changes.
+ */
+export const useDictationAvailability = () => {
+  const [availability, setAvailability] =
+    useState<DictationAvailability>("loading");
+
+  useEffect(() => {
+    let disposed = false;
+    let request = 0;
+    const read = async () => {
+      request += 1;
+      const current = request;
+      const result = await Result.tryPromise(async () =>
+        invoke<unknown>("dictation_get_snapshot"),
+      );
+      if (disposed || current !== request) {
+        return;
+      }
+      setAvailability(
+        Result.isOk(result) &&
+          isDictationSnapshot(result.value) &&
+          result.value.available
+          ? "available"
+          : "unavailable",
+      );
+    };
+    const stopListening = subscribeDesktopEvent({
+      event: "dictation-changed",
+      handler: () => {
+        void read();
+      },
+      onError: () => {
+        setAvailability("unavailable");
+      },
+    });
+    void read();
+    return () => {
+      disposed = true;
+      stopListening();
+    };
+  }, []);
+
+  return availability;
+};
+
+/** The Dictation page: the switch, where speech is transcribed, AI cleanup,
+ *  the speech model and what went wrong. Renders nothing for an account
+ *  without the feature. */
+export const DictationSetting = () => {
+  // Reading again after a failure starts the page afresh.
+  const [attempt, setAttempt] = useState(0);
+  return (
+    <DictationPage
+      key={attempt}
+      onRetry={() => {
+        setAttempt((current) => current + 1);
+      }}
+    />
+  );
+};
+
+const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations("dictation");
+  const tDestination = useTranslations("dictation.destination");
   const locale = useLocale();
   const layout = useKeyboardLayout();
   const [snapshot, setSnapshot] = useState<DictationSnapshot | null>(null);
+  // A failed read says so and offers another, rather than leaving the page
+  // empty until the next change event.
+  const [read, setRead] = useState<"pending" | "failed" | "done">("pending");
   const [removeFailed, setRemoveFailed] = useState(false);
 
   useEffect(() => {
@@ -126,11 +196,12 @@ export const DictationSetting = ({
       if (disposed) {
         return;
       }
-      setSnapshot(
+      const next =
         Result.isOk(result) && isDictationSnapshot(result.value)
           ? result.value
-          : null,
-      );
+          : null;
+      setSnapshot(next);
+      setRead(next === null ? "failed" : "done");
     };
     const stopListening = subscribeDesktopEvent({
       event: "dictation-changed",
@@ -139,6 +210,7 @@ export const DictationSetting = ({
       },
       onError: () => {
         setSnapshot(null);
+        setRead("failed");
       },
     });
     void refresh();
@@ -147,6 +219,10 @@ export const DictationSetting = ({
       stopListening();
     };
   }, []);
+
+  if (read === "failed") {
+    return <DictationReadFailed onRetry={onRetry} />;
+  }
 
   if (snapshot === null || !snapshot.available) {
     return null;
@@ -237,173 +313,214 @@ export const DictationSetting = ({
     }
   };
 
-  return renderGroup(
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{t("title")}</p>
-          <p
-            className="text-muted-foreground mt-1 text-sm leading-relaxed"
-            id="dictation-description"
-          >
-            {snapshot.destination === "cloud"
-              ? t("descriptionCloud", { shortcut })
-              : t("description", { shortcut })}
-          </p>
-          {snapshot.enabled && snapshot.keepsInHistory && (
-            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t("keptInHistory")}
-            </p>
-          )}
-        </div>
-        <Switch
-          aria-describedby="dictation-description"
-          aria-label={t("title")}
-          checked={snapshot.enabled}
-          onCheckedChange={(enabled) => {
-            void setEnabled(enabled);
-          }}
-        />
-      </div>
-      {snapshot.enabled && (
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t("cleanup.title")}</p>
-            <p
-              className="text-muted-foreground mt-1 text-sm leading-relaxed"
-              id="dictation-cleanup-description"
-            >
-              {snapshot.destination === "cloud"
-                ? t("cleanup.descriptionCloud")
-                : t("cleanup.description")}
-            </p>
-          </div>
+  const cleanupIds = settingsRowIds("dictation-cleanup");
+
+  return (
+    <div className="flex flex-col gap-6">
+      <SettingsPageHeader
+        action={
           <Switch
-            aria-describedby="dictation-cleanup-description"
-            aria-label={t("cleanup.title")}
-            checked={snapshot.cleanup}
-            onCheckedChange={(cleanup) => {
-              void setCleanup(cleanup);
+            aria-describedby="dictation-description"
+            aria-label={t("title")}
+            checked={snapshot.enabled}
+            onCheckedChange={(enabled) => {
+              void setEnabled(enabled);
             }}
           />
-        </div>
-      )}
-      {snapshot.enabled && snapshot.cleanup && (
-        <div className="flex flex-col gap-3 ps-4">
-          <DictationSwitchRow
-            checked={snapshot.shareWindowTitle}
-            description={t("context.windowTitle.description")}
-            id="dictation-share-window-title"
-            onChange={(enabled) => {
-              void setShare("dictation_set_share_window_title", enabled);
-            }}
-            title={t("context.windowTitle.title")}
-          />
-          {snapshot.textBeforeCursorAvailable && (
-            <DictationSwitchRow
-              checked={snapshot.shareTextBeforeCursor}
-              description={t("context.textBeforeCursor.description", {
-                limit: DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
-              })}
-              id="dictation-share-text-before-cursor"
-              onChange={(enabled) => {
-                void setShare(
-                  "dictation_set_share_text_before_cursor",
-                  enabled,
-                );
-              }}
-              title={t("context.textBeforeCursor.title")}
-            />
-          )}
-        </div>
-      )}
-      {snapshot.enabled && snapshot.cloudAvailable && (
-        <DictationDestination
-          cloudModel={snapshot.cloudModel}
-          destination={snapshot.destination}
-          onDestinationChange={(destination) => {
-            void setDestination(destination);
-          }}
-          onModelChange={(modelId) => {
-            void setCloudModel(modelId);
-          }}
-        />
-      )}
-      {snapshot.enabled && languageHasEffect(snapshot) && (
-        <DictationLanguageRow
-          language={snapshot.language}
-          locale={locale}
-          onChange={(language) => {
-            void setLanguage(language);
-          }}
-        />
-      )}
-      {/* With stella AI the model is not needed, but a downloaded one can
-          still be removed. */}
-      {snapshot.enabled &&
-        (snapshot.destination === "local" ||
-          snapshot.model.status === "ready") && (
-          <DictationModelRow
-            busy={snapshot.phase !== "idle"}
-            model={snapshot.model}
-            modelBytes={snapshot.modelBytes}
-            onDownload={() => {
-              void download();
-            }}
-            onRemove={() => {
-              void removeModel();
-            }}
-            removeFailed={removeFailed}
-          />
-        )}
+        }
+        description={
+          <span id="dictation-description">
+            {t.rich("lede", {
+              key: (chunks) => <Kbd className="mx-0.5">{chunks}</Kbd>,
+              shortcut,
+            })}
+          </span>
+        }
+        title={t("title")}
+      />
       {snapshot.shortcutTaken && (
-        <p className="text-destructive text-sm">
+        <p className="text-destructive-foreground text-sm">
           {t("shortcutTaken", { shortcut })}
         </p>
       )}
       {snapshot.failure !== null && (
-        <p className="text-destructive text-sm" role="status">
+        <p className="text-destructive-foreground text-sm" role="status">
           {t(`failure.${snapshot.failure}`)}
           {/* Two sentences, each translated whole. */}
           {snapshot.failureKeptInHistory && ` ${t("failureKeptInHistory")}`}
         </p>
       )}
-    </div>,
+      {snapshot.enabled && (
+        <>
+          <SettingsGroup title={t("groups.transcription")}>
+            {snapshot.cloudAvailable ? (
+              <DictationDestination
+                cloudModel={snapshot.cloudModel}
+                destination={snapshot.destination}
+                onDestinationChange={(destination) => {
+                  void setDestination(destination);
+                }}
+                onModelChange={(modelId) => {
+                  void setCloudModel(modelId);
+                }}
+              />
+            ) : (
+              // Without stella AI there is no choice, but where speech goes
+              // is still said.
+              <SettingsRow
+                description={t("destination.localDescription")}
+                id="dictation-destination"
+                title={t("destination.title")}
+              >
+                <span className="text-muted-foreground text-sm">
+                  {tDestination("local")}
+                </span>
+              </SettingsRow>
+            )}
+            {languageHasEffect(snapshot) && (
+              <DictationLanguageRow
+                language={snapshot.language}
+                locale={locale}
+                onChange={(language) => {
+                  void setLanguage(language);
+                }}
+              />
+            )}
+          </SettingsGroup>
+          <SettingsGroup title={t("groups.cleanup")}>
+            <SettingsRow
+              description={
+                snapshot.destination === "cloud"
+                  ? t("cleanup.descriptionCloud")
+                  : t("cleanup.description")
+              }
+              id="dictation-cleanup"
+              title={t("cleanup.title")}
+            >
+              <Switch
+                aria-describedby={cleanupIds.description}
+                aria-labelledby={cleanupIds.label}
+                checked={snapshot.cleanup}
+                onCheckedChange={(cleanup) => {
+                  void setCleanup(cleanup);
+                }}
+              />
+            </SettingsRow>
+            {/* What cleanup may also read; offered only while it runs. */}
+            <DictationSwitchRow
+              checked={snapshot.shareWindowTitle}
+              description={t("context.windowTitle.description")}
+              disabled={!snapshot.cleanup}
+              id="dictation-share-window-title"
+              onChange={(enabled) => {
+                void setShare("dictation_set_share_window_title", enabled);
+              }}
+              title={t("context.windowTitle.title")}
+            />
+            {snapshot.textBeforeCursorAvailable && (
+              <DictationSwitchRow
+                checked={snapshot.shareTextBeforeCursor}
+                description={t("context.textBeforeCursor.description", {
+                  limit:
+                    DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
+                })}
+                disabled={!snapshot.cleanup}
+                id="dictation-share-text-before-cursor"
+                onChange={(enabled) => {
+                  void setShare(
+                    "dictation_set_share_text_before_cursor",
+                    enabled,
+                  );
+                }}
+                title={t("context.textBeforeCursor.title")}
+              />
+            )}
+          </SettingsGroup>
+          {/* With stella AI the model is not needed, but a downloaded one
+              can still be removed. */}
+          {(snapshot.destination === "local" ||
+            snapshot.model.status === "ready") && (
+            <SettingsGroup title={t("groups.thisComputer")}>
+              <DictationModelRow
+                busy={snapshot.phase !== "idle"}
+                model={snapshot.model}
+                modelBytes={snapshot.modelBytes}
+                onDownload={() => {
+                  void download();
+                }}
+                onRemove={() => {
+                  void removeModel();
+                }}
+                removeFailed={removeFailed}
+              />
+            </SettingsGroup>
+          )}
+          {snapshot.keepsInHistory && (
+            <p className="text-muted-foreground px-1 text-xs">
+              {t("keptInHistory")}
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 };
 
-/** An opt-in switch under AI cleanup, with what it sends. */
+/** The page's title, what failed and the one action that reads again. */
+const DictationReadFailed = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("dictation");
+  const tSettings = useTranslations("settings");
+  return (
+    <div className="flex flex-col gap-6">
+      <SettingsPageHeader title={t("title")} />
+      <div className="flex items-center justify-between gap-4 px-1">
+        <p className="text-destructive-foreground text-sm" role="alert">
+          {tSettings("errorReadState")}
+        </p>
+        <Button onClick={onRetry} variant="outline">
+          {tSettings("tryAgain")}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+/** An opt-in switch under AI cleanup, with what it sends; dimmed and
+ *  disabled while cleanup is off. */
 const DictationSwitchRow = ({
   checked,
   description,
+  disabled,
   id,
   onChange,
   title,
 }: {
   checked: boolean;
   description: string;
+  disabled: boolean;
   id: string;
   onChange: (enabled: boolean) => void;
   title: string;
-}) => (
-  <div className="flex items-center justify-between gap-4">
-    <div className="min-w-0 flex-1">
-      <p className="text-sm font-medium">{title}</p>
-      <p
-        className="text-muted-foreground mt-1 text-sm leading-relaxed"
-        id={`${id}-description`}
-      >
-        {description}
-      </p>
-    </div>
-    <Switch
-      aria-describedby={`${id}-description`}
-      aria-label={title}
-      checked={checked}
-      onCheckedChange={onChange}
-    />
-  </div>
-);
+}) => {
+  const ids = settingsRowIds(id);
+  return (
+    <SettingsRow
+      depth="nested"
+      description={description}
+      disabled={disabled}
+      id={id}
+      title={title}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
 
 /** Which language dictation expects: automatic (this computer's languages)
  *  or one the speech model lists, named in its own language. */
@@ -417,6 +534,7 @@ const DictationLanguageRow = ({
   onChange: (language: string) => void;
 }) => {
   const t = useTranslations("dictation.language");
+  const ids = settingsRowIds("dictation-language-row");
   const items = [AUTOMATIC_LANGUAGE, ...language.supported];
   const automatic =
     language.inferred.length === 0
@@ -430,15 +548,11 @@ const DictationLanguageRow = ({
     item === AUTOMATIC_LANGUAGE ? automatic : displayLanguageName(item);
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0 flex-1">
-        <Label className="text-sm font-medium" htmlFor="dictation-language">
-          {t("title")}
-        </Label>
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-          {t("description")}
-        </p>
-      </div>
+    <SettingsRow
+      description={t("description")}
+      id="dictation-language-row"
+      title={t("title")}
+    >
       <Combobox<string>
         autoHighlight
         items={items}
@@ -453,7 +567,9 @@ const DictationLanguageRow = ({
         }
       >
         <ComboboxInput
-          className="w-48"
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          className="w-60"
           id="dictation-language"
           showTrigger={false}
         />
@@ -468,10 +584,12 @@ const DictationLanguageRow = ({
           <ComboboxEmpty>{t("noResults")}</ComboboxEmpty>
         </ComboboxPopup>
       </Combobox>
-    </div>
+    </SettingsRow>
   );
 };
 
+/** The speech model on this computer: its state and the one action that
+ *  changes it. Its licence is behind the title. */
 const DictationModelRow = ({
   busy,
   model,
@@ -491,48 +609,98 @@ const DictationModelRow = ({
   const t = useTranslations("dictation");
   const size = Math.round(modelBytes / BYTES_PER_MEGABYTE);
 
-  if (model.status === "ready") {
-    return (
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-muted-foreground min-w-0 flex-1 text-sm">
-            {t("modelInstalled", { size })}
-          </p>
-          <Button
-            disabled={busy}
-            onClick={onRemove}
-            size="sm"
-            variant="outline"
-          >
-            {t("removeModel")}
-          </Button>
-        </div>
-        {removeFailed ? (
-          <p className="text-destructive text-sm" role="alert">
+  return (
+    <SettingsRow
+      description={<DictationModelState model={model} size={size} />}
+      footer={
+        model.status === "ready" && removeFailed ? (
+          <p className="text-destructive-foreground text-xs" role="alert">
             {t("removeFailed")}
           </p>
-        ) : null}
-        <p className="text-muted-foreground text-xs">{t("modelAttribution")}</p>
-      </div>
-    );
-  }
-  if (model.status === "downloading") {
-    return (
-      <p className="text-muted-foreground text-sm" role="status">
-        {t("downloading", {
-          percent: Math.floor((model.received / model.total) * PERCENT),
-        })}
-      </p>
-    );
-  }
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <p className="text-muted-foreground min-w-0 flex-1 text-sm">
-        {model.status === "failed" ? t("downloadFailed") : t("modelNeeded")}
-      </p>
-      <Button onClick={onDownload} size="sm" variant="outline">
-        {t("download", { size })}
-      </Button>
-    </div>
+        ) : null
+      }
+      id="dictation-model"
+      title={
+        <Tooltip>
+          <TooltipFactTrigger>{t("speechModel")}</TooltipFactTrigger>
+          <TooltipPopup className="max-w-72">
+            {t("modelAttribution")}
+          </TooltipPopup>
+        </Tooltip>
+      }
+    >
+      <DictationModelAction
+        busy={busy}
+        model={model}
+        onDownload={onDownload}
+        onRemove={onRemove}
+        size={size}
+      />
+    </SettingsRow>
   );
+};
+
+const DictationModelState = ({
+  model,
+  size,
+}: {
+  model: DictationModel;
+  size: number;
+}) => {
+  const t = useTranslations("dictation");
+  switch (model.status) {
+    case "ready":
+      return t("modelInstalled", { size });
+    case "downloading":
+      return (
+        <span role="status">
+          {t("downloading", {
+            percent: Math.floor((model.received / model.total) * PERCENT),
+          })}
+        </span>
+      );
+    case "failed":
+      return t("downloadFailed");
+    case "missing":
+      return t("modelNeeded");
+    default:
+      model satisfies never;
+      return panic("Unknown speech model status");
+  }
+};
+
+const DictationModelAction = ({
+  busy,
+  model,
+  onDownload,
+  onRemove,
+  size,
+}: {
+  busy: boolean;
+  model: DictationModel;
+  onDownload: () => void;
+  onRemove: () => void;
+  size: number;
+}) => {
+  const t = useTranslations("dictation");
+  switch (model.status) {
+    case "ready":
+      return (
+        <Button disabled={busy} onClick={onRemove} variant="ghost">
+          {t("removeModel")}
+        </Button>
+      );
+    case "downloading":
+      return null;
+    case "failed":
+    case "missing":
+      return (
+        <Button onClick={onDownload} variant="outline">
+          {t("download", { size })}
+        </Button>
+      );
+    default:
+      model satisfies never;
+      return panic("Unknown speech model status");
+  }
 };

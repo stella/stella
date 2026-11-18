@@ -177,6 +177,7 @@ export const ProtectedAppFrame = ({
   user: AuthenticatedUser;
   children: ReactNode;
 }) => {
+  const t = useTranslations();
   useMountEffect(() => {
     const activity = createSessionActivity({
       page: document,
@@ -297,6 +298,7 @@ export const ProtectedAppFrame = ({
                     ),
                     mode: "responsive",
                   }}
+                  skipToContentLabel={t("common.skipToContent")}
                   topBar={() => <ProtectedContent />}
                 >
                   {children}
@@ -629,7 +631,6 @@ function WorkspaceInspectorSidePanel({
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
   const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
-    openedFrom: "matter",
     sidebarWidth,
     viewportWidth,
   });

@@ -16,6 +16,7 @@ import { useTranslations } from "use-intl";
 import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
 
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -78,7 +79,9 @@ type DecisionTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: DecisionTableLayout;
-  onLayoutChange: (layout: DecisionTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<DecisionTableLayout>,
+  ) => void;
   onSelectedIdsChange: (decisionIds: string[]) => void;
   /**
    * The query the rows answer, which is not always the one the URL asks

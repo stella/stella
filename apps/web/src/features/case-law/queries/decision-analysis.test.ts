@@ -1,7 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { decisionAnalysisOptions } from "@/features/case-law/queries/decision-analysis";
 import {

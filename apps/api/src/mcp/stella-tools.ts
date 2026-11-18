@@ -17,6 +17,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
   caseLawHitGroup,
@@ -29,7 +30,6 @@ import {
   SEARCH_TOTAL_NOT_COUNTED,
   searchPageEnd,
 } from "@stll/api-contract/search";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
