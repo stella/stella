@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import * as fc from "fast-check";
 import * as v from "valibot";
 
@@ -14,21 +14,29 @@ import {
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import { assertProperty } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { makeM4aAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
 import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import type { TranscriptionDeployment } from "@/api/handlers/dictation/transcription-deployment";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -38,9 +46,16 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { dictationBodySchema } from "./schema";
-import { executeDictation } from "./transcribe";
+import { desktopDictationBodySchema, dictationBodySchema } from "./schema";
+import {
+  createDictationTranscribeEndpoint,
+  executeDictation,
+} from "./transcribe";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 type DictationContext = Exclude<
   Parameters<typeof executeDictation>[0],
@@ -856,5 +871,169 @@ describe("dictation input boundary", () => {
         }).success,
       ).toBe(false);
     }
+  });
+});
+
+describe("a member's labels flag", () => {
+  const USER_ID = toSafeId<"user">("labelling-member");
+  const ORGANIZATION_ID = toSafeId<"organization">("labelling-firm");
+  const EMAIL = "labelling-member@example.test";
+  const GRANT = {
+    type: "member",
+    organizationId: ORGANIZATION_ID,
+    email: EMAIL,
+  } as const;
+  const SCRIBE = "elevenlabs-direct/scribe-v3";
+  /** An ElevenLabs key without zero retention: Scribe v3 keeps the audio. */
+  const RETAINING = {
+    openRouter: true,
+    elevenLabs: {
+      apiKey: "elevenlabs-fixture",
+      environment: "eu",
+      zeroRetention: false,
+    },
+  } as const;
+
+  beforeEach(() => {
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+  });
+
+  const grantRetainingModels = () => {
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+      "desktop-dictation": [GRANT],
+      "desktop-dictation-cloud": [GRANT],
+      "desktop-dictation-retaining-models": [GRANT],
+    });
+  };
+
+  const transcribeAs = async ({
+    modelId,
+    labels,
+    residency = "eu",
+    deployment = RETAINING,
+  }: {
+    modelId: string;
+    labels: boolean;
+    residency?: "eu" | "us";
+    deployment?: TranscriptionDeployment;
+  }) => {
+    const f = fixture(1234, 1234, deployment);
+    const { scopedDb } = createScopedDbMock({});
+    const endpoint = createDictationTranscribeEndpoint({
+      ...f.dependencies,
+      admit: asTestRaw<typeof withActionAdmission>(
+        async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
+          Result.ok(
+            await run(new AbortController().signal, {
+              reservePeriod: async () => Result.ok(undefined),
+            }),
+          ),
+      ),
+    });
+    const result = await endpoint.handler(
+      createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        scopedDb,
+        safeDb: safeDbFromScoped(scopedDb),
+        session: { activeOrganizationId: ORGANIZATION_ID },
+        user: { id: USER_ID, email: EMAIL },
+        managedAIResidency: residency,
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+          identity: { email: EMAIL, emailVerified: true },
+          enrolments: [],
+        }),
+        body: {
+          file: audioChunk(),
+          modelId,
+          language: "cs",
+          ...(labels ? { [TRANSCRIPTION_LABELS_SHOWN_FIELD]: "1" } : {}),
+        },
+        request: new Request("https://stella.test/v1/dictation/transcribe", {
+          method: "POST",
+        }),
+        route: "/v1/dictation/transcribe",
+      }),
+    );
+    return { result, f };
+  };
+
+  const refusalCode = (result: unknown) =>
+    result instanceof HttpStatusResponse &&
+    typeof result.response === "object" &&
+    result.response !== null &&
+    "code" in result.response
+      ? result.response.code
+      : undefined;
+
+  test("lets a granted member name a model whose provider keeps the audio", async () => {
+    grantRetainingModels();
+    const { result, f } = await transcribeAs({ modelId: SCRIBE, labels: true });
+    expect(result).not.toBeInstanceOf(HttpStatusResponse);
+    expect(result).toMatchObject({ modelId: SCRIBE, text: TEXT });
+    expect(f.directRequests).toHaveLength(1);
+  });
+
+  test("never lets a member without the grant name such a model", async () => {
+    const { result, f } = await transcribeAs({ modelId: SCRIBE, labels: true });
+    expect(result instanceof HttpStatusResponse && result.code).toBe(503);
+    expect(refusalCode(result)).toBe("transcription_model_unavailable");
+    expect(f.directRequests).toEqual([]);
+  });
+
+  test("without it, a granted member still gets the region's models only", async () => {
+    grantRetainingModels();
+    const retaining = await transcribeAs({ modelId: SCRIBE, labels: false });
+    expect(refusalCode(retaining.result)).toBe(
+      "transcription_model_unavailable",
+    );
+    expect(retaining.f.directRequests).toEqual([]);
+    expect(TRANSCRIPTION_MODELS[MODEL].residency.us.status).not.toBe(
+      "available",
+    );
+    const outside = await transcribeAs({
+      modelId: MODEL,
+      labels: false,
+      residency: "us",
+      deployment: OPENROUTER_ONLY,
+    });
+    expect(refusalCode(outside.result)).toBe("transcription_model_unavailable");
+    expect(outside.f.requests).toEqual([]);
+  });
+
+  test("lets a member name a model outside the region, sent to the global endpoint", async () => {
+    const { result, f } = await transcribeAs({
+      modelId: MODEL,
+      labels: true,
+      residency: "us",
+      deployment: OPENROUTER_ONLY,
+    });
+    expect(result).not.toBeInstanceOf(HttpStatusResponse);
+    expect(f.requests.at(0)?.url).toBe(
+      "https://openrouter.ai/api/v1/audio/transcriptions",
+    );
+    expect(f.settlements.at(0)?.caller.transcriptionEndpoint).toBe("global");
+  });
+
+  test("is a multipart field the member body reads and the desktop body refuses", () => {
+    const upload = {
+      file: audioChunk(),
+      modelId: MODEL,
+      [TRANSCRIPTION_LABELS_SHOWN_FIELD]: "1",
+    };
+    expect(v.safeParse(dictationBodySchema, upload).success).toBe(true);
+    expect(
+      v.safeParse(dictationBodySchema, {
+        ...upload,
+        [TRANSCRIPTION_LABELS_SHOWN_FIELD]: "yes",
+      }).success,
+    ).toBe(false);
+    expect(v.safeParse(desktopDictationBodySchema, upload).success).toBe(false);
+    expect(Object.keys(desktopDictationBodySchema.entries).toSorted()).toEqual([
+      "file",
+      "language",
+      "modelId",
+    ]);
   });
 });

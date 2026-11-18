@@ -107,6 +107,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
   ],
   [
+    "/v1/dictation/models",
+    "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/cleanup",
+    "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
+  ],
+  [
     "/v1/organizations/audit-export",
     "Organization owners export the activity log before deleting the organization on every deployment",
   ],

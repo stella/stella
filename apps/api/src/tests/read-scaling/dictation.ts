@@ -20,12 +20,14 @@ import {
   createDesktopDictationModelsEndpoint,
   readDesktopDictationModels,
 } from "@/api/handlers/dictation/desktop-transcription";
+import readDictationModels from "@/api/handlers/dictation/models";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import transcribeDictation, {
   createDictationTranscribeEndpoint,
 } from "@/api/handlers/dictation/transcribe";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
+import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -333,6 +335,63 @@ export const desktopDictationModelsScalingScenario = {
         return panic(
           "Desktop dictation models scaling requires the region's models",
         );
+      }
+      return {
+        statements: counter.count,
+        transactionRoundTrips: counter.transactions,
+        responseBytes: Buffer.byteLength(JSON.stringify(response)),
+        rows: response.models.length,
+        response,
+      };
+    });
+  },
+};
+
+const MEMBER_MODELS_ROUTE = "/v1/dictation/models" satisfies ApiRoutePath;
+
+/**
+ * Listing a signed-in member's labelled transcription models. The session
+ * brings the organization's AI settings and the member's feature decisions,
+ * read here the way the session reads them, so the handler reads nothing
+ * that grows with other organizations.
+ */
+export const dictationModelsScalingScenario = {
+  name: "dictation models",
+  definition: readDictationModels,
+  measure: async (fixture: DesktopDictationModelsFixture) => {
+    const request = new Request(`https://example.test${MEMBER_MODELS_ROUTE}`);
+    return await runWithMeasuredQueryCounter(async (counter) => {
+      const settings = await fixture.scopedDb(
+        async (tx) =>
+          await loadOrgSettingsForAuth(tx, {
+            organizationId: fixture.organizationId,
+            userId: fixture.userId,
+          }),
+      );
+      const response = await readDictationModels.handler(
+        createTestHandlerContext<
+          Parameters<typeof readDictationModels.handler>[0]
+        >({
+          ...settings,
+          session: { activeOrganizationId: fixture.organizationId },
+          user: { id: fixture.userId },
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          featureAccessSnapshot: buildFeatureAccessSnapshot({
+            organizationId: fixture.organizationId,
+            userId: fixture.userId,
+            identity: { email: fixture.email, emailVerified: true },
+            enrolments: [],
+          }),
+          request,
+          route: MEMBER_MODELS_ROUTE,
+        }),
+      );
+      if (
+        response instanceof HttpStatusResponse ||
+        response.unavailable !== null
+      ) {
+        return panic("Dictation models scaling requires the region's models");
       }
       return {
         statements: counter.count,

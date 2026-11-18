@@ -27,6 +27,7 @@ import {
   type DictationCaller,
   type DictationDependencies,
   executeDictation,
+  RETAINING_MODELS_FEATURE_ID,
 } from "@/api/handlers/dictation/transcribe";
 import {
   readTranscriptionDeployment,
@@ -61,12 +62,6 @@ import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission"
 // `desktop-dictation` its prerequisite.
 const REQUIRED_FEATURE_ID =
   "desktop-dictation-cloud" satisfies DesktopFeatureId;
-
-// A model whose provider keeps the audio is offered to members with this
-// decision only. The API lists and refuses; the desktop only refreshes its
-// model list when the decision changes.
-const RETAINING_MODELS_FEATURE_ID =
-  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
 
 /**
  * The transcription models stella AI offers this organization, none when

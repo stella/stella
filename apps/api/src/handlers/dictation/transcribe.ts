@@ -9,11 +9,13 @@ import {
 } from "@stll/ai-catalog/transcription";
 import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
+import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_MULTIPART_BYTES,
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
@@ -48,7 +50,10 @@ import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-creden
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { emitTranscriptionDurationMismatchMetric } from "@/api/lib/observability/request-metrics";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { transcriptionUsageUnits } from "@/api/lib/usage/unit-model";
@@ -57,10 +62,34 @@ import {
   recordUsageEvent,
 } from "@/api/lib/usage/usage-ledger";
 
+// A model whose provider keeps the audio is offered to members with this
+// decision only, on every client that warns about it. The API lists and
+// refuses; the desktop only refreshes its model list when the decision
+// changes.
+export const RETAINING_MODELS_FEATURE_ID =
+  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
+
+/** The member may use a model whose provider keeps the audio. A request
+ *  without the member's feature decisions never may. */
+export const mayUseRetainingModels = ({
+  featureAccessSnapshot,
+  session,
+  user,
+}: {
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+  session: { activeOrganizationId: SafeId<"organization"> };
+  user: { id: SafeId<"user"> };
+}): boolean =>
+  featureAccessSnapshot !== undefined &&
+  isFeatureEnabled(featureAccessSnapshot, RETAINING_MODELS_FEATURE_ID, {
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+  });
+
 const config = {
   contract: "patch",
   description:
-    "Transcribe one audio chunk without storing the audio or transcript. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, and an optional matterId. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
+    "Transcribe one audio chunk without storing the audio or transcript. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, an optional matterId, and labels=1 only when the client showed the models list's outsideRegion and retainsData labels where the model was chosen. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
@@ -419,6 +448,7 @@ export const DEFAULT_DICTATION_DEPENDENCIES = {
 } satisfies DictationDependencies;
 
 export const createDictationTranscribeEndpoint = ({
+  admit,
   transcribe = transcribeAudio,
   transcribeElevenLabs = transcribeWithElevenLabs,
   deployment = readTranscriptionDeployment,
@@ -426,21 +456,42 @@ export const createDictationTranscribeEndpoint = ({
   limit = consumeDictationLimit,
   preflight = checkUsage,
   settle = settleUsage,
-}: Partial<DictationDependencies> = {}) =>
-  createSafeRootHandler(config, async function* (ctx) {
-    const result = yield* Result.await(
-      executeDictation(ctx, {
-        transcribe,
-        transcribeElevenLabs,
-        deployment,
-        credential,
-        limit,
-        preflight,
-        settle,
-      }),
-    );
-    return Result.ok(result);
-  });
+}: Partial<DictationDependencies> & {
+  admit?: typeof withActionAdmission;
+} = {}) =>
+  createSafeRootHandler(
+    config,
+    async function* (ctx) {
+      // A client that showed the models list's labels where the model was
+      // chosen may name a model outside the region, or one whose provider
+      // keeps the audio when the member is granted such models. Any other
+      // request gets the region's models only.
+      const labelsShown =
+        ctx.body[TRANSCRIPTION_LABELS_SHOWN_FIELD] !== undefined;
+      const result = yield* Result.await(
+        executeDictation(
+          labelsShown
+            ? {
+                ...ctx,
+                allowOutsideRegion: true,
+                allowRetainingModels: mayUseRetainingModels(ctx),
+              }
+            : ctx,
+          {
+            transcribe,
+            transcribeElevenLabs,
+            deployment,
+            credential,
+            limit,
+            preflight,
+            settle,
+          },
+        ),
+      );
+      return Result.ok(result);
+    },
+    admit === undefined ? undefined : { admit },
+  );
 
 const transcribeDictation = createDictationTranscribeEndpoint();
 
