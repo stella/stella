@@ -246,6 +246,8 @@ const provisionHistoryItemSchema = v.object({
     ),
     v.maxLength(LIMITS.legislationGoverningTextMax),
   ),
+  /** Present when governing wording past the bound was left out. */
+  governingTextTruncated: v.optional(v.literal(true)),
 });
 export const provisionHistorySuccessResponseSchema = v.object({
   items: v.pipe(
@@ -380,6 +382,10 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
     readerTextBytes.versionValidTo,
   ),
   text: truncateTextBytes(row.text, readerTextBytes.provisionText),
+  ...(row.governingTextTruncated === true ||
+  row.governingText.length > LIMITS.legislationGoverningTextMax
+    ? { governingTextTruncated: true as const }
+    : {}),
   governingText: row.governingText
     .slice(0, LIMITS.legislationGoverningTextMax)
     .map((wording) => ({

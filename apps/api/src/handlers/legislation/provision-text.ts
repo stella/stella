@@ -10,6 +10,8 @@ import type { GoverningWordingPosition } from "@stll/legal-ast/provision-preview
 import { unfiledAnchor } from "@stll/legal-ast/statute-anchor-scheme";
 import type { StatuteBlocks } from "@stll/legal-ast/statute-anchor-scheme";
 
+import { LIMITS } from "@/api/lib/limits";
+
 type SubdivisionTarget = { provisionAnchorId: string; citedAnchorId: string };
 
 /**
@@ -69,6 +71,12 @@ export type ProvisionReading = {
    * for a whole provision.
    */
   governing: ProvisionGoverningText[];
+  /**
+   * Whether governing wording past `LIMITS.legislationGoverningTextMax`
+   * entries was left out, so a reader is told rather than handed a silent
+   * cut.
+   */
+  governingTruncated: boolean;
 };
 
 const joinedText = (blocks: readonly Block[]): string =>
@@ -112,7 +120,11 @@ export const readProvision = (
   // grammar is not a reliable way to tell the two apart, but the document is.
   const whole = provisionBlocks(statute, anchorId);
   if (whole !== null) {
-    return { text: joinedText(whole), governing: [] };
+    return {
+      text: joinedText(whole),
+      governing: [],
+      governingTruncated: false,
+    };
   }
   // The block the anchor names, by its own anchor or by a unique tail of it
   // (`frag_6070235` for `par_5-pism_e-frag_6070235`).
@@ -133,14 +145,16 @@ export const readProvision = (
   if (owned === null) {
     return null;
   }
+  const governing = governingWording(statute, target).flatMap(
+    ({ block, position }) => {
+      const text = block.plainText.trim();
+      return text === "" ? [] : [{ anchor: block.anchorId, position, text }];
+    },
+  );
   return {
     text: joinedText(owned),
-    governing: governingWording(statute, target).flatMap(
-      ({ block, position }) => {
-        const text = block.plainText.trim();
-        return text === "" ? [] : [{ anchor: block.anchorId, position, text }];
-      },
-    ),
+    governing: governing.slice(0, LIMITS.legislationGoverningTextMax),
+    governingTruncated: governing.length > LIMITS.legislationGoverningTextMax,
   };
 };
 

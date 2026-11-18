@@ -15,6 +15,7 @@ import {
   extractProvisionText,
   readProvision,
 } from "@/api/handlers/legislation/provision-text";
+import { LIMITS } from "@/api/lib/limits";
 
 /** Written as an escape so the fixture text is unambiguous in review. */
 const SECTION_SIGN = "\u00a7";
@@ -299,4 +300,21 @@ describe("a read of § 5 písm. e) of the Employment Act", () => {
       section5Text.closing,
     );
   });
+});
+
+test("governing wording past its bound is flagged, never cut silently", () => {
+  const leadIns = Array.from(
+    { length: LIMITS.legislationGoverningTextMax + 3 },
+    (_, index) =>
+      paragraph(`par_9-frag_${String(1000 + index)}`, `Line ${String(index)}`),
+  );
+  const statute = czech([
+    heading("par_9", 2, "§ 9"),
+    ...leadIns,
+    paragraph("par_9-pism_a", "a) letter"),
+  ]);
+  const reading = readProvision(statute, "par_9-pism_a");
+  expect(reading?.governing).toHaveLength(LIMITS.legislationGoverningTextMax);
+  expect(reading?.governingTruncated).toBe(true);
+  expect(readProvision(statute, "par_9")?.governingTruncated).toBe(false);
 });

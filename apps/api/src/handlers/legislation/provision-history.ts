@@ -232,6 +232,9 @@ export const readProvisionHistoryHandler = async ({
             ...item,
             text: reading.text,
             governingText: reading.governing,
+            ...(reading.governingTruncated
+              ? { governingTextTruncated: true as const }
+              : {}),
           }),
         ],
   );

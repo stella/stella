@@ -3616,6 +3616,10 @@
                   "additionalProperties": true
                 }
               },
+              "governingTextTruncated": {
+                "enum": [true],
+                "type": "boolean"
+              },
               "nextTextCursor": {
                 "type": ["string", "null"]
               },
@@ -3797,6 +3801,10 @@
                   "type": "object",
                   "additionalProperties": true
                 }
+              },
+              "governingTextTruncated": {
+                "enum": [true],
+                "type": "boolean"
               },
               "nextTextCursor": {
                 "type": ["string", "null"]

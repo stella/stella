@@ -62,6 +62,8 @@ const governingText = {
       text: v.string(),
     }),
   ),
+  // Present when governing wording past the bound was left out.
+  governingTextTruncated: v.optional(v.literal(true)),
 } as const;
 
 /**

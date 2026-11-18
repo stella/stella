@@ -1052,6 +1052,9 @@ const provisionItemResult = ({
           // Once per read: a continuation window carries on the same text.
           governingText:
             item.text_cursor === undefined ? reading.governing : [],
+          ...(item.text_cursor === undefined && reading.governingTruncated
+            ? { governingTextTruncated: true as const }
+            : {}),
           truncated: window.truncated,
           nextTextCursor: window.nextTextCursor,
           documentId: version.id,
@@ -1393,6 +1396,9 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
             ...version,
             text: window.text,
             governingText: textCursor === undefined ? item.governingText : [],
+            ...(textCursor === undefined && item.governingTextTruncated === true
+              ? { governingTextTruncated: true as const }
+              : {}),
             truncated: window.truncated,
             nextTextCursor: window.nextTextCursor,
             status: PROVISION_STATUS.found,
