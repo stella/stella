@@ -60,7 +60,7 @@ export const SKILL_NAME_PATTERN = /^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/u;
  * (a backslash or `< > : " | ? *`), and no segment that starts or ends with whitespace or
  * ends with a dot. `@stll/api-contract` holds the same pattern for browsers.
  */
-export const SKILL_RESOURCE_PATH_PATTERN =
+export const SKILL_PACKAGE_RESOURCE_PATH_PATTERN =
   /^(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
 
 /**
@@ -279,7 +279,7 @@ export const readSkillResourceReferences = (body: string): string[] => {
   const paths: string[] = [];
   for (const match of body.matchAll(skillResourceReferencePattern)) {
     const path = match[1];
-    if (path !== undefined && SKILL_RESOURCE_PATH_PATTERN.test(path)) {
+    if (path !== undefined && SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)) {
       paths.push(path);
     }
   }
@@ -419,7 +419,7 @@ const collectPackageResources = ({
     }
     if (
       path.length > SKILL_PACKAGE_LIMITS.resourcePathMaxChars ||
-      !SKILL_RESOURCE_PATH_PATTERN.test(path)
+      !SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)
     ) {
       diagnostics.push({ type: "resource_path_invalid", path });
       continue;

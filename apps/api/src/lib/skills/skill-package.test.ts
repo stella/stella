@@ -316,7 +316,7 @@ Use the references.`,
     );
     zip.set("skill/references/checklist.md", "# Checklist");
     zip.set("skill/assets/example.txt", "Example");
-    zip.set("skill/private/ignore.md", "Ignored");
+    zip.set("skill/private/notes.md", "Kept: any folder belongs to the skill");
     const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await parseUpload(
@@ -329,6 +329,7 @@ Use the references.`,
     }
     expect(result.value.resources.map((resource) => resource.path)).toEqual([
       "assets/example.txt",
+      "private/notes.md",
       "references/checklist.md",
     ]);
     expect(hashSkillPackageContent(result.value)).not.toBe(

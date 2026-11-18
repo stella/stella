@@ -8,7 +8,7 @@ import {
   isKnownBinaryResourcePath,
   readSkillResourceReferences,
   SKILL_PACKAGE_LIMITS,
-  SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_PACKAGE_RESOURCE_PATH_PATTERN,
   validateSkillPackage,
 } from "./format";
 
@@ -149,7 +149,7 @@ describe("skill package format", () => {
       "references/trailing-dot.",
       "references/trailing dot folder./a.md",
     ]) {
-      expect(SKILL_RESOURCE_PATH_PATTERN.test(path)).toBe(false);
+      expect(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)).toBe(false);
     }
     for (const path of [
       "README.md",
@@ -162,7 +162,7 @@ describe("skill package format", () => {
       "references/50%.md",
       "assets/template (copy).txt",
     ]) {
-      expect(SKILL_RESOURCE_PATH_PATTERN.test(path)).toBe(true);
+      expect(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)).toBe(true);
     }
   });
 
@@ -226,7 +226,7 @@ describe("skill package format", () => {
       /export const SKILL_RESOURCE_PATH_PATTERN =\s*\/(.+)\/u;/u.exec(
         source,
       )?.[1];
-    expect(copy).toBe(SKILL_RESOURCE_PATH_PATTERN.source);
+    expect(copy).toBe(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.source);
   });
 
   test("knows binary files by extension in any case", () => {

@@ -7,7 +7,6 @@ import {
   syntheticSkillSource,
 } from "@stll/catalogue/pinned-facts";
 import {
-  isAllowedFirstPartySkillPackageSkip,
   listSkillMetadata,
   readSkillRequiredTools,
   validateSkillPackage,
@@ -46,11 +45,7 @@ const expectValid = (files: readonly { content: string; path: string }[]) => {
   });
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
-    expect(
-      result.value.skipped.filter(
-        (skipped) => !isAllowedFirstPartySkillPackageSkip(skipped),
-      ),
-    ).toEqual([]);
+    expect(result.value.skipped).toEqual([]);
   }
 };
 
@@ -76,31 +71,26 @@ describe("first-party skill packages", () => {
     }
   });
 
-  test("allows root ancillary files and rejects nested skipped files", () => {
-    expectValid([
-      {
-        path: "SKILL.md",
-        content:
-          "---\nname: ancillary\ndescription: Ancillary\n---\nInstructions",
-      },
-      { path: "README.md", content: "Notes" },
-    ]);
-
+  test("keeps root and nested ancillary files as resources", () => {
     const result = validateSkillPackage({
       files: [
         {
           path: "SKILL.md",
-          content: "---\nname: nested\ndescription: Nested\n---\nInstructions",
+          content:
+            "---\nname: ancillary\ndescription: Ancillary\n---\nInstructions",
         },
-        { path: "notes/README.md", content: "Stray notes" },
+        { path: "README.md", content: "Notes" },
+        { path: "notes/README.md", content: "Nested notes" },
       ],
       tools: { known: skillRequirableToolNames(), type: "check" },
     });
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(
-        result.value.skipped.every(isAllowedFirstPartySkillPackageSkip),
-      ).toBe(false);
+      expect(result.value.skipped).toEqual([]);
+      expect(result.value.resources.map((resource) => resource.path)).toEqual([
+        "README.md",
+        "notes/README.md",
+      ]);
     }
   });
 
