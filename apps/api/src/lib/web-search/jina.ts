@@ -1,5 +1,9 @@
 import { fetchWithTimeout } from "@stll/fetch";
 
+import {
+  discardResponseBody,
+  readResponseTextPrefix,
+} from "@/api/lib/web-search/response-text-prefix";
 import type {
   FetchUrlOutput,
   UrlFetcher,
@@ -36,6 +40,7 @@ export const validateJinaKey = async (apiKey: string): Promise<void> => {
       timeoutMs: VALIDATE_TIMEOUT_MS,
     },
   );
+  discardResponseBody(response);
   if (!response.ok) {
     throw new WebSearchProviderError({
       provider: "jina",
@@ -77,15 +82,18 @@ export const createJinaFetcher = ({
       timeoutMs: READER_TIMEOUT_MS,
     });
     if (!response.ok) {
+      discardResponseBody(response);
       throw new WebSearchProviderError({
         provider: "jina",
         status: response.status,
         message: `Jina Reader failed (${response.status}) for ${url.slice(0, 200)}`,
       });
     }
-    const body = await response.text();
-    const truncated = body.length > maxChars;
-    const content = truncated ? body.slice(0, maxChars) : body;
+    const { content, truncated } = await readResponseTextPrefix(response, {
+      maxChars,
+      idleMs: READER_TIMEOUT_MS,
+      signal,
+    });
     const title = parseJinaHeader(response, "x-title");
     const publishedAt = parseJinaHeader(response, "x-published-time");
     const canonicalUrl = parseJinaHeader(response, "x-url") ?? url;

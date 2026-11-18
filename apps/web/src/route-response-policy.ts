@@ -17,6 +17,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/onboarding": "private-no-store",
   "/tools": "private-no-store",
   "/agent-claim": "private-no-store",
+  "/invoice-link": "private-no-store",
   "/consent": "private-no-store",
   "/dev": "private-no-store",
   "/robots.txt": "private-no-store",

@@ -2,12 +2,13 @@ import { startTransition, Suspense, use, useState } from "react";
 
 import { Result } from "better-result";
 import { randomUUID } from "expo-crypto";
-import { ActivityIndicator, Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract/workspace-contacts";
 import type { WorkspaceContactRole } from "@stll/api-contract/workspace-contacts";
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { ContactPicker } from "@/components/contact-picker";
@@ -25,7 +26,7 @@ import {
   removeMatterParty,
 } from "@/state/matter-detail";
 import type { MatterParty } from "@/state/matter-detail";
-import { useAppColors, useUiColors } from "@/theme";
+import { useUiColors } from "@/theme";
 
 type PartiesLoad = Promise<Result<MatterParty[], ApiError>>;
 
@@ -44,12 +45,11 @@ export const MatterParties = ({
   matterId: string;
   source: AccessTokenSource;
 }) => {
-  const colors = useAppColors();
   const load = async () => await listMatterParties({ fetch, matterId, source });
   const [parties, setParties] = useState<PartiesLoad>(load);
 
   return (
-    <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+    <Suspense fallback={<Loader />}>
       <LoadedParties
         disabled={disabled}
         matterId={matterId}
@@ -181,18 +181,17 @@ const LoadedParties = ({
                 </Text>
               </View>
               {disabled ? null : (
-                <Pressable
+                <Button
                   accessibilityLabel={t("removeParty")}
-                  accessibilityRole="button"
-                  className="p-1 active:opacity-60"
                   disabled={busy}
-                  hitSlop={8}
                   onPress={() => {
                     remove(party);
                   }}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <XIcon color={ui.mutedForeground} size={18} />
-                </Pressable>
+                </Button>
               )}
             </View>
           ))}
@@ -274,24 +273,15 @@ const RoleChip = ({
   label: string;
   onPress: () => void;
   selected: boolean;
-}) => {
-  const ui = useUiColors();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ disabled, selected }}
-      className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
-        selected ? "border-foreground bg-foreground" : "border-border bg-card"
-      }`}
-      disabled={disabled}
-      onPress={onPress}
-    >
-      <Text
-        style={selected ? { color: ui.background } : undefined}
-        variant="label"
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-};
+}) => (
+  <Button
+    accessibilityRole="radio"
+    accessibilityState={{ selected }}
+    disabled={disabled}
+    onPress={onPress}
+    size="chip"
+    variant={selected ? "default" : "outline"}
+  >
+    {label}
+  </Button>
+);

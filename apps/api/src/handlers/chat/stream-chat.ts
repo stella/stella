@@ -29,7 +29,7 @@ import {
 } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
-  createThirdPartyBoundaryRefusalPayload,
+  CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
@@ -42,11 +42,14 @@ import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
   type ChatLocalRunContext,
   chatLocalRunContextSchema,
   chatLocalRunFilePartsOf,
   chatLocalRunFilesNotSharedSchema,
   chatLocalRunLimitSchema,
+  type ChatLocalRunModel,
+  chatLocalRunModelSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   desktopRunnerAttachmentPath,
@@ -61,7 +64,10 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
-import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
+import {
+  anonymizationRefusalPayload,
+  refuseAnonymizedCrossing,
+} from "@/api/handlers/chat/anonymization-refusal";
 import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
 import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
@@ -131,6 +137,7 @@ import {
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import {
+  isChatTurnReleasedChunk,
   LOCAL_RUN_OUTPUTS_INSTRUCTIONS,
   type LocalChatRun,
   reportsSessionNotResumed,
@@ -329,6 +336,9 @@ const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 const STELLA_ANON_RESTORATIONS_EVENT = "stella.anon-restorations";
 const ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL = "stella-assistant-response";
+
+/** See `ProcessServerChatStreamProps.answerSoFar`. */
+type ChatTurnAnswerSoFar = "none" | "released";
 const CHAT_LOOP_DETECTED_MESSAGE =
   "The AI model repeated the same work and could not recover. Please try again with a narrower request.";
 const CHAT_EMPTY_COMPLETION_MESSAGE =
@@ -702,6 +712,7 @@ export const streamChat = async ({
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
+    runsOn: localRun === undefined ? "agent_sandbox" : "computer",
   });
   if (agentBoundaryError !== null) {
     return {
@@ -922,6 +933,7 @@ export const streamChat = async ({
   };
   const attemptStream = runChatAttempts({
     abortController: run.control.providerAbortController,
+    handOverSignal: run.control.handOverSignal,
     abortSignal:
       run.control.admissionSignal === undefined
         ? deadlineSignal
@@ -987,6 +999,7 @@ export const streamChat = async ({
 
   const production = produceChatTurn({
     answerQuoteChecker,
+    answerSoFar: "none",
     contextNotice,
     decisionPassageStamper,
     dismissesAwaited: resumeDismissesAwaited(preparedResume),
@@ -1041,6 +1054,8 @@ export const streamChat = async ({
 /** What a turn's production learns of its settlement as its output runs. */
 type TurnProductionSettlement = {
   event: StreamChatFinishEvent | undefined;
+  /** The answer so far of a turn released to another task, to store. */
+  release: PersistableChatMessage | undefined;
   source: "not-started" | "started";
   resumeSnapshot: ChatMessageMetadata["resumeSnapshot"];
   terminalChunk: StreamChunk | undefined;
@@ -1184,6 +1199,8 @@ type ProduceChatTurnOptions = {
   contextNotice: ContextNoticeStamp;
   /** See `ProcessTurnForPersistenceOptions.dismissesAwaited`. */
   dismissesAwaited: boolean;
+  /** See `ProcessServerChatStreamProps.answerSoFar`. */
+  answerSoFar: ChatTurnAnswerSoFar;
   /** Names who answered the finished turn on its message. */
   stampAnswer: (
     message: StreamChatFinishEvent["responseMessage"],
@@ -1209,6 +1226,7 @@ type ProduceChatTurnOptions = {
  */
 export const produceChatTurn = ({
   answerQuoteChecker,
+  answerSoFar,
   contextNotice,
   decisionPassageStamper,
   dismissesAwaited,
@@ -1252,6 +1270,7 @@ export const produceChatTurn = ({
     terminalChunk: undefined,
     finished: undefined,
     event: undefined,
+    release: undefined,
   };
   const persistenceVisibleStream = transformPersistenceVisibleStream({
     boundary: thirdPartyBoundary,
@@ -1286,6 +1305,7 @@ export const produceChatTurn = ({
         }),
     deadlineSignal,
     dismissesAwaited,
+    answerSoFar,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
@@ -1301,6 +1321,12 @@ export const produceChatTurn = ({
           turnOutcome: event.outcome,
         }),
       };
+    },
+    onRelease: (answer) => {
+      settlement.release = toPersistableChatMessage({
+        ...answer,
+        metadata: { ...answer.metadata, ...contextNotice.metadata() },
+      });
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -1327,7 +1353,12 @@ export const produceChatTurn = ({
     visibleOutput,
   });
   const finishSettlement = async () => {
-    const { event } = settlement;
+    const { event, release } = settlement;
+    if (release !== undefined) {
+      settlement.finished ??= run.settleHandOver(release);
+      await settlement.finished;
+      return;
+    }
     if (event === undefined) {
       settlement.finished ??= run.failProduction(settlement.source);
       await settlement.finished;
@@ -1378,6 +1409,7 @@ export const produceChatTurn = ({
     output: withChatTurnTiming({
       source: observedOutput,
       getPhase: () => timingPhase.status,
+      isReleased: () => settlement.release !== undefined,
       readTiming,
     }),
     durability: createChatTurnTimingDurability({
@@ -1390,6 +1422,7 @@ export const produceChatTurn = ({
               messageId: settlement.event.responseMessage.id,
             },
       getPhase: () => timingPhase.status,
+      isReleased: () => settlement.release !== undefined,
       finishSettlement,
       readTiming,
     }),
@@ -1402,18 +1435,21 @@ const thirdPartyBoundaryRefusalResponse = (
   new ChatTurnFailureResponse({
     cause: error,
     failureCode: error.failureCode,
-    payload: createThirdPartyBoundaryRefusalPayload(error.message),
+    payload: anonymizationRefusalPayload(error),
     status: error.status,
   });
 
 type ResolveAgentRunBoundaryErrorInput = {
   boundary: Pick<ChatThirdPartyBoundary, "type">;
   runMode: ChatRunMode | undefined;
+  /** Where an agent turn runs: the agent sandbox, or the member's computer. */
+  runsOn: "agent_sandbox" | "computer";
 };
 
 export const resolveAgentRunBoundaryError = ({
   boundary,
   runMode,
+  runsOn,
 }: ResolveAgentRunBoundaryErrorInput): AnonymizationRefusal<422> | null => {
   if (
     runMode !== CHAT_RUN_MODE.agent ||
@@ -1422,6 +1458,17 @@ export const resolveAgentRunBoundaryError = ({
     return null;
   }
 
+  if (runsOn === "computer") {
+    return refuseAnonymizedCrossing({
+      message:
+        "A turn on your computer cannot be sent anonymized: the agent there reads your matters as they are. Send it without anonymization, or run it on stella.",
+      offerRawRetry: true,
+      rawRetryCode: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      reason: "mode_policy",
+      site: "local_run",
+      status: 422,
+    });
+  }
   return refuseAnonymizedCrossing({
     message:
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
@@ -1752,6 +1799,8 @@ type RunChatAttemptsProps = {
   onModelDispatched: (model: ResolvedTanStackTextModel) => void;
   abortController: AbortController;
   abortSignal: AbortSignal;
+  /** The run's release to another task; only a local run reads it. */
+  handOverSignal: AbortSignal;
   devModelId: string | undefined;
   externalMcpToolSource: StellaMcpToolSource | undefined;
   fallbackModel: ResolvedTanStackTextModel | null;
@@ -1786,6 +1835,7 @@ type RunChatAttemptsProps = {
 const runChatAttempts = async function* ({
   abortController,
   abortSignal,
+  handOverSignal,
   devModelId,
   onAttemptStarted,
   onContextNotice,
@@ -1829,6 +1879,7 @@ const runChatAttempts = async function* ({
       // The run's own cut: a stop on any task, a lost owner or admission, a
       // failed production. A local run has no deadline (`ChatTurnRunBound`).
       abortSignal: abortController.signal,
+      handOverSignal,
     })) {
       if (reportsSessionNotResumed(chunk)) {
         onContextNotice(SESSION_NOT_RESUMED_NOTICE);
@@ -2403,6 +2454,21 @@ const createChatRuntimeMiddleware = ({
 type ProcessServerChatStreamProps = {
   reportSnapshotFailure?:
     ((error: SnapshotReconciliationError) => void) | undefined;
+  /**
+   * Store the answer so far of a turn whose source released it to another
+   * task (`CHAT_TURN_RELEASED_EVENT`) instead of settling it: the message as
+   * it stands, open calls open, with no outcome. Only a source that can be
+   * released needs it.
+   */
+  onRelease?:
+    ((answer: PersistableChatMessage) => Promise<void> | void) | undefined;
+  /**
+   * What the turn answered before this read: nothing, or the answer a read
+   * released to another task stored, which this read continues. A released
+   * answer is the turn's own, so a read that only ends it completes the turn
+   * instead of failing it as empty; a continuation's earlier answer is not.
+   */
+  answerSoFar?: ChatTurnAnswerSoFar | undefined;
   /** The run's own signal: aborted by the provider deadline below *and* by the
    *  response stream's cancel, which is how a client disconnect arrives. */
   abortSignal: AbortSignal;
@@ -2857,16 +2923,19 @@ type StreamSettlementOptions = Pick<
   | "getResponseMessage"
   | "mapMessageId"
   | "onFinish"
+  | "onRelease"
   | "processor"
 > & {
   runSignal: AbortSignal;
   deferredRunFinishedChunks: PublicStreamChunk[];
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
-  getUsage: () => TokenUsage | undefined;
+  /**
+   * What the run reported so far (usage, and for a turn on the member's
+   * computer its context and models), read when the turn settles.
+   */
+  runState: Readonly<PersistenceRunState>;
   getTurnSpend: () => ChatTurnSpend | undefined;
-  /** How full the context of a turn run on the member's computer was. */
-  getLocalRunContext: () => ChatLocalRunContext | undefined;
   announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
@@ -2882,17 +2951,35 @@ const createStreamSettlement = ({
   getResponseMessage,
   mapMessageId,
   onFinish,
+  onRelease,
   processor,
   deferredRunFinishedChunks,
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
-  getUsage,
+  runState,
   getTurnSpend,
-  getLocalRunContext,
   getProducedAnswer,
   announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
+  /**
+   * Store the answer so far of a read released to another task instead of
+   * an outcome: the adopter continues the message and settles the turn, so
+   * nothing here ends it or closes it for viewers. Finalizing only captures
+   * the message as it stands.
+   */
+  const release = async (): Promise<void> => {
+    terminal.state = "settled";
+    finalizeResponseProcessor(processor);
+    const store =
+      onRelease ?? panic("A released turn's processor has no release");
+    await store(
+      releasedAnswer(
+        mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+        getResponseMessage(),
+      ),
+    );
+  };
   const admissionCut = () =>
     chatTurnRunCutOf(abortSignal.reason) === "admission-lost";
   const admissionLost = () =>
@@ -2977,8 +3064,9 @@ const createStreamSettlement = ({
             producedAnswer: getProducedAnswer(),
             responseMessage,
             turnSpend: getTurnSpend(),
-            usage: getUsage(),
-            localRunContext: getLocalRunContext(),
+            usage: runState.usage,
+            localRunContext: runState.localRunContext,
+            localRunModel: runState.localRunModel,
           })
         : attachTerminalTurnOutcome({
             message: checkpoint,
@@ -3003,7 +3091,22 @@ const createStreamSettlement = ({
       timestamp: Temporal.Now.instant().epochMilliseconds,
     };
   };
+  /**
+   * End the stream for a lost admission, or a control cut that also cut it:
+   * the outcome stored, then what the run deferred and the refusal.
+   */
+  const endForAdmission =
+    async function* (): AsyncGenerator<PublicStreamChunk> {
+      const outcome = admissionCutByControl()
+        ? cutShortOutcome()
+        : admissionLossOutcome();
+      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
+      yield* deferredRunFinishedChunks.splice(0);
+      yield* admissionFailureChunks(outcome);
+    };
   return {
+    endForAdmission,
+    release,
     admissionLost,
     admissionCutByControl,
     cutShortOutcome,
@@ -3019,6 +3122,8 @@ type PersistenceRunState = {
   usage?: TokenUsage | undefined;
   /** The last run's context report is the one the next turn starts from. */
   localRunContext?: ChatLocalRunContext | undefined;
+  /** The last run's models: a later run of the turn may have been rerouted. */
+  localRunModel?: ChatLocalRunModel | undefined;
 };
 
 type ProcessPersistenceChunkOptions = {
@@ -3400,6 +3505,8 @@ const processPersistenceChunk = ({
     }
     runState.localRunContext =
       localRunContextFromChunk(chunk) ?? runState.localRunContext;
+    runState.localRunModel =
+      localRunModelFromChunk(chunk) ?? runState.localRunModel;
     // TanStack's agent loop can emit continuation events after a model
     // run finishes, notably `approval-requested` for a gated server tool.
     // The client already receives RUN_FINISHED only after the source is
@@ -3673,6 +3780,57 @@ const closingChunks = function* (
   yield* finished;
 };
 
+/**
+ * Whether the turn's answer is already produced before this read: the answer
+ * a released read stored is this turn's (`answerSoFar`), so a read that only
+ * ends it completes the turn.
+ */
+const releasedAnswerShown = (
+  answerSoFar: ChatTurnAnswerSoFar,
+  initialResponseMessage: ChatMessage | undefined,
+): boolean =>
+  answerSoFar === "released" &&
+  arrayOrEmpty(initialResponseMessage?.parts).length > 0;
+
+/**
+ * `source` without the marker a read released to another task ends with
+ * (`CHAT_TURN_RELEASED_EVENT`), and whether it ended so.
+ */
+const withoutReleaseMarker = (source: AsyncIterable<PublicStreamChunk>) => {
+  const seen = { released: false };
+  return {
+    released: () => seen.released,
+    source: (async function* (): AsyncIterable<PublicStreamChunk> {
+      for await (const chunk of source) {
+        if (isChatTurnReleasedChunk(chunk)) {
+          seen.released = true;
+          continue;
+        }
+        yield chunk;
+      }
+    })(),
+  };
+};
+
+/**
+ * The answer so far of a read released to another task: the processor's
+ * message as it stands under the turn's id, empty when nothing was shown yet.
+ */
+const releasedAnswer = (
+  id: SafeId<"chatMessage">,
+  current: ChatMessage | null,
+): PersistableChatMessage =>
+  current === null
+    ? toPersistableChatMessage({ id, parts: [], role: "assistant" })
+    : toPersistableChatMessage({
+        id,
+        parts: current.parts,
+        role: "assistant",
+        ...(current.metadata === undefined
+          ? {}
+          : { metadata: current.metadata }),
+      });
+
 export const processServerChatStream = async function* ({
   abortSignal,
   dismissesAwaited = false,
@@ -3685,6 +3843,8 @@ export const processServerChatStream = async function* ({
   initialMessages,
   mapMessageId,
   onFinish,
+  onRelease,
+  answerSoFar = "none",
   processor,
   source,
   turnBudget,
@@ -3705,7 +3865,8 @@ export const processServerChatStream = async function* ({
   );
   // Source deltas or new content in an explicit UI snapshot establish an
   // answer. Continuation history alone cannot make an empty run successful.
-  let producedAnswer = false;
+  let producedAnswer = releasedAnswerShown(answerSoFar, initialResponseMessage);
+  const releasable = withoutReleaseMarker(source);
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = approvedCallIdsOf(initialResponseMessage);
   // One accepted turn has exactly one terminal callback. Set before awaiting
@@ -3718,6 +3879,8 @@ export const processServerChatStream = async function* ({
     cutShortOutcome,
     admissionLossOutcome,
     admissionFailureChunks,
+    endForAdmission,
+    release,
     terminalize,
   } = createStreamSettlement({
     abortSignal,
@@ -3728,12 +3891,12 @@ export const processServerChatStream = async function* ({
     getResponseMessage,
     mapMessageId,
     onFinish,
+    onRelease,
     processor,
     deferredRunFinishedChunks,
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
-    getUsage: () => runState.usage,
-    getLocalRunContext: () => runState.localRunContext,
+    runState,
     getTurnSpend: () => turnBudget?.spend(),
     getProducedAnswer: () => producedAnswer,
     announceBeforeFailure: clientAssistantOwner.announceBeforeFailure,
@@ -3743,7 +3906,7 @@ export const processServerChatStream = async function* ({
     for await (const sourceRead of readSourceUntilCut({
       initialMessages,
       mapMessageId,
-      source,
+      source: releasable.source,
       signal: runSignal,
     })) {
       if (Result.isError(sourceRead)) {
@@ -3765,12 +3928,7 @@ export const processServerChatStream = async function* ({
       ) {
         runState.usage =
           tokenUsageFromTerminalChunk(sourceChunk) ?? runState.usage;
-        const outcome = admissionCutByControl()
-          ? cutShortOutcome()
-          : admissionLossOutcome();
-        await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-        yield* deferredRunFinishedChunks.splice(0);
-        yield* admissionFailureChunks(outcome);
+        yield* endForAdmission();
         return;
       }
       const processed = processPersistenceChunk({
@@ -3812,13 +3970,12 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
 
+    if (releasable.released()) {
+      await release();
+      return;
+    }
     if (admissionLost() || admissionCutByControl()) {
-      const outcome = admissionCutByControl()
-        ? cutShortOutcome()
-        : admissionLossOutcome();
-      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
-      yield* deferredRunFinishedChunks.splice(0);
-      yield* admissionFailureChunks(outcome);
+      yield* endForAdmission();
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
@@ -3952,6 +4109,7 @@ type FinishResponseMessageProps = {
   turnSpend: ChatTurnSpend | undefined;
   usage: TokenUsage | undefined;
   localRunContext: ChatLocalRunContext | undefined;
+  localRunModel: ChatLocalRunModel | undefined;
 };
 
 const createTerminalResponseMessage = ({
@@ -3962,6 +4120,7 @@ const createTerminalResponseMessage = ({
   turnSpend,
   usage,
   localRunContext,
+  localRunModel,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
   if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
@@ -3996,7 +4155,9 @@ const createTerminalResponseMessage = ({
   });
   return attachTerminalTurnOutcome({
     message:
-      turnSpend === undefined && localRunContext === undefined
+      turnSpend === undefined &&
+      localRunContext === undefined &&
+      localRunModel === undefined
         ? persistableMessage
         : {
             ...persistableMessage,
@@ -4004,6 +4165,7 @@ const createTerminalResponseMessage = ({
               ...persistableMessage.metadata,
               ...(turnSpend === undefined ? {} : { turnSpend }),
               ...(localRunContext === undefined ? {} : { localRunContext }),
+              ...(localRunModel === undefined ? {} : { localRunModel }),
             },
           },
     turnOutcome: outcome,
@@ -4020,6 +4182,20 @@ const localRunContextFromChunk = (
   const parsed = v.safeParse(
     chatLocalRunContextSchema,
     chunk.metadata?.[CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY],
+  );
+  return parsed.success ? parsed.output : undefined;
+};
+
+/**
+ * The models a turn run on the member's computer asked for and ran on, as the
+ * local run's own reader checked them (`local-run-chunks.ts`), checked again.
+ */
+const localRunModelFromChunk = (
+  chunk: Extract<PublicStreamChunk, { type: EventType.RUN_FINISHED }>,
+) => {
+  const parsed = v.safeParse(
+    chatLocalRunModelSchema,
+    chunk.metadata?.[CHAT_LOCAL_RUN_MODEL_METADATA_KEY],
   );
   return parsed.success ? parsed.output : undefined;
 };

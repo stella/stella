@@ -115,6 +115,7 @@ export const DictationSetting = ({
   const locale = useLocale();
   const layout = useKeyboardLayout();
   const [snapshot, setSnapshot] = useState<DictationSnapshot | null>(null);
+  const [removeFailed, setRemoveFailed] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -226,6 +227,16 @@ export const DictationSetting = ({
     }
   };
 
+  const removeModel = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke<DictationSnapshot>("dictation_remove_model"),
+    );
+    setRemoveFailed(Result.isError(result));
+    if (Result.isOk(result)) {
+      setSnapshot(result.value);
+    }
+  };
+
   return renderGroup(
     <div className="flex flex-col gap-3 px-4 py-3">
       <div className="flex items-center justify-between gap-4">
@@ -327,15 +338,24 @@ export const DictationSetting = ({
           }}
         />
       )}
-      {snapshot.enabled && snapshot.destination === "local" && (
-        <DictationModelRow
-          model={snapshot.model}
-          modelBytes={snapshot.modelBytes}
-          onDownload={() => {
-            void download();
-          }}
-        />
-      )}
+      {/* With stella AI the model is not needed, but a downloaded one can
+          still be removed. */}
+      {snapshot.enabled &&
+        (snapshot.destination === "local" ||
+          snapshot.model.status === "ready") && (
+          <DictationModelRow
+            busy={snapshot.phase !== "idle"}
+            model={snapshot.model}
+            modelBytes={snapshot.modelBytes}
+            onDownload={() => {
+              void download();
+            }}
+            onRemove={() => {
+              void removeModel();
+            }}
+            removeFailed={removeFailed}
+          />
+        )}
       {snapshot.shortcutTaken && (
         <p className="text-destructive text-sm">
           {t("shortcutTaken", { shortcut })}
@@ -453,19 +473,47 @@ const DictationLanguageRow = ({
 };
 
 const DictationModelRow = ({
+  busy,
   model,
   modelBytes,
   onDownload,
+  onRemove,
+  removeFailed,
 }: {
+  /** A dictation is running, so the model cannot be removed now. */
+  busy: boolean;
   model: DictationModel;
   modelBytes: number;
   onDownload: () => void;
+  onRemove: () => void;
+  removeFailed: boolean;
 }) => {
   const t = useTranslations("dictation");
+  const size = Math.round(modelBytes / BYTES_PER_MEGABYTE);
 
   if (model.status === "ready") {
     return (
-      <p className="text-muted-foreground text-xs">{t("modelAttribution")}</p>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-muted-foreground min-w-0 flex-1 text-sm">
+            {t("modelInstalled", { size })}
+          </p>
+          <Button
+            disabled={busy}
+            onClick={onRemove}
+            size="sm"
+            variant="outline"
+          >
+            {t("removeModel")}
+          </Button>
+        </div>
+        {removeFailed ? (
+          <p className="text-destructive text-sm" role="alert">
+            {t("removeFailed")}
+          </p>
+        ) : null}
+        <p className="text-muted-foreground text-xs">{t("modelAttribution")}</p>
+      </div>
     );
   }
   if (model.status === "downloading") {
@@ -483,9 +531,7 @@ const DictationModelRow = ({
         {model.status === "failed" ? t("downloadFailed") : t("modelNeeded")}
       </p>
       <Button onClick={onDownload} size="sm" variant="outline">
-        {t("download", {
-          size: Math.round(modelBytes / BYTES_PER_MEGABYTE),
-        })}
+        {t("download", { size })}
       </Button>
     </div>
   );

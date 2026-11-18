@@ -146,26 +146,52 @@ test("installed dependency version invalidates the key with identical source and
 test("concurrent acquirers build once and both receive the final snapshot", async () => {
   const root = fixture();
   const cacheDir = path.join(root, "cache");
+  const key = "a".repeat(64);
+  const building = deferred();
+  const publish = deferred();
+  const waiting = deferred();
+  const retry = deferred();
   let builds = 0;
   const acquire = async () =>
     acquireCachedSnapshot({
       cacheDir,
-      key: "a".repeat(64),
+      key,
       build: async (filePath) => {
         builds += 1;
-        await Bun.sleep(100);
+        building.resolve();
+        await publish.promise;
         writeFileSync(filePath, "valid");
       },
       validate: async (filePath) => readFileSync(filePath, "utf-8") === "valid",
+      waitForLock: async () => {
+        waiting.resolve();
+        await retry.promise;
+      },
     });
-  const [first, second] = await Promise.all([acquire(), acquire()]);
-  expect(builds).toBe(1);
-  expect(first.status).toBe("hit");
-  expect(second.status).toBe("hit");
-  if (first.status === "hit" && second.status === "hit") {
-    expect(first.snapshot.path).toBe(second.snapshot.path);
-    first.snapshot.release();
-    second.snapshot.release();
+  const owner = acquire();
+  const contender = acquire();
+  try {
+    await Promise.all([building.promise, waiting.promise]);
+    expect(builds).toBe(1);
+    expect(existsSync(path.join(cacheDir, `${key}.lock`, "owner"))).toBe(true);
+    expect(existsSync(path.join(cacheDir, `${key}.tar`))).toBe(false);
+    publish.resolve();
+    const first = await owner;
+    retry.resolve();
+    const second = await contender;
+    expect(builds).toBe(1);
+    expect(first.status).toBe("hit");
+    expect(second.status).toBe("hit");
+    if (first.status === "hit" && second.status === "hit") {
+      expect(first.snapshot.path).toBe(second.snapshot.path);
+      expect(readFileSync(first.snapshot.path, "utf-8")).toBe("valid");
+      first.snapshot.release();
+      second.snapshot.release();
+    }
+  } finally {
+    publish.resolve();
+    retry.resolve();
+    await Promise.allSettled([owner, contender]);
   }
 });
 
@@ -385,6 +411,10 @@ test("competing stale-lock takers still build once", async () => {
     path.join(lockDir, "owner"),
     JSON.stringify({ pid: 99_999_999, started: 0, token: "dead" }),
   );
+  const building = deferred();
+  const publish = deferred();
+  const waiting = deferred();
+  const retry = deferred();
   let builds = 0;
   const acquire = async () =>
     acquireCachedSnapshot({
@@ -392,18 +422,43 @@ test("competing stale-lock takers still build once", async () => {
       key,
       build: async (filePath) => {
         builds += 1;
-        await Bun.sleep(100);
+        building.resolve();
+        await publish.promise;
         writeFileSync(filePath, "valid");
       },
-      validate: async () => true,
+      validate: async (filePath) => readFileSync(filePath, "utf-8") === "valid",
+      waitForLock: async () => {
+        waiting.resolve();
+        await retry.promise;
+      },
     });
-  const results = await Promise.all([acquire(), acquire()]);
-  expect(builds).toBe(1);
-  for (const result of results) {
-    expect(result.status).toBe("hit");
-    if (result.status === "hit") {
-      result.snapshot.release();
+  const owner = acquire();
+  const contender = acquire();
+  try {
+    await Promise.all([building.promise, waiting.promise]);
+    expect(builds).toBe(1);
+    expect(readFileSync(path.join(lockDir, "owner"), "utf-8")).not.toContain(
+      '"token":"dead"',
+    );
+    expect(existsSync(`${lockDir}.takeover`)).toBe(false);
+    expect(existsSync(path.join(cacheDir, `${key}.tar`))).toBe(false);
+    publish.resolve();
+    const first = await owner;
+    retry.resolve();
+    const second = await contender;
+    expect(builds).toBe(1);
+    expect(first.status).toBe("hit");
+    expect(second.status).toBe("hit");
+    if (first.status === "hit" && second.status === "hit") {
+      expect(first.snapshot.path).toBe(second.snapshot.path);
+      expect(readFileSync(first.snapshot.path, "utf-8")).toBe("valid");
+      first.snapshot.release();
+      second.snapshot.release();
     }
+  } finally {
+    publish.resolve();
+    retry.resolve();
+    await Promise.allSettled([owner, contender]);
   }
 });
 

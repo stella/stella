@@ -189,8 +189,10 @@ test("the typed read and proof boundaries return the current revision", async ()
     const transaction = asTestRaw<Transaction>(tx);
     return [
       await readCorpusIndexProjectionRevisionTx(transaction, TARGET),
-      await lockCorpusIndexProjectionRevisionTx(transaction, TARGET),
-      await lockCorpusIndexProjectionPromotionTx(transaction, TARGET),
+      (await lockCorpusIndexProjectionRevisionTx(transaction, TARGET)).unwrap(),
+      (
+        await lockCorpusIndexProjectionPromotionTx(transaction, TARGET)
+      ).unwrap(),
     ];
   });
   expect(read).toBe(await revision());

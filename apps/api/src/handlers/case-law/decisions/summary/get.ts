@@ -87,6 +87,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "analysis",
   "extractionWarnings",
   "parserVersion",
+  "reviewExtractionVersion",
   "sourceRaw",
   "sourceRawS3Key",
   "sourceRawContentType",
@@ -129,6 +130,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "projectionEpoch",
   "createdAt",
   "updatedAt",
+  "contentChangedAt",
 ] as const satisfies readonly (keyof PublishedDecisionRow)[];
 type MissingSummarySourceColumn = UnprojectedColumns<
   PublishedDecisionRow,

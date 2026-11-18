@@ -1974,6 +1974,9 @@ describe("processDecision — corpus storage off", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2013,7 +2016,7 @@ describe("processDecision — corpus storage off", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/1/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",
@@ -2085,6 +2088,9 @@ describe("processDecision — the decision's judges", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2233,6 +2239,11 @@ describe("processDecision — fields on an existing row", () => {
                           ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                           : [],
                       ),
+                    // The generation registry, read in generation order: no
+                    // generation is registered, so nothing is projected.
+                    orderBy: () => ({
+                      limit: async () => await Promise.resolve([]),
+                    }),
                   }),
                 },
         }),
@@ -2272,7 +2283,7 @@ describe("processDecision — fields on an existing row", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/1/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           decisionDate,
@@ -2391,6 +2402,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2416,7 +2430,7 @@ describe("processDecision — source raw upload failure", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/2/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",
@@ -2482,6 +2496,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2507,7 +2524,7 @@ describe("processDecision — source raw upload failure", () => {
       await processDecision({
         input: plainTextIngestionResult({
           caseNumber: "X/3/2026",
-          court: "Test Court",
+          court: "Najvyšší súd Slovenskej republiky",
           country: "SVK",
           language: "sk",
           fulltext: "Rozhodnutie o veci samej.",

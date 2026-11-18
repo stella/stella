@@ -62,6 +62,7 @@ const PARSED_GENERATION_COLUMNS = {
   documentAst: "parse-input-or-output",
   analysis: "bookkeeping",
   parserVersion: "parse-input-or-output",
+  reviewExtractionVersion: "bookkeeping",
   sourceRaw: "parse-input-or-output",
   sourceRawS3Key: "parse-input-or-output",
   sourceRawContentType: "parse-input-or-output",
@@ -114,6 +115,7 @@ const PARSED_GENERATION_COLUMNS = {
   projectionEpoch: "bookkeeping",
   createdAt: "bookkeeping",
   updatedAt: "bookkeeping",
+  contentChangedAt: "bookkeeping",
 } as const satisfies Record<
   keyof typeof caseLawDecisions.$inferSelect,
   ParsedGenerationColumnDisposition

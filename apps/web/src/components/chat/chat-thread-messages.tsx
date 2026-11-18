@@ -15,6 +15,7 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
+import { isFixedInDesktopSettings } from "@stll/api-contract/ai-errors";
 import {
   isChatPastedTextPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
@@ -31,6 +32,7 @@ import {
   PROCESS_SUMMARY_KINDS,
 } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -85,6 +87,7 @@ import {
   ChatMessageActionsScope,
 } from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
+import { ChatRanOnModel } from "@/components/chat/chat-ran-on-model";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
   ChatRichMessagePart,
@@ -135,7 +138,6 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
-  canUndoLocalFilesOf,
   finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
@@ -191,7 +193,6 @@ import {
 import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
-import type { NewestLocalTurn } from "@/features/chat/queries";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -202,6 +203,7 @@ import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
+import { openDesktopUrl } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { aiErrorKindFromMessage } from "@/lib/errors/ai-failure";
@@ -394,37 +396,6 @@ const ActiveTurnStatus = memo(
   },
 );
 
-/** What the thread knows about undoing its local turns' file changes. */
-type LocalFilesUndoFacts = {
-  generationActive: boolean;
-  messages: ChatUIMessage[];
-  newestLocalTurn: NewestLocalTurn | null | undefined;
-};
-
-/**
- * The undo props of `message`'s actions: the turn it may undo (only the
- * newest turn's answer), whether a new undo may be asked now, and whether
- * its turn was undone already, as the server marked the answer.
- */
-const localFilesUndoPropsFor = (
-  { generationActive, messages, newestLocalTurn }: LocalFilesUndoFacts,
-  { id: messageId, metadata }: ChatUIMessage,
-) => {
-  const turn =
-    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
-  return {
-    localFilesUndoTurnId: turn?.id ?? null,
-    localFilesUndoOffered:
-      turn !== null &&
-      canUndoLocalFilesOf({
-        isGenerating: generationActive,
-        messageId,
-        messages,
-      }),
-    localFilesUndone: metadata?.localFilesUndone !== undefined,
-  };
-};
-
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -456,7 +427,6 @@ export const ChatThreadMessages = ({
   stickyUserMessages = false,
   computerWait = null,
   turnSentAt,
-  newestLocalTurn,
   queue,
   streamdownComponents,
   threadRef,
@@ -474,7 +444,6 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
-  const undo = { generationActive, messages, newestLocalTurn };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -531,7 +500,7 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
-            {...localFilesUndoPropsFor(undo, message)}
+            localFilesUndone={message.metadata?.localFilesUndone !== undefined}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
@@ -605,6 +574,7 @@ export const ChatThreadMessages = ({
                                 timing={message.metadata?.turnTiming}
                               />
                             )}
+                            <ChatRanOnModel metadata={message.metadata} />
                             <AssistantAnswerMetadata
                               message={message}
                               workspaceId={workspaceId}
@@ -1441,6 +1411,11 @@ export const ChatErrorMessage = ({
   // The turn was stored and failed because none of the member's computers
   // was connected: opening stella desktop is the fix, then a resend.
   const noComputerConnected = failureKind === "local_runner_no_computer";
+  // The agent on the member's computer needs signing in or installing, which
+  // happens in stella desktop's Settings: the card says where, and opens it
+  // when stella desktop is on this computer.
+  const desktopSettingsFix =
+    failureKind !== undefined && isFixedInDesktopSettings(failureKind);
   // The resend an "Open stella desktop" click holds until a computer
   // connects belongs to this refusal: Resend, another refusal in its place,
   // or the card leaving the page (a new send, another thread) drops it.
@@ -1488,6 +1463,9 @@ export const ChatErrorMessage = ({
             <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
           )}
         </p>
+        {desktopSettingsFix && (
+          <p className="text-sm">{t("chat.localRun.desktopSettingsSteps")}</p>
+        )}
         <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
@@ -1510,6 +1488,17 @@ export const ChatErrorMessage = ({
               disabled={isGenerating}
               threadRef={threadRef}
             />
+          )}
+          {desktopSettingsFix && (
+            <Button
+              onClick={() => {
+                openDesktopUrl(desktopAgentSettingsUrl());
+              }}
+              size="sm"
+              variant="destructive-outline"
+            >
+              {t("settings.account.desktopOpenApp")}
+            </Button>
           )}
           {onResend && noComputerConnected && (
             <OpenDesktopAndResendButton
@@ -1781,11 +1770,6 @@ type ChatThreadMessagesProps = {
   /** When this page sent the running turn's message (`performance.now()`);
    *  its live status counts from it. `null` for a turn the page joined. */
   turnSentAt?: number | null | undefined;
-  /**
-   * The newest turn of a chat that runs on the member's computer: the
-   * message that answered it offers to undo its file changes.
-   */
-  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**

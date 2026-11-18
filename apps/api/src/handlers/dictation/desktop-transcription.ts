@@ -4,9 +4,12 @@ import {
   defaultTranscriptionModelId,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
+  transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
+  DESKTOP_DICTATION_MODELS_LABELED_QUERY,
+  DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
   type DesktopDictationModels,
   desktopDictationModelsSchema,
   desktopDictationTranscriptSchema,
@@ -25,6 +28,12 @@ import {
   type DictationDependencies,
   executeDictation,
 } from "@/api/handlers/dictation/transcribe";
+import {
+  readTranscriptionDeployment,
+  type TranscriptionDeployment,
+  transcriptionRetainsData,
+  transcriptionServed,
+} from "@/api/handlers/dictation/transcription-deployment";
 import {
   loadOrgSettingsForAuth,
   type OrgSettingsForAuth,
@@ -53,18 +62,40 @@ import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission"
 const REQUIRED_FEATURE_ID =
   "desktop-dictation-cloud" satisfies DesktopFeatureId;
 
+// A model whose provider keeps the audio is offered to members with this
+// decision only. The API lists and refuses; the desktop only refreshes its
+// model list when the decision changes.
+const RETAINING_MODELS_FEATURE_ID =
+  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
+
 /**
- * The transcription models stella AI offers this organization: only those
- * available in its region, and none when its own AI provider does not
- * transcribe. The default is the model a request without one gets.
+ * The transcription models stella AI offers this organization, none when
+ * its own AI provider does not transcribe. A desktop that labels models
+ * also gets the models its region does not serve, marked as leaving it,
+ * after the regional ones; an older desktop reads only the regional ones,
+ * without labels. The default is the model a request without one gets and
+ * never leaves the region.
  */
-export const listDictationModels = ({
-  orgAIConfig,
-  managedAIResidency,
-}: Pick<
-  OrgSettingsForAuth,
-  "orgAIConfig" | "managedAIResidency"
->): DesktopDictationModels => {
+export const listDictationModels = (
+  {
+    orgAIConfig,
+    managedAIResidency,
+  }: Pick<OrgSettingsForAuth, "orgAIConfig" | "managedAIResidency">,
+  {
+    labeled = false,
+    retention = false,
+    retainingModels = false,
+    deployment = readTranscriptionDeployment(),
+  }: {
+    labeled?: boolean;
+    /** The desktop warns about `retainsData`, so models whose provider
+     *  keeps the audio may be listed, marked. */
+    retention?: boolean;
+    /** The member may use a model whose provider keeps the audio. */
+    retainingModels?: boolean;
+    deployment?: TranscriptionDeployment;
+  } = {},
+): DesktopDictationModels => {
   const none = (unavailable: "region" | "provider") => ({
     models: [],
     defaultModelId: null,
@@ -81,23 +112,57 @@ export const listDictationModels = ({
   ) {
     return none("provider");
   }
-  const models = Object.keys(TRANSCRIPTION_MODELS)
+  const served = transcriptionServed(deployment, orgAIConfig, {
+    retainingData: labeled && retention && retainingModels,
+  });
+  const offered = Object.keys(TRANSCRIPTION_MODELS)
     .filter(isTranscriptionModelId)
-    .filter(
-      (modelId) =>
-        TRANSCRIPTION_MODELS[modelId].residency[managedAIResidency].status ===
-        "available",
-    )
-    .map((modelId) => ({
-      id: modelId,
-      displayName: TRANSCRIPTION_MODELS[modelId].displayName,
-    }));
+    .flatMap((modelId) => {
+      const endpoint = transcriptionEndpointFor(modelId, managedAIResidency, {
+        outsideRegion: labeled,
+        served,
+      });
+      return endpoint === undefined
+        ? []
+        : [{ modelId, outsideRegion: endpoint !== managedAIResidency }];
+    });
+  // The regional models first, then those outside the region.
+  const models = [
+    ...offered.filter(({ outsideRegion }) => !outsideRegion),
+    ...offered.filter(({ outsideRegion }) => outsideRegion),
+  ].map(({ modelId, outsideRegion }) => {
+    const { displayName, provider } = TRANSCRIPTION_MODELS[modelId];
+    if (!labeled) {
+      return { id: modelId, displayName };
+    }
+    return retention
+      ? {
+          id: modelId,
+          displayName,
+          provider,
+          outsideRegion,
+          retainsData: transcriptionRetainsData(deployment, modelId),
+        }
+      : { id: modelId, displayName, provider, outsideRegion };
+  });
   if (models.length === 0) {
-    return none("region");
+    // Nothing this deployment can transcribe with, or nothing in the region.
+    const servedAnywhere = Object.keys(TRANSCRIPTION_MODELS)
+      .filter(isTranscriptionModelId)
+      .some((modelId) =>
+        (["eu", "us", "global"] as const).some((endpoint) =>
+          served(modelId, endpoint),
+        ),
+      );
+    return none(servedAnywhere ? "region" : "provider");
   }
   return {
     models,
-    defaultModelId: defaultTranscriptionModelId(managedAIResidency) ?? null,
+    defaultModelId:
+      defaultTranscriptionModelId(
+        managedAIResidency,
+        transcriptionServed(deployment, orgAIConfig, { asDefault: true }),
+      ) ?? null,
     unavailable: null,
   };
 };
@@ -105,6 +170,7 @@ export const listDictationModels = ({
 type DesktopDictationOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadSettings?: typeof loadOrgSettingsForAuth;
+  readDeployment?: typeof readTranscriptionDeployment;
 };
 
 /** The linked account's email, for the restricted-account check a session
@@ -155,7 +221,16 @@ const authorizeDictation = async (
           }),
       ),
     );
-    return Result.ok({ account, safeDb, settings });
+    return Result.ok({
+      account,
+      safeDb,
+      settings,
+      retainingModels: isFeatureEnabled(
+        account.featureAccessSnapshot,
+        RETAINING_MODELS_FEATURE_ID,
+        account,
+      ),
+    });
   });
 
 export const createDesktopDictationModelsEndpoint = (
@@ -172,7 +247,7 @@ export const createDesktopDictationModelsEndpoint = (
       ),
     },
     async function* ({ request }) {
-      const { settings } = yield* Result.await(
+      const { settings, retainingModels } = yield* Result.await(
         authorizeDictation(request, options),
       );
       const configurationError = orgAIConfigStatusError(
@@ -181,7 +256,17 @@ export const createDesktopDictationModelsEndpoint = (
       if (configurationError !== null) {
         return Result.err(configurationError);
       }
-      return Result.ok(listDictationModels(settings));
+      const { searchParams } = new URL(request.url);
+      return Result.ok(
+        listDictationModels(settings, {
+          deployment: (options.readDeployment ?? readTranscriptionDeployment)(),
+          labeled:
+            searchParams.get(DESKTOP_DICTATION_MODELS_LABELED_QUERY) === "1",
+          retention:
+            searchParams.get(DESKTOP_DICTATION_MODELS_RETENTION_QUERY) === "1",
+          retainingModels,
+        }),
+      );
     },
   );
 
@@ -243,14 +328,18 @@ export const createDesktopDictationTranscribeEndpoint = ({
       },
       async function* (ctx) {
         const { request, body } = ctx;
-        const { account, safeDb, settings } = yield* Result.await(
-          authorizeDictation(request, options),
-        );
+        const { account, safeDb, settings, retainingModels } =
+          yield* Result.await(authorizeDictation(request, options));
         yield* Result.await(admitStandardAccount(account, readAccountEmail));
         const user = { id: account.userId };
         const session = { activeOrganizationId: account.organizationId };
         const caller: DictationCaller = {
           ...settings,
+          // The desktop lists models outside the region only labeled as such.
+          allowOutsideRegion: true,
+          // The desktop lists a model whose provider keeps the audio only
+          // with its warning, and only to a member granted such models.
+          allowRetainingModels: retainingModels,
           user,
           session,
           safeDb,

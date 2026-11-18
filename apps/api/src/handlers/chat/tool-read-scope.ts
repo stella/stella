@@ -23,7 +23,7 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
@@ -98,14 +98,14 @@ export const recordToolReadScope = ({
   recorder: ToolReadScopeRecorder;
   tools: ChatToolMap;
 }): ChatToolMap => {
-  const wrapped: ChatToolMap = {};
+  const wrapped = new Map<string, ChatTool>();
   for (const [name, current] of Object.entries(tools)) {
     if (current === undefined) {
       continue;
     }
     const execute = current.execute;
     if (execute === undefined) {
-      wrapped[name] = current;
+      wrapped.set(name, current);
       continue;
     }
     const committedBeforeScope =
@@ -130,7 +130,7 @@ export const recordToolReadScope = ({
       },
     };
     copyChatToolPolicy(current, recordingTool);
-    wrapped[name] = recordingTool;
+    wrapped.set(name, recordingTool);
   }
-  return wrapped;
+  return Object.fromEntries(wrapped);
 };

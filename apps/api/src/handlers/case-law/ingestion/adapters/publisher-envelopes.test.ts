@@ -104,9 +104,11 @@ for (const publisher of ["hu-bhgy", "pl-sn"] as const) {
           }),
         );
         if (size === "exact") {
+          // hu-bhgy states its listing count, which the census records.
           expect(await listSlice(publisher)).toEqual({
             items: [],
             totalPages: 0,
+            ...(publisher === "hu-bhgy" ? { publisherCount: 0 } : {}),
           });
           expect(body.wasCancelled()).toBe(false);
         } else {

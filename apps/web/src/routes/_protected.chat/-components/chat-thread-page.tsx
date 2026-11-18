@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -13,15 +13,10 @@ import { useTranslations } from "use-intl";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import {
-  CHAT_RUN_TARGET_KIND,
-  type ChatRunTarget,
-} from "@stll/api-contract/chat-run-target";
-import {
   CHAT_MEMBER_SEND_ACTION,
   type ChatMemberSendAction,
   type ChatThreadSendState,
   type ChatTurnSteering,
-  chatTurnSteering,
   isChatQueueOffered,
 } from "@stll/api-contract/chat-send-intent";
 import { Button, buttonVariants } from "@stll/ui/button";
@@ -82,7 +77,6 @@ import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thre
 import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
-  localRunnersOptions,
 } from "@/features/chat/queries";
 import {
   resolveThreadActiveSkill,
@@ -235,11 +229,6 @@ export const ChatThreadPage = ({
     queryKey: threadQueryOptions.queryKey,
   });
   const { getRunTarget } = composerModels;
-  const turnSteering = useChatTurnSteering(
-    activeOrganizationId,
-    composerModels.runTarget,
-  );
-  const getTurnSteering = useLatestCallback(() => turnSteering);
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
@@ -312,6 +301,7 @@ export const ChatThreadPage = ({
     reconnecting,
     turnAbandoned,
     computerWait,
+    turnSteering,
     turnSentAt,
     turnsStarted,
     alwaysApprovedTools,
@@ -349,7 +339,6 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
-    getTurnSteering,
     initialOlderCursor: data.olderCursor,
     playbookPane: "auto-open",
     onError: (nextError) => {
@@ -526,7 +515,7 @@ export const ChatThreadPage = ({
   // the block at any height. A ref callback, not a mount effect: it follows
   // whichever block element is mounted, so a remounted block can never
   // leave the padding measured from a stale one.
-  const observeComposerBlock = useCallback((block: HTMLDivElement | null) => {
+  const observeComposerBlock = (block: HTMLDivElement | null) => {
     const host = block?.closest<HTMLElement>(`[${COMPOSER_HOST_ATTRIBUTE}]`);
     if (!block || !host) {
       return undefined;
@@ -543,7 +532,7 @@ export const ChatThreadPage = ({
     return () => {
       observer.disconnect();
     };
-  }, []);
+  };
 
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.
@@ -834,7 +823,6 @@ export const ChatThreadPage = ({
                           stickyUserMessages
                           streamdownComponents={streamdownComponents}
                           computerWait={computerWait}
-                          newestLocalTurn={data.newestLocalTurn}
                           threadRef={threadRef}
                           turnSentAt={turnSentAt}
                           userMessageEdit={userMessageEdit}
@@ -1026,27 +1014,6 @@ export const ChatThreadPage = ({
         />
       </ChatMattersContext>
     </RenderStormRegion>
-  );
-};
-
-/**
- * Whether the thread's turns take a message mid-turn, from what the member's
- * computers report; read only for a turn bound for one, from the list the
- * Run on menu reads too.
- */
-const useChatTurnSteering = (
-  activeOrganizationId: string,
-  runTarget: ChatRunTarget,
-): ChatTurnSteering => {
-  const localRunnersView = queryView(
-    useQuery({
-      ...localRunnersOptions(activeOrganizationId),
-      enabled: runTarget.kind === CHAT_RUN_TARGET_KIND.local,
-    }),
-  );
-  return chatTurnSteering(
-    runTarget,
-    localRunnersView.type === "items" ? localRunnersView.items : undefined,
   );
 };
 

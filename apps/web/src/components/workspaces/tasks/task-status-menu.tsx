@@ -14,6 +14,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -33,6 +34,7 @@ import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
  * failure is reported by the mutation's own `onError`.
  */
 const useTaskStatusChange = (workspaceId: string) => {
+  const { activeOrganizationId } = useAuthenticatedUser();
   const t = useTranslations();
   const queryClient = useQueryClient();
   // The write declares its capability and the resources it changes, so every
@@ -80,7 +82,11 @@ const useTaskStatusChange = (workspaceId: string) => {
   });
 
   return (taskId: string, status: TaskStatus, shown: TaskStatus) => {
-    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    const { queryKey } = taskDetailOptions({
+      workspaceId,
+      taskId,
+      organizationId: activeOrganizationId,
+    });
     const read = () => queryClient.getQueryData(queryKey)?.status;
     const stored = read();
     const previous = isTaskStatus(stored) ? stored : shown;

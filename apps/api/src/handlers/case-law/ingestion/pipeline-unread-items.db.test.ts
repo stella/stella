@@ -268,11 +268,14 @@ describe("a listed item whose read stays unavailable", () => {
 
     expect((await sourceState(sourceId)).cursor).toBe("page-2");
     const after = (await decisionRow(sourceId, "held-1")) ?? panic("stored");
+    // Recording the outcome writes metadata, so the content stamp moves.
+    expect(after.contentChangedAt).not.toEqual(before.contentChangedAt);
     const {
       metadata: metadataAfter,
       sourceObservedAt: _observedAfter,
       sourceObservationOrder: _orderAfter,
       sourceObservationHash: _hashAfter,
+      contentChangedAt: _stampAfter,
       ...detailAfter
     } = after;
     const {
@@ -280,6 +283,7 @@ describe("a listed item whose read stays unavailable", () => {
       sourceObservedAt: _observedBefore,
       sourceObservationOrder: _orderBefore,
       sourceObservationHash: _hashBefore,
+      contentChangedAt: _stampBefore,
       ...detailBefore
     } = before;
     expect(detailAfter).toEqual(detailBefore);
@@ -318,11 +322,14 @@ describe("a listed item whose read stays unavailable", () => {
 
     const after = (await decisionRow(sourceId, "back-1")) ?? panic("stored");
     expect(after.sourceHash).toBe(marked.sourceHash);
+    // Removing the outcome writes metadata, so the content stamp moves.
+    expect(after.contentChangedAt).not.toEqual(marked.contentChangedAt);
     const {
       metadata: metadataAfter,
       sourceObservedAt: _observedAfter,
       sourceObservationOrder: _orderAfter,
       sourceObservationHash: _hashAfter,
+      contentChangedAt: _stampAfter,
       ...restAfter
     } = after;
     const {
@@ -330,6 +337,7 @@ describe("a listed item whose read stays unavailable", () => {
       sourceObservedAt: _observedMarked,
       sourceObservationOrder: _orderMarked,
       sourceObservationHash: _hashMarked,
+      contentChangedAt: _stampMarked,
       ...restMarked
     } = marked;
     expect(restAfter).toEqual(restMarked);

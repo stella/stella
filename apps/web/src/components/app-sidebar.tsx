@@ -3,8 +3,6 @@ import {
   Fragment,
   lazy,
   Suspense,
-  useCallback,
-  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -309,11 +307,11 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     SEARCH_DIALOG_STATES.idle,
   );
   useFindModalBoundary(searchState === SEARCH_DIALOG_STATES.open);
-  const setSearchOpen = useCallback((open: boolean) => {
+  const setSearchOpen = (open: boolean) => {
     setSearchState(
       open ? SEARCH_DIALOG_STATES.open : SEARCH_DIALOG_STATES.closed,
     );
-  }, []);
+  };
   const guideDrawerAttentionSequence = useGuideDrawerStore(
     (store) => store.attentionSequence,
   );
@@ -457,7 +455,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     handleCreateWorkspace();
   });
 
-  const pinned = useMemo(() => {
+  const pinned = (() => {
     if (!workspaces) {
       return [];
     }
@@ -467,7 +465,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     return pinnedOrder
       .map((id) => wsMap.get(id))
       .filter((ws) => ws !== undefined);
-  }, [workspaces, pinnedOrder]);
+  })();
 
   const recents = workspaces
     ? selectRecentWorkspaces({
@@ -1260,15 +1258,12 @@ export const MatterItem = ({
   });
   const activityQueryHash = hashKey(activityQueryKey);
   const activityIsInvalidated = useSyncExternalStore(
-    useCallback(
-      (onStoreChange: () => void) =>
-        queryClient.getQueryCache().subscribe((event) => {
-          if (event.query.queryHash === activityQueryHash) {
-            onStoreChange();
-          }
-        }),
-      [activityQueryHash, queryClient],
-    ),
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event.query.queryHash === activityQueryHash) {
+          onStoreChange();
+        }
+      }),
     () => queryClient.getQueryState(activityQueryKey)?.isInvalidated ?? false,
     () => false,
   );

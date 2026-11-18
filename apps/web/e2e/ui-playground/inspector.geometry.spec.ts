@@ -15,7 +15,7 @@
  * fix that does not hold.
  */
 
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import {
   expect,
@@ -154,3 +154,55 @@ test("a table too wide for the column scrolls inside its own box", async ({
   expect(tableScrollers.overflowX).toBe("auto");
   expect(tableScrollers.scrolls).toBe(true);
 });
+
+test("an expanded reader disclosure keeps its hanging permalink reachable", async ({
+  page,
+}) => {
+  await page.goto("/dev?visual=inspector-pane", { waitUntil: "commit" });
+  for (const width of PANE_WIDTHS) {
+    const section = page.locator(`${SECTION}[data-pane-width="${width}"]`);
+    const disclosure = section.locator(".reader-apparatus");
+    const trigger = disclosure.locator('[data-slot="collapsible-trigger"]');
+    const panel = disclosure.locator('[data-slot="collapsible-panel"]');
+    const paragraph = disclosure.locator('[data-anchor="p-apparatus"]');
+    const permalink = paragraph.locator('a[href="#p-apparatus"]');
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await waitForStableGeometry(page, panel);
+    await paragraph.hover();
+    await expect(permalink).toHaveCSS("opacity", "1");
+    const outside = await permalink.evaluate((element) => {
+      const ownerPanel = element.closest('[data-slot="collapsible-panel"]');
+      const linkBox = element.getBoundingClientRect();
+      const panelBox = ownerPanel?.getBoundingClientRect();
+      return (
+        panelBox !== undefined &&
+        (linkBox.right <= panelBox.left || linkBox.left >= panelBox.right)
+      );
+    });
+    expect(outside).toBe(true);
+    await expect.poll(async () => await permalinkHit(permalink)).toBe(true);
+    // A normal pointer action must receive events at the control's own box.
+    await permalink.click({ trial: true });
+    await trigger.focus();
+    await page.keyboard.press("Tab");
+    await expect(permalink).toBeFocused();
+    await expect.poll(async () => await permalinkHit(permalink)).toBe(true);
+    await trigger.click();
+    await expect(panel).toHaveAttribute("hidden", "until-found");
+    await expect.poll(async () => await permalinkHit(permalink)).toBe(false);
+  }
+});
+
+const permalinkHit = async (link: Locator): Promise<boolean> =>
+  await link.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) {
+      return false;
+    }
+    const target = element.ownerDocument.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    return target === element || (target !== null && element.contains(target));
+  });

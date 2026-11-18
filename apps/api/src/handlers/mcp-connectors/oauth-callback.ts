@@ -70,8 +70,11 @@ const config = {
   query: requestQuery,
 } satisfies HandlerConfig;
 
+// A failure names the connector once the state has identified it, so the
+// page can start that connector's sign-in again.
 type CallbackRedirectInput =
-  { status: "connected"; slug: string } | { status: "error"; reason: string };
+  | { status: "connected"; slug: string }
+  | { status: "error"; reason: string; slug?: string };
 
 // The popup lands on a SPA route that does the postMessage + close.
 // Returning HTML with an inline <script> from api.stll.app is blocked
@@ -85,10 +88,11 @@ export const buildCallbackRedirectUrl = (
 ): string => {
   const url = new URL("/mcp/oauth-callback", frontendUrl);
   url.searchParams.set("status", input.status);
-  if (input.status === "connected") {
-    url.searchParams.set("slug", input.slug);
-  } else {
+  if (input.status === "error") {
     url.searchParams.set("reason", input.reason);
+  }
+  if (input.slug !== undefined) {
+    url.searchParams.set("slug", input.slug);
   }
   return url.toString();
 };
@@ -99,26 +103,35 @@ const redirect = (input: CallbackRedirectInput) =>
     headers: { Location: buildCallbackRedirectUrl(env.FRONTEND_URL, input) },
   });
 
+const errorRedirect = (reason: string, slug: string | undefined) =>
+  redirect({
+    status: "error",
+    reason,
+    ...(slug === undefined ? {} : { slug }),
+  });
+
 type OAuthCallbackFailureRedirectOptions = {
   error: unknown;
   organizationId: SafeId<"organization">;
   request: Request;
+  slug: string | undefined;
 };
 
 const redirectForOAuthCallbackFailure = ({
   error,
   organizationId,
   request,
+  slug,
 }: OAuthCallbackFailureRedirectOptions) =>
-  redirect({
-    status: "error",
-    reason: oauthCallbackFailureReason(error, {
+  errorRedirect(
+    oauthCallbackFailureReason(error, {
       scope: requireRequestExceptionScope(request),
       operation: "mcp_oauth_callback",
       organizationId,
       request,
     }),
-  });
+    slug,
+  );
 
 const logAuthorizationResponseBindingObservation = ({
   binding,
@@ -528,12 +541,16 @@ export const createMcpOAuthCallbackHandler = (
         // an Err closes this generator via `.return()`, which skips `catch`
         // below (only `finally` would run). Await and branch explicitly instead
         // of `yield*` so every failure — DB or thrown — still redirects.
+        // Set once the state names a connector this member may connect.
+        let connectorSlug: string | undefined;
         const redirectForFailure = (error: unknown) =>
           redirectForOAuthCallbackFailure({
             error,
             organizationId: session.activeOrganizationId,
             request,
+            slug: connectorSlug,
           });
+        const fail = (reason: string) => errorRedirect(reason, connectorSlug);
 
         try {
           const rowResult = await safeDb((tx) =>
@@ -575,7 +592,8 @@ export const createMcpOAuthCallbackHandler = (
               redirect({ status: "error", reason: "user-mismatch" }),
             );
           }
-          const connectorSlug = row.connector.slug;
+          connectorSlug = row.connector.slug;
+          const slug = connectorSlug;
           const permit = grantThirdPartyOutboundPermit();
 
           const authorization = await authorizePendingConnection({
@@ -589,9 +607,7 @@ export const createMcpOAuthCallbackHandler = (
           });
           switch (authorization.type) {
             case "approval_required":
-              return Result.ok(
-                redirect({ status: "error", reason: "approval-required" }),
-              );
+              return Result.ok(fail("approval-required"));
             case "failed":
               return Result.ok(redirectForFailure(authorization.error));
             case "bound":
@@ -624,9 +640,7 @@ export const createMcpOAuthCallbackHandler = (
           const client = clientResult.value;
 
           if (!client) {
-            return Result.ok(
-              redirect({ status: "error", reason: "missing-client" }),
-            );
+            return Result.ok(fail("missing-client"));
           }
 
           const clientSecret =
@@ -671,9 +685,7 @@ export const createMcpOAuthCallbackHandler = (
           });
 
           if (Result.isError(token)) {
-            return Result.ok(
-              redirect({ status: "error", reason: "token-exchange" }),
-            );
+            return Result.ok(fail("token-exchange"));
           }
 
           const savedResult = await saveOAuthConnection({
@@ -681,7 +693,7 @@ export const createMcpOAuthCallbackHandler = (
             recordAuditEvent,
             pending: row,
             state,
-            connectorSlug,
+            connectorSlug: slug,
             userId: brandPersistedUserId(row.userId),
             token: token.value,
           });
@@ -690,9 +702,7 @@ export const createMcpOAuthCallbackHandler = (
           }
           const saved = savedResult.value;
           if (saved.type === "superseded") {
-            return Result.ok(
-              redirect({ status: "error", reason: "expired-state" }),
-            );
+            return Result.ok(fail("expired-state"));
           }
 
           const connection = saved.rows.at(0);
@@ -706,9 +716,7 @@ export const createMcpOAuthCallbackHandler = (
             });
           }
 
-          return Result.ok(
-            redirect({ status: "connected", slug: connectorSlug }),
-          );
+          return Result.ok(redirect({ status: "connected", slug }));
         } catch (error) {
           return Result.ok(redirectForFailure(error));
         }

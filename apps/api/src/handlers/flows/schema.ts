@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/flows/flow-types";
 import type { FLOW_RUN_STATUSES } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
 // The HTTP contract for a flow definition (the API client's typed shape +
 // first-pass validation). The handler additionally parses the body through
@@ -104,6 +105,11 @@ export const flowDefinitionBodySchema = v.object({
   ),
   trigger: tFlowTrigger,
   enabled: v.boolean(),
+});
+
+export const updateFlowDefinitionBodySchema = v.object({
+  ...flowDefinitionBodySchema.entries,
+  expectedUpdatedAt: expectedUpdatedAtSchema,
 });
 
 export const flowDefinitionParamsSchema = v.object({

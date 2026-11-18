@@ -48,6 +48,8 @@ import {
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
+  chatLocalRunReroutedModel,
 } from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
@@ -270,6 +272,7 @@ describe("agent sandbox third-party boundary", () => {
     const error = resolveAgentRunBoundaryError({
       boundary: { type: CHAT_SEND_MODE.anonymized },
       runMode: CHAT_RUN_MODE.agent,
+      runsOn: "agent_sandbox",
     });
 
     expect(error).toMatchObject({
@@ -278,11 +281,27 @@ describe("agent sandbox third-party boundary", () => {
     });
   });
 
+  test("refuses an anonymized turn on the member's computer, naming the computer", () => {
+    const error = resolveAgentRunBoundaryError({
+      boundary: { type: CHAT_SEND_MODE.anonymized },
+      runMode: CHAT_RUN_MODE.agent,
+      runsOn: "computer",
+    });
+
+    expect(error).toMatchObject({
+      code: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      status: 422,
+    });
+    expect(error?.message).toContain("your computer");
+    expect(error?.message).not.toContain("sandbox");
+  });
+
   test("allows an explicit agent run at the raw boundary", () => {
     expect(
       resolveAgentRunBoundaryError({
         boundary: { type: "raw" },
         runMode: CHAT_RUN_MODE.agent,
+        runsOn: "computer",
       }),
     ).toBeNull();
   });
@@ -6022,7 +6041,9 @@ describe("chat stream refs", () => {
       transformClientVisibleStream({
         deniedApprovals,
         resolveAssistantValueRefs: (value) =>
-          JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
+          JSON.parse(
+            JSON.stringify(value).replaceAll(ref, () => resolved),
+          ) as unknown,
         source: streamChunks([buildEngineSnapshot(history)]),
         storedHistory: NOTHING_REWRITTEN,
       }),
@@ -7363,6 +7384,64 @@ test("a local turn's context report is stored with its answer and reloaded, and 
     { usedTokens: 10, windowTokens: 0 },
     { ...report, note: "extra" },
     "48200/200000",
+  ]) {
+    expect((await finishedWith(malformed)).stored).toBeUndefined();
+  }
+});
+
+test("a local turn's models are stored with its answer and reloaded, and a malformed report is not", async () => {
+  const finishedWith = async (reported: unknown) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield { type: EventType.RUN_STARTED, runId: "run-1", threadId: "t-1" };
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "m-1",
+        role: "assistant",
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "m-1",
+        delta: "Done.",
+      };
+      yield { type: EventType.TEXT_MESSAGE_END, messageId: "m-1" };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "t-1",
+        finishReason: "stop",
+        metadata: { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reported },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    const reloaded = normalizePersistedChatMessageContent(
+      toPersistedChatMessageContentV3({
+        data: response.parts,
+        metadata: response.metadata,
+      }),
+    ).metadata;
+    return {
+      stored: response.metadata.localRunModel,
+      reloaded: reloaded.localRunModel,
+      ranOn: chatLocalRunReroutedModel(reloaded),
+    };
+  };
+
+  const rerouted = { requested: "gpt-5.5", ran: "gpt-5.4" };
+  const reported = await finishedWith(rerouted);
+  expect(reported.stored).toEqual(rerouted);
+  expect(reported.reloaded).toEqual(rerouted);
+  expect(reported.ranOn).toBe("gpt-5.4");
+
+  const asked = { requested: "gpt-5.5", ran: "gpt-5.5" };
+  expect((await finishedWith(asked)).ranOn).toBeNull();
+
+  for (const malformed of [
+    { requested: "gpt-5.5" },
+    { requested: "gpt-5.5", ran: "" },
+    { ...rerouted, note: "extra" },
+    "gpt-5.4",
   ]) {
     expect((await finishedWith(malformed)).stored).toBeUndefined();
   }

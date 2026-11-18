@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { publicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -31,6 +32,7 @@ export const publicRouteExceptions: Record<string, string> = {
 const absentText = { type: "absent", reason: "not_published" } as const;
 
 const decision = {
+  appealReviews: noDecisionReviewFound(),
   caseFile: { items: [], nextCursor: null, limit: 50 },
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -53,6 +55,8 @@ const decision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   ecli: null,
   extractionWarnings: [],

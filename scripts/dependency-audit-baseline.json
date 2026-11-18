@@ -11,6 +11,23 @@
       "reason": "Every zod 4 consumer resolves to a release outside the advisory range (>=4.6.6). The remaining reported copies are zod 3.25.76, for which no patched 3.x release exists (accepted 2026-10-24): @mcp-ui/client (pinned 7.1.1, latest, declares zod ^3.23.8) is loaded only in the browser through @tanstack/ai-react's MCP app resource renderer, so validation runs on the viewer's own client and never in the API or web server; @expo/cli (declares zod ^3.25.76 through its latest release) is @stll/mobile developer tooling outside the shipped app and server images. The acceptance is temporary: it lapses on 2026-11-23 or once the advisory is no longer reported. untilPatched is not set because zod 4.6.6 already exists, which would lapse the acceptance for copies that cannot take it.",
       "affectedPaths": ["@expo/cli/zod", "@mcp-ui/client/zod"],
       "expiresOn": "2026-11-23"
+    },
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "owner": "supply-chain",
+      "severity": "high",
+      "package": "picomatch",
+      "title": "picomatch vulnerable to ReDoS through single-branch repeated extglobs",
+      "reason": "No patched release exists: 4.0.7 is the latest picomatch and the advisory covers every version (accepted 2026-11-17). Every copy is reached through build, lint, bundling or developer tooling: vite, tsdown, rolldown and unplugin through tinyglobby and fdir, the TanStack Start and devtools build plugins, astro and its language server, stylelint, knip, changesets, the shared lint config, the Tailwind CLI watcher, the WXT extension builder, and the React Native, Metro and Expo toolchain (micromatch, jest-util, anymatch through unstorage). None of these runs in the API or web server images, and no stella code matches untrusted glob patterns. The acceptance lapses on 2026-12-17, or as soon as a patched release is published.",
+      "affectedPaths": [
+        "picomatch",
+        "@aklinker1/rollup-plugin-visualizer/picomatch",
+        "anymatch/picomatch",
+        "jest-util/picomatch",
+        "micromatch/picomatch"
+      ],
+      "expiresOn": "2026-12-17",
+      "untilPatched": true
     }
   ]
 }

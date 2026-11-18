@@ -598,21 +598,21 @@
   },
   "dictation": {
     "title": "Dictation",
-    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored. With AI cleanup on, the transcribed text, not the audio, is sent through stella to your organization’s AI provider to fix mistakes and formatting, and stella does not store it.",
+    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored.",
     "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
     "cleanup": {
       "title": "Clean up with AI",
-      "description": "Speech is still transcribed on this computer, and audio never leaves it. With cleanup on, the transcribed text is sent through stella to your organization’s AI provider to fix recognition mistakes and apply spoken punctuation and formatting, such as “new line” or “bold”. stella does not store it. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it.",
-      "descriptionCloud": "With cleanup on, stella AI also fixes recognition mistakes in the transcribed text and applies spoken punctuation and formatting, such as “new line” or “bold”. Cleanup is also told what kind of app you dictate into, such as email or chat, so the text suits it."
+      "description": "Fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email. Only the text, not the audio, is sent through stella to your organization’s AI provider; stella does not store it.",
+      "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email."
     },
     "context": {
       "windowTitle": {
         "title": "Share the window title with AI cleanup",
-        "description": "Cleanup also gets the title of the window you dictate into, so it can tell a contract from an internal memo. Window titles can contain client or matter names. The title is sent through stella to your organization’s AI provider, and stella does not store it."
+        "description": "Helps tell a contract from a memo. Window titles can contain client or matter names."
       },
       "textBeforeCursor": {
         "title": "Share text before the cursor with AI cleanup",
-        "description": "Cleanup also gets up to {limit, number} characters before the cursor, so the dictation fits the text you are writing. This sends part of the document you are in through stella to your organization’s AI provider, and stella does not store it."
+        "description": "Up to {limit, number} characters of the document you are in, so the dictation fits what you are writing."
       }
     },
     "keptInHistory": "Each dictation is also kept in clipboard history on this computer.",
@@ -624,16 +624,25 @@
       "unavailableRegion": "stella AI does not offer transcription in your organization’s region yet.",
       "unavailableProvider": "Your organization’s AI provider does not offer transcription.",
       "unavailable": "stella AI transcription is unavailable right now.",
-      "model": "Transcription model"
+      "model": "Transcription model",
+      "chooseModel": "Choose a model",
+      "outsideRegion": "Outside your region",
+      "outsideRegionNote": "This model processes audio outside your organization’s region.",
+      "retainsData": "Keeps your audio",
+      "retainsDataTitle": "{provider} keeps what you dictate",
+      "retainsDataWarning": "This model runs on an account without zero data retention. {provider} stores the audio and transcript of everything you dictate under its own terms, outside stella’s control. Don’t dictate confidential or client information with it."
     },
     "language": {
       "title": "Dictation language",
-      "description": "Speech is recognized in this language, and cleanup keeps the text in it. Automatic uses the languages of this computer’s display and keyboards.",
+      "description": "Automatic uses this computer’s display and keyboard languages.",
       "automatic": "Automatic",
       "automaticWith": "Automatic ({languages})",
       "noResults": "No languages found"
     },
     "modelNeeded": "The speech model runs on this computer.",
+    "modelInstalled": "The speech model ({size} MB) is on this computer.",
+    "removeModel": "Remove",
+    "removeFailed": "The speech model could not be removed. Try again.",
     "download": "Download ({size} MB)",
     "downloading": "Downloading the speech model: {percent}%",
     "downloadFailed": "The speech model could not be downloaded.",
@@ -716,6 +725,11 @@
     "howDocumentsBody": "Choose Open on a document in stella. When you save, the edit returns to stella as a new version.",
     "howClipboard": "Clipboard",
     "howClipboardBody": "Copy as usual, then press {shortcut} to pick from what you copied.",
+    "howSigning": "Sign PDFs",
+    "howSigningBodyMac": "Choose “Sign with stella desktop” on a PDF in stella. Your certificate stays in your keychain or on your smart card, and the signed PDF returns to stella as a new version.",
+    "howSigningBodyPc": "Choose “Sign with stella desktop” on a PDF in stella. Your certificate stays in your certificate store or on your smart card, and the signed PDF returns to stella as a new version.",
+    "howDictation": "Dictation",
+    "howDictationBody": "Hold a shortcut and speak, and the text appears in the app you are using. You can turn it on in a later step.",
     "howActivity": "Activity",
     "howActivityBody": "See where your day went and turn it into draft time entries. Off until you start it.",
     "activityTitle": "Activity, explained",
@@ -825,9 +839,12 @@
       "storage": "The connection could not be read or saved on this computer."
     },
     "callbackConnectedTitle": "ChatGPT is connected",
-    "callbackConnectedBody": "You can close this tab and go back to stella.",
+    "callbackConnectedBody": "AI requests in stella now use your ChatGPT plan.",
     "callbackNotConnectedTitle": "ChatGPT was not connected",
-    "callbackNotConnectedBody": "Go back to stella to see what happened and try again.",
+    "callbackNotConnectedBody": "The reason is shown in the stella app. To try again, open {section} › {group} and click “{button}”.",
+    "callbackAccount": "Account",
+    "callbackPlan": "Plan",
+    "callbackCloseTab": "You can close this tab.",
     "claudeCode": {
       "title": "Claude Code",
       "description": "Use your Claude subscription for local agents in stella. Usage counts toward your Claude plan, separately from your stella subscription.",

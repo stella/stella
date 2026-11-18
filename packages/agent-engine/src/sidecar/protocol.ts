@@ -145,9 +145,10 @@ export const SIDECAR_PROBE_FAILURES = [
 ] as const;
 
 /**
- * How a folder restore ended: done, no checkpoint for the run, a newer
- * checkpoint not undone yet, a run using the folder, or a failure that left
- * the folder as it was before the restore.
+ * How a folder restore ended: done, no checkpoint for the run, a run using
+ * the folder, or a failure that left the folder as it was before the
+ * restore. `not_newest` (a newer checkpoint not undone yet) comes only from a
+ * sidecar from before any kept checkpoint could be restored.
  */
 export const SIDECAR_RESTORE_OUTCOMES = [
   "restored",

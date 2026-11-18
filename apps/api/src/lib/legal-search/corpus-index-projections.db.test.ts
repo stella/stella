@@ -7,6 +7,7 @@ import {
   canTransitionCorpusIndexIntent,
   CORPUS_INDEX_INTENT_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_URLS = [
@@ -30,6 +31,10 @@ const MIGRATION_URLS = [
  */
 const LATEST_TRANSITION_MIGRATION_URL = new URL(
   "../../../drizzle/20261115130000_corpus_projection_offline_delivery/migration.sql",
+  import.meta.url,
+);
+const LATEST_HISTORY_DELETE_GUARD_MIGRATION_URL = new URL(
+  "../../../drizzle/20261117203000_corpus_index_generation_retire/migration.sql",
   import.meta.url,
 );
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000001";
@@ -70,6 +75,10 @@ const rejectionMessage = async (run: Promise<unknown>): Promise<string> =>
 beforeAll(
   async () => {
     client = await createTestPglite();
+    await optOutOfCorpusProjectionSeedingGuard(client, {
+      reason:
+        "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+    });
     db = drizzle({ client });
 
     await db.execute(sql`
@@ -139,6 +148,22 @@ beforeAll(
       panic("The newest transition function is missing");
     }
     await db.execute(sql.raw(latestTransition));
+    // The history delete guard production runs, which the bounded purge
+    // function (installed with every test database) is written against.
+    const latestHistoryDeleteGuard = (
+      await Bun.file(LATEST_HISTORY_DELETE_GUARD_MIGRATION_URL).text()
+    )
+      .split("--> statement-breakpoint")
+      .map((statement) => statement.trim())
+      .find((statement) =>
+        statement.includes(
+          'FUNCTION public."guard_corpus_index_projection_history_delete"',
+        ),
+      );
+    if (latestHistoryDeleteGuard === undefined) {
+      panic("The newest history delete guard is missing");
+    }
+    await db.execute(sql.raw(latestHistoryDeleteGuard));
   },
   { timeout: 120_000 },
 );
@@ -370,7 +395,7 @@ test("one exact append revision becomes authoritative", async () => {
           AND entity_id = ${FIRST_DECISION_ID}
       `),
     ),
-  ).toContain("projection history requires a retired generation");
+  ).toContain("projection history requires a retiring or retired generation");
 });
 
 test("an erasure epoch fences an in-flight append until exact cleanup settles", async () => {
@@ -630,8 +655,9 @@ test("the ingestion role purges retired history only through the bounded functio
       deleted_state_count: number;
       deleted_intent_count: number;
     }>(sql`
-      SELECT * FROM purge_retired_corpus_index_projection_history(
-        'case_law', 'case_law_v8', 100
+      SELECT deleted_state_count, deleted_intent_count
+      FROM purge_retired_corpus_index_generation_page(
+        'case_law', 'case_law_v8', NULL, 100
       )
     `);
     await tx.execute(sql`

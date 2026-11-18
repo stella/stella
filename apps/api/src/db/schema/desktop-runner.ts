@@ -619,7 +619,11 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
     userId: p.text("user_id").notNull(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     chatThreadId: p.uuid("chat_thread_id").notNull(),
-    chatTurnId: p.uuid("chat_turn_id").notNull(),
+    /**
+     * The turn the undo was asked from; null once an edit removed that turn.
+     * The restore stays, so the chat's next run is still told of it.
+     */
+    chatTurnId: p.uuid("chat_turn_id"),
     /** The run whose checkpoint the folder goes back to. */
     runId: p.uuid("run_id").notNull(),
     /** The run's computer and device key; only that socket is sent it. */
@@ -659,7 +663,7 @@ export const desktopRunnerFolderRestores = p.pgTable.withRLS(
         columns: [table.chatTurnId],
         foreignColumns: [chatTurns.id],
       })
-      .onDelete("cascade"),
+      .onDelete("set null"),
     p
       .foreignKey({
         name: "desktop_runner_folder_restores_run_fk",

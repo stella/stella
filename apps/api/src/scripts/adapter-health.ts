@@ -338,7 +338,7 @@ const buildReport = async (
     // A missing registry adapter and a failed total probe both report null;
     // membership remains explicit so the operator can tell them apart.
     const membership = sourceRegistryMembership(source.adapterKey);
-    const adapterRegistered = membership.type === "registered";
+    const adapterRegistered = membership.type !== "unrecognized";
     if (!adapterRegistered) {
       reportUnrecognizedSource(source.adapterKey);
     }

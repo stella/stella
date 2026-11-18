@@ -36,6 +36,7 @@ export * from "./components/file-input";
 export * from "./components/form";
 export * from "./components/frame";
 export * from "./components/hex-color-picker";
+export * from "./components/highlighted-textarea";
 export * from "./components/input";
 export * from "./components/inline-rename";
 export * from "./components/input-group";

@@ -1,6 +1,7 @@
 // parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing year and collegium listing count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -87,6 +88,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import type { HuBhgyHeaderLabel } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import { arrayOrEmpty } from "@/api/lib/array";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1507,11 +1510,24 @@ const listHuBhgySlicePage = async ({
     );
   }
 
-  const items = rows.map((row) => ({
-    identity: huBhgyListingIdentity(normalizeHuBhgyRow(row)),
-    payload: row,
-  }));
-  return { items, totalPages: Math.ceil(count / MAX_PAGE_SIZE) };
+  const items = rows.map((row) => {
+    const normalized = normalizeHuBhgyRow(row);
+    const identity = huBhgyListingIdentity(normalized);
+    return {
+      identity,
+      payload: row,
+      ...(identity.type === "case-number"
+        ? {
+            censusCourtEvidence: observedCensusCourt(normalized.MeghozoBirosag),
+          }
+        : {}),
+    };
+  });
+  return {
+    items,
+    totalPages: Math.ceil(count / MAX_PAGE_SIZE),
+    publisherCount: count,
+  };
 };
 
 const buildHuBhgyFromPayload = async (

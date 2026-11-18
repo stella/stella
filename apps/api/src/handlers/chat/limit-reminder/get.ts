@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { ChatLimitReminderResponse } from "@stll/api-contract/chat-limit-reminder";
+import type {
+  ChatLimitReminderResponse,
+  ChatLimitResetAction,
+} from "@stll/api-contract/chat-limit-reminder";
 
 import { chatLimitReminders, chatTurns } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -26,7 +29,30 @@ const config = {
   query: limitReminderQuery,
 } satisfies HandlerConfig;
 
-/** When the member will hear that their chat's usage limit reset, if they asked. */
+const reminderResponse = (
+  reminder: { remindAt: Date; onReset: ChatLimitResetAction } | undefined,
+): ChatLimitReminderResponse => {
+  if (reminder === undefined) {
+    const nothingAsked = { remindAt: null };
+    return nothingAsked satisfies AssertNoExtraFields<
+      typeof nothingAsked,
+      ChatLimitReminderResponse
+    >;
+  }
+  const asked = {
+    remindAt: reminder.remindAt.toISOString(),
+    onReset: reminder.onReset,
+  };
+  return asked satisfies AssertNoExtraFields<
+    typeof asked,
+    ChatLimitReminderResponse
+  >;
+};
+
+/**
+ * What happens when the usage limit that stopped the chat's latest turn
+ * resets, and when, if the member asked.
+ */
 const getChatLimitReminder = createSafeRootHandler(
   config,
   async function* ({
@@ -57,6 +83,7 @@ const getChatLimitReminder = createSafeRootHandler(
         const [reminder] = await tx
           .select({
             remindAt: chatLimitReminders.remindAt,
+            onReset: chatLimitReminders.onReset,
             turnId: chatLimitReminders.turnId,
           })
           .from(chatLimitReminders)
@@ -87,15 +114,7 @@ const getChatLimitReminder = createSafeRootHandler(
     if (found === null) {
       return Result.err(chatThreadNotFound());
     }
-    const response = {
-      remindAt: found.reminder?.remindAt.toISOString() ?? null,
-    };
-    return Result.ok(
-      response satisfies AssertNoExtraFields<
-        typeof response,
-        ChatLimitReminderResponse
-      >,
-    );
+    return Result.ok(reminderResponse(found.reminder));
   },
 );
 

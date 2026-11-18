@@ -276,6 +276,7 @@ import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
+import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -340,6 +341,7 @@ import {
   getDefaultClientResourceIdentifiers,
   getOwnNativeClientResources,
   isApiResourceClient,
+  isMobileAppClient,
 } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -2469,6 +2471,7 @@ export const createAuth = (
             }
             return { data: data.value };
           },
+          after: createUserProjectionUpdateHook(),
         },
       },
     },
@@ -3873,6 +3876,7 @@ const resolveAccessTokenIdentity = async ({
     return { ok: false, statusCode: 401 };
   }
   const admission = admitApiAccessTokenRoute({
+    client: isMobileAppClient(tokenSession.clientId) ? "mobile" : undefined,
     method: request.method,
     route,
     scopes: tokenSession.scopes,

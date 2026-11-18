@@ -459,9 +459,7 @@ function AuditLogsPage() {
                     <SelectItem value="execute">
                       {t("settings.organization.auditLogsActionExecute")}
                     </SelectItem>
-                    <SelectItem value="access">
-                      {t("settings.organization.auditLogsActionAccess")}
-                    </SelectItem>
+                    <SelectItem value="access">{t("common.access")}</SelectItem>
                   </SelectPopup>
                 </Select>
               </div>

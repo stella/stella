@@ -47,9 +47,9 @@ describe("parseUserShortcuts", () => {
       search: { type: "hotkey", hotkey: "Mod+P" },
       newChat: { type: "hotkey", hotkey: "Mod+Shift+K" },
     };
-    expect(parseUserShortcuts(serializeUserShortcuts(overrides))).toEqual(
-      overrides,
-    );
+    const serialized = serializeUserShortcuts(overrides);
+    expect(serialized).toBe('{"search":"Mod+P","newChat":"Mod+Shift+K"}');
+    expect(parseUserShortcuts(serialized)).toEqual(overrides);
   });
 });
 
@@ -154,8 +154,12 @@ describe("resetShortcutOverride", () => {
       search: { type: "hotkey", hotkey: "Mod+P" },
       newChat: { type: "hotkey", hotkey: "Mod+Shift+K" },
     };
-    expect(resetShortcutOverride(overrides, "search")).toEqual({
+    const before = structuredClone(overrides);
+    const reset = resetShortcutOverride(overrides, "search");
+    expect(reset).toEqual({
       newChat: { type: "hotkey", hotkey: "Mod+Shift+K" },
     });
+    expect(reset.newChat).toBe(overrides.newChat);
+    expect(overrides).toEqual(before);
   });
 });

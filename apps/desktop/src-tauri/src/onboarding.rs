@@ -26,7 +26,7 @@ const HISTORY_FILE_NAME: &str = "onboarding-history-v1.json";
 /// renders every step at this size (`tests/desktop-window-sizes.ts`); the
 /// activity step, with its permission row, sets the height.
 const WINDOW_WIDTH: f64 = 620.0;
-const WINDOW_HEIGHT: f64 = 680.0;
+const WINDOW_HEIGHT: f64 = 720.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -548,6 +548,7 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
     DesktopFeature::Dictation if dictation_available(app) => Introduction::Dictation,
     DesktopFeature::Dictation
     | DesktopFeature::DictationCloud
+    | DesktopFeature::DictationRetainingModels
     | DesktopFeature::LocalAgents => return,
   };
   if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {

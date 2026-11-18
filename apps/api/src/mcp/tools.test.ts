@@ -23,6 +23,7 @@ import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { PUBLIC_COUNTRY_CAPABILITIES } from "@stll/api-contract/public-country-capability";
 import {
@@ -33,12 +34,14 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
   SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type {
+  CaseLawSearchPaginationOutcome,
   SearchPageReach,
   SearchPaginationOutcome,
 } from "@stll/api-contract/search";
@@ -75,6 +78,7 @@ import {
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
+import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -89,8 +93,8 @@ import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
+import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
-import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -449,7 +453,7 @@ type MockSearchHit = {
 };
 const searchProviderSearchMock = mock(
   async (input: { limit: number; query: string }): Promise<SearchResult> => {
-    const result = await searchAcrossMattersExecute(
+    const result: unknown = await searchAcrossMattersExecute(
       {
         limit: input.limit,
         query: input.query,
@@ -659,11 +663,14 @@ const createCitationDigest = (
 });
 
 const createReadDecisionResult = () => ({
+  textIncompleteReason: null,
+  textWithheldReason: null,
   extractionWarnings: [],
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationCount: 2,
+  appealReviews: noDecisionReviewFound(),
   identifiers: [
     { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
   ],
@@ -1329,6 +1336,10 @@ const createContext = ({
         loadAllowlistByWorkspaceMock,
       loadAnonymizationGazetteerEntriesByWorkspace:
         loadGazetteerByWorkspaceMock,
+      readDecisionReviews:
+        testDependencies.readDecisionReviews ??
+        (async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()]))),
       readGatedDecisionCitations: readGatedDecisionCitationsMock,
       readGatedDecisionCitationDigest: readGatedDecisionCitationDigestMock,
       readGatedDecisionWithDocument: readGatedDecisionMock,
@@ -1452,7 +1463,10 @@ describe("OpenAI-compatible MCP tools", () => {
     // set up per test by resolving the gate to null.
     readGatedDecisionMock.mockImplementation(
       async ({ locator, ...rest }: { locator: { kind: "id"; id: string } }) =>
-        await readDecisionHandlerMock({ subject: { id: locator.id }, ...rest }),
+        (await readDecisionHandlerMock({
+          subject: { id: locator.id },
+          ...rest,
+        })) as unknown,
     );
     withRedistributableSubjectMock.mockReset();
     withRedistributableSubjectMock.mockImplementation(
@@ -2944,6 +2958,8 @@ describe("OpenAI-compatible MCP tools", () => {
             textAvailability,
             matchingPassages: 4,
             match: "all_terms",
+            matchedTerms: [],
+            missingTerms: [],
             languageAlternates: [
               {
                 caseNumber: "29 Cdo 123/2024",
@@ -3073,6 +3089,7 @@ describe("OpenAI-compatible MCP tools", () => {
             textAvailability,
             matchingPassages: 4,
             match: "all_terms",
+            terms: { query: 0, matched: [], missing: [] },
             snippet: 'Relevant holding on "smlouva"',
           },
         ],
@@ -3292,6 +3309,8 @@ describe("OpenAI-compatible MCP tools", () => {
       textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
+      matchedTerms: [],
+      missingTerms: [],
       languageAlternates: [],
       slug: "stable-official-slug",
       sourceUrl: "https://example.test/decision",
@@ -3485,6 +3504,8 @@ describe("OpenAI-compatible MCP tools", () => {
           textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
+          matchedTerms: [],
+          missingTerms: [],
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
@@ -3545,6 +3566,7 @@ describe("OpenAI-compatible MCP tools", () => {
           textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
+          terms: { query: 0, matched: [], missing: [] },
           snippet: "Relevant holding",
         },
       ],
@@ -3582,6 +3604,8 @@ describe("OpenAI-compatible MCP tools", () => {
       textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
+      matchedTerms: [],
+      missingTerms: [],
       slug: "stable-official-slug",
       sourceUrl: "https://example.test/decision",
     };
@@ -3596,6 +3620,8 @@ describe("OpenAI-compatible MCP tools", () => {
           caseNumber: "29 Cdo 124/2024",
           slug: "other-official-slug",
           match: "some_terms",
+          matchedTerms: [],
+          missingTerms: [],
         },
       ],
       nextCursor: null,
@@ -3807,6 +3833,8 @@ describe("OpenAI-compatible MCP tools", () => {
     textAvailability: "available",
     matchingPassages: 1,
     match: "all_terms",
+    matchedTerms: [],
+    missingTerms: [],
     slug: `slug-${decisionId}`,
     sourceUrl: "https://example.test/decision",
   });
@@ -4489,7 +4517,8 @@ describe("OpenAI-compatible MCP tools", () => {
     // The time-budget outcome is the agent tool's own, wider than the
     // contract's HTTP pagination outcome, so the page reads it as sent.
     type PaginationOutcomeAsSent =
-      SearchPaginationOutcome | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
+      | CaseLawSearchPaginationOutcome
+      | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
     type PartialPage = MergedSearchPage & {
       paginationOutcome: PaginationOutcomeAsSent;
       searches: {
@@ -4499,13 +4528,28 @@ describe("OpenAI-compatible MCP tools", () => {
       }[];
     };
 
+    const SHORT_COUNTS = {
+      allTerms: 1,
+      terms: [
+        { term: "loajalita", count: 812 },
+        { term: "odklonil", count: 4 },
+      ],
+      countType: FACET_COUNT_TYPE.ESTIMATE,
+    };
+    const partialUnread = (query: string) => ({
+      ...answered(query, null),
+      hitOrder: "all_words_first",
+      relaxedHitCount: 0,
+      termDecisionCounts: SHORT_COUNTS,
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
+    });
+
     test("names the phrasing whose partial matches went unread", async () => {
       searchDecisionsHandlerMock.mockImplementation(
-        async ({ body: { query } }: { body: { query: string } }) => ({
-          ...answered(query, null),
-          relaxedHitCount: 0,
-          ...(query === "short" ? { relaxedTopUp: "skipped" as const } : {}),
-        }),
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "short"
+            ? partialUnread(query)
+            : { ...answered(query, null), relaxedHitCount: 0 },
       );
 
       const result = await handleMcpToolCall({
@@ -4522,8 +4566,76 @@ describe("OpenAI-compatible MCP tools", () => {
         "partial_matches_unread",
       ]);
       expect(JSON.stringify(warnings)).toContain('\\"short\\"');
-      expect(warnings.at(0)?.hint).toContain("strict: true");
+      expect(warnings.at(0)?.hint).toContain("nextCursor");
+      // Which word is rare reaches the agent beside the phrasing it belongs to.
+      expect(
+        asTestRaw<{ searches: { termDecisionCounts?: unknown }[] }>(
+          page,
+        ).searches.map(({ termDecisionCounts }) => termDecisionCounts),
+      ).toEqual([undefined, SHORT_COUNTS]);
+      // Never complete: the merged page says what stopped it.
+      expect(page.paginationOutcome).toEqual(
+        SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
+      );
     });
+
+    test.each([
+      ["one phrasing", ["short"]],
+      ["several phrasings", ["full", "short"]],
+    ] as const)(
+      "the cursor of a page with unread partial matches reruns that phrasing (%s)",
+      async (_name, queries) => {
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) =>
+            query === "short"
+              ? partialUnread(query)
+              : { ...answered(query, null), relaxedHitCount: 0 },
+        );
+        const first = asTestRaw<PartialPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              args: { country: "CZE", queries: [...queries] },
+              context: createContext(),
+              toolName: "search_case_law",
+            }),
+          ),
+        );
+        // The strict scan had ended, so the engine gave no cursor; the
+        // tool's own cursor is what keeps the phrasing open.
+        expect(first.nextCursor).not.toBeNull();
+
+        searchDecisionsHandlerMock.mockClear();
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) => ({
+            ...answered(query, null),
+            hitOrder: "all_words_first",
+            relaxedHitCount: 0,
+          }),
+        );
+        const second = asTestRaw<PartialPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              args: {
+                country: "CZE",
+                queries: [...queries],
+                cursor: first.nextCursor ?? "",
+              },
+              context: createContext(),
+              toolName: "search_case_law",
+            }),
+          ),
+        );
+        // Only the unread phrasing runs again, and from its first page,
+        // which is where its partial phase runs.
+        const bodies = searchDecisionsHandlerMock.mock.calls.map(([args]) =>
+          isRecord(args) && isRecord(args["body"]) ? args["body"] : {},
+        );
+        expect(bodies.map((body) => body["query"])).toEqual(["short"]);
+        expect(bodies.at(0)?.["cursor"]).toBeUndefined();
+        expect(second.paginationOutcome).toEqual(SEARCH_PAGINATION_COMPLETE);
+        expect(second.nextCursor).toBeNull();
+      },
+    );
 
     test("leaves the phrasings that finished on the page and says it timed out", async () => {
       searchDecisionsHandlerMock.mockImplementation(
@@ -4602,10 +4714,10 @@ describe("OpenAI-compatible MCP tools", () => {
       );
 
       const cursorByQuery = new Map(
-        searchDecisionsHandlerMock.mock.calls.map(([args]) => [
-          args.body.query,
-          args.body.cursor,
-        ]),
+        searchDecisionsHandlerMock.mock.calls.map(([args]) => {
+          const { body }: { body: { query: unknown; cursor: unknown } } = args;
+          return [body.query, body.cursor] as const;
+        }),
       );
       expect(cursorByQuery.get("fast")).toBe("engine-fast-2");
       // Absent, not the marker: a first page carries no engine cursor.
@@ -5168,6 +5280,8 @@ describe("OpenAI-compatible MCP tools", () => {
               textAvailability: "available",
               matchingPassages: 1,
               match: "all_terms",
+              matchedTerms: [],
+              missingTerms: [],
               slug: "stable-official-slug",
               sourceUrl: "https://example.test/decision",
             },
@@ -5202,9 +5316,61 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("an empty precedent citator still reports the decision's cassation review", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      decisionId: "01a03050-4387-76b6-aae3-4b05db9a0238",
+      page: {
+        items: [],
+        nextCursor: null,
+        limit: 5,
+        doctrineAvailability: "available",
+      },
+    });
+    const evidence = {
+      status: "upheld" as const,
+      basis: "available_corpus" as const,
+      reviewedBy: [
+        {
+          reviewingDecisionId: "019dd78d-2e0c-7000-955a-63d713b246ba",
+          reviewingCaseNumber: "7 As 32/2025-30",
+          reviewingCourt: "Nejvyšší správní soud",
+          reviewedDecisionId: "01a03050-4387-76b6-aae3-4b05db9a0238",
+          reviewedCaseNumber: "25 A 20/2024-35",
+          reviewedCourt: "Krajský soud v Ostravě",
+          reviewedDecisionDate: "2025-01-16",
+          outcome: "upheld" as const,
+          source: "opening" as const,
+          evidenceStatus: "opening_only" as const,
+        },
+      ],
+      reviews: [],
+      reviewedByTruncated: false,
+      reviewsTruncated: false,
+    };
+    const result = await handleMcpToolCall({
+      args: {
+        decision_id: "01a03050-4387-76b6-aae3-4b05db9a0238",
+        direction: "cited_by",
+      },
+      context: createContext({
+        testDependencies: {
+          readDecisionReviews: async ({ decisionIds }) =>
+            new Map(decisionIds.map((id) => [id, evidence])),
+        },
+      }),
+      toolName: "read_case_law_citations",
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      citations: [],
+      appealReviews: evidence,
+    });
+  });
+
   test("read_case_law_citations maps the direction and returns treatment, decision and passage", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "available",
         items: [
@@ -5212,6 +5378,10 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
+            textIncompleteReason: null,
+            evidenceIncompleteReason: "missing_privileges",
+            polarityEvidence: null,
+            citedPart: null,
             extractionWarnings: [],
             sectionIndex: 3,
             doctrine: "unread",
@@ -5245,6 +5415,10 @@ describe("OpenAI-compatible MCP tools", () => {
             id: "00000000-0000-4000-8000-0000000c0002",
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
+            textIncompleteReason: null,
+            evidenceIncompleteReason: "missing_privileges",
+            polarityEvidence: null,
+            citedPart: null,
             extractionWarnings: [],
             sectionIndex: null,
             doctrine: "unread",
@@ -5281,6 +5455,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
+      appealReviews: noDecisionReviewFound(),
       direction: "cited_by",
       doctrineAvailability: "available",
       doctrine: "limits",
@@ -5291,6 +5466,10 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0001",
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
+          textIncompleteReason: null,
+          evidenceIncompleteReason: "missing_privileges",
+          polarityEvidence: null,
+          citedPart: null,
           extractionWarnings: [],
           polarity: "negative",
           doctrine: "unread",
@@ -5315,6 +5494,10 @@ describe("OpenAI-compatible MCP tools", () => {
           citationId: "00000000-0000-4000-8000-0000000c0002",
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
+          textIncompleteReason: null,
+          evidenceIncompleteReason: "missing_privileges",
+          polarityEvidence: null,
+          citedPart: null,
           extractionWarnings: [],
           polarity: "unclassified",
           doctrine: "unread",
@@ -5325,9 +5508,36 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_case_law_citations hydrates the composing judgment after absorption", async () => {
+    readGatedDecisionCitationsMock.mockResolvedValue({
+      type: "page",
+      decisionId: CITING_DECISION_ID,
+      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
+    });
+    const readReviews = mock(
+      async ({ decisionIds }: Parameters<typeof readDecisionReviews>[0]) =>
+        new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
+    );
+    const result = await handleMcpToolCall({
+      args: { decision_id: DECISION_ID, direction: "cites" },
+      context: createContext({
+        testDependencies: { readDecisionReviews: readReviews },
+      }),
+      toolName: "read_case_law_citations",
+    });
+    expect(readReviews).toHaveBeenCalledWith({
+      decisionIds: [CITING_DECISION_ID],
+      caseLawDb: caseLawPublicReadDb,
+    });
+    expect(parseToolPayload(result)).toMatchObject({
+      decisionId: CITING_DECISION_ID,
+    });
+  });
+
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         items: [],
         nextCursor: null,
@@ -5403,6 +5613,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations compact detail asks for the short passage", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "unavailable",
         items: [],
@@ -5439,6 +5650,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations filters passages and says how many it read", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
+      decisionId: DECISION_ID,
       page: {
         doctrineAvailability: "unavailable",
         items: [],
@@ -5457,7 +5669,11 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_case_law_citations",
     });
 
-    const [options] = readGatedDecisionCitationsMock.mock.lastCall ?? [];
+    const options:
+      | {
+          passageFilter?: (paragraph: string, language: string) => boolean;
+        }
+      | undefined = readGatedDecisionCitationsMock.mock.lastCall?.[0];
     expect(
       options?.passageFilter?.("Kamerové záznamy byly smazány.", "cs"),
     ).toBe(true);
@@ -6903,20 +7119,84 @@ describe("OpenAI-compatible MCP tools", () => {
    * search runs unfiltered instead of answering nothing, and the reading is
    * reported beside the result.
    */
+  describe("search_case_law keeps the order the search answered in", () => {
+    const pageIn = (
+      hitOrder: "score" | "all_words_first",
+      hits: readonly { id: string; match: "all_terms" | "some_terms" }[],
+    ) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
+      facets: null,
+      hits: hits.map(({ id, match }) => ({
+        ...createCaseLawHit(id, "Holding"),
+        match,
+      })),
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, hits.length),
+      hitOrder,
+      relaxedHitCount: hits.filter(({ match }) => match === "some_terms")
+        .length,
+      termDecisionCounts: null,
+      queryUsed: "loajalita jednatel",
+      warnings: [],
+    });
+    const resultIds = async (queries: string[]) => {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries, limit: 10 },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      if (!isRecord(payload) || !Array.isArray(payload["results"])) {
+        throw new Error("expected a search payload");
+      }
+      return payload["results"].map((result: unknown) =>
+        isRecord(result) ? result["decisionId"] : null,
+      );
+    };
+
+    test.each([
+      [
+        "a score-ordered page, a partial match above a full one",
+        pageIn("score", [
+          { id: "partial-high", match: "some_terms" },
+          { id: "full", match: "all_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+      [
+        "a page whose full matches come first",
+        pageIn("all_words_first", [
+          { id: "full", match: "all_terms" },
+          { id: "partial-high", match: "some_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+    ] as const)("%s reads the same through the tool", async (_name, page) => {
+      searchDecisionsHandlerMock.mockResolvedValue(page);
+      const http = page.hits.map(({ decisionId }) => decisionId);
+
+      expect(await resultIds(["loajalita jednatel"])).toEqual(http);
+      // Two phrasings answering the same page merge into that page's order.
+      expect(
+        await resultIds(["loajalita jednatel", "jednatel loajalita"]),
+      ).toEqual(http);
+    });
+  });
+
   describe("search_case_law warns about a long phrasing that came back short", () => {
     const SIX_TERMS = "promlčení náhrady škody subjektivní lhůta vědomost";
     const FIVE_TERMS = "promlčení náhrady škody subjektivní lhůta";
     const SIX_WORD_PHRASE = `"${SIX_TERMS}"`;
 
     const searchFor = async ({
-      guidance,
       queryUsed,
       hits,
       limit,
       nextCursor = null,
       pageReach = SEARCH_PAGE_REACH.REACHED,
     }: {
-      guidance: CaseLawSearchGuidanceMode;
       queryUsed: string;
       hits: number;
       limit: number;
@@ -6935,16 +7215,9 @@ describe("OpenAI-compatible MCP tools", () => {
         queryUsed,
         warnings: [],
       });
-      const baseContext = createContext();
       const result = await handleMcpToolCall({
         args: { queries: [queryUsed], country: "CZE", limit },
-        context: {
-          ...baseContext,
-          testDependencies: {
-            ...baseContext.testDependencies,
-            caseLawSearchGuidance: guidance,
-          },
-        },
+        context: createContext(),
         toolName: "search_case_law",
       });
       const payload = parseToolPayload(result);
@@ -6964,7 +7237,6 @@ describe("OpenAI-compatible MCP tools", () => {
 
     test("six required terms filling fewer slots than given are named", async () => {
       const warnings = await searchFor({
-        guidance: "v1",
         queryUsed: SIX_TERMS,
         hits: 2,
         limit: 3,
@@ -6982,7 +7254,6 @@ describe("OpenAI-compatible MCP tools", () => {
       // No cursor after it, but the scan stopped before the end of the
       // results, so nothing proves the phrasing found only these.
       const warnings = await searchFor({
-        guidance: "v1",
         queryUsed: SIX_TERMS,
         hits: 2,
         limit: 3,
@@ -6994,28 +7265,22 @@ describe("OpenAI-compatible MCP tools", () => {
 
     test("a quoted six-word phrase counts each of its words", async () => {
       const warnings = await searchFor({
-        guidance: "v1",
         queryUsed: SIX_WORD_PHRASE,
         hits: 2,
         limit: 3,
       });
 
       expect(warnings).toHaveLength(1);
-      expect(warnings.at(0)?.["message"]).toContain("required 6 words");
+      expect(warnings.at(0)?.["message"]).toContain("has 6 words");
       expect(warnings.at(0)?.["message"]).toContain(SIX_WORD_PHRASE);
     });
 
     test.each([
-      [
-        "five required terms",
-        { guidance: "v1", queryUsed: FIVE_TERMS, hits: 2 },
-      ],
-      ["every slot filled", { guidance: "v1", queryUsed: SIX_TERMS, hits: 3 }],
-      ["guidance off", { guidance: "off", queryUsed: SIX_TERMS, hits: 2 }],
+      ["five required terms", { queryUsed: FIVE_TERMS, hits: 2 }],
+      ["every slot filled", { queryUsed: SIX_TERMS, hits: 3 }],
       [
         "a short first page that still carries a cursor",
         {
-          guidance: "v1",
           queryUsed: SIX_TERMS,
           hits: 2,
           nextCursor: "next-page",
@@ -7045,18 +7310,22 @@ describe("OpenAI-compatible MCP tools", () => {
         .filter((text) => text.startsWith("Input read:"))
         .join(" ");
 
+    type SearchWarning = { code: string; message: string; hint: string };
+
     const searchWarnings = (
       result: Awaited<ReturnType<typeof handleMcpToolCall>>,
-    ): { code: string; message: string; hint: string }[] => {
+    ): SearchWarning[] => {
       const payload = parseToolPayload(result);
       if (!isRecord(payload) || !Array.isArray(payload["searches"])) {
         throw new Error("expected a search payload");
       }
-      return payload["searches"].flatMap((search: unknown) =>
-        isRecord(search) && Array.isArray(search["warnings"])
-          ? search["warnings"]
-          : [],
-      );
+      return payload["searches"].flatMap((search: unknown) => {
+        if (!isRecord(search) || !Array.isArray(search["warnings"])) {
+          return [];
+        }
+        const warnings: SearchWarning[] = search["warnings"];
+        return warnings;
+      });
     };
 
     beforeEach(() => {
@@ -7163,7 +7432,8 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(2);
         for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
           // Exact: a level the caller left out is absent, so it matches any.
-          expect(body.provision).toEqual(expected);
+          const searched: { provision?: unknown } = body;
+          expect(searched.provision).toEqual(expected);
         }
       },
     );
@@ -7262,7 +7532,8 @@ describe("OpenAI-compatible MCP tools", () => {
       // Read once for the call, handed to every phrasing's search.
       expect(readCaseLawProvisionScopeMock).toHaveBeenCalledTimes(1);
       for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
-        expect(body.provisionScope).toEqual({
+        const searched: { provisionScope?: unknown } = body;
+        expect(searched.provisionScope).toEqual({
           type: "broad",
         });
       }
@@ -7778,6 +8049,9 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
     test("reports every jurisdiction with only public coverage facts and the data timestamp", async () => {
+      expect(v.is(coverageResponseSchema, CASE_LAW_COVERAGE_FIXTURE)).toBe(
+        true,
+      );
       const result = await call({});
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toEqual(CASE_LAW_COVERAGE_EXPECTED);
@@ -8065,6 +8339,7 @@ describe("OpenAI-compatible MCP tools", () => {
             // and so absent, and the publisher's name is the court's, so
             // `source` would restate it.
             metadata: { panel: "29 Cdo" },
+            appealReviews: noDecisionReviewFound(),
             citations: {
               citedBy: {
                 doctrineCounts: { status: "unavailable" },
@@ -9367,12 +9642,12 @@ describe("OpenAI-compatible MCP tools", () => {
         caseLawDb: unknown;
         locator: { kind: "id"; id: string };
       }) =>
-        await withRedistributableSubjectMock(
+        (await withRedistributableSubjectMock(
           caseLawDb,
           locator,
           async (subject: { id: string }) =>
-            await readDecisionHandlerMock({ subject }),
-        ),
+            (await readDecisionHandlerMock({ subject })) as unknown,
+        )) as unknown,
     );
     withRedistributableSubjectMock.mockResolvedValue(null);
 
@@ -10617,7 +10892,8 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    const anonymizeInput: { catalogs?: unknown } | undefined =
+      anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
     expect(anonymizeInput).toMatchObject({
       fields: ["John Smith SPA"],
       organizationId: toSafeId<"organization">("org_1"),
@@ -11138,14 +11414,16 @@ describe("OpenAI-compatible MCP tools", () => {
     }
 
     expect(payloads).toEqual(
-      Array.from({ length: 4 }, () =>
-        expect.objectContaining({
-          contentState: {
-            status: "unsupported",
-            sourceVersionId: "entity_version_1",
-            reason: "Encrypted document content cannot be extracted.",
-          },
-        }),
+      Array.from(
+        { length: 4 },
+        () =>
+          expect.objectContaining({
+            contentState: {
+              status: "unsupported",
+              sourceVersionId: "entity_version_1",
+              reason: "Encrypted document content cannot be extracted.",
+            },
+          }) as unknown,
       ),
     );
   });

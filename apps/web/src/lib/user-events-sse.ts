@@ -1,5 +1,7 @@
+import { useRef } from "react";
+
 import type { QueryKey } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 
 import {
   parseOrganizationRealtimeEvent,
@@ -16,16 +18,27 @@ import { activeChatRunsOptions } from "@/features/chat/active-runs";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import {
+  captureSessionQueryOwner,
+  isObservedSessionQueryOwner,
+} from "@/lib/account/auth-query-owner";
+import { useObservedSessionQueryOwner } from "@/lib/account/use-observed-session-query-owner";
 import { apiUrl } from "@/lib/api-url";
+import { sessionOptions } from "@/lib/auth-query-options";
 import { firstNotificationsPageRefresh } from "@/lib/notification-queries";
 import { organizationEventQueryKeys } from "@/lib/organization/realtime.logic";
+import { organizationResourceQueryActions } from "@/lib/workspace-realtime";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
+import type {
+  ResourceQueryOwner,
+  ResourceRefreshContext,
+} from "@/lib/workspaces/resource-query-identity";
 
 /** A query the user stream refreshes, and what to trim before it does. */
 type UserEventRefresh = {
   queryKey: QueryKey;
   prepare?: () => void;
-};
+} & ResourceRefreshContext;
 
 const USER_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
@@ -68,7 +81,7 @@ const reconnectDelayMs = (failures: number): number =>
  * its own connection.
  */
 const useUserEventsSSE = (
-  organizationId: string,
+  { organizationId, userId }: { organizationId: string; userId: string },
   {
     onEvent,
     onResync,
@@ -78,22 +91,46 @@ const useUserEventsSSE = (
      * Everything the stream keeps fresh. Events sent while the stream was
      * down are lost, so every reopen after the first re-reads all of it.
      */
-    onResync: () => UserEventRefresh[];
+    onResync: (owner: ResourceQueryOwner) => UserEventRefresh[];
   },
 ): void => {
   const queryClient = useQueryClient();
   const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
+  const observedOwner = useObservedSessionQueryOwner(queryClient);
+  const connectionGap = useRef({ userId, organizationId, pending: false });
   const handleEvent = useLatestCallback(onEvent);
   const handleResync = useLatestCallback(onResync);
 
   useExternalSyncEffect(() => {
+    const captureOwner = () => {
+      const captured = captureSessionQueryOwner(queryClient);
+      return captured?.userId === userId &&
+        captured.organizationId === organizationId
+        ? captured
+        : undefined;
+    };
+    const initialOwner = captureOwner();
+    if (
+      connectionGap.current.userId !== userId ||
+      connectionGap.current.organizationId !== organizationId
+    ) {
+      connectionGap.current = { userId, organizationId, pending: false };
+    }
+    const gap = connectionGap.current;
+    if (initialOwner === undefined) {
+      gap.pending = true;
+    }
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let consecutiveFailures = 0;
     let disposed = false;
     let hasOpened = false;
+    let unsubscribeWaiter: (() => void) | undefined;
 
-    const connect = () => {
+    const connect = (owner: ResourceQueryOwner) => {
+      if (disposed) {
+        return;
+      }
       const stream = new EventSource(
         apiUrl("/notifications/events"),
         USER_SSE_EVENT_SOURCE_INIT,
@@ -101,23 +138,34 @@ const useUserEventsSSE = (
       source = stream;
 
       stream.addEventListener("open", () => {
+        if (
+          disposed ||
+          source !== stream ||
+          !isObservedSessionQueryOwner(queryClient, owner)
+        ) {
+          return;
+        }
         consecutiveFailures = 0;
         // The browser's own retries and ours both land here; either way the
         // gap may have swallowed events. The first open re-reads nothing: the
         // queries were just fetched, and a second read would only double them.
-        if (hasOpened) {
-          for (const { queryKey, prepare } of handleResync()) {
-            realtimeRefresh.refresh(queryKey, prepare);
+        if (hasOpened || gap.pending) {
+          for (const { queryKey, prepare, ...context } of handleResync(owner)) {
+            realtimeRefresh.refresh(queryKey, prepare, { ...context, owner });
           }
+          gap.pending = false;
         }
         hasOpened = true;
       });
       stream.addEventListener("message", (event: MessageEvent) => {
+        if (disposed || source !== stream) {
+          return;
+        }
         const payload = jsonOrNull(String(event.data));
         const parsed = parseUserRealtimeEvent(payload);
         if (parsed) {
-          for (const { queryKey, prepare } of handleEvent(parsed)) {
-            realtimeRefresh.refresh(queryKey, prepare);
+          for (const { queryKey, prepare, ...context } of handleEvent(parsed)) {
+            realtimeRefresh.refresh(queryKey, prepare, { ...context, owner });
           }
           return;
         }
@@ -129,34 +177,73 @@ const useUserEventsSSE = (
             organizationEvent,
             organizationId,
           )) {
-            realtimeRefresh.refresh(queryKey);
+            realtimeRefresh.refresh(queryKey, undefined, { owner });
+          }
+          for (const {
+            queryKey,
+            ...context
+          } of organizationResourceQueryActions({
+            queryClient,
+            organizationId,
+            resources: [organizationEvent.resourceType],
+            owner,
+          })) {
+            realtimeRefresh.refresh(queryKey, undefined, context);
           }
         }
       });
       stream.addEventListener("error", () => {
+        if (disposed || source !== stream) {
+          return;
+        }
         // CONNECTING means the browser is retrying on its own.
-        if (stream.readyState !== EventSource.CLOSED || disposed) {
+        if (stream.readyState !== EventSource.CLOSED) {
           return;
         }
         stream.close();
         consecutiveFailures += 1;
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
-          connect();
+          connect(owner);
         }, reconnectDelayMs(consecutiveFailures));
       });
     };
 
-    connect();
+    if (initialOwner !== undefined) {
+      connect(initialOwner);
+    } else {
+      unsubscribeWaiter = queryClient.getQueryCache().subscribe((event) => {
+        if (
+          disposed ||
+          event.query.queryHash !== hashKey(sessionOptions.queryKey)
+        ) {
+          return;
+        }
+        const owner = captureOwner();
+        if (owner !== undefined) {
+          unsubscribeWaiter?.();
+          connect(owner);
+        }
+      });
+    }
 
     return () => {
       disposed = true;
+      unsubscribeWaiter?.();
       if (reconnectTimer !== null) {
         clearTimeout(reconnectTimer);
       }
       source?.close();
     };
-  }, [handleEvent, handleResync, organizationId, realtimeRefresh]);
+  }, [
+    handleEvent,
+    handleResync,
+    organizationId,
+    userId,
+    observedOwner,
+    realtimeRefresh,
+    queryClient,
+  ]);
 };
 
 /**
@@ -208,21 +295,30 @@ export const useUserEventRefreshes = ({
     [USER_EVENT_READ.NOTIFICATIONS]: notifications,
   } satisfies Record<UserEventRead, () => UserEventRefresh>;
 
-  useUserEventsSSE(organizationId, {
-    onEvent: ({ type }) =>
-      USER_EVENT_READS[type].map((read) => refreshes[read]()),
-    onResync: () => [
-      notifications(),
-      activeChatRuns(),
-      chatThreadLists(),
-      backgroundTasks(),
-      chatQueues(),
-      ...organizationEventQueryKeys(
-        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
-        organizationId,
-      ).map((queryKey) => ({ queryKey })),
-    ],
-  });
+  useUserEventsSSE(
+    { organizationId, userId },
+    {
+      onEvent: ({ type }) =>
+        USER_EVENT_READS[type].map((read) => refreshes[read]()),
+      onResync: (owner) => [
+        notifications(),
+        activeChatRuns(),
+        chatThreadLists(),
+        backgroundTasks(),
+        chatQueues(),
+        ...organizationResourceQueryActions({
+          queryClient,
+          organizationId,
+          resources: Object.values(RESOURCE_TYPE),
+          owner,
+        }),
+        ...organizationEventQueryKeys(
+          resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
+          organizationId,
+        ).map((queryKey) => ({ queryKey })),
+      ],
+    },
+  );
 };
 
 const jsonOrNull = (raw: string): unknown => {

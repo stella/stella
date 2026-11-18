@@ -57,7 +57,8 @@ type SourceReconciliationStatus = {
 type SourceStatus = {
   adapterKey: string;
   /**
-   * False when no adapter is registered for `adapterKey`: a retired source, or
+   * False when neither an adapter nor a bulk import is registered for
+   * `adapterKey`: a retired source, or
    * a seeded/test row. The corpus figures below are still that row's own, but
    * nothing will ingest into it, which is not visible from the numbers alone.
    */
@@ -467,7 +468,7 @@ export const getIngestionStatus = async (
 
       sourceStatuses.push({
         adapterKey: source.adapterKey,
-        adapterRegistered: membership.type === "registered",
+        adapterRegistered: membership.type !== "unrecognized",
         name: source.name,
         enabled: source.enabled,
         syncCursor: source.syncCursor,

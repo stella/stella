@@ -2,10 +2,16 @@ import { panic, Result } from "better-result";
 import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatQueuedMessages } from "@/api/db/schema";
-import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";
+import { isChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import {
+  lockOwnQueueThreadOnTx,
+  parseQueuedChatSend,
+} from "@/api/handlers/chat/queue/chat-queue-store";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,7 +61,11 @@ const steerMark = (revision: number | null) =>
  * when it is no longer queued at that revision (edited, sent or removed
  * since), or a steer of another revision is still open: the runner takes one
  * input per id, so a second revision would be removed for the first one's
- * report. The caller holds the thread lock.
+ * report. `not-raw` when that revision is queued to be sent anonymized: a
+ * steer hands the computer the text as it is, and a turn on a computer is
+ * never anonymized, so it goes as a message of its own. `has-files` when it
+ * carries files: a steer hands over text alone, and the message would leave
+ * the queue without them. The caller holds the thread lock.
  */
 export const markSteeredQueuedMessageOnTx = async ({
   id,
@@ -63,8 +73,30 @@ export const markSteeredQueuedMessageOnTx = async ({
   threadId,
   tx,
 }: SteeredMessageOnTx & { revision: number }): Promise<
-  "marked" | "changed"
+  "marked" | "changed" | "not-raw" | "has-files"
 > => {
+  const at = and(
+    eq(chatQueuedMessages.id, id),
+    eq(chatQueuedMessages.threadId, threadId),
+    eq(chatQueuedMessages.revision, revision),
+  );
+  const queued = (
+    await tx
+      .select({ request: chatQueuedMessages.request })
+      .from(chatQueuedMessages)
+      .where(at)
+      .limit(1)
+  ).at(0);
+  if (queued === undefined) {
+    return "changed";
+  }
+  const send = parseQueuedChatSend(queued.request);
+  if (send.sendMode !== CHAT_SEND_MODE.rawOverride) {
+    return "not-raw";
+  }
+  if (send.message.parts.some(isChatAttachmentPart)) {
+    return "has-files";
+  }
   const mark = steerMark(revision);
   // A repeat of the same steer marks the same revision again.
   // audit: skip — the mark is bookkeeping of a steer; the message leaves the queue audited once the run took it
@@ -73,9 +105,7 @@ export const markSteeredQueuedMessageOnTx = async ({
     .set(mark.set)
     .where(
       and(
-        eq(chatQueuedMessages.id, id),
-        eq(chatQueuedMessages.threadId, threadId),
-        eq(chatQueuedMessages.revision, revision),
+        at,
         or(
           isNull(chatQueuedMessages.steeredRevision),
           eq(chatQueuedMessages.steeredRevision, revision),

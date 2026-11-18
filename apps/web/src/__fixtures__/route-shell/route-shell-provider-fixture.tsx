@@ -273,7 +273,7 @@ const installFixtureNetwork = () => {
   }
   const organizationSettings = {
     declaredFeatureIds: [],
-    deploymentFeatures: { legalLists: true },
+    deploymentFeatures: { legalLists: true, invoiceLinks: true },
     capabilities: {},
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",
@@ -383,7 +383,7 @@ const installFixtureNetwork = () => {
           return Response.json({
             activeSkill: null,
             activeTurnId: null,
-            newestLocalTurn: null,
+            activeTurnSteering: "not_steerable",
             attachedFiles: { fileCount: 0, files: [] },
             context: {
               estimatedTokens: 0,

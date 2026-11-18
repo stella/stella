@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -300,6 +301,10 @@ test("every batch action preserves billed and written-off entries and their appr
  * executed: a write another request commits between this action's lock and
  * its update, which the update would otherwise see.
  */
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
+
 const runningFirst = (before: () => Promise<void>, builder: object): object =>
   new Proxy(builder, {
     get(target, property) {
@@ -310,7 +315,11 @@ const runningFirst = (before: () => Promise<void>, builder: object): object =>
           onRejected?: (error: unknown) => unknown,
         ) => {
           await before();
-          return await Reflect.apply(value, target, [onFulfilled, onRejected]);
+          const settled: unknown = await Reflect.apply(value, target, [
+            onFulfilled,
+            onRejected,
+          ]);
+          return settled;
         };
       }
       return typeof value === "function"
@@ -361,13 +370,25 @@ test("approval updates only the entries it locked and checked, never one moved i
       const watched = new Proxy(tx, {
         get(target, property) {
           const value: unknown = Reflect.get(target, property, target);
+          if (property === "execute") {
+            return async (query: Parameters<typeof tx.execute>[0]) => {
+              const statement =
+                typeof query === "string"
+                  ? query
+                  : new PgDialect().sqlToQuery(query.getSQL()).sql;
+              if (/^\s*UPDATE "time_entries"\s/u.test(statement)) {
+                await moveIn();
+              }
+              return await target.execute(query);
+            };
+          }
           if (property === "update" && typeof value === "function") {
             return (table: unknown) =>
               table === timeEntries
                 ? runningFirst(moveIn, Reflect.apply(value, target, [table]))
-                : Reflect.apply(value, target, [table]);
+                : (Reflect.apply(value, target, [table]) as unknown);
           }
-          return typeof value === "function" ? value.bind(target) : value;
+          return isCallable(value) ? value.bind(target) : value;
         },
       });
       return await fn(watched);

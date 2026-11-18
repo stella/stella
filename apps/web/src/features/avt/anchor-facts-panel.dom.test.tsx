@@ -150,7 +150,7 @@ const mountFact = ({
         ) {
           return Response.json({
             declaredFeatureIds: [],
-            deploymentFeatures: { legalLists: false },
+            deploymentFeatures: { legalLists: false, invoiceLinks: true },
             capabilities: {},
           });
         }
