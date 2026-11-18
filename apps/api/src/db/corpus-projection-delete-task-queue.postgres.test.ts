@@ -31,7 +31,7 @@ import {
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import {
-  type GatedTestClient,
+  type GatedTestClientScope,
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
@@ -48,7 +48,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 /** A manifest generation no other gated suite registers. */
 const GENERATION = "case_law_v12";
-const FAMILY = "case_law";
+const FAMILY = "case_law" as const;
 const DELETE_TASK_CREATED_AT = Temporal.Instant.from("2026-08-25T12:00:00Z");
 const LONG_AFTER_THE_TASK = DELETE_TASK_CREATED_AT.add({ hours: 24 * 8 });
 const LEASE_MS = 60_000;
@@ -237,7 +237,9 @@ const cleanUp = async (db: GatedTestDb, suite: Suite): Promise<void> => {
   await db.delete(corpusIndexGenerations).where(generation);
 };
 
-const connectionOver = ({ sql: client }: GatedTestClient) =>
+const connectionOver = ({
+  sql: client,
+}: ReturnType<GatedTestClientScope["openClient"]>) =>
   ({
     execute: async (query, params = []) => {
       await client.unsafe(query, [...params]);

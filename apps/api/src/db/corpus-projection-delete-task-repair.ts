@@ -143,6 +143,14 @@ const decodeKey = (cursor: string | null): DeleteTaskKey => {
     return panic(`Online repair ${REPAIR_NAME}: invalid cursor`);
   }
   const [family, generation, indexId, deleteOpstamp] = parsed;
+  if (
+    family === undefined ||
+    generation === undefined ||
+    indexId === undefined ||
+    deleteOpstamp === undefined
+  ) {
+    return panic(`Online repair ${REPAIR_NAME}: invalid cursor`);
+  }
   return [family, generation, indexId, deleteOpstamp];
 };
 
