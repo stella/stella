@@ -829,10 +829,19 @@ export const rehydrateLegislationCandidates = async ({
           : [corpusSearchGroupToken(legislationWorkRefKey(read.cursorWork))]),
       ]);
 
+      // A work is shown as its representative version, and a named work is
+      // placed outright: neither stands on a scanned copy, and neither shows
+      // an excerpt.
+      const selectedIds = new Set(appliedCandidates.map(({ id }) => id));
       return {
         context: { byId },
         revisionById,
         ranked: collapsed.ranked,
+        placedWithoutCopy: new Set(
+          collapsed.ranked.flatMap(({ id }) =>
+            selectedIds.has(id) ? [] : [id],
+          ),
+        ),
         groups: collapsed.workTokens.filter((token) =>
           recurringTokens.has(token),
         ),

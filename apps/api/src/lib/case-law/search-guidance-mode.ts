@@ -2,12 +2,12 @@
 /**
  * Which query guidance `search_case_law` gives an agent.
  *
- * - `off` The tool describes itself as it did before guidance existed, and
- *         raises no `many_required_terms` warning.
+ * - `off` The tool describes itself as it did before guidance existed.
  * - `v1`  The description says how a phrasing is matched (every required
- *         word in one passage) and how `limit` is shared, the court example
- *         names every admitted country's apex courts, and a long phrasing that
- *         fills fewer slots than it was given carries `many_required_terms`.
+ *         word in one passage) and how `limit` is shared, and the court
+ *         example names every admitted country's apex courts.
+ *
+ * `many_required_terms` is raised in both: it reports what a search did.
  *
  * Resolved once in `env-base`. A leaf module with no imports, because
  * `env-base` imports it.

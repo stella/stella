@@ -1,5 +1,6 @@
 import type { ESTree } from "@oxlint/plugins";
 
+import { resolveApiClientReceiverRoot } from "./api-client-chain.ts";
 import {
   getPropertyName,
   type ImportedFromOptions,
@@ -117,11 +118,19 @@ export const createNetworkCallDetector = (context: RuleContext) => {
       root === null
         ? null
         : resolveImportedExpressionForEnforcement(context, root);
-    return (
+    if (
       imported !== null &&
       (FETCH_MODULES.has(imported.source) ||
         CLIENT_MODULES.has(imported.source) ||
         imported.source.startsWith(CLIENT_MODULE_PREFIX))
-    );
+    ) {
+      return true;
+    }
+    const receiverRoot = resolveApiClientReceiverRoot(context, root);
+    const receiverImport =
+      receiverRoot === null
+        ? null
+        : resolveImportedExpressionForEnforcement(context, receiverRoot);
+    return receiverImport !== null && CLIENT_MODULES.has(receiverImport.source);
   };
 };

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-decisions-ecli-upper-idx",
   revision: 1415,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

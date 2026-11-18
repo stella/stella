@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { useNavigate, useRouter } from "@tanstack/react-router";
 
 import type { FileTab } from "@/components/inspector/file-tab";
@@ -19,47 +17,42 @@ export const useFileFullViewNavigation = () => {
   const navigate = useNavigate();
   const currentView = useCurrentWorkspaceView();
 
-  const resolveOriginView = useCallback(
-    (tab: FileTab) => resolveWorkspaceViewParams(tab.workspaceId, currentView),
-    [currentView],
-  );
+  const resolveOriginView = (tab: FileTab) =>
+    resolveWorkspaceViewParams(tab.workspaceId, currentView);
 
-  const openFullView = useCallback(
-    async (tab: FileTab, { carryEditing }: OpenFullViewOptions) => {
-      await navigate({
-        to: "/workspaces/$workspaceId/$viewId/document",
+  const openFullView = async (
+    tab: FileTab,
+    { carryEditing }: OpenFullViewOptions,
+  ) => {
+    await navigate({
+      to: "/workspaces/$workspaceId/$viewId/document",
+      params: resolveOriginView(tab),
+      search: {
+        entity: tab.entityId,
+        field: tab.id,
+        justification: undefined,
+        justificationPage: undefined,
+        ...(carryEditing && { editing: true }),
+      },
+    });
+  };
+
+  const leaveFullView = (tab: FileTab) => {
+    useInspectorTabsStore.getState().setFileMetadataLane(tab.id, "closed");
+    // Full-view file switches replace their entry, so the previous one is
+    // the screen the file was expanded from, scroll and selection intact.
+    if (router.history.canGoBack()) {
+      router.history.back();
+      return;
+    }
+    detached(
+      navigate({
+        to: "/workspaces/$workspaceId/$viewId",
         params: resolveOriginView(tab),
-        search: {
-          entity: tab.entityId,
-          field: tab.id,
-          justification: undefined,
-          justificationPage: undefined,
-          ...(carryEditing && { editing: true }),
-        },
-      });
-    },
-    [navigate, resolveOriginView],
-  );
-
-  const leaveFullView = useCallback(
-    (tab: FileTab) => {
-      useInspectorTabsStore.getState().setFileMetadataLane(tab.id, "closed");
-      // Full-view file switches replace their entry, so the previous one is
-      // the screen the file was expanded from, scroll and selection intact.
-      if (router.history.canGoBack()) {
-        router.history.back();
-        return;
-      }
-      detached(
-        navigate({
-          to: "/workspaces/$workspaceId/$viewId",
-          params: resolveOriginView(tab),
-        }),
-        "file-full-view.leave",
-      );
-    },
-    [navigate, resolveOriginView, router],
-  );
+      }),
+      "file-full-view.leave",
+    );
+  };
 
   return { leaveFullView, openFullView };
 };

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-invoices-client-backfill-idx",
   revision: 410,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

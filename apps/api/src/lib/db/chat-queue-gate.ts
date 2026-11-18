@@ -92,20 +92,30 @@ const closePositionGapOnTx = async ({
 };
 
 export type QueuedMessageRemoval =
-  | { type: "removed"; request: unknown }
+  | {
+      type: "removed";
+      request: unknown;
+      /** The chat files the enqueue stored for it. */
+      uploadedFileIds: SafeId<"userFile">[];
+    }
+  | { type: "changed" }
   | { type: "sent" }
   | { type: "not-found" };
 
 /**
- * Remove a queued message, keeping positions 1..n and the hold only while
- * something is queued. The caller holds the thread lock.
+ * Remove a queued message at the revision the caller read, keeping positions
+ * 1..n and the hold only while something is queued. One edited since
+ * (another revision) stays and answers `changed`. The caller holds the
+ * thread lock.
  */
 export const removeQueuedChatMessageOnTx = async ({
   id,
+  revision,
   threadId,
   tx,
 }: {
   id: SafeId<"chatMessage">;
+  revision: number;
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 }): Promise<QueuedMessageRemoval> => {
@@ -116,20 +126,39 @@ export const removeQueuedChatMessageOnTx = async ({
       and(
         eq(chatQueuedMessages.id, id),
         eq(chatQueuedMessages.threadId, threadId),
+        eq(chatQueuedMessages.revision, revision),
       ),
     )
     .returning({
       position: chatQueuedMessages.position,
       request: chatQueuedMessages.request,
+      uploadedFileIds: chatQueuedMessages.uploadedFileIds,
     });
   if (removed === undefined) {
+    const queued = await tx
+      .select({ id: chatQueuedMessages.id })
+      .from(chatQueuedMessages)
+      .where(
+        and(
+          eq(chatQueuedMessages.id, id),
+          eq(chatQueuedMessages.threadId, threadId),
+        ),
+      )
+      .limit(1);
+    if (queued.length > 0) {
+      return { type: "changed" };
+    }
     return (await wasSentOnTx({ id, threadId, tx }))
       ? { type: "sent" }
       : { type: "not-found" };
   }
   await closePositionGapOnTx({ position: removed.position, threadId, tx });
   await dropHoldOfEmptyQueueOnTx({ threadId, tx });
-  return { type: "removed", request: removed.request };
+  return {
+    type: "removed",
+    request: removed.request,
+    uploadedFileIds: removed.uploadedFileIds,
+  };
 };
 
 export type ChatQueueHoldWrite =
@@ -181,9 +210,11 @@ export const holdChatQueueOnTx = async ({
   })();
   // Owner columns come from the thread, and the row is written only while
   // the thread has a queued message.
+  // The table is named in the text so the conflict target reads as this
+  // table's key, not a chat turn's (scripts/check-online-index-dependencies.ts).
   // audit: skip — a hold records why queued messages wait; the turn or refusal that caused it is recorded where it happened
   await tx.execute(sql`
-    INSERT INTO ${chatQueueHolds} (
+    INSERT INTO chat_queue_holds (
       thread_id, organization_id, workspace_id, user_id, reason,
       turn_id, queued_message_id, refusal_code
     )
@@ -421,7 +452,12 @@ export const takeQueuedChatMessageOnTx = async ({
   if (!(await isDueHeadOnTx({ id, revision, threadId, tx }))) {
     return "not-due";
   }
-  const removed = await removeQueuedChatMessageOnTx({ id, threadId, tx });
+  const removed = await removeQueuedChatMessageOnTx({
+    id,
+    revision,
+    threadId,
+    tx,
+  });
   return removed.type === "removed" ? "taken" : "not-due";
 };
 

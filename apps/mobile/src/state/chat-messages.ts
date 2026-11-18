@@ -9,9 +9,15 @@ import {
 import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
 import {
   CHAT_RUN_TARGET_KIND,
+  chatLocalRunReroutedModel,
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+  chatTurnSteeringSchema,
+} from "@stll/api-contract/chat-send-intent";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -23,6 +29,7 @@ import type { ChatDraft, SentFile } from "@/state/chat-attachments";
 import { draftDocumentsOf } from "@/state/chat-documents";
 import type { ChatDraftDocument } from "@/state/chat-documents";
 import { storedTurnFailure } from "@/state/chat-failure";
+import { storedLimitResetsAt } from "@/state/chat-limit-reminder";
 import { localRunTargetOf, pendingInputOf } from "@/state/chat-pending-input";
 import type { LocalRunTarget, PendingInput } from "@/state/chat-pending-input";
 
@@ -62,6 +69,11 @@ const messagesPageSchema = v.object({
   messages: v.array(messageSchema),
   olderCursor: v.nullable(v.string()),
   activeTurnId: v.optional(v.nullable(v.string()), null),
+  /** Whether that turn takes a message mid-turn; unsaid, it takes none. */
+  activeTurnSteering: v.optional(
+    chatTurnSteeringSchema,
+    CHAT_TURN_STEERING.notSteerable,
+  ),
   usedAnonymization: v.optional(v.boolean(), false),
   /** Where the thread's turns run, read where a paused one is answered. */
   runTarget: v.optional(v.unknown()),
@@ -84,8 +96,24 @@ export type ChatEntry = {
   readonly drafts: readonly ChatDraftDocument[];
   /** Why the answer's turn failed; absent for one that did not. */
   readonly failure?: AIErrorKind;
+  /**
+   * When the usage limit of the agent on the person's computer that stopped
+   * the answer's turn resets; absent for any other answer.
+   */
+  readonly limitResetsAt?: string;
   /** What the answer's context left out, as the web says it too. */
   readonly contextNotice: ChatContextNotice | null;
+  /**
+   * The model a coding agent's answer ran on when the harness rerouted it
+   * away from the one asked for; absent when it ran on that one.
+   */
+  readonly ranOnModel?: string;
+  /**
+   * A stored message of the person's: its parts as the thread stores them,
+   * which an edit sends back. Absent on an answer and on a message still
+   * being sent from here.
+   */
+  readonly parts?: readonly unknown[];
 };
 
 const contextNoticeMetadataSchema = v.object({
@@ -130,12 +158,19 @@ export type ChatMessagesPage = {
   readonly entries: readonly ChatEntry[];
   readonly olderCursor: string | null;
   readonly activeTurnId: string | null;
+  /** Whether the active turn takes a message mid-turn, as the server knows it. */
+  readonly activeTurnSteering: ChatTurnSteering;
   readonly usedAnonymization: boolean;
   readonly pendingInput: PendingInput | null;
   /** On the thread's latest page, when its latest answer failed. */
   readonly retry: ChatRetry | null;
   /** Where the thread's turns run: on stella's model path, or a computer. */
   readonly runTargetKind: ChatRunTarget["kind"];
+  /**
+   * The computer target the thread's turns run on, when they run on the
+   * person's computer: what an edit names, as a regeneration does.
+   */
+  readonly localRunTarget: LocalRunTarget | undefined;
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
@@ -168,6 +203,14 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     message.role === "assistant"
       ? storedTurnFailure(message.metadata)
       : undefined;
+  const limitResetsAt =
+    message.role === "assistant"
+      ? storedLimitResetsAt(message.metadata)
+      : undefined;
+  const ranOnModel =
+    message.role === "assistant"
+      ? chatLocalRunReroutedModel(message.metadata)
+      : null;
   if (
     text === "" &&
     blocks.length === 0 &&
@@ -190,6 +233,9 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
         ? (contextNoticeIn(message.metadata) ?? null)
         : null,
     ...(failure === undefined ? {} : { failure }),
+    ...(limitResetsAt === undefined ? {} : { limitResetsAt }),
+    ...(ranOnModel === null ? {} : { ranOnModel }),
+    ...(message.role === "user" ? { parts: message.parts } : {}),
   };
 };
 
@@ -253,11 +299,13 @@ const toPage = (
   entries: page.messages.flatMap((message) => toChatEntry(message) ?? []),
   olderCursor: page.olderCursor,
   activeTurnId: page.activeTurnId,
+  activeTurnSteering: page.activeTurnSteering,
   usedAnonymization: page.usedAnonymization,
   // A thread that never chose where it runs runs on stella's model path.
   runTargetKind: v.is(chatRunTargetSchema, page.runTarget)
     ? page.runTarget.kind
     : CHAT_RUN_TARGET_KIND.cloud,
+  localRunTarget: localRunTargetOf(page.runTarget),
   pendingInput: latest
     ? pendingInputOf({
         message: page.messages.at(-1),
@@ -267,6 +315,21 @@ const toPage = (
   retry: latest ? retryOf(page.messages, page.runTarget) : null,
 });
 
+/**
+ * Whether the turn takes a message mid-turn once the thread's page is read
+ * again: as the page says, unless a turn's stream is open, which says it for
+ * its own turn.
+ */
+export const steeringAfterPageRead = ({
+  page,
+  shown,
+  streamOpen,
+}: {
+  readonly page: ChatTurnSteering;
+  readonly shown: ChatTurnSteering;
+  readonly streamOpen: boolean;
+}): ChatTurnSteering => (streamOpen ? shown : page);
+
 /** An older page in front of what is loaded, without a message twice. */
 export const prependOlderPage = (
   loaded: readonly ChatEntry[],
@@ -274,6 +337,27 @@ export const prependOlderPage = (
 ): ChatEntry[] => {
   const seen = new Set(loaded.map((entry) => entry.id));
   return [...older.filter((entry) => !seen.has(entry.id)), ...loaded];
+};
+
+/**
+ * The loaded thread once its latest page is read again, as the server holds
+ * it now: that page, after the loaded messages known to come before it (the
+ * ones before the page's oldest message). A message the server no longer
+ * holds, such as one an edit elsewhere replaced, leaves. When the page's
+ * oldest message is not loaded, nothing loaded is known to come before it:
+ * the page stands alone (`standalone`), and paging starts again from its
+ * cursor.
+ */
+export const withLatestPage = (
+  loaded: readonly ChatEntry[],
+  latest: readonly ChatEntry[],
+): { readonly entries: readonly ChatEntry[]; readonly standalone: boolean } => {
+  const oldest = latest[0];
+  const index =
+    oldest === undefined ? -1 : loaded.findIndex(({ id }) => id === oldest.id);
+  return index === -1
+    ? { entries: latest, standalone: true }
+    : { entries: [...loaded.slice(0, index), ...latest], standalone: false };
 };
 
 const threadPath = (threadId: string) =>

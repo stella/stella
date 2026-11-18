@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-correspondence-attachments-ws-entity-idx",
   revision: 720,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

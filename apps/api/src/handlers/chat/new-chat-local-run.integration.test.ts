@@ -7,7 +7,14 @@ import {
   CHAT_THREAD_PLACEHOLDER_TITLE,
   CHAT_TURN_ID_HEADER,
 } from "@stll/api-contract";
-import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_COMMAND_ERROR_CODE,
+  CHAT_COMMAND_ID_HEADER,
+} from "@stll/api-contract/chat-command";
+import type {
+  ChatLocalRunTarget,
+  ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
   type DesktopRunnerHarnessReport,
@@ -204,10 +211,22 @@ const newThreadId = () => {
 const firstSend = (
   threadId: SafeId<"chatThread">,
   runTarget: ChatSendRequest["runTarget"],
-  { runId, runMode }: { runId?: string; runMode?: "agent" } = {},
+  {
+    commandId,
+    messageId,
+    runId,
+    runMode,
+  }: {
+    /** The member's command id, which the client sends on every retry. */
+    commandId?: string;
+    /** A retry resends its message under the first attempt's id. */
+    messageId?: SafeId<"chatMessage">;
+    runId?: string;
+    runMode?: "agent";
+  } = {},
 ): SendMessageCtx => {
   const message: ChatSendRequest["message"] = {
-    id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+    id: messageId ?? toSafeId<"chatMessage">(Bun.randomUUIDv7()),
     parts: [{ content: "Run the tests", type: "text" }],
     role: "user",
   };
@@ -247,6 +266,8 @@ const firstSend = (
     recordAuditEvent: async () => undefined,
     request: new Request("http://localhost/v1/chat"),
     route: "/v1/chat" satisfies ApiRoutePath,
+    headers:
+      commandId === undefined ? {} : { [CHAT_COMMAND_ID_HEADER]: commandId },
     safeDb,
     scopedDb,
     set: { headers: {}, status: 200 },
@@ -353,5 +374,99 @@ describe("a new chat's first send bound for the member's computer", () => {
     const turnId = await storedTurnId(takenThread);
     expect(turnId).toBeDefined();
     expect(taken.set.headers[CHAT_TURN_ID_HEADER]).toBe(turnId ?? "");
+  });
+});
+
+describe("a send retried under its command id after a lost answer", () => {
+  // One send path for both targets: the retry learns its first attempt's
+  // turn whether that turn runs on stella or on the member's computer.
+  const targets: [string, ChatRunTarget][] = [
+    ["stella's cloud model", { kind: "cloud" }],
+    ["the member's computer", CODEX],
+  ];
+  test.each(targets)(
+    "on %s is answered with the first attempt's turn and hands over no other",
+    async (_target, runTarget) => {
+      const threadId = newThreadId();
+      const commandId = Bun.randomUUIDv7();
+      const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+      const runId = `run-${messageId}`;
+      streamChatMock.mockClear();
+
+      const first = firstSend(threadId, runTarget, {
+        commandId,
+        messageId,
+        runId,
+      });
+      expect(await sendMessage.handler(first)).toBeInstanceOf(Response);
+      const turnId = await storedTurnId(threadId);
+      expect(turnId).toBeDefined();
+      expect(first.set.headers[CHAT_TURN_ID_HEADER]).toBe(turnId ?? "");
+      expect(handedOff()?.harness).toBe(
+        runTarget.kind === "local" ? runTarget.harness : undefined,
+      );
+
+      const retry = firstSend(threadId, runTarget, {
+        commandId,
+        messageId,
+        runId,
+      });
+      expect(await sendMessage.handler(retry)).toMatchObject({
+        code: 409,
+        response: { code: CHAT_COMMAND_ERROR_CODE.replayed },
+      });
+      expect(retry.set.headers[CHAT_TURN_ID_HEADER]).toBe(turnId ?? "");
+      // Nothing ran again: one turn, handed to its run once.
+      expect(streamChatMock).toHaveBeenCalledTimes(1);
+      expect(
+        await testDb
+          .select({ id: chatTurns.id })
+          .from(chatTurns)
+          .where(eq(chatTurns.threadId, threadId)),
+      ).toHaveLength(1);
+      expect(await storedRunTarget(threadId)).toEqual(runTarget);
+    },
+  );
+});
+
+describe("a send to a thread that runs on the member's computer", () => {
+  /** A thread whose Run on choice is Codex on the member's computer. */
+  const threadOnCodex = async () => {
+    const threadId = newThreadId();
+    await testDb.insert(chatThreads).values({
+      id: threadId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      title: CHAT_THREAD_PLACEHOLDER_TITLE,
+      workspaceId: null,
+      contextMatterIds: [],
+      dataWorkspaceIds: [],
+      chatLocalRunTarget: CODEX,
+    });
+    picks.length = 0;
+    streamChatMock.mockClear();
+    return threadId;
+  };
+
+  test("runs on the thread's computer when it names no target, as the phone sends it", async () => {
+    const threadId = await threadOnCodex();
+
+    const result = await sendMessage.handler(firstSend(threadId, undefined));
+
+    expect(result).toBeInstanceOf(Response);
+    expect(handedOff()?.harness).toBe("codex");
+    expect(await storedRunTarget(threadId)).toEqual(CODEX);
+  });
+
+  test("runs on stella when it names stella, and the thread keeps its choice", async () => {
+    const threadId = await threadOnCodex();
+
+    const result = await sendMessage.handler(
+      firstSend(threadId, { kind: "cloud" }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    expect(handedOff()).toBeUndefined();
+    expect(await storedRunTarget(threadId)).toEqual(CODEX);
   });
 });

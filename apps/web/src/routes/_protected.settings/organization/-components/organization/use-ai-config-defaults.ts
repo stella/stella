@@ -1,7 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import {
   projectDefaultRoleModels,
   projectProviderDefaultRoleModels,
@@ -11,7 +9,6 @@ import { aiDefaultsPreviewOptions } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type UseAIConfigDefaultsOptions = {
   config: OrganizationAIConfig | null;
@@ -27,29 +24,21 @@ export const useAIConfigDefaults = ({
   const storedProviders = config?.configured
     ? config.providers.map(({ provider }) => provider)
     : [];
-  const defaultsQuery = useQuery(
-    resourceQueryOptions(
-      {
-        ...aiDefaultsPreviewOptions({ organizationId, providers }),
-        enabled: config !== null,
-        ...(config !== null &&
-        JSON.stringify(providers) === JSON.stringify(storedProviders)
-          ? {
-              initialData: {
-                defaultModels: projectDefaultRoleModels(config.defaultModels),
-                providerDefaultModels: projectProviderDefaultRoleModels(
-                  config.providerDefaultModels,
-                ),
-              },
-            }
-          : {}),
-      },
-      {
-        resources: [RESOURCE_TYPE.ORGANIZATION],
-        scope: { type: "organization" },
-      },
-    ),
-  );
+  const defaultsQuery = useQuery({
+    ...aiDefaultsPreviewOptions({ organizationId, providers }),
+    enabled: config !== null,
+    ...(config !== null &&
+    JSON.stringify(providers) === JSON.stringify(storedProviders)
+      ? {
+          initialData: {
+            defaultModels: projectDefaultRoleModels(config.defaultModels),
+            providerDefaultModels: projectProviderDefaultRoleModels(
+              config.providerDefaultModels,
+            ),
+          },
+        }
+      : {}),
+  });
   const defaultsView = queryView(defaultsQuery);
   useQueryViewError(defaultsView, "useAIConfigDefaults:query");
   return {

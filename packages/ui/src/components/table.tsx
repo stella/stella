@@ -354,6 +354,9 @@ const TableCaption = ({
   />
 );
 
+export { TABLE_FIRST_LINE } from "./table-layout";
+export type { TableFirstLine } from "./table-layout";
+
 export {
   Table,
   TableHeader,

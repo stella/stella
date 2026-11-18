@@ -85,6 +85,7 @@
     "documentClose": "Bezárás",
     "approvalBrowserNote": "Engedélyezés után a számítógépe böngészőjében fut, a stella bővítményen keresztül.",
     "grantFailed": "Az engedélyt nem sikerült menteni. Próbálja újra.",
+    "limitReminderFailed": "A módosítást nem sikerült menteni. Próbálja újra.",
     "elsewhereBrowser": "Ez a lépés a számítógépe böngészőjében fut, a stella bővítményen keresztül. A befejezéshez nyissa meg ott ezt a beszélgetést a stellában.",
     "elsewhereSecret": "Ehhez a lépéshez kulcs kell. Biztonsági okból a kulcsokat a számítógépen, a stellában lehet hozzáadni, nem az alkalmazásban.",
     "elsewhereConnector": "Ez a lépés egy alkalmazást kapcsol össze. Biztonsági okból az alkalmazásokat a számítógépen, a stellában lehet összekapcsolni, nem az alkalmazásban.",
@@ -103,6 +104,8 @@
     "pickFailed": "A fájlválasztót nem sikerült megnyitni. Próbálja újra.",
     "sendFileRefused": "Egy fájlt nem sikerült elküldeni, ezért az üzenet nem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
     "sendFileNotAnonymizable": "Ez a beszélgetés anonimizált, és a stella nem tudta anonimizálni az egyik fájlt, ezért semmi sem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
+    "sendLocalRunNotAnonymizable": "Ez a beszélgetés anonimizált, a számítógépén futó kódoló ügynök pedig a dokumentumait eredeti formájukban olvassa, ezért semmi sem lett elküldve neki.",
+    "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "pickTitle": "Válasszon beszélgetést",
     "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal.",
     "runBanner": {
@@ -247,7 +250,15 @@
         "showMore": "Több megjelenítése"
       },
       "sessionNotResumed": "A számítógépén futó kódoló ügynök nem tudta onnan folytatni, ahol abbahagyta, ezért a csevegés üzeneteiből dolgozott tovább.",
-      "steered": "Az ügynök munkája közben elküldve"
+      "steered": "Az ügynök munkája közben elküldve",
+      "ranOnModel": "Ezen a modellen futott: {model}",
+      "desktopSettingsSteps": "A számítógépén a stella desktopban nyissa meg a Beállítások › Általános › AI-előfizetések részt.",
+      "errorLimitResetsAt": "A számítógépén futó kódoló ügynök elérte a használati korlátját. {time} után újra megpróbálhatja.",
+      "limitReminderNotify": "Értesítsen, amikor visszaáll",
+      "limitReminderScheduled": "{time} után értesítjük.",
+      "limitResumeContinue": "Automatikus folytatás, amikor visszaáll",
+      "limitResumeScheduled": "{time} után automatikusan folytatódik.",
+      "limitReminderCancel": "Mégse"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}",
@@ -293,7 +304,67 @@
       "noRun": "Az ügynök most nem fut a számítógépén.",
       "cannotSteer": "Ez az ügynök munka közben nem fogad üzeneteket.",
       "runFull": "Az ügynök most nem fogad több üzenetet.",
-      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét."
+      "notTaken": "Az ügynök most nem tudta fogadni az üzenetét.",
+      "queuedMessageChanged": "Az üzenet időközben megváltozott vagy már nincs a sorban, ezért az ügynök nem kapta meg."
+    },
+    "queue": {
+      "notice": "Sorba állítva – a jelenlegi válasz befejeztével küldjük el",
+      "prompt": "Küldés, amikor az ügynök végzett",
+      "sendNow": "Küldés most",
+      "remove": "Sorba állított üzenet visszavonása",
+      "edit": "Szerkesztés",
+      "moveUp": "Mozgatás fel",
+      "moveDown": "Mozgatás le",
+      "cancel": "Mégse",
+      "attachments": "{count, plural, one {# melléklet} other {# melléklet}}",
+      "actions": "A sorban álló üzenet műveletei",
+      "notSent": "Nem sikerült elküldeni",
+      "pause": "Sor szüneteltetése",
+      "resume": "Sor folytatása",
+      "replaceTitle": "Elküldi most ezt az üzenetet?",
+      "replaceDescription": "Ez a csevegés az Ön válaszára vár. Ha most elküldi ezt az üzenetet, a kérdés vagy jóváhagyás, amelyre vár, megszűnik.",
+      "noLongerQueued": "Ez az üzenet már nincs a sorban.",
+      "held": {
+        "turn-failed": "A sor szüneteltetve: az utolsó válasz sikertelen volt. Folytassa a következő üzenet elküldéséhez.",
+        "turn-interrupted": "A sor szüneteltetve: az utolsó válasz megszakadt. Folytassa a következő üzenet elküldéséhez.",
+        "member": "A sor szüneteltetve.",
+        "send-refused": "A sor szüneteltetve: az első üzenetet nem sikerült elküldeni. Szerkessze vagy távolítsa el, majd folytassa.",
+        "usage-limit": "A sor szüneteltetve: elérte a használati korlátot. Folytassa, amikor visszaáll.",
+        "computer-away": "Várakozás a számítógépére: a sorban álló üzenetek elmennek, amint csatlakozik."
+      }
+    },
+    "edit": {
+      "action": "Szerkesztés",
+      "title": "Üzenet szerkesztése",
+      "input": "Szerkesztett üzenet",
+      "notice": "A küldés lecseréli ezt az üzenetet és az utána következő összes üzenetet.",
+      "cancel": "Mégse",
+      "refused": "Az üzenetet nem sikerült szerkeszteni. A csevegés most a mentett állapotot mutatja; próbálja újra, amikor már nem fut válasz.",
+      "refusedHistoryChanged": "A csevegés megváltozott a szerkesztés küldése közben. Most a mentett állapotot mutatja; küldje el újra a szerkesztést.",
+      "refusedTargetMissing": "Ez az üzenet már nincs a csevegésben, ezért nem szerkeszthető.",
+      "localFiles": {
+        "computer": {
+          "failed": "A visszavonás nem fejeződött be a számítógépén. Előfordulhat, hogy néhány fájl már megváltozott, ezért ellenőrizze a csevegés mappáját.",
+          "folderBusy": "Egy futás használja ezt a mappát a számítógépén. Próbálja újra, ha befejeződött.",
+          "noCheckpoint": "A számítógépén nincs mentett másolat a fájlokról a lépés előtti állapotból, így semmi sem vonódott vissza.",
+          "updateForEarlier": "Frissítse a stella desktopot a korábbi üzenetek módosításainak visszavonásához."
+        },
+        "conversationRestarts": "Az ügynök a csevegés szövegéből kezdi újra, mert az üzenet előtti válasz nem fejeződött be.",
+        "expired": "A számítógépe nem válaszolt időben. Próbálja újra.",
+        "option": "Az üzenet óta történt fájlmódosítások visszavonása is",
+        "optionHint": "Ez a mappában Ön által végzett módosításokat is visszavonja.",
+        "pending": "Fájlmódosítások visszavonása a számítógépén",
+        "refused": {
+          "alreadyUndone": "Ezeket a fájlmódosításokat már visszavonták.",
+          "desktopOffline": "A számítógépe offline. Nyissa meg a stella asztali alkalmazást, és próbálja újra.",
+          "desktopUpdateRequired": "A számítógépén lévő stella asztali alkalmazás túl régi a módosítások visszavonásához. Frissítse, és próbálja újra.",
+          "folderShared": "Az üzenet óta egy másik csevegés is dolgozott ebben a mappában.",
+          "noSavedCopy": "A számítógépe nem őrzött meg másolatot a mappáról az üzenet előtti állapotból: túl nagy volt, túl lassan mentődött, vagy újabb másolatok váltották fel.",
+          "severalFolders": "A későbbi üzenetek másik számítógépen vagy másik mappában futottak.",
+          "threadBusy": "Ez a csevegés még dolgozik. Próbálja újra, ha befejezte."
+        },
+        "restored": "Fájlmódosítások visszavonva"
+      }
     }
   },
   "tasks": {

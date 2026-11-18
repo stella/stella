@@ -30,6 +30,63 @@ const ownSelection = (
 };
 
 describe("shared ratchet scan", () => {
+  test("a constructor-named metric cannot inherit a missing snapshot", () => {
+    const metric = {
+      id: "constructor",
+      scope: "repo",
+      perFile: true,
+      description: "fixture",
+      count: () => ({ count: 1, files: { "a.ts": 1 } }),
+    } satisfies RatchetMetric;
+    expect(
+      assessMeasurements({
+        current: { [metric.id]: metric.count() },
+        baseline: {},
+        metrics: [metric],
+      }).allowed,
+    ).toBe(false);
+    expect(() =>
+      assessMeasurements({ current: {}, baseline: {}, metrics: [metric] }),
+    ).toThrow("ratchet metric constructor is missing from the snapshot");
+  });
+
+  for (const file of [
+    "__proto__",
+    "constructor",
+    "toString",
+    "hasOwnProperty",
+    "1",
+    "žluťoučký.ts",
+  ]) {
+    test(`a repository measurement retains the own file ${file}`, () => {
+      const measurement = { count: 2, files: { [file]: 2 } };
+      const metric = {
+        id: "own-files",
+        scope: "repo",
+        perFile: true,
+        description: "fixture",
+        count: () => measurement,
+      } satisfies RatchetMetric;
+      const result = scanTree({
+        tree: openSourceTree(ROOT),
+        metrics: [metric],
+      });
+      expect(result.snapshot[metric.id]).toEqual(measurement);
+      const assessment = assessMeasurements({
+        current: result.snapshot,
+        baseline: { [metric.id]: { count: 2, files: { "previous.ts": 2 } } },
+        metrics: [metric],
+      });
+      expect(assessment.allowed).toBe(false);
+      expect(assessment.diffs[0]?.regressedFiles).toEqual([
+        { file, from: 0, to: 2 },
+      ]);
+      expect(Object.hasOwn(result.snapshot[metric.id]?.files ?? {}, file)).toBe(
+        true,
+      );
+    });
+  }
+
   test("every file metric scans exactly the files its own globs select", () => {
     const tree = openSourceTree(ROOT);
     for (const metric of RATCHET_METRICS) {

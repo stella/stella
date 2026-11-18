@@ -1,5 +1,15 @@
 import { panic, Result } from "better-result";
-import { and, count, eq, gt, inArray, max, min, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  max,
+  min,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { Buffer } from "node:buffer";
 import { rm } from "node:fs/promises";
 
@@ -8,6 +18,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
+import { CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -27,6 +38,7 @@ import { recoverExpiredCorpusProjectionIntentsTx } from "@/api/lib/legal-search/
 import type { CorpusIndexAppendFault } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  corpusIndexAppendPublishDelayMs,
   proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
@@ -34,11 +46,12 @@ import {
   CORPUS_PROJECTION_OFFLINE_MAX_WALK_PASSES,
   corpusProjectionOfflineBlockJoins,
   type CorpusProjectionOfflineBuildPolicy,
+  type CorpusProjectionOfflineIngestedShard,
   corpusProjectionOfflineLeaseCanStart,
+  corpusProjectionOfflineLoneKillJudgement,
   corpusProjectionOfflineNextShardClass,
   corpusProjectionOfflinePageLimit,
   type CorpusProjectionOfflinePlan,
-  corpusProjectionOfflineRateCannotIndex,
   corpusProjectionOfflineShardCapAfterKill,
   corpusProjectionOfflineShardClass,
   corpusProjectionOfflineShardIsClosed,
@@ -117,11 +130,15 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  *   cap halves too (`corpusProjectionOfflineShardCapAfterKill`), and a cap
  *   that can no longer hold the largest revision stops the run
  *   (`rate_too_slow`).
- * - a lone revision killed short: its own fault (`documents`), charged like
- *   a lone indexer failure, unless the rate the run measured on earlier
- *   shards cannot index its bytes in the kill budget
- *   (`corpusProjectionOfflineRateCannotIndex`); then nothing is charged
- *   (`none`) and the run stops (`rate_too_slow`).
+ * - a lone revision killed short (`corpusProjectionOfflineLoneKillJudgement`):
+ *   its own fault (`documents`), charged like a lone indexer failure, unless
+ *   the budget it was handed was short: below the plan's indexing window, or
+ *   below what a shard of at least its size, ingested to its end in this run,
+ *   needed at its rate (`none`, `infrastructure_failed`). A run charges an
+ *   entity for a lone kill at most once and does not take it again, so the
+ *   attempt limit spans runs; the block it may lead to records
+ *   `CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE`. An engine slower than the
+ *   policy shows as shards of several killed, below.
  * - refused past its deadline, never delivered (a lost lock, a generation
  *   no longer building, no kill budget left), a failure the runner reports
  *   as infrastructure, or a census that cannot answer: nothing about the
@@ -148,19 +165,27 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
  * nothing, starts nothing (`no_progress`), or after
  * `CORPUS_PROJECTION_OFFLINE_MAX_WALK_PASSES` (`walk_pass_limit`). A pass
  * that reserves nothing ends the run `drained` only once nothing of the route
- * is outstanding either (no revision started or committed and undecided);
- * what it cannot settle by the deadline ends it `awaiting_proof`.
+ * is outstanding either (no revision started or committed and undecided, by
+ * any actor, the per-row path included). Until the run stops reserving, it
+ * waits for the earliest instant an outstanding revision becomes decidable
+ * (its lease ends, its barrier passes, its indexer has certainly ended),
+ * then sweeps, proves and walks again; what is still outstanding after that
+ * ends the run `awaiting_proof`, which the caller answers by running the
+ * build again later: a later run, or the append cycle, settles those rows.
  *
  * What the caller provides:
  * - The route lock (`lock`) lives on a session of its own. `runInTransaction`
  *   never lends that connection, or any connection holding a session-level
  *   advisory lock: a start transaction refuses to run while its connection
- *   holds any lock (`requireFreshReadCommittedStartTx`), and runs in read
- *   committed.
+ *   holds any lock but the corpus schema lane held shared
+ *   (`requireFreshReadCommittedStartTx`), and runs in read committed.
  * - `deliver` resolves only once its indexer has exited, been killed or been
  *   refused, and enforces the shard's `killAfterMs` with a monotonic timer
  *   started before it launches the indexer, never by comparing its own clock
- *   with `killDeadline`. One indexer identity per slot is exclusive in time: a run starts
+ *   with `killDeadline`. The hand-off is an in-process call: the time from
+ *   `deliver` being called to that timer's start is not measured, and must
+ *   stay well inside `CORPUS_PROJECTION_OFFLINE_INDEXER_END_MARGIN_MS` (no
+ *   job queue, no remote round trip in between). One indexer identity per slot is exclusive in time: a run starts
  *   delivering only after every offline run an earlier holder of the route
  *   started has certainly ended, and a run that fails keeps the lock until
  *   every delivery it handed out has certainly ended.
@@ -199,7 +224,8 @@ export type CorpusProjectionOfflineShard = {
    * kills it when the timer reaches this, outside this process, so neither
    * this process nor its death can extend it, and no clock skew between the
    * hosts can either. The margin after `killDeadline` then only has to cover
-   * a publish already in flight.
+   * a publish already in flight and the in-process hand-off from this call
+   * to the timer's start, which the caller keeps well inside it.
    */
   killAfterMs: number;
   revisionCount: number;
@@ -210,9 +236,18 @@ export type CorpusProjectionOfflineShard = {
 /**
  * What the caller's indexer reported for one shard. Timestamps are the
  * indexer host's clock: reported, never compared with the database clock.
+ * `ranMs` is how long the indexer ran, from launch to exit or kill, on the
+ * same monotonic timer that enforces `killAfterMs`: the only duration the
+ * run measures a rate by.
  */
 export type CorpusProjectionOfflineDeliveryOutcome =
-  | { type: "ingested"; exitCode: 0; startedAt: Date; endedAt: Date }
+  | {
+      type: "ingested";
+      exitCode: 0;
+      startedAt: Date;
+      endedAt: Date;
+      ranMs: number;
+    }
   | {
       type: "failed";
       exitCode: number;
@@ -225,19 +260,23 @@ export type CorpusProjectionOfflineDeliveryOutcome =
       cause: "indexer" | "infrastructure";
       startedAt: Date;
       endedAt: Date;
+      ranMs: number;
     }
   | {
       type: "killed_at_deadline";
       exitCode: number | null;
       startedAt: Date;
       endedAt: Date;
+      ranMs: number;
     }
   /** The indexer refused the shard: its kill budget was already spent. */
   | { type: "deadline_passed"; refusedAt: Date };
 
 /**
  * Deliver one shard through the offline indexer and resolve once it has
- * exited, been killed, or been refused. A rejection is the end of the run: an
+ * exited, been killed, or been refused. Start the kill timer at once, in this
+ * process: the end margin covers only that hand-off (see `killAfterMs`). A
+ * rejection is the end of the run: an
  * indexer it started may still be running under the slot's identity, so the
  * run keeps the route lock until that indexer's kill deadline has passed.
  */
@@ -286,8 +325,11 @@ export type CorpusProjectionOfflineAdmission = <Value>(
 
 export type CorpusProjectionOfflineBuildOptions<Family extends CorpusFamily> = {
   runInTransaction: ProjectionTransactionRunner;
-  /** Census client of an engine endpoint that reads the route's index. */
-  client: Pick<CorpusIndexClient, "aggregate">;
+  /**
+   * Census client of an engine endpoint that reads the route's index; it also
+   * counts the route's published splits once the run ends.
+   */
+  client: Pick<CorpusIndexClient, "aggregate" | "readPublishedSplitCounts">;
   family: Family;
   generation: string;
   indexId: string;
@@ -373,12 +415,6 @@ export type CorpusProjectionOfflineBuildProgress = {
      */
     attemptedBytes: number;
     attemptedMs: number;
-    /**
-     * Bytes and indexer time of every shard the indexer ran to its own end:
-     * the rate it achieved, which judges a lone revision's kill.
-     */
-    completedBytes: number;
-    completedMs: number;
     /** The shard byte cap now; it halves after a shard killed too large. */
     shardByteCap: number;
   };
@@ -423,8 +459,10 @@ export type CorpusProjectionOfflineBuildOutcome = {
    * - `drained`: a full pass over the queue reserved nothing, and nothing of
    *   the route is outstanding.
    * - `awaiting_proof`: a full pass reserved nothing, but revisions of the
-   *   route are still started or committed and undecided at the deadline, or
-   *   no proof can decide them yet (`progress.outstanding`).
+   *   route, by any actor, are still started or committed and undecided, and
+   *   none becomes decidable before the run stops reserving
+   *   (`progress.outstanding`). The caller runs the build again later; that
+   *   run, or the append cycle, settles them. Nothing is lost meanwhile.
    * - `no_progress`: a full pass reserved work but started none of it.
    * - `walk_pass_limit`: the run walked the queue its most times and the
    *   last pass still found work.
@@ -444,6 +482,40 @@ export type CorpusProjectionOfflineBuildOutcome = {
     | "rate_too_slow"
     | "infrastructure_failed";
   progress: CorpusProjectionOfflineBuildProgress;
+  /** The route's published splits when the run ended: the build's receipt. */
+  publishedSplits: CorpusProjectionOfflineSplitReceipt;
+};
+
+/**
+ * How many splits the route's index publishes once a run ends, read from the
+ * metastore. Merges never cross the node id an indexer ran under, and each
+ * build slot writes under its own, so this is what a run leaves the searchers
+ * to open. `not_read` when the run never held the route.
+ */
+type CorpusProjectionOfflineSplitReceipt =
+  | { read: "counted"; count: number }
+  | { read: "failed"; message: string }
+  | { read: "not_read" };
+
+/** Bounds the receipt's metastore read; the run's work is already recorded. */
+const SPLIT_RECEIPT_TIMEOUT_MS = 30_000;
+
+const readSplitReceipt = async (
+  client: Pick<CorpusIndexClient, "readPublishedSplitCounts">,
+  indexId: string,
+): Promise<CorpusProjectionOfflineSplitReceipt> => {
+  const read = await client.readPublishedSplitCounts({
+    includes: (candidate) => candidate === indexId,
+    observer: "unobserved",
+    signal: AbortSignal.timeout(SPLIT_RECEIPT_TIMEOUT_MS),
+  });
+  if (Result.isError(read)) {
+    return { read: "failed", message: read.error.message };
+  }
+  const counted = read.value.find((entry) => entry.indexId === indexId);
+  return counted === undefined
+    ? { read: "failed", message: `index ${indexId} is not listed` }
+    : { read: "counted", count: counted.publishedSplits };
 };
 
 /** The advisory lock key of a route's offline build. */
@@ -470,6 +542,20 @@ const lockKeyOf = (
  * no advisory and no transaction id lock means nothing was locked yet. A
  * connection that holds a session-level advisory lock (the route lock among
  * them) is refused too, which is why that lock lives on a session of its own.
+ *
+ * One lock is let through: the corpus schema lane held SHARED, which the
+ * production transaction boundary (`createIngestionDb`) takes before every
+ * corpus batch. It cannot close a cycle with anything a start waits for. A
+ * cycle through it needs a holder of a conflicting lane lock that waits for
+ * something a start holds, and the only conflicting mode is EXCLUSIVE, which
+ * only the migrate entrypoint takes, on a session of its own, waiting with
+ * nothing else held; every shared holder only tries the lane, never waits for
+ * it, so no start ever waits for the lane either. Shared holders never
+ * conflict with one another. The exclusive waiter waits for a start exactly
+ * as for any other corpus batch: one bounded transaction of at most
+ * `CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE` revisions, with no delivery inside
+ * it, and once it waits every further try is refused, so no new start
+ * begins. The lane EXCLUSIVE, or any other key, is still refused.
  */
 export const requireFreshReadCommittedStartTx = async (
   tx: Transaction,
@@ -483,6 +569,7 @@ export const requireFreshReadCommittedStartTx = async (
         WHERE pid = pg_backend_pid()
           AND granted
           AND locktype IN ('advisory', 'transactionid', 'tuple')
+          AND NOT ${sql.raw(CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL)}
       )`,
     })
     .from(sql`(SELECT 1) AS probe`);
@@ -565,8 +652,6 @@ const emptyProgress = (
     capped: 0,
     attemptedBytes: 0,
     attemptedMs: 0,
-    completedBytes: 0,
-    completedMs: 0,
     shardByteCap,
   },
   recorded: 0,
@@ -636,17 +721,20 @@ const validateDeliveryOutcome = (
 ): CorpusProjectionOfflineDeliveryOutcome => {
   const instant = (value: unknown) =>
     value instanceof Date && Number.isFinite(value.getTime());
+  const duration = (value: number) => Number.isSafeInteger(value) && value >= 0;
   switch (outcome.type) {
     case "ingested":
     case "killed_at_deadline":
       return instant(outcome.startedAt) &&
         instant(outcome.endedAt) &&
+        duration(outcome.ranMs) &&
         (outcome.exitCode === null || Number.isSafeInteger(outcome.exitCode))
         ? outcome
         : panic(`Offline delivery outcome is malformed: ${outcome.type}`);
     case "failed":
       return instant(outcome.startedAt) &&
         instant(outcome.endedAt) &&
+        duration(outcome.ranMs) &&
         Number.isSafeInteger(outcome.exitCode) &&
         DELIVERY_FAILURE_CAUSES.has(outcome.cause)
         ? outcome
@@ -762,6 +850,13 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
    * A run that fails keeps its lock until the latest of them has passed.
    */
   readonly #inFlight = new Map<string, Date>();
+  /** Shards the indexer ingested to their end: what judges a lone kill. */
+  readonly #ingested: CorpusProjectionOfflineIngestedShard[] = [];
+  /**
+   * Entities this run charged for a lone kill. The run reserves them no more:
+   * one charge per run, so the attempt limit spans runs, not one incident.
+   */
+  readonly #chargedAlone = new Set<string>();
   /**
    * Final files of started shards not yet removed: one never delivered, or
    * whose delivery failed, is removed when the run ends.
@@ -915,50 +1010,103 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   }
 
   /**
-   * A pass from the head reserved nothing. Count what of the route is still
-   * started or committed and undecided, by any actor; if any is, sweep and
-   * prove once. `stuck` when that settled nothing or the deadline has passed.
+   * A pass from the head reserved nothing. If any revision of the route is
+   * still started or committed and undecided, by any actor, sweep and prove
+   * once. `stuck` when that settled nothing.
    */
   async #settleOutstanding(): Promise<
     "nothing_outstanding" | "settled_some" | "stuck"
   > {
-    const outstanding = await this.#countOutstanding();
-    this.#progress.outstanding = outstanding;
-    if (outstanding === 0) {
+    if (!(await this.#outstandingExists())) {
+      this.#progress.outstanding = 0;
       return "nothing_outstanding";
     }
-    if ((await this.#nowMs()) >= this.#options.deadline.getTime()) {
-      return "stuck";
-    }
-    const before = this.#progress.recovered;
+    // The sweep is generation-wide: judge progress by this route's own rows.
+    const before = await this.#countOutstanding();
     await this.#recover();
-    return this.#progress.recovered === before ? "stuck" : "settled_some";
+    return (await this.#countOutstanding()) < before ? "settled_some" : "stuck";
   }
 
-  /**
-   * Revisions of the route started or committed and not decided yet, by any
-   * actor: one count over the in-flight and proof indexes, one row back.
-   */
+  /** The route's revisions started or committed and not decided yet. */
+  #outstandingWhere() {
+    const { family, generation, indexId } = this.#options;
+    return and(
+      eq(corpusIndexProjectionIntents.family, family),
+      eq(corpusIndexProjectionIntents.generation, generation),
+      eq(corpusIndexProjectionIntents.indexId, indexId),
+      inArray(corpusIndexProjectionIntents.status, [
+        "append_started",
+        "append_committed",
+      ]),
+    );
+  }
+
+  /** Whether any revision of the route is outstanding: one probe. */
+  async #outstandingExists(): Promise<boolean> {
+    const [row] = await this.#options.runInTransaction(
+      async (tx) =>
+        await tx
+          .select({
+            outstanding: sql<boolean>`exists (${tx
+              .select({ id: corpusIndexProjectionIntents.id })
+              .from(corpusIndexProjectionIntents)
+              .where(this.#outstandingWhere())})`,
+          })
+          .from(sql`(SELECT 1) AS probe`),
+    );
+    return row?.outstanding ?? false;
+  }
+
+  /** How many revisions of the route are outstanding, for the report. */
   async #countOutstanding(): Promise<number> {
-    const { runInTransaction, family, generation, indexId } = this.#options;
-    const [row] = await runInTransaction(
+    const [row] = await this.#options.runInTransaction(
       async (tx) =>
         await tx
           .select({ count: count() })
           .from(corpusIndexProjectionIntents)
+          .where(this.#outstandingWhere()),
+    );
+    return row?.count ?? 0;
+  }
+
+  /**
+   * The earliest instant, on the database clock and after `nowMs`, at which
+   * an outstanding revision of the route certainly becomes decidable: a
+   * start once its lease has ended (the sweep then moves it), an offline
+   * commit once its barrier has passed and its indexer has certainly ended,
+   * an ingest commit at its proof deadline. A commit that still holds its
+   * lease has no barrier, but exists only inside the one transaction that
+   * applies it, so no other transaction sees it. Null when none lies ahead.
+   */
+  async #nextDecidableAtMs(nowMs: number): Promise<number | null> {
+    const t = corpusIndexProjectionIntents;
+    const endedAfter = sql.raw(String(this.#plan.endedAfterMs));
+    const publishDelay = sql.raw(
+      String(corpusIndexAppendPublishDelayMs(this.#manifest)),
+    );
+    const decidableAt = sql<string>`(CASE
+      WHEN ${t.status} = 'append_started' THEN ${t.leaseExpiresAt}
+      WHEN ${t.appendDelivery} = 'offline_indexer' THEN greatest(
+        ${t.appendPublishBarrierAt},
+        ${t.appendStartedAt} + ${endedAfter} * interval '1 millisecond'
+      )
+      ELSE ${t.appendPublishBarrierAt} + ${publishDelay} * interval '1 millisecond'
+    END)`;
+    const after = new Date(nowMs).toISOString();
+    const [row] = await this.#options.runInTransaction(
+      async (tx) =>
+        await tx
+          .select({ at: sql<string | null>`min(${decidableAt})::text` })
+          .from(t)
           .where(
             and(
-              eq(corpusIndexProjectionIntents.family, family),
-              eq(corpusIndexProjectionIntents.generation, generation),
-              eq(corpusIndexProjectionIntents.indexId, indexId),
-              inArray(corpusIndexProjectionIntents.status, [
-                "append_started",
-                "append_committed",
-              ]),
+              this.#outstandingWhere(),
+              sql`${decidableAt} > ${after}::timestamptz`,
             ),
           ),
     );
-    return row?.count ?? 0;
+    const at = row?.at ?? null;
+    return at === null ? null : new Date(at).getTime();
   }
 
   /**
@@ -995,8 +1143,25 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           return "drained";
         }
         if (settled === "stuck") {
-          this.#stop = "awaiting_proof";
-          return "drained";
+          // Nothing is decidable now. Wait for the first row that becomes
+          // decidable while the run still reserves, then sweep, prove and
+          // walk again; otherwise the caller runs the build again later.
+          const databaseNowMs = await this.#databaseNowMs();
+          const decidableAtMs = await this.#nextDecidableAtMs(databaseNowMs);
+          // Each instant against its own clock: how long until the row is
+          // decidable (database), how long until the run stops reserving
+          // (this process), so no skew between them moves the wake past it.
+          const waitMs =
+            decidableAtMs === null ? null : decidableAtMs - databaseNowMs + 1;
+          if (
+            waitMs === null ||
+            waitMs >= stopReservingAtMs - (await this.#nowMs())
+          ) {
+            this.#progress.outstanding = await this.#countOutstanding();
+            this.#stop = "awaiting_proof";
+            return "drained";
+          }
+          await this.#sleep(waitMs);
         }
       } else {
         await this.#sleep(dueInMs);
@@ -1041,6 +1206,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               eq(corpusIndexProjectionStates.desiredIndexId, indexId),
               eq(corpusIndexProjectionStates.workStatus, "retry_scheduled"),
               eq(corpusIndexProjectionStates.appendMode, "batchable"),
+              // Entities this run charged for a lone kill wait for another.
+              this.#chargedAlone.size === 0
+                ? undefined
+                : notInArray(corpusIndexProjectionStates.entityId, [
+                    ...this.#chargedAlone,
+                  ]),
               gt(corpusIndexProjectionStates.retryNotBefore, new Date(nowMs)),
             ),
           ),
@@ -1417,6 +1588,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
               generation,
               indexId,
               after: this.#progress.cursor,
+              skipEntityIds: [...this.#chargedAlone],
               limit,
               leaseMs: this.#plan.leaseMs,
               ...(testNow === undefined ? {} : { testNow }),
@@ -1804,28 +1976,16 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     killAfterMs: number,
   ): Promise<CorpusIndexAppendFault> {
     const shards = this.#progress.shards;
-    // The rate achieved on earlier shards, before this one counts.
-    const completed = {
-      bytes: shards.completedBytes,
-      ms: shards.completedMs,
-    };
-    const ranMs =
-      outcome.type === "deadline_passed"
-        ? 0
-        : Math.max(0, outcome.endedAt.getTime() - outcome.startedAt.getTime());
+    const ranMs = outcome.type === "deadline_passed" ? 0 : outcome.ranMs;
     const attempted = () => {
       shards.attemptedBytes += shard.bytes;
       shards.attemptedMs += ranMs;
     };
-    const ranToItsEnd = () => {
-      attempted();
-      shards.completedBytes += shard.bytes;
-      shards.completedMs += ranMs;
-    };
     switch (outcome.type) {
       case "ingested":
-        ranToItsEnd();
+        attempted();
         shards.ingested += 1;
+        this.#ingested.push({ bytes: shard.bytes, ms: ranMs });
         return "documents";
       case "killed_at_deadline": {
         attempted();
@@ -1840,21 +2000,29 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           return "none";
         }
         if (entries.length === 1) {
-          // Alone, the revision held its run up itself, unless the rate the
-          // run achieved could not index it in the budget it was handed.
-          if (
-            corpusProjectionOfflineRateCannotIndex(
-              completed,
-              shard.bytes,
-              killAfterMs,
-            )
-          ) {
-            shards.infrastructureFailures += 1;
-            this.#stop ??= "rate_too_slow";
-            return "none";
+          const judgement = corpusProjectionOfflineLoneKillJudgement(
+            this.#plan,
+            { ingested: this.#ingested, bytes: shard.bytes, killAfterMs },
+          );
+          switch (judgement) {
+            case "revision": {
+              shards.killedAlone += 1;
+              // Charged once per run: the run that charges it does not take
+              // it again, so a slow hour cannot spend its attempts.
+              const [entry] = entries;
+              if (entry !== undefined) {
+                this.#chargedAlone.add(entry.lease.entityId);
+              }
+              return "documents";
+            }
+            case "budget_short":
+              shards.infrastructureFailures += 1;
+              this.#stop ??= "infrastructure_failed";
+              return "none";
+            default:
+              judgement satisfies never;
+              return panic(`Unhandled lone kill: ${String(judgement)}`);
           }
-          shards.killedAlone += 1;
-          return "documents";
         }
         shards.killedTooLarge += 1;
         const next = corpusProjectionOfflineShardCapAfterKill(
@@ -1870,12 +2038,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         return "killed";
       }
       case "failed":
+        attempted();
         if (outcome.cause === "indexer") {
-          ranToItsEnd();
           shards.indexerFailures += 1;
           return "documents";
         }
-        attempted();
         shards.infrastructureFailures += 1;
         this.#stop ??= "infrastructure_failed";
         return "none";
@@ -1919,7 +2086,15 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
                   leaseToken: lease.leaseToken,
                   documentCount,
                 })),
-                delivery: { type: "offline_indexer", fault },
+                delivery: {
+                  type: "offline_indexer",
+                  fault,
+                  killedAlone:
+                    entries.length === 1 &&
+                    entries.every(({ lease }) =>
+                      this.#chargedAlone.has(lease.entityId),
+                    ),
+                },
                 testNow,
               }),
           ),
@@ -2136,7 +2311,11 @@ export const buildCorpusProjectionRouteOffline = async <
   const progress = emptyProgress(resumeAfter, plan.shardByteCap);
   const hold = await lock.tryAcquire(lockKeyOf(family, generation, indexId));
   if (hold === null) {
-    return { status: "lock_held", progress };
+    return {
+      status: "lock_held",
+      progress,
+      publishedSplits: { read: "not_read" },
+    };
   }
   try {
     const status = await new OfflineRouteBuild(
@@ -2145,7 +2324,10 @@ export const buildCorpusProjectionRouteOffline = async <
       hold,
       progress,
     ).run();
-    return { status, progress };
+    // Read under the route lock, so no later run of this route can publish
+    // splits between this run's end and its receipt.
+    const publishedSplits = await readSplitReceipt(options.client, indexId);
+    return { status, progress, publishedSplits };
   } finally {
     await hold.release();
   }

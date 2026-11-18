@@ -1,12 +1,17 @@
-import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import { SAVED_SEARCH_NOT_FOUND_ERROR_CODE } from "@stll/api-contract";
 
 import { savedSearches } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
+import { enforceWritePrecondition } from "@/api/lib/write-contract/write-contract";
 
 import {
   validateSavedSearchCriteria,
@@ -19,8 +24,8 @@ import { savedSearchParamsSchema, updateSavedSearchBodySchema } from "./schema";
 const config = {
   contract: "replace",
   precondition: {
-    type: "deferred",
-    baselineId: "apps/api/src/handlers/saved-searches/update.ts",
+    type: "updatedAt",
+    field: "expectedUpdatedAt",
   },
   permissions: { savedSearch: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -30,7 +35,6 @@ const config = {
 } satisfies HandlerConfig;
 
 type SavedSearchUpdates = {
-  updatedAt: Date;
   name?: string;
   criteria?: SavedSearchCriteria;
 };
@@ -79,7 +83,7 @@ const updateSavedSearch = createSafeRootHandler(
       }
     }
 
-    const updates: SavedSearchUpdates = { updatedAt: new Date() };
+    const updates: SavedSearchUpdates = {};
     const changedFields: string[] = [];
     if (name && Result.isOk(name)) {
       updates.name = name.value;
@@ -92,9 +96,45 @@ const updateSavedSearch = createSafeRootHandler(
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        const acquisition = await withAggregateRowQuery({
+          aggregate: "savedSearch",
+          id: {
+            id: params.savedSearchId,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          },
+          tx,
+          mode: "update",
+          select: (lockTx) => lockTx.select().from(savedSearches),
+        });
+        const locked = acquisition.rows.at(0);
+        if (!locked) {
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              code: SAVED_SEARCH_NOT_FOUND_ERROR_CODE,
+              message: "Saved search not found",
+            }),
+          );
+        }
+        const conflict = enforceWritePrecondition({
+          type: "updatedAt",
+          field: "expectedUpdatedAt",
+          storedUpdatedAt: locked.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "Saved search",
+        });
+        if (conflict) {
+          return Result.err(conflict);
+        }
         const [savedSearch] = await tx
           .update(savedSearches)
-          .set(updates)
+          .set({
+            ...updates,
+            // The wire token has millisecond precision; even writes in one
+            // clock tick must invalidate the previous editor snapshot.
+            updatedAt: sql`greatest(date_trunc('milliseconds', clock_timestamp()), date_trunc('milliseconds', ${savedSearches.updatedAt}) + interval '1 millisecond')`,
+          })
           .where(
             and(
               eq(savedSearches.id, params.savedSearchId),
@@ -104,7 +144,7 @@ const updateSavedSearch = createSafeRootHandler(
           )
           .returning();
         if (!savedSearch) {
-          return null;
+          return panic("Locked saved search disappeared before update");
         }
 
         await recordAuditEvent(tx, {
@@ -113,17 +153,17 @@ const updateSavedSearch = createSafeRootHandler(
           resourceId: savedSearch.id,
           changes: { fields: { old: null, new: changedFields } },
         });
-        return savedSearch;
+        return Result.ok(savedSearch);
       }),
     );
-    if (!updated) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Saved search not found" }),
-      );
-    }
-
-    return Result.ok(toSavedSearchResponse(updated));
+    const savedSearch = yield* updated;
+    return Result.ok(toSavedSearchResponse(savedSearch));
   },
 );
+
+declareAggregateMutation(updateSavedSearch, {
+  type: "aggregate",
+  aggregates: ["savedSearch"],
+});
 
 export default updateSavedSearch;

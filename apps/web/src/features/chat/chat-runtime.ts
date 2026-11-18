@@ -20,6 +20,7 @@ import {
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
+import { CHAT_COMMAND_MAX_RETRIES } from "@stll/api-contract/chat-command";
 import {
   isSameLocalRunQuestionPause,
   type LocalRunQuestionPause,
@@ -35,12 +36,20 @@ import {
   chatLocalRunSteerEventSchema,
   type ChatLocalRunSteerOutcome,
   type ChatLocalRunSteerRefusal,
+  type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+  chatTurnSteeringEventSchema,
+} from "@stll/api-contract/chat-send-intent";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
   createDurableChatTransport,
+  finishedChatRunResponse,
 } from "@stll/chat/durable-transport";
 import {
   chatResumeSnapshotSchema,
@@ -107,7 +116,12 @@ import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
-import { chatFetchClient, chatResponseError } from "./chat-fetch";
+import {
+  chatCommandFetchClient,
+  ChatCommandReplayedError,
+  chatFetchClient,
+  chatResponseError,
+} from "./chat-fetch";
 import {
   localRunLimitResetsAtFromThrown,
   withLocalRunLimitResetsAt,
@@ -147,6 +161,13 @@ export type ChatSendMessageOptions = {
   /** Where the message was sent from; a send without it is not timed. */
   timingSurface?: ChatTimingSurface | undefined;
 };
+/** A new chat's first message, sent before the page moved to the chat. */
+export type ChatRouteHandoff = {
+  /** Whether the server took the message's turn, once it answered. */
+  accepted: Promise<ChatSendAcceptance>;
+  message: ChatRouteHandoffMessage;
+};
+
 export type ChatRouteHandoffStart = {
   messageId: SafeId<"chatMessage">;
   status: "started";
@@ -185,6 +206,10 @@ type ChatRuntimeSnapshot = {
    *  `null` while it runs. A rejoin replays the run's events, so a reload
    *  reads the same. */
   computerWait: ChatComputerWait | null;
+  /** Whether the turn running or waiting now takes a message mid-turn, as
+   *  the server tells it (the turn's stream, else the thread's page). A new
+   *  turn takes none until its stream says so; a cloud turn never does. */
+  turnSteering: ChatTurnSteering;
   /** When this page sent the message its running request carries, on the
    *  `performance.now()` clock: the start every turn's live elapsed time
    *  counts from, on stella or on the member's computer alike. `null` once
@@ -270,17 +295,12 @@ export type ChatRuntime = ChatActivitySession & {
   steerLocalTurn: (input: {
     inputId: string;
     text: string;
+    source: ChatLocalRunSteerSource;
   }) => Promise<ChatSteerOutcome>;
   getSnapshot: () => ChatRuntimeSnapshot;
   /** Answer the latest message again: a regeneration, which the server
    *  takes only for a message it stores. */
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
-  /**
-   * Send the page's latest message again as the new message it still is,
-   * for a send the server refused before it stored anything. The registry
-   * decides between this and `reload` (`resendLatestChatMessage`).
-   */
-  sendLatestMessageAgain: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
   /** Show the thread as the server stores it, after a request the server did
    *  not accept: its messages replace the page's, and the request's error
@@ -291,6 +311,12 @@ export type ChatRuntime = ChatActivitySession & {
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
   ) => Promise<ChatRouteHandoffStart>;
+  /**
+   * The route handoff this runtime started that no page has taken yet, once:
+   * the page the member lands on takes it, to hand the message back to its
+   * composer if the server refuses it.
+   */
+  takeRouteHandoff: () => ChatRouteHandoff | null;
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
@@ -327,7 +353,7 @@ export const sendThreadChatMessage = async (
  * accepted the turn (whose answer then streams on), or the request failed
  * before it did, with the failure it reported.
  */
-type ChatSendAcceptance =
+export type ChatSendAcceptance =
   { status: "accepted" } | { status: "failed"; error: Error };
 
 type ChatThreadSendUntilAccepted = (
@@ -353,6 +379,38 @@ export const sendThreadChatMessageUntilAccepted = async (
   return await send(message, options);
 };
 
+/**
+ * The send a message would make, as the chat's queue keeps it: everything the
+ * page sends with it now (its mode, the open document, the run target), but
+ * no run, which the queue's sender gives it when it sends it.
+ */
+export type QueuedChatSendBody = Omit<
+  ChatSendRequestDraft,
+  "message" | "runId" | "threadId" | "truncateAfterMessageId" | "turnIntent"
+> & {
+  message: Omit<ChatSendRequestDraft["message"], "role"> & { role: "user" };
+};
+
+type ChatThreadQueuedSend = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => QueuedChatSendBody;
+
+const threadQueuedSendByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadQueuedSend
+>();
+
+export const queuedChatSendOf = (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): QueuedChatSendBody =>
+  (
+    threadQueuedSendByRuntime.get(chat) ??
+    panic("Missing thread queued send capability for chat runtime")
+  )(message, options);
+
 const getChatApiPath = () => apiUrl("/chat");
 
 /** Runs `callback` once, later; the returned function cancels it. */
@@ -377,6 +435,9 @@ type CreateChatRuntimeProps = {
   /** The thread's turn not yet settled when the page loaded, which Stop
    *  cancels until a request names a newer one. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn; absent where the thread's
+   *  turns run on stella and take none. */
+  activeTurnSteering?: ChatTurnSteering | undefined;
   context: ChatThreadOptionsContext | undefined;
   initialMessages: PersistedChatMessage[];
   key: ChatThreadKey;
@@ -400,7 +461,11 @@ type ActiveToolResultOperation = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const hasChatErrorCode = (error: unknown, code: string): boolean => {
+/** The run id a queued send is built under; the queue never sends it. */
+const QUEUED_SEND_RUN_ID = "queued";
+
+/** Whether `error`, or an error it was caused by, is the API's `code`. */
+export const hasChatErrorCode = (error: unknown, code: string): boolean => {
   const visited = new Set<Error>();
   let current = error;
 
@@ -456,16 +521,23 @@ const STOP_REQUEST_TIMEOUT_MS = 20_000;
  *  settled. */
 type StopAnswer = "running" | "settled";
 
-/** Ask the server to stop `turnId`: its answer is the turn as it stands. */
+/**
+ * Ask the server to stop `turnId`: its answer is the turn as it stands. An
+ * answer that never arrived (the connection failed, or it timed out) is asked
+ * for again up to `retries` times: a stop names its turn, so asking again can
+ * stop only that turn, and the server answers each ask the same way.
+ */
 const requestChatTurnStop = async ({
+  retries = 0,
   threadId,
   turnId,
 }: {
+  retries?: number | undefined;
   threadId: string;
   turnId: SafeId<"chatTurn">;
 }): Promise<Result<StopAnswer, Error>> => {
-  const sent = await Result.tryPromise(
-    async (): Promise<Result<StopAnswer, APIError>> => {
+  const ask = async () =>
+    await Result.tryPromise(async (): Promise<Result<StopAnswer, APIError>> => {
       const { data, error } = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(threadId) })
         .turns({ turnId })
@@ -476,8 +548,17 @@ const requestChatTurnStop = async ({
         return Result.err(toAPIError(error));
       }
       return Result.ok(data.turn.status === "running" ? "running" : "settled");
-    },
-  );
+    });
+  /** No answer arrived: the request failed before any status came back. */
+  const lost = (asked: Awaited<ReturnType<typeof ask>>) =>
+    Result.isError(asked) ||
+    (Result.isError(asked.value) &&
+      (asked.value.error.transportKind === "network" ||
+        asked.value.error.transportKind === "timeout"));
+  let sent = await ask();
+  for (let retry = 0; retry < retries && lost(sent); retry += 1) {
+    sent = await ask();
+  }
   return Result.isError(sent)
     ? Result.err(toError(sent.error.cause))
     : sent.value;
@@ -514,6 +595,7 @@ const hasUserMessage = (
 
 export const createChatRuntime = ({
   activeTurnId,
+  activeTurnSteering = CHAT_TURN_STEERING.notSteerable,
   context,
   initialMessages,
   key,
@@ -542,6 +624,10 @@ export const createChatRuntime = ({
     stop: { status: "idle" },
     turnAbandoned: false,
     computerWait: null,
+    turnSteering:
+      activeTurnId === null
+        ? CHAT_TURN_STEERING.notSteerable
+        : activeTurnSteering,
     turnSentAt: null,
     turnsStarted,
   };
@@ -563,6 +649,8 @@ export const createChatRuntime = ({
    *  a new one, before its request is posted. */
   let requestAnswered = Promise.withResolvers<undefined>();
   requestAnswered.resolve(undefined);
+  /** The route handoff no page has taken yet (`takeRouteHandoff`). */
+  let routeHandoff: ChatRouteHandoff | null = null;
   /** Counts the page's loadings, so a steer stays with the one it was asked
    *  in. */
   let loadingGeneration = 0;
@@ -588,6 +676,10 @@ export const createChatRuntime = ({
    *  request the send posts answers it (see `turnObservingFetchClient`). */
   let awaitedSendAcceptance:
     PromiseWithResolvers<ChatSendAcceptance> | undefined;
+  /** The run of the member's command (a send, an answer) the next request
+   *  posts, sent under a command id and again when its response is lost;
+   *  an edit or a regeneration is no command. */
+  let postedCommandRunId: string | undefined;
   /** TanStack's delivery of the page's latest send, until it has finished. */
   let clientDelivery: Promise<void> | undefined;
   /** A new message starts a new turn. Stop waits for its response headers
@@ -599,6 +691,7 @@ export const createChatRuntime = ({
     stopBeforeHeaders = "none";
     setSnapshot({
       turnSentAt: performance.now(),
+      turnSteering: CHAT_TURN_STEERING.notSteerable,
       turnsStarted: snapshot.turnsStarted + 1,
       ...(snapshot.stop.status === "idle" ? {} : { stop: { status: "idle" } }),
     });
@@ -736,18 +829,42 @@ export const createChatRuntime = ({
       if (acceptance !== undefined) {
         awaitedSendAcceptance = undefined;
       }
+      const commandRunId =
+        init?.method === "GET" ? undefined : postedCommandRunId;
+      postedCommandRunId = undefined;
       const received = await Result.tryPromise({
-        try: async () => await chatFetchClient(input, init),
+        try: async () =>
+          commandRunId === undefined
+            ? await chatFetchClient(input, init)
+            : await chatCommandFetchClient(input, init),
         catch: toError,
       });
       requestAnswered.resolve(undefined);
-      if (Result.isError(received)) {
+      const replayed =
+        Result.isError(received) &&
+        ChatCommandReplayedError.is(received.error) &&
+        commandRunId !== undefined
+          ? { runId: commandRunId, turnId: received.error.turnId }
+          : undefined;
+      if (Result.isError(received) && replayed === undefined) {
         acceptance?.resolve({ status: "failed", error: received.error });
         return readQueryResult(received);
       }
       acceptance?.resolve({ status: "accepted" });
-      const response = received.value;
-      const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
+      // An earlier attempt of this command was accepted and its response
+      // lost: its turn is this request's. The page follows it in the thread
+      // as stored, which rejoins the turn while it runs, as after a stream
+      // whose run log is gone.
+      const response =
+        replayed === undefined
+          ? readQueryResult(received)
+          : finishedChatRunResponse(replayed.runId);
+      if (replayed !== undefined) {
+        setSnapshot({ turnAbandoned: true });
+        reloadThread();
+      }
+      const servedTurnId =
+        replayed?.turnId ?? response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
         if (stopBeforeHeaders === "requested") {
@@ -918,8 +1035,10 @@ export const createChatRuntime = ({
           }),
       });
       const requestBody = readQueryResult(prepared);
-      const send = () =>
-        observeChatProviderDiagnostic(
+      const send = () => {
+        postedCommandRunId =
+          requestBody.turnIntent === undefined ? runContext.runId : undefined;
+        return observeChatProviderDiagnostic(
           keepPostedMessagesInSnapshots(
             messages,
             upstreamConnection.connect(
@@ -954,6 +1073,7 @@ export const createChatRuntime = ({
             },
           },
         );
+      };
       // A new message for the member's computer while stella desktop opens
       // (the member's own send or Run on pick started it) waits for the
       // launch, shown as such, and goes out once it ends. A continuation of
@@ -1143,6 +1263,14 @@ export const createChatRuntime = ({
         const steer = v.safeParse(chatLocalRunSteerEventSchema, value);
         if (steer.success) {
           settleSteer(steer.output.inputId, steerOutcomeOfEvent(steer.output));
+        }
+        return;
+      }
+      if (name === CHAT_TURN_STEERING_EVENT) {
+        // Unreadable, the turn keeps what it was told: a message then waits.
+        const steering = v.safeParse(chatTurnSteeringEventSchema, value);
+        if (steering.success) {
+          setSnapshot({ turnSteering: steering.output.steering });
         }
         return;
       }
@@ -1441,18 +1569,33 @@ export const createChatRuntime = ({
     }
   };
 
-  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
-    message,
-    options,
-  ) => {
+  /**
+   * Listen for whether the server takes the turn of the next send the page
+   * posts; call before starting it. The answer comes as soon as the server
+   * answered; a send that ends before its request was answered (it never
+   * started, or failed while it was prepared) answers from how its
+   * `delivery` ended.
+   */
+  const listenForSendAcceptance = () => {
     const acceptance = Promise.withResolvers<ChatSendAcceptance>();
     awaitedSendAcceptance = acceptance;
     const errorBeforeSend = snapshot.error;
-    // A send that ends before its request was answered (it never started, or
-    // failed while it was prepared) answers from how it ended.
+    return async (delivery: Promise<void>): Promise<ChatSendAcceptance> =>
+      await settleSendAcceptance({ acceptance, delivery, errorBeforeSend });
+  };
+
+  const settleSendAcceptance = async ({
+    acceptance,
+    delivery,
+    errorBeforeSend,
+  }: {
+    acceptance: PromiseWithResolvers<ChatSendAcceptance>;
+    delivery: Promise<void>;
+    errorBeforeSend: Error | undefined;
+  }): Promise<ChatSendAcceptance> => {
     const delivered = Result.tryPromise({
       try: async () => {
-        await sendThreadMessage(message, options);
+        await delivery;
       },
       catch: toError,
     }).then((outcome): ChatSendAcceptance => {
@@ -1474,6 +1617,14 @@ export const createChatRuntime = ({
       await delivered;
     }
     return answer;
+  };
+
+  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
+    message,
+    options,
+  ) => {
+    const answer = listenForSendAcceptance();
+    return await answer(sendThreadMessage(message, options));
   };
 
   const showStoredMessages = (messages: PersistedChatMessage[]): void => {
@@ -1554,9 +1705,11 @@ export const createChatRuntime = ({
   const steerLocalTurn = async ({
     inputId,
     text,
+    source,
   }: {
     inputId: string;
     text: string;
+    source: ChatLocalRunSteerSource;
   }): Promise<ChatSteerOutcome> => {
     // The loading the steer was asked in: a later one is another request,
     // which the steer must not reach.
@@ -1565,10 +1718,6 @@ export const createChatRuntime = ({
       loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
     if (!running()) {
       return STEER_UNSETTLED;
-    }
-    // A cloud turn takes nothing mid-turn.
-    if (context?.getRunTarget?.().kind !== "local") {
-      return { type: "refused", reason: "harness_cannot_steer" };
     }
     const settled = new Promise<ChatSteerOutcome>((resolve) => {
       pendingSteers.set(inputId, resolve);
@@ -1591,7 +1740,7 @@ export const createChatRuntime = ({
             const { data, error } = await api.chat
               .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
               .turns({ turnId: steeredTurn })
-              .steer.post({ inputId, text });
+              .steer.post({ inputId, text, source });
             return error
               ? Result.err(toAPIError(error))
               : Result.ok(data.steer);
@@ -1728,6 +1877,9 @@ export const createChatRuntime = ({
    */
   const settleStop = async (stoppedTurn: SafeId<"chatTurn">) => {
     let answer = await requestChatTurnStop({
+      // The member's Stop is a command like a send: a lost answer is asked
+      // for again before Stop is shown as failed.
+      retries: CHAT_COMMAND_MAX_RETRIES,
       threadId: key.threadId,
       turnId: stoppedTurn,
     });
@@ -1796,8 +1948,8 @@ export const createChatRuntime = ({
     }
   };
 
-  /** Start a turn on the page's latest user message again. The body says
-   *  what the request is: a regeneration, or the message sent anew. */
+  /** Start a turn on the page's latest user message again, as the body
+   *  says. */
   const postLatestMessageAgain = async (
     options: ChatSendMessageOptions,
   ): Promise<void> => {
@@ -1911,13 +2063,12 @@ export const createChatRuntime = ({
         },
       });
     },
-    sendLatestMessageAgain: async (options) => {
-      await postLatestMessageAgain({ body: { ...options?.body } });
-    },
     setMessages: showMessages,
     showStoredMessages,
     startRouteHandoffMessage: async (message, options) => {
+      const answer = listenForSendAcceptance();
       const started = startClientSend(message, options);
+      const accepted = answer(started.stream);
       if (started.status === "not_started") {
         const outcome = await Result.tryPromise({
           try: async () => await started.stream,
@@ -1934,7 +2085,13 @@ export const createChatRuntime = ({
         started.stream.catch(captureRuntimeError),
         "chat-queries.stream",
       );
+      routeHandoff = { accepted, message };
       return started;
+    },
+    takeRouteHandoff: () => {
+      const taken = routeHandoff;
+      routeHandoff = null;
+      return taken;
     },
     stop: () => {
       // Stopping the request does not stop the extension: a browser command
@@ -2003,6 +2160,33 @@ export const createChatRuntime = ({
   } satisfies ChatRuntime;
 
   threadSendMessageByRuntime.set(runtime, sendThreadMessage);
+  threadQueuedSendByRuntime.set(runtime, (message, options) => {
+    const {
+      runId: _runId,
+      threadId: _threadId,
+      truncateAfterMessageId: _truncateAfterMessageId,
+      turnIntent: _turnIntent,
+      ...send
+    } = buildSendRequestBody({
+      context,
+      key,
+      messages: toPersistedChatMessages([
+        {
+          id: message.id,
+          role: "user",
+          parts:
+            typeof message.content === "string"
+              ? [{ type: "text", content: message.content }]
+              : [...message.content],
+          createdAt: new Date(),
+        },
+      ]),
+      purpose: "queue",
+      run: { runId: QUEUED_SEND_RUN_ID, threadId: key.threadId },
+      requestBody: normalizeChatContinuationRequestBody(options?.body),
+    });
+    return { ...send, message: { ...send.message, role: "user" } };
+  });
   threadSendUntilAcceptedByRuntime.set(runtime, sendThreadMessageUntilAccepted);
 
   return runtime;
@@ -2039,16 +2223,25 @@ type ChatSendRequestDraft = Omit<
   message: ChatSendRequest["message"];
 };
 
+/**
+ * What a send body is built for: `send` it now, which makes its message the
+ * turn the page runs (a continuation of that turn keeps its mode), or
+ * `queue` it, which runs nothing yet.
+ */
+type ChatSendBodyPurpose = "queue" | "send";
+
 export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  purpose = "send",
   run,
   requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  purpose?: ChatSendBodyPurpose | undefined;
   run: Pick<
     RunAgentInputContext,
     "parentRunId" | "resume" | "runId" | "threadId"
@@ -2082,6 +2275,7 @@ export const buildSendRequestBody = ({
       context,
       key,
       messages,
+      purpose,
       requestBody,
     }),
     runId: run.runId,
@@ -2113,9 +2307,10 @@ export const buildSendRequestBody = ({
 
   applyChatContext({ body, context });
 
-  // Cloud is the default and travels as an absent field.
+  // A surface with a Run on choice names it, cloud included; the server runs
+  // a send that names none where its thread runs.
   const runTarget = context?.getRunTarget?.();
-  if (runTarget?.kind === "local") {
+  if (runTarget !== undefined) {
     body.runTarget = runTarget;
   }
 
@@ -2124,6 +2319,7 @@ export const buildSendRequestBody = ({
       context,
       key,
       messages,
+      purpose,
       requestBody,
     });
   if (editApplyMode !== undefined) {
@@ -2328,6 +2524,7 @@ type ResolveChatRequestSendModeProps = {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: readonly PersistedChatMessage[];
+  purpose: ChatSendBodyPurpose;
   requestBody: ChatContinuationRequestBody | undefined;
 };
 
@@ -2335,6 +2532,7 @@ const resolveChatRequestSendMode = ({
   context,
   key,
   messages,
+  purpose,
   requestBody,
 }: ResolveChatRequestSendModeProps): ChatSendMode => {
   const explicitSendMode = getRequestSendMode(requestBody);
@@ -2349,7 +2547,7 @@ const resolveChatRequestSendMode = ({
     context?.getSendMode?.() ??
     CHAT_SEND_MODE.rawOverride;
 
-  if (userMessageId) {
+  if (userMessageId && purpose === "send") {
     activeTurnSendModes.set(threadKey, { sendMode, userMessageId });
   }
 
@@ -2389,6 +2587,7 @@ const resolveChatRequestDocxEditPreferences = ({
   context,
   key,
   messages,
+  purpose,
   requestBody,
 }: ResolveChatRequestSendModeProps): Omit<
   ActiveTurnDocxEditPreferences,
@@ -2422,7 +2621,7 @@ const resolveChatRequestDocxEditPreferences = ({
     };
   }
 
-  if (userMessageId !== null) {
+  if (userMessageId !== null && purpose === "send") {
     activeTurnDocxEditPreferences.set(threadKey, {
       ...preferences,
       userMessageId,

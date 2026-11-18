@@ -37,6 +37,7 @@ import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { unqueuedSteers } from "@/api/tests/helpers/steered-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -206,12 +207,15 @@ const localRunFor = ({
       options: Parameters<typeof readRunOutputFile>[1],
     ) => Result.ok(await readRunOutputFile(testDb, options)),
     recordChatReadSeq: async () => await Promise.resolve(Result.ok(undefined)),
+    readChatTurnSteering: async () =>
+      await Promise.resolve(Result.ok("not_steerable")),
     interruptRun: async () =>
       await Promise.resolve(Result.ok({ type: "queued" })),
   });
   return createLocalChatRun(
     {
       control,
+      steeredQueue: unqueuedSteers,
       runBell: createLocalRunBell(),
       owner: { organizationId: ids.orgA, userId: ids.userA1 },
       chatThreadId: threadId,

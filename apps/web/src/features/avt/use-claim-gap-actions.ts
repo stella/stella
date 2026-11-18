@@ -10,8 +10,10 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type {
@@ -30,6 +32,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
+import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { legalListKeys } from "@/lib/workspaces/queries/legal-lists";
 
@@ -126,10 +132,22 @@ export const useClaimGapActions = ({
       }),
     );
 
+  const writeRecheck = resourceMutation({
+    mutation: "recheckClaim",
+    queryClient,
+    mutationFn: async (_variables: { workspaceId: string }) =>
+      await recheckClaim(),
+  });
+  const writeLink = resourceMutation({
+    mutation: "recordClaimReview",
+    queryClient,
+    mutationFn: async ({ input }: { workspaceId: string; input: LinkInput }) =>
+      await changeLink(input),
+  });
   const recheckKey = claimRecheckKey({ workspaceId, runId, listId, claimId });
   const recheck = useMutation({
     mutationKey: recheckKey,
-    mutationFn: recheckClaim,
+    mutationFn: async () => await writeRecheck({ workspaceId }),
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.recheckFailed")),
   });
@@ -139,7 +157,8 @@ export const useClaimGapActions = ({
     // A link or unlink only records what the reviewer points to; the grade
     // reads as out of date until they check the claim again, the one action
     // that calls the model.
-    mutationFn: changeLink,
+    mutationFn: async (input: LinkInput) =>
+      await writeLink({ workspaceId, input }),
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.linkFailed")),
   });
@@ -157,100 +176,99 @@ export const useClaimGapActions = ({
     useAddFactProgress.getState().record(progressKey, added);
   };
 
+  const writeFact = resourceMutation({
+    mutation: "addClaimFact",
+    queryClient,
+    mutationFn: async ({
+      input: submitted,
+    }: {
+      workspaceId: string;
+      input: AddFactInput;
+    }) =>
+      await useAddFactProgress.getState().runAttempt(progressKey, async () => {
+        const previous: AddedFact | undefined =
+          useAddFactProgress.getState().progress[progressKey];
+        const { statement, source } = previous?.input ?? submitted;
+        const createBody = {
+          name: statement,
+          listId: toSafeId<"legalList">(listId),
+          listItemType: LIST_ITEM_TYPE.FACT,
+        };
+        const createOperation = `claim-add-fact:${runId}:${claimId}`;
+        let pending: AddedFact = previous ?? {
+          input: { statement, source },
+          step: "creating",
+          // Recorded before the create is sent: a retry whose response was
+          // lost replays the first create instead of adding the fact twice.
+          createRequest: submit.prepare({
+            body: createBody,
+            operation: createOperation,
+          }),
+          recheckKey: createUuid(),
+        };
+        const { input, createRequest, recheckKey: retryKey } = pending;
+        const intent = { input, createRequest, recheckKey: retryKey };
+        if (pending.step === "creating") {
+          record(pending);
+          const created = unwrapApiResponse(
+            await submit.run({
+              operation: createOperation,
+              body: createBody,
+              request: pending.createRequest,
+              send: async (body, replay) =>
+                await invokeCapability("tasks.create", async (request) =>
+                  api
+                    .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                    .put(body, {
+                      ...request,
+                      headers: {
+                        "Idempotency-Key": replay.headers["Idempotency-Key"],
+                        ...request.headers,
+                      },
+                    }),
+                ),
+            }),
+          );
+          pending = { ...intent, step: "added", entityId: created.entityId };
+        }
+        let added = pending;
+        const { entityId } = added;
+        record(added);
+        if (added.step === "added") {
+          const sourceRequest = await prepareFactSource({
+            queryClient,
+            submit,
+            workspaceId,
+            listId,
+            entityId,
+            source,
+          });
+          added = { ...intent, step: "sourcing", entityId, sourceRequest };
+          record(added);
+        }
+        if (added.step === "sourcing") {
+          await submitFactSource({
+            workspaceId,
+            submit,
+            sourceRequest: added.sourceRequest,
+          });
+          added = { ...intent, step: "sourced", entityId };
+          record(added);
+        }
+        if (added.step === "sourced") {
+          await changeLink({ factEntityId: entityId, change: "link" });
+          added = { ...intent, step: "linked", entityId };
+          record(added);
+        }
+        // The addition's own key, kept with it across claims and retries.
+        unwrapApiResponse(await postRecheck(added.recheckKey));
+        record(null);
+      }),
+  });
   const addFact = useMutation({
     mutationKey: ["avt", workspaceId, "claim-add-fact", runId, claimId],
-    mutationFn: async (submitted: AddFactInput) => {
-      const previous: AddedFact | undefined =
-        useAddFactProgress.getState().progress[progressKey];
-      const { statement, source } = previous?.input ?? submitted;
-      const createBody = {
-        name: statement,
-        listId: toSafeId<"legalList">(listId),
-        listItemType: LIST_ITEM_TYPE.FACT,
-      };
-      const createOperation = `claim-add-fact:${runId}:${claimId}`;
-      let pending: AddedFact = previous ?? {
-        input: { statement, source },
-        step: "creating",
-        // Recorded before the create is sent: a retry whose response was
-        // lost replays the first create instead of adding the fact twice.
-        createRequest: submit.prepare({
-          body: createBody,
-          operation: createOperation,
-        }),
-        recheckKey: createUuid(),
-      };
-      if (pending.step === "creating") {
-        record(pending);
-        const created = unwrapApiResponse(
-          await submit.run({
-            operation: createOperation,
-            body: createBody,
-            request: pending.createRequest,
-            send: async (body, replay) =>
-              await invokeCapability("tasks.create", async (request) =>
-                api
-                  .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-                  .put(body, {
-                    ...request,
-                    headers: {
-                      "Idempotency-Key": replay.headers["Idempotency-Key"],
-                      ...request.headers,
-                    },
-                  }),
-              ),
-          }),
-        );
-        pending = { ...pending, step: "added", entityId: created.entityId };
-      }
-      let added = pending;
-      const { entityId } = added;
-      record(added);
-      if (added.step === "added") {
-        // The live version at submission rather than a stale pick, read
-        // inside the attempt so the sheet stays busy until it is written.
-        const document = await queryClient.query({
-          ...entityOptions(workspaceId, source.documentId),
-          staleTime: 0,
-        });
-        unwrapApiResponse(
-          await submit.run({
-            operation: `list-source-create:${workspaceId}`,
-            body: {
-              listId: toSafeId<"legalList">(listId),
-              itemEntityId: toSafeId<"entity">(entityId),
-              sourceEntityId: toSafeId<"entity">(document.entityId),
-              sourceEntityVersionId: toSafeId<"entityVersion">(
-                document.currentVersionId,
-              ),
-              locator:
-                source.pageNumber === null
-                  ? { type: "document" as const }
-                  : {
-                      type: "pdf-page" as const,
-                      pageNumber: source.pageNumber,
-                    },
-              quote: source.quote,
-            },
-            send: async (body) =>
-              await invokeCapability(
-                "lists.items.sources.create",
-                async (request) => lists["item-sources"].post(body, request),
-              ),
-          }),
-        );
-        added = { ...added, step: "sourced" };
-        record(added);
-      }
-      if (added.step === "sourced") {
-        await changeLink({ factEntityId: entityId, change: "link" });
-        added = { ...added, step: "linked" };
-        record(added);
-      }
-      // The addition's own key, kept with it across claims and retries.
-      unwrapApiResponse(await postRecheck(added.recheckKey));
-      record(null);
-    },
+    mutationFn: async (input: AddFactInput) =>
+      await writeFact({ workspaceId, input }),
     onSettled: refresh,
     onError: (error) => notifyUserError(error, t("avt.gap.addFactFailed")),
   });
@@ -266,4 +284,84 @@ export const useClaimGapActions = ({
   });
 
   return { recheck, recheckPending, link, addFact, addFactResume: resume };
+};
+
+type PrepareFactSourceOptions = {
+  queryClient: QueryClient;
+  submit: ReturnType<typeof useIdempotentSubmit>;
+  workspaceId: string;
+  listId: string;
+  entityId: string;
+  source: AddFactInput["source"];
+};
+
+/** Pin the submitted source to its current version inside the resumable attempt. */
+const prepareFactSource = async ({
+  queryClient,
+  submit,
+  workspaceId,
+  listId,
+  entityId,
+  source,
+}: PrepareFactSourceOptions) => {
+  const document = await queryClient.query(
+    resourceQueryOptions(
+      {
+        ...entityOptions(workspaceId, source.documentId),
+        staleTime: 0,
+      },
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        scope: { type: "workspace", workspaceId },
+      },
+    ),
+  );
+  const body = {
+    listId: toSafeId<"legalList">(listId),
+    itemEntityId: toSafeId<"entity">(entityId),
+    sourceEntityId: toSafeId<"entity">(document.entityId),
+    sourceEntityVersionId: toSafeId<"entityVersion">(document.currentVersionId),
+    locator:
+      source.pageNumber === null
+        ? { type: "document" as const }
+        : { type: "pdf-page" as const, pageNumber: source.pageNumber },
+    quote: source.quote,
+  };
+  return {
+    body,
+    request: submit.prepare({
+      operation: `list-source-create:${workspaceId}`,
+      body,
+    }),
+  };
+};
+
+type SubmitFactSourceOptions = {
+  workspaceId: string;
+  submit: ReturnType<typeof useIdempotentSubmit>;
+  sourceRequest: Extract<AddedFact, { step: "sourcing" }>["sourceRequest"];
+};
+
+const submitFactSource = async ({
+  workspaceId,
+  submit,
+  sourceRequest,
+}: SubmitFactSourceOptions) => {
+  const lists = api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) });
+  return unwrapApiResponse(
+    await submit.run({
+      operation: `list-source-create:${workspaceId}`,
+      ...sourceRequest,
+      send: async (body, replay) =>
+        await invokeCapability("lists.items.sources.create", async (request) =>
+          lists["item-sources"].post(body, {
+            ...request,
+            headers: {
+              "Idempotency-Key": replay.headers["Idempotency-Key"],
+              ...request.headers,
+            },
+          }),
+        ),
+    }),
+  );
 };

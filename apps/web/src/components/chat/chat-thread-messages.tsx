@@ -15,7 +15,7 @@ import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { isFixedInDesktopSettings } from "@stll/api-contract/ai-errors";
 import {
   isChatPastedTextPart,
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
@@ -32,7 +32,17 @@ import {
   PROCESS_SUMMARY_KINDS,
 } from "@stll/api-contract/chat-tool-activity";
 import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { Temporal } from "@stll/time";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import {
   Collapsible,
@@ -41,12 +51,16 @@ import {
 } from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  type EntityAction,
+  EntityActions,
+  EntityActionsButton,
+} from "@stll/ui/entity-actions";
+import {
   ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
   PaperclipIcon,
   RotateCcwIcon,
-  XIcon,
 } from "@stll/ui/icons";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
@@ -73,6 +87,7 @@ import {
   ChatMessageActionsScope,
 } from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
+import { ChatRanOnModel } from "@/components/chat/chat-ran-on-model";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
   ChatRichMessagePart,
@@ -123,7 +138,6 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
-  canUndoLocalFilesOf,
   finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
@@ -171,15 +185,14 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import { localRunLimitResetsAtFromThrown } from "@/features/chat/chat-local-run-limit";
+import type { ChatQueueView } from "@/features/chat/chat-queue";
 import {
-  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
-  type ChatRequestError,
-  findChatRequestError,
-} from "@/features/chat/chat-request-error";
+  CHAT_QUEUE_HOLD_NOTICE_KEYS,
+  queueMoveTarget,
+} from "@/features/chat/chat-queue.logic";
+import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
-import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
-import type { NewestLocalTurn } from "@/features/chat/queries";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -190,13 +203,10 @@ import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
+import { openDesktopUrl } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import {
-  AI_FAILURE_ERROR_KEYS,
-  aiErrorKindFromMessage,
-} from "@/lib/errors/ai-failure";
-import type { AIFailureTranslationKey } from "@/lib/errors/ai-failure";
+import { aiErrorKindFromMessage } from "@/lib/errors/ai-failure";
 import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -386,37 +396,6 @@ const ActiveTurnStatus = memo(
   },
 );
 
-/** What the thread knows about undoing its local turns' file changes. */
-type LocalFilesUndoFacts = {
-  generationActive: boolean;
-  messages: ChatUIMessage[];
-  newestLocalTurn: NewestLocalTurn | null | undefined;
-};
-
-/**
- * The undo props of `message`'s actions: the turn it may undo (only the
- * newest turn's answer), whether a new undo may be asked now, and whether
- * its turn was undone already, as the server marked the answer.
- */
-const localFilesUndoPropsFor = (
-  { generationActive, messages, newestLocalTurn }: LocalFilesUndoFacts,
-  { id: messageId, metadata }: ChatUIMessage,
-) => {
-  const turn =
-    newestLocalTurn?.assistantMessageId === messageId ? newestLocalTurn : null;
-  return {
-    localFilesUndoTurnId: turn?.id ?? null,
-    localFilesUndoOffered:
-      turn !== null &&
-      canUndoLocalFilesOf({
-        isGenerating: generationActive,
-        messageId,
-        messages,
-      }),
-    localFilesUndone: metadata?.localFilesUndone !== undefined,
-  };
-};
-
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -448,9 +427,7 @@ export const ChatThreadMessages = ({
   stickyUserMessages = false,
   computerWait = null,
   turnSentAt,
-  newestLocalTurn,
-  queuedMessages,
-  queuedMessageActions,
+  queue,
   streamdownComponents,
   threadRef,
   userMessageEdit,
@@ -467,7 +444,6 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const generationActive = error === undefined && isGenerating;
-  const undo = { generationActive, messages, newestLocalTurn };
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -524,7 +500,7 @@ export const ChatThreadMessages = ({
                 ? findCreateDocumentArtifactForMessage(messages, index)
                 : null
             }
-            {...localFilesUndoPropsFor(undo, message)}
+            localFilesUndone={message.metadata?.localFilesUndone !== undefined}
             message={message}
             threadRef={messageActionsThreadRef(message, threadRef)}
           >
@@ -598,6 +574,7 @@ export const ChatThreadMessages = ({
                                 timing={message.metadata?.turnTiming}
                               />
                             )}
+                            <ChatRanOnModel metadata={message.metadata} />
                             <AssistantAnswerMetadata
                               message={message}
                               workspaceId={workspaceId}
@@ -718,14 +695,9 @@ export const ChatThreadMessages = ({
         {generationActive && computerWait !== null && (
           <ComputerWaitIndicator wait={computerWait} />
         )}
-        {queuedMessageActions &&
-          queuedMessages !== undefined &&
-          queuedMessages.length > 0 && (
-            <QueuedUserMessages
-              actions={queuedMessageActions}
-              messages={queuedMessages}
-            />
-          )}
+        {queue !== undefined && queue.items.length > 0 && (
+          <QueuedUserMessages queue={queue} />
+        )}
       </ReferenceRenderScope>
     </ChatActivitySessionContext>
   );
@@ -1329,28 +1301,6 @@ const ElapsedSince = ({ since }: { since: string }) => {
   );
 };
 
-type ChatErrorTranslationKey =
-  | AIFailureTranslationKey
-  | "chat.sendErrorAnonymizationBlocked"
-  | "chat.sendError"
-  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
-
-const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
-  const requestError = findChatRequestError(error);
-  if (requestError !== undefined) {
-    return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
-  }
-  if (isThirdPartyBoundaryRefusalError(error)) {
-    return "chat.sendErrorAnonymizationBlocked";
-  }
-  // An unknown kind keeps the chat's own copy, which points to support.
-  const kind = aiErrorKindFromMessage(error.message);
-  if (kind !== undefined && kind !== "unknown") {
-    return AI_FAILURE_ERROR_KEYS[AI_FAILURE_CODES[kind]];
-  }
-  return "chat.sendError";
-};
-
 /**
  * A local run's usage limit with the time the harness said it resets, in the
  * member's own locale and time zone.
@@ -1461,6 +1411,11 @@ export const ChatErrorMessage = ({
   // The turn was stored and failed because none of the member's computers
   // was connected: opening stella desktop is the fix, then a resend.
   const noComputerConnected = failureKind === "local_runner_no_computer";
+  // The agent on the member's computer needs signing in or installing, which
+  // happens in stella desktop's Settings: the card says where, and opens it
+  // when stella desktop is on this computer.
+  const desktopSettingsFix =
+    failureKind !== undefined && isFixedInDesktopSettings(failureKind);
   // The resend an "Open stella desktop" click holds until a computer
   // connects belongs to this refusal: Resend, another refusal in its place,
   // or the card leaving the page (a new send, another thread) drops it.
@@ -1508,6 +1463,9 @@ export const ChatErrorMessage = ({
             <LocalRunLimitResetMessage resetsAt={limitResetsAt} />
           )}
         </p>
+        {desktopSettingsFix && (
+          <p className="text-sm">{t("chat.localRun.desktopSettingsSteps")}</p>
+        )}
         <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
@@ -1530,6 +1488,17 @@ export const ChatErrorMessage = ({
               disabled={isGenerating}
               threadRef={threadRef}
             />
+          )}
+          {desktopSettingsFix && (
+            <Button
+              onClick={() => {
+                openDesktopUrl(desktopAgentSettingsUrl());
+              }}
+              size="sm"
+              variant="destructive-outline"
+            >
+              {t("settings.account.desktopOpenApp")}
+            </Button>
           )}
           {onResend && noComputerConnected && (
             <OpenDesktopAndResendButton
@@ -1801,11 +1770,6 @@ type ChatThreadMessagesProps = {
   /** When this page sent the running turn's message (`performance.now()`);
    *  its live status counts from it. `null` for a turn the page joined. */
   turnSentAt?: number | null | undefined;
-  /**
-   * The newest turn of a chat that runs on the member's computer: the
-   * message that answered it offers to undo its file changes.
-   */
-  newestLocalTurn?: NewestLocalTurn | null | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**
@@ -1816,14 +1780,11 @@ type ChatThreadMessagesProps = {
    */
   stickyUserMessages?: boolean | undefined;
   /**
-   * Messages the user composed while a response was streaming.
-   * Rendered as dimmed "pending" bubbles below the transcript;
-   * `useChatSession` dispatches them once the turn finishes.
+   * The messages the member queued in this chat, which the server sends in
+   * order once the turn has ended. Rendered as dimmed bubbles below the
+   * transcript, with what holds them; omitted on surfaces with no queue.
    */
-  queuedMessages?: readonly QueuedChatMessage[] | undefined;
-  /** What the user can do with a queued message: cancel it, or send it now
-   *  (stops the running turn and sends it next). */
-  queuedMessageActions?: QueuedMessageActions | undefined;
+  queue?: ChatQueueView | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
     "stll-anon"?: (
@@ -1842,73 +1803,171 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
-type QueuedMessageActions = {
-  remove: (id: string) => void;
-  sendNow: (id: string) => void;
-};
-
-type QueuedUserMessagesProps = {
-  actions: QueuedMessageActions;
-  messages: readonly QueuedChatMessage[];
-};
-
 /**
- * Pending user messages — composed mid-stream and waiting their
- * turn. Rendered below the live transcript as dimmed bubbles so the
- * user can see what is queued and cancel any of it before it sends.
+ * The messages waiting in the chat's queue, below the live transcript as
+ * dimmed bubbles, each with its actions (the same list on its "…" button and
+ * on right-click), and the line that says what holds them.
  */
-const QueuedUserMessages = ({ actions, messages }: QueuedUserMessagesProps) => {
+const QueuedUserMessages = ({ queue }: { queue: ChatQueueView }) => {
   const t = useTranslations();
+  const { actions, hold, items } = queue;
+  // Send now over a turn that waits on the member ends what it waits on:
+  // the member confirms it first.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const sendNow = (id: string) => {
+    if (actions.sendNow(id) === "confirm") {
+      setConfirming(id);
+    }
+  };
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground flex items-center gap-1 text-xs">
-        <ClockIcon aria-hidden="true" className="size-3" />
-        {t("chat.queuedNotice")}
-      </p>
-      {messages.map((queued) => {
-        const text = queued.text.trim()
-          ? normalizeUserMessageTextForDisplay(queued.text)
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirming(null);
+          }
+        }}
+        open={confirming !== null}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("chat.queue.replaceTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("chat.queue.replaceDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              onClick={() => {
+                if (confirming !== null) {
+                  actions.replaceWith(confirming);
+                }
+                setConfirming(null);
+              }}
+            >
+              {t("chat.sendQueuedMessageNow")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+      <div className="text-muted-foreground flex items-center gap-1 text-xs">
+        <ClockIcon aria-hidden="true" className="size-3 shrink-0" />
+        <p className="min-w-0 flex-1" role="status">
+          {hold === null
+            ? t("chat.queuedNotice")
+            : t(CHAT_QUEUE_HOLD_NOTICE_KEYS[hold.reason])}
+        </p>
+        <Button
+          className="shrink-0"
+          onClick={hold === null ? actions.pause : actions.resume}
+          size="xs"
+          variant="ghost"
+        >
+          {hold === null ? t("chat.queue.pause") : t("chat.queue.resume")}
+        </Button>
+      </div>
+      {items.map((queued) => {
+        const text = queued.preview.trim()
+          ? normalizeUserMessageTextForDisplay(queued.preview)
           : "";
+        const up = queueMoveTarget({ direction: "up", id: queued.id, items });
+        const down = queueMoveTarget({
+          direction: "down",
+          id: queued.id,
+          items,
+        });
+        const refused =
+          hold?.reason === "send-refused" && hold.queuedMessageId === queued.id;
+        const itemActions: EntityAction[] = [
+          {
+            label: t("chat.sendQueuedMessageNow"),
+            onClick: () => {
+              sendNow(queued.id);
+            },
+          },
+          {
+            label: t("common.edit"),
+            onClick: () => {
+              actions.edit(queued.id);
+            },
+          },
+          ...(up === undefined
+            ? []
+            : [
+                {
+                  label: t("common.moveUp"),
+                  onClick: () => {
+                    actions.move(queued.id, "up");
+                  },
+                },
+              ]),
+          ...(down === undefined
+            ? []
+            : [
+                {
+                  label: t("common.moveDown"),
+                  onClick: () => {
+                    actions.move(queued.id, "down");
+                  },
+                },
+              ]),
+          {
+            label: t("chat.cancelQueuedMessage"),
+            onClick: () => {
+              actions.remove(queued.id);
+            },
+            separatorBefore: true,
+            variant: "destructive",
+          },
+        ];
         return (
-          <Message from="user" key={queued.id}>
-            <div className="flex w-full items-start gap-1">
-              <MessageContent className="min-w-0 flex-1 opacity-60">
-                {text.length > 0 && (
-                  <UserMessageText
-                    restorationPairs={EMPTY_RESTORATION_PAIRS}
-                    text={text}
-                  />
-                )}
-                {queued.fileCount > 0 && (
-                  <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                    <PaperclipIcon aria-hidden="true" className="size-3" />
-                    {t("chat.queuedAttachmentCount", {
-                      count: queued.fileCount,
-                    })}
-                  </span>
-                )}
-              </MessageContent>
-              <Button
-                aria-label={t("chat.sendQueuedMessageNow")}
-                className="mt-0.5 shrink-0"
-                onClick={() => actions.sendNow(queued.id)}
-                size="icon-xs"
-                title={t("chat.sendQueuedMessageNow")}
-                variant="ghost"
-              >
-                <ArrowUpIcon className="size-3.5" />
-              </Button>
-              <Button
-                aria-label={t("chat.cancelQueuedMessage")}
-                className="mt-0.5 shrink-0"
-                onClick={() => actions.remove(queued.id)}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-            </div>
-          </Message>
+          <EntityActions
+            actions={itemActions}
+            key={queued.id}
+            label={t("chat.queue.actions")}
+          >
+            <Message from="user">
+              <div className="flex w-full items-start gap-1">
+                <MessageContent className="min-w-0 flex-1 opacity-60">
+                  {text.length > 0 && (
+                    <UserMessageText
+                      restorationPairs={EMPTY_RESTORATION_PAIRS}
+                      text={text}
+                    />
+                  )}
+                  {queued.attachmentCount > 0 && (
+                    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                      <PaperclipIcon aria-hidden="true" className="size-3" />
+                      {t("chat.queuedAttachmentCount", {
+                        count: queued.attachmentCount,
+                      })}
+                    </span>
+                  )}
+                  {refused && (
+                    <span className="text-destructive text-xs">
+                      {t("chat.queue.notSent")}
+                    </span>
+                  )}
+                </MessageContent>
+                <Button
+                  aria-label={t("chat.sendQueuedMessageNow")}
+                  className="mt-0.5 shrink-0"
+                  onClick={() => {
+                    sendNow(queued.id);
+                  }}
+                  size="icon-xs"
+                  title={t("chat.sendQueuedMessageNow")}
+                  variant="ghost"
+                >
+                  <ArrowUpIcon className="size-3.5" />
+                </Button>
+                <EntityActionsButton />
+              </div>
+            </Message>
+          </EntityActions>
         );
       })}
     </div>

@@ -26,11 +26,11 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import {
-  CHAT_TURN_OWNER_LOST_REASON,
   ChatTurnOwnership,
   ChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnStoredSettlement } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run-cut";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -721,7 +721,7 @@ describe("a producing run", () => {
       threadId,
     });
 
-    expect(await ownership.relinquish()).toBe("stored");
+    expect(await ownership.relinquish({ type: "end" })).toBe("stored");
 
     expect(stored.settlement).toBe("settled");
     expect(await readTurn(execution.id)).toMatchObject({
@@ -741,7 +741,7 @@ describe("a producing run", () => {
       Date.now() + CHAT_TURN_RUN_LEASE_MS * 2,
     );
 
-    const relinquished = ownership.relinquish();
+    const relinquished = ownership.relinquish({ type: "end" });
     await waitForExternalState({
       description: "the relinquished claim shortens the lease",
       intervalMs: 5,
@@ -798,7 +798,7 @@ describe("a producing run", () => {
     });
     await beatStarted.promise;
 
-    const relinquished = ownership.relinquish();
+    const relinquished = ownership.relinquish({ type: "end" });
     let over = false;
     const settled = run.settled.then((end) => {
       over = true;
@@ -884,7 +884,7 @@ describe("a producing run", () => {
 
     // Giving up the process's turns from here still waits for that beat.
     let relinquishedWith: string | undefined;
-    const relinquished = ownership.relinquish().then((end) => {
+    const relinquished = ownership.relinquish({ type: "end" }).then((end) => {
       relinquishedWith = end;
       return end;
     });
@@ -916,7 +916,7 @@ describe("a producing run", () => {
     );
 
     let relinquishedWith: string | undefined;
-    const relinquished = ownership.relinquish().then((end) => {
+    const relinquished = ownership.relinquish({ type: "end" }).then((end) => {
       relinquishedWith = end;
       return end;
     });
@@ -946,7 +946,7 @@ describe("a producing run", () => {
       threadId,
     });
 
-    expect(await ownership.relinquish()).toBe("unstored");
+    expect(await ownership.relinquish({ type: "end" })).toBe("unstored");
     await response.body?.cancel();
   });
 });

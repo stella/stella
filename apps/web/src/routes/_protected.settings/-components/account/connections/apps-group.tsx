@@ -169,7 +169,7 @@ const AccessPopover = ({
     <Popover>
       <PopoverTrigger render={<Button size="xs" variant="muted" />}>
         <span className="tabular-nums">
-          {t("settings.connections.permissionCount", { count: labels.length })}
+          {t("common.permissionCount", { count: labels.length })}
         </span>
       </PopoverTrigger>
       <PopoverPopup align="end" className="w-72" side="bottom">

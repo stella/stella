@@ -13,6 +13,9 @@ pub enum DesktopFeature {
   Dictation,
   /// Transcription by stella AI; the audio leaves the computer.
   DictationCloud,
+  /// Transcription models whose provider keeps the audio. The server lists
+  /// and refuses them; the desktop only refreshes its model list.
+  DictationRetainingModels,
   LocalAgents,
 }
 
@@ -21,6 +24,7 @@ impl DesktopFeature {
     Self::ActivityTimeline,
     Self::Dictation,
     Self::DictationCloud,
+    Self::DictationRetainingModels,
     Self::LocalAgents,
   ];
 
@@ -30,6 +34,7 @@ impl DesktopFeature {
       Self::ActivityTimeline => "activity-timeline",
       Self::Dictation => "desktop-dictation",
       Self::DictationCloud => "desktop-dictation-cloud",
+      Self::DictationRetainingModels => "desktop-dictation-retaining-models",
       Self::LocalAgents => "local-agents",
     }
   }

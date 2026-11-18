@@ -1,0 +1,4 @@
+{
+  "alter-column": "DROP NOT NULL on chat_turn_id of desktop_runner_folder_restores is a catalog-only change that rewrites and scans no rows, under 1s lock_timeout and 10s statement_timeout.",
+  "add-foreign-key": "The turn reference is re-added on the same column with only its delete action changed; validating it reads desktop_runner_folder_restores, a few rows per member, under 1s lock_timeout and 10s statement_timeout."
+}

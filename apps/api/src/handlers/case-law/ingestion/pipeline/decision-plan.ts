@@ -46,6 +46,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { planDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/nss-publisher-columns";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -618,7 +619,11 @@ const preparedCitationMetadata = (
 };
 
 /** The decision's identifiers, and the rows that store them. */
-const plannedIdentifiers = (
+/**
+ * The identifier rows a decision is written with, each keyed by the function
+ * every reader normalizes a reference with.
+ */
+export const plannedIdentifiers = (
   result: IngestionResult,
   caseNumberType: ReturnType<typeof parsePrimaryReferenceType>,
 ) => {
@@ -842,6 +847,11 @@ export const planDecisionWrite = async ({
   }
   return Result.ok({
     citations: plannedCitations.value,
+    reviews: planDecisionReviews({
+      country: result.country,
+      sections,
+      metadata: result.metadata,
+    }),
     caseNumberType,
     docketColumns,
     preparedMetadata,

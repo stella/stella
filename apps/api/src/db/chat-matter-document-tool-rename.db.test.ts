@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+
 /**
  * The stored chat tool-name rewrite, applied to rows written before the deploy.
  *
@@ -95,10 +97,15 @@ const contentOf = async (id: string): Promise<Record<string, unknown>> => {
 
 const partsOf = async (id: string): Promise<Record<string, unknown>[]> => {
   const { data } = await contentOf(id);
-  if (!Array.isArray(data)) {
+  if (!isUnknownArray(data)) {
     throw new TypeError(`chat_messages row ${id} has no data array`);
   }
-  return data;
+  return data.map((part) => {
+    if (!isRecord(part)) {
+      throw new TypeError(`chat_messages row ${id} has a non-object part`);
+    }
+    return part;
+  });
 };
 
 beforeAll(async () => {

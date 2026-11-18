@@ -77,8 +77,7 @@ const deleteFlowDefinition = createSafeRootHandler(
     // throws).
     await syncFlowScheduleTrigger({
       id: deleted.id,
-      trigger: deleted.trigger,
-      enabled: false,
+      organizationId,
     });
 
     return Result.ok({});

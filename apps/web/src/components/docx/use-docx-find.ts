@@ -153,6 +153,7 @@ export const useDocxFind = ({
   };
 
   // Stable identity: the keydown subscription below depends on it.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const close = useCallback(() => {
     debouncedSearch.cancel();
     matchesRef.current = [];

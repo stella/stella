@@ -12,18 +12,6 @@
     "reason": "transaction-boundary in apps/api/scripts/backfill-image-thumbnails.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/scripts/classify-citations.ts",
-    "fingerprint": "46ec935e1725484ca4eb4f5cbe1ef171b29e756209b23fca64c1a363c7c9e381",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/classify-citations.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/classify-citations.ts",
-    "fingerprint": "81100dac781780abc97b5c17fd6559d7e4bfed90fbeee9df18b2531d20b510f5",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/classify-citations.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/scripts/ingestion-status.ts",
     "fingerprint": "12ff525534827e6faa7be2d94a593027df89056e80bf28ae869812f1c93f55ca",
     "count": 1,
@@ -596,9 +584,9 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "0d8e1c0920ab27a71bcd3fc39e6bbb4a7bc09c9cacf525156c0e75923893f5e7",
+    "fingerprint": "a0d461591d9aabd02a6e3345d40088c1e01e780e8883b00ca61898780df9e8dd",
     "count": 1,
-    "reason": "Reuse request feature decisions within the existing scoped transaction; transaction boundary and lock acquisitions are unchanged."
+    "reason": "The scoped transaction runner opens the same transaction; it only notes when its callback is entered and passes an optional request deadline into the settings statement it already sends."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
@@ -858,13 +846,6 @@
     "holder": "stella_ingestion"
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
-    "count": 1,
-    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged.",
-    "holder": "stella_ingestion"
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
     "fingerprint": "055cac1fb1cc155061a279e3f761531eebf27628de03fdaa0f77b143b0b24766",
     "count": 1,
@@ -908,12 +889,6 @@
     "fingerprint": "5767a7afb70117a75d32c9948a3ab7100df85adeed5311425cea96b09937ba26",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/case-law/matter-links/link-writes.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/polarity/rule-retirement.ts",
-    "fingerprint": "9148acf7c1b5665e158dc21ed1c6413c60dfa2a47b442da1a1e6de30a6785c79",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/polarity/rule-retirement.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts",
@@ -2761,7 +2736,7 @@
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
     "fingerprint": "f1478ef9e6ed075774fe03a6eccdf93090599ce271bf7b1450ea87bdc523bb70",
-    "count": 2,
+    "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-generation-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
     "holder": "stella_ingestion"
   },
@@ -4003,36 +3978,6 @@
     "reason": "offline corpus script; predates the owner; migrate in a later slice"
   },
   {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "8b716c07aebbf7cbf8daf28e3f08ef84ec5cc7699bd326da1faec1a4e86c36f4",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "9d902dfa7f0db759a46fc9e5fb93f46ed29d2eaf65b9d66223aad65c4293f1e0",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "afcada2c96cb9cc82cc09ee88a3a175823518243aea85a16ae3e55d3138ae7e3",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "e87f3cf7b320fd8049a37b17f19611e315735b4e609894b536e04f2fc17e1ac6",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
-    "file": "apps/api/src/scripts/corpus-generation.ts",
-    "fingerprint": "f5000330083e1d1a65682bee7eed29ea1f39ba1f0abcd413cb1c792d6992d5dc",
-    "count": 1,
-    "reason": "offline corpus script; predates the owner; migrate in a later slice"
-  },
-  {
     "file": "apps/api/src/scripts/corpus-snippet-compare.ts",
     "fingerprint": "580456339b5270ec234a248fed12ba1a82b9064fb73d9488fda0146c61245ddc",
     "count": 1,
@@ -4134,18 +4079,6 @@
     "fingerprint": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
     "count": 1,
     "reason": "Move the replay tick command out of its entry so other scripts import it without importing an entrypoint; the transaction and count are unchanged."
-  },
-  {
-    "file": "apps/api/src/scripts/seed-polarity-rules.ts",
-    "fingerprint": "6233b829cf8c6b607855d4f015a9af41f3653d23737a00358ee082ac5cd56438",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/seed-polarity-rules.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/scripts/seed-polarity-rules.ts",
-    "fingerprint": "e8f49bca889e436cf8dfbd1a6363ccdfd9fc2fc2f0f2b6f5d85b8eae67eff3ad",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/seed-polarity-rules.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "packages/db-load-gate/src/heavy-work-slot.ts",

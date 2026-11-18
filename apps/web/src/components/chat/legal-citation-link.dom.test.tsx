@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import type { ChatDecisionLocator } from "@stll/api-contract/chat-reference-href";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { createTestState } from "@stll/test-state";
@@ -155,6 +156,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  appealReviews: noDecisionReviewFound(),
   extractionWarnings: [],
   citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
@@ -185,6 +187,8 @@ const fullDecision = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   fulltext: null,
   headnote: absentText,
@@ -231,6 +235,8 @@ const canonicalSearchHit = {
   textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
+  matchedTerms: [],
+  missingTerms: [],
 } satisfies PublicLawData<
   typeof api.case.decisions.search.post
 >["hits"][number];

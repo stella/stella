@@ -219,6 +219,7 @@ const isInvoiceAccessPredicate = (expression: string | null): boolean =>
 const INVOICE_CHILD_TABLES: ReadonlySet<string> = new Set([
   "invoice_lines",
   "invoice_payments",
+  "invoice_sends",
 ]);
 
 const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
@@ -606,6 +607,11 @@ describe("policy coverage", () => {
     // workspace policies would hide exactly the rows the check exists to
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
+    // An invoice's email sends are visible exactly when their invoice is: a
+    // restrictive policy reads invoices under their own row security, and the
+    // rows leave only with the invoice, so the app role has no DELETE.
+    // invoice-links.integration.test.ts asserts that boundary.
+    "invoice_sends",
     // A legal hold is an organization record: an item hold carries no
     // workspace_id, so workspace policies would hide it from the deletion
     // checks that must see it. The request role places and releases holds but
@@ -1066,6 +1072,33 @@ describe("policy coverage", () => {
         expect(expr).toContain(SETTING_ORGANIZATION_ID);
       }
     }
+  });
+
+  test("outbound actions inherit thread scope and permit select, insert and update", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) => policy.table_name === "outbound_actions",
+    );
+    expect(policies).toHaveLength(4);
+    for (const policy of policies) {
+      if (policy.command === "d") {
+        expect(policy.permissive).toBe(false);
+        expect(policy.using_expr).toBe("false");
+        continue;
+      }
+      const expression =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expression).toContain("chat_threads");
+      expect(expression).toContain("data_workspace_ids");
+      expect(expression).toContain(SETTING_USER_ID);
+      expect(expression).toContain(SETTING_ORGANIZATION_ID);
+      expect(expression).toContain(WORKSPACE_ACCESS_VIEW_NAME);
+    }
+    expect(
+      privilegesForTable(
+        await fetchStellaTablePrivileges(testDb),
+        "outbound_actions",
+      ),
+    ).toEqual(["INSERT", "SELECT", "UPDATE"]);
   });
 
   test("daily targets require the active organization and owner or organization management", async () => {

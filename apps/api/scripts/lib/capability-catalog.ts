@@ -32,6 +32,73 @@ import {
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
+import { isRecord } from "../../src/lib/type-guards";
+
+type ReviewedInvoiceManagementOptions<TEndpoint> = {
+  routes: readonly RouteEntry[];
+  endpoints: readonly TEndpoint[];
+  classify: (middleware: Middleware) => RouteGate;
+};
+
+/** Join the reviewed management group to discovery; endpoint filenames are never a second allowlist. */
+export const reviewedInvoiceManagementEndpoints = <
+  TEndpoint extends {
+    file: string;
+    definition: object;
+    config: Record<string, unknown>;
+  },
+>({
+  routes,
+  endpoints,
+  classify,
+}: ReviewedInvoiceManagementOptions<TEndpoint>): TEndpoint[] =>
+  routes.map(({ definition, middleware }) => {
+    const permissions = definition.config["permissions"];
+    if (
+      definition.access !== "workspace" ||
+      definition.config["featureAccess"] !== undefined ||
+      !isRecord(permissions) ||
+      Object.keys(permissions).length !== 1 ||
+      !Array.isArray(permissions["invoice"]) ||
+      permissions["invoice"].length !== 1 ||
+      permissions["invoice"].at(0) !== "update" ||
+      !middleware.some((stage) => {
+        const gate = classify(stage);
+        return (
+          gate.kind === "deployment-feature" &&
+          gate.flag === "FEATURE_TIME_BILLING"
+        );
+      }) ||
+      middleware.some((stage) => {
+        const gate = classify(stage);
+        return (
+          gate.kind !== "budget" &&
+          !(
+            gate.kind === "deployment-feature" &&
+            gate.flag === "FEATURE_TIME_BILLING"
+          )
+        );
+      })
+    ) {
+      return panic(
+        "Invoice management requires invoice:update and only time-billing deployment availability",
+      );
+    }
+    const matching = endpoints.filter(
+      (endpoint) => endpoint.definition === definition,
+    );
+    const endpoint = matching.at(0);
+    if (
+      matching.length !== 1 ||
+      endpoint === undefined ||
+      endpoint.config !== definition.config
+    ) {
+      return panic(
+        "Every reviewed invoice management route must identify exactly one discovered handler",
+      );
+    }
+    return endpoint;
+  });
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
 const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
@@ -191,6 +258,7 @@ export const DOMAIN_ACTION_VERBS = [
   "retry",
   "revert",
   "review",
+  "revoke",
   "rewrite",
   "run",
   "search",
@@ -1395,8 +1463,8 @@ export const compareScopeStrictness = ({
  * The six write-only OAuth grants. A capability whose `access` is `read` must
  * never resolve to one of these — a read-only credential (`stella:read` /
  * `stella:admin_read`) would then be unable to invoke it. Enforced structurally
- * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
- * ratchet, so the class stays impossible even if the resolver is later changed.
+ * by the exporter's read-scope guard, so the class stays impossible even if the
+ * resolver is later changed.
  */
 export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
   MCP_WRITE_ONLY_RESOURCE_SCOPES,

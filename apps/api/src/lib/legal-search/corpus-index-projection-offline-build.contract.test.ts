@@ -176,8 +176,9 @@ const holdPublish = async (indexId: string) => {
   const held = Promise.withResolvers<undefined>();
   const released = Promise.withResolvers<undefined>();
   const transaction = metastore().begin(async (tx: TransactionSQL) => {
-    const rows =
-      await tx`SELECT index_uid FROM indexes WHERE index_id = ${indexId} FOR NO KEY UPDATE`;
+    const rows = await tx<
+      { index_uid: unknown }[]
+    >`SELECT index_uid FROM indexes WHERE index_id = ${indexId} FOR NO KEY UPDATE`;
     if (rows.length !== 1) {
       panic(`expected to lock one index row, locked ${String(rows.length)}`);
     }
@@ -223,10 +224,19 @@ const now = async () => {
   return new Date(row?.ms ?? panic("The database returned no clock"));
 };
 
+/** When a run ended and how long it ran, on the run's one clock. */
+const endedSince = async (startedAt: Date) => {
+  const endedAt = await now();
+  return { endedAt, ranMs: endedAt.getTime() - startedAt.getTime() };
+};
+
 /** The token every document of entity `serial` carries. */
 const marker = (serial: number) => `offlinebuild${String(serial)}`;
 
-/** Seed `count` legislation documents and their pending projection states. */
+/**
+ * Seed `count` legislation documents and their pending projection states,
+ * committed together as a settle transaction commits them.
+ */
 const seedEntities = async (count: number) => {
   const rows = Array.from({ length: count }, (_, serial) => ({
     id: toSafeId<"legislationDocument">(
@@ -246,41 +256,42 @@ const seedEntities = async (count: number) => {
     textS3Key: `test-corpus/offline-build-engine/${String(serial + 1)}`,
     projectionEpoch: 1n,
   }));
-  await db.insert(legislationDocuments).values(rows);
-  await db.insert(corpusIndexProjectionStates).values(
-    rows.map((row) => {
-      const descriptor = deriveCorpusIndexProjectionDescriptor(
-        MANIFEST,
-        legislationProjectionInputFromCanonical({
-          documentId: row.id,
-          sourceId: row.sourceId,
-          jurisdiction: row.country,
-          language: row.language,
-          documentType: row.documentType,
-          contentHash: row.contentHash,
-          title: row.title,
-          status: row.status,
-          effectiveDate: row.effectiveDate,
-          versionValidFrom: row.versionValidFrom,
-          versionValidTo: row.versionValidTo,
-          eli: row.eli,
-          sourceDescriptor: null,
-          ...EFFECTIVE_CONSOLIDATION,
-        }),
-      );
-      if (descriptor.action !== "upsert") {
-        return panic("Seeded legislation row is not projectable");
-      }
-      return {
-        ...TARGET,
-        entityId: String(row.id),
-        desiredAction: "upsert" as const,
-        desiredEpoch: 1n,
-        desiredFingerprint: descriptor.fingerprint,
-        desiredIndexId: descriptor.indexId,
-      };
-    }),
-  );
+  const states = rows.map((row) => {
+    const descriptor = deriveCorpusIndexProjectionDescriptor(
+      MANIFEST,
+      legislationProjectionInputFromCanonical({
+        documentId: row.id,
+        sourceId: row.sourceId,
+        jurisdiction: row.country,
+        language: row.language,
+        documentType: row.documentType,
+        contentHash: row.contentHash,
+        title: row.title,
+        status: row.status,
+        effectiveDate: row.effectiveDate,
+        versionValidFrom: row.versionValidFrom,
+        versionValidTo: row.versionValidTo,
+        eli: row.eli,
+        sourceDescriptor: null,
+        ...EFFECTIVE_CONSOLIDATION,
+      }),
+    );
+    if (descriptor.action !== "upsert") {
+      return panic("Seeded legislation row is not projectable");
+    }
+    return {
+      ...TARGET,
+      entityId: String(row.id),
+      desiredAction: "upsert" as const,
+      desiredEpoch: 1n,
+      desiredFingerprint: descriptor.fingerprint,
+      desiredIndexId: descriptor.indexId,
+    };
+  });
+  await db.transaction(async (tx) => {
+    await tx.insert(legislationDocuments).values(rows);
+    await tx.insert(corpusIndexProjectionStates).values(states);
+  });
   return rows.map(({ id }) => String(id));
 };
 
@@ -410,16 +421,16 @@ const engineDelivery =
         type: "killed_at_deadline",
         exitCode: killed.exitCode,
         startedAt,
-        endedAt: await now(),
+        ...(await endedSince(startedAt)),
       } as const;
       delivered.push({ scenario, revisions, outcome });
       return outcome;
     }
     const { exitCode, stderr } = await exited;
-    const endedAt = await now();
+    const { endedAt, ranMs } = await endedSince(startedAt);
     const outcome: CorpusProjectionOfflineDeliveryOutcome =
       exitCode === 0
-        ? { type: "ingested", exitCode: 0, startedAt, endedAt }
+        ? { type: "ingested", exitCode: 0, startedAt, endedAt, ranMs }
         : {
             type: "failed",
             exitCode,
@@ -430,6 +441,7 @@ const engineDelivery =
                 : "indexer",
             startedAt,
             endedAt,
+            ranMs,
           };
     if (exitCode !== 0) {
       process.stderr.write(
@@ -610,6 +622,13 @@ describe.skipIf(!runEngineTests)(
         offsetMs += PLAN.leaseMs + PLAN.endedAfterMs;
         const second = await runBuild(indexId, [], delivered, markerOf);
         expect(second.status).toBe("drained");
+        // The receipt reads the real metastore: the route publishes splits.
+        expect(second.publishedSplits).toMatchObject({ read: "counted" });
+        expect(
+          second.publishedSplits.read === "counted"
+            ? second.publishedSplits.count
+            : 0,
+        ).toBeGreaterThan(0);
         const intents = await readIntents(entityIds);
         for (const [serial, entityId] of entityIds.entries()) {
           const applied = intents.filter(

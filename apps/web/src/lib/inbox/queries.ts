@@ -46,7 +46,10 @@ export const inboxCountOptions = (organizationId: string, userId: string) => {
       staleTime: INBOX_STALE_TIME_MS,
       refetchInterval: STALE_TIME.FIVE.MINUTES,
     }),
-    { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+    {
+      resources: [RESOURCE_TYPE.ENTITY],
+      scope: { type: "organization", organizationId, userId },
+    },
   );
 };
 
@@ -66,7 +69,10 @@ export const inboxSignalOptions = (
         ),
       staleTime: INBOX_STALE_TIME_MS,
     }),
-    { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+    {
+      resources: [RESOURCE_TYPE.ENTITY],
+      scope: { type: "organization", organizationId, userId },
+    },
   );
 
 /** Derived from the API client's response type. */

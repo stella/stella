@@ -29,6 +29,7 @@ import {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { DecisionWritePlan } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import { sweepRawWriteLostToErasureTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
+import { writeDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
@@ -47,6 +48,7 @@ import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
@@ -61,6 +63,8 @@ const replacedDecisionState = async (
 ): Promise<{
   citationKey: string | null;
   country: string;
+  court: string;
+  docketFamilyKey: string | null;
   language: string;
   decisionDate: string | null;
   holdsDocument: boolean;
@@ -71,19 +75,12 @@ const replacedDecisionState = async (
     value: string;
   }[];
 } | null> => {
-  const rows = await tx
-    .select({
-      citationKey: caseLawDecisions.citationKey,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
-      holdsDocument: sql<boolean>`${rowHoldsDocumentFor(caseLawDecisions)}`,
-      metadata: caseLawDecisions.metadata,
-    })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, id))
-    .for("update")
-    .limit(1);
+  const rows = await lockCaseLawDecisionSnapshot({
+    tx,
+    decisions: caseLawDecisions,
+    decisionId: id,
+    holdsDocument: rowHoldsDocumentFor(caseLawDecisions),
+  });
   const row = rows.at(0);
   if (!row) {
     return null;
@@ -577,18 +574,26 @@ const reopenMovedIdentityTx = async (
   await settleReopenedCitations(tx, [incoming, keyed, announced]);
 };
 
+type FinishRefreshedRowOptions = {
+  tx: CitationGraphTransaction<Transaction>;
+  write: DecisionRowWrite;
+  existing: ExistingDecision;
+  replacedState: ReplacedDecisionState | null;
+  projectionLock: ActiveCorpusProjectionSourceLock | null;
+};
+
 /**
  * Finish a refreshed row in the row write's transaction, after its columns
  * and identifiers are written: reopen what its identity change affects,
  * then rewrite its citations under the citation-graph lock.
  */
-export const finishRefreshedRowTx = async (
-  tx: CitationGraphTransaction<Transaction>,
-  write: DecisionRowWrite,
-  existing: ExistingDecision,
-  replacedState: ReplacedDecisionState | null,
-  projectionLock: ActiveCorpusProjectionSourceLock | null,
-): Promise<DecisionRowWriteStatus> => {
+export const finishRefreshedRowTx = async ({
+  tx,
+  write,
+  existing,
+  replacedState,
+  projectionLock,
+}: FinishRefreshedRowOptions): Promise<DecisionRowWriteStatus> => {
   const {
     observedAt,
     shape: { incomingCarriesDocument },
@@ -600,6 +605,13 @@ export const finishRefreshedRowTx = async (
   ) {
     await reopenMovedIdentityTx(tx, write, existing, replacedState);
   }
+
+  await writeDecisionReviews(tx, {
+    decisionId: existing.id,
+    country: write.result.country,
+    previousIdentity: replacedState,
+    reviews: write.plan.reviews,
+  });
 
   // Citations are read out of the document, so a refresh that
   // carries no document has nothing to say about them either.

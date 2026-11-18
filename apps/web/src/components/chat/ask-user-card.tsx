@@ -4,7 +4,7 @@ import type {
   KeyboardEvent,
   ReactNode,
 } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
@@ -354,27 +354,19 @@ export const AskUserCard = ({
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
     restorationPairs ?? EMPTY_RESTORATION_PAIRS;
-  const analysisComponents = useMemo(
-    () => ({
-      a: createAnalysisAnchor(workspaceId),
-      img: messageComponents.img,
-      "stll-anon": renderAnalysisAnonymizedSpan,
-    }),
-    [workspaceId],
-  );
+  const analysisComponents = {
+    a: createAnalysisAnchor(workspaceId),
+    img: messageComponents.img,
+    "stll-anon": renderAnalysisAnonymizedSpan,
+  };
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo(
-    () => [
-      ...Object.values(defaultRehypePlugins),
-      rehypeScopeAnswerIds,
-      ...(pairs.length > 0
-        ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
-        : []),
-      rehypeChatLinks,
-    ],
-    [pairs],
-  );
+  const analysisRehypePlugins = [
+    ...Object.values(defaultRehypePlugins),
+    rehypeScopeAnswerIds,
+    ...(pairs.length > 0 ? [[rehypeAnonSpans, pairs] satisfies Pluggable] : []),
+    rehypeChatLinks,
+  ];
   const answeredOutput = part.state === "complete" ? part.output : null;
   const isLoading =
     part.state === "awaiting-input" || part.state === "input-streaming";
@@ -418,22 +410,20 @@ export const AskUserCard = ({
     return () => onEditingChange?.(part.id, false);
   }, [isEditing, onEditingChange, part.id]);
 
-  const updateDraft = useCallback(
-    (index: number, next: (draft: AskUserDraft) => AskUserDraft) =>
-      setDrafts((current) => ({
-        ...current,
-        [index]: next(askUserDraftOf(current, index)),
-      })),
-    [],
-  );
+  const updateDraft = (
+    index: number,
+    next: (draft: AskUserDraft) => AskUserDraft,
+  ) =>
+    setDrafts((current) => ({
+      ...current,
+      [index]: next(askUserDraftOf(current, index)),
+    }));
 
   const answers = input ? askUserAnswersOf(input.questions, drafts) : null;
-  const buildOutput = useCallback(
-    (): AskUserOutput | null => (answers === null ? null : { answers }),
-    [answers],
-  );
+  const buildOutput = (): AskUserOutput | null =>
+    answers === null ? null : { answers };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!input || submitted) {
       return;
     }
@@ -443,9 +433,9 @@ export const AskUserCard = ({
     }
     setSubmitted(true);
     onSubmit(part.id, output);
-  }, [input, submitted, buildOutput, onSubmit, part.id]);
+  };
 
-  const handleStartEdit = useCallback(() => {
+  const handleStartEdit = () => {
     if (!input || !answeredOutput || !canRerun) {
       return;
     }
@@ -453,13 +443,13 @@ export const AskUserCard = ({
       askUserDraftsFromAnswers(input.questions, answeredOutput.answers),
     );
     setIsEditing(true);
-  }, [input, answeredOutput, canRerun]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
-  }, []);
+  };
 
-  const handleRerun = useCallback(() => {
+  const handleRerun = () => {
     if (!input || !onEditAndRerun) {
       return;
     }
@@ -469,22 +459,19 @@ export const AskUserCard = ({
     }
     setIsEditing(false);
     detached(onEditAndRerun(part.id, output), "ask-user-card.edit-and-rerun");
-  }, [input, onEditAndRerun, buildOutput, part.id]);
+  };
 
-  const handleFormSubmit = useCallback<
-    NonNullable<ComponentProps<"form">["onSubmit"]>
-  >(
-    (event) => {
-      event.preventDefault();
-      if (isEditing) {
-        handleRerun();
-        return;
-      }
+  const handleFormSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
+    event,
+  ) => {
+    event.preventDefault();
+    if (isEditing) {
+      handleRerun();
+      return;
+    }
 
-      handleSubmit();
-    },
-    [handleRerun, handleSubmit, isEditing],
-  );
+    handleSubmit();
+  };
 
   if (!input || isWithdrawn) {
     return (

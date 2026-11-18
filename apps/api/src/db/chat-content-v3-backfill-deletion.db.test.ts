@@ -170,7 +170,9 @@ const runDeletionRace = async ({ content, source }: DeletionCase) => {
           await connectionA.sql.unsafe(query, [...params]);
         },
         query: async (query, params = []) => {
-          const rows = await connectionA.sql.unsafe(query, [...params]);
+          const rows = await connectionA.sql.unsafe<unknown[]>(query, [
+            ...params,
+          ]);
           if (
             !intercepted &&
             query.trimStart().startsWith("SELECT target.id,")

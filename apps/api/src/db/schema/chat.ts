@@ -3,6 +3,10 @@ import type { SQL } from "drizzle-orm";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
+import {
+  CHAT_COMMAND_TYPES,
+  type ChatCommandType,
+} from "@stll/api-contract/chat-command";
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 import { CHAT_QUEUE_HOLD_REASONS } from "@stll/api-contract/chat-queue";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
@@ -35,6 +39,7 @@ import {
 import {
   aiMemoryPolicies,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
+  chatCommandReceiptPolicies,
   chatMessagePolicies,
   chatMessageRevisionPolicies,
   chatMessageSearchDocumentPolicies,
@@ -91,6 +96,118 @@ const CHAT_TURN_STATUS_SQL_VALUES = CHAT_TURN_STATUSES.map((status) =>
 const CHAT_TURN_TIMING_ACTIVE_SQL_VALUES = CHAT_TURN_STATUSES.filter(
   (status) => CHAT_TURN_TIMING_DISPOSITION[status] !== "finished",
 ).map((status) => sql`${status}`);
+
+type ChatTurnStateColumns = Record<
+  | "assistantMessageId"
+  | "cancellationReason"
+  | "executionId"
+  | "failureCode"
+  | "failureRetryable"
+  | "interactionToolCallId"
+  | "interactionType"
+  | "interruptionReason"
+  | "leaseExpiresAt"
+  | "settledAt"
+  | "status",
+  AnyPgColumn
+>;
+
+/**
+ * The columns each chat turn status carries (`chat_turns_state_payload_check`):
+ * a status not listed is refused.
+ */
+const chatTurnStatePayload = (table: ChatTurnStateColumns) =>
+  sql`CASE ${table.status}
+      WHEN 'accepted' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'running' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NOT NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'awaiting-user' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NOT NULL AND
+        ${table.interactionToolCallId} IS NOT NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'handed-over' THEN
+        ${table.leaseExpiresAt} IS NOT NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NULL
+      WHEN 'completed' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'failed' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NOT NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NOT NULL AND
+        ${table.failureRetryable} IS NOT NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'cancelled' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NOT NULL AND
+        ${table.interruptionReason} IS NULL AND
+        ${table.settledAt} IS NOT NULL
+      WHEN 'interrupted' THEN
+        ${table.leaseExpiresAt} IS NULL AND
+        ${table.executionId} IS NULL AND
+        ${table.assistantMessageId} IS NULL AND
+        ${table.interactionType} IS NULL AND
+        ${table.interactionToolCallId} IS NULL AND
+        ${table.failureCode} IS NULL AND
+        ${table.failureRetryable} IS NULL AND
+        ${table.cancellationReason} IS NULL AND
+        ${table.interruptionReason} IS NOT NULL AND
+        ${table.settledAt} IS NOT NULL
+      ELSE false
+    END`;
 
 const CHAT_THREAD_NAME_KIND_SQL_VALUES = CHAT_THREAD_NAME_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
@@ -690,89 +807,7 @@ export const chatTurns = p.pgTable(
       "chat_turns_interruption_reason_values_check",
       sql`${table.interruptionReason} IS NULL OR ${table.interruptionReason} IN (${sql.join(CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES, sql`, `)})`,
     ),
-    p.check(
-      "chat_turns_state_payload_check",
-      sql`CASE ${table.status}
-        WHEN 'accepted' THEN
-          ${table.leaseExpiresAt} IS NOT NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'running' THEN
-          ${table.leaseExpiresAt} IS NOT NULL AND
-          ${table.executionId} IS NOT NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'awaiting-user' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NOT NULL AND
-          ${table.interactionToolCallId} IS NOT NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NULL
-        WHEN 'completed' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'failed' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NOT NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NOT NULL AND
-          ${table.failureRetryable} IS NOT NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'cancelled' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NOT NULL AND
-          ${table.interruptionReason} IS NULL AND
-          ${table.settledAt} IS NOT NULL
-        WHEN 'interrupted' THEN
-          ${table.leaseExpiresAt} IS NULL AND
-          ${table.executionId} IS NULL AND
-          ${table.assistantMessageId} IS NULL AND
-          ${table.interactionType} IS NULL AND
-          ${table.interactionToolCallId} IS NULL AND
-          ${table.failureCode} IS NULL AND
-          ${table.failureRetryable} IS NULL AND
-          ${table.cancellationReason} IS NULL AND
-          ${table.interruptionReason} IS NOT NULL AND
-          ${table.settledAt} IS NOT NULL
-        ELSE false
-      END`,
-    ),
+    p.check("chat_turns_state_payload_check", chatTurnStatePayload(table)),
     p.check(
       "chat_turns_lease_after_created_check",
       sql`${table.leaseExpiresAt} IS NULL OR ${table.leaseExpiresAt} > ${table.createdAt}`,
@@ -787,10 +822,20 @@ export const chatTurns = p.pgTable(
     p
       .uniqueIndex("chat_turns_thread_ordinal_uidx")
       .on(table.threadId, table.ordinal.asc().nullsFirst()),
+    // Superseded by chat_turns_active_thread_v2_uidx, which also covers
+    // `handed-over`; dropped once that one is valid everywhere.
     p
       .uniqueIndex("chat_turns_active_thread_uidx")
       .on(table.threadId)
       .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
+    // A thread holds at most one unsettled turn. Built online
+    // (indexes-chat-turns-handed-over-indexes).
+    p
+      .uniqueIndex("chat_turns_active_thread_v2_uidx")
+      .on(table.threadId)
+      .where(
+        sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
+      ),
     p
       .index("chat_turns_org_user_thread_created_idx")
       .on(
@@ -800,12 +845,20 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
-    // A member's unfinished runs, without walking their settled history.
-    // Built online (indexes-chat-turns-org-user-active-idx).
+    // Superseded by chat_turns_org_user_active_v2_idx; dropped once that one
+    // is valid everywhere. Built online (indexes-chat-turns-org-user-active-idx).
     p
       .index("chat_turns_org_user_active_idx")
       .on(table.organizationId, table.userId)
       .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-handed-over-indexes).
+    p
+      .index("chat_turns_org_user_active_v2_idx")
+      .on(table.organizationId, table.userId)
+      .where(
+        sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'handed-over')`,
+      ),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),
@@ -813,8 +866,15 @@ export const chatTurns = p.pgTable(
       .uniqueIndex("chat_turns_org_run_id_uidx")
       .on(table.organizationId, table.runId)
       .where(sql`${table.runId} IS NOT NULL`),
+    // Superseded by chat_turns_org_active_lease_v2_idx; dropped once that one
+    // is valid everywhere.
     p
       .index("chat_turns_org_active_lease_idx")
+      .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
+      .where(sql`${table.status} IN ('accepted', 'running')`),
+    // Built online (indexes-chat-turns-handed-over-indexes).
+    p
+      .index("chat_turns_org_active_lease_v2_idx")
       .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
       .where(
         sql`${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})`,
@@ -857,6 +917,21 @@ export const chatQueuedMessages = p.pgTable(
     request: jsonb("request").notNull(),
     /** Raised by every edit; a send and an edit name the revision they read. */
     revision: p.integer("revision").notNull().default(0),
+    /**
+     * The chat files the enqueue stored for this message's inline files.
+     * Removing the message deletes them; sending it leaves them to the
+     * message that now holds them.
+     */
+    uploadedFileIds: safeUuid<"userFile">("uploaded_file_ids")
+      .array()
+      .notNull()
+      .default([]),
+    /**
+     * The revision handed to a running turn as a steer, until the run says
+     * whether it took it: taken, the message leaves the queue at that
+     * revision; refused, the mark is cleared. Null when no steer is open.
+     */
+    steeredRevision: p.integer("steered_revision"),
     /** When a queue sweep last tried this thread's queue; the next sweep tries the oldest first. */
     sweptAt: timestamptz("swept_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -956,6 +1031,63 @@ export const chatQueueHolds = p.pgTable(
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_queue_holds'::regclass)`,
     }),
     ...chatQueueHoldPolicies(),
+  ],
+);
+
+/**
+ * That a member's chat command (a send, an answer) was accepted, under the id
+ * the client chose for it, so a retry after a lost response is answered with
+ * the turn the first attempt started or continued instead of acting twice
+ * (`@stll/api-contract/chat-command`). Written in the transaction that accepts
+ * the command; only accepted commands have one. Deleted after a day.
+ */
+export const chatCommandReceipts = p.pgTable(
+  "chat_command_receipts",
+  {
+    /** The id the client minted for the command; its retries send it again. */
+    commandId: p.uuid("command_id").primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    threadId: safeUuid<"chatThread">("thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    /**
+     * The turn the command started (a send) or continued (an answer); null
+     * once that turn was removed from the thread (an edit from an earlier
+     * message), when the receipt still answers that the command was taken.
+     */
+    turnId: safeUuid<"chatTurn">("turn_id").references(() => chatTurns.id, {
+      onDelete: "set null",
+    }),
+    /** `send` or `answer` (`CHAT_COMMAND_TYPES`). */
+    commandType: p.text("command_type").$type<ChatCommandType>().notNull(),
+    acceptedAt: timestamptz("accepted_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "chat_command_receipts_command_type_check",
+      sql`${table.commandType} IN (${sql.join(
+        CHAT_COMMAND_TYPES.map((type) => sql.raw(`'${type}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.index("chat_command_receipts_accepted_at_idx").on(table.acceptedAt),
+    p.index("chat_command_receipts_thread_id_idx").on(table.threadId),
+    p.index("chat_command_receipts_turn_id_idx").on(table.turnId),
+    // The retention sweep runs on the owner connection, which FORCE holds to
+    // RLS too, so it is admitted by name.
+    p.pgPolicy("chat_command_receipts_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_command_receipts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_command_receipts'::regclass)`,
+    }),
+    ...chatCommandReceiptPolicies(),
   ],
 );
 

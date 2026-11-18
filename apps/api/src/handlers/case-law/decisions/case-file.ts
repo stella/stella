@@ -251,6 +251,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "analysis",
   // Parser bookkeeping does not describe a case-file document.
   "parserVersion",
+  // Procedural review extraction version is internal bookkeeping.
+  "reviewExtractionVersion",
   // Raw publisher bytes are not returned in a document list.
   "sourceRaw",
   // Internal object-storage address for publisher bytes.
@@ -335,6 +337,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "createdAt",
   // Storage update time is not the document's decision date.
   "updatedAt",
+  // Content change time is a reader's cursor, not the decision's date.
+  "contentChangedAt",
 ] as const satisfies readonly (keyof typeof publishedCaseLawDecisions.$inferSelect)[];
 
 type CaseFilePage = Exclude<

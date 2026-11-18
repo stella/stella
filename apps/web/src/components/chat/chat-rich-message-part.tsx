@@ -1,4 +1,4 @@
-import { createElement, lazy, Suspense, useMemo, useRef } from "react";
+import { createElement, lazy, Suspense, useRef } from "react";
 
 import type { AppRendererProps } from "@mcp-ui/client";
 import { useQuery } from "@tanstack/react-query";
@@ -319,10 +319,7 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
 const UiResource = ({ part }: { part: UiResourcePart }) => {
   const t = useTranslations();
   const frameTitle = t("chat.richContentTitle");
-  const sandboxUrl = useMemo(
-    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
-    [frameTitle],
-  );
+  const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
   const normalized = normalizeUiResourcePart(part);
   if (!normalized) {
     return <RichContentStatus />;
@@ -371,10 +368,7 @@ const StellaAppFrame = ({
   const locale = useMessageLocale();
   const { resolvedTheme } = useTheme();
   const frameTitle = t("chat.richContentTitle");
-  const sandboxUrl = useMemo(
-    () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
-    [frameTitle],
-  );
+  const sandboxUrl = withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle);
   const directory = stellaAppDirectory(part.resource.uri) ?? "";
   const bundle = useQuery({
     queryKey: ["stella-mcp-app-bundle", directory],
@@ -390,7 +384,7 @@ const StellaAppFrame = ({
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const bridge = useMemo((): McpAppBridge => {
+  const bridge = ((): McpAppBridge => {
     const call = readStellaMcpAppCall(part);
     const thread = api.chat.threads({
       threadId: toSafeId<"chatThread">(threadRef.threadId),
@@ -413,7 +407,7 @@ const StellaAppFrame = ({
       onOpenLink: async ({ url }) =>
         await Promise.resolve(openStellaAppLink(url, openIsolatedWindow)),
     };
-  }, [part, threadRef.threadId, resolvedTheme, locale]);
+  })();
   if (bundle.isPending) {
     return (
       <div className="min-h-32 w-full overflow-hidden rounded-md border">

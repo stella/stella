@@ -55,6 +55,7 @@ const CONSUMERS = {
   // Decision and statute pages, and the API reads that serve them.
   "apps/api/src/handlers/case-law/public-routes.ts": "pages",
   "apps/api/src/lib/case-law/decision-badges.ts": "pages",
+  "apps/api/src/lib/case-law/decision-reviews.ts": "pages",
   "apps/api/src/lib/case-law/language-alternates.ts": "pages",
   "apps/api/src/handlers/legislation/by-slug.ts": "pages",
   "apps/web/src/routes/law/-case-detail.logic.ts": "pages",

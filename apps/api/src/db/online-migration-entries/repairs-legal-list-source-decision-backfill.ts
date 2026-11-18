@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-legal-list-source-decision-backfill",
   revision: 1201,
+  lifecycle: "finalized",
   type: "repairs",
   values: [LEGAL_LIST_SOURCE_DECISION_BACKFILL],
 } satisfies OnlineMigrationEntry;

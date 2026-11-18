@@ -11,6 +11,11 @@
 import { describe, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 
+import {
+  directoryCourtIdentities,
+  isPrintedCourtJurisdiction,
+} from "@stll/api-contract/court-identity";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
@@ -71,14 +76,18 @@ const observation = ({
   decisionDate = DECISION_DATE,
   language = source.language,
 }: ObservationOptions): IngestionResult => {
-  // Only a directory jurisdiction names its court by id; the rest by name.
+  // Only a directory jurisdiction names its court by id; the rest by name,
+  // and a printed-name jurisdiction by one its directory can place.
   const directoryCourt =
     source.country === "USA" ? legacyTrustedUsaCourts().at(0) : undefined;
+  const printedCourt = isPrintedCourtJurisdiction(source.country)
+    ? directoryCourtIdentities(source.country).at(0)?.name
+    : undefined;
   return plainTextIngestionResult({
     caseNumber,
     sourceDocumentId,
     ecli,
-    court: directoryCourt?.name ?? `${key} court`,
+    court: directoryCourt?.name ?? printedCourt ?? `${key} court`,
     ...(directoryCourt === undefined
       ? {}
       : { courtId: directoryCourt.courtId }),
