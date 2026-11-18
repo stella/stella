@@ -25,8 +25,11 @@ const { EditorModel, EditorView, StringValue } =
 // document has already painted once. These stand-ins let the test deliver the
 // observer callback and hold animation frames back, which is exactly the
 // window between the editor's first layout and its second frame.
-type ObserverCallback = () => void;
-let observers: ObserverCallback[] = [];
+type HeldObserver = {
+  notify: ResizeObserverCallback;
+  observer: ResizeObserver;
+};
+let observers: HeldObserver[] = [];
 let heldFrames: FrameRequestCallback[] = [];
 const realResizeObserver = globalThis.ResizeObserver;
 const realRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -34,14 +37,14 @@ const realRequestAnimationFrame = globalThis.requestAnimationFrame;
 beforeEach(() => {
   observers = [];
   heldFrames = [];
-  globalThis.ResizeObserver = class {
-    constructor(callback: ObserverCallback) {
-      observers.push(callback);
+  globalThis.ResizeObserver = class HeldResizeObserver implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      observers.push({ notify: callback, observer: this });
     }
     observe() {}
     unobserve() {}
     disconnect() {}
-  } as unknown as typeof ResizeObserver;
+  };
   globalThis.requestAnimationFrame = (callback) => {
     heldFrames.push(callback);
     return heldFrames.length;
@@ -63,8 +66,8 @@ const mountAtWidth = (width: number) => {
   Object.defineProperty(view.element, "clientWidth", { value: width });
   document.body.append(view.element);
   expect(observers.length).toBeGreaterThan(0);
-  for (const deliver of observers) {
-    deliver();
+  for (const { notify, observer } of observers) {
+    notify([], observer);
   }
   return view;
 };
