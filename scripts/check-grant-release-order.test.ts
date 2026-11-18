@@ -58,6 +58,22 @@ describe("findPrematureRequiredGrants", () => {
     ).toEqual([]);
   });
 
+  test("a prototype property is not a declaration", () => {
+    expect(
+      findPrematureRequiredGrants(
+        { case_law_citations: { constructor: "required" } },
+        { case_law_citations: {} },
+      ),
+    ).toEqual([{ relation: "case_law_citations", column: "constructor" }]);
+    expect(
+      findUndeclaredNewGrants(
+        new Set(["case_law_citations.toString"]),
+        new Set(),
+        { case_law_citations: {} },
+      ),
+    ).toEqual([{ relation: "case_law_citations", column: "toString" }]);
+  });
+
   test("removing a column or a relation passes", () => {
     expect(
       findPrematureRequiredGrants(
@@ -220,15 +236,19 @@ describe("selectProductionTag", () => {
   });
 });
 
-test("follows relative imports and re-exports only", () => {
+test("follows runtime relative imports, never comments, strings or types", () => {
   expect(
     relativeImports(
       [
         'import { panic } from "better-result";',
         'import { A } from "./case-law/review-column-grants.ts";',
+        'import type { T } from "./types.ts";',
         'export { B } from "../b";',
         'import "./side-effect.ts";',
+        '// import "./removed.ts";',
+        "const s = 'from \"./not-an-import.ts\"';",
         'const c = await import("./c.ts");',
+        "export const X = { ...A, c, s, panic } satisfies T;",
       ].join("\n"),
     ),
   ).toEqual([

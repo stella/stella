@@ -58,6 +58,18 @@ export const GRANT_RELEASE_ORDER_ALLOWANCES: readonly GrantReleaseOrderAllowance
 
 export type GrantColumn = { relation: string; column: string };
 
+/** Whether `grants` declares the column itself, not through a prototype. */
+const declares = (
+  grants: ColumnGrants,
+  relation: string,
+  column: string,
+): boolean => {
+  const columns = Object.hasOwn(grants, relation)
+    ? grants[relation]
+    : undefined;
+  return columns !== undefined && Object.hasOwn(columns, column);
+};
+
 const compareGrantColumns = (left: GrantColumn, right: GrantColumn): number => {
   const leftKey = `${left.relation}.${left.column}`;
   const rightKey = `${right.relation}.${right.column}`;
@@ -82,7 +94,7 @@ export const findPrematureRequiredGrants = (
         .filter(
           ([column, grant]) =>
             grant === "required" &&
-            released[relation]?.[column] === undefined &&
+            !declares(released, relation, column) &&
             !allowed.has(`${relation}\u0000${column}`),
         )
         .map(([column]) => ({ relation, column })),
@@ -154,7 +166,7 @@ export const findUndeclaredNewGrants = (
     .filter((key) => !releasedGranted.has(key) && !allowed.has(key))
     .flatMap((key) => {
       const [relation = "", column = ""] = key.split(".");
-      return released[relation]?.[column] === undefined
+      return !declares(released, relation, column)
         ? [{ relation, column }]
         : [];
     })
@@ -166,8 +178,8 @@ export const staleAllowances = (
   released: ColumnGrants,
   allowances: readonly GrantReleaseOrderAllowance[],
 ): GrantReleaseOrderAllowance[] =>
-  allowances.filter(
-    ({ relation, column }) => released[relation]?.[column] !== undefined,
+  allowances.filter(({ relation, column }) =>
+    declares(released, relation, column),
   );
 
 export const formatPrematureRequiredGrant = (
@@ -211,14 +223,19 @@ export const selectProductionTag = (
     .toSorted(compareVersionsDescending)
     .find((tag) => sharesHistoryWithHead(tag));
 
-const RELATIVE_IMPORT =
-  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["'](\.{1,2}\/[^"']+)["']/gu;
+const IMPORT_SCANNER = new Bun.Transpiler({ loader: "ts" });
 
-/** Relative module specifiers a source file imports or re-exports. */
+/**
+ * Relative module specifiers a source file loads at runtime: imports,
+ * re-exports and dynamic imports. Parsed, so comments, strings and type-only
+ * imports never count.
+ */
 export const relativeImports = (source: string): string[] =>
-  [...source.matchAll(RELATIVE_IMPORT)].flatMap((match) =>
-    match[1] === undefined ? [] : [match[1]],
-  );
+  IMPORT_SCANNER.scan(source)
+    .imports.map(({ path: specifier }) => specifier)
+    .filter(
+      (specifier) => specifier.startsWith("./") || specifier.startsWith("../"),
+    );
 
 type Git = (args: readonly string[]) => string | undefined;
 
@@ -247,7 +264,8 @@ const resolveAtRevision = (
   ];
   const found = candidates.find(
     (candidate) =>
-      git(["cat-file", "-e", `${revision}:${candidate}`]) !== undefined,
+      // A directory is a tree object; only a blob is a module.
+      git(["cat-file", "-t", `${revision}:${candidate}`])?.trim() === "blob",
   );
   if (found === undefined) {
     return panic(
