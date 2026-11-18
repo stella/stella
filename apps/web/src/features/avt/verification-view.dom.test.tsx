@@ -1349,9 +1349,15 @@ test("the original PDF mounts its viewer and claim boxes inside the PDF store", 
     const { client } = await mount(run);
     await seedPdfFile(client, run, await onePagePdf());
     openOriginal();
-    await nextFrame();
-    await nextFrame();
-    expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    // The original view is a lazily loaded chunk: its first import compiles
+    // the file viewer, which takes as long as the machine needs, so the test
+    // waits for that import rather than a guessed number of frames.
+    await import("./original-pdf-view");
+    await waitFor(() => {
+      expect(document.querySelector("[data-avt-original-pdf]") !== null).toBe(
+        true,
+      );
+    });
     await waitFor(() => {
       expect(
         client
