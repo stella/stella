@@ -24,7 +24,7 @@ import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { readProvision } from "@/api/handlers/legislation/provision-text";
 import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
@@ -407,7 +407,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "as_of and language, or document_id from read_provision_history for an exact " +
       "consolidation. document_id and as_of are mutually exclusive. " +
       "Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). " +
-      "Entries return in input order: found carries text; invalid, not_found, " +
+      "Entries return in input order: found carries text and governingText " +
+      "(lead-in and closing wording of the units the anchor is nested in, which qualifies it); invalid, not_found, " +
       "uncovered_date (no applicable consolidation, including inconsistent publisher dates), " +
       "provision_not_found and text_withheld (AI use barred) carry messages. " +
       "Continue long text with nextTextCursor as text_cursor on the same entry until null. " +
@@ -445,7 +446,9 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "not carry the anchor is left out of `items`. Pass the returned " +
       "nextCursor back as cursor for older versions. Long wording returns " +
       "nextTextCursor on its item; pass it back as text_cursor with the same " +
-      "eli, anchor, and version-page cursor until it is null. " +
+      "eli, anchor, and version-page cursor until it is null. Each item's " +
+      "governingText holds the lead-in and closing wording of the units the " +
+      "anchor is nested in. " +
       "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
@@ -1019,11 +1022,11 @@ const provisionItemResult = ({
       const blocks =
         blocksByDocumentId.get(String(version.id)) ??
         panic(`No block list was read for consolidation ${version.id}`);
-      const text = extractProvisionText(
+      const reading = readProvision(
         { blocks, scheme: statuteAnchorSchemeFor(version.country) },
         item.anchor,
       );
-      if (text === null) {
+      if (reading === null) {
         return {
           type: "item",
           item: {
@@ -1038,7 +1041,7 @@ const provisionItemResult = ({
         ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
         limit: LIMITS.legislationProvisionTextChars,
         subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
-        text,
+        text: reading.text,
       });
       if (window.type === "invalid-cursor") {
         return { type: "invalid-cursor" };
@@ -1049,6 +1052,9 @@ const provisionItemResult = ({
           ...subject,
           ...cited,
           text: window.text,
+          // Once per read: a continuation window carries on the same text.
+          governingText:
+            item.text_cursor === undefined ? reading.governing : [],
           truncated: window.truncated,
           nextTextCursor: window.nextTextCursor,
           documentId: version.id,
@@ -1389,6 +1395,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
           item: {
             ...version,
             text: window.text,
+            governingText: textCursor === undefined ? item.governingText : [],
             truncated: window.truncated,
             nextTextCursor: window.nextTextCursor,
             status: PROVISION_STATUS.found,

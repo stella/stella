@@ -30,7 +30,8 @@ export const anchorInputSchema = v.pipe(
       "the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, " +
       "-odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, " +
       "par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to " +
-      "that subdivision. Other publishers may use different schemes.",
+      "that subdivision; the wording of the units around it that governs it " +
+      "comes back in governingText. Other publishers may use different schemes.",
   ),
 );
 

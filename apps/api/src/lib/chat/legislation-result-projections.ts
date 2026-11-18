@@ -5,6 +5,7 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
+import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
 
 import {
   PROVISION_ABSENCE_STATUSES,
@@ -40,6 +41,23 @@ const provisionEntrySubject = {
 const provisionCitation = { citation: v.optional(v.string()) } as const;
 
 /**
+ * Wording outside a read subdivision that governs it: the lead-in of each
+ * unit it is nested in and the closing text after their lists, with the
+ * anchor each is filed under. Empty for a whole provision and on a
+ * continuation window of the same text. Source of truth: `governingWording`
+ * (`@stll/legal-ast/provision-preview`).
+ */
+const governingText = {
+  governingText: v.array(
+    v.strictObject({
+      anchor: passthroughId(),
+      position: v.picklist(GOVERNING_WORDING_POSITIONS),
+      text: v.string(),
+    }),
+  ),
+} as const;
+
+/**
  * read_statute_provisions. Source of truth:
  * `handleReadStatuteProvisionsTool` (`legislation-tools.ts`). One entry per
  * requested item, in input order: a batch read reports per entry rather than
@@ -59,6 +77,7 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
+          ...governingText,
           nextTextCursor: v.nullable(passthroughId()),
           truncated: v.boolean(),
           versionValidFrom: v.nullable(v.string()),
@@ -122,6 +141,7 @@ export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
           ...statuteProvisionVersion,
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
+          ...governingText,
           nextTextCursor: v.nullable(passthroughId()),
           truncated: v.boolean(),
         }),

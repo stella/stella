@@ -3506,7 +3506,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute_provisions",
-    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text and governingText (lead-in and closing wording of the units the anchor is nested in, which qualifies it); invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["items"],
@@ -3531,7 +3531,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision; the wording of the units around it that governs it comes back in governingText. Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -3609,6 +3609,13 @@
               "text": {
                 "type": "string"
               },
+              "governingText": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
               "nextTextCursor": {
                 "type": ["string", "null"]
               },
@@ -3658,7 +3665,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_provision_history",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Each item's governingText holds the lead-in and closing wording of the units the anchor is nested in. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli", "anchor"],
@@ -3677,7 +3684,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision; the wording of the units around it that governs it comes back in governingText. Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -3783,6 +3790,13 @@
               },
               "text": {
                 "type": "string"
+              },
+              "governingText": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
               },
               "nextTextCursor": {
                 "type": ["string", "null"]
