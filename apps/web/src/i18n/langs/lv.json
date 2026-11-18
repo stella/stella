@@ -4654,7 +4654,7 @@
       "importSkill": "Importēt no URL",
       "importTitle": "Importēt prasmi",
       "importedSkills": "{count, plural, zero {Importētas # prasmes} one {Importēta # prasme} other {Importētas # prasmes}}",
-      "invalidPath": "Ceļā drīkst izmantot tikai mazos burtus, ciparus, punktus, defises vai pasvītras",
+      "invalidPath": "Izmantojiet relatīvu ceļu. Failu un mapju nosaukumi nedrīkst būt . vai .., sākties vai beigties ar atstarpi, kā arī saturēt \\ : * ? \" | vai leņķiekavas.",
       "invocationAuto": "Automātiski",
       "invocationAutoHelp": "AI var pats izmantot šo prasmi, ja tā atbilst pieprasījumam.",
       "invocationManual": "Tikai pēc izsaukuma",

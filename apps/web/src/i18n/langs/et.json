@@ -4654,7 +4654,7 @@
       "importSkill": "Impordi URL-ist",
       "importTitle": "Impordi oskus",
       "importedSkills": "{count, plural, one {Imporditi # oskus} other {Imporditi # oskust}}",
-      "invalidPath": "Tee tohib sisaldada ainult väiketähti, numbreid, punkte, sidekriipse või allkriipse",
+      "invalidPath": "Kasutage suhtelist teed. Faili- ja kaustanimed ei tohi olla . ega .., alata ega lõppeda tühikuga ega sisaldada märke \\ : * ? \" | või nurksulge.",
       "invocationAuto": "Automaatselt",
       "invocationAutoHelp": "AI võib seda oskust ise kasutada, kui see päringuga sobib.",
       "invocationManual": "Ainult käivitamisel",

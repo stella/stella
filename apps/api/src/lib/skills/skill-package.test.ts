@@ -25,7 +25,7 @@ import {
   resolveGithubRefAndPath,
   verifySkillPackageIntegrity,
 } from "./skill-package";
-import type { SkillFile } from "./skill-package";
+import type { GithubSkillFiles, SkillFile } from "./skill-package";
 
 const permit = grantThirdPartyOutboundPermit();
 
@@ -267,7 +267,7 @@ Use \`assets/logo.png\` and the references.`,
       new Uint8Array([0x4d, 0xfc, 0x6c, 0x6c, 0x65, 0x72]),
     );
     zip.set("skill/assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
-    zip.set("skill/notes/todo.md", "Not a resource folder");
+    zip.set("skill/notes/todo.md", "Any folder is kept");
     zip.set("README.md", "Outside the skill folder");
     const buffer = (await zip.generate({ compression: "store" })).buffer;
 
@@ -279,6 +279,7 @@ Use \`assets/logo.png\` and the references.`,
       throw result.error;
     }
     expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "notes/todo.md",
       "references/guide.md",
     ]);
     expect(
@@ -286,7 +287,6 @@ Use \`assets/logo.png\` and the references.`,
     ).toEqual([
       { path: "README.md", reason: "outside-skill-folder" },
       { path: "skill/assets/logo.png", reason: "unsupported-extension" },
-      { path: "skill/notes/todo.md", reason: "unsupported-folder" },
       { path: "skill/references/latin1.txt", reason: "not-utf8-text" },
     ]);
   });
@@ -756,7 +756,7 @@ Instructions.`,
       selectedSkillPath: null,
     };
     const fetchCatalogue = async (
-      fetchFiles: () => Promise<Result<SkillFile[], HandlerError>>,
+      fetchFiles: () => Promise<Result<GithubSkillFiles, HandlerError>>,
     ) =>
       await fetchGithubCatalogueSkillPackage({
         permit,
@@ -771,18 +771,24 @@ Instructions.`,
     });
 
     const valid = await fetchCatalogue(async () =>
-      Result.ok([
-        skillFile("---\nname: review\ndescription: Review.\n---\n\nBody."),
-      ]),
+      Result.ok({
+        files: [
+          skillFile("---\nname: review\ndescription: Review.\n---\n\nBody."),
+        ],
+        skippedFiles: [],
+      }),
     );
     expect(valid.unwrap().sourceUrl).toBe(
       "https://github.com/example/skills/tree/main",
     );
 
     const invalid = await fetchCatalogue(async () =>
-      Result.ok([
-        skillFile("---\nname: Not Valid\ndescription: Review.\n---\n\nBody."),
-      ]),
+      Result.ok({
+        files: [
+          skillFile("---\nname: Not Valid\ndescription: Review.\n---\n\nBody."),
+        ],
+        skippedFiles: [],
+      }),
     );
     const unavailable = await fetchCatalogue(async () =>
       Result.err(

@@ -46,9 +46,15 @@ export const SKILL_DRAFT_NAME_KINDS = ["person", "organization"] as const;
 
 export type SkillDraftNameKind = (typeof SKILL_DRAFT_NAME_KINDS)[number];
 
-/** Browser-safe path grammar shared by skill-resource producers and editors. */
+/**
+ * Path grammar for a skill resource, shared by producers and editors: any
+ * folder and case (the Agent Skills spec allows any files beside SKILL.md),
+ * relative, no empty, `.` or `..` segment, no control or format characters,
+ * no backslash or any of `< > : " | ? *`, no segment that starts or ends with whitespace
+ * or ends with a dot. `@stll/skills/format` holds the same pattern.
+ */
 export const SKILL_RESOURCE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
+  /^(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
 
 /**
  * The document a chat composer has open, as far as the chat's tools care:

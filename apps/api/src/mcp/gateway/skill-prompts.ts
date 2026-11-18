@@ -147,7 +147,7 @@ export const getSkillPrompt = async ({
         resource: {
           mimeType: "text/plain",
           text: content,
-          uri: `${SKILL_PROMPT_RESOURCE_URI_PREFIX}${encodeURIComponent(skill.name)}/${path}`,
+          uri: skillPromptResourceUri({ name: skill.name, path }),
         },
         type: "resource",
       },
@@ -156,6 +156,22 @@ export const getSkillPrompt = async ({
   ];
   return Result.ok({ description: skill.description, messages });
 };
+
+/**
+ * A resource path may hold spaces, `#`, `%` or non-ASCII letters, so each
+ * segment is percent-encoded; the `/` between them stays.
+ */
+export const skillPromptResourceUri = ({
+  name,
+  path,
+}: {
+  name: string;
+  path: string;
+}): string =>
+  `${SKILL_PROMPT_RESOURCE_URI_PREFIX}${encodeURIComponent(name)}/${path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")}`;
 
 const servesSkillPrompts = ({
   mode,
