@@ -299,13 +299,24 @@ for (const { language, sundayBasedWeekStart } of [
         const router = window.__TSR_ROUTER__;
         return router !== undefined && router.state.matches.length > 0;
       });
-      // Opening the filters and calendar requires hydrated event handlers.
+      // The sidebar offers sign-in once the browser knows nobody is signed
+      // in; the providers above the page have then settled.
+      await expect(
+        page.getByRole("button", { name: ar.auth.signIn, exact: true }),
+      ).toBeVisible();
+      // Opening the filters and calendar requires hydrated event handlers. A
+      // press that lands while the list is still hydrating is not replayed
+      // if the list renders again, so the open is retried.
       const filters = page.getByRole("button", {
         name: ar.common.filters,
         exact: true,
       });
-      await filters.click();
-      await expect(filters).toHaveAttribute("aria-expanded", "true");
+      await expect(async () => {
+        if ((await filters.getAttribute("aria-expanded")) !== "true") {
+          await filters.click();
+        }
+        await expect(filters).toHaveAttribute("aria-expanded", "true");
+      }).toPass();
       await page
         .getByRole("button", {
           name: `${ar.search.dateFrom} ${ar.common.selectDate}`,
