@@ -370,7 +370,7 @@ const pct = (current: number, baseline: number): string => {
 
 // --- Modes ------------------------------------------------------------------
 
-const runReport = async (): Promise<number> => {
+const runReport = (): number => {
   const measured = measure(ASSETS_DIR);
   if (!measured.ok) {
     console.error(measured.error);
@@ -387,7 +387,7 @@ const runReport = async (): Promise<number> => {
       : "";
     console.log(`  ${key.padEnd(20)} ${kib(size).padStart(12)}${suffix}`);
   }
-  const startup = await readStartupGraph(DIST_DIR);
+  const startup = readStartupGraph(DIST_DIR);
   if (startup.ok) {
     const budget = readBaselineFields().initial;
     const initial = initialGzipBytes(startup.graph);
@@ -401,13 +401,13 @@ const runReport = async (): Promise<number> => {
   return 0;
 };
 
-const runWrite = async (): Promise<number> => {
+const runWrite = (): number => {
   const measured = measure(ASSETS_DIR);
   if (!measured.ok) {
     console.error(measured.error);
     return 1;
   }
-  const startup = await readStartupGraph(DIST_DIR);
+  const startup = readStartupGraph(DIST_DIR);
   if (!startup.ok) {
     console.error(startup.error);
     return 1;
@@ -422,7 +422,7 @@ const runWrite = async (): Promise<number> => {
   return 0;
 };
 
-const runCheck = async (): Promise<number> => {
+const runCheck = (): number => {
   const measured = measure(ASSETS_DIR);
   if (!measured.ok) {
     console.error(measured.error);
@@ -435,7 +435,7 @@ const runCheck = async (): Promise<number> => {
     );
     return 1;
   }
-  const startup = await readStartupGraph(DIST_DIR);
+  const startup = readStartupGraph(DIST_DIR);
   if (!startup.ok) {
     console.error(startup.error);
     return 1;
@@ -704,7 +704,7 @@ const runMcpApps = (): number => {
 
 // --- Entry ------------------------------------------------------------------
 
-const main = async (): Promise<number> => {
+const main = (): number => {
   if (process.argv.includes("--mcp-apps")) {
     return runMcpApps();
   }
@@ -712,19 +712,19 @@ const main = async (): Promise<number> => {
     return runSelfTest();
   }
   if (process.argv.includes("--write-baseline")) {
-    return await runWrite();
+    return runWrite();
   }
   if (process.argv.includes("--check-duplicates")) {
     return runCheckDuplicates();
   }
   if (process.argv.includes("--check")) {
-    return await runCheck();
+    return runCheck();
   }
-  return await runReport();
+  return runReport();
 };
 
 if (import.meta.main) {
   assertOfflineCheckPreload();
 
-  process.exit(await main());
+  process.exit(main());
 }

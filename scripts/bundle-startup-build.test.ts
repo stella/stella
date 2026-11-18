@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   componentDeclarationLines,
+  parseStartManifest,
   readStartupGraph,
 } from "./bundle-startup-build";
 import { coldLoadHops, startupPageCode } from "./bundle-startup-gates";
@@ -93,6 +94,64 @@ describe("route component declarations", () => {
 // A real build: a route file whose pending view keeps its page eager, and a
 // route that loads its page with a hand-written import(). The manifest module
 // has the Start plugin's shape.
+describe("reading the Start manifest as data", () => {
+  // The shape the Start plugin writes into the server build, minified.
+  const minified = [
+    "// \\0tanstack-start-manifest:v",
+    "var tsrStartManifest = () => ({ routes: {",
+    "\t__root__: {",
+    '\t\tfilePath: "/build/apps/web/src/routes/__root.tsx",',
+    '\t\tchildren: ["/", "/law"],',
+    '\t\tcss: ["/assets/vendor-tanstack-Bv1_VIvA.css"],',
+    '\t\tpreloads: ["/assets/index-B8Lw9Urb.js", `/assets/vendor-react-DFHnd9ca.js`],',
+    '\t\tscripts: [{ attrs: { type: "module", async: !0, src: "/assets/index-B8Lw9Urb.js" } }]',
+    "\t},",
+    '\t"/": { filePath: "/build/apps/web/src/routes/index.tsx", children: void 0, preloads: ["/assets/routes-C9t_oDei.js"] }',
+    "} });",
+    "export { tsrStartManifest };",
+  ].join("\n");
+
+  test("reads the routes and their preloads without running the module", () => {
+    expect(parseStartManifest("manifest.js", minified)).toEqual({
+      routes: {
+        __root__: {
+          filePath: "/build/apps/web/src/routes/__root.tsx",
+          preloads: [
+            "/assets/index-B8Lw9Urb.js",
+            "/assets/vendor-react-DFHnd9ca.js",
+          ],
+        },
+        "/": {
+          filePath: "/build/apps/web/src/routes/index.tsx",
+          preloads: ["/assets/routes-C9t_oDei.js"],
+        },
+      },
+    });
+  });
+
+  test("refuses a manifest that computes a value", () => {
+    const computed = minified.replace(
+      '"/assets/routes-C9t_oDei.js"',
+      "routeChunk()",
+    );
+    const referenced = minified.replace(
+      '"/assets/routes-C9t_oDei.js"',
+      "chunk",
+    );
+
+    expect(computed).not.toBe(minified);
+    expect(parseStartManifest("manifest.js", computed)).toBe(
+      "manifest.js: the manifest is not plain data (CallExpression)",
+    );
+    expect(parseStartManifest("manifest.js", referenced)).toBe(
+      "manifest.js: the manifest is not plain data (Identifier chunk)",
+    );
+    expect(parseStartManifest("manifest.js", "export const other = 1;")).toBe(
+      "manifest.js does not declare tsrStartManifest as an arrow returning an object",
+    );
+  });
+});
+
 describe("reading a production build", () => {
   let dir = "";
   let pageChunk = "";
@@ -189,8 +248,8 @@ describe("reading a production build", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("finds the page code the startup carries and the page loaded late", async () => {
-    const read = await readStartupGraph(path.join(dir, "dist"));
+  test("finds the page code the startup carries and the page loaded late", () => {
+    const read = readStartupGraph(path.join(dir, "dist"));
     if (!read.ok) {
       throw new Error(read.error);
     }
@@ -213,8 +272,8 @@ describe("reading a production build", () => {
     ]);
   });
 
-  test("a build without a Start manifest is refused, not passed", async () => {
-    const read = await readStartupGraph(path.join(dir, "src"));
+  test("a build without a Start manifest is refused, not passed", () => {
+    const read = readStartupGraph(path.join(dir, "src"));
 
     expect(read).toEqual({
       ok: false,

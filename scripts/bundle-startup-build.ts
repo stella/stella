@@ -13,16 +13,18 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { ROUTE_TREE_OPTIONS } from "../apps/web/route-tree.config";
 import {
+  type ArrayExpression,
   type Node,
+  type ObjectExpression,
   parseSource,
   type Program,
   type Statement,
   staticPropertyName,
+  type UnaryExpression,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import type {
@@ -61,28 +63,132 @@ export type ReadResult =
 /** `/assets/index-abc.js` -> `index-abc.js` */
 const chunkFileName = (url: string): string => path.posix.basename(url);
 
-const readManifest = async (distDir: string): Promise<Manifest | string> => {
+type Literal = { ok: true; value: unknown } | { ok: false; node: string };
+
+/**
+ * The value of a JSON-like expression as a minifier prints it (`!0`,
+ * `void 0`, parentheses included). Anything else is refused by node type:
+ * the manifest is read as data, never run.
+ */
+const unaryValue = (node: UnaryExpression): Literal => {
+  if (node.operator === "void") {
+    return { ok: true, value: undefined };
+  }
+  const argument = literalValue(node.argument);
+  if (!argument.ok) {
+    return argument;
+  }
+  if (node.operator === "!") {
+    return { ok: true, value: !argument.value };
+  }
+  if (node.operator === "-" && typeof argument.value === "number") {
+    return { ok: true, value: -argument.value };
+  }
+  return { ok: false, node: `UnaryExpression ${node.operator}` };
+};
+
+const arrayValue = (node: ArrayExpression): Literal => {
+  const values: unknown[] = [];
+  for (const element of node.elements) {
+    if (element === null || element.type === "SpreadElement") {
+      return { ok: false, node: element?.type ?? "array hole" };
+    }
+    const value = literalValue(element);
+    if (!value.ok) {
+      return value;
+    }
+    values.push(value.value);
+  }
+  return { ok: true, value: values };
+};
+
+const objectValue = (node: ObjectExpression): Literal => {
+  const entries: [string, unknown][] = [];
+  for (const property of node.properties) {
+    const key =
+      property.type === "Property" ? staticPropertyName(property) : undefined;
+    if (property.type !== "Property" || key === undefined) {
+      return { ok: false, node: property.type };
+    }
+    const value = literalValue(property.value);
+    if (!value.ok) {
+      return value;
+    }
+    entries.push([key, value.value]);
+  }
+  return { ok: true, value: Object.fromEntries(entries) };
+};
+
+export const literalValue = (node: Node): Literal => {
+  if (node.type === "ParenthesizedExpression") {
+    return literalValue(node.expression);
+  }
+  if (node.type === "Literal") {
+    return { ok: true, value: node.value };
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return { ok: true, value: node.quasis.at(0)?.value.cooked ?? "" };
+  }
+  if (node.type === "Identifier") {
+    return node.name === "undefined"
+      ? { ok: true, value: undefined }
+      : { ok: false, node: `Identifier ${node.name}` };
+  }
+  if (node.type === "UnaryExpression") {
+    return unaryValue(node);
+  }
+  if (node.type === "ArrayExpression") {
+    return arrayValue(node);
+  }
+  if (node.type === "ObjectExpression") {
+    return objectValue(node);
+  }
+  return { ok: false, node: node.type };
+};
+
+/** The object `tsrStartManifest = () => ({ ... })` returns, read as data. */
+export const parseStartManifest = (
+  fileName: string,
+  source: string,
+): Manifest | string => {
+  let body: Node | undefined;
+  walk(parseSource(fileName, source).program, (node) => {
+    if (
+      body === undefined &&
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.id.name === "tsrStartManifest" &&
+      node.init?.type === "ArrowFunctionExpression" &&
+      node.init.expression
+    ) {
+      body = node.init.body;
+    }
+    return body === undefined ? undefined : "skip-children";
+  });
+  if (body === undefined) {
+    return `${fileName} does not declare tsrStartManifest as an arrow returning an object`;
+  }
+  const literal = literalValue(body);
+  if (!literal.ok) {
+    return `${fileName}: the manifest is not plain data (${literal.node})`;
+  }
+  const manifest = v.safeParse(ManifestSchema, literal.value);
+  if (!manifest.success) {
+    return `${fileName} is not a Start manifest: ${v.summarize(manifest.issues)}`;
+  }
+  return manifest.output;
+};
+
+const readManifest = (distDir: string): Manifest | string => {
   const files = [...new Bun.Glob(MANIFEST_GLOB).scanSync(distDir)];
   const [file] = files;
   if (file === undefined || files.length !== 1) {
     return `Expected one Start manifest at ${MANIFEST_GLOB} in ${distDir}, found ${files.length}. Build the web app first.`;
   }
-  // The manifest is a side-effect-free module of one object literal.
-  const imported = v.safeParse(
-    v.object({ tsrStartManifest: v.function() }),
-    await import(pathToFileURL(path.join(distDir, file)).href),
+  return parseStartManifest(
+    file,
+    readFileSync(path.join(distDir, file), "utf-8"),
   );
-  if (!imported.success) {
-    return `${file} does not export tsrStartManifest`;
-  }
-  const manifest = v.safeParse(
-    ManifestSchema,
-    imported.output.tsrStartManifest(),
-  );
-  if (!manifest.success) {
-    return `${file} is not a Start manifest: ${v.summarize(manifest.issues)}`;
-  }
-  return manifest.output;
 };
 
 // `import(`./x.js`)`: Rolldown's dynamic import of a sibling chunk.
@@ -132,7 +238,7 @@ const declaredNames = (statement: Statement): string[] => {
     statement.type === "ExportDefaultDeclaration"
       ? statement.declaration
       : statement;
-  if (declaration === null || declaration === undefined) {
+  if (declaration === null) {
     return [];
   }
   if (
@@ -410,10 +516,8 @@ const readRoutes = (
   return routes;
 };
 
-export const readStartupGraph = async (
-  distDir: string,
-): Promise<ReadResult> => {
-  const manifest = await readManifest(distDir);
+export const readStartupGraph = (distDir: string): ReadResult => {
+  const manifest = readManifest(distDir);
   if (typeof manifest === "string") {
     return { ok: false, error: manifest };
   }
