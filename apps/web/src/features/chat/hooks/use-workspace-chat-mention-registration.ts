@@ -87,7 +87,7 @@ export const useWorkspaceChatMentionRegistration = (
     },
     [filters, sorts, workspaceId],
   );
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: as a plain local function the mutation/query census reads each call as a new unclassified reader; this search moves to resource query options separately
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- as a plain local function the mutation/query census reads each call as a new unclassified reader; this search moves to resource query options separately
   const searchEntities = useCallback(
     async (query: string) => {
       const options = createSearchOptions(query);

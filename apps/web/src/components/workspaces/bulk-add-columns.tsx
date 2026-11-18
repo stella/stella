@@ -1,4 +1,4 @@
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -499,18 +499,31 @@ const PropertyColumnsBody = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const displayName = usePropertyDisplayName();
 
-  const fileProperties: FileChip[] = properties.flatMap((p) =>
-    p.content.type === "file" ? [{ id: p.id, name: displayName(p) }] : [],
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const fileProperties = useMemo<FileChip[]>(
+    () =>
+      properties.flatMap((p) =>
+        p.content.type === "file" ? [{ id: p.id, name: displayName(p) }] : [],
+      ),
+    [displayName, properties],
   );
   const allProperties: FileChip[] = properties.map((p) => ({
     id: p.id,
     name: displayName(p),
   }));
-  const defaultFileIds = fileProperties.map((p) => p.id);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const defaultFileIds = useMemo(
+    () => fileProperties.map((p) => p.id),
+    [fileProperties],
+  );
 
   // Shared "applies to" scope: gate every AI column added here to one document
   // type (or all). Offered only when a Document Type classifier exists.
-  const classifier = resolveDocumentTypeClassifier(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const classifier = useMemo(
+    () => resolveDocumentTypeClassifier(properties),
+    [properties],
+  );
   const docTypeOptions =
     classifier?.content.type === "single-select"
       ? classifier.content.options

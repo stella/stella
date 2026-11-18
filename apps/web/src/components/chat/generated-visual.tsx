@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -93,7 +93,11 @@ const GeneratedVisualFrame = ({
           literalLinks: page.data.literalLinks,
           now,
         });
-  const shell = createVisualShellSession({ url: sandboxUrl.href });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const shell = useMemo(
+    () => createVisualShellSession({ url: sandboxUrl.href }),
+    [sandboxUrl.href],
+  );
   const attachFrame = useLatestCallback((element: HTMLIFrameElement | null) => {
     frame.current = element;
     if (element !== null) {

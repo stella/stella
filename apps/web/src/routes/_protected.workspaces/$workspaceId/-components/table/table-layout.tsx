@@ -1,4 +1,4 @@
-import { lazy, Suspense, useDeferredValue } from "react";
+import { lazy, Suspense, useDeferredValue, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -137,13 +137,19 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       }),
     );
 
-  const treeData = toTableEntities(
-    data.pages.flatMap((window) =>
-      window.entities.filter(
-        (entity) =>
-          entity.kind !== "folder" && (showListItems || entity.kind !== "task"),
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const treeData = useMemo(
+    () =>
+      toTableEntities(
+        data.pages.flatMap((window) =>
+          window.entities.filter(
+            (entity) =>
+              entity.kind !== "folder" &&
+              (showListItems || entity.kind !== "task"),
+          ),
+        ),
       ),
-    ),
+    [data.pages, showListItems],
   );
   const justificationEntityIdChunks = data.pages.map((page) =>
     page.entities.map((entity) => entity.entityId),

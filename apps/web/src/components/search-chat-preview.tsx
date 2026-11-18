@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { PluggableList } from "unified";
 
@@ -47,7 +47,8 @@ export const SearchChatPreview = ({
   const [matchSummary, setMatchSummary] =
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
-  const rehypePluginsByMessage: PluggableList[] = (() => {
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const rehypePluginsByMessage = useMemo<PluggableList[]>(() => {
     // Allocate immutable per-message budgets from the same matcher before
     // rendering. Their sum is globally bounded while each transform remains
     // deterministic under Strict Mode and concurrent replays.
@@ -59,7 +60,7 @@ export const SearchChatPreview = ({
     return messages.map((_, index) => [
       [rehypeSearchMatches, { maxMatches: budgets[index] ?? 0, searchText }],
     ]);
-  })();
+  }, [messages, searchText]);
 
   useExternalSyncEffect(() => {
     setActiveIndex(0);

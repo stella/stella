@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -248,8 +248,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
-  const weekStart = getWeekStart(locale, Temporal.PlainDate.from(today));
-  const weekEnd = weekStart.add({ days: 6 });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const weekStart = useMemo(
+    () => getWeekStart(locale, Temporal.PlainDate.from(today)),
+    [today, locale],
+  );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
   const timeSummaryView = queryView(
     useQuery({
@@ -280,8 +285,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
-  const prevWeekStart = weekStart.subtract({ days: 7 });
-  const prevWeekEnd = weekStart.subtract({ days: 1 });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const prevWeekStart = useMemo(
+    () => weekStart.subtract({ days: 7 }),
+    [weekStart],
+  );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const prevWeekEnd = useMemo(
+    () => weekStart.subtract({ days: 1 }),
+    [weekStart],
+  );
 
   const previousTimeSummaryView = queryView(
     useQuery({

@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 
 import type { WorkspaceFieldContent } from "@stll/workspace-ui/types";
@@ -115,12 +117,17 @@ export const useFileTabEntity = ({
         isEmailViewerActive: queryInput.isEmailViewerActive,
       }),
   });
-  const entityState = getFileTabEntityState({
-    entityData: query.data,
-    entityQueryError: query.isError,
-    needsPropertyResolution: queryInput.needsPropertyResolution,
-    tab,
-  });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const entityState = useMemo(
+    () =>
+      getFileTabEntityState({
+        entityData: query.data,
+        entityQueryError: query.isError,
+        needsPropertyResolution: queryInput.needsPropertyResolution,
+        tab,
+      }),
+    [query.data, query.isError, queryInput.needsPropertyResolution, tab],
+  );
   const downloadRenditions = getEntityFileDownloadRenditions({
     entityData: query.data,
     fieldId: tab.id,

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
@@ -158,13 +158,21 @@ export const useDocxAnonymizationHighlights = ({
     // the user just added to the allowlist disappear.
     detectionRef.current?.run();
   }, [excludedCanonicalsSet]);
-  const mergedAnonymizationTerms: AnonymizationTerm[] = mergeAnonymizationTerms(
-    {
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(
+    () =>
+      mergeAnonymizationTerms({
+        isAnonymizationActive,
+        workspaceTerms: workspaceAnonymizationTerms,
+        detectedTerms: detectedAnonymizationTerms,
+        excludedCanonicals: excludedCanonicalsSet,
+      }),
+    [
       isAnonymizationActive,
-      workspaceTerms: workspaceAnonymizationTerms,
-      detectedTerms: detectedAnonymizationTerms,
-      excludedCanonicals: excludedCanonicalsSet,
-    },
+      workspaceAnonymizationTerms,
+      detectedAnonymizationTerms,
+      excludedCanonicalsSet,
+    ],
   );
   // Dispatch the live term list into the plugin. We can't simply
   // read matches right after `dispatch` because DOCX content

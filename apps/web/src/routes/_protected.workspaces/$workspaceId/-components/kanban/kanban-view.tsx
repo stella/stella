@@ -274,12 +274,21 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }
 
   const schema = useWorkspaceKanbanSchema(properties);
-  const grouping = resolveWorkspaceKanbanGrouping(configuredGroupBy, schema);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const grouping = useMemo(
+    () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
+    [configuredGroupBy, schema],
+  );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
-  const subgroupDefinition = resolveWorkspaceKanbanSubgroup(
-    configuredSubgroupBy,
-    groupByPropertyId,
-    schema,
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const subgroupDefinition = useMemo(
+    () =>
+      resolveWorkspaceKanbanSubgroup(
+        configuredSubgroupBy,
+        groupByPropertyId,
+        schema,
+      ),
+    [configuredSubgroupBy, groupByPropertyId, schema],
   );
   const subgroupByPropertyId = getKanbanGroupingPropertyId(subgroupDefinition);
   const isStatusGrouping =
@@ -362,9 +371,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         : [],
     [subgroupQueryData],
   );
-  const subgroup = resolveWorkspaceKanbanDynamicSubgroup(
-    subgroupDefinition,
-    subgroupEntities,
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const subgroup = useMemo(
+    () =>
+      resolveWorkspaceKanbanDynamicSubgroup(
+        subgroupDefinition,
+        subgroupEntities,
+      ),
+    [subgroupDefinition, subgroupEntities],
   );
   const subgroupMatrix = (() => {
     if (

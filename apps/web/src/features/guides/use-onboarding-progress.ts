@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -85,7 +87,11 @@ export const useOnboardingProgress = (
   useQueryViewError(dataView, "useOnboardingProgress:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const stored = parseGuideProgress(data?.user.guideProgress);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const stored = useMemo(
+    () => parseGuideProgress(data?.user.guideProgress),
+    [data?.user.guideProgress],
+  );
   const mutation = useMutation({
     mutationFn: async ({
       tourId,

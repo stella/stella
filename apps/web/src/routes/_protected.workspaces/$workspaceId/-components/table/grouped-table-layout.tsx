@@ -1,4 +1,10 @@
-import { type RefObject, useDeferredValue, useRef, useState } from "react";
+import {
+  type RefObject,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useInfiniteQuery,
@@ -167,7 +173,11 @@ export const GroupedTableLayout = ({
 
   const groupByConfig = view.layout.groupByPropertyId ?? "";
   const schema = useWorkspaceKanbanSchema(properties);
-  const grouping = resolveWorkspaceKanbanGrouping(groupByConfig, schema);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const grouping = useMemo(
+    () => resolveWorkspaceKanbanGrouping(groupByConfig, schema),
+    [groupByConfig, schema],
+  );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
 
   const groupByProperty =
@@ -190,27 +200,36 @@ export const GroupedTableLayout = ({
   // renders the common columns plus only the playbook columns scoped to that
   // section's document type, read from each column's materialized doc-type gate.
   // Any other grouping keeps the shared column set.
-  const documentTypeClassifier = resolveDocumentTypeClassifier(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const documentTypeClassifier = useMemo(
+    () => resolveDocumentTypeClassifier(properties),
+    [properties],
+  );
   const classifierPropertyId =
     groupByPropertyId !== null &&
     documentTypeClassifier?.id === groupByPropertyId
       ? groupByPropertyId
       : null;
-  const gateLabelsByColumnId =
-    classifierPropertyId !== null
-      ? buildDocTypeGateLabels({
-          properties,
-          classifierPropertyId,
-        })
-      : new Map<string, Set<string>>();
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const gateLabelsByColumnId = useMemo(
+    () =>
+      classifierPropertyId !== null
+        ? buildDocTypeGateLabels({
+            properties,
+            classifierPropertyId,
+          })
+        : new Map<string, Set<string>>(),
+    [classifierPropertyId, properties],
+  );
   // The whole-view "+ new document" row carries the common (ungated) columns: a
   // freshly created, unclassified document has no document type, so no playbook
   // column applies to it yet.
-  const addRowColumns = selectGroupColumns({
-    columns,
-    gateLabelsByColumnId,
-    groupValue: null,
-  });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const addRowColumns = useMemo(
+    () =>
+      selectGroupColumns({ columns, gateLabelsByColumnId, groupValue: null }),
+    [columns, gateLabelsByColumnId],
+  );
 
   // Only "kind" and single/multi-select property groupings are supported for a
   // document table. Status grouping is task-only, so on a document table (which
@@ -649,15 +668,17 @@ const GroupSection = ({
   // query is disabled, but React Query can still hold cached pages for this key.
   // Drop them when the group has no rows so stale rows aren't published to the
   // selection union or rendered.
-  const entities = (() => {
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const entities = useMemo(() => {
     if (!hasRows || !queryData) {
       return [];
     }
     return queryData.pages.flatMap((page) => page.entities);
-  })();
+  }, [hasRows, queryData]);
   const loadedCount = entities.length;
 
-  const treeData = toTableEntities(entities);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const treeData = useMemo(() => toTableEntities(entities), [entities]);
 
   // Publish this section's rows to the parent so the row selection resolves
   // across every group; clear them when the section unmounts.

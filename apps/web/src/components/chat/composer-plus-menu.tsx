@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, RefObject } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -732,16 +732,22 @@ export const ComposerSkillsMenu = ({
   const unavailableSkillIds = availability?.hidden;
   const browserExtensionStoreUrl = useBrowserExtensionStoreUrl();
   const oneClickNeeds = oneClickSkillNeeds(chat, browserExtensionStoreUrl);
-  const shortcutRows = commandShortcutRowsFromSkillPages(
-    data?.pages,
-    unavailableSkillIds,
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const shortcutRows = useMemo(
+    () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
+    [data?.pages, unavailableSkillIds],
   );
-  const items = buildChatSlashItems({
-    shortcuts: shortcutRows,
-    skillPages: data?.pages,
-    unavailableSkillIds,
-    reservedCommands: reservedCommands ?? null,
-  });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const items = useMemo(
+    () =>
+      buildChatSlashItems({
+        shortcuts: shortcutRows,
+        skillPages: data?.pages,
+        unavailableSkillIds,
+        reservedCommands: reservedCommands ?? null,
+      }),
+    [reservedCommands, shortcutRows, data?.pages, unavailableSkillIds],
+  );
 
   const query = search.trim();
   useExternalSyncEffect(() => {

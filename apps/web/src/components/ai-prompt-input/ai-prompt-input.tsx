@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { AnyExtension } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -134,9 +134,11 @@ export const AIPromptInput = ({
     activeOrganizationId,
     userId,
   );
-  const slashShortcutRows = commandShortcutRowsFromSkillPages(
-    skillPages?.pages,
-    unavailableSkillIds,
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const slashShortcutRows = useMemo(
+    () =>
+      commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
+    [skillPages, unavailableSkillIds],
   );
   useExternalSyncEffect(() => {
     if (!hasNextSkillPage || isFetchingNextSkillPage || isNextSkillPageError) {
@@ -149,11 +151,17 @@ export const AIPromptInput = ({
     isFetchingNextSkillPage,
     isNextSkillPageError,
   ]);
-  const slashItems: SlashItem[] = buildChatSlashItems({
-    shortcuts: slashShortcutRows,
-    skillPages: skillPages && skillPagesForChips(skillPages.pages, skillChips),
-    unavailableSkillIds,
-  });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const slashItems = useMemo<SlashItem[]>(
+    () =>
+      buildChatSlashItems({
+        shortcuts: slashShortcutRows,
+        skillPages:
+          skillPages && skillPagesForChips(skillPages.pages, skillChips),
+        unavailableSkillIds,
+      }),
+    [slashShortcutRows, skillChips, skillPages, unavailableSkillIds],
+  );
   const getSlashItems = useLatestCallback(() => slashItems);
 
   const readValue = (editor: Editor): string =>

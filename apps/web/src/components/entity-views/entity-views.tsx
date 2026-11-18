@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
   useInfiniteQuery,
@@ -98,10 +98,15 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       });
     }
   }, [analytics, saved.error]);
-  const defaults = defaultEntityViews({
-    table: t("workspaces.views.layouts.table"),
-    kanban: t("workspaces.views.layouts.kanban"),
-  });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const defaults = useMemo(
+    () =>
+      defaultEntityViews({
+        table: t("workspaces.views.layouts.table"),
+        kanban: t("workspaces.views.layouts.kanban"),
+      }),
+    [t],
+  );
   const savedViews = (() => {
     if (!saved.data) {
       return [];

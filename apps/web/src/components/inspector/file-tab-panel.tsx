@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
@@ -276,12 +276,11 @@ export const FileTabPanel = ({
   const t = useTranslations();
   const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
-  const display = getFileTabDisplayState({
-    activeId,
-    minimized,
-    scaleOffsets,
-    tab,
-  });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const display = useMemo(
+    () => getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab }),
+    [activeId, minimized, scaleOffsets, tab],
+  );
   const {
     desktopEditFileType,
     isActive,
