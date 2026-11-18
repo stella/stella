@@ -189,6 +189,8 @@ const batchHaltReason = (
       return RETRY_HALT_REASON[stop.reason];
     case "timeout":
       return databaseTimeoutHaltReason(stop.error);
+    case "transient":
+      return `Transient failure; cursor held for retry: [${stop.tag}] ${stop.message.slice(0, 200)}`;
     case "insert-limit":
       // Halting (instead of breaking quietly) keeps the cursor at this page
       // so the unprocessed remainder is not skipped.
@@ -212,6 +214,7 @@ const batchStopKind = (
   switch (stop.type) {
     case "retryable":
     case "timeout":
+    case "transient":
       return INGESTION_STOP_KIND.INTERNAL_ERROR;
     case "insert-limit":
       return undefined;
