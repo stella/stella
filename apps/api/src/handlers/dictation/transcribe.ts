@@ -8,7 +8,6 @@ import {
   transcriptionEndpointFor,
 } from "@stll/ai-catalog/transcription";
 import type { TranscriptionEndpoint } from "@stll/ai-catalog/transcription";
-import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
   MAX_TRANSCRIPTION_MULTIPART_BYTES,
@@ -270,20 +269,12 @@ export const executeDictation = async (
         );
       }
     }
+    // The organization's own OpenRouter key, when it brings one; otherwise,
+    // even on another AI provider of its own, it transcribes on stella's
+    // credential as stella usage.
     const ownKey = ctx.orgAIConfig?.providers.find(
       ({ provider }) => provider === "openrouter",
     )?.apiKey;
-    if (ctx.orgAIConfig !== null && ownKey === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          code: AI_FAILURE_CODES.own_key_required,
-          message:
-            "Transcription is not available with your organization's AI provider.",
-          hint: "Configure an organization OpenRouter key in organization AI settings.",
-        }),
-      );
-    }
     const deployment = dependencies.deployment();
     const served = transcriptionServed(deployment, ctx.orgAIConfig, {
       retainingData: ctx.allowRetainingModels === true,

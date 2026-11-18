@@ -69,8 +69,9 @@ const RETAINING_MODELS_FEATURE_ID =
   "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
 
 /**
- * The transcription models stella AI offers this organization, none when
- * its own AI provider does not transcribe. A desktop that labels models
+ * The transcription models stella AI offers this organization, also when it
+ * brings another AI provider of its own, and none when this deployment has
+ * no transcription provider. A desktop that labels models
  * also gets the models its region does not serve, marked as leaving it,
  * after the regional ones; an older desktop reads only the regional ones,
  * without labels. The default is the model a request without one gets and
@@ -103,14 +104,6 @@ export const listDictationModels = (
   });
   if (managedAIResidency === null) {
     return none("region");
-  }
-  // Transcription runs only on the managed provider or the organization's
-  // own OpenRouter key, as the transcription endpoint requires.
-  if (
-    orgAIConfig !== null &&
-    !orgAIConfig.providers.some(({ provider }) => provider === "openrouter")
-  ) {
-    return none("provider");
   }
   const served = transcriptionServed(deployment, orgAIConfig, {
     retainingData: labeled && retention && retainingModels,

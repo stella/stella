@@ -22,7 +22,6 @@ import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-pr
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import type { TranscriptionDeployment } from "@/api/handlers/dictation/transcription-deployment";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -483,7 +482,7 @@ describe("dictation operation request matrix", () => {
       baseURL: "https://fixture-resource.example.invalid/openai",
     },
   ] as const)(
-    "organization provider %p requires explicit transcription credentials",
+    "an organization on provider %p transcribes on stella's credential, as stella usage",
     async (provider) => {
       const f = fixture();
       const context = {
@@ -495,14 +494,11 @@ describe("dictation operation request matrix", () => {
         },
       } satisfies DictationContext;
       const result = await executeDictation(context, f.dependencies);
-      expect(result.isErr()).toBe(true);
-      if (result.isOk()) {
-        throw new TypeError("Expected organization credential refusal");
-      }
-      expect(result.error).toMatchObject({ code: "ai_own_key_required" });
-      expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });
-      expect(f.requests).toEqual([]);
-      expect(f.settlements).toEqual([]);
+      expect(result.isOk()).toBe(true);
+      expect(f.counts()).toEqual({ credentials: 1, preflights: 1 });
+      expect(f.requests.at(0)?.key).toBe("Bearer managed-fixture");
+      expect(f.settlements).toHaveLength(1);
+      expect(f.settlements.at(0)?.isByok).toBe(false);
     },
   );
 
@@ -644,43 +640,53 @@ describe("dictation operation request matrix", () => {
     expect(settlement?.caller.transcriptionEndpoint).toBe("eu");
   });
 
-  test("Scribe v3 is refused without the deployment's key, and to an organization on its own provider", async () => {
-    const cases: [TranscriptionDeployment, OrgAIConfig | null][] = [
-      [OPENROUTER_ONLY, null],
-      [
-        {
-          openRouter: true,
-          elevenLabs: {
-            apiKey: "elevenlabs-fixture",
-            environment: "eu",
-            zeroRetention: true,
-          },
-        },
-        {
-          providers: [
-            { provider: "openrouter", apiKey: "organization-fixture" },
-          ],
-          overrideModels: null,
-          decision: null,
-        },
-      ],
-    ];
-    for (const [deployment, orgAIConfig] of cases) {
+  test("Scribe v3 is refused without the deployment's key", async () => {
+    const f = fixture(1234, 1234, OPENROUTER_ONLY);
+    const context = {
+      ...f.context,
+      body: { ...f.context.body, modelId: "elevenlabs-direct/scribe-v3" },
+    } satisfies DictationContext;
+    const result = await executeDictation(context, f.dependencies);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new TypeError("Expected refusal");
+    }
+    expect(result.error).toMatchObject({
+      code: "transcription_model_unavailable",
+    });
+    expect(f.directRequests).toEqual([]);
+  });
+
+  test("an organization on its own provider transcribes with Scribe v3 on the deployment's key, as stella usage", async () => {
+    const deployment = {
+      openRouter: true,
+      elevenLabs: {
+        apiKey: "elevenlabs-fixture",
+        environment: "eu",
+        zeroRetention: true,
+      },
+    } as const satisfies TranscriptionDeployment;
+    for (const provider of [
+      { provider: "openrouter", apiKey: "organization-fixture" },
+      { provider: "anthropic", apiKey: "organization-fixture" },
+    ] as const) {
       const f = fixture(1234, 1234, deployment);
       const context = {
         ...f.context,
-        orgAIConfig,
+        orgAIConfig: {
+          providers: [provider],
+          overrideModels: null,
+          decision: null,
+        },
         body: { ...f.context.body, modelId: "elevenlabs-direct/scribe-v3" },
       } satisfies DictationContext;
-      const result = await executeDictation(context, f.dependencies);
-      expect(result.isErr()).toBe(true);
-      if (result.isOk()) {
-        throw new TypeError("Expected refusal");
-      }
-      expect(result.error).toMatchObject({
-        code: "transcription_model_unavailable",
-      });
-      expect(f.directRequests).toEqual([]);
+      expect((await executeDictation(context, f.dependencies)).isOk()).toBe(
+        true,
+      );
+      expect(f.directRequests).toHaveLength(1);
+      expect(f.directRequests.at(0)?.key).toBe("elevenlabs-fixture");
+      expect(f.requests).toEqual([]);
+      expect(f.settlements.at(0)?.isByok).toBe(false);
     }
   });
 

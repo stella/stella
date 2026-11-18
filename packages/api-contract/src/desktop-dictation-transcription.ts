@@ -28,7 +28,8 @@ export const DESKTOP_DICTATION_TRANSCRIBE_PATH =
 export const DESKTOP_DICTATION_MODELS_UNAVAILABLE = [
   /** The organization's region offers no transcription model. */
   "region",
-  /** The organization's own AI provider does not transcribe. */
+  /** This deployment has no transcription provider, as a self-hosted
+   *  server without transcription credentials. */
   "provider",
 ] as const;
 

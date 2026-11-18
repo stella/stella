@@ -38,12 +38,12 @@ export const transcriptionRetainsData = (
 
 /**
  * Which models an organization may use, and at which endpoints. OpenRouter
- * models need the deployment's OpenRouter credential, or the organization's
- * own OpenRouter key when it brings its own AI provider. A direct model runs
- * on the deployment's key, so an organization on its own AI provider, which
- * pays its provider itself, does not get it. A model whose provider keeps
- * the data is served only where the caller warns about it, and never as a
- * default (`asDefault`).
+ * models run on the organization's own OpenRouter key when it brings one,
+ * and otherwise on the deployment's OpenRouter credential, as stella usage:
+ * an organization on another AI provider of its own still transcribes with
+ * stella. A direct model always runs on the deployment's key, as stella
+ * usage. A model whose provider keeps the data is served only where the
+ * caller warns about it, and never as a default (`asDefault`).
  */
 export const transcriptionServed =
   (
@@ -63,13 +63,12 @@ export const transcriptionServed =
     }
     const model = TRANSCRIPTION_MODELS[modelId];
     if (model.route === "openrouter") {
-      return orgAIConfig === null
-        ? deployment.openRouter
-        : orgAIConfig.providers.some(
-            ({ provider }) => provider === "openrouter",
-          );
+      return (
+        deployment.openRouter ||
+        orgAIConfig?.providers.some(
+          ({ provider }) => provider === "openrouter",
+        ) === true
+      );
     }
-    return (
-      orgAIConfig === null && elevenLabsServes(deployment.elevenLabs, endpoint)
-    );
+    return elevenLabsServes(deployment.elevenLabs, endpoint);
   };
