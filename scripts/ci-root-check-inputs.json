@@ -726,6 +726,11 @@
       "@stll/sha256",
       "scripts/**"
     ],
+    "Check grant release order against the production release": [
+      "@stll/api",
+      "scripts/check-grant-release-order.ts",
+      "scripts/check-grant-release-order.test.ts"
+    ],
     "Test dead-columns reference matching": [
       "@stll/api",
       "scripts/**",

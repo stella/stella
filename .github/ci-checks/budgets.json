@@ -1117,6 +1117,13 @@
       "p99Seconds": 0,
       "peakRssMiB": 58
     },
+    "Check grant release order against the production release": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0,
+      "peakRssMiB": 512
+    },
     "Test dead-columns reference matching": {
       "minutes": 5,
       "samples": 18,
