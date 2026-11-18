@@ -17,7 +17,7 @@ import type { SourceTotalOrigin } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import {
   adapterParkOf,
-  readAdapterFailureRunIn,
+  readAdapterFailureRunsIn,
 } from "@/api/handlers/case-law/ingestion/adapter-park";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -270,24 +270,20 @@ export const reconciliationCountsQuery = (
  */
 /**
  * The park of each source whose last event failed; any other source cannot be
- * parked, so only those few read their failure run. One read at a time: the
- * transaction holds a single connection.
+ * parked, so only those read their failure run, all in one statement.
  */
 const readSourceParks = async (
   db: Transaction,
   aggregates: SourceAggregates,
   now: Date,
 ): Promise<void> => {
-  const failing = [...aggregates].filter(
-    ([, aggregate]) => aggregate.lastEvent?.failed === true,
-  );
-  for (const [sourceId, aggregate] of failing) {
-    // oxlint-disable-next-line no-await-in-loop -- one transaction connection carries one statement at a time
-    const park = adapterParkOf(
-      await readAdapterFailureRunIn(db, sourceId),
-      now.getTime(),
-    );
-    aggregate.park =
+  const failing = [...aggregates]
+    .filter(([, aggregate]) => aggregate.lastEvent?.failed === true)
+    .map(([sourceId]) => sourceId);
+  const runs = await readAdapterFailureRunsIn(db, failing);
+  for (const [sourceId, run] of runs) {
+    const park = adapterParkOf(run, now.getTime());
+    requireAggregate(aggregates, sourceId).park =
       park === null
         ? null
         : {

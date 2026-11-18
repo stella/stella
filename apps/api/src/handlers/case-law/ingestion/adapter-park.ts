@@ -19,18 +19,14 @@
  * time, and the operator reading the report must see that rather than infer
  * it from a failed last event.
  */
-import { and, count, desc, eq, gt, min, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, min, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawIngestionEvents } from "@/api/db/schema";
+import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
-} from "@/api/lib/db-pagination";
 
 const HOUR_IN_MS = 60 * 60 * 1000;
 
@@ -82,88 +78,105 @@ export const adapterParkOf = (
 };
 
 /**
- * The unbroken run of identical failed cycles the source's latest event ends,
- * or null when that event did not fail, stored a page or carries no message.
- * The latest-first index on source and finish time answers each read.
+ * The unbroken run of identical failed cycles each source's latest event
+ * ends, for every source whose latest event failed, stored no page and
+ * carries a message; any other source is absent from the map. One statement
+ * for the whole set: each source reads its latest event, its latest event
+ * outside the run, and the run between them, all on the latest-first index
+ * on source and finish time. The boundary is compared in Postgres, at the
+ * column's microsecond precision, never as a millisecond JS Date.
  */
-export const readAdapterFailureRunIn = async (
+export const readAdapterFailureRunsIn = async (
   tx: Transaction,
-  sourceId: SafeId<"caseLawSource">,
-): Promise<AdapterFailureRun | null> => {
+  sourceIds: readonly SafeId<"caseLawSource">[],
+): Promise<Map<SafeId<"caseLawSource">, AdapterFailureRun>> => {
+  if (sourceIds.length === 0) {
+    return new Map();
+  }
   const events = caseLawIngestionEvents;
-  const latest = (
-    await tx
-      .select({
-        status: events.status,
-        pagesProcessed: events.pagesProcessed,
-        errorMessage: events.errorMessage,
-        finishedAt: events.finishedAt,
-      })
-      .from(events)
-      .where(eq(events.sourceId, sourceId))
-      .orderBy(desc(events.finishedAt), desc(events.id))
-      .limit(1)
-  ).at(0);
-  if (
-    latest?.status !== "failed" ||
-    latest.pagesProcessed > 0 ||
-    latest.errorMessage === null
-  ) {
-    return null;
+  const latest = tx
+    .select({
+      status: events.status,
+      pagesProcessed: events.pagesProcessed,
+      errorMessage: events.errorMessage,
+      finishedAt: events.finishedAt,
+    })
+    .from(events)
+    .where(eq(events.sourceId, caseLawSources.id))
+    .orderBy(desc(events.finishedAt), desc(events.id))
+    .limit(1)
+    .as("latest_event");
+  const lastOther = tx
+    .select({ finishedAt: events.finishedAt })
+    .from(events)
+    .where(
+      and(
+        eq(events.sourceId, caseLawSources.id),
+        sql`NOT (${events.status} = 'failed'
+          AND ${events.pagesProcessed} = 0
+          AND ${events.errorMessage} IS NOT DISTINCT FROM ${latest.errorMessage})`,
+      ),
+    )
+    .orderBy(desc(events.finishedAt), desc(events.id))
+    .limit(1)
+    .as("last_other_event");
+  const run = tx
+    .select({
+      cycles: sql<number>`count(*)::int`.as("cycles"),
+      startedAt: min(events.finishedAt).as("started_at"),
+    })
+    .from(events)
+    .where(
+      and(
+        eq(events.sourceId, caseLawSources.id),
+        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both sides are columns compared inside Postgres; no Date is round-tripped
+        sql`(${lastOther.finishedAt} IS NULL OR ${events.finishedAt} > ${lastOther.finishedAt})`,
+      ),
+    )
+    .as("failure_run");
+
+  const rows = await tx
+    .select({
+      sourceId: caseLawSources.id,
+      status: latest.status,
+      pagesProcessed: latest.pagesProcessed,
+      errorMessage: latest.errorMessage,
+      lastAt: latest.finishedAt,
+      cycles: run.cycles,
+      startedAt: run.startedAt,
+    })
+    .from(caseLawSources)
+    .innerJoinLateral(latest, sql`true`)
+    .leftJoinLateral(lastOther, sql`true`)
+    .innerJoinLateral(run, sql`true`)
+    .where(inArray(caseLawSources.id, [...sourceIds]));
+
+  const runs = new Map<SafeId<"caseLawSource">, AdapterFailureRun>();
+  for (const row of rows) {
+    if (
+      row.status !== "failed" ||
+      row.pagesProcessed > 0 ||
+      row.errorMessage === null ||
+      row.startedAt === null
+    ) {
+      continue;
+    }
+    runs.set(row.sourceId, {
+      errorMessage: row.errorMessage,
+      cycles: row.cycles,
+      startedAtMs: new Date(row.startedAt).getTime(),
+      lastAtMs: new Date(row.lastAt).getTime(),
+    });
   }
-  // Read the boundary as Postgres microsecond text: a JS Date keeps only
-  // milliseconds, so comparing a round-tripped Date would count the boundary
-  // event itself into the run.
-  const lastOther = (
-    await tx
-      .select({ finishedAt: pgTimestampCursorValue(events.finishedAt) })
-      .from(events)
-      .where(
-        and(
-          eq(events.sourceId, sourceId),
-          sql`NOT (${events.status} = 'failed'
-            AND ${events.pagesProcessed} = 0
-            AND ${events.errorMessage} IS NOT DISTINCT FROM ${latest.errorMessage})`,
-        ),
-      )
-      .orderBy(desc(events.finishedAt), desc(events.id))
-      .limit(1)
-  ).at(0);
-  const run = (
-    await tx
-      .select({ cycles: count(), startedAt: min(events.finishedAt) })
-      .from(events)
-      .where(
-        and(
-          eq(events.sourceId, sourceId),
-          lastOther === undefined
-            ? undefined
-            : gt(
-                events.finishedAt,
-                pgTimestampCursorBoundary({
-                  type: "pgTimestampCursor",
-                  value: lastOther.finishedAt,
-                  precision: "microseconds",
-                }),
-              ),
-        ),
-      )
-  ).at(0);
-  const startedAt = run?.startedAt ?? null;
-  if (run === undefined || startedAt === null) {
-    return null;
-  }
-  return {
-    errorMessage: latest.errorMessage,
-    cycles: run.cycles,
-    startedAtMs: startedAt.getTime(),
-    lastAtMs: latest.finishedAt.getTime(),
-  };
+  return runs;
 };
 
-/** {@link readAdapterFailureRunIn} in a transaction of its own. */
+/** The failure run of one source; see {@link readAdapterFailureRunsIn}. */
 export const readAdapterFailureRun = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
 ): Promise<AdapterFailureRun | null> =>
-  await scopedDb(async (tx) => await readAdapterFailureRunIn(tx, sourceId));
+  await scopedDb(
+    async (tx) =>
+      (await readAdapterFailureRunsIn(tx, [sourceId])).get(sourceId) ?? null,
+  );
