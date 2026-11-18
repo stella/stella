@@ -683,7 +683,7 @@
       "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again.",
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
       "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
-      "passwordField": "A password field has focus, so nothing was recorded or typed.",
+      "passwordField": "A password field has focus, so the dictation was not kept or typed.",
       "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
     },
     "failureKeptInHistory": "The text is in clipboard history."

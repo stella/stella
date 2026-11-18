@@ -683,7 +683,7 @@
       "focusChanged": "Perjungėte į kitą programą, kol tekstas dar nebuvo paruoštas, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą.",
-      "passwordField": "Pasirinktas slaptažodžio laukas, todėl niekas nebuvo įrašyta ar įvesta.",
+      "passwordField": "Pasirinktas slaptažodžio laukas, todėl diktuotas tekstas nebuvo išsaugotas ar įvestas.",
       "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį."
     },
     "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje."

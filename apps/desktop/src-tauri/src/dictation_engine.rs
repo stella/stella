@@ -74,28 +74,27 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
     match commands.recv_timeout(wait) {
       Ok(Command::Press) if active.is_none() => {
         dictation::clear_failure(app);
-        let model = dictation::start_recording(app);
-        match begin(app, model, &mut worker) {
-          Ok(started) => {
-            // Read once recording runs, so the lookups never delay capture;
-            // the context is where the speaker pressed the shortcut.
-            let focus = dictation_focus::current(app);
-            if dictation_focus::in_password_field(focus.as_ref()) {
-              // Nothing is recorded for a password field.
-              started.cancel(&mut worker);
-              dictation::report_failure(app, Failure::PasswordField);
-              dictation::set_phase(app, Phase::Idle);
-            } else {
+        // Read before capture starts: the microphone never opens for a
+        // password field that already has focus.
+        let focus = dictation_focus::current(app);
+        if dictation_focus::in_password_field(focus.as_ref()) {
+          dictation::report_failure(app, Failure::PasswordField);
+        } else {
+          let model = dictation::start_recording(app);
+          match begin(app, model, &mut worker) {
+            Ok(started) => {
+              // Read once recording runs, so it never delays capture; the
+              // context is where the speaker pressed the shortcut.
               let context = dictation_context::read(
                 focus.as_ref(),
                 dictation::context_sharing(app),
               );
               active = Some((started, focus, context));
             }
-          }
-          Err(failure) => {
-            dictation::report_failure(app, failure);
-            dictation::set_phase(app, Phase::Idle);
+            Err(failure) => {
+              dictation::report_failure(app, failure);
+              dictation::set_phase(app, Phase::Idle);
+            }
           }
         }
       }
@@ -274,9 +273,15 @@ fn type_into_focus(
   if !dictation_input::wait_for_released_modifiers() {
     return Err(Failure::ShortcutHeld);
   }
+  // The wait above can let a password field take focus in the same window,
+  // so the field is checked again just before anything is typed.
+  let current = dictation_focus::current(app);
+  if dictation_focus::in_password_field(current.as_ref()) {
+    return Err(Failure::PasswordField);
+  }
   // Transcription and cleanup take a moment; text goes only to the app the
   // speaker pressed the shortcut in.
-  match dictation_focus::insertion(focus, dictation_focus::current(app).as_ref()) {
+  match dictation_focus::insertion(focus, current.as_ref()) {
     Insertion::Allowed => {}
     Insertion::FocusMoved => return Err(Failure::FocusChanged),
     Insertion::FocusUnconfirmed => return Err(Failure::FocusUnconfirmed),
