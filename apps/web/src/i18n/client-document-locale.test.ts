@@ -17,7 +17,6 @@ const createHarness = ({
   onWritePrefs,
   onLoadSelectedMessages,
   profileFailure,
-  migrationProfileFailure,
 }: {
   bootGate?: Promise<unknown>;
   selectedGate?: Promise<unknown>;
@@ -27,31 +26,22 @@ const createHarness = ({
   onWritePrefs?: (patch: Partial<typeof defaultPresentationPrefs>) => void;
   onLoadSelectedMessages?: (locale: SupportedLanguage) => void;
   profileFailure?: Error;
-  migrationProfileFailure?: Error;
 } = {}) => {
   let prefs = defaultPresentationPrefs;
   let visible: SupportedLanguage = "en";
   const profileWrites: SupportedLanguage[] = [];
   const reportedErrors: string[] = [];
-  let failMigration = migrationProfileFailure !== undefined;
   const owner = createClientDocumentLocaleOwner({
     readBootUser: async () => ({ id: "member", locale: "de" }),
     readSelectionUser: async () => ({ id: "member", locale: "de" }),
     isCurrent: (_queryClient, userId) =>
       userId === (currentUser?.() ?? "member"),
     getPrefs: () => prefs,
-    migrate: async ({ user }) => {
-      if (failMigration) {
-        failMigration = false;
-        return {
-          status: "profile-error",
-          prefs,
-          locale: user?.locale ?? null,
-          error: migrationProfileFailure,
-        };
-      }
-      return { status: "complete", prefs, locale: user?.locale ?? null };
-    },
+    migrate: async ({ user }) => ({
+      status: "complete",
+      prefs,
+      locale: user?.locale ?? null,
+    }),
     writePrefs: async (patch) => {
       onWritePrefs?.(patch);
       prefs = { ...prefs, ...patch };
@@ -235,26 +225,6 @@ test("a rejected profile update leaves the visible locale and cookie unchanged",
       profileWrites: ["cs"],
       reportedErrors: ["setLang:updateUser"],
     });
-  } finally {
-    queryClient.clear();
-  }
-});
-
-test("a failed legacy profile write leaves boot unapplied and retries later", async () => {
-  const queryClient = new QueryClient();
-  const { owner, current } = createHarness({
-    migrationProfileFailure: new Error("legacy profile unavailable"),
-  });
-  try {
-    await owner.boot(queryClient);
-    expect(current().visible).toBe("en");
-    expect(current().prefs.visitorLocale).toBe("en");
-    expect(current().reportedErrors).toEqual(["boot:updateUser"]);
-
-    await owner.boot(queryClient);
-    expect(current().visible).toBe("de");
-    expect(current().prefs.visitorLocale).toBe("de");
-    expect(current().reportedErrors).toEqual(["boot:updateUser"]);
   } finally {
     queryClient.clear();
   }

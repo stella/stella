@@ -1,5 +1,4 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
@@ -92,24 +91,22 @@ test.each(migrationLocales)(
   async (language) => {
     seedFixture(language);
     let saved = defaultPresentationPrefs;
-    let savedLocale = "en";
     const migrated = await migrateLegacyPresentationPreferences({
       prefs: saved,
-      profileLocale: "en",
+      profileLocale: null,
       userId: "user-1",
       writePrefs: async (patch) => {
         saved = { ...saved, ...patch };
         return saved;
       },
-      writeProfileLocale: async (locale) => {
-        savedLocale = locale;
-        return Result.ok(undefined);
-      },
     });
 
-    expect(savedLocale).toBe(language);
+    // An account without a saved language keeps this browser's choice as a
+    // browser preference; the profile stays unset.
+    expect(migrated.locale).toBe(language);
     expect(migrated.prefs).toEqual({
       ...defaultPresentationPrefs,
+      visitorLocale: language,
       calendar: "islamic-umalqura",
       numberingSystem: "arab",
       regionalFormat: "en-IN",
@@ -167,58 +164,49 @@ test.each(migrationLocales)(
 
 test("an explicit selection keeps its locale while still migrating other legacy preferences", async () => {
   seedFixture("cs");
-  let profileWrites = 0;
   const migrated = await migrateLegacyPresentationPreferences({
     prefs: defaultPresentationPrefs,
     profileLocale: "en",
     userId: "user-1",
     localePriority: "explicit",
     writePrefs: async (patch) => ({ ...defaultPresentationPrefs, ...patch }),
-    writeProfileLocale: async () => {
-      profileWrites += 1;
-      return Result.ok(undefined);
-    },
   });
-  expect(profileWrites).toBe(0);
   expect(migrated.locale).toBe("en");
   expect(migrated.prefs.visitorLocale).toBe("en");
   expect(migrated.prefs.theme).toBe("dark");
   expect(legacyBrowserStorage.getItem("stella-i18n").unwrap()).toBeNull();
 });
 
-test("a later profile locale is not overwritten by stale legacy data", async () => {
-  seedFixture("cs");
-  let profileWrites = 0;
-  const currentPrefs = { ...defaultPresentationPrefs, theme: "light" as const };
-  const migrated = await migrateLegacyPresentationPreferences({
-    prefs: currentPrefs,
-    profileLocale: "ar",
-    userId: "user-1",
-    writePrefs: async (patch) => ({ ...currentPrefs, ...patch }),
-    writeProfileLocale: async () => {
-      profileWrites += 1;
-      return Result.ok(undefined);
-    },
-  });
-  expect(migrated.locale).toBe("ar");
-  expect(migrated.prefs.theme).toBe("light");
-  expect(profileWrites).toBe(0);
-});
+test.each(UI_LOCALES.filter((locale) => locale === "ar" || locale === "en"))(
+  "a saved %s profile language is not overwritten by stale legacy data",
+  async (profileLocale) => {
+    seedFixture("cs");
+    const currentPrefs = {
+      ...defaultPresentationPrefs,
+      theme: "light" as const,
+    };
+    const migrated = await migrateLegacyPresentationPreferences({
+      prefs: currentPrefs,
+      profileLocale,
+      userId: "user-1",
+      writePrefs: async (patch) => ({ ...currentPrefs, ...patch }),
+    });
+    expect(migrated.locale).toBe(profileLocale);
+    expect(migrated.prefs.theme).toBe("light");
+    expect(migrated.prefs.visitorLocale).toBe(currentPrefs.visitorLocale);
+  },
+);
 
 test("a completed migration is a no-op when run twice", async () => {
   seedFixture();
   let writes = 0;
   const options = {
     prefs: defaultPresentationPrefs,
-    profileLocale: "en" as const,
+    profileLocale: null,
     userId: "user-1",
     writePrefs: async (patch: Partial<typeof defaultPresentationPrefs>) => {
       writes += 1;
       return { ...defaultPresentationPrefs, ...patch };
-    },
-    writeProfileLocale: async () => {
-      writes += 1;
-      return Result.ok(undefined);
     },
   };
   const first = await migrateLegacyPresentationPreferences(options);
@@ -226,7 +214,7 @@ test("a completed migration is a no-op when run twice", async () => {
     ...options,
     prefs: first.prefs,
   });
-  expect(writes).toBe(2);
+  expect(writes).toBe(1);
 });
 
 test("a failed write leaves legacy entries for retry", async () => {
@@ -239,7 +227,6 @@ test("a failed write leaves legacy entries for retry", async () => {
       writePrefs: async () => {
         throw new Error("fixture write failed");
       },
-      writeProfileLocale: async () => Result.ok(undefined),
     }),
   );
   expect(rejection).toBeInstanceOf(Error);
@@ -251,32 +238,6 @@ test("a failed write leaves legacy entries for retry", async () => {
   expect(legacyBrowserStorage.getItem("statute_table_layout").unwrap()).toBe(
     fixture.statute_table_layout,
   );
-});
-
-test("a rejected profile locale keeps every legacy entry for a later boot", async () => {
-  seedFixture("cs");
-  const failure = new Error("profile unavailable");
-  let preferenceWrites = 0;
-  const migrated = await migrateLegacyPresentationPreferences({
-    prefs: defaultPresentationPrefs,
-    profileLocale: "en",
-    userId: "user-1",
-    writePrefs: async (patch) => {
-      preferenceWrites += 1;
-      return { ...defaultPresentationPrefs, ...patch };
-    },
-    writeProfileLocale: async () => Result.err(failure),
-  });
-  expect(migrated).toEqual({
-    status: "profile-error",
-    prefs: defaultPresentationPrefs,
-    locale: "en",
-    error: failure,
-  });
-  expect(preferenceWrites).toBe(0);
-  for (const [key, value] of Object.entries(fixture)) {
-    expect(legacyBrowserStorage.getItem(key).unwrap()).toBe(value);
-  }
 });
 
 test("a valid layout too large for a cookie remains in local storage for retry", async () => {
@@ -318,7 +279,6 @@ test("a valid layout too large for a cookie remains in local storage for retry",
     profileLocale: "ar",
     userId: "user-1",
     writePrefs: async (patch) => ({ ...defaultPresentationPrefs, ...patch }),
-    writeProfileLocale: async () => Result.ok(undefined),
   });
   expect(migrated.prefs.theme).toBe("dark");
   expect(migrated.prefs.decisionLayouts).toEqual({});
@@ -343,7 +303,6 @@ test("canonical country wins a legacy alias collision without deleting either or
     profileLocale: "ar",
     userId: "user-1",
     writePrefs: async (patch) => ({ ...defaultPresentationPrefs, ...patch }),
-    writeProfileLocale: async () => Result.ok(undefined),
   });
   expect(migrated.prefs.decisionLayouts["CZE"]?.hidden).toEqual(["country"]);
   expect(legacyBrowserStorage.getItem("case_law_hidden_columns").unwrap()).toBe(

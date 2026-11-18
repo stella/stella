@@ -3,8 +3,9 @@ import { Result } from "better-result";
 
 import { isUiLocale } from "@stll/locales";
 
+/** Null is no saved choice: the account follows the browser's language. */
 export const validateUserLocale = (locale: unknown) => {
-  if (locale === undefined) {
+  if (locale === undefined || locale === null) {
     return Result.ok(undefined);
   }
   if (!isUiLocale(locale)) {

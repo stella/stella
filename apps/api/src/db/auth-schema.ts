@@ -39,8 +39,9 @@ export const user = pgTable(
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
-    // The user's selected UI locale, shared across devices.
-    locale: text("locale", { enum: USER_LOCALES }).default("en").notNull(),
+    // The UI locale the user picked, shared across devices. Null until they
+    // pick one: the browser's language applies meanwhile.
+    locale: text("locale", { enum: USER_LOCALES }),
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     // Null or document follows the document language; a UI locale overrides it.

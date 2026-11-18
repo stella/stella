@@ -8,6 +8,15 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { createRootCaughtErrorHandler } from "@/lib/analytics/root-caught-error";
 import { detached } from "@/lib/detached";
 
+/**
+ * React's production message for a recovered render (a hydration mismatch,
+ * for one) names no component; its component stack does.
+ */
+const withComponentStack = (error: unknown, componentStack?: string) =>
+  componentStack && error instanceof Error
+    ? new Error(`${error.message}${componentStack}`, { cause: error })
+    : error;
+
 const hydrate = () => {
   startTransition(() => {
     hydrateRoot(
@@ -19,6 +28,9 @@ const hydrate = () => {
       </StrictMode>,
       {
         onCaughtError: createRootCaughtErrorHandler(getAnalytics),
+        onRecoverableError: (error, errorInfo) => {
+          reportError(withComponentStack(error, errorInfo.componentStack));
+        },
       },
     );
   });

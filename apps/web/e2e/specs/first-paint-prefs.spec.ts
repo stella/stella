@@ -236,6 +236,39 @@ test("a fresh visitor renders the preferred browser catalogue and explicit prefe
   }
 });
 
+test("a member who never picked a language sees the browser's Czech after sign-in", async ({
+  browser,
+  baseURL,
+}) => {
+  const webBaseURL = baseURL ?? "http://localhost:3000";
+  const context = await browser.newContext({
+    baseURL: webBaseURL,
+    locale: "cs-CZ",
+    storageState: { cookies: [], origins: [] },
+    extraHTTPHeaders: { "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.2" },
+  });
+  const page = await context.newPage();
+  const profileSession = await createProfileTestSession({
+    page,
+    label: "browser-language",
+    webUrl: webBaseURL,
+  });
+  try {
+    expect(await sessionLocale(page)).toBeNull();
+    // A signed-in route renders once the account's language is applied.
+    await page.goto("/settings/account/profile", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.locator("#language-select")).toHaveText("Čeština");
+    await expect(page.locator("html")).toHaveAttribute("lang", "cs");
+    // Following the browser saves nothing to the account.
+    expect(await sessionLocale(page)).toBeNull();
+  } finally {
+    await profileSession.cleanup();
+    await context.close();
+  }
+});
+
 for (const { language, sundayBasedWeekStart } of [
   { language: "ar-SA", sundayBasedWeekStart: 0 },
   { language: "ar-AE", sundayBasedWeekStart: 1 },

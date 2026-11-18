@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import { resolveUiLocale } from "@stll/locales";
 
@@ -103,16 +103,6 @@ export const createClientDocumentLocaleOwner = (
       });
       if (!current()) {
         return operations.getPrefs();
-      }
-      switch (migrated.status) {
-        case "profile-error":
-          operations.reportSelectionError(migrated.error, "boot:updateUser");
-          return operations.getPrefs();
-        case "complete":
-          break;
-        default:
-          migrated satisfies never;
-          return panic("Unhandled legacy presentation migration result");
       }
       const locale =
         selection.kind === "chosen"
@@ -219,12 +209,12 @@ const updateProfileLocale = async (locale: SupportedLanguage) => {
 const clientLocaleOwner = createClientDocumentLocaleOwner({
   readBootUser: async (queryClient) => {
     const { user } = await loadAuthContext(queryClient);
-    return user === null ? null : { id: user.id, locale: user.locale };
+    return user === null ? null : { id: user.id, locale: user.locale ?? null };
   },
   readSelectionUser: async () => {
     const session = await fetchSession();
     return session?.user !== undefined
-      ? { id: session.user.id, locale: session.user.locale }
+      ? { id: session.user.id, locale: session.user.locale ?? null }
       : null;
   },
   isCurrent: isCurrentDocumentSession,
@@ -237,7 +227,6 @@ const clientLocaleOwner = createClientDocumentLocaleOwner({
       localePriority,
       isCurrentDocument: isCurrent,
       writePrefs: writeBrowserPresentationPrefs,
-      writeProfileLocale: updateProfileLocale,
     }),
   writePrefs: writeBrowserPresentationPrefs,
   updateProfile: updateProfileLocale,

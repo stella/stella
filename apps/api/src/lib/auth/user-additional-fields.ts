@@ -5,10 +5,11 @@ export const AUTH_USER_ADDITIONAL_FIELDS = {
     required: false,
     defaultValue: "UTC",
   },
+  // No default: an account follows the browser's language until its user
+  // picks one.
   locale: {
     type: "string",
     required: false,
-    defaultValue: "en",
   },
   preferredName: {
     type: "string",

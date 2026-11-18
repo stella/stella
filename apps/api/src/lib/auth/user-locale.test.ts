@@ -12,7 +12,7 @@ test("accepts every exact UI locale", () => {
   }
 });
 
-test.each(["en-US", "CS", "", null, 42])(
+test.each(["en-US", "CS", "", 42])(
   "rejects unsupported profile locale %s",
   (locale) => {
     const result = validateUserLocale(locale);
@@ -24,6 +24,9 @@ test.each(["en-US", "CS", "", null, 42])(
   },
 );
 
-test("allows an omitted locale so the database default applies on account creation", () => {
-  expect(Result.isOk(validateUserLocale(undefined))).toBe(true);
-});
+test.each([undefined, null])(
+  "allows %s: an account without a saved language follows the browser",
+  (locale) => {
+    expect(Result.isOk(validateUserLocale(locale))).toBe(true);
+  },
+);

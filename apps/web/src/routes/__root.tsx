@@ -7,6 +7,7 @@ import {
   createRootRouteWithContext,
   type ErrorComponentProps,
   HeadContent,
+  isRedirect,
   Outlet,
   redirect,
   Scripts,
@@ -14,7 +15,7 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { cn } from "@stll/ui/utils";
 
@@ -127,6 +128,33 @@ export const Route = createRootRouteWithContext<{
   notFoundComponent: RootNotFoundComponent,
 });
 
+// Public documents hydrate from the anonymous server render and reuse its
+// route context. Their browser guards run in place after mounting; only a
+// redirect they raise navigates. Re-navigating to the same address instead
+// would hold the route content dehydrated until the session read settles,
+// and that content would then hydrate against state the server never had.
+const enterPublicDocument = async ({
+  router,
+  queryClient,
+}: {
+  router: ReturnType<typeof useRouter>;
+  queryClient: QueryClient;
+}) => {
+  const location = router.state.location;
+  const entered = await Result.tryPromise(async () => {
+    await requireFreshDocument({ queryClient, location });
+    await requireProfessionalUseForSignedInRoute({ queryClient, location });
+  });
+  if (entered.isOk()) {
+    return;
+  }
+  const { cause } = entered.error;
+  if (!isRedirect(cause)) {
+    throw cause;
+  }
+  await router.navigate({ ...cause.options, replace: true });
+};
+
 function RootNotFoundComponent() {
   const appContext = Route.useRouteContext({
     select: (context) => ({
@@ -169,8 +197,14 @@ function RootComponent() {
   });
   const navigate = useNavigate();
   const router = useRouter();
-  // Public documents reuse server route context during hydration. Re-enter
-  // the browser guard after mounting so redirects stay in the router boundary.
+  const { analyticsValue, queryClient } = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
+  // Public documents reuse server route context during hydration; their
+  // browser guards run after mounting (see enterPublicDocument).
   useMountEffect(() => {
     sweepStaleRedirectRequests();
     const href = pendingHandoffPath();
@@ -186,22 +220,11 @@ function RootComponent() {
     }
     if (isPublicSsrPath(router.state.location.pathname)) {
       detached(
-        navigate({
-          href: router.state.location.publicHref,
-          replace: true,
-          resetScroll: false,
-        }),
+        enterPublicDocument({ router, queryClient }),
         "professional-use.route-entry",
       );
     }
   });
-  const { analyticsValue, queryClient } = Route.useRouteContext({
-    select: (context) => ({
-      analyticsValue: context.analyticsValue,
-      queryClient: context.queryClient,
-    }),
-  });
-
   return (
     <AppProviders analyticsValue={analyticsValue} queryClient={queryClient}>
       {!(isDev && pathname === "/dev") && (

@@ -255,19 +255,13 @@ type MigrationOptions = {
   localePriority?: "explicit" | "legacy-if-default";
   isCurrentDocument?: () => boolean;
   writePrefs: (patch: Partial<PresentationPrefs>) => Promise<PresentationPrefs>;
-  writeProfileLocale: (
-    locale: (typeof UI_LOCALES)[number],
-  ) => Promise<Result<void, unknown>>;
 };
 
-export type LegacyPresentationMigrationResult =
-  | { status: "complete"; prefs: PresentationPrefs; locale: string | null }
-  | {
-      status: "profile-error";
-      prefs: PresentationPrefs;
-      locale: string | null;
-      error: unknown;
-    };
+export type LegacyPresentationMigrationResult = {
+  status: "complete";
+  prefs: PresentationPrefs;
+  locale: string | null;
+};
 
 const readLegacyLayoutPatch = (
   prefs: PresentationPrefs,
@@ -495,7 +489,6 @@ export const migrateLegacyPresentationPreferences = async ({
   localePriority = "legacy-if-default",
   isCurrentDocument = () => true,
   writePrefs,
-  writeProfileLocale,
 }: MigrationOptions): Promise<LegacyPresentationMigrationResult> => {
   const provisionKey = ownerStorageKey(
     READER_PROVISION_MODE_STORAGE_KEY,
@@ -526,37 +519,23 @@ export const migrateLegacyPresentationPreferences = async ({
   );
 
   let locale = profileLocale;
-  if (legacyLocale !== undefined && localePriority === "legacy-if-default") {
-    if (profileLocale === null) {
-      const visitorLocale = legacyChoice(
-        prefs.visitorLocale,
-        defaultPresentationPrefs.visitorLocale,
-        legacyLocale,
-      );
-      if (visitorLocale !== undefined) {
-        patch.visitorLocale = visitorLocale;
-      }
-      locale = visitorLocale ?? prefs.visitorLocale;
-    } else if (
-      profileLocale === defaultPresentationPrefs.visitorLocale &&
-      legacyLocale !== profileLocale
-    ) {
-      // An unchanged locale needs no profile write; a write would refresh
-      // the session and interrupt the page that is loading.
-      const written = await writeProfileLocale(legacyLocale);
-      if (written.isErr()) {
-        return {
-          status: "profile-error",
-          prefs,
-          locale: profileLocale,
-          error: written.error,
-        };
-      }
-      if (!isCurrentDocument()) {
-        return { status: "complete", prefs, locale: profileLocale };
-      }
-      locale = legacyLocale;
+  // A saved profile language is the user's choice and always wins. Until one
+  // is saved, the language follows this browser, so a legacy browser choice
+  // stays a browser preference rather than becoming the account's.
+  if (
+    legacyLocale !== undefined &&
+    localePriority === "legacy-if-default" &&
+    profileLocale === null
+  ) {
+    const visitorLocale = legacyChoice(
+      prefs.visitorLocale,
+      defaultPresentationPrefs.visitorLocale,
+      legacyLocale,
+    );
+    if (visitorLocale !== undefined) {
+      patch.visitorLocale = visitorLocale;
     }
+    locale = visitorLocale ?? prefs.visitorLocale;
   }
   if (!isCurrentDocument()) {
     return { status: "complete", prefs, locale: profileLocale };
