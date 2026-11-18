@@ -143,3 +143,20 @@ export const tableChartPoints = ({
   }
   return points;
 };
+
+/**
+ * The value axis's title: the one value column's heading. Several value
+ * columns are several series, which the legend names one by one; a title
+ * joining their headings would only repeat it, and read as a quantity of
+ * its own beside the chart's title.
+ */
+export const tableChartValueLabel = ({
+  table,
+  plan,
+}: Pick<TableChartPointsOptions, "table" | "plan">): string | undefined => {
+  const values = plan.columns.filter(({ role }) => role === "y");
+  const [only] = values;
+  return values.length === 1 && only !== undefined
+    ? table.headers.at(only.index)
+    : undefined;
+};
