@@ -50,7 +50,7 @@ type QueryTerm = { type: string; value: string };
  * and no more than one search checks. Counted on distinct terms, so a word
  * repeated in the query counts once, as it does in every query built from it.
  */
-export const checksWordsOneByOne = (terms: readonly QueryTerm[]): boolean => {
+const checksWordsOneByOne = (terms: readonly QueryTerm[]): boolean => {
   const distinct = new Set(terms.map(({ value }) => value)).size;
   return distinct >= 2 && distinct <= LIMITS.caseLawSearchTermCountsMax;
 };
@@ -467,7 +467,7 @@ export const readTermDecisionCounts = async ({
 };
 
 /** The words a decision holds, and the copy of it they were read off. */
-export type WordsAtCopy = {
+type WordsAtCopy = {
   revision: CorpusProjectionRevision;
   held: ReadonlySet<number>;
 };

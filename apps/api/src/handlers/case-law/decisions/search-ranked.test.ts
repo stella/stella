@@ -174,15 +174,18 @@ describe("which counts the engine may take", () => {
     expect(aggregationsApplyEveryFilter({ ...body, court: "NS" })).toBe(true);
   });
 
-  test.each([
-    ["category", { category: "civil" }],
-    ["legal sentence", { hasLegalSentence: true }],
-    ["docket registers", { docketRegisters: ["Cdo"] }],
-    ["senate", { senate: "29" }],
-  ] as const)(
-    "a %s filter, which only the rows apply, is not",
-    (_name, filter) => {
-      expect(aggregationsApplyEveryFilter({ ...body, ...filter })).toBe(false);
-    },
-  );
+  test("a filter only the rows apply is not", () => {
+    // Category, legal sentence, docket registers, senate: each is decided per
+    // row, so an engine count under the request would count past it.
+    expect(aggregationsApplyEveryFilter({ ...body, category: "civil" })).toBe(
+      false,
+    );
+    expect(
+      aggregationsApplyEveryFilter({ ...body, hasLegalSentence: true }),
+    ).toBe(false);
+    expect(
+      aggregationsApplyEveryFilter({ ...body, docketRegisters: ["Cdo"] }),
+    ).toBe(false);
+    expect(aggregationsApplyEveryFilter({ ...body, senate: 29 })).toBe(false);
+  });
 });
