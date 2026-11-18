@@ -338,6 +338,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",
+  // A source's record held as an attachment to another source's decision:
+  // ingestion state only, never read through the request role.
+  "case_law_held_decision_attachments",
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",
