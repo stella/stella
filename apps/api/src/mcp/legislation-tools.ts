@@ -407,8 +407,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "as_of and language, or document_id from read_provision_history for an exact " +
       "consolidation. document_id and as_of are mutually exclusive. " +
       "Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). " +
-      "Entries return in input order: found carries text and governingText " +
-      "(lead-in and closing wording of the units the anchor is nested in, which qualifies it); invalid, not_found, " +
+      "Entries return in input order: found carries text; invalid, not_found, " +
       "uncovered_date (no applicable consolidation, including inconsistent publisher dates), " +
       "provision_not_found and text_withheld (AI use barred) carry messages. " +
       "Continue long text with nextTextCursor as text_cursor on the same entry until null. " +
@@ -446,9 +445,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "not carry the anchor is left out of `items`. Pass the returned " +
       "nextCursor back as cursor for older versions. Long wording returns " +
       "nextTextCursor on its item; pass it back as text_cursor with the same " +
-      "eli, anchor, and version-page cursor until it is null. Each item's " +
-      "governingText holds the lead-in and closing wording of the units the " +
-      "anchor is nested in. " +
+      "eli, anchor, and version-page cursor until it is null. " +
       "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: READ_PROVISION_HISTORY_INPUT_NORMALIZATION,

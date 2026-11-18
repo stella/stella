@@ -55,7 +55,7 @@ const headingHolding = (
     .findLast((candidate) => candidate.type === "heading")?.anchorId ?? null;
 
 /** Where a subdivision's governing wording sits, as a reader states it. */
-export type ProvisionGoverningText = {
+type ProvisionGoverningText = {
   anchor: string;
   position: GoverningWordingPosition;
   text: string;

@@ -164,11 +164,11 @@ test("provision history pages keep each preview wording inside its byte budget",
         windowDisposition: "effective",
         windowDispositionBasis: null,
         text,
-        governingText: [{ anchor: text, position: "closing" as const, text }],
       } as const;
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
       const item = projectProvisionHistoryItem({
         ...row,
+        governingText: [{ anchor: text, position: "closing", text }],
         country: "CZE",
         slug: "89-2012-sb",
         sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
