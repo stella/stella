@@ -1,10 +1,12 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 import { Link, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { useLayout, useSelection } from "@/components/selection";
@@ -121,32 +123,35 @@ export const MatterRow = ({
           }}
         >
           <Link.Trigger>
-            <Pressable
+            <Button
               {...accessibility}
-              accessibilityRole="button"
               accessibilityState={{ selected: open }}
-              className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
+              size="row"
+              variant="ghost"
             >
-              <View className="pt-0.5">
-                <MatterIcon matter={matter} size={18} />
-              </View>
-              <View className="flex-1 gap-0.5">
-                <Text numberOfLines={2} variant="rowTitle">
-                  {matter.name}
-                </Text>
-                {details.length === 0 ? null : (
-                  <Text numberOfLines={1} variant="caption">
-                    {details.join(" · ")}
+              <Separator className="absolute inset-x-0 bottom-0" />
+              <View className="flex-1 flex-row gap-3">
+                <View className="pt-0.5">
+                  <MatterIcon matter={matter} size={18} />
+                </View>
+                <View className="flex-1 gap-0.5">
+                  <Text numberOfLines={2} variant="rowTitle">
+                    {matter.name}
                   </Text>
-                )}
-                <WriteFailureNotice
-                  failure={failure}
-                  message={timerText(
-                    timer?.type === "start" ? "startFailed" : "changeFailed",
+                  {details.length === 0 ? null : (
+                    <Text numberOfLines={1} variant="caption">
+                      {details.join(" · ")}
+                    </Text>
                   )}
-                />
+                  <WriteFailureNotice
+                    failure={failure}
+                    message={timerText(
+                      timer?.type === "start" ? "startFailed" : "changeFailed",
+                    )}
+                  />
+                </View>
               </View>
-            </Pressable>
+            </Button>
           </Link.Trigger>
           <Link.Menu>
             <Link.MenuAction

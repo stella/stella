@@ -11,7 +11,7 @@ import {
   exactDecisionMatches,
   parseDecisionQuery,
 } from "./decision-query-intent";
-import { decisionReporterGrammarForJurisdiction } from "./us-reporter-citation";
+import { decisionReporterGrammarForJurisdiction } from "./decision-reporter-grammar";
 
 /** Dockets as the corpus's courts print them, one per grammar. */
 const canonicalDockets = [

@@ -7,7 +7,6 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { installRenderProbe } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
-import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 // The outline the docx editor shows, through the app's folio adapter and the
 // design-system rail. Folio rebuilds its heading list after every edit: first
@@ -16,8 +15,6 @@ import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plu
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 // React DOM reads its DevTools hook once, when it loads.
 const probe = installRenderProbe();
-// Rendered as it ships, compiled by the React Compiler.
-Bun.plugin(reactCompilerBunPlugin);
 
 const { act, cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");

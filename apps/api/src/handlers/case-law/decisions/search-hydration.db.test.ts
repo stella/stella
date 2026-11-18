@@ -918,6 +918,24 @@ test.each(["unchanged", "refreshed"] as const)(
           : [],
       });
     });
+    // The words of a decision shown from its refreshed copy are read again
+    // off that copy; here the refreshed copy no longer holds the word.
+    const wordReads: string[] = [];
+    const aggregateSpy = spyOn(
+      getCorpusIndexClient(manifest.cluster),
+      "aggregate",
+    ).mockImplementation(async ({ query }) => {
+      wordReads.push(query);
+      return await Promise.resolve(
+        Result.ok({
+          term_coverage: {
+            buckets: [],
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+          },
+        }),
+      );
+    });
     resetPublicCaseLawConfigForTesting(caseLawDb);
     try {
       const result = await searchCorpusIndexDecisions({
@@ -950,6 +968,19 @@ test.each(["unchanged", "refreshed"] as const)(
       expect(hit.anchorId).toBe(
         revisionState === "refreshed" ? null : anchorId,
       );
+      // Its words describe the copy it is shown from, never the one scanned.
+      if (revisionState === "refreshed") {
+        expect(wordReads).toHaveLength(1);
+        expect(wordReads.at(0)).toContain(refreshedRevision);
+        expect(wordReads.at(0)).not.toContain(originalRevision);
+        expect(hit.matchedTerms).toEqual([]);
+        expect(hit.missingTerms).toEqual(["promlčení"]);
+        expect(hit.match).toBe("some_terms");
+      } else {
+        expect(wordReads).toEqual([]);
+        expect(hit.matchedTerms).toEqual(["promlčení"]);
+        expect(hit.match).toBe("all_terms");
+      }
       const finalRows = await readCaseLawPageDecisionRows({
         body: SEARCH_BODY,
         caseLawDb,
@@ -961,6 +992,7 @@ test.each(["unchanged", "refreshed"] as const)(
       );
     } finally {
       searchSpy.mockRestore();
+      aggregateSpy.mockRestore();
       resetPublicCaseLawConfigForTesting();
       await db
         .delete(corpusIndexProjectionStates)

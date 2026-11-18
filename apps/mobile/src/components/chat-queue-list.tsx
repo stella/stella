@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { panic, Result } from "better-result";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { QUEUED_MESSAGE_FILES_ON_REMOVE } from "@stll/api-contract/chat-queue";
@@ -455,12 +455,12 @@ const QueueItemRow = ({
   ];
   return (
     <View className="border-border rounded-xl border px-3 py-2">
-      <Pressable
+      <Button
         accessibilityHint={t("actions")}
-        accessibilityRole="button"
         accessibilityState={{ expanded: opened }}
         className="active:opacity-70"
         onPress={onPress}
+        variant="plain"
       >
         <Text numberOfLines={2} variant="body">
           {item.preview}
@@ -471,7 +471,7 @@ const QueueItemRow = ({
           </Text>
         )}
         {notSent ? <Text variant="error">{t("notSent")}</Text> : null}
-      </Pressable>
+      </Button>
       {opened ? (
         <View
           accessibilityLabel={t("actions")}

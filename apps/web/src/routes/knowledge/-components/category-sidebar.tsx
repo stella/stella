@@ -1,5 +1,5 @@
 import type { DragEvent, ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -553,7 +553,7 @@ const CategoryRow = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = async () => {
     setDeleting(true);
     const ok = await ops.remove(category.id);
     setDeleting(false);
@@ -564,7 +564,7 @@ const CategoryRow = ({
 
     setDeleteOpen(false);
     onChanged();
-  }, [category.id, ops, onChanged]);
+  };
 
   return (
     <div
@@ -726,7 +726,7 @@ const CategoryFormDialogBody = ({
   const [name, setName] = useState(initial?.name ?? "");
   const [saving, setSaving] = useState(false);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
       return;
@@ -751,7 +751,7 @@ const CategoryFormDialogBody = ({
 
     onOpenChange(false);
     onChanged();
-  }, [name, initial, ops, onOpenChange, onChanged, onCreated]);
+  };
 
   return (
     <DialogPopup className="sm:max-w-sm">

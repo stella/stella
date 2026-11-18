@@ -2,7 +2,6 @@ import {
   type PropsWithChildren,
   type ReactNode,
   type Ref,
-  useCallback,
   useId,
   useState,
 } from "react";
@@ -170,7 +169,7 @@ export const CaseLawCoveragePage = ({
   const [collapsed, setCollapsed] = useState<ReadonlySet<CaseLawJurisdiction>>(
     new Set(),
   );
-  const expandCountry = useCallback((country: CaseLawJurisdiction) => {
+  const expandCountry = (country: CaseLawJurisdiction) => {
     setCollapsed((previous) => {
       if (!previous.has(country)) {
         return previous;
@@ -179,7 +178,7 @@ export const CaseLawCoveragePage = ({
       next.delete(country);
       return next;
     });
-  }, []);
+  };
 
   // Not a discriminated union: the endpoint answers either the figures or a
   // message saying it cannot state them.
@@ -626,15 +625,12 @@ const CountrySection = ({
   // finds no section yet: the section a link named brings itself into view
   // when it mounts. Stable per target, so a background refetch that
   // re-renders the page does not pull the reader back.
-  const scrollIntoViewOnArrival = useCallback(
-    (node: HTMLElement | null) => {
-      if (isTarget && node !== null) {
-        onExpand(country.country);
-        node.scrollIntoView({ block: "start" });
-      }
-    },
-    [isTarget, onExpand, country.country],
-  );
+  const scrollIntoViewOnArrival = (node: HTMLElement | null) => {
+    if (isTarget && node !== null) {
+      onExpand(country.country);
+      node.scrollIntoView({ block: "start" });
+    }
+  };
 
   return (
     <CountryCard

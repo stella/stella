@@ -4,6 +4,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { czNsCollectionIdentifierValues } from "@stll/api-contract/cz-ns-collection-citation";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -1188,5 +1189,63 @@ describe("a district court named around the docket", () => {
       status: "not_found",
       reason: "not_at_this_court",
     });
+  });
+});
+
+describe("a Supreme Court collection citation", () => {
+  const collectionRow = (
+    part: "civil" | "criminal",
+    caseNumber: string,
+  ): DecisionIdentityRow => ({
+    ...row(caseNumber),
+    id: createSafeId<"caseLawDecision">(),
+    court: "Nejvyšší soud",
+    courtAbbreviation: "NS",
+    ecli: null,
+    identifiers: czNsCollectionIdentifierValues({
+      part,
+      number: 9,
+      year: 1971,
+    }).map((value) => ({ type: "reporter-citation", value })),
+  });
+
+  test("reads by its canonical spelling, and resolves the one entry that carries it", async () => {
+    const civil = collectionRow("civil", "6 Cz 90/70");
+    const locators: unknown[] = [];
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "č. 9/1971 Sb. rozh. obč.",
+      dependencies: {
+        lookup: async ({ locator }) => {
+          locators.push(locator);
+          return locator.kind === "reporter" && locator.value === "Rc 9/1971"
+            ? [civil]
+            : [];
+        },
+        read: readableDecision,
+      },
+    });
+    expect(locators).toContainEqual({ kind: "reporter", value: "Rc 9/1971" });
+    expect(result).toMatchObject({ status: "resolved" });
+  });
+
+  test("a citation leaving the part out names both entries of that number, and says so", async () => {
+    const civil = collectionRow("civil", "6 Cz 90/70");
+    const criminal = collectionRow("criminal", "4 Tz 26/70");
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "R 9/1971",
+      dependencies: {
+        lookup: async ({ locator }) =>
+          locator.kind === "reporter" && locator.value === "R 9/1971"
+            ? [civil, criminal]
+            : [],
+        read: async () =>
+          panic("An ambiguous citation must not open a decision"),
+      },
+    });
+    expect(result.status).toBe("ambiguous");
   });
 });

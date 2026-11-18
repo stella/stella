@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the address-as-label rejection reason; text conversion is unchanged.
 // parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 // parser-output-unchanged: typed URL values pass through; plain strings are projected as before
 // parser-output-unchanged: Rejecting non-finite runtime numbers leaves publisher JSON metadata unchanged.
@@ -43,7 +44,8 @@ export class PlainTextError extends TaggedError("PlainTextError")<{
     | "rtf-syntax"
     | "unsupported-metadata"
     | "empty-present-text"
-    | "entity-decode-failed";
+    | "entity-decode-failed"
+    | "address-as-label";
 }> {
   static {
     declareFingerprintFields(this, ["reason"]);

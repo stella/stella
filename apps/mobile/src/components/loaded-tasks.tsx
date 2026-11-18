@@ -1,14 +1,10 @@
 import { use } from "react";
 
-import {
-  ActivityIndicator,
-  RefreshControl,
-  SectionList,
-  View,
-} from "react-native";
+import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
@@ -84,7 +80,7 @@ export const LoadedTasks = ({
       return null;
     }
     if (loadingMore) {
-      return <ActivityIndicator className="py-6" color={colors.muted} />;
+      return <Loader className="py-6" />;
     }
     if (current.error !== null) {
       return (

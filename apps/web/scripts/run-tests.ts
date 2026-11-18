@@ -11,6 +11,7 @@ import {
 import { attachTestProcessShutdown } from "@stll/scripts/src/process-shutdown";
 import { spawnTestProcess } from "@stll/scripts/src/process-spawn";
 import { forwardTestStderr } from "@stll/scripts/src/process-stderr";
+import { warmReactCompilerCache } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
@@ -50,6 +51,24 @@ if (runs.length === 0) {
   console.error("No test files matched the given paths.");
   process.exit(1);
 }
+
+// The test preload compiles every source module with the React Compiler, and
+// an isolated run loads the module graph once per test file. Compiling the
+// sources here first lets those test files read cached output instead of
+// each loading the compiler.
+const REPOSITORY_ROOT = path.resolve(WEB_ROOT_PATH, "../..");
+const COMPILED_SOURCE_GLOBS = [
+  "apps/web/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+];
+warmReactCompilerCache(
+  COMPILED_SOURCE_GLOBS.flatMap((pattern) => [
+    ...new Bun.Glob(pattern).scanSync({
+      cwd: REPOSITORY_ROOT,
+      absolute: true,
+    }),
+  ]).filter((file) => !file.split(path.sep).includes("node_modules")),
+);
 
 const limitBytes = testInvocationMemoryLimit(process.env);
 const readBytes = await createProcessMemoryReader();

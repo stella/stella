@@ -4538,6 +4538,7 @@ describe("OpenAI-compatible MCP tools", () => {
     };
     const partialUnread = (query: string) => ({
       ...answered(query, null),
+      hitOrder: "all_words_first",
       relaxedHitCount: 0,
       termDecisionCounts: SHORT_COUNTS,
       paginationOutcome: SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
@@ -4607,6 +4608,7 @@ describe("OpenAI-compatible MCP tools", () => {
         searchDecisionsHandlerMock.mockImplementation(
           async ({ body: { query } }: { body: { query: string } }) => ({
             ...answered(query, null),
+            hitOrder: "all_words_first",
             relaxedHitCount: 0,
           }),
         );
@@ -6801,6 +6803,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6812,6 +6815,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6852,6 +6856,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           nextTextCursor: null,
           truncated: false,
           versionValidFrom: "2014-01-01",
@@ -6866,6 +6871,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2012-03-22",
           nextTextCursor: null,
@@ -6891,6 +6897,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6904,6 +6911,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: false,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6932,6 +6940,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2014-01-01",
           nextTextCursor: null,
@@ -6972,6 +6981,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text,
+          governingText: [],
           versionValidFrom: null,
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -7117,6 +7127,72 @@ describe("OpenAI-compatible MCP tools", () => {
    * search runs unfiltered instead of answering nothing, and the reading is
    * reported beside the result.
    */
+  describe("search_case_law keeps the order the search answered in", () => {
+    const pageIn = (
+      hitOrder: "score" | "all_words_first",
+      hits: readonly { id: string; match: "all_terms" | "some_terms" }[],
+    ) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
+      facets: null,
+      hits: hits.map(({ id, match }) => ({
+        ...createCaseLawHit(id, "Holding"),
+        match,
+      })),
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, hits.length),
+      hitOrder,
+      relaxedHitCount: hits.filter(({ match }) => match === "some_terms")
+        .length,
+      termDecisionCounts: null,
+      queryUsed: "loajalita jednatel",
+      warnings: [],
+    });
+    const resultIds = async (queries: string[]) => {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries, limit: 10 },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      if (!isRecord(payload) || !Array.isArray(payload["results"])) {
+        throw new Error("expected a search payload");
+      }
+      return payload["results"].map((result: unknown) =>
+        isRecord(result) ? result["decisionId"] : null,
+      );
+    };
+
+    test.each([
+      [
+        "a score-ordered page, a partial match above a full one",
+        pageIn("score", [
+          { id: "partial-high", match: "some_terms" },
+          { id: "full", match: "all_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+      [
+        "a page whose full matches come first",
+        pageIn("all_words_first", [
+          { id: "full", match: "all_terms" },
+          { id: "partial-high", match: "some_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+    ] as const)("%s reads the same through the tool", async (_name, page) => {
+      searchDecisionsHandlerMock.mockResolvedValue(page);
+      const http = page.hits.map(({ decisionId }) => decisionId);
+
+      expect(await resultIds(["loajalita jednatel"])).toEqual(http);
+      // Two phrasings answering the same page merge into that page's order.
+      expect(
+        await resultIds(["loajalita jednatel", "jednatel loajalita"]),
+      ).toEqual(http);
+    });
+  });
+
   describe("search_case_law warns about a long phrasing that came back short", () => {
     const SIX_TERMS = "promlčení náhrady škody subjektivní lhůta vědomost";
     const FIVE_TERMS = "promlčení náhrady škody subjektivní lhůta";
@@ -7203,7 +7279,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
       expect(warnings).toHaveLength(1);
-      expect(warnings.at(0)?.["message"]).toContain("required 6 words");
+      expect(warnings.at(0)?.["message"]).toContain("has 6 words");
       expect(warnings.at(0)?.["message"]).toContain(SIX_WORD_PHRASE);
     });
 

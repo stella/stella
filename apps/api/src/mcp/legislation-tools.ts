@@ -24,7 +24,7 @@ import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { readProvision } from "@/api/handlers/legislation/provision-text";
 import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
@@ -1019,11 +1019,11 @@ const provisionItemResult = ({
       const blocks =
         blocksByDocumentId.get(String(version.id)) ??
         panic(`No block list was read for consolidation ${version.id}`);
-      const text = extractProvisionText(
+      const reading = readProvision(
         { blocks, scheme: statuteAnchorSchemeFor(version.country) },
         item.anchor,
       );
-      if (text === null) {
+      if (reading === null) {
         return {
           type: "item",
           item: {
@@ -1038,7 +1038,7 @@ const provisionItemResult = ({
         ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
         limit: LIMITS.legislationProvisionTextChars,
         subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
-        text,
+        text: reading.text,
       });
       if (window.type === "invalid-cursor") {
         return { type: "invalid-cursor" };
@@ -1049,6 +1049,12 @@ const provisionItemResult = ({
           ...subject,
           ...cited,
           text: window.text,
+          // Once per read: a continuation window carries on the same text.
+          governingText:
+            item.text_cursor === undefined ? reading.governing : [],
+          ...(item.text_cursor === undefined && reading.governingTruncated
+            ? { governingTextTruncated: true as const }
+            : {}),
           truncated: window.truncated,
           nextTextCursor: window.nextTextCursor,
           documentId: version.id,
@@ -1389,6 +1395,10 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
           item: {
             ...version,
             text: window.text,
+            governingText: textCursor === undefined ? item.governingText : [],
+            ...(textCursor === undefined && item.governingTextTruncated === true
+              ? { governingTextTruncated: true as const }
+              : {}),
             truncated: window.truncated,
             nextTextCursor: window.nextTextCursor,
             status: PROVISION_STATUS.found,
