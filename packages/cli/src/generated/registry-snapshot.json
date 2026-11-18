@@ -21,7 +21,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 34100,
+          "maxLength": 26936,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -3030,12 +3030,12 @@
         "country": {
           "type": "string",
           "maxLength": 64,
-          "description": "Required corpus country. Admitted: CZE, HUN, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "description": "Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
           "x-stella-agent-input": {
             "kind": "country",
             "country": {
               "spelling": "alpha-3",
-              "admitted": ["CZE", "HUN", "SVK"],
+              "admitted": ["CZE", "SVK"],
               "tool": "search_legislation"
             }
           }

@@ -5,7 +5,6 @@ import {
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
 } from "@stll/api-contract/public-country-capability";
-import { PROVISION_CITATION_JURISDICTIONS } from "@stll/legal-atlas/provision-citation-profile";
 
 import {
   admitLawRead,
@@ -520,20 +519,13 @@ for (const country of PUBLIC_COUNTRIES.filter(
   (candidate) =>
     PUBLIC_COUNTRY_CAPABILITIES[candidate].legislation === "admitted",
 )) {
-  const profiled = PROVISION_CITATION_JURISDICTIONS.some(
-    (jurisdiction) => jurisdiction === country,
-  );
-  test(`admitted legislation country ${country} resolves citations exactly when it has a citation profile`, async () => {
+  test(`advertised legislation country ${country} has a citation resolver`, async () => {
     expect(
       await resolveLawCitation({
         admission,
         country,
         input: { citation: "0/0000" },
       }),
-    ).toEqual(
-      profiled
-        ? { status: "not_found", reason: "unknown_document" }
-        : { status: "country_unavailable" },
-    );
+    ).toEqual({ status: "not_found", reason: "unknown_document" });
   });
 }

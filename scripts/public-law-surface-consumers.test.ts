@@ -125,7 +125,6 @@ const CONSUMERS = {
   // Agent surfaces.
   "apps/api/src/mcp/stella-tools.ts": "mcp",
   "apps/api/src/mcp/legislation-tools.ts": "mcp",
-  "apps/api/src/mcp/legal-resolve-tools.ts": "mcp",
   "apps/api/src/mcp/case-law-search-guidance.ts": "mcp",
   "apps/api/src/mcp/case-law-search-input.ts": "mcp",
   "apps/api/src/mcp/case-law-court-catalog-input.ts": "mcp",

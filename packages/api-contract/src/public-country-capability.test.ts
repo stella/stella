@@ -44,7 +44,7 @@ describe("public country availability contract", () => {
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE.caseLaw).toBe("admitted");
     expect(PUBLIC_COUNTRY_CAPABILITIES.HUN).toEqual({
       caseLaw: "admitted",
-      legislation: "admitted",
+      legislation: "pending_public",
     });
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toEqual({
       caseLaw: "admitted",
@@ -156,7 +156,7 @@ describe("public country availability contract", () => {
       domain: "legislation",
       country: "EU",
       message: "Legislation for this country is not available.",
-      hint: "Choose a country with available legislation: CZE, HUN, SVK.",
+      hint: "Choose a country with available legislation: CZE, SVK.",
     });
   });
 

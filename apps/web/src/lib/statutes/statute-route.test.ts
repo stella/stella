@@ -51,9 +51,12 @@ test("public statute routes follow the shared jurisdiction admission list", () =
   const browsed = Object.keys(STATUTE_COUNTRIES)
     .filter(isPublicStatuteCountry)
     .map((country) => country.toUpperCase());
-  // Every admitted jurisdiction is browsed or declared pending, never both.
-  expect([...browsed, ...STATUTE_BROWSER_PENDING_COUNTRIES].toSorted()).toEqual(
-    [...PUBLIC_LEGISLATION_COUNTRIES].toSorted(),
+  // Every admitted jurisdiction is browsed unless it is declared pending.
+  const pending: readonly string[] = STATUTE_BROWSER_PENDING_COUNTRIES;
+  expect(browsed).toEqual(
+    PUBLIC_LEGISLATION_COUNTRIES.filter(
+      (country) => !pending.includes(country),
+    ),
   );
   expect(isPublicStatuteCountry("hun")).toBe(false);
   expect(isPublicStatuteCountry("svk")).toBe(true);
