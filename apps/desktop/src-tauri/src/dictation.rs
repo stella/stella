@@ -125,6 +125,9 @@ pub enum Failure {
   /// stella AI could not transcribe, and this computer has no speech model to
   /// fall back to.
   CloudTranscription,
+  /// A password field had focus at the press or before typing: the
+  /// dictation was neither kept nor typed.
+  PasswordField,
 }
 
 /// A dictation that went wrong, and whether its text is in stella's
@@ -1125,6 +1128,7 @@ mod tests {
       (Failure::FocusChanged, "focusChanged"),
       (Failure::FocusUnconfirmed, "focusUnconfirmed"),
       (Failure::ShortcutHeld, "shortcutHeld"),
+      (Failure::PasswordField, "passwordField"),
       (Failure::CloudTranscription, "cloudTranscription"),
     ] {
       assert_eq!(
