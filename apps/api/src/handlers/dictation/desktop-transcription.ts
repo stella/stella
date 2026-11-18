@@ -33,6 +33,7 @@ import {
   type TranscriptionDeployment,
   transcriptionRetainsData,
   transcriptionServed,
+  transcriptionServedAnywhere,
 } from "@/api/handlers/dictation/transcription-deployment";
 import {
   loadOrgSettingsForAuth,
@@ -140,14 +141,7 @@ export const listDictationModels = (
   });
   if (models.length === 0) {
     // Nothing this deployment can transcribe with, or nothing in the region.
-    const servedAnywhere = Object.keys(TRANSCRIPTION_MODELS)
-      .filter(isTranscriptionModelId)
-      .some((modelId) =>
-        (["eu", "us", "global"] as const).some((endpoint) =>
-          served(modelId, endpoint),
-        ),
-      );
-    return none(servedAnywhere ? "region" : "provider");
+    return none(transcriptionServedAnywhere(served) ? "region" : "provider");
   }
   return {
     models,

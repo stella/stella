@@ -690,6 +690,31 @@ describe("dictation operation request matrix", () => {
     }
   });
 
+  test("a deployment without a transcription credential says how to configure one, not that the region lacks a model", async () => {
+    const f = fixture(1234, 1234, { openRouter: false, elevenLabs: null });
+    const result = await executeDictation(
+      {
+        ...f.context,
+        orgAIConfig: {
+          providers: [
+            { provider: "anthropic", apiKey: "organization-fixture" },
+          ],
+          overrideModels: null,
+          decision: null,
+        },
+      },
+      f.dependencies,
+    );
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 503,
+      code: "transcription_model_unavailable",
+      message: "No transcription provider is available to your organization",
+      hint: "Configure an organization OpenRouter key in organization AI settings, or ask your server administrator to configure transcription.",
+    });
+    expect(f.requests).toEqual([]);
+    expect(f.counts().credentials).toBe(0);
+  });
+
   test("a key without zero retention never asks for it, serves only a caller that warns, and is never a default", async () => {
     const deployment = {
       openRouter: false,

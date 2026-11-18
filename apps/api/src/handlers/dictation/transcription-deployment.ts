@@ -1,4 +1,7 @@
-import { TRANSCRIPTION_MODELS } from "@stll/ai-catalog/transcription";
+import {
+  isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
+} from "@stll/ai-catalog/transcription";
 import type {
   TranscriptionModelId,
   TranscriptionServed,
@@ -72,3 +75,16 @@ export const transcriptionServed =
     }
     return elevenLabsServes(deployment.elevenLabs, endpoint);
   };
+
+/** Whether any model is served at any endpoint: false when the caller has
+ *  no transcription provider at all, not merely none in its region. */
+export const transcriptionServedAnywhere = (
+  served: TranscriptionServed,
+): boolean =>
+  Object.keys(TRANSCRIPTION_MODELS)
+    .filter(isTranscriptionModelId)
+    .some((modelId) =>
+      (["eu", "us", "global"] as const).some((endpoint) =>
+        served(modelId, endpoint),
+      ),
+    );
