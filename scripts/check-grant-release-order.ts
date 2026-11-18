@@ -128,7 +128,10 @@ export const censusColumnGrants = (
         typeof privilege === "string"
           ? CENSUS_COLUMN_GRANT.exec(privilege)
           : null;
-      return match === null ? [] : [`${match[1]}.${match[2]}`];
+      const [, relation, column] = match ?? [];
+      return relation === undefined || column === undefined
+        ? []
+        : [`${relation}.${column}`];
     }),
   );
 };
