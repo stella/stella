@@ -481,6 +481,88 @@ export const corpusIndexProjectionIntents = p.pgTable(
   ],
 );
 
+/**
+ * One delete task of one index whose revisions may still wait in
+ * `cleanup_committed`: the settlement queue. The revisions' own rows are the
+ * truth; a task row only says where to look, so the settlement claim reads the
+ * next tasks off this table instead of grouping the whole committed backlog.
+ *
+ * Written by the owner's triggers on `corpus_index_projection_intents` in the
+ * transaction that stamps a delete receipt on a revision, so every writer of
+ * the receipt is covered; the online repair `corpus-projection-delete-tasks`
+ * adds the tasks recorded before the triggers existed. Settlement and the
+ * claim delete a task once none of its revisions is left in
+ * `cleanup_committed`, after locking the task row, so a receipt committing
+ * meanwhile is either seen or recreates the row.
+ */
+export const corpusIndexProjectionDeleteTasks = p.pgTable(
+  "corpus_index_projection_delete_tasks",
+  {
+    family: p.text({ enum: CORPUS_FAMILIES }).notNull(),
+    generation: p
+      .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
+      .notNull(),
+    indexId: p.varchar("index_id", { length: 64 }).notNull(),
+    deleteOpstamp: p.bigint("delete_opstamp", { mode: "bigint" }).notNull(),
+    /** The metastore's creation instant for the task, from its receipt. */
+    taskCreatedAt: timestamptz("task_created_at").notNull(),
+    /** The earliest cleanup start among its revisions: the queue order. */
+    cleanupStartedAt: timestamptz("cleanup_started_at").notNull(),
+    /** A settlement turn's lease on the task; null while no turn holds it. */
+    leaseToken: p.uuid("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "corpus_index_projection_delete_tasks_pkey",
+      columns: [t.family, t.generation, t.indexId, t.deleteOpstamp],
+    }),
+    p
+      .foreignKey({
+        name: "corpus_index_projection_delete_tasks_generation_fk",
+        columns: [t.family, t.generation],
+        foreignColumns: [
+          corpusIndexGenerations.family,
+          corpusIndexGenerations.generation,
+        ],
+      })
+      .onDelete("cascade"),
+    // The claim's walk: one index's tasks, oldest cleanup first.
+    p
+      .index("corpus_index_projection_delete_tasks_claim_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.indexId,
+        t.cleanupStartedAt,
+        t.deleteOpstamp,
+      ),
+    p.check(
+      "corpus_index_projection_delete_tasks_family_values",
+      sql`${t.family} IN (${sqlValues(CORPUS_FAMILIES)})`,
+    ),
+    p.check(
+      "corpus_index_projection_delete_tasks_opstamp_nonnegative",
+      sql`${t.deleteOpstamp} >= 0`,
+    ),
+    p.check(
+      "corpus_index_projection_delete_tasks_lease_shape",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+    // Row security is forced, so the owner's trigger functions are bound by
+    // policy too. The owner role is named per deployment, so the policy
+    // cannot name it; table privileges decide who reaches the rows.
+    p.pgPolicy("corpus_index_projection_delete_tasks_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 /** PostgreSQL-authoritative desired and applied state for one generation. */
 const corpusIndexProjectionWorkShape = ({
   workStatus,

@@ -181,15 +181,14 @@
     "handoffExpired": "Link do dokumentu wygasł, zanim stella desktop został połączony. Zacznij ponownie w stelli."
   },
   "settings": {
-    "about": "Informacje",
-    "accountLinked": "Konto połączone",
+    "accountLinked": "Połączone",
+    "disconnect": "Odłącz",
     "connectionExpired": "Połączenie wygasło",
     "reconnectToStella": "Połącz ponownie ze stella web",
     "connectionExpiredDescription": "Połączenie wygasło. Połącz się ponownie ze stella web.",
     "connectToStella": "Połącz ze stella web",
     "connectToStellaDescription": "Połącz ten komputer z bieżącym kontem stella bez otwierania dokumentu.",
     "desktopBenefit": "Pliki Office i lokalna historia schowka",
-    "disconnectAccount": "Odłącz konto",
     "errorDisconnectAccount": "stella desktop nie mogła odłączyć konta.",
     "errorReadAccount": "stella desktop nie mogła sprawdzić połączenia konta.",
     "stellaWebAccount": "Konto stella web",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Błędy techniczne, pomiary czasu i podsumowania awarii; bez dokumentów, zawartości schowka i danych o aktywności.",
     "errorReadTelemetry": "Nie udało się odczytać ustawienia wysyłania raportów. Spróbuj ponownie.",
     "errorSaveTelemetry": "Nie udało się zapisać ustawienia wysyłania raportów. Spróbuj ponownie.",
-    "general": "Ogólne",
     "lastVerified": "Ostatnio zweryfikowano",
     "language": "Język",
-    "languageDescription": "Wybierz język aplikacji desktop.",
     "setupGuide": "Przewodnik konfiguracji",
     "setupGuideDescription": "Przejdź konfigurację jeszcze raz: co robi aplikacja, uprawnienia i skrót schowka.",
     "setupGuideAction": "Uruchom konfigurację ponownie",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Wsparcie",
     "title": "Ustawienia",
-    "serverLabel": "Serwer",
+    "pages": {
+      "general": "Ogólne",
+      "dictation": "Dyktowanie",
+      "clipboard": "Schowek",
+      "agents": "AI i agenci",
+      "signing": "Podpisywanie",
+      "activity": "Aktywność",
+      "notifications": "Powiadomienia",
+      "permissions": "Uprawnienia",
+      "about": "Informacje"
+    },
+    "account": "Konto",
+    "app": "Aplikacja",
+    "privacy": "Prywatność",
+    "pageEmpty": "Na tym komputerze nie ma tu nic do ustawienia.",
     "connectToHost": "Połącz z {host}",
     "connectToHostDescription": "Otwiera {host} w przeglądarce, aby zatwierdzić ten komputer.",
     "reconnectNeeded": "Wymagane ponowne połączenie",
     "reconnect": "Połącz ponownie",
     "reconnectHostDescription": "Połączenie z {host} trzeba odnowić. Zatwierdź ten komputer ponownie w przeglądarce.",
-    "permissions": "Uprawnienia",
     "permissionNotificationsDescription": "Powiadamia, gdy dokument jest gotowy lub synchronizacja wymaga uwagi.",
     "permissionAccessibility": "Dostępność",
     "permissionAccessibilityDescription": "Pozwala osi czasu aktywności zapisywać tytuły okien.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Dozwolone",
     "permissionAllow": "Zezwól",
     "permissionOpenSettings": "Otwórz ustawienia",
-    "permissionDenied": "Wyłączone w ustawieniach systemu.",
+    "permissionTurnedOff": "Wyłączone",
+    "permissionsDescription": "Każde zależy od Ciebie i włącza jedną rzecz.",
+    "neverRequested": "Nigdy niewymagane",
     "permissionManaged": "Zarządzane przez Twoją organizację",
     "errorUpdateAutostart": "stella desktop nie mogła zmienić uruchamiania przy logowaniu.",
     "errorPermissions": "stella desktop nie mógł odczytać ani zmienić tego uprawnienia.",
@@ -600,6 +612,12 @@
     "title": "Dyktowanie",
     "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
     "descriptionCloud": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowę przetwarza stella AI, a stella jej nie przechowuje.",
+    "lede": "Przytrzymaj <key>{shortcut}</key> i mów. Tekst pojawi się tam, gdzie piszesz.",
+    "groups": {
+      "transcription": "Transkrypcja",
+      "cleanup": "Poprawianie",
+      "thisComputer": "Na tym komputerze"
+    },
     "cleanup": {
       "title": "Popraw za pomocą AI",
       "description": "Poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail. Za pośrednictwem stelli do dostawcy AI Twojej organizacji trafia tylko tekst, nie dźwięk; stella go nie zapisuje.",
@@ -607,11 +625,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Udostępniaj tytuł okna poprawianiu przez AI",
+        "title": "Udostępniaj tytuł okna",
         "description": "Pomaga odróżnić umowę od notatki. Tytuły okien mogą zawierać nazwy klientów lub spraw."
       },
       "textBeforeCursor": {
-        "title": "Udostępniaj tekst przed kursorem poprawianiu przez AI",
+        "title": "Udostępniaj tekst przed kursorem",
         "description": "Do {limit, number} znaków dokumentu, w którym jesteś, aby dyktowany tekst pasował do tego, co piszesz."
       }
     },
@@ -620,6 +638,7 @@
       "title": "Przetwarzaj za pomocą",
       "local": "Ten komputer",
       "cloud": "stella AI",
+      "localDescription": "Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
       "cloudDescription": "Dźwięk opuszcza ten komputer: w celu przetworzenia jest wysyłany do stelli, a za pośrednictwem dostawcy AI stelli do dostawcy wybranego modelu. stella go nie przechowuje.",
       "unavailableRegion": "stella AI nie oferuje jeszcze przetwarzania mowy w regionie Twojej organizacji.",
       "unavailableProvider": "Dostawca AI Twojej organizacji nie oferuje przetwarzania mowy.",
@@ -627,7 +646,6 @@
       "model": "Model przetwarzania",
       "chooseModel": "Wybierz model",
       "outsideRegion": "Poza Twoim regionem",
-      "outsideRegionNote": "Ten model przetwarza dźwięk poza regionem Twojej organizacji.",
       "retainsData": "Przechowuje Twój dźwięk",
       "retainsDataTitle": "{provider} przechowuje to, co dyktujesz",
       "retainsDataWarning": "Ten model działa na koncie bez zerowej retencji danych. {provider} przechowuje dźwięk i transkrypcję wszystkiego, co dyktujesz, na własnych warunkach, poza kontrolą stella. Nie dyktuj za jego pomocą informacji poufnych ani danych klientów."
@@ -640,6 +658,7 @@
       "noResults": "Nie znaleziono języków"
     },
     "modelNeeded": "Model mowy działa na tym komputerze.",
+    "speechModel": "Model mowy",
     "modelInstalled": "Model mowy ({size} MB) jest na tym komputerze.",
     "removeModel": "Usuń",
     "removeFailed": "Nie udało się usunąć modelu mowy. Spróbuj ponownie.",

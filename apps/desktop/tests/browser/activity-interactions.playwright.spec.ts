@@ -696,7 +696,7 @@ const installNativeBoundary = async ({
     await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
     await page.goto("/#activity");
     if (!activityEnabled) {
-      await expect(page.getByRole("tabpanel")).toBeVisible();
+      await expect(page.locator("[data-slot=settings-page]")).toBeVisible();
       return;
     }
     await expect(
@@ -1316,7 +1316,7 @@ test("the activity window opens its settings in the Settings window", async ({
   });
 });
 
-test("the Activity tab is absent while the activity feature is off", async ({
+test("the Activity page is absent while the activity feature is off", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -1324,11 +1324,18 @@ test("the Activity tab is absent while the activity feature is off", async ({
     view: "settings",
     activityEnabled: false,
   });
+  const pages = page.getByRole("navigation");
   await expect(
-    page.getByRole("tab", { name: enMessages.settings.general, exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    pages.getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(
-    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
+    pages.getByRole("button", {
+      name: enMessages.settings.pages.activity,
+      exact: true,
+    }),
   ).toHaveCount(0);
   await expect(
     page.getByRole("heading", {
@@ -1345,13 +1352,16 @@ test("the Activity tab is absent while the activity feature is off", async ({
   );
 });
 
-test("the Activity tab reads settings, never the day timeline", async ({
+test("the Activity page reads settings, never the day timeline", async ({
   page,
 }) => {
   await installNativeBoundary({ page, view: "settings" });
   await expect(
-    page.getByRole("tab", { name: enMessages.activity.title, exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    page.getByRole("navigation").getByRole("button", {
+      name: enMessages.settings.pages.activity,
+      exact: true,
+    }),
+  ).toHaveAttribute("aria-current", "page");
   const commands = (await tauriInvocations(page)).map(({ command }) => command);
   expect(commands).toContain("activity_get_settings");
   expect(commands).not.toContain("activity_get_day");

@@ -514,6 +514,11 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    disposition: "excluded",
+    reason:
+      "the sitemap walk, the parked cycle at the newest entry, an edited entry met again and the stop on an unread page are covered by cz-ns-sbirka.test.ts against recorded sitemaps",
+  },
   [ADAPTER_KEYS.BR_TST]: {
     disposition: "excluded",
     reason:

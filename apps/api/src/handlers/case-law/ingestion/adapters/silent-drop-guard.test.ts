@@ -16,6 +16,7 @@ import {
   brTjdftFixture,
   brTstFixture,
   czNsFixture,
+  czNsSbirkaFixture,
   czNssFixture,
   czRegionalFixture,
   czUsFixture,
@@ -168,6 +169,15 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     driver: "html",
     fixture: brTjdftFixture,
     part: "detail",
+  },
+  "cz-ns-sbirka": {
+    driver: "html",
+    fixture: czNsSbirkaFixture,
+    part: "detail",
+    // The detail page is a whole site page; the decision's text is the one
+    // cell of the entry's table the page heads "Sbírkový text rozhodnutí".
+    // The labelled rows are fields, certified by the field inventory.
+    textRoot: "table.content-table td.fw-400",
   },
   // The listing row is JSON whose one parsed markup is the full text. The
   // record's highlight renderings repeat that text and are deliberately not
