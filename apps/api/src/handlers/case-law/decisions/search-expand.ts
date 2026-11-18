@@ -10,7 +10,7 @@ import {
   isWholeEntryIdentifier,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
