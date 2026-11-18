@@ -150,6 +150,7 @@ export const TAGGED_FAILURE_REASON = {
   CorpusIndexGroupNotReadyError: "tagged_failure",
   CorpusIndexGroupWithdrawalRefusedError: "tagged_failure",
   CorpusIndexJobDetailBackfillError: "tagged_failure",
+  CorpusIndexProjectionFenceBusyError: "tagged_failure",
   CorpusIndexProjectionSubjectMissingError: "tagged_failure",
   CorpusIndexReadContractError: "tagged_failure",
   CorpusIndexRetireEngineError: "tagged_failure",
