@@ -15,11 +15,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
-  CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
   corpusIndexManifestScopeJurisdictions,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { registeredCorpusIndexGenerationsQuery } from "@/api/lib/legal-search/corpus-index-projected-generations";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
@@ -283,7 +283,9 @@ const selectUnprojectable = async (
  * Which of the page's unprojectable ids have a desired state in some
  * generation of the family. Those are owed one in this generation too; the
  * rest are shown by no generation and wait for their settle transaction. A
- * primary-key probe per declared generation, bounded by the page.
+ * primary-key probe per registered generation, bounded by the page. The
+ * registry names the generations, not this process: a state held only by a
+ * generation a newer release registered counts as well.
  */
 const selectProjectedAnywhere = async (
   tx: Transaction,
@@ -293,9 +295,7 @@ const selectProjectedAnywhere = async (
   if (entityIds.length === 0) {
     return new Set();
   }
-  const generations = Object.values(CORPUS_INDEX_MANIFESTS).flatMap(
-    (manifest) => (manifest.family === family ? [manifest.generation] : []),
-  );
+  const generations = registeredCorpusIndexGenerationsQuery(tx, family);
   const rows = await tx
     .selectDistinct({ entityId: corpusIndexProjectionStates.entityId })
     .from(corpusIndexProjectionStates)

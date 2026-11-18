@@ -2,6 +2,7 @@ import type { TextInputProps } from "react-native";
 import { TextInput } from "react-native";
 
 import type { ControlSize } from "../lib/control-size";
+import { cn } from "../lib/utils";
 import type { InputContract, TextFieldContract } from "./input.shared";
 import { textFontFamily } from "./text.native";
 
@@ -45,15 +46,13 @@ export const NativeField = ({
     placeholderTextColorClassName="accent-muted-foreground"
     selectionColorClassName="accent-ring"
     {...props}
-    className={[
+    className={cn(
       "text-foreground",
       box,
       TEXT_SIZE[size],
-      disabled ? "opacity-64" : "",
-      className ?? "",
-    ]
-      .filter((name) => name !== "")
-      .join(" ")}
+      disabled && "opacity-64",
+      className,
+    )}
     editable={editable && !disabled}
     onChangeText={(text) => {
       onChangeText?.(text);

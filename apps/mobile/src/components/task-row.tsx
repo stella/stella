@@ -1,8 +1,10 @@
 import { Link, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
+import { Button } from "@stll/ui/button";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { useCan } from "@/components/role";
@@ -96,51 +98,54 @@ export const TaskRow = ({
           }}
         >
           <Link.Trigger>
-            <Pressable
+            <Button
               {...accessibility}
-              accessibilityRole="button"
               accessibilityState={{ selected: open }}
-              className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
+              size="row"
+              variant="ghost"
             >
-              <View className="pt-0.5">
-                {closed ? (
-                  <CircleCheckIcon color={ui.successForeground} size={18} />
-                ) : (
-                  <CircleIcon color={ui.mutedForeground} size={18} />
-                )}
-              </View>
-              <View className="flex-1 gap-0.5">
-                <Text numberOfLines={2} variant="rowTitle">
-                  {task.name === null ||
-                  task.name === undefined ||
-                  task.name === ""
-                    ? matter("untitled")
-                    : task.name}
-                </Text>
-                <Text numberOfLines={1} variant="caption">
-                  {showMatter ? task.matterName : null}
-                  {due === undefined ? null : (
-                    <>
-                      {showMatter ? " · " : null}
-                      <Text
-                        style={
-                          overdue
-                            ? { color: ui.destructiveForeground }
-                            : undefined
-                        }
-                        variant="caption"
-                      >
-                        {due}
-                      </Text>
-                    </>
+              <Separator className="absolute inset-x-0 bottom-0" />
+              <View className="flex-1 flex-row gap-3">
+                <View className="pt-0.5">
+                  {closed ? (
+                    <CircleCheckIcon color={ui.successForeground} size={18} />
+                  ) : (
+                    <CircleIcon color={ui.mutedForeground} size={18} />
                   )}
-                </Text>
-                <WriteFailureNotice
-                  failure={failure}
-                  message={t("statusFailed")}
-                />
+                </View>
+                <View className="flex-1 gap-0.5">
+                  <Text numberOfLines={2} variant="rowTitle">
+                    {task.name === null ||
+                    task.name === undefined ||
+                    task.name === ""
+                      ? matter("untitled")
+                      : task.name}
+                  </Text>
+                  <Text numberOfLines={1} variant="caption">
+                    {showMatter ? task.matterName : null}
+                    {due === undefined ? null : (
+                      <>
+                        {showMatter ? " · " : null}
+                        <Text
+                          style={
+                            overdue
+                              ? { color: ui.destructiveForeground }
+                              : undefined
+                          }
+                          variant="caption"
+                        >
+                          {due}
+                        </Text>
+                      </>
+                    )}
+                  </Text>
+                  <WriteFailureNotice
+                    failure={failure}
+                    message={t("statusFailed")}
+                  />
+                </View>
               </View>
-            </Pressable>
+            </Button>
           </Link.Trigger>
           <Link.Menu>
             {canEdit ? (

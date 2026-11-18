@@ -38,3 +38,14 @@ export const ssrStatusFromHeader = (value: string | null): number | null => {
   }
   return status;
 };
+
+/**
+ * The status a document is sent with: the one its route asked for, else the
+ * router's. The diagnostic report and the response both read it from here, so
+ * a degraded page a route serves as 503 is reported as the 503 it sends.
+ */
+export const documentStatus = (
+  headers: Pick<Headers, "get">,
+  routerStatus: number,
+): number =>
+  ssrStatusFromHeader(headers.get(SSR_STATUS_HEADER)) ?? routerStatus;

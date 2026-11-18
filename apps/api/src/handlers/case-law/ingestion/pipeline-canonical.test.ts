@@ -11,6 +11,7 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
+  corpusIndexGenerations,
 } from "@/api/db/schema";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
@@ -303,6 +304,13 @@ const scopedDb: ScopedDb = async (callback) => {
         };
         if (table === caseLawDecisionIdentifiers) {
           return { where: rows };
+        }
+        if (table === corpusIndexGenerations) {
+          // The generation registry, read whole and in generation order: no
+          // generation is registered, so nothing is projected.
+          return {
+            where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+          };
         }
         return {
           innerJoin: () => ({
