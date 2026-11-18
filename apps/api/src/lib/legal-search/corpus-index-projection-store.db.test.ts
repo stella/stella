@@ -347,6 +347,8 @@ const installProjectionMigrationDdl = async (): Promise<void> => {
     ),
   ]
     .filter((migration) => !migration.includes("projection_revision"))
+    // The test database build installs the delete task queue's triggers.
+    .filter((migration) => !migration.includes("projection_delete_tasks"))
     .toSorted();
   const migrations = await Promise.all(
     projectionMigrations.map(
