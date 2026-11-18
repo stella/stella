@@ -683,6 +683,7 @@
       "focusChanged": "Sie haben zu einer anderen App gewechselt, bevor der Text fertig war, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut.",
+      "passwordField": "Ein Passwortfeld ist ausgewählt, daher wurde nichts aufgenommen oder eingegeben.",
       "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter."
     },
     "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf."

@@ -683,6 +683,7 @@
       "focusChanged": "Cambió a otra aplicación antes de que el texto estuviera listo, así que no se escribió nada. Inténtelo de nuevo.",
       "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
       "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo.",
+      "passwordField": "Hay un campo de contraseña seleccionado, así que no se grabó ni se escribió nada.",
       "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo."
     },
     "failureKeptInHistory": "El texto está en el historial del portapapeles."

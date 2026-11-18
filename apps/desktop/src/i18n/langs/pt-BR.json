@@ -683,6 +683,7 @@
       "focusChanged": "Você mudou para outro aplicativo antes de o texto ficar pronto, então nada foi digitado. Tente novamente.",
       "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
       "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente.",
+      "passwordField": "Um campo de senha está selecionado, então nada foi gravado nem digitado.",
       "cloudTranscription": "A stella AI não conseguiu transcrever este ditado e o modelo de voz não está neste computador. Tente novamente ou, em “Transcrever com”, escolha “Este computador” e baixe o modelo."
     },
     "failureKeptInHistory": "O texto está no histórico da área de transferência."

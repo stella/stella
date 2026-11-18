@@ -1018,3 +1018,14 @@ test("a key that cannot be heard yet says so", async () => {
   ].map((message) => message.replace("{shortcut}", "fn"));
   expect(getByText((text) => messages.includes(text))).toBeTruthy();
 });
+
+test("a dictation refused in a password field says nothing was recorded", async () => {
+  const { getByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    failure: "passwordField",
+  });
+
+  expect(
+    getByText(defaultMessages.dictation.failure.passwordField),
+  ).toBeTruthy();
+});

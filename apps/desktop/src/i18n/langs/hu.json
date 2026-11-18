@@ -683,6 +683,7 @@
       "focusChanged": "Másik alkalmazásra váltott, mielőtt a szöveg elkészült, ezért semmi sem lett beírva. Próbálja újra.",
       "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
       "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra.",
+      "passwordField": "Jelszómező van kijelölve, ezért semmi sem lett rögzítve vagy beírva.",
       "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
     },
     "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben."

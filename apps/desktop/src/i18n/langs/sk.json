@@ -683,6 +683,7 @@
       "focusChanged": "Kým bol text pripravený, prepli ste do inej aplikácie, takže sa nič nenapísalo. Skúste to znova.",
       "focusUnconfirmed": "stella nemohla overiť, ktorá aplikácia je aktívna, takže sa nič nenapísalo. Skúste to znova.",
       "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova.",
+      "passwordField": "Je vybrané pole na heslo, preto sa nič nenahralo ani nenapísalo.",
       "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite."
     },
     "failureKeptInHistory": "Text nájdete v histórii schránky."

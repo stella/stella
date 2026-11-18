@@ -80,9 +80,18 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             // Read once recording runs, so the lookups never delay capture;
             // the context is where the speaker pressed the shortcut.
             let focus = dictation_focus::current(app);
-            let context =
-              dictation_context::read(focus.as_ref(), dictation::context_sharing(app));
-            active = Some((started, focus, context));
+            if dictation_focus::in_password_field(focus.as_ref()) {
+              // Nothing is recorded for a password field.
+              started.cancel(&mut worker);
+              dictation::report_failure(app, Failure::PasswordField);
+              dictation::set_phase(app, Phase::Idle);
+            } else {
+              let context = dictation_context::read(
+                focus.as_ref(),
+                dictation::context_sharing(app),
+              );
+              active = Some((started, focus, context));
+            }
           }
           Err(failure) => {
             dictation::report_failure(app, failure);
@@ -230,6 +239,11 @@ fn finish(
   let cleaned = dictation::cleanup_enabled(app)
     .then(|| dictation_cleanup::clean_up(app, text, &language.speaker, context))
     .flatten();
+  // Focus may have moved to a password field meanwhile: such text is
+  // neither kept nor typed.
+  if dictation_focus::in_password_field(dictation_focus::current(app).as_ref()) {
+    return Err(Failure::PasswordField.into());
+  }
   let identifier = focus.and_then(|target| target.identifier.as_deref());
   // Kept before typing, so a dictation that cannot be typed is not lost.
   let kept_in_history = clipboard::keep_dictation(
