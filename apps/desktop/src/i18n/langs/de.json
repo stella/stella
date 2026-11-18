@@ -614,6 +614,7 @@
     "descriptionCloud": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird von stella AI umgewandelt und von stella nicht gespeichert.",
     "lede": "Halten Sie <key>{shortcut}</key> gedrückt und sprechen Sie. Der Text erscheint dort, wo Sie gerade schreiben.",
     "groups": {
+      "shortcut": "Tastenkürzel",
       "transcription": "Transkription",
       "cleanup": "Überarbeitung",
       "thisComputer": "Auf diesem Computer"
@@ -667,6 +668,13 @@
     "downloadFailed": "Das Sprachmodell konnte nicht geladen werden.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Eine andere App verwendet {shortcut}.",
+    "holdKey": {
+      "title": "Taste zum Halten",
+      "description": "Halten Sie sie allein gedrückt, um zu diktieren. Kurzes Antippen oder ein Kurzbefehl mit dieser Taste bewirkt nichts.",
+      "right": "{key} rechts",
+      "waiting": "stella erkennt {shortcut}, sobald es Zugriff auf die Bedienungshilfen hat.",
+      "unavailable": "stella kann {shortcut} auf diesem Computer nicht erkennen. Wählen Sie eine andere Taste."
+    },
     "failure": {
       "accessibility": "Erlauben Sie den Zugriff auf die Bedienungshilfen, damit stella in andere Apps schreiben kann.",
       "microphone": "stella kann Ihr Mikrofon nicht hören. Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen.",
@@ -817,6 +825,7 @@
       "screenRecording": "Bildschirmaufnahme",
       "camera": "Kamera",
       "keystrokes": "Tastatureingaben",
+      "keystrokesWithoutHoldKey": "Tastatureingaben, außer Sie wählen eine Taste zum Halten",
       "fullDiskAccess": "Festplattenvollzugriff",
       "administrator": "Administratorrechte"
     }

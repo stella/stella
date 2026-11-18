@@ -17,6 +17,7 @@ export const DICTATION_OFF = {
   destination: "local",
   enabled: false,
   failure: null,
+  holdKey: "combination",
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "missing" },
   modelBytes: 740_363_168,

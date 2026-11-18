@@ -614,6 +614,7 @@
     "descriptionCloud": "Mantenha {shortcut} pressionado e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita pela stella AI e não é armazenada pela stella.",
     "lede": "Segure <key>{shortcut}</key> e fale. O texto aparece onde você está digitando.",
     "groups": {
+      "shortcut": "Atalho",
       "transcription": "Transcrição",
       "cleanup": "Revisão",
       "thisComputer": "Neste computador"
@@ -667,6 +668,13 @@
     "downloadFailed": "Não foi possível baixar o modelo de voz.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Outro aplicativo está usando {shortcut}.",
+    "holdKey": {
+      "title": "Tecla para segurar",
+      "description": "Segure só ela para ditar. Um toque rápido ou um atalho que a use não faz nada.",
+      "right": "{key} direita",
+      "waiting": "stella detecta {shortcut} assim que tiver acesso à Acessibilidade.",
+      "unavailable": "stella não consegue detectar {shortcut} neste computador. Escolha outra tecla."
+    },
     "failure": {
       "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
       "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
@@ -817,6 +825,7 @@
       "screenRecording": "Gravação de tela",
       "camera": "Câmera",
       "keystrokes": "Pressionamentos de teclas",
+      "keystrokesWithoutHoldKey": "Pressionamentos de teclas, a menos que você escolha uma tecla para segurar",
       "fullDiskAccess": "Acesso total ao disco",
       "administrator": "Direitos de administrador"
     }

@@ -43,6 +43,7 @@ macro_rules! with_stella_commands {
       dictation::dictation_set_share_text_before_cursor => "dictation_set_share_text_before_cursor",
       dictation::dictation_set_language => "dictation_set_language",
       dictation::dictation_set_destination => "dictation_set_destination",
+      dictation::dictation_set_hold_key => "dictation_set_hold_key",
       dictation::dictation_get_cloud_models => "dictation_get_cloud_models",
       dictation::dictation_set_cloud_model => "dictation_set_cloud_model",
       dictation::dictation_download_model => "dictation_download_model",

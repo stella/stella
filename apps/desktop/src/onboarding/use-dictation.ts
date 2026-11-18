@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { isHoldKey } from "../shared/hold-key";
+import type { HoldKey } from "../shared/hold-key";
 import { isShortcutKeys } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import { reportOnboardingFailure } from "./onboarding-telemetry";
@@ -45,6 +47,9 @@ export type DictationSnapshot = {
   destination: "cloud" | "local";
   enabled: boolean;
   failure: string | null;
+  /** The key dictation listens for. */
+  holdKey: HoldKey;
+  /** Control, Option (Alt) and Space: the `combination` choice. */
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -85,6 +90,7 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   (value["destination"] === "local" || value["destination"] === "cloud") &&
   typeof value["enabled"] === "boolean" &&
   (value["failure"] === null || typeof value["failure"] === "string") &&
+  isHoldKey(value["holdKey"]) &&
   isShortcutKeys(value["keys"]) &&
   isModel(value["model"]) &&
   typeof value["modelBytes"] === "number" &&
