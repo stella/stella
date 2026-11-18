@@ -581,13 +581,13 @@
     "declaredStepNames": [
       "Build web",
       "Bundle duplicate content guard",
-      "Bundle size report",
       "Cancel merge group after failure in this job",
       "Checkout",
       "Install dependencies",
       "Prepare environment",
       "Prod-deps web boot smoke",
       "Setup Bun",
+      "Startup bundle gates",
       "Upload failed Bun install logs",
       "Upload production E2E web build"
     ],
