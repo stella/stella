@@ -44,9 +44,11 @@ const threadData: ChatThreadState["data"] = {
   chatLocalRunTarget: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
+  firstSend: true,
   historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
   id: threadId,
   messages: [],
+  title: "New thread",
   webSearchEnabled: false,
   workspaceId,
 };
