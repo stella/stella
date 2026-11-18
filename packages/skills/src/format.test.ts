@@ -152,7 +152,7 @@ describe("skill package format", () => {
       expect(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)).toBe(false);
     }
     for (const path of [
-      "README.md",
+      "Guide.md",
       "LICENSE",
       ".gitignore",
       "references/REFERENCE.md",
