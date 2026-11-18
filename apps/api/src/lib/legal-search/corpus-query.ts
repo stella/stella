@@ -1039,7 +1039,7 @@ export const corpusDecisionTypeClause = (requested: string): string => {
  * exact without every scoped query paying for a clause its index already
  * implies.
  */
-type CaseLawCorpusFilters = {
+export type CaseLawCorpusFilters = {
   court?: string | undefined;
   courts?: readonly string[] | undefined;
   /**
@@ -1125,7 +1125,19 @@ export const caseLawCorpusQuery = ({
     return null;
   }
 
-  const clauses: string[] = [freeText];
+  return [freeText, ...caseLawCorpusFilterClauses(filters)].join(" AND ");
+};
+
+/**
+ * The request's filters as engine clauses, without the words: what scopes a
+ * case-law query. The words and the scope are separate so a ranking can put
+ * the scope where it does not score (`corpus-ranked-decision-query.ts`); the
+ * query string above joins both, as it always has.
+ */
+export const caseLawCorpusFilterClauses = (
+  filters: CaseLawCorpusFilters,
+): string[] => {
+  const clauses: string[] = [];
   if (filters.jurisdiction) {
     clauses.push(`jurisdiction:${quoteCorpusValue(filters.jurisdiction)}`);
   }
@@ -1167,7 +1179,7 @@ export const caseLawCorpusQuery = ({
       `${DECISION_ID_FIELD}: IN [${filters.decisionIds.map(quoteCorpusValue).join(" ")}]`,
     );
   }
-  return clauses.join(" AND ");
+  return clauses;
 };
 
 /**

@@ -27,6 +27,7 @@ const config = {
         "activity-timeline": decisionSchema,
         "desktop-dictation": decisionSchema,
         "desktop-dictation-cloud": decisionSchema,
+        "desktop-dictation-retaining-models": decisionSchema,
         "local-agents": decisionSchema,
       } satisfies Record<DesktopFeatureId, typeof decisionSchema>),
     }),
@@ -63,6 +64,10 @@ export const createDesktopFeatureAccessReadEndpoint = (
         "activity-timeline": decide(snapshot, "activity-timeline"),
         "desktop-dictation": decide(snapshot, "desktop-dictation"),
         "desktop-dictation-cloud": decide(snapshot, "desktop-dictation-cloud"),
+        "desktop-dictation-retaining-models": decide(
+          snapshot,
+          "desktop-dictation-retaining-models",
+        ),
         "local-agents": decide(snapshot, "local-agents"),
       } satisfies Record<DesktopFeatureId, unknown>,
     });

@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -111,17 +111,16 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const availabilityOptions = useMemo(
-    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-    [activeOrganizationId],
-  );
+  const availabilityOptions = aiAvailabilityOptions({
+    organizationId: activeOrganizationId,
+  });
   const dataQuery = useChromeQuery(availabilityOptions);
   const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const openAIKeyDialog = useCallback(() => {
+  const openAIKeyDialog = () => {
     if (
       dataQuery.status === "success" &&
       data?.providerConfiguration === "allowed" &&
@@ -129,9 +128,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status]);
+  };
 
-  const ensureAIAvailable = useCallback(async () => {
+  const ensureAIAvailable = async () => {
     const availability = await queryClient
       .query({
         ...availabilityOptions,
@@ -187,9 +186,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, dataQuery.status, queryClient, t]);
+  };
 
-  const openIfAIUnavailable = useCallback(() => {
+  const openIfAIUnavailable = () => {
     if (
       dataQuery.status === "success" &&
       data &&
@@ -200,7 +199,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status, isFetching]);
+  };
   let aiUnavailable: AIUnavailableState | null = null;
   if (
     dataQuery.status === "error" ||
@@ -244,15 +243,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     availability = "available";
   }
 
-  const value = useMemo(
-    () => ({
-      availability,
-      ensureAIAvailable,
-      openAIKeyDialog,
-      openIfAIUnavailable,
-    }),
-    [availability, ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
-  );
+  const value = {
+    availability,
+    ensureAIAvailable,
+    openAIKeyDialog,
+    openIfAIUnavailable,
+  };
 
   return (
     <AIAvailabilityContext value={value}>

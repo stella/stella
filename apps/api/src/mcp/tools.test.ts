@@ -34,12 +34,14 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
   SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_SORTS,
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type {
+  CaseLawSearchPaginationOutcome,
   SearchPageReach,
   SearchPaginationOutcome,
 } from "@stll/api-contract/search";
@@ -93,7 +95,6 @@ import {
 } from "@/api/lib/case-law/citation-vocabulary";
 import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
-import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -2957,6 +2958,8 @@ describe("OpenAI-compatible MCP tools", () => {
             textAvailability,
             matchingPassages: 4,
             match: "all_terms",
+            matchedTerms: [],
+            missingTerms: [],
             languageAlternates: [
               {
                 caseNumber: "29 Cdo 123/2024",
@@ -3086,6 +3089,7 @@ describe("OpenAI-compatible MCP tools", () => {
             textAvailability,
             matchingPassages: 4,
             match: "all_terms",
+            terms: { query: 0, matched: [], missing: [] },
             snippet: 'Relevant holding on "smlouva"',
           },
         ],
@@ -3305,6 +3309,8 @@ describe("OpenAI-compatible MCP tools", () => {
       textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
+      matchedTerms: [],
+      missingTerms: [],
       languageAlternates: [],
       slug: "stable-official-slug",
       sourceUrl: "https://example.test/decision",
@@ -3498,6 +3504,8 @@ describe("OpenAI-compatible MCP tools", () => {
           textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
+          matchedTerms: [],
+          missingTerms: [],
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
@@ -3558,6 +3566,7 @@ describe("OpenAI-compatible MCP tools", () => {
           textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
+          terms: { query: 0, matched: [], missing: [] },
           snippet: "Relevant holding",
         },
       ],
@@ -3595,6 +3604,8 @@ describe("OpenAI-compatible MCP tools", () => {
       textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
+      matchedTerms: [],
+      missingTerms: [],
       slug: "stable-official-slug",
       sourceUrl: "https://example.test/decision",
     };
@@ -3609,6 +3620,8 @@ describe("OpenAI-compatible MCP tools", () => {
           caseNumber: "29 Cdo 124/2024",
           slug: "other-official-slug",
           match: "some_terms",
+          matchedTerms: [],
+          missingTerms: [],
         },
       ],
       nextCursor: null,
@@ -3820,6 +3833,8 @@ describe("OpenAI-compatible MCP tools", () => {
     textAvailability: "available",
     matchingPassages: 1,
     match: "all_terms",
+    matchedTerms: [],
+    missingTerms: [],
     slug: `slug-${decisionId}`,
     sourceUrl: "https://example.test/decision",
   });
@@ -4502,7 +4517,8 @@ describe("OpenAI-compatible MCP tools", () => {
     // The time-budget outcome is the agent tool's own, wider than the
     // contract's HTTP pagination outcome, so the page reads it as sent.
     type PaginationOutcomeAsSent =
-      SearchPaginationOutcome | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
+      | CaseLawSearchPaginationOutcome
+      | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
     type PartialPage = MergedSearchPage & {
       paginationOutcome: PaginationOutcomeAsSent;
       searches: {
@@ -4512,13 +4528,28 @@ describe("OpenAI-compatible MCP tools", () => {
       }[];
     };
 
+    const SHORT_COUNTS = {
+      allTerms: 1,
+      terms: [
+        { term: "loajalita", count: 812 },
+        { term: "odklonil", count: 4 },
+      ],
+      countType: FACET_COUNT_TYPE.ESTIMATE,
+    };
+    const partialUnread = (query: string) => ({
+      ...answered(query, null),
+      hitOrder: "all_words_first",
+      relaxedHitCount: 0,
+      termDecisionCounts: SHORT_COUNTS,
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
+    });
+
     test("names the phrasing whose partial matches went unread", async () => {
       searchDecisionsHandlerMock.mockImplementation(
-        async ({ body: { query } }: { body: { query: string } }) => ({
-          ...answered(query, null),
-          relaxedHitCount: 0,
-          ...(query === "short" ? { relaxedTopUp: "skipped" as const } : {}),
-        }),
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "short"
+            ? partialUnread(query)
+            : { ...answered(query, null), relaxedHitCount: 0 },
       );
 
       const result = await handleMcpToolCall({
@@ -4535,8 +4566,76 @@ describe("OpenAI-compatible MCP tools", () => {
         "partial_matches_unread",
       ]);
       expect(JSON.stringify(warnings)).toContain('\\"short\\"');
-      expect(warnings.at(0)?.hint).toContain("strict: true");
+      expect(warnings.at(0)?.hint).toContain("nextCursor");
+      // Which word is rare reaches the agent beside the phrasing it belongs to.
+      expect(
+        asTestRaw<{ searches: { termDecisionCounts?: unknown }[] }>(
+          page,
+        ).searches.map(({ termDecisionCounts }) => termDecisionCounts),
+      ).toEqual([undefined, SHORT_COUNTS]);
+      // Never complete: the merged page says what stopped it.
+      expect(page.paginationOutcome).toEqual(
+        SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
+      );
     });
+
+    test.each([
+      ["one phrasing", ["short"]],
+      ["several phrasings", ["full", "short"]],
+    ] as const)(
+      "the cursor of a page with unread partial matches reruns that phrasing (%s)",
+      async (_name, queries) => {
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) =>
+            query === "short"
+              ? partialUnread(query)
+              : { ...answered(query, null), relaxedHitCount: 0 },
+        );
+        const first = asTestRaw<PartialPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              args: { country: "CZE", queries: [...queries] },
+              context: createContext(),
+              toolName: "search_case_law",
+            }),
+          ),
+        );
+        // The strict scan had ended, so the engine gave no cursor; the
+        // tool's own cursor is what keeps the phrasing open.
+        expect(first.nextCursor).not.toBeNull();
+
+        searchDecisionsHandlerMock.mockClear();
+        searchDecisionsHandlerMock.mockImplementation(
+          async ({ body: { query } }: { body: { query: string } }) => ({
+            ...answered(query, null),
+            hitOrder: "all_words_first",
+            relaxedHitCount: 0,
+          }),
+        );
+        const second = asTestRaw<PartialPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              args: {
+                country: "CZE",
+                queries: [...queries],
+                cursor: first.nextCursor ?? "",
+              },
+              context: createContext(),
+              toolName: "search_case_law",
+            }),
+          ),
+        );
+        // Only the unread phrasing runs again, and from its first page,
+        // which is where its partial phase runs.
+        const bodies = searchDecisionsHandlerMock.mock.calls.map(([args]) =>
+          isRecord(args) && isRecord(args["body"]) ? args["body"] : {},
+        );
+        expect(bodies.map((body) => body["query"])).toEqual(["short"]);
+        expect(bodies.at(0)?.["cursor"]).toBeUndefined();
+        expect(second.paginationOutcome).toEqual(SEARCH_PAGINATION_COMPLETE);
+        expect(second.nextCursor).toBeNull();
+      },
+    );
 
     test("leaves the phrasings that finished on the page and says it timed out", async () => {
       searchDecisionsHandlerMock.mockImplementation(
@@ -5181,6 +5280,8 @@ describe("OpenAI-compatible MCP tools", () => {
               textAvailability: "available",
               matchingPassages: 1,
               match: "all_terms",
+              matchedTerms: [],
+              missingTerms: [],
               slug: "stable-official-slug",
               sourceUrl: "https://example.test/decision",
             },
@@ -6702,6 +6803,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6713,6 +6815,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6753,6 +6856,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           nextTextCursor: null,
           truncated: false,
           versionValidFrom: "2014-01-01",
@@ -6767,6 +6871,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2012-03-22",
           nextTextCursor: null,
@@ -6792,6 +6897,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6805,6 +6911,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: false,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6833,6 +6940,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2014-01-01",
           nextTextCursor: null,
@@ -6873,6 +6981,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text,
+          governingText: [],
           versionValidFrom: null,
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -7018,20 +7127,84 @@ describe("OpenAI-compatible MCP tools", () => {
    * search runs unfiltered instead of answering nothing, and the reading is
    * reported beside the result.
    */
+  describe("search_case_law keeps the order the search answered in", () => {
+    const pageIn = (
+      hitOrder: "score" | "all_words_first",
+      hits: readonly { id: string; match: "all_terms" | "some_terms" }[],
+    ) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
+      facets: null,
+      hits: hits.map(({ id, match }) => ({
+        ...createCaseLawHit(id, "Holding"),
+        match,
+      })),
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, hits.length),
+      hitOrder,
+      relaxedHitCount: hits.filter(({ match }) => match === "some_terms")
+        .length,
+      termDecisionCounts: null,
+      queryUsed: "loajalita jednatel",
+      warnings: [],
+    });
+    const resultIds = async (queries: string[]) => {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries, limit: 10 },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      if (!isRecord(payload) || !Array.isArray(payload["results"])) {
+        throw new Error("expected a search payload");
+      }
+      return payload["results"].map((result: unknown) =>
+        isRecord(result) ? result["decisionId"] : null,
+      );
+    };
+
+    test.each([
+      [
+        "a score-ordered page, a partial match above a full one",
+        pageIn("score", [
+          { id: "partial-high", match: "some_terms" },
+          { id: "full", match: "all_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+      [
+        "a page whose full matches come first",
+        pageIn("all_words_first", [
+          { id: "full", match: "all_terms" },
+          { id: "partial-high", match: "some_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+    ] as const)("%s reads the same through the tool", async (_name, page) => {
+      searchDecisionsHandlerMock.mockResolvedValue(page);
+      const http = page.hits.map(({ decisionId }) => decisionId);
+
+      expect(await resultIds(["loajalita jednatel"])).toEqual(http);
+      // Two phrasings answering the same page merge into that page's order.
+      expect(
+        await resultIds(["loajalita jednatel", "jednatel loajalita"]),
+      ).toEqual(http);
+    });
+  });
+
   describe("search_case_law warns about a long phrasing that came back short", () => {
     const SIX_TERMS = "promlčení náhrady škody subjektivní lhůta vědomost";
     const FIVE_TERMS = "promlčení náhrady škody subjektivní lhůta";
     const SIX_WORD_PHRASE = `"${SIX_TERMS}"`;
 
     const searchFor = async ({
-      guidance,
       queryUsed,
       hits,
       limit,
       nextCursor = null,
       pageReach = SEARCH_PAGE_REACH.REACHED,
     }: {
-      guidance: CaseLawSearchGuidanceMode;
       queryUsed: string;
       hits: number;
       limit: number;
@@ -7050,16 +7223,9 @@ describe("OpenAI-compatible MCP tools", () => {
         queryUsed,
         warnings: [],
       });
-      const baseContext = createContext();
       const result = await handleMcpToolCall({
         args: { queries: [queryUsed], country: "CZE", limit },
-        context: {
-          ...baseContext,
-          testDependencies: {
-            ...baseContext.testDependencies,
-            caseLawSearchGuidance: guidance,
-          },
-        },
+        context: createContext(),
         toolName: "search_case_law",
       });
       const payload = parseToolPayload(result);
@@ -7079,7 +7245,6 @@ describe("OpenAI-compatible MCP tools", () => {
 
     test("six required terms filling fewer slots than given are named", async () => {
       const warnings = await searchFor({
-        guidance: "v1",
         queryUsed: SIX_TERMS,
         hits: 2,
         limit: 3,
@@ -7097,7 +7262,6 @@ describe("OpenAI-compatible MCP tools", () => {
       // No cursor after it, but the scan stopped before the end of the
       // results, so nothing proves the phrasing found only these.
       const warnings = await searchFor({
-        guidance: "v1",
         queryUsed: SIX_TERMS,
         hits: 2,
         limit: 3,
@@ -7109,28 +7273,22 @@ describe("OpenAI-compatible MCP tools", () => {
 
     test("a quoted six-word phrase counts each of its words", async () => {
       const warnings = await searchFor({
-        guidance: "v1",
         queryUsed: SIX_WORD_PHRASE,
         hits: 2,
         limit: 3,
       });
 
       expect(warnings).toHaveLength(1);
-      expect(warnings.at(0)?.["message"]).toContain("required 6 words");
+      expect(warnings.at(0)?.["message"]).toContain("has 6 words");
       expect(warnings.at(0)?.["message"]).toContain(SIX_WORD_PHRASE);
     });
 
     test.each([
-      [
-        "five required terms",
-        { guidance: "v1", queryUsed: FIVE_TERMS, hits: 2 },
-      ],
-      ["every slot filled", { guidance: "v1", queryUsed: SIX_TERMS, hits: 3 }],
-      ["guidance off", { guidance: "off", queryUsed: SIX_TERMS, hits: 2 }],
+      ["five required terms", { queryUsed: FIVE_TERMS, hits: 2 }],
+      ["every slot filled", { queryUsed: SIX_TERMS, hits: 3 }],
       [
         "a short first page that still carries a cursor",
         {
-          guidance: "v1",
           queryUsed: SIX_TERMS,
           hits: 2,
           nextCursor: "next-page",

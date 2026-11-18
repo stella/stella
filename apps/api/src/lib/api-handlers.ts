@@ -309,6 +309,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `human_confirmation`: the user's own confirmation of an action an agent
+ *   prepared (for example sending an email they reviewed); an agent must never
+ *   be able to confirm for them.
  * - `organization_export`: starting or downloading a whole-organization data
  *   export; a person performs it in the app, never an agent, because it hands
  *   over the firm's privileged material in one action.
@@ -342,6 +345,7 @@ type McpInternalReason =
   | "native_tool_ui"
   | "billing_ui"
   | "compound_consent"
+  | "human_confirmation"
   | "native_device"
   | "organization_export"
   | "agent_autonomy_ceiling";

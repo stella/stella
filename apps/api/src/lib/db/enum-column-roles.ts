@@ -423,6 +423,9 @@ export const ENUM_COLUMN_ROLES = {
     method: ATTRIBUTE,
     origin: ATTRIBUTE,
   },
+  invoice_sends: {
+    language: ATTRIBUTE,
+  },
   invoices: {
     billing_mode: ATTRIBUTE,
     document_type: ATTRIBUTE,

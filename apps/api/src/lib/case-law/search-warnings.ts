@@ -121,10 +121,10 @@ export const caseLawSearchWarnings = ({
  *   nothing for it.
  * - `filter_unread`: the known values could not be read within the search's
  *   budget, so the value was used exactly as sent, unread.
- * - `many_required_terms`: a phrasing required many words in one passage and
- *   filled fewer result slots than it was given, so dropping a word is the
- *   likelier fix than paging. Raised only under `MCP_CASE_LAW_SEARCH_GUIDANCE`
- *   `v1`, from the page already returned: it costs no search.
+ * - `many_required_terms`: a phrasing has many words and fewer decisions
+ *   than its result slots hold every one, so dropping a word is the likelier
+ *   fix than paging. Raised in every guidance mode, from the page already
+ *   returned: it costs no search.
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
@@ -327,7 +327,8 @@ export const phrasingTimedOutWarning = ({
 /**
  * A short page whose top-up with partial matches did not finish. What it holds
  * is correct but not everything it would normally hold, which the caller cannot
- * tell from the hits. The phrasing is named for the same reason as above.
+ * tell from the hits, so the page is never `complete` and its cursor runs the
+ * phrasing again. The phrasing is named for the same reason as above.
  */
 export const partialMatchesUnreadWarning = ({
   query,
@@ -336,7 +337,7 @@ export const partialMatchesUnreadWarning = ({
 }): AgentCaseLawSearchWarning => ({
   code: "partial_matches_unread",
   message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
-  hint: "Repeat this search to read the partial matches, or narrow it with a court or date range. Pass strict: true if only decisions holding every word are wanted.",
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again with its partial matches; it may repeat the hits above. If they stay unread after a rerun, search this phrasing on its own or narrow it with a court, date range or provision filter. Pass strict: true if only decisions holding every word are wanted.",
 });
 
 export const manyRequiredTermsWarning = ({
@@ -352,8 +353,8 @@ export const manyRequiredTermsWarning = ({
   slots: number;
 }): AgentCaseLawSearchWarning => ({
   code: "many_required_terms",
-  message: `This phrasing required ${String(wordCount)} words in one passage and filled fewer than its ${String(slots)} result slots: ${terms.join(", ")}.`,
-  hint: "Drop the least central of these words, or move an alternative wording into a phrasing of its own: a hit holds every required word in the same passage.",
+  message: `This phrasing has ${String(wordCount)} words and fewer decisions than its ${String(slots)} result slots hold every one of them: ${terms.join(", ")}.`,
+  hint: "Each hit's terms.missing names the words it lacks. Drop the least central of these words, or move an alternative wording into a phrasing of its own, to find decisions that hold all of them.",
 });
 
 export const provisionCitedWidelyWarning = ({

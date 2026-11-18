@@ -181,6 +181,12 @@
       "cleanOrganization": 1
     }
   },
+  "apps/api/src/handlers/invoices/sends/list.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "listInvoiceSends.loaded.client": 1
+    }
+  },
   "apps/api/src/handlers/organization-settings/billing-drafts/get.ts::names-contacts-table": {
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
     "sites": {

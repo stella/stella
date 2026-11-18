@@ -145,7 +145,11 @@ const RETRY_START =
 
 /** Whether a command segment runs through the retry helper. */
 const startsWithRetry = (segment: string): boolean =>
-  RETRY_START.test(segment.replace(CONTROL_PREFIX, ""));
+  RETRY_START.test(
+    segment
+      .replace(CONTROL_PREFIX, "")
+      .replace(/^timeout\s+(?:[1-9]\d*[smhd]?|"\$[A-Za-z_]\w*")\s+/u, ""),
+  );
 const NATIVE_CURL_RETRY = /--retry[\s=]+[1-9]/u;
 // A loopback host ends the hostname: `localhost.example.com` is remote.
 const LOOPBACK = /\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?![\w.-])|\[::1\]/u;

@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { updateUser } from "better-auth/api";
 import { organization } from "better-auth/plugins";
+import { panic } from "better-result";
 import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -317,7 +318,11 @@ test("each migrated mutation still invalidates every prior cache target", async 
   const migrated = Object.entries(migratedMutationTargets);
   expect(migrated.length).toBeGreaterThan(0);
   for (const [mutation, factories] of migrated) {
-    if (!isContractName(mutation) || mutation === "updateUser") {
+    if (
+      !isContractName(mutation) ||
+      mutation === "updateUser" ||
+      isPublicTokenMutation(mutation)
+    ) {
       throw new TypeError(`Frozen targets name no contract: ${mutation}`);
     }
     expect({ mutation, factories: factories.length > 0 }).toEqual({
@@ -431,10 +436,64 @@ test("organization mutations invalidate organization readers without touching wo
   }
 });
 
+// A public page's token write has no member session to refresh.
+const PUBLIC_TOKEN_MUTATIONS = ["openInvoiceLinkFile"] as const;
+type PublicTokenMutation = (typeof PUBLIC_TOKEN_MUTATIONS)[number];
+const isPublicTokenMutation = (name: string): name is PublicTokenMutation =>
+  PUBLIC_TOKEN_MUTATIONS.some((mutation) => mutation === name);
+
+test("public token contracts write only public routes", () => {
+  for (const [name, contract] of Object.entries(RESOURCE_MUTATION_CONTRACTS)) {
+    expect(
+      contract.writes.every(({ route }) => route.startsWith("/public/")),
+    ).toBe(isPublicTokenMutation(name));
+  }
+});
+
+test("a public token write settles without touching any session query", async () => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(rootKeys.session, {
+    user: { id: "profile-user" },
+    session: { activeOrganizationId: "profile-organization" },
+  });
+  queryClient.getQueryCache().build(queryClient, {
+    queryKey: ["registered-reader", "invoice"],
+    queryFn: async () => null,
+    meta: {
+      resourceReads: {
+        resources: [RESOURCE_TYPE.INVOICE],
+        scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+      },
+    },
+  });
+  const invalidate = spyOn(queryClient, "invalidateQueries");
+  const committed = new Blob(["invoice"]);
+  try {
+    const write = resourceMutation({
+      mutation: "openInvoiceLinkFile",
+      queryClient,
+      scope: { type: "public-token" },
+      mutationFn: async ({ token }: { token: string }) =>
+        token === "link-token" ? committed : panic("Unexpected link token"),
+    });
+    expect(await write({ token: "link-token" })).toBe(committed);
+    expect(invalidate).not.toHaveBeenCalled();
+  } finally {
+    invalidate.mockRestore();
+    queryClient.clear();
+  }
+});
+
 test("cache invalidation failures preserve every registered mutation's committed result", async () => {
   const mutationNames = Object.keys(RESOURCE_MUTATION_CONTRACTS).filter(
-    (name): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
-      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name),
+    (
+      name,
+    ): name is Exclude<
+      keyof typeof RESOURCE_MUTATION_CONTRACTS,
+      PublicTokenMutation
+    > =>
+      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name) &&
+      !isPublicTokenMutation(name),
   );
   for (const mutation of mutationNames) {
     const queryClient = new QueryClient();

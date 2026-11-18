@@ -17,7 +17,6 @@ import {
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-  IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -48,6 +47,7 @@ import {
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteConflictCheckRoutines,
+  installPgliteCorpusIndexGenerationRetire,
   installPgliteCorpusIndexSeedingLifecycle,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteCorrespondenceSources,
@@ -58,6 +58,7 @@ import {
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFindingDecisionHistory,
   installPgliteFlowTransitions,
+  installPgliteInvoiceLinks,
   installPgliteInvoiceObjects,
   installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
@@ -353,12 +354,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set(
-    [
-      ...publicLawColumnPairs(
-        CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
-      ),
-      ...publicLawColumnPairs(IMPORT_SNAPSHOT_COLUMN_GRANTS_BY_RELATION),
-    ].map(({ relation, column }) => `${relation}.${column}`),
+    publicLawColumnPairs(
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+    ).map(({ relation, column }) => `${relation}.${column}`),
   );
 
 const decisionColumnNames = new Set(
@@ -397,6 +395,7 @@ export const availableSchemaRelationNames = new Set<string>(
  * is how a REVOKE goes missing from the harness.
  */
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT UPDATE (${schema.INVOICE_SEND_UPDATE_COLUMNS.map(({ name }) => quoteSqlIdentifier(name)).join(", ")}) ON TABLE "invoice_sends" TO stella`,
   `GRANT SELECT (generation_provenance), UPDATE (generation_provenance), INSERT (generation_provenance) ON chat_threads TO stella`,
   `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
@@ -922,6 +921,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
+  await installPgliteCorpusIndexGenerationRetire(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteDecisionCitationStats(db);
@@ -938,6 +938,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawPopulationCounts(db);
   await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteInvoiceLinks(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);

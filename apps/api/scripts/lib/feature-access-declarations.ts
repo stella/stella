@@ -54,6 +54,8 @@ type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
   sources: ReadonlyMap<string, string>;
+  /** Derived from the reviewed invoice management route group. */
+  invoiceManagementFiles?: ReadonlySet<string>;
 };
 export type FeatureAccessDeclarationViolation = {
   file: string;
@@ -243,14 +245,22 @@ const drizzleConstructors = (ast: DeclarationSource) => {
   for (const statement of statementsOf(ast)) {
     if (
       !runtimeImport(statement) ||
-      !statement.source.value.startsWith("drizzle-orm/")
+      !(
+        statement.source.value.startsWith("drizzle-orm/") ||
+        statement.source.value === "@/api/db/sql-client"
+      )
     ) {
       continue;
     }
     for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const exportedName = moduleExportName(binding.imported);
       if (
-        binding.type === "ImportSpecifier" &&
-        moduleExportName(binding.imported) === "drizzle"
+        exportedName === "drizzle" ||
+        (exportedName === "createDatabase" &&
+          statement.source.value === "@/api/db/sql-client")
       ) {
         constructors.add(binding.local.name);
       }
@@ -432,7 +442,9 @@ class DeclarationSourceGraph {
         }
         const selections = Object.values(this.registry).flatMap(
           ({ ownership }) => {
-            const symbols = ownership?.conditionalTableSchemas?.[file];
+            const symbols =
+              ownership?.tableSchemas?.[file] ??
+              ownership?.conditionalTableSchemas?.[file];
             return symbols === undefined ? [] : [symbols];
           },
         );
@@ -643,7 +655,8 @@ const isValidDispatchBoundary = (
               declaration.id.type === "Identifier" &&
               declaration.id.name === boundary.registry &&
               declaration.init !== null &&
-              unwrapExpression(declaration.init).type === "ArrayExpression",
+              (unwrapExpression(declaration.init).type === "ArrayExpression" ||
+                unwrapExpression(declaration.init).type === "ObjectExpression"),
           )
         );
       });
@@ -685,6 +698,27 @@ const isValidDispatchBoundary = (
     }
   }
 };
+const ownedTableSchemas = (
+  ownership: NonNullable<FeatureRegistry[string]["ownership"]>,
+) => [
+  ...ownership.tableSchemaFiles.map((file) => ({
+    file,
+    symbols: undefined,
+    requirement: "required" as const,
+  })),
+  ...Object.entries(ownership.tableSchemas ?? {}).map(([file, symbols]) => ({
+    file,
+    symbols,
+    requirement: "required" as const,
+  })),
+  ...Object.entries(ownership.conditionalTableSchemas ?? {}).map(
+    ([file, symbols]) => ({
+      file,
+      symbols,
+      requirement: "conditional" as const,
+    }),
+  ),
+];
 const validateOwnership = (
   registry: FeatureRegistry,
   graph: DeclarationSourceGraph,
@@ -707,8 +741,7 @@ const validateOwnership = (
       ownership === undefined ||
       [
         ...ownership.handlerDirectories,
-        ...ownership.tableSchemaFiles,
-        ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+        ...ownedTableSchemas(ownership).map(({ file }) => file),
         ...ownership.coreModules,
         ...(ownership.conditionalModules ?? []),
       ].length === 0
@@ -731,9 +764,9 @@ const validateOwnership = (
         });
       }
     }
+    const tableSchemas = ownedTableSchemas(ownership);
     for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
+      ...tableSchemas.map(({ file: schemaFile }) => schemaFile),
       ...ownership.coreModules,
       ...(ownership.conditionalModules ?? []),
     ]) {
@@ -744,15 +777,15 @@ const validateOwnership = (
         });
       }
     }
-    for (const file of [
-      ...ownership.tableSchemaFiles,
-      ...Object.keys(ownership.conditionalTableSchemas ?? {}),
-    ]) {
+    for (const {
+      file,
+      symbols: selectedSymbols,
+      requirement,
+    } of tableSchemas) {
       const ast = graph.sourceFile(file);
       if (ast === undefined) {
         continue;
       }
-      const selectedSymbols = ownership.conditionalTableSchemas?.[file];
       const statements = statementsOf(ast);
       const selectedStatements =
         selectedSymbols === undefined
@@ -774,12 +807,7 @@ const validateOwnership = (
       }
       for (const name of exportedTableNames(selectedStatements)) {
         const owners = tableOwners.get(name) ?? new Map<string, Requirement>();
-        owners.set(
-          featureId,
-          ownership.conditionalTableSchemas?.[file] !== undefined
-            ? "conditional"
-            : "required",
-        );
+        owners.set(featureId, requirement);
         tableOwners.set(name, owners);
       }
     }
@@ -867,7 +895,8 @@ const moduleRequirements = (registry: FeatureRegistry, module: string) => {
         module.startsWith(`${directory.replace(/\/$/u, "")}/`),
       ) ||
       ownership?.coreModules.includes(module) ||
-      ownership?.tableSchemaFiles.includes(module)
+      ownership?.tableSchemaFiles.includes(module) ||
+      ownership?.tableSchemas?.[module] !== undefined
     ) {
       required.set(id, "required");
     }
@@ -887,7 +916,12 @@ const collectModuleUses = (
 ): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   walk(ast.parsed.program, (node) => {
-    if (dispatchRegistry(node)) {
+    // Type positions carry no runtime use; an instantiation expression
+    // (`fn<T>`) still runs its expression.
+    if (
+      (isTypeSyntax(node) && node.type !== "TSInstantiationExpression") ||
+      dispatchRegistry(node)
+    ) {
       return "skip-children";
     }
     if (
@@ -974,6 +1008,7 @@ type EndpointOptions = {
   graph: DeclarationSourceGraph;
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
   modules: ModuleFacts;
+  invoiceManagementFiles: ReadonlySet<string>;
 };
 const inspectEndpoint = ({
   endpoint,
@@ -981,6 +1016,7 @@ const inspectEndpoint = ({
   graph,
   dispatchModules,
   modules,
+  invoiceManagementFiles,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
   const declaration = parseDeclaration(endpoint.config, file, registry);
@@ -989,7 +1025,14 @@ const inspectEndpoint = ({
     return violations;
   }
   const required = new Map<string, Set<Requirement>>();
-  const add = (id: string, type: Requirement) => {
+  const add = (
+    id: string,
+    type: Requirement,
+    management = invoiceManagementFiles.has(endpoint.file),
+  ) => {
+    if (management && (id === "time-billing" || id === "invoice-links")) {
+      return;
+    }
     const types = required.get(id) ?? new Set<Requirement>();
     types.add(type);
     required.set(id, types);
@@ -1004,10 +1047,14 @@ const inspectEndpoint = ({
     }
   }
   const visited = new Set<string>();
-  const visitModule = (module: string) => {
-    if (visited.has(module)) {
+  const walked = new Set<string>();
+  const visitModule = (module: string, throughManagement = false) => {
+    const management = throughManagement || invoiceManagementFiles.has(module);
+    const walkKey = `${module}:${management ? "management" : "ordinary"}`;
+    if (walked.has(walkKey)) {
       return;
     }
+    walked.add(walkKey);
     visited.add(module);
     // Descriptor registries do not invoke their handlers. Dispatch owners
     // admit the selected descriptor before invocation, not the whole caller.
@@ -1021,7 +1068,7 @@ const inspectEndpoint = ({
     }
     const boundary = modules.boundary(module);
     for (const [id, type] of boundary) {
-      add(id, type);
+      add(id, type, management);
     }
     if (boundary.size !== 0) {
       return;
@@ -1031,10 +1078,10 @@ const inspectEndpoint = ({
       violations.push({ file, message });
     }
     for (const target of dependencies.targets) {
-      visitModule(target);
+      visitModule(target, management);
     }
     for (const [id, type] of modules.uses(module, ast)) {
-      add(id, type);
+      add(id, type, management);
     }
   };
   visitModule(file);
@@ -1176,6 +1223,7 @@ export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
+  invoiceManagementFiles = new Set<string>(),
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
   const graph = new DeclarationSourceGraph(dispatch.sources, registry);
@@ -1234,6 +1282,7 @@ export const validateFeatureAccessDeclarations = ({
         graph,
         dispatchModules: ownership.dispatchModules,
         modules,
+        invoiceManagementFiles,
       }),
     );
   }

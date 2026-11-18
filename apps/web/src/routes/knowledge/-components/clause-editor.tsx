@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
@@ -591,37 +591,37 @@ export const ClauseEditor = ({
     editor.chain().focus().toggleHeading({ level }).run();
   };
 
-  const toggleBulletList = useCallback(() => {
+  const toggleBulletList = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleBulletList().run();
-  }, [editor]);
+  };
 
-  const toggleOrderedList = useCallback(() => {
+  const toggleOrderedList = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleOrderedList().run();
-  }, [editor]);
+  };
 
-  const undo = useCallback(() => {
+  const undo = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().undo().run();
-  }, [editor]);
+  };
 
-  const redo = useCallback(() => {
+  const redo = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().redo().run();
-  }, [editor]);
+  };
 
   const canUndo = editorReady && editor.can().undo();
   const canRedo = editorReady && editor.can().redo();

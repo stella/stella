@@ -81,6 +81,7 @@ const benchDecisions = (): Decision[] =>
     return {
       id: `bench-${index}`,
       match: "all_terms",
+      missingTerms: [],
       textAvailability: "available",
       caseNumber: `${senate} Cdo ${sequence}/2024`,
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,

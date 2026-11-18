@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { useTranslations } from "use-intl";
 
 import {
@@ -29,8 +27,6 @@ export const propertyDisplayName = (
 export const usePropertyDisplayName = () => {
   const t = useTranslations();
   const documentsLabel = t("common.documents");
-  return useCallback(
-    (property: NamedProperty) => propertyDisplayName(property, documentsLabel),
-    [documentsLabel],
-  );
+  return (property: NamedProperty) =>
+    propertyDisplayName(property, documentsLabel);
 };

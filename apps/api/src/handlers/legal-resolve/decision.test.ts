@@ -4,6 +4,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { czNsCollectionIdentifierValues } from "@stll/api-contract/cz-ns-collection-citation";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -154,6 +155,9 @@ const licensedDecision: typeof readDecisionReaderSource = async ({
   return { ...readable, textAccess: "withheld", ast: null };
 };
 
+/** A coverage snapshot that could not be read. */
+const noCoverage = async () => await Promise.resolve(null);
+
 describe("decision legal resolution", () => {
   test("returns every non-resolved envelope status", async () => {
     expect(
@@ -187,10 +191,15 @@ describe("decision legal resolution", () => {
         country: "CZE",
         identifier: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
         dependencies: {
+          readCoverage: noCoverage,
           lookup: lookupRows([]),
         },
       }),
-    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+    ).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
+    });
     expect(
       await resolveDecision({
         admission,
@@ -206,6 +215,54 @@ describe("decision legal resolution", () => {
         { decisionId: expect.any(String), readerUrl: expect.any(String) },
         { decisionId: expect.any(String), readerUrl: expect.any(String) },
       ],
+    });
+  });
+
+  test("says what the reconciled listing knows about a decision it did not find", async () => {
+    const regional = {
+      adapterKey: "cz-regional",
+      name: "Okresní, krajské a vrchní soudy",
+      decisionYearFrom: 2006,
+      decisionYearTo: 2026,
+      knownGaps: {
+        type: "reconciled" as const,
+        summary: { missing: 0, shortSlices: 0, unlistedSlices: 0 },
+        years: [2024, 2025, 2026].map((year) => ({
+          year,
+          type: "complete" as const,
+        })),
+      },
+      courts: [{ court: "Vrchní soud v Olomouci" }],
+    };
+    const result = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "Vrchní soud v Olomouci 5 Cmo 174/2025",
+      dependencies: {
+        lookup: lookupRows([]),
+        readCoverage: async () =>
+          await Promise.resolve({
+            generatedAt: "2026-11-17T19:00:00.000Z",
+            countries: [{ country: "CZE", sources: [regional] }],
+          }),
+      },
+    });
+    expect(v.parse(legalResolveResponseSchema, result)).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      hint: "coverage: every candidate publisher listing is reconciled complete for these years; the publisher has not published this decision. Do not scan the publisher.",
+      coverage: {
+        status: "read",
+        asOf: "2026-11-17T19:00:00.000Z",
+        sources: [
+          {
+            verdict: "not_published",
+            source: "cz-regional",
+            sourceName: "Okresní, krajské a vrchní soudy",
+            years: { from: 2025, to: 2026 },
+          },
+        ],
+      },
     });
   });
 
@@ -465,11 +522,16 @@ describe("decision legal resolution", () => {
         country: "CZE",
         identifier: "3 Afs 41/2008 - II.",
         dependencies: {
+          readCoverage: noCoverage,
           lookup: lookupRows([bare]),
           read: readableDecision,
         },
       }),
-    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+    ).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
+    });
   });
 
   test("never picks one of several unrecorded sheets for a printed sheet", async () => {
@@ -481,10 +543,15 @@ describe("decision legal resolution", () => {
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
         dependencies: {
+          readCoverage: noCoverage,
           lookup: lookupRows([first, second]),
         },
       }),
-    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+    ).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
+    });
   });
 
   test("an absorbed reader's reviews do not replace the requested identity's reviews", async () => {
@@ -589,10 +656,15 @@ describe("decision legal resolution", () => {
           country: "CZE",
           identifier,
           dependencies: {
+            readCoverage: noCoverage,
             lookup: lookupRows([row()]),
           },
         }),
-      ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+      ).toEqual({
+        status: "not_found",
+        reason: "no_exact_identity",
+        coverage: { status: "unavailable" },
+      });
     }
   });
 
@@ -975,12 +1047,14 @@ describe("a docket at other courts", () => {
       country: "CZ",
       identifier: "KS Praha 65 A 3/2025",
       dependencies: {
+        readCoverage: noCoverage,
         lookup: lookupRows([{ ...row("65 As 3/2025"), ecli: null }]),
       },
     });
     expect(result).toEqual({
       status: "not_found",
       reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
     });
   });
   test("a single other-court holder is still a mismatch", async () => {
@@ -1115,5 +1189,63 @@ describe("a district court named around the docket", () => {
       status: "not_found",
       reason: "not_at_this_court",
     });
+  });
+});
+
+describe("a Supreme Court collection citation", () => {
+  const collectionRow = (
+    part: "civil" | "criminal",
+    caseNumber: string,
+  ): DecisionIdentityRow => ({
+    ...row(caseNumber),
+    id: createSafeId<"caseLawDecision">(),
+    court: "Nejvyšší soud",
+    courtAbbreviation: "NS",
+    ecli: null,
+    identifiers: czNsCollectionIdentifierValues({
+      part,
+      number: 9,
+      year: 1971,
+    }).map((value) => ({ type: "reporter-citation", value })),
+  });
+
+  test("reads by its canonical spelling, and resolves the one entry that carries it", async () => {
+    const civil = collectionRow("civil", "6 Cz 90/70");
+    const locators: unknown[] = [];
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "č. 9/1971 Sb. rozh. obč.",
+      dependencies: {
+        lookup: async ({ locator }) => {
+          locators.push(locator);
+          return locator.kind === "reporter" && locator.value === "Rc 9/1971"
+            ? [civil]
+            : [];
+        },
+        read: readableDecision,
+      },
+    });
+    expect(locators).toContainEqual({ kind: "reporter", value: "Rc 9/1971" });
+    expect(result).toMatchObject({ status: "resolved" });
+  });
+
+  test("a citation leaving the part out names both entries of that number, and says so", async () => {
+    const civil = collectionRow("civil", "6 Cz 90/70");
+    const criminal = collectionRow("criminal", "4 Tz 26/70");
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "R 9/1971",
+      dependencies: {
+        lookup: async ({ locator }) =>
+          locator.kind === "reporter" && locator.value === "R 9/1971"
+            ? [civil, criminal]
+            : [],
+        read: async () =>
+          panic("An ambiguous citation must not open a decision"),
+      },
+    });
+    expect(result.status).toBe("ambiguous");
   });
 });

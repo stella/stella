@@ -17,16 +17,19 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  caseLawHitGroup,
+  type CaseLawHitOrder,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
   SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_TOTAL_NOT_COUNTED,
   searchPageEnd,
 } from "@stll/api-contract/search";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -91,7 +94,6 @@ import {
   readCaseLawProvisionScopeWithinBudget,
   readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
-import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
@@ -187,7 +189,6 @@ import {
 } from "@/api/mcp/case-law-decision-read";
 import type { DecisionQuerySection } from "@/api/mcp/case-law-decision-read";
 import {
-  CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS,
   caseLawAgentSearchTotal,
   MANY_REQUIRED_TERMS_THRESHOLD,
   searchCaseLawTexts,
@@ -1937,6 +1938,8 @@ type MergedCaseLawHit = {
   match: CaseLawSearchHit["match"];
   matchedQueries: number[];
   rank: number;
+  /** The query whose hit represents the decision, which its words are of. */
+  queryIndex: number;
 };
 
 /**
@@ -1957,6 +1960,9 @@ type MergedCaseLawHit = {
  */
 const mergeCaseLawSearchHits = (
   pagesByQuery: readonly (readonly CaseLawSearchHit[])[],
+  // The order the search answered in: the merge keeps it, so a phrasing
+  // reads in the same order here as from the search itself.
+  order: CaseLawHitOrder,
 ): readonly MergedCaseLawHit[] => {
   const merged = new Map<string, MergedCaseLawHit>();
   for (const [queryIndex, hits] of pagesByQuery.entries()) {
@@ -1968,6 +1974,7 @@ const mergeCaseLawSearchHits = (
           match: hit.match,
           matchedQueries: [queryIndex],
           rank,
+          queryIndex,
         });
         continue;
       }
@@ -1976,11 +1983,13 @@ const mergeCaseLawSearchHits = (
       // A full match represents the decision over any partial one: its hit
       // (excerpt) and rank stand, and ranks compare only within one class,
       // so a promoted decision never sorts by its partial rank.
-      const promotes = hit.match === "all_terms" && seen.match === "some_terms";
-      if (promotes || (hit.match === seen.match && rank < seen.rank)) {
+      const group = caseLawHitGroup(hit.match, order);
+      const seenGroup = caseLawHitGroup(seen.match, order);
+      if (group < seenGroup || (group === seenGroup && rank < seen.rank)) {
         seen.hit = hit;
         seen.rank = rank;
         seen.match = hit.match;
+        seen.queryIndex = queryIndex;
       }
     }
   }
@@ -1991,12 +2000,38 @@ const mergeCaseLawSearchHits = (
       // Partial matches follow every full match: within one query they are
       // appended after it, and ranks of different queries are not comparable
       // across that line.
-      Number(left.match === "some_terms") -
-        Number(right.match === "some_terms") ||
+      caseLawHitGroup(left.match, order) -
+        caseLawHitGroup(right.match, order) ||
       left.rank - right.rank ||
       right.matchedQueries.length - left.matchedQueries.length ||
       (left.hit.decisionId < right.hit.decisionId ? -1 : 1),
   );
+};
+
+/** A page whose partial-match phase was due and did not finish. */
+const partialMatchesUnread = (outcome: {
+  type: string;
+  reason?: string;
+}): boolean =>
+  outcome.type === SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.type &&
+  outcome.reason === SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.reason;
+
+/**
+ * The order the merged page keeps: the one every phrasing's page names. All
+ * phrasings of a call read one generation, so they name the same order; a
+ * call whose pages disagree keeps full matches first, which no page's own
+ * order contradicts within itself.
+ */
+const mergedCaseLawHitOrder = (
+  pages: readonly CaseLawQueryOutcome[],
+): CaseLawHitOrder => {
+  const orders = new Set(
+    pages.flatMap((outcome) =>
+      outcome.type === "page" ? [outcome.page.hitOrder] : [],
+    ),
+  );
+  const [only] = orders;
+  return orders.size === 1 && only !== undefined ? only : "all_words_first";
 };
 
 /**
@@ -2359,14 +2394,7 @@ const mcpCorpusQueryVariant = ({
   testDependencies?.corpusIndexQueryVariant ??
   envBase.CORPUS_INDEX_QUERY_VARIANT;
 
-const mcpCaseLawSearchGuidance = ({
-  testDependencies,
-}: AuthorizedMcpRequestContext) =>
-  testDependencies?.caseLawSearchGuidance ??
-  envBase.MCP_CASE_LAW_SEARCH_GUIDANCE;
-
 type ManyRequiredTermsOptions = {
-  guidance: CaseLawSearchGuidanceMode;
   /** The phrasing's cursor this call: `undefined` is its first page. */
   subCursor: string | null | undefined;
   /**
@@ -2392,7 +2420,6 @@ type ManyRequiredTermsOptions = {
  * exhausted. A quoted phrase requires each of its words.
  */
 const manyRequiredTermsWarnings = ({
-  guidance,
   subCursor,
   page,
   slots,
@@ -2402,11 +2429,12 @@ const manyRequiredTermsWarnings = ({
     paginationOutcome: page.paginationOutcome,
     reach: page.pageReach,
   });
+  // Partial matches can fill the slots without one decision holding every
+  // word, so only the hits that hold them all count against the slots.
   if (
-    !CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS[guidance] ||
     subCursor !== undefined ||
     end !== SEARCH_PAGE_END.COMPLETE ||
-    page.hits.length >= slots
+    page.hits.filter(({ match }) => match === "all_terms").length >= slots
   ) {
     return [];
   }
@@ -2500,6 +2528,7 @@ const caseLawSearchResult = ({
   hit: matchedHit,
   match,
   matchedQueries,
+  queryIndex,
   preferredLanguage,
 }: ReturnType<typeof mergeCaseLawSearchHits>[number] & {
   preferredLanguage: string | null;
@@ -2538,6 +2567,11 @@ const caseLawSearchResult = ({
     matchingPassages: hit.matchingPassages,
     textAvailability: hit.textAvailability,
     match,
+    terms: {
+      query: queryIndex,
+      matched: matchedHit.matchedTerms,
+      missing: matchedHit.missingTerms,
+    },
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
@@ -2598,7 +2632,11 @@ const mergedCaseLawSearchCursor = (
       case "exhausted":
         return null;
       case "page":
-        return outcome.page.nextCursor;
+        // A first page whose partial matches went unread runs again: the
+        // phase only runs on a first page, and its strict scan had ended.
+        return partialMatchesUnread(outcome.page.paginationOutcome)
+          ? CASE_LAW_PHRASING_FIRST_PAGE_PENDING
+          : outcome.page.nextCursor;
       case "timed_out":
         // A continuation runs the page again; a first page runs for the
         // first time, so it is carried as pending rather than as ended.
@@ -2623,6 +2661,15 @@ const mergedCaseLawPaginationOutcome = (
 ) => {
   if (pages.some(({ type }) => type === "timed_out")) {
     return SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
+  }
+  if (
+    pages.some(
+      (outcome) =>
+        outcome.type === "page" &&
+        partialMatchesUnread(outcome.page.paginationOutcome),
+    )
+  ) {
+    return SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET;
   }
   return pages.some(
     (outcome) =>
@@ -2788,7 +2835,7 @@ const listSearchCaseLawProvision = async ({
     return answer.result;
   }
   const { page } = answer;
-  const merged = mergeCaseLawSearchHits([page.hits]);
+  const merged = mergeCaseLawSearchHits([page.hits], page.hitOrder);
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: page.facets,
@@ -3033,12 +3080,11 @@ type AnsweredPhrasingWarningsOptions = Parameters<
 >[0] &
   PartialMatchWarningOptions & {
     query: string;
-    page: { relaxedTopUp?: "skipped" | undefined };
+    page: { paginationOutcome: { type: string; reason?: string } };
   };
 
 /** What a phrasing that returned a page says about that page. */
 const answeredPhrasingWarnings = ({
-  guidance,
   query,
   subCursor,
   page,
@@ -3047,10 +3093,10 @@ const answeredPhrasingWarnings = ({
   queryIndex,
   countsStrictSet,
 }: AnsweredPhrasingWarningsOptions): AgentCaseLawSearchWarning[] => [
-  ...(page.relaxedTopUp === "skipped"
+  ...(partialMatchesUnread(page.paginationOutcome)
     ? [partialMatchesUnreadWarning({ query })]
     : []),
-  ...manyRequiredTermsWarnings({ guidance, subCursor, page, slots }),
+  ...manyRequiredTermsWarnings({ subCursor, page, slots }),
   ...partialMatchWarnings({ merged, queryIndex, countsStrictSet }),
 ];
 
@@ -3136,6 +3182,12 @@ const phrasingProgressReporter = (
           pendingQueries,
           decisions: mergeCaseLawSearchHits(
             [...settledPages.values()].map(({ hits }) => hits),
+            mergedCaseLawHitOrder(
+              [...settledPages.values()].map((page) => ({
+                type: "page" as const,
+                page,
+              })),
+            ),
           ).map(({ hit }) => ({
             decisionId: hit.decisionId,
             caseNumber: hit.caseNumber,
@@ -3150,8 +3202,10 @@ const phrasingProgressReporter = (
 const stoppedOnTimeBudget = (
   outcome: { type: string; reason?: string } | undefined,
 ): boolean =>
-  outcome?.type === SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.type &&
-  outcome.reason === SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.reason;
+  outcome !== undefined &&
+  ((outcome.type === SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.type &&
+    outcome.reason === SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.reason) ||
+    partialMatchesUnread(outcome));
 
 /** The onboarding step belongs to the caller's organization, so it is added per call. */
 const withOnboardingNextStep = async (
@@ -3407,6 +3461,7 @@ const searchCaseLawWork = async ({
 
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.type === "page" ? outcome.page.hits : [])),
+    mergedCaseLawHitOrder(pages),
   );
 
   // Facets describe the first phrasing, without double-counting overlapping
@@ -3451,6 +3506,9 @@ const searchCaseLawWork = async ({
         query,
         queryUsed: outcome.page.queryUsed,
         paginationOutcome: outcome.page.paginationOutcome,
+        ...(outcome.page.termDecisionCounts === null
+          ? {}
+          : { termDecisionCounts: outcome.page.termDecisionCounts }),
         warnings: [
           ...warnings,
           ...provisionRead.warnings,
@@ -3460,7 +3518,6 @@ const searchCaseLawWork = async ({
             .filter(({ code }) => code !== "partial_matches_appended")
             .map((warning) => withFacetValues(warning, values)),
           ...answeredPhrasingWarnings({
-            guidance: mcpCaseLawSearchGuidance(context),
             query,
             subCursor,
             page: outcome.page,
@@ -3478,7 +3535,13 @@ const searchCaseLawWork = async ({
     headnotes: "included",
     facets: first.type === "page" ? first.page.facets : null,
     searches: searchNotesForCall(searches, requests),
-    nextCursor: single === undefined ? mergedCursor : single.nextCursor,
+    // A single phrasing pages on the engine's cursor, except a page whose
+    // partial matches went unread: only the envelope can say "run this
+    // first page again".
+    nextCursor:
+      single === undefined || partialMatchesUnread(single.paginationOutcome)
+        ? mergedCursor
+        : single.nextCursor,
     paginationOutcome: mergedCaseLawPaginationOutcome(pages),
     results: caseLawSearchResults(merged, searchArgs),
     total: caseLawAgentSearchTotal(single?.total ?? SEARCH_TOTAL_NOT_COUNTED),

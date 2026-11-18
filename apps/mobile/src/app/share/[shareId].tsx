@@ -8,10 +8,11 @@ import {
   usePreventRemove,
   useRouter,
 } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -33,7 +34,7 @@ import type {
   SharedItem,
   SharedItemsError,
 } from "@/state/shared-items";
-import { useAppColors, useUiColors } from "@/theme";
+import { useUiColors } from "@/theme";
 
 /**
  * What another app shared through the share extension: its files, links
@@ -57,7 +58,6 @@ const ShareLoader = ({
   shareId: string;
   source: AccessTokenSource;
 }) => {
-  const colors = useAppColors();
   const [share] = useState(async () => {
     // Best effort: the extension deletes stale shares too, as it writes one.
     sweepShares({ keep: shareId, now: epochMilliseconds() }).unwrapOr(
@@ -66,7 +66,7 @@ const ShareLoader = ({
     return await readShare(shareId);
   });
   return (
-    <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+    <Suspense fallback={<Loader />}>
       <LoadedShare share={share} shareId={shareId} source={source} />
     </Suspense>
   );
@@ -123,7 +123,6 @@ const ShareSheet = ({
   const scan = useTranslations("scan");
   const chat = useTranslations("chat");
   const matterT = useTranslations("matter");
-  const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
@@ -305,7 +304,7 @@ const ShareSheet = ({
             ) : null}
             {uploading ? (
               <View className="flex-row items-center gap-2 px-1">
-                <ActivityIndicator color={colors.muted} />
+                <Loader size="sm" />
                 <Text variant="caption">
                   {t("uploading", {
                     done: Math.min(done + 1, files.length),
@@ -322,7 +321,7 @@ const ShareSheet = ({
               <View className="px-1">
                 <Text variant="section">{scan("matterTitle")}</Text>
               </View>
-              <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+              <Suspense fallback={<Loader />}>
                 <MatterPicker
                   matters={matters}
                   onSelect={setMatterId}
@@ -372,21 +371,26 @@ const ChoiceRow = ({
 }) => {
   const ui = useUiColors();
   return (
-    <Pressable
+    <Button
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      className={`active:bg-accent flex-row items-center gap-3 py-3 ${
-        last ? "" : "border-border border-b"
-      }`}
       onPress={onPress}
+      size="row"
+      variant="ghost"
     >
-      <View className="flex-1">
-        <Text numberOfLines={1} variant="rowTitle">
-          {label}
-        </Text>
+      <View
+        className={`flex-1 flex-row items-center gap-3 ${
+          last ? "" : "border-border border-b"
+        }`}
+      >
+        <View className="flex-1">
+          <Text numberOfLines={1} variant="rowTitle">
+            {label}
+          </Text>
+        </View>
+        {selected ? <CheckIcon color={ui.foreground} size={18} /> : null}
       </View>
-      {selected ? <CheckIcon color={ui.foreground} size={18} /> : null}
-    </Pressable>
+    </Button>
   );
 };
 

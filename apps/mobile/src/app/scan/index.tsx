@@ -9,18 +9,13 @@ import {
   usePreventRemove,
   useRouter,
 } from "expo-router";
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  Share,
-  View,
-} from "react-native";
+import { Alert, ScrollView, Share, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { screenStyles } from "@/components/empty-state-screen";
@@ -39,7 +34,6 @@ import {
   totalSize,
 } from "@/state/scan-pages";
 import type { ReviewPage } from "@/state/scan-pages";
-import { useAppColors } from "@/theme";
 
 /**
  * The pages a scan captured, to look over before they go anywhere, laid out
@@ -54,7 +48,6 @@ const ScanReviewScreen = () => {
   const t = useTranslations("scan");
   const tabs = useTranslations("tabs");
   const format = useFormatter();
-  const colors = useAppColors();
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{
@@ -251,7 +244,7 @@ const ScanReviewScreen = () => {
               <Text variant="caption">{day}</Text>
             </View>
           </View>
-          {busy === null ? null : <ActivityIndicator color={colors.muted} />}
+          {busy === null ? null : <Loader />}
           {failure === null ? null : <Text variant="error">{failure}</Text>}
           {pages.length === 0 ? (
             <View className="items-center py-6">
