@@ -21,6 +21,8 @@ import {
   caseLawDecisions,
   caseLawIngestionFailures,
   caseLawSources,
+  corpusIndexGenerations,
+  corpusIndexProjectionStates,
   relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -58,6 +60,10 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import {
@@ -1480,8 +1486,10 @@ describe("why a batch is not certified", () => {
       throw new Error("expected no receipt");
     }
     expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.TRANSIENT);
+    // The first transient failure stops the batch: the second record is
+    // unreached, never called rejected.
+    expect(applied.error.unsettled).toBe(2);
     expect(applied.error.records.map(({ reason }) => reason)).toEqual([
-      CASE_LAW_BATCH_FAILURE.TRANSIENT,
       CASE_LAW_BATCH_FAILURE.TRANSIENT,
     ]);
 
@@ -1493,16 +1501,23 @@ describe("why a batch is not certified", () => {
     expect(Result.isOk(replayed) ? replayed.value.applied : null).toBe(2);
     expect(await decisionRows(recordsSourceId)).toEqual(settledRows(2));
 
-    // The crawl's policy is unchanged: the ledger holds both, and the page
-    // is stepped over.
+    // The crawl holds its cursor too, and reads the page again.
     const crawlSourceId = await crawlSource();
     const crawled = await withSerializationFault(
       "decisions",
       async () =>
         await crawlCaller.apply({ sourceId: crawlSourceId, decisions, corpus }),
     );
-    expect(crawled.type).toBe("certified");
-    expect(await ledgerRows(crawlSourceId)).toHaveLength(2);
+    expect(crawled).toEqual({
+      type: "held",
+      detail: expect.stringContaining("cursor held for retry"),
+    });
+    expect(await sourceCursor(crawlSourceId)).toBeNull();
+    expect(
+      (await crawlCaller.apply({ sourceId: crawlSourceId, decisions, corpus }))
+        .type,
+    ).toBe("certified");
+    expect(await decisionRows(crawlSourceId)).toEqual(settledRows(2));
   });
 
   test("records a rejection streak did not reach are not called rejected", async () => {
@@ -1586,5 +1601,69 @@ describe("why a batch is not certified", () => {
       inserted: true,
       reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
     });
+  });
+});
+
+describe("a decision a writer cannot project into every generation", () => {
+  test("holds the crawl's cursor, and lands when the page is read again", async () => {
+    const known = {
+      family: "case_law",
+      generation: "case_law_v5",
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+      ),
+      status: "building",
+    } as const;
+    // A generation a newer release registered: this process has no manifest.
+    const unknown = {
+      family: "case_law",
+      generation: "case_law_v99",
+      cluster: "q09",
+      manifestDigest: "f".repeat(64),
+      status: "building",
+    } as const;
+    await db.insert(corpusIndexGenerations).values(known);
+    try {
+      const sourceId = await crawlSource();
+      const decisions = [record(1)];
+      const { corpus } = landingTransfer();
+      expect(
+        (await crawlCaller.apply({ sourceId, decisions, corpus })).type,
+      ).toBe("certified");
+      const cursor = await sourceCursor(sourceId);
+      const [settled] = await decisionRows(sourceId);
+
+      await db.insert(corpusIndexGenerations).values(unknown);
+      const held = await crawlCaller.apply({ sourceId, decisions, corpus });
+
+      expect(held).toEqual({
+        type: "held",
+        detail: expect.stringContaining(
+          "cursor held for retry: [CorpusIndexGenerationUnknownError]",
+        ),
+      });
+      expect(await sourceCursor(sourceId)).toBe(cursor);
+      expect(await decisionRows(sourceId)).toEqual([settled]);
+
+      // Once no writer is asked for a generation it does not know, the same
+      // page is read again and the existing row settles as before.
+      await db
+        .update(corpusIndexGenerations)
+        .set({ status: "retired" })
+        .where(eq(corpusIndexGenerations.generation, unknown.generation));
+      expect(
+        (await crawlCaller.apply({ sourceId, decisions, corpus })).type,
+      ).toBe("certified");
+      expect(await sourceCursor(sourceId)).not.toBe(cursor);
+      expect(await decisionRows(sourceId)).toEqual(settledRows(1));
+    } finally {
+      await db
+        .delete(corpusIndexProjectionStates)
+        .where(eq(corpusIndexProjectionStates.family, "case_law"));
+      await db
+        .delete(corpusIndexGenerations)
+        .where(eq(corpusIndexGenerations.family, "case_law"));
+    }
   });
 });
