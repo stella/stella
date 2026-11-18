@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
+  cpSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -64,6 +66,54 @@ describe("route component declarations", () => {
     expect(componentDeclarationLines("src/routes/invoice.tsx", source)).toEqual(
       [[2, 4]],
     );
+  });
+
+  test("a key or member spelled like a page is not a reference to it", () => {
+    // The loader returns `{ InvoicePage: true }` and reads `meta.InvoicePage`;
+    // neither reaches the local function, so it stays component-only.
+    const source = [
+      'import { createFileRoute } from "@tanstack/react-router";',
+      'export const Route = createFileRoute("/invoice")({',
+      "  loader: ({ meta }) => ({ InvoicePage: meta.InvoicePage }),",
+      "  component: () => <InvoicePage />,",
+      "  pendingComponent: () => <InvoicePage />,",
+      "});",
+      "function InvoicePage() {",
+      "  return null;",
+      "}",
+    ].join("\n");
+    const shorthand = source.replace(
+      "({ InvoicePage: meta.InvoicePage })",
+      "({ InvoicePage })",
+    );
+
+    expect(shorthand).not.toBe(source);
+    expect(componentDeclarationLines("src/routes/invoice.tsx", source)).toEqual(
+      [[6, 8]],
+    );
+    // Shorthand `{ InvoicePage }` does read the binding: it is route data.
+    expect(
+      componentDeclarationLines("src/routes/invoice.tsx", shorthand),
+    ).toEqual([]);
+  });
+
+  test("declarators sharing a statement are measured apart", () => {
+    const source = [
+      'import { createFileRoute } from "@tanstack/react-router";',
+      'import { fetchData } from "./-data";',
+      'export const Route = createFileRoute("/two")({',
+      "  loader: () => load(),",
+      "  component: () => <Page />,",
+      "  pendingComponent: () => <Page />,",
+      "});",
+      "const load = () => fetchData(),",
+      "  Page = () => <main />;",
+    ].join("\n");
+
+    // Only `Page` (line 8); `load` on line 7 belongs to the loader.
+    expect(componentDeclarationLines("src/routes/two.tsx", source)).toEqual([
+      [8, 8],
+    ]);
   });
 
   test("an imported component and a route without one cover nothing", () => {
@@ -146,6 +196,14 @@ describe("reading the Start manifest as data", () => {
     expect(parseStartManifest("manifest.js", referenced)).toBe(
       "manifest.js: the manifest is not plain data (Identifier chunk)",
     );
+    const discarded = minified.replace(
+      "children: void 0",
+      "children: void load()",
+    );
+    expect(discarded).not.toBe(minified);
+    expect(parseStartManifest("manifest.js", discarded)).toBe(
+      "manifest.js: the manifest is not plain data (CallExpression)",
+    );
     expect(parseStartManifest("manifest.js", "export const other = 1;")).toBe(
       "manifest.js does not declare tsrStartManifest as an arrow returning an object",
     );
@@ -155,6 +213,41 @@ describe("reading the Start manifest as data", () => {
 describe("reading a production build", () => {
   let dir = "";
   let pageChunk = "";
+  let entryChunk = "";
+  let routesDir = "";
+  const manifestFile =
+    "dist/server/assets/_tanstack-start-manifest_v-fixture.js";
+
+  const manifestText = (rootPreloads: readonly string[]): string =>
+    `export const tsrStartManifest = () => (${JSON.stringify({
+      routes: {
+        __root__: {
+          filePath: path.join(routesDir, "__root.tsx"),
+          preloads: rootPreloads.map((file) => `/assets/${file}`),
+        },
+        "/statutes": {
+          filePath: path.join(routesDir, "statutes.tsx"),
+          preloads: [],
+        },
+        "/cases": { filePath: path.join(routesDir, "cases.tsx"), preloads: [] },
+      },
+    })});\n`;
+
+  /** The fixture build, copied and damaged by `damage`, then read. */
+  const readDamaged = (damage: (dist: string) => void) => {
+    const copy = mkdtempSync(path.join(tmpdir(), "bundle-startup-damaged-"));
+    try {
+      cpSync(path.join(dir, "dist"), path.join(copy, "dist"), {
+        recursive: true,
+      });
+      damage(path.join(copy, "dist"));
+      return readStartupGraph(path.join(copy, "dist"));
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
+  };
+  const entryMap = (dist: string) =>
+    path.join(dist, "client/assets", `${entryChunk}.map`);
 
   beforeAll(async () => {
     // The real path: the bundler writes map sources relative to the real
@@ -222,26 +315,9 @@ describe("reading a production build", () => {
       throw new Error("the fixture build did not split the cases page");
     }
     pageChunk = path.basename(page.path);
-    const routesDir = path.join(dir, "src/routes");
-    write(
-      "dist/server/assets/_tanstack-start-manifest_v-fixture.js",
-      `export const tsrStartManifest = () => (${JSON.stringify({
-        routes: {
-          __root__: {
-            filePath: path.join(routesDir, "__root.tsx"),
-            preloads: [`/assets/${path.basename(entry.path)}`],
-          },
-          "/statutes": {
-            filePath: path.join(routesDir, "statutes.tsx"),
-            preloads: [],
-          },
-          "/cases": {
-            filePath: path.join(routesDir, "cases.tsx"),
-            preloads: [],
-          },
-        },
-      })});\n`,
-    );
+    entryChunk = path.basename(entry.path);
+    routesDir = path.join(dir, "src/routes");
+    write(manifestFile, manifestText([entryChunk]));
   });
 
   afterAll(() => {
@@ -278,6 +354,59 @@ describe("reading a production build", () => {
     expect(read).toEqual({
       ok: false,
       error: expect.stringContaining("Build the web app first"),
+    });
+  });
+
+  test("a page an ancestor route preloads is no hop", () => {
+    // The root is every route's ancestor; its preloads are linked on /cases.
+    const read = readDamaged((dist) => {
+      writeFileSync(
+        path.join(dist, "..", manifestFile),
+        manifestText([entryChunk, pageChunk]),
+      );
+    });
+    if (!read.ok) {
+      throw new Error(read.error);
+    }
+
+    expect(coldLoadHops(read.graph)).toEqual([]);
+  });
+
+  test("a build whose startup graph cannot be read is refused, by cause", () => {
+    expect(
+      readDamaged((dist) => {
+        writeFileSync(path.join(dist, "..", manifestFile), manifestText([]));
+      }),
+    ).toEqual({
+      ok: false,
+      error: expect.stringContaining("route preloads nothing"),
+    });
+    expect(
+      readDamaged((dist) => {
+        rmSync(entryMap(dist));
+      }),
+    ).toEqual({
+      ok: false,
+      error: `${entryChunk} is an initial chunk without a sourcemap; rebuild the web app with hidden sourcemaps.`,
+    });
+    expect(
+      readDamaged((dist) => {
+        const text = readFileSync(entryMap(dist), "utf-8");
+        writeFileSync(entryMap(dist), text.slice(0, text.length / 2));
+      }),
+    ).toEqual({
+      ok: false,
+      error: expect.stringContaining(`${entryChunk}.map is not valid JSON`),
+    });
+    expect(
+      readDamaged((dist) => {
+        const map = JSON.parse(readFileSync(entryMap(dist), "utf-8"));
+        map.sourcesContent = map.sourcesContent.map(() => null);
+        writeFileSync(entryMap(dist), JSON.stringify(map));
+      }),
+    ).toEqual({
+      ok: false,
+      error: expect.stringContaining("has no source text for src/routes/"),
     });
   });
 });

@@ -71,12 +71,13 @@ type Literal = { ok: true; value: unknown } | { ok: false; node: string };
  * the manifest is read as data, never run.
  */
 const unaryValue = (node: UnaryExpression): Literal => {
-  if (node.operator === "void") {
-    return { ok: true, value: undefined };
-  }
+  // `void x` discards x, but a computed x is still code: check it first.
   const argument = literalValue(node.argument);
   if (!argument.ok) {
     return argument;
+  }
+  if (node.operator === "void") {
+    return { ok: true, value: undefined };
   }
   if (node.operator === "!") {
     return { ok: true, value: !argument.value };
@@ -232,7 +233,17 @@ const appRelative = (source: string): string =>
 /** An inclusive range of 0-based original lines. */
 export type LineRange = readonly [start: number, end: number];
 
-const declaredNames = (statement: Statement): string[] => {
+/**
+ * One top-level binding a component can reach: a function or class
+ * declaration, or a single declarator of a `const`/`let` statement, so two
+ * declarators sharing a statement are measured apart.
+ */
+type DeclarationUnit = {
+  names: readonly string[];
+  node: Node;
+};
+
+const declarationUnits = (statement: Statement): DeclarationUnit[] => {
   const declaration =
     statement.type === "ExportNamedDeclaration" ||
     statement.type === "ExportDefaultDeclaration"
@@ -246,20 +257,62 @@ const declaredNames = (statement: Statement): string[] => {
       declaration.type === "ClassDeclaration") &&
     declaration.id !== null
   ) {
-    return [declaration.id.name];
+    return [{ names: [declaration.id.name], node: statement }];
   }
   if (declaration.type === "VariableDeclaration") {
+    const single = declaration.declarations.length === 1;
     return declaration.declarations.flatMap((declarator) =>
-      declarator.id.type === "Identifier" ? [declarator.id.name] : [],
+      declarator.id.type === "Identifier"
+        ? [
+            {
+              names: [declarator.id.name],
+              // A lone declarator keeps its statement's span (`export const`).
+              node: single ? statement : declarator,
+            },
+          ]
+        : [],
     );
   }
   return [];
 };
 
+/**
+ * Whether an identifier names something rather than reading a binding: an
+ * object key, a member name, a JSX attribute or member name, a class member
+ * key. `{ Page: true }` and `props.Page` never reach a local `Page`.
+ */
+const isNameNotReference = (node: Node, parent: Node | undefined): boolean => {
+  if (parent === undefined) {
+    return false;
+  }
+  if (parent.type === "Property") {
+    return parent.key === node && !parent.computed && !parent.shorthand;
+  }
+  if (parent.type === "MemberExpression") {
+    return parent.property === node && !parent.computed;
+  }
+  if (parent.type === "JSXAttribute") {
+    return parent.name === node;
+  }
+  if (parent.type === "JSXMemberExpression") {
+    return parent.property === node;
+  }
+  if (
+    parent.type === "MethodDefinition" ||
+    parent.type === "PropertyDefinition"
+  ) {
+    return parent.key === node && !parent.computed;
+  }
+  return false;
+};
+
 const referencedNames = (node: Node): Set<string> => {
   const names = new Set<string>();
-  walk(node, (child) => {
-    if (child.type === "Identifier" || child.type === "JSXIdentifier") {
+  walk(node, (child, ancestors) => {
+    if (
+      (child.type === "Identifier" || child.type === "JSXIdentifier") &&
+      !isNameNotReference(child, ancestors.at(-1))
+    ) {
       names.add(child.name);
     }
   });
@@ -347,13 +400,10 @@ export const componentDeclarationLines = (
   }
   const declarations = parsed.program.body
     .filter((statement) => statement !== route.statement)
-    .map((statement) => ({
-      statement,
-      names: declaredNames(statement),
-      references: referencedNames(statement),
-    }));
-  const reach = (roots: readonly Node[]): Set<Statement> => {
-    const reached = new Set<Statement>();
+    .flatMap(declarationUnits)
+    .map((unit) => ({ ...unit, references: referencedNames(unit.node) }));
+  const reach = (roots: readonly Node[]): Set<Node> => {
+    const reached = new Set<Node>();
     const pending = roots.flatMap((root) => [...referencedNames(root)]);
     const visited = new Set<string>();
     for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
@@ -363,7 +413,7 @@ export const componentDeclarationLines = (
       visited.add(name);
       for (const declaration of declarations) {
         if (declaration.names.includes(name)) {
-          reached.add(declaration.statement);
+          reached.add(declaration.node);
           pending.push(...declaration.references);
         }
       }
@@ -372,10 +422,10 @@ export const componentDeclarationLines = (
   };
   const data = reach(route.data);
   return [...reach([route.component])]
-    .filter((statement) => !data.has(statement))
-    .map((statement) => [
-      parsed.locate(statement.start).line - 1,
-      parsed.locate(statement.end).line - 1,
+    .filter((node) => !data.has(node))
+    .map((node) => [
+      parsed.locate(node.start).line - 1,
+      parsed.locate(node.end).line - 1,
     ]);
 };
 
@@ -396,6 +446,37 @@ type ReadChunk = {
   chunk: BuiltChunk;
   /** Route file to the initial bytes of its component's declarations. */
   routeComponentBytes: Map<string, number>;
+  /** No map and not a re-export facade: its modules cannot be known. */
+  opaque: boolean;
+};
+
+// The module runtime Rolldown emits beside the entry carries no source.
+const MODULE_RUNTIME = /^rolldown-runtime-[\w-]+\.js$/u;
+
+/** A chunk of nothing but static imports and re-exports of other chunks. */
+export const isReexportFacade = (fileName: string, code: string): boolean =>
+  parseSource(fileName, code).program.body.every(
+    (statement) =>
+      statement.type === "ImportDeclaration" ||
+      statement.type === "ExportAllDeclaration" ||
+      (statement.type === "ExportNamedDeclaration" &&
+        statement.declaration === null),
+  );
+
+const parseSourceMap = (
+  mapFile: string,
+): v.InferOutput<typeof SourceMapSchema> | string => {
+  let json: unknown;
+  // A truncated or hand-edited map is a broken build, reported by name.
+  try {
+    json = JSON.parse(readFileSync(mapFile, "utf-8"));
+  } catch (error) {
+    return `${path.basename(mapFile)} is not valid JSON (${String(error)}); rebuild the web app.`;
+  }
+  const map = v.safeParse(SourceMapSchema, json);
+  return map.success
+    ? map.output
+    : `${path.basename(mapFile)} is not a sourcemap: ${v.summarize(map.issues)}`;
 };
 
 const readChunk = (
@@ -412,39 +493,46 @@ const readChunk = (
   );
   if (!existsSync(mapFile)) {
     // Rolldown writes no map for a chunk without original code: the module
-    // runtime, a re-export facade, a bundled worker. Its bytes still count;
-    // it has no modules to attribute them to.
+    // runtime and a re-export facade. Their bytes still count; they have no
+    // modules. Any other chunk without a map hides what it carries, which
+    // the initial graph cannot afford.
+    const opaque =
+      !MODULE_RUNTIME.test(fileName) && !isReexportFacade(fileName, code);
+    if (initial && opaque) {
+      return `${fileName} is an initial chunk without a sourcemap; rebuild the web app with hidden sourcemaps.`;
+    }
     return {
       chunk: {
         fileName,
         gzipBytes: Bun.gzipSync(raw).length,
-        codeBytes: code.length,
+        codeBytes: raw.length,
         modules: new Map(),
         staticImports,
         dynamicImports: [],
       },
       routeComponentBytes: new Map(),
+      opaque,
     };
   }
-  const map = v.parse(
-    SourceMapSchema,
-    JSON.parse(readFileSync(mapFile, "utf-8")),
-  );
+  const map = parseSourceMap(mapFile);
+  if (typeof map === "string") {
+    return map;
+  }
   const ids = map.sources.map(appRelative);
   // An initial route file's component declarations, by source index.
   const componentLines = new Map<number, LineRange[]>();
   if (initial) {
     for (const [index, id] of ids.entries()) {
+      if (!id.startsWith(ROUTES_PREFIX) || id.includes("?")) {
+        continue;
+      }
       const content = map.sourcesContent?.[index];
-      if (
-        typeof content === "string" &&
-        id.startsWith(ROUTES_PREFIX) &&
-        !id.includes("?")
-      ) {
-        const ranges = componentDeclarationLines(id, content);
-        if (ranges.length > 0) {
-          componentLines.set(index, ranges);
-        }
+      if (typeof content !== "string") {
+        return `${fileName}.map has no source text for ${id}, so its route component cannot be measured; rebuild the web app.`;
+      }
+      const ranges = componentDeclarationLines(id, content);
+      if (ranges.length > 0) {
+        componentLines.set(index, ranges);
       }
     }
   }
@@ -486,19 +574,45 @@ const readChunk = (
     chunk: {
       fileName,
       gzipBytes: Bun.gzipSync(raw).length,
-      codeBytes: code.length,
+      codeBytes: raw.length,
       modules,
       staticImports,
       dynamicImports,
     },
     routeComponentBytes,
+    opaque: false,
   };
+};
+
+/** Whether route id `ancestor` encloses `id` (`/law` encloses `/law/cases/`). */
+const encloses = (ancestor: string, id: string): boolean =>
+  ancestor === ROOT_ROUTE_ID ||
+  (ancestor !== id && id.startsWith(`${ancestor}/`));
+
+/**
+ * Each route's preloads including its ancestors': the manifest lists a
+ * chunk once, at the highest route that needs it, and the document links
+ * every matched route's preloads, the root's included. Route ids nest by
+ * path segment, and the manifest omits a route without assets (with its
+ * `children`), so ancestry comes from the ids.
+ */
+const effectivePreloads = (manifest: Manifest): Map<string, string[]> => {
+  const entries = Object.entries(manifest.routes);
+  const preloads = new Map<string, string[]>();
+  for (const [id] of entries) {
+    const chain = entries
+      .filter(([other]) => other === id || encloses(other, id))
+      .flatMap(([, route]) => route.preloads ?? []);
+    preloads.set(id, [...new Set(chain.map(chunkFileName))]);
+  }
+  return preloads;
 };
 
 const readRoutes = (
   manifest: Manifest,
   appRoot: string,
 ): StartupRoute[] | string => {
+  const preloads = effectivePreloads(manifest);
   const routes: StartupRoute[] = [];
   for (const [id, route] of Object.entries(manifest.routes)) {
     if (id === ROOT_ROUTE_ID || route.filePath === undefined) {
@@ -510,7 +624,7 @@ const readRoutes = (
     routes.push({
       id,
       filePath: route.filePath.slice(appRoot.length),
-      preloads: (route.preloads ?? []).map(chunkFileName),
+      preloads: preloads.get(id) ?? [],
     });
   }
   return routes;
@@ -540,10 +654,17 @@ export const readStartupGraph = (distDir: string): ReadResult => {
     return { ok: false, error: routes };
   }
   const initialChunks = (root.preloads ?? []).map(chunkFileName);
+  if (initialChunks.length === 0) {
+    return {
+      ok: false,
+      error: `The Start manifest's ${ROOT_ROUTE_ID} route preloads nothing; the build is incomplete.`,
+    };
+  }
   const initial = new Set(initialChunks);
 
   const assetsDir = path.join(distDir, CLIENT_ASSETS);
   const chunks = new Map<string, BuiltChunk>();
+  const opaque = new Set<string>();
   const routeComponentBytes = new Map<string, number>();
   for (const fileName of new Bun.Glob("*.js").scanSync(assetsDir)) {
     const read = readChunk(assetsDir, fileName, initial.has(fileName));
@@ -551,6 +672,9 @@ export const readStartupGraph = (distDir: string): ReadResult => {
       return { ok: false, error: read };
     }
     chunks.set(fileName, read.chunk);
+    if (read.opaque) {
+      opaque.add(fileName);
+    }
     for (const [id, bytes] of read.routeComponentBytes) {
       routeComponentBytes.set(id, (routeComponentBytes.get(id) ?? 0) + bytes);
     }
@@ -561,6 +685,18 @@ export const readStartupGraph = (distDir: string): ReadResult => {
       ok: false,
       error: `Initial chunk(s) missing from ${assetsDir}: ${missing.join(", ")}`,
     };
+  }
+  // A route file's import() target must show what it loads, or a late page
+  // in it would pass the cold-load hop gate unseen.
+  for (const chunk of chunks.values()) {
+    for (const { target, importer } of chunk.dynamicImports) {
+      if (importer?.startsWith(ROUTES_PREFIX) === true && opaque.has(target)) {
+        return {
+          ok: false,
+          error: `${importer} loads ${target}, which has no sourcemap; rebuild the web app with hidden sourcemaps.`,
+        };
+      }
+    }
   }
   return {
     ok: true,

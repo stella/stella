@@ -13,6 +13,7 @@ import {
   pendingLayer,
   type StartupGraph,
   type StartupLedger,
+  startupLedgerKeys,
   StartupLedgerSchema,
   startupPageCode,
   startupSummary,
@@ -315,6 +316,75 @@ describe("cold-load hops", () => {
     ]);
   });
 
+  test("a page behind a wrapper chunk or a chain of facades is still a hop", () => {
+    // The target has code of its own and imports the page chunk statically.
+    const wrapper = chunk(
+      "cases-entry-f.js",
+      { "src/features/cases/entry.ts": 300 },
+      { staticImports: ["cases-facade-g.js"] },
+    );
+    const facadeOne = chunk(
+      "cases-facade-g.js",
+      {},
+      {
+        staticImports: ["cases-facade-h.js"],
+      },
+    );
+    const facadeTwo = chunk(
+      "cases-facade-h.js",
+      {},
+      {
+        staticImports: ["cases-page-b.js", "cases-entry-f.js"],
+      },
+    );
+    const graph = graphOf(
+      [
+        routeChunk([
+          { target: "cases-entry-f.js", importer: "src/routes/cases.tsx" },
+        ]),
+      ],
+      [wrapper, facadeOne, facadeTwo, page],
+      {
+        routes: [
+          { id: "/cases", filePath: "src/routes/cases.tsx", preloads: [] },
+        ],
+      },
+    );
+
+    expect(coldLoadHops(graph).map((hop) => hop.chunk)).toEqual([
+      "cases-page-b.js",
+    ]);
+  });
+
+  test("the walk stops at a chunk the document already preloads", () => {
+    const wrapper = chunk(
+      "cases-entry-f.js",
+      { "src/features/cases/entry.ts": 300 },
+      { staticImports: ["vendor-a.js"] },
+    );
+    const shell = chunk(
+      "vendor-a.js",
+      { "src/routes/cases.tsx": 900, "src/routes/law/coverage.page.tsx": 2000 },
+      {
+        dynamicImports: [
+          { target: "cases-entry-f.js", importer: "src/routes/cases.tsx" },
+        ],
+      },
+    );
+    const graph = graphOf([shell], [wrapper], {
+      routes: [
+        {
+          id: "/cases",
+          filePath: "src/routes/cases.tsx",
+          preloads: ["vendor-a.js"],
+        },
+      ],
+    });
+
+    // The preloaded shell holds a page module, but nothing waits for it.
+    expect(coldLoadHops(graph)).toEqual([]);
+  });
+
   test("a lazy feature and another route's import are not this route's page", () => {
     const graph = graphOf(
       [
@@ -370,8 +440,64 @@ describe("shrink-only ledger", () => {
         reason: "pending view imports it",
       },
     ],
-    coldLoadHops: [{ route: "/cases", reason: "hand-written lazy page" }],
+    coldLoadHops: [
+      {
+        route: "/cases",
+        module: "src/routes/cases/-cases-page.tsx",
+        reason: "hand-written lazy page",
+      },
+    ],
   };
+
+  test("an exception covers one late page of its route, not a second one", () => {
+    const second = graphOf(
+      [
+        chunk(
+          "vendor-a.js",
+          {
+            "src/routes/cases.tsx": 900,
+            "src/routes/law/coverage.page.tsx": 2000,
+          },
+          {
+            dynamicImports: [
+              { target: "cases-page-b.js", importer: "src/routes/cases.tsx" },
+              { target: "cases-help-c.js", importer: "src/routes/cases.tsx" },
+            ],
+          },
+        ),
+      ],
+      [
+        chunk("cases-page-b.js", {
+          "src/routes/cases/-cases-page.tsx": 60_000,
+        }),
+        chunk("cases-help-c.js", { "src/routes/cases/help.page.tsx": 9000 }),
+      ],
+      {
+        routes: [
+          { id: "/cases", filePath: "src/routes/cases.tsx", preloads: [] },
+        ],
+      },
+    );
+    const result = evaluateStartup(second, 0, ledger, "rebaseline");
+
+    expect(result.hops.listed.map((hop) => hop.module)).toEqual([
+      "src/routes/cases/-cases-page.tsx",
+    ]);
+    expect(result.failures.map((f) => f.title)).toEqual([
+      "Extra cold-load hop: /cases",
+    ]);
+    expect(result.hops.unlisted.map((hop) => hop.module)).toEqual([
+      "src/routes/cases/help.page.tsx",
+    ]);
+  });
+
+  test("the ledger's exceptions keep the identities the gates match on", () => {
+    expect(startupLedgerKeys(ledger)).toEqual([
+      "page-code page-module src/routes/law/coverage.page.tsx",
+      "cold-load-hop /cases src/routes/cases/-cases-page.tsx",
+    ]);
+    expect(startupLedgerKeys(EMPTY_LEDGER)).toEqual([]);
+  });
 
   test("a listed offender passes and a new one fails", () => {
     const listed = evaluateStartup(offending, 0, ledger, "rebaseline");
@@ -395,7 +521,9 @@ describe("shrink-only ledger", () => {
       expect.stringContaining(
         "page-module src/routes/law/coverage.page.tsx no longer",
       ),
-      expect.stringContaining("/cases no longer"),
+      expect.stringContaining(
+        "/cases src/routes/cases/-cases-page.tsx: the route no longer",
+      ),
     ]);
   });
 

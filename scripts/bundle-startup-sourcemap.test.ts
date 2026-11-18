@@ -117,4 +117,30 @@ describe("sourcemap attribution", () => {
       attributeChunk("a", { sources: ["a.ts"], mappings: "AA!A" }),
     ).toThrow("Invalid sourcemap mappings character at 2");
   });
+
+  test("rejects a mapping that names a source outside the source table", () => {
+    // "ACAA": column 0, source +1, so index 1 of a one-source table.
+    expect(() =>
+      attributeChunk("a", { sources: ["a.ts"], mappings: "ACAA" }),
+    ).toThrow("Sourcemap mapping names source 1, but the map lists 1");
+    expect(
+      attributeChunk("a", { sources: ["a.ts"], mappings: "AAAA" })
+        .bytesBySource[0],
+    ).toBe(1);
+  });
+
+  test("counts the UTF-8 bytes a span downloads, not its UTF-16 units", () => {
+    // One segment from column 0 covers the whole line.
+    const euros = `x="${"€".repeat(2100)}"`;
+    const emoji = "x='😀'";
+    const one = { sources: ["src/routes/a.pending.tsx"], mappings: "AAAA" };
+
+    expect(euros.length).toBe(2104);
+    expect(attributeChunk(euros, one).bytesBySource[0]).toBe(
+      Buffer.byteLength(euros),
+    );
+    expect(attributeChunk(euros, one).bytesBySource[0]).toBe(6304);
+    expect(emoji.length).toBe(6);
+    expect(attributeChunk(emoji, one).bytesBySource[0]).toBe(8);
+  });
 });

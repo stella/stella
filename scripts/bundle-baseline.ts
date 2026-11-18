@@ -25,7 +25,8 @@
 // Modes:
 //   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
 //   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups and the initial budget
-//   bun scripts/bundle-baseline.ts --check             startup gates + worker-only groups (blocking)
+//   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
+//                                                     startup gates + worker-only groups (blocking)
 //   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
 //   bun scripts/bundle-baseline.ts --self-test         prove the comparison logic fires
 //
@@ -282,18 +283,24 @@ const measure = (assetsDir: string): MeasureResult => {
 
 // --- Baseline IO ------------------------------------------------------------
 
-const BaselineFieldsSchema = v.object({
-  initial: v.optional(v.number()),
-  mcpApps: v.optional(v.record(v.string(), v.number())),
-});
-
-const readBaselineFields = (): v.InferOutput<typeof BaselineFieldsSchema> =>
+// Each field is read only by the modes that consume it, so a mode that
+// replaces one field never refuses to run over a damaged value of another.
+const readBaselineJson = (): unknown =>
   existsSync(BASELINE_PATH)
-    ? v.parse(
-        BaselineFieldsSchema,
-        JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
-      )
+    ? JSON.parse(readFileSync(BASELINE_PATH, "utf-8"))
     : {};
+
+const readMcpAppsBudgets = (): Record<string, number> | undefined =>
+  v.parse(
+    v.object({ mcpApps: v.optional(v.record(v.string(), v.number())) }),
+    readBaselineJson(),
+  ).mcpApps;
+
+const readInitialBudget = (): number | undefined =>
+  v.parse(
+    v.object({ initial: v.optional(v.pipe(v.number(), v.integer())) }),
+    readBaselineJson(),
+  ).initial;
 
 // Copies every GROUP_KEYS value onto emptySizes' (alphabetical) literal, so
 // the written file's key set and order come from the one compiler-guarded
@@ -308,7 +315,7 @@ const sortedSizes = (sizes: Sizes): Sizes => {
 };
 
 const writeBaseline = (sizes: Sizes, initial: number): void => {
-  const { mcpApps } = readBaselineFields();
+  const mcpApps = readMcpAppsBudgets();
   writeFileSync(
     BASELINE_PATH,
     `${JSON.stringify(
@@ -387,13 +394,17 @@ const runReport = (): number => {
       : "";
     console.log(`  ${key.padEnd(20)} ${kib(size).padStart(12)}${suffix}`);
   }
+  // The group report reads no sourcemap; a build the startup graph cannot be
+  // read from still gets it, with the reason the initial line is missing.
   const startup = readStartupGraph(DIST_DIR);
   if (startup.ok) {
-    const budget = readBaselineFields().initial;
+    const budget = readInitialBudget();
     const initial = initialGzipBytes(startup.graph);
     console.log(
       `  ${"initial".padEnd(20)} ${kib(initial).padStart(12)}${budget === undefined ? "" : `  (budget ${kib(budget)}, ${pct(initial, budget)})`}`,
     );
+  } else {
+    console.log(`  ${"initial".padEnd(20)} unavailable: ${startup.error}`);
   }
   if (!hasBaseline) {
     console.log(`\nNo baseline yet. Seed one with \`${WRITE_HINT}\`.`);
@@ -428,7 +439,7 @@ const runCheck = (): number => {
     console.error(measured.error);
     return 1;
   }
-  const budget = readBaselineFields().initial;
+  const budget = readInitialBudget();
   if (budget === undefined) {
     console.error(
       `${BASELINE_REL} has no initial budget. Seed it with \`${WRITE_HINT}\` and commit it.`,
@@ -657,7 +668,7 @@ const runMcpApps = (): number => {
       return [directory, gzipSize(file)] as const;
     }),
   );
-  const field = readBaselineFields();
+  const budgets = readMcpAppsBudgets();
   if (process.argv.includes("--write-baseline")) {
     const baseline = v.parse(
       v.record(v.string(), v.unknown()),
@@ -670,7 +681,7 @@ const runMcpApps = (): number => {
     console.log(`Wrote ${measured.size} MCP app budgets to ${BASELINE_REL}`);
     return 0;
   }
-  const baseline = new Map(Object.entries(field.mcpApps ?? {}));
+  const baseline = new Map(Object.entries(budgets ?? {}));
   let regressions = 0;
   for (const [directory, size] of measured) {
     const previous = baseline.get(directory);

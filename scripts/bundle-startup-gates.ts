@@ -34,9 +34,9 @@ export const PENDING_TOTAL_LIMIT_BYTES = 150 * 1024;
 export type BuiltChunk = {
   fileName: string;
   gzipBytes: number;
-  /** Minified size: the chunk's length in UTF-16 code units. */
+  /** Minified size: the chunk's length in UTF-8 bytes. */
   codeBytes: number;
-  /** Module id (app-relative path, query kept) to minified code units. */
+  /** Module id (app-relative path, query kept) to minified UTF-8 bytes. */
   modules: ReadonlyMap<string, number>;
   /** Chunk file names this one imports or re-exports statically. */
   staticImports: readonly string[];
@@ -229,23 +229,41 @@ export type ColdLoadHop = {
 };
 
 /**
- * The chunks an `import()` of `target` fetches for its code: the target, or,
- * when the target is a re-export facade with no modules of its own, the
- * chunks it re-exports.
+ * The chunks an `import()` of `target` fetches late: the target and,
+ * transitively, the chunks it imports or re-exports statically, stopping at
+ * chunks the document already preloads (whose own static imports the
+ * manifest preloads with them).
  */
-const lateChunks = (graph: StartupGraph, target: string): BuiltChunk[] => {
-  const chunk = graph.chunks.get(target);
-  if (chunk === undefined) {
-    return [];
+const lateChunks = (
+  graph: StartupGraph,
+  target: string,
+  preloaded: ReadonlySet<string>,
+): BuiltChunk[] => {
+  const late: BuiltChunk[] = [];
+  const visited = new Set<string>();
+  const pending = [target];
+  for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+    if (visited.has(file) || preloaded.has(file)) {
+      continue;
+    }
+    visited.add(file);
+    const chunk = graph.chunks.get(file);
+    if (chunk !== undefined) {
+      late.push(chunk);
+      pending.push(...chunk.staticImports);
+    }
   }
-  if (chunk.modules.size > 0) {
-    return [chunk];
-  }
-  return chunk.staticImports.flatMap((file) => {
-    const reexported = graph.chunks.get(file);
-    return reexported === undefined ? [] : [reexported];
-  });
+  return late;
 };
+
+/** The page or split component module a late chunk holds for a route. */
+const pageModuleIn = (
+  chunk: BuiltChunk,
+  routeFile: string,
+): string | undefined =>
+  [...chunk.modules.keys()]
+    .toSorted(byCodeUnit)
+    .find((id) => isSplitComponentModule(id, routeFile) || isPageModule(id));
 
 export const coldLoadHops = (graph: StartupGraph): ColdLoadHop[] => {
   const hops: ColdLoadHop[] = [];
@@ -257,15 +275,9 @@ export const coldLoadHops = (graph: StartupGraph): ColdLoadHop[] => {
         if (importer === undefined || modulePath(importer) !== route.filePath) {
           continue;
         }
-        for (const late of lateChunks(graph, target)) {
-          if (preloaded.has(late.fileName) || seen.has(late.fileName)) {
-            continue;
-          }
-          const page = [...late.modules.keys()].find(
-            (id) =>
-              isSplitComponentModule(id, route.filePath) || isPageModule(id),
-          );
-          if (page === undefined) {
+        for (const late of lateChunks(graph, target, preloaded)) {
+          const page = pageModuleIn(late, route.filePath);
+          if (page === undefined || seen.has(late.fileName)) {
             continue;
           }
           seen.add(late.fileName);
@@ -280,7 +292,7 @@ export const coldLoadHops = (graph: StartupGraph): ColdLoadHop[] => {
     }
   }
   return hops.toSorted(
-    (a, b) => byCodeUnit(a.route, b.route) || byCodeUnit(a.chunk, b.chunk),
+    (a, b) => byCodeUnit(a.route, b.route) || byCodeUnit(a.module, b.module),
   );
 };
 
@@ -296,7 +308,14 @@ export const StartupLedgerSchema = v.strictObject({
       reason,
     }),
   ),
-  coldLoadHops: v.array(v.strictObject({ route: v.string(), reason })),
+  coldLoadHops: v.array(
+    v.strictObject({
+      route: v.string(),
+      /** The late page module; a chunk hash churns, this does not. */
+      module: v.string(),
+      reason,
+    }),
+  ),
 });
 export type StartupLedger = v.InferOutput<typeof StartupLedgerSchema>;
 
@@ -328,6 +347,20 @@ const reconcile = <T>(
 export const startupKey = (entry: { kind: string; module: string }): string =>
   `${entry.kind} ${entry.module}`;
 
+/** One exception per route and late page, so a second late page is new. */
+export const hopKey = (entry: { route: string; module: string }): string =>
+  `${entry.route} ${entry.module}`;
+
+/**
+ * Every exception the ledger grants, as the identities the gates match on.
+ * scripts/check-bundle-startup-ledger.ts compares them with the merge base:
+ * an identity the base did not grant fails, so the ledger only shrinks.
+ */
+export const startupLedgerKeys = (ledger: StartupLedger): string[] => [
+  ...ledger.startupPageCode.map((entry) => `page-code ${startupKey(entry)}`),
+  ...ledger.coldLoadHops.map((entry) => `cold-load-hop ${hopKey(entry)}`),
+];
+
 export const reconcileStartupPageCode = (
   offenders: readonly StartupOffender[],
   ledger: StartupLedger,
@@ -338,11 +371,7 @@ export const reconcileColdLoadHops = (
   hops: readonly ColdLoadHop[],
   ledger: StartupLedger,
 ): LedgerVerdict<ColdLoadHop> =>
-  reconcile(
-    hops,
-    (hop) => hop.route,
-    ledger.coldLoadHops.map((entry) => entry.route),
-  );
+  reconcile(hops, hopKey, ledger.coldLoadHops.map(hopKey));
 
 // --- Evaluation ----------------------------------------------------------------------
 
@@ -421,10 +450,10 @@ export const evaluateStartup = (
       message: `${hop.route} loads ${hop.module} (${hop.chunk}, ${kib(hop.bytes)}) with import() outside its manifest preloads, so a cold visit fetches it only after the route chunk ran. Import the page statically from the route's component and let the router split it.`,
     });
   }
-  for (const route of hops.stale) {
+  for (const key of hops.stale) {
     failures.push({
       title: "Ledger line no longer offends",
-      message: `${route} no longer loads its page outside its preloads. ${LEDGER_HINT}`,
+      message: `${key}: the route no longer loads that page outside its preloads. ${LEDGER_HINT}`,
     });
   }
 

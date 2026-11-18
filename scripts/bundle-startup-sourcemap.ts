@@ -6,8 +6,7 @@
 // covers the generated columns up to the next segment on its line, so summing
 // those spans per original source gives each module's share of the minified
 // chunk. Columns are UTF-16 code units, as the sourcemap format defines them;
-// for minified JavaScript that is the byte count to within a few non-ASCII
-// string literals.
+// each span is converted to the UTF-8 bytes the browser downloads.
 
 import { panic } from "better-result";
 
@@ -33,18 +32,15 @@ export type SourceMapV3 = {
 type DecodedLine = { columns: number[]; sources: number[]; lines: number[] };
 
 export type ChunkAttribution = {
-  /** Generated code units attributed to each source index. */
+  /** Generated UTF-8 bytes attributed to each source index. */
   bytesBySource: Float64Array;
-  /**
-   * For the sources asked for, generated code units per 0-based original
-   * line.
-   */
+  /** For the sources asked for, generated UTF-8 bytes per 0-based original line. */
   bytesByLine: ReadonlyMap<number, ReadonlyMap<number, number>>;
   /** The source index mapped at a generated position, or -1. */
   sourceAt: (line: number, column: number) => number;
 };
 
-const decodeLines = (mappings: string): DecodedLine[] => {
+const decodeLines = (mappings: string, sourceCount: number): DecodedLine[] => {
   const lines: DecodedLine[] = [];
   let source = 0;
   let originalLine = 0;
@@ -94,6 +90,12 @@ const decodeLines = (mappings: string): DecodedLine[] => {
     if (fields.length >= 4) {
       source += fields[1] ?? 0;
       originalLine += fields[2] ?? 0;
+      // An index outside the source table would drop its bytes silently.
+      if (source < 0 || source >= sourceCount) {
+        panic(
+          `Sourcemap mapping names source ${source}, but the map lists ${sourceCount}`,
+        );
+      }
       mapped = source;
     }
     current.columns.push(column);
@@ -103,8 +105,47 @@ const decodeLines = (mappings: string): DecodedLine[] => {
   return lines;
 };
 
+const utf8Length = (codePoint: number): number => {
+  if (codePoint < 0x80) {
+    return 1;
+  }
+  if (codePoint < 0x8_00) {
+    return 2;
+  }
+  return codePoint < 0x1_00_00 ? 3 : 4;
+};
+
+const LOW_SURROGATE_FIRST = 0xdc_00;
+const LOW_SURROGATE_LAST = 0xdf_ff;
+// Any character outside ASCII, so a line without one needs no conversion.
+const NON_ASCII = /[^\0-\u007F]/u;
+
 /**
- * Attributes every generated code unit of `code` to the source mapped there,
+ * UTF-8 byte offset of every UTF-16 column of `line` (one past the end too),
+ * or undefined for an ASCII line, where the two coincide.
+ */
+const utf8Offsets = (line: string): Uint32Array | undefined => {
+  if (!NON_ASCII.test(line)) {
+    return undefined;
+  }
+  const offsets = new Uint32Array(line.length + 1);
+  for (let index = 0; index < line.length; index += 1) {
+    const codePoint = line.codePointAt(index) ?? 0;
+    const previous = index === 0 ? 0 : (line.codePointAt(index - 1) ?? 0);
+    // The low half of a surrogate pair: the pair's four bytes were counted
+    // at its high half.
+    const pairTail =
+      previous > 0xff_ff &&
+      codePoint >= LOW_SURROGATE_FIRST &&
+      codePoint <= LOW_SURROGATE_LAST;
+    offsets[index + 1] =
+      (offsets[index] ?? 0) + (pairTail ? 0 : utf8Length(codePoint));
+  }
+  return offsets;
+};
+
+/**
+ * Attributes every generated UTF-8 byte of `code` to the source mapped there,
  * and, for the source indexes in `lineSources`, to the original line.
  */
 export const attributeChunk = (
@@ -113,7 +154,7 @@ export const attributeChunk = (
   lineSources: ReadonlySet<number> = new Set(),
 ): ChunkAttribution => {
   const codeLines = code.split("\n");
-  const decoded = decodeLines(map.mappings);
+  const decoded = decodeLines(map.mappings, map.sources.length);
   const bytesBySource = new Float64Array(map.sources.length);
   const bytesByLine = new Map<number, Map<number, number>>();
   for (let line = 0; line < codeLines.length; line += 1) {
@@ -121,14 +162,20 @@ export const attributeChunk = (
     if (segments === undefined) {
       break;
     }
-    const length = codeLines[line]?.length ?? 0;
+    const text = codeLines[line] ?? "";
+    const offsets = utf8Offsets(text);
+    const byteAt = (column: number): number =>
+      offsets === undefined
+        ? column
+        : (offsets[Math.min(column, text.length)] ?? 0);
     for (let index = 0; index < segments.columns.length; index += 1) {
       const source = segments.sources[index] ?? -1;
       if (source < 0) {
         continue;
       }
       const start = segments.columns[index] ?? 0;
-      const span = (segments.columns[index + 1] ?? length) - start;
+      const end = segments.columns[index + 1] ?? text.length;
+      const span = byteAt(end) - byteAt(start);
       bytesBySource[source] = (bytesBySource[source] ?? 0) + span;
       if (lineSources.has(source)) {
         const perLine = bytesByLine.get(source) ?? new Map<number, number>();
