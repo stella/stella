@@ -85,7 +85,7 @@ test("profile language and collapsed sidebar render in the first HTML response",
     expect(rawResponse.ok()).toBe(true);
     const html = await rawResponse.text();
     expect(html).toMatch(/<html[^>]*\blang="cs"/u);
-    expect(html).toMatch(/<span[^>]*>Judikatura<\/span>/u);
+    expect(html).toMatch(/aria-label="Právní databáze"/u);
     expect(html).toMatch(
       /(?=[^>]*data-slot="sidebar")(?=[^>]*data-state="collapsed")[^>]*/u,
     );
@@ -112,7 +112,7 @@ test("profile language and collapsed sidebar render in the first HTML response",
       await expect(
         serverPage
           .locator('[data-slot="sidebar"]')
-          .getByRole("link", { name: "Judikatura", exact: true }),
+          .getByRole("link", { name: "Právní databáze", exact: true }),
       ).toHaveCount(1);
       const serverWidth = await serverPage
         .locator('[data-slot="sidebar-gap"]')

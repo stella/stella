@@ -37,13 +37,13 @@ export const pushRouterPath = async (page: Page, path: string) => {
       if (main === null) {
         return isHydrated(document.body);
       }
-      // Editors own the DOM inside their editable roots.
+      // Editors create their editable roots and own the DOM inside them.
       return (
         isHydrated(main) &&
         [...main.querySelectorAll("*")].every(
           (element) =>
             isHydrated(element) ||
-            element.parentElement?.closest("[contenteditable]") !== null,
+            element.closest("[contenteditable]") !== null,
         )
       );
     },
