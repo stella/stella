@@ -116,6 +116,7 @@ export { CircleOffIcon, DollarSignIcon, ScissorsIcon } from "lucide-react";
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react";
 export {
+  AccessibilityIcon,
   ActivityIcon,
   AlarmClockIcon,
   AlertCircleIcon,

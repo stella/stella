@@ -181,15 +181,14 @@
     "handoffExpired": "O link do documento expirou antes de o stella desktop ser conectado. Comece de novo pelo stella."
   },
   "settings": {
-    "about": "Sobre",
-    "accountLinked": "Conta vinculada",
+    "accountLinked": "Vinculada",
+    "disconnect": "Desconectar",
     "connectionExpired": "Conexão expirada",
     "reconnectToStella": "Reconectar ao stella web",
     "connectionExpiredDescription": "A conexão expirou. Reconecte-se ao stella web.",
     "connectToStella": "Conectar à stella web",
     "connectToStellaDescription": "Vincule este computador à sua conta atual da stella sem abrir um documento.",
     "desktopBenefit": "Arquivos do Office e histórico local da área de transferência",
-    "disconnectAccount": "Desconectar conta",
     "errorDisconnectAccount": "O stella desktop não conseguiu desconectar sua conta.",
     "errorReadAccount": "O stella desktop não conseguiu verificar a conexão da sua conta.",
     "stellaWebAccount": "Conta da stella web",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Erros técnicos, tempos e resumos de falhas; sem documentos, conteúdo da área de transferência ou dados de atividade.",
     "errorReadTelemetry": "Não foi possível ler a preferência de envio de relatórios. Tente novamente.",
     "errorSaveTelemetry": "Não foi possível salvar a preferência de envio de relatórios. Tente novamente.",
-    "general": "Geral",
     "lastVerified": "Última verificação",
     "language": "Idioma",
-    "languageDescription": "Escolha o idioma usado pelo aplicativo para desktop.",
     "setupGuide": "Guia de configuração",
     "setupGuideDescription": "Refaça a configuração: o que o app faz, as permissões e o atalho da área de transferência.",
     "setupGuideAction": "Configurar novamente",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Suporte",
     "title": "Configurações",
-    "serverLabel": "Servidor",
+    "pages": {
+      "general": "Geral",
+      "dictation": "Ditado",
+      "clipboard": "Área de transferência",
+      "agents": "IA e agentes",
+      "signing": "Assinatura",
+      "activity": "Atividade",
+      "notifications": "Notificações",
+      "permissions": "Permissões",
+      "about": "Sobre"
+    },
+    "account": "Conta",
+    "app": "Aplicativo",
+    "privacy": "Privacidade",
+    "pageEmpty": "Não há nada para configurar aqui neste computador.",
     "connectToHost": "Conectar a {host}",
     "connectToHostDescription": "Abre {host} no navegador para você aprovar este computador.",
     "reconnectNeeded": "É preciso reconectar",
     "reconnect": "Reconectar",
     "reconnectHostDescription": "A conexão com {host} precisa ser renovada. Aprove este computador novamente no navegador.",
-    "permissions": "Permissões",
     "permissionNotificationsDescription": "Avisa quando um documento está pronto ou uma sincronização precisa de atenção.",
     "permissionAccessibility": "Acessibilidade",
     "permissionAccessibilityDescription": "Permite que a linha do tempo de atividade registre títulos de janelas.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir configurações",
-    "permissionDenied": "Desativado nas configurações do sistema.",
+    "permissionTurnedOff": "Desativado",
+    "permissionsDescription": "Cada uma é escolha sua e libera uma coisa.",
+    "neverRequested": "Nunca solicitado",
     "permissionManaged": "Gerenciado pela sua organização",
     "errorUpdateAutostart": "O stella desktop não conseguiu atualizar o início ao fazer login.",
     "errorPermissions": "O stella desktop não conseguiu ler nem alterar esta permissão.",
@@ -600,6 +612,12 @@
     "title": "Ditado",
     "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
     "descriptionCloud": "Mantenha {shortcut} pressionado e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita pela stella AI e não é armazenada pela stella.",
+    "lede": "Segure <key>{shortcut}</key> e fale. O texto aparece onde você está digitando.",
+    "groups": {
+      "transcription": "Transcrição",
+      "cleanup": "Revisão",
+      "thisComputer": "Neste computador"
+    },
     "cleanup": {
       "title": "Revisar com IA",
       "description": "Corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail. Só o texto, não o áudio, é enviado pela stella ao provedor de IA da sua organização; a stella não o armazena.",
@@ -607,11 +625,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Compartilhar o título da janela com a revisão por IA",
+        "title": "Compartilhar o título da janela",
         "description": "Ajuda a distinguir um contrato de um memorando. Títulos de janela podem conter nomes de clientes ou casos."
       },
       "textBeforeCursor": {
-        "title": "Compartilhar o texto antes do cursor com a revisão por IA",
+        "title": "Compartilhar o texto antes do cursor",
         "description": "Até {limit, number} caracteres do documento em que você está, para que o ditado combine com o que você escreve."
       }
     },
@@ -620,6 +638,7 @@
       "title": "Transcrever com",
       "local": "Este computador",
       "cloud": "stella AI",
+      "localDescription": "A fala é transcrita neste computador e não é armazenada.",
       "cloudDescription": "O áudio sai deste computador: é enviado à stella e, por meio do provedor de IA da stella, ao provedor do modelo selecionado para transcrição. A stella não o armazena.",
       "unavailableRegion": "A stella AI ainda não oferece transcrição na região da sua organização.",
       "unavailableProvider": "O provedor de IA da sua organização não oferece transcrição.",
@@ -627,7 +646,6 @@
       "model": "Modelo de transcrição",
       "chooseModel": "Escolha um modelo",
       "outsideRegion": "Fora da sua região",
-      "outsideRegionNote": "Este modelo processa o áudio fora da região da sua organização.",
       "retainsData": "Guarda seu áudio",
       "retainsDataTitle": "{provider} guarda o que você dita",
       "retainsDataWarning": "Este modelo usa uma conta sem retenção zero de dados. {provider} armazena o áudio e a transcrição de tudo o que você dita conforme os próprios termos, fora do controle da stella. Não dite informações confidenciais nem dados de clientes com ele."
@@ -640,6 +658,7 @@
       "noResults": "Nenhum idioma encontrado"
     },
     "modelNeeded": "O modelo de voz é executado neste computador.",
+    "speechModel": "Modelo de fala",
     "modelInstalled": "O modelo de fala ({size} MB) está neste computador.",
     "removeModel": "Remover",
     "removeFailed": "Não foi possível remover o modelo de fala. Tente novamente.",

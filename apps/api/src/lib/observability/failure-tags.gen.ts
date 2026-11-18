@@ -156,6 +156,7 @@ export const FAILURE_TAGS = [
   "CourtListenerRecordRejectedError",
   "CoverageError",
   "CredentialNotFoundError",
+  "CzNsSbirkaParseError",
   "CzUsCursorError",
   "CzUsJudgesBackfillError",
   "CzUsRosterFetchError",

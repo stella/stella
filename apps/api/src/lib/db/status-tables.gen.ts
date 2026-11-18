@@ -377,6 +377,7 @@ export const ENUM_COLUMNS = {
   corpus_index_group_enrollments: ["contract_version", "family"],
   corpus_index_group_withdrawals: ["family"],
   corpus_index_jurisdiction_serving: ["family"],
+  corpus_index_projection_delete_tasks: ["family"],
   corpus_index_projection_intents: [
     "append_delivery",
     "append_fault",

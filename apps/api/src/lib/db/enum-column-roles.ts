@@ -243,6 +243,9 @@ export const ENUM_COLUMN_ROLES = {
   corpus_index_jurisdiction_serving: {
     family: ATTRIBUTE,
   },
+  corpus_index_projection_delete_tasks: {
+    family: ATTRIBUTE,
+  },
   corpus_index_projection_intents: {
     append_delivery: ATTRIBUTE,
     append_fault: ATTRIBUTE,

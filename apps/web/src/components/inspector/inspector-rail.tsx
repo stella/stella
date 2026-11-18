@@ -601,16 +601,32 @@ const VerticalTabCell = ({
     }),
   });
 
-  // Flash the tab on (re-)activation.
+  // Flash the tab on (re-)activation from elsewhere (a document link, a chat
+  // opening a file, a command), so the eye finds where it lives in the rail.
+  // An activation this cell's own click caused never flashes: the reader is
+  // already looking at the cell, and a fading fill on the tab they just chose
+  // reads as the file still loading. The click records the sequence number it
+  // produced, so only that exact activation is skipped.
   const activationSeq = useInspectorTabsStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
+  const selfActivationSeq = useRef<number | null>(null);
   useExternalSyncEffect(() => {
     const el = tabRef.current;
-    if (el && active && activationSeq !== prevSeq.current) {
+    if (
+      el &&
+      active &&
+      activationSeq !== prevSeq.current &&
+      activationSeq !== selfActivationSeq.current
+    ) {
       flashTabElement(el);
     }
     prevSeq.current = activationSeq;
   }, [active, activationSeq]);
+  const activateFromRail = () => {
+    onActivate();
+    // Store updates are synchronous, so this is the sequence the click made.
+    selfActivationSeq.current = useInspectorTabsStore.getState().activationSeq;
+  };
 
   // Targeted flash: flash this tab when something asks for it by id
   // (e.g. clicking a field in the document, or a chat just opened here),
@@ -669,7 +685,7 @@ const VerticalTabCell = ({
           event.stopPropagation();
           onDropTab({ sourceId, targetId: tab.id });
         }}
-        onSelect={onActivate}
+        onSelect={activateFromRail}
         ref={tabRef}
       />
       {contextMenu.element}

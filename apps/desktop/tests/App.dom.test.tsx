@@ -157,9 +157,12 @@ const installBackend = (order: ResponseOrder) => {
         }
         case "account_get_state":
           return ACCOUNT;
-        // Decides whether the Activity tab shows; this account has no timeline.
+        // Decide whether the Activity and Dictation pages show; this account
+        // has neither.
         case "is_activity_enabled":
           return false;
+        case "dictation_get_snapshot":
+          return { available: false };
         default:
           unexpected.push(command);
           return panic(`Unexpected native command: ${command}`);

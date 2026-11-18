@@ -48,6 +48,7 @@ import {
   contacts,
   corpusIndexGenerations,
   corpusIndexGenerationSeedingPasses,
+  corpusIndexProjectionDeleteTasks,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   documentReviewRuns,
@@ -4413,6 +4414,87 @@ export const lockCorpusProjectionStatesByEntity = async (
     )
     .orderBy(asc(corpusIndexProjectionStates.entityId))
     .limit(entityIds.length)
+    .for("update");
+
+type CorpusProjectionDeleteTaskRoute = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+};
+
+const corpusProjectionDeleteTaskRoute = ({
+  family,
+  generation,
+  indexId,
+}: CorpusProjectionDeleteTaskRoute) =>
+  and(
+    eq(corpusIndexProjectionDeleteTasks.family, family),
+    eq(corpusIndexProjectionDeleteTasks.generation, generation),
+    eq(corpusIndexProjectionDeleteTasks.indexId, indexId),
+  );
+
+/**
+ * Planned settlement tasks of one index whose lease is still free, in queue
+ * order, at most `limit`, skipping any another transaction holds: the
+ * settlement claim read its plan without locks, and never waits for a task.
+ */
+export const lockFreeCorpusProjectionDeleteTasks = async (
+  tx: Transaction,
+  {
+    deleteOpstamps,
+    limit,
+    ...route
+  }: CorpusProjectionDeleteTaskRoute & {
+    deleteOpstamps: readonly bigint[];
+    limit: number;
+  },
+) =>
+  await tx
+    .select({
+      deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp,
+      taskCreatedAt: corpusIndexProjectionDeleteTasks.taskCreatedAt,
+    })
+    .from(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        corpusProjectionDeleteTaskRoute(route),
+        inArray(corpusIndexProjectionDeleteTasks.deleteOpstamp, [
+          ...deleteOpstamps,
+        ]),
+        or(
+          isNull(corpusIndexProjectionDeleteTasks.leaseExpiresAt),
+          sql`${corpusIndexProjectionDeleteTasks.leaseExpiresAt} <= clock_timestamp()`,
+        ),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionDeleteTasks.cleanupStartedAt),
+      asc(corpusIndexProjectionDeleteTasks.deleteOpstamp),
+    )
+    .limit(limit)
+    .for("update", { skipLocked: true });
+
+/**
+ * One settlement task, waiting for a transaction that holds it: a turn that
+ * settled or reissued its revisions decides under this lock whether the task
+ * is drained, so a receipt committing meanwhile is seen.
+ */
+export const lockCorpusProjectionDeleteTask = async (
+  tx: Transaction,
+  {
+    deleteOpstamp,
+    ...route
+  }: CorpusProjectionDeleteTaskRoute & { deleteOpstamp: bigint },
+) =>
+  await tx
+    .select({ deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp })
+    .from(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        corpusProjectionDeleteTaskRoute(route),
+        eq(corpusIndexProjectionDeleteTasks.deleteOpstamp, deleteOpstamp),
+      ),
+    )
     .for("update");
 
 /**

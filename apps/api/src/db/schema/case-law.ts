@@ -120,7 +120,10 @@ import {
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
-import { HELD_DECISION_MATCH_BASES } from "@/api/lib/legal-search/held-decision-attachment-values";
+import {
+  HELD_DECISION_MATCH_BASES,
+  HELD_DECISION_MATCH_BASIS,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { HeldDecisionDeclaredIdentifier } from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   storedObservationHasDetail,
@@ -1917,7 +1920,10 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
     sourceDocumentId: p
       .varchar("source_document_id", { length: 256 })
       .notNull(),
-    /** What named the host: the stated ECLI, or court, docket and date. */
+    /**
+     * What named the host: the stated ECLI, or court, docket and date; or,
+     * for a record parked for review, court and docket under another date.
+     */
     matchBasis: p
       .varchar("match_basis", { length: 32, enum: HELD_DECISION_MATCH_BASES })
       .notNull(),
@@ -1997,6 +2003,12 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
     p.check(
       "case_law_held_decision_attachments_host_shape",
       sql`${t.hostDecisionId} IS NULL OR cardinality(${t.candidateDecisionIds}) = 0`,
+    ),
+    // A docket held only under another date never names a host: the record
+    // waits for review with its candidates listed.
+    p.check(
+      "case_law_held_decision_attachments_review_shape",
+      sql`${t.matchBasis} <> ${HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE} OR ${t.hostDecisionId} IS NULL`,
     ),
     // A withdrawn host's takedown leaves nothing of the record but its key.
     p.check(
