@@ -208,18 +208,21 @@ offender with its minified bytes.
   page an eager option renders. Put it behind the route's `component` (the
   router splits it) or a dynamic `import()`. Rebaseline with
   `--write-baseline` only with a stated reason every cold visit should pay
-  for it.
+  for it. [check: scripts/bundle-baseline.ts]
 - **Page code at startup.** A pending or error component, a loader or an
   export reaches the page: the pending view imports from the page module, or
   renders a component the page also renders, or the route file exports a page
   part. Give the loading view its own `-x.pending.tsx` that imports nothing
   from `-x.page.tsx`, and keep shared pieces in a module of their own.
+  [check: scripts/bundle-baseline.ts]
 - **Pending view too large.** It renders more than the page's skeleton.
+  [check: scripts/bundle-baseline.ts]
 - **Extra cold-load hop.** A route loads its page with a hand-written
   `lazyRouteComponent(() => import(...))` or `await import(...)`, which the
   manifest cannot preload. Import the page statically from the route file's
-  `component` and let the router split it.
+  `component` and let the router split it. [check: scripts/bundle-baseline.ts]
 - **Ledger line no longer offends.** Delete the line; the ledger only shrinks.
+  [check: scripts/bundle-baseline.ts]
 - **A dependency escaped its `manualChunks` bucket** and landed in the
   initial graph instead of a lazy route chunk. Dynamic-`import()` it, or fix
   the `manualChunks` rule in `apps/web/vite.config.ts`. [review]
