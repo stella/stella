@@ -20,8 +20,10 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // phrasing that ran out of time (67).
 // Regulator guidance adds search_guidance and read_guidance (3,268 characters
 // together).
+// Statute provision reads say they return governingText and its truncation
+// flag, and that an annex reads by its number (241 characters).
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 140_375;
+const TOTAL_CONNECT_CHAR_BUDGET = 140_613;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {
