@@ -15,12 +15,15 @@ import {
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  CASE_LAW_RANKED_HIT_ORDER,
+  type CaseLawHitOrder,
   caseLawPageOutcome,
   countedSearchTotal,
   type DecisionSearchMatch,
   DEFAULT_CASE_LAW_SEARCH_FACETS,
   DEFAULT_SEARCH_EXCERPT,
   FACET_COUNT_TYPE,
+  orderCaseLawHits,
   SEARCH_PAGE_END,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
@@ -217,6 +220,7 @@ import {
   type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import {
+  corpusIndexDecisionTerms,
   corpusIndexRankingSignals,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -247,6 +251,8 @@ import {
   readCorpusSearchFacets,
 } from "@/api/lib/legal-search/corpus-index-search-facets";
 import {
+  caseLawCorpusFilterClauses,
+  type CaseLawCorpusFilters,
   caseLawCorpusQuery,
   type CorpusQueryToken,
   type CorpusTermExpander,
@@ -328,6 +334,17 @@ import {
 } from "@/api/lib/search/highlight";
 import { isRecord } from "@/api/lib/type-guards";
 
+import {
+  planRankedSearch,
+  rankedCountsOutcome,
+  rankedCursorTarget,
+  rankedHitTerms,
+  rankedMatch,
+  rankedPageWordsRefusal,
+  rankedSearchShape,
+  readRankedPageWords,
+  readRankedTermDecisionCounts,
+} from "./search-ranked";
 import {
   allTermsHeld,
   distinctRequiredTerms,
@@ -1468,6 +1485,27 @@ type CorpusIndexQueryOptions = {
   match?: "all" | "any" | undefined;
 };
 
+/** The request's filters named after the index fields they apply to. */
+const caseLawCorpusFiltersOf = ({
+  body,
+  contract,
+  jurisdictionClause,
+}: Pick<
+  CorpusIndexQueryOptions,
+  "body" | "contract" | "jurisdictionClause"
+>): CaseLawCorpusFilters => ({
+  court: body.court,
+  courts: body.courts,
+  courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
+  dateFrom: body.dateFrom,
+  dateTo: body.dateTo,
+  decisionIds: body.provisionDecisionIds,
+  documentType: body.decisionType,
+  jurisdiction: jurisdictionClause,
+  language: body.language,
+  source: body.sourceId,
+});
+
 const buildCorpusIndexQuery = ({
   body,
   jurisdictionClause,
@@ -1486,18 +1524,7 @@ const buildCorpusIndexQuery = ({
     queryVariant,
     functionWords,
     legalAlternatives,
-    filters: {
-      court: body.court,
-      courts: body.courts,
-      courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
-      dateFrom: body.dateFrom,
-      dateTo: body.dateTo,
-      decisionIds: body.provisionDecisionIds,
-      documentType: body.decisionType,
-      jurisdiction: jurisdictionClause,
-      language: body.language,
-      source: body.sourceId,
-    },
+    filters: caseLawCorpusFiltersOf({ body, contract, jurisdictionClause }),
     expand,
     stemming: fields.stemming,
     legacyStemming: fields.legacyStemming,
@@ -3281,6 +3308,9 @@ const settledRelaxedTopUp = <Hits>(
   }
 };
 
+/** A passage page's partial matches are a second pass, appended. */
+const PASSAGE_HIT_ORDER: CaseLawHitOrder = "all_words_first";
+
 const TERM_DECISION_COUNTS_SKIPPED_SINK = failureSink({
   event: "case_law.search_term_decision_counts.skipped",
   expected: [],
@@ -3454,9 +3484,25 @@ export const searchCorpusIndexDecisions = async (
     sort,
     textTokenCount: tokenizeCorpusFreeText(body.query).length,
   });
-  const cursorTarget = corpusQueryVariantCursorTarget(
-    corpusRankingCursorTarget(target.value.cursorTarget, rankingMode),
-    interpretation.queryVariant,
+  // Whether this request ranks whole decisions, and with which arm. Read now
+  // because the arm is part of what a cursor continues.
+  const rankedShape = rankedSearchShape({
+    decisionTerms: corpusIndexDecisionTerms(
+      requireCorpusIndexManifest("case_law", serving.generation),
+    ),
+    text: body.query,
+    sort,
+    strict: body.strict === true,
+    functionWords: interpretation.functionWords,
+    queryVariant: interpretation.queryVariant,
+    jurisdiction: body.country,
+  });
+  const cursorTarget = rankedCursorTarget(
+    corpusQueryVariantCursorTarget(
+      corpusRankingCursorTarget(target.value.cursorTarget, rankingMode),
+      interpretation.queryVariant,
+    ),
+    rankedShape,
   );
   // A different target cannot continue this read, regardless of dictionary
   // or sort; refuse it before registry, expansion, and engine work.
@@ -3697,6 +3743,59 @@ export const searchCorpusIndexDecisions = async (
   });
   const excerptTokens = tokenizeCorpusFreeText(body.query);
   const indexRanking = caseLawIndexRanking({ body, generation, indexId });
+  const scopeOf = (scoped: SearchDecisionsBody): string =>
+    caseLawCorpusFilterClauses(
+      caseLawCorpusFiltersOf({ body: scoped, contract, jurisdictionClause }),
+    ).join(" AND ");
+  // The decision-level search's requests, built in one place so the
+  // passage path reads every branch below as "no ranking". Its own function:
+  // each choice here is the ranked path's alone.
+  const reads = await (async () => {
+    if (rankedShape.type !== "ranked") {
+      return {
+        plan: null,
+        excerptQuery: resolved.query,
+        scan: undefined,
+        facetQueryFor: facetQueries(),
+        totalQuery: resolved.query,
+      };
+    }
+    const plan = planRankedSearch(rankedShape, {
+      fields: excerptFields,
+      legalAlternatives: legalAlternativesExpander(
+        interpretation.legalAlternatives,
+      ),
+      filterClauses: caseLawCorpusFilterClauses(
+        caseLawCorpusFiltersOf({ body, contract, jurisdictionClause }),
+      ),
+    });
+    // The excerpt is cut from the decision's passage that best matches any
+    // of the words: the strict passage query would find none in a decision
+    // that holds them only across passages.
+    const anyWord = await resolveCorpusIndexQuery({
+      body,
+      generation,
+      jurisdictionClause,
+      contract,
+      functionWords: interpretation.functionWords,
+      legalAlternatives: interpretation.legalAlternatives,
+      queryVariant: interpretation.queryVariant,
+      match: "any",
+    });
+    return {
+      plan,
+      excerptQuery:
+        anyWord.resolved.type === "empty"
+          ? resolved.query
+          : anyWord.resolved.query,
+      scan: { query: plan.scanQuery },
+      // Its result set is the decisions holding every word: that is what its
+      // total counts and its facets break down.
+      facetQueryFor: (facet: CorpusSearchFacetName) =>
+        plan.allWordsQuery(scopeOf(bodyWithoutFacetFilter(body, facet))),
+      totalQuery: plan.allWordsQuery(plan.scope),
+    };
+  })();
 
   // The strict page and the relaxed top-up are the same scan over different
   // queries; `omit` names decisions the relaxed one must leave out, and its
@@ -3724,6 +3823,7 @@ export const searchCorpusIndexDecisions = async (
         "case_law",
         generation,
       ).projection.projectionRevisionField,
+      rankedScan: reads.scan,
       extractId: (hit) => {
         const id = hit["document_id"];
         return typeof id === "string" && isUuid(id) ? id : null;
@@ -3778,10 +3878,12 @@ export const searchCorpusIndexDecisions = async (
     });
   const concurrentStartedAt = performance.now();
   trace.phase = "scan_and_facets";
-  const pageRead = readTextPage(resolved.query, limit, null).then((read) => {
-    trace.scanSettled = true;
-    return read;
-  });
+  const pageRead = readTextPage(reads.excerptQuery, limit, null).then(
+    (read) => {
+      trace.scanSettled = true;
+      return read;
+    },
+  );
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
   const facetRead = readsResultSetDescription(body, isFirstPage)
@@ -3794,14 +3896,14 @@ export const searchCorpusIndexDecisions = async (
         decisionCountField,
         indexId,
         aggregationFilter: route.aggregationFilter,
-        queryFor: facetQueries(),
+        queryFor: reads.facetQueryFor,
         readSourceRegistry,
         recordCacheOutcome: (outcome) => {
           facetCache = outcome;
         },
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
-        totalQuery: resolved.query,
+        totalQuery: reads.totalQuery,
       }).then((read) => {
         facetMs = performance.now() - concurrentStartedAt;
         trace.facetMs = facetMs;
@@ -3865,7 +3967,47 @@ export const searchCorpusIndexDecisions = async (
   const checkedTerms = distinctRequiredTerms(requiredTerms);
   // A decision an identifier named was not matched by the words.
   const strictTerms = allTermsHeld(requiredTerms);
-  const page = decisionHitsPage({
+  // A ranked page reads each decision's words off the decision field: one
+  // aggregation per word over this page's decisions, each in its applied
+  // copy. Not optional and not on a sub-budget: the page states every hit's
+  // words, so it is answered with them or fails as a whole.
+  const pageWordsRead = await (async () => {
+    const rankedPlan = reads.plan;
+    if (rankedPlan === null) {
+      return Result.ok({
+        termsOf: (id: string) =>
+          pinnedIds.has(id) ? NO_HIT_TERMS : strictTerms,
+        matchOf: (): DecisionSearchMatch => "all_terms",
+        // The partial pass appends after the full matches.
+        hitOrder: PASSAGE_HIT_ORDER,
+      });
+    }
+    const read = await readRankedPageWords({
+      aggregate: getCorpusIndexClient(serving.cluster).aggregate,
+      observer,
+      signal,
+      indexId,
+      plan: rankedPlan,
+      revisionField: requireCorpusIndexManifest("case_law", generation)
+        .projection.projectionRevisionField,
+      appliedRevisionOf: (id) =>
+        hydrated.get(id)?.appliedRevision ??
+        panic("Ranked hit has no applied revision"),
+      ids: pageRanked
+        .filter((hit) => !pinnedIds.has(hit.id))
+        .map((hit) => hit.id),
+    });
+    return read.map((held) => ({
+      termsOf: rankedHitTerms({ plan: rankedPlan, held, pinnedIds }),
+      matchOf: rankedMatch,
+      hitOrder: CASE_LAW_RANKED_HIT_ORDER,
+    }));
+  })();
+  if (Result.isError(pageWordsRead)) {
+    return rankedPageWordsRefusal(pageWordsRead.error);
+  }
+  const pageWords = pageWordsRead.value;
+  const strictPage = decisionHitsPage({
     alternatesByGroupKey,
     anchorIdById,
     byId,
@@ -3879,8 +4021,19 @@ export const searchCorpusIndexDecisions = async (
     headnotePresentation: body.headnotePresentation,
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
     match: "all_terms",
-    termsOf: (id) => (pinnedIds.has(id) ? NO_HIT_TERMS : strictTerms),
+    termsOf: pageWords.termsOf,
   });
+  // On a ranked page a decision holding every word is a full match and one
+  // missing a word is partial, wherever in its text the words stand.
+  // The page's order is the policy's, applied here and named on the page so
+  // every reader keeps it.
+  const page = {
+    ...strictPage,
+    hits: orderCaseLawHits(
+      strictPage.hits.map((hit) => ({ ...hit, match: pageWords.matchOf(hit) })),
+      pageWords.hitOrder,
+    ),
+  };
   const strictEnd = searchPageEnd(searchPage);
   // The strict hits stay first and untouched; partial matches only follow.
   const readRelaxedHits = async (stepSignal: AbortSignal) => {
@@ -4011,15 +4164,50 @@ export const searchCorpusIndexDecisions = async (
       countType: FACET_COUNT_TYPE.ESTIMATE,
     }));
   };
-  const fewHoldEveryWord = fewDecisionsHoldEveryWord({
-    intentType: intent.type,
-    isFirstPage,
-    requiredTermCount: checkedTerms.length,
-    strictHitCount: page.hits.length,
-    limit,
-    strictEnd,
-  });
-  const [relaxedOutcome, countsOutcome] = await Promise.all([
+  // Which word is the rare one, when few decisions hold them all: on a
+  // ranked search counted against the decision field, on the passage path
+  // against the passages, under the partial pass's budget.
+  const readCountsIfDue =
+    async (): Promise<RelaxedTopUpOutcome<TermDecisionCounts> | null> => {
+      const rankedPlan = reads.plan;
+      if (rankedPlan !== null) {
+        return isFirstPage && rankedPlan.words.length >= 2
+          ? rankedCountsOutcome(
+              await readRankedTermDecisionCounts({
+                aggregate: getCorpusIndexClient(serving.cluster).aggregate,
+                observer,
+                signal,
+                indexId,
+                filter: route.aggregationFilter,
+                decisionCountField,
+                plan: rankedPlan,
+                limit,
+              }),
+            )
+          : null;
+      }
+      return fewDecisionsHoldEveryWord({
+        intentType: intent.type,
+        isFirstPage,
+        requiredTermCount: checkedTerms.length,
+        strictHitCount: page.hits.length,
+        limit,
+        strictEnd,
+      })
+        ? relaxedTopUpOutcome(
+            await runBoundedRequestStep(readCounts, {
+              label: "case-law-term-decision-counts",
+              budgetMs: CASE_LAW_RELAXED_TOP_UP_BUDGET_MS,
+            }),
+          )
+        : null;
+    };
+  // Only the passage generations have a partial pass: a generation with the
+  // decision field answers partial matches in its one ranked query, or, for
+  // the queries it keeps on the passages, not at all.
+  const partialPassDue = (): boolean =>
+    rankedShape.type === "passages" &&
+    rankedShape.reason === "not_a_decision_generation" &&
     shouldRelaxCaseLawSearch({
       body,
       intentType: intent.type,
@@ -4029,18 +4217,15 @@ export const searchCorpusIndexDecisions = async (
       strictHitCount: page.hits.length,
       limit,
       strictEnd,
-    })
+    });
+  const [relaxedOutcome, countsOutcome] = await Promise.all([
+    partialPassDue()
       ? runBoundedRequestStep(readRelaxedHits, {
           label: "case-law-relaxed-top-up",
           budgetMs: CASE_LAW_RELAXED_TOP_UP_BUDGET_MS,
         }).then(relaxedTopUpOutcome)
       : null,
-    fewHoldEveryWord
-      ? runBoundedRequestStep(readCounts, {
-          label: "case-law-term-decision-counts",
-          budgetMs: CASE_LAW_RELAXED_TOP_UP_BUDGET_MS,
-        }).then(relaxedTopUpOutcome)
-      : null,
+    readCountsIfDue(),
   ]);
   const { value: relaxed, state: partialMatches } = settledRelaxedTopUp(
     relaxedOutcome,
@@ -4095,10 +4280,12 @@ export const searchCorpusIndexDecisions = async (
     body,
     interpretation,
     hitCount: hits.length,
-    partialHitCount: relaxedHits.length,
+    // Partial hits: appended by the partial pass, or ranked among the rest.
+    partialHitCount: hits.filter(({ match }) => match === "some_terms").length,
     countsResultSet: isFirstPage && strictEnd === SEARCH_PAGE_END.COMPLETE,
     partialMatches,
     termDecisionCounts,
+    hitOrder: pageWords.hitOrder,
   });
   return projectCaseLawSearchResponse(
     {
@@ -4996,6 +5183,7 @@ export const listCaseLawProvisionDecisions = async ({
       ...page,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
+      hitOrder: "all_words_first",
       queryUsed: "",
       relaxedHitCount: 0,
       termDecisionCounts: null,

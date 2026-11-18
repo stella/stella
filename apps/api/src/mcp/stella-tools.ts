@@ -19,6 +19,8 @@ import {
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  caseLawHitGroup,
+  type CaseLawHitOrder,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
@@ -1958,6 +1960,9 @@ type MergedCaseLawHit = {
  */
 const mergeCaseLawSearchHits = (
   pagesByQuery: readonly (readonly CaseLawSearchHit[])[],
+  // The order the search answered in: the merge keeps it, so a phrasing
+  // reads in the same order here as from the search itself.
+  order: CaseLawHitOrder,
 ): readonly MergedCaseLawHit[] => {
   const merged = new Map<string, MergedCaseLawHit>();
   for (const [queryIndex, hits] of pagesByQuery.entries()) {
@@ -1978,8 +1983,9 @@ const mergeCaseLawSearchHits = (
       // A full match represents the decision over any partial one: its hit
       // (excerpt) and rank stand, and ranks compare only within one class,
       // so a promoted decision never sorts by its partial rank.
-      const promotes = hit.match === "all_terms" && seen.match === "some_terms";
-      if (promotes || (hit.match === seen.match && rank < seen.rank)) {
+      const group = caseLawHitGroup(hit.match, order);
+      const seenGroup = caseLawHitGroup(seen.match, order);
+      if (group < seenGroup || (group === seenGroup && rank < seen.rank)) {
         seen.hit = hit;
         seen.rank = rank;
         seen.match = hit.match;
@@ -1994,8 +2000,8 @@ const mergeCaseLawSearchHits = (
       // Partial matches follow every full match: within one query they are
       // appended after it, and ranks of different queries are not comparable
       // across that line.
-      Number(left.match === "some_terms") -
-        Number(right.match === "some_terms") ||
+      caseLawHitGroup(left.match, order) -
+        caseLawHitGroup(right.match, order) ||
       left.rank - right.rank ||
       right.matchedQueries.length - left.matchedQueries.length ||
       (left.hit.decisionId < right.hit.decisionId ? -1 : 1),
@@ -2009,6 +2015,24 @@ const partialMatchesUnread = (outcome: {
 }): boolean =>
   outcome.type === SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.type &&
   outcome.reason === SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.reason;
+
+/**
+ * The order the merged page keeps: the one every phrasing's page names. All
+ * phrasings of a call read one generation, so they name the same order; a
+ * call whose pages disagree keeps full matches first, which no page's own
+ * order contradicts within itself.
+ */
+const mergedCaseLawHitOrder = (
+  pages: readonly CaseLawQueryOutcome[],
+): CaseLawHitOrder => {
+  const orders = new Set(
+    pages.flatMap((outcome) =>
+      outcome.type === "page" ? [outcome.page.hitOrder] : [],
+    ),
+  );
+  const [only] = orders;
+  return orders.size === 1 && only !== undefined ? only : "all_words_first";
+};
 
 /**
  * A phrasing in the merged cursor that has returned no page yet. `null` means
@@ -2811,7 +2835,7 @@ const listSearchCaseLawProvision = async ({
     return answer.result;
   }
   const { page } = answer;
-  const merged = mergeCaseLawSearchHits([page.hits]);
+  const merged = mergeCaseLawSearchHits([page.hits], page.hitOrder);
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: page.facets,
@@ -3158,6 +3182,12 @@ const phrasingProgressReporter = (
           pendingQueries,
           decisions: mergeCaseLawSearchHits(
             [...settledPages.values()].map(({ hits }) => hits),
+            mergedCaseLawHitOrder(
+              [...settledPages.values()].map((page) => ({
+                type: "page" as const,
+                page,
+              })),
+            ),
           ).map(({ hit }) => ({
             decisionId: hit.decisionId,
             caseNumber: hit.caseNumber,
@@ -3431,6 +3461,7 @@ const searchCaseLawWork = async ({
 
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.type === "page" ? outcome.page.hits : [])),
+    mergedCaseLawHitOrder(pages),
   );
 
   // Facets describe the first phrasing, without double-counting overlapping
