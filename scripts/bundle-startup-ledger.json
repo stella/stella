@@ -57,11 +57,6 @@
     },
     {
       "kind": "tsr-shared",
-      "module": "src/routes/law/index.tsx?tsr-shared=1",
-      "reason": "LawHomePending and LawHome share LawHomeGreeting."
-    },
-    {
-      "kind": "tsr-shared",
       "module": "src/routes/auth/index.tsx?tsr-shared=1",
       "reason": "beforeLoad and the component share getOauthPostLoginRedirectTo."
     },
