@@ -7,14 +7,14 @@ import {
   createRootRouteWithContext,
   type ErrorComponentProps,
   HeadContent,
-  isRedirect,
   Outlet,
   redirect,
   Scripts,
+  useNavigate,
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import { cn } from "@stll/ui/utils";
 
@@ -127,65 +127,6 @@ export const Route = createRootRouteWithContext<{
   notFoundComponent: RootNotFoundComponent,
 });
 
-// Public documents hydrate from the anonymous server render and reuse its
-// route context. Their browser guards run in place after mounting; only a
-// redirect they raise navigates. Re-navigating to the same address instead
-// would hold the route content dehydrated until the session read settles,
-// and that content would then hydrate against state the server never had.
-const enterPublicDocument = async ({
-  router,
-  queryClient,
-}: {
-  router: ReturnType<typeof useRouter>;
-  queryClient: QueryClient;
-}) => {
-  const location = router.state.location;
-  const entered = await Result.tryPromise(async () => {
-    await requireFreshDocument({ queryClient, location });
-    await requireProfessionalUseForSignedInRoute({ queryClient, location });
-  });
-  if (entered.isOk()) {
-    return;
-  }
-  const { cause } = entered.error;
-  if (isRedirect(cause)) {
-    await router.navigate({ ...cause.options, replace: true });
-    return;
-  }
-  // A guard that failed otherwise re-runs as a navigation, so the router's
-  // own boundaries handle the failure as they did before.
-  await router.navigate({
-    href: location.publicHref,
-    replace: true,
-    resetScroll: false,
-  });
-};
-
-/**
- * A handoff captured before a server-rendered document hydrated is redeemed
- * in place for the same reason; only its outcome navigates.
- */
-const enterHandoffDocument = async ({
-  router,
-  queryClient,
-  href,
-}: {
-  router: ReturnType<typeof useRouter>;
-  queryClient: QueryClient;
-  href: string;
-}) => {
-  const handoffRedirect = await loadMcpHandoff();
-  if (handoffRedirect) {
-    await router.navigate({ ...handoffRedirect.options, replace: true });
-    return;
-  }
-  if (isPublicSsrPath(router.state.location.pathname)) {
-    await enterPublicDocument({ router, queryClient });
-    return;
-  }
-  await router.navigate({ href, replace: true });
-};
-
 function RootNotFoundComponent() {
   const appContext = Route.useRouteContext({
     select: (context) => ({
@@ -226,32 +167,41 @@ function RootComponent() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const navigate = useNavigate();
   const router = useRouter();
-  const { analyticsValue, queryClient } = Route.useRouteContext({
-    select: (context) => ({
-      analyticsValue: context.analyticsValue,
-      queryClient: context.queryClient,
-    }),
-  });
-  // Public documents reuse server route context during hydration; their
-  // browser guards run after mounting (see enterPublicDocument).
+  // Public documents reuse server route context during hydration. Re-enter
+  // the browser guard after mounting so redirects stay in the router boundary.
   useMountEffect(() => {
     sweepStaleRedirectRequests();
     const href = pendingHandoffPath();
     if (href) {
       detached(
-        enterHandoffDocument({ router, queryClient, href }),
+        navigate({
+          href,
+          replace: true,
+        }),
         "mcp-handoff.route-entry",
       );
       return;
     }
     if (isPublicSsrPath(router.state.location.pathname)) {
       detached(
-        enterPublicDocument({ router, queryClient }),
+        navigate({
+          href: router.state.location.publicHref,
+          replace: true,
+          resetScroll: false,
+        }),
         "professional-use.route-entry",
       );
     }
   });
+  const { analyticsValue, queryClient } = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
+
   return (
     <AppProviders analyticsValue={analyticsValue} queryClient={queryClient}>
       {!(isDev && pathname === "/dev") && (

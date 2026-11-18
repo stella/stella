@@ -18,11 +18,12 @@ import {
   writeBrowserPresentationPrefs,
 } from "@/lib/account/presentation-prefs/provider";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { fetchSession } from "@/lib/auth-queries";
+import { fetchSession, sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { isCurrentDocumentSession } from "@/lib/session-cache-guard";
-import { loadAuthContext } from "@/routes/-auth-context";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type DocumentUser = { id: string; locale: string | null } | null;
 type DocumentLocaleFingerprint = `${string}:${string}`;
@@ -208,8 +209,14 @@ const updateProfileLocale = async (locale: SupportedLanguage) => {
 
 const clientLocaleOwner = createClientDocumentLocaleOwner({
   readBootUser: async (queryClient) => {
-    const { user } = await loadAuthContext(queryClient);
-    return user === null ? null : { id: user.id, locale: user.locale };
+    // Session transitions refresh this read through the session signals.
+    const session = await ensureRouteQueryData(
+      queryClient,
+      resourceQueryOptions({ ...sessionOptions }, { type: "independent" }),
+    );
+    return session?.user !== undefined
+      ? { id: session.user.id, locale: session.user.locale }
+      : null;
   },
   readSelectionUser: async () => {
     const session = await fetchSession();
