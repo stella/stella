@@ -28,6 +28,7 @@ import {
   type CorpusIndexProjectionSubject,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusProjectionMigrationDdl } from "@/api/tests/helpers/corpus-projection-migration-ddl";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -120,30 +121,11 @@ export const corpusProjectionLegacyFixture = (
   const installProjectionDdl = async (
     withServedCopyGuard: boolean,
   ): Promise<void> => {
-    const migrations = [
-      ...new Bun.Glob("*corpus*projection*/migration.sql").scanSync(
-        Bun.fileURLToPath(DRIZZLE_DIR),
-      ),
-    ]
-      .filter((migration) => !migration.includes("projection_revision"))
-      // The test database build installs the delete task queue's triggers.
-      .filter((migration) => !migration.includes("projection_delete_tasks"))
-      .filter(
-        (migration) => withServedCopyGuard || migration < SERVED_COPY_MIGRATION,
-      )
-      .toSorted();
-    for (const migration of migrations) {
-      const text = await Bun.file(new URL(migration, DRIZZLE_DIR)).text();
-      for (const statement of text.split("--> statement-breakpoint")) {
-        const ddl = statement.trim();
-        if (
-          /(?:^|\n)\s*CREATE (?:OR REPLACE )?FUNCTION\b/u.test(ddl) ||
-          /(?:^|\n)\s*CREATE TRIGGER\b/u.test(ddl)
-        ) {
-          // db-await-in-loop: DDL applies in migration order
-          await database().execute(sql.raw(ddl));
-        }
-      }
+    for (const ddl of await corpusProjectionMigrationDdl(
+      withServedCopyGuard ? {} : { before: SERVED_COPY_MIGRATION },
+    )) {
+      // db-await-in-loop: DDL applies in migration order
+      await database().execute(sql.raw(ddl));
     }
   };
 

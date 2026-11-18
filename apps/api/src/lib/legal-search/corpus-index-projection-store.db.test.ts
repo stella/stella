@@ -61,6 +61,7 @@ import {
   unparkCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
+import { corpusProjectionMigrationDdl } from "@/api/tests/helpers/corpus-projection-migration-ddl";
 import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -186,7 +187,6 @@ const acceptAndProveAppend = async (
 };
 const POL_INDEX_ID = "case_law_v5_pol";
 const INITIAL_RUNNABLE_AT = new Date("2026-08-25T00:00:00.000Z");
-const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -341,40 +341,10 @@ const verifySettlement = async ({
 };
 
 const installProjectionMigrationDdl = async (): Promise<void> => {
-  const projectionMigrations = [
-    ...new Bun.Glob("*corpus*projection*/migration.sql").scanSync(
-      Bun.fileURLToPath(DRIZZLE_DIR),
-    ),
-  ]
-    .filter((migration) => !migration.includes("projection_revision"))
-    // The test database build installs the delete task queue's triggers.
-    .filter((migration) => !migration.includes("projection_delete_tasks"))
-    .toSorted();
-  const migrations = await Promise.all(
-    projectionMigrations.map(
-      async (migration) =>
-        await Bun.file(new URL(migration, DRIZZLE_DIR)).text(),
-    ),
-  );
-  const ddls = migrations.flatMap((migration) =>
-    migration
-      .split("--> statement-breakpoint")
-      .map((statement) => statement.trim())
-      .filter(
-        (ddl) =>
-          /(?:^|\n)\s*CREATE (?:OR REPLACE )?FUNCTION\b/u.test(ddl) ||
-          /(?:^|\n)\s*CREATE TRIGGER\b/u.test(ddl),
-      ),
-  );
-  const executeInOrder = async (index: number): Promise<void> => {
-    const ddl = ddls.at(index);
-    if (ddl === undefined) {
-      return;
-    }
+  for (const ddl of await corpusProjectionMigrationDdl()) {
+    // db-await-in-loop: DDL applies in migration order
     await db.execute(sql.raw(ddl));
-    await executeInOrder(index + 1);
-  };
-  await executeInOrder(0);
+  }
 };
 
 const seedDatabase = async (): Promise<void> => {
