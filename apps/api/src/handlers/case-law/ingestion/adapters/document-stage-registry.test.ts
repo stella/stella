@@ -300,7 +300,7 @@ test("scoped adapter callbacks preserve receivers, arguments and rejections whil
 });
 
 describe("a page fetch that throws", () => {
-  const throwing = (cause: unknown) =>
+  const throwing = (cause: Error) =>
     defineSourceAdapter({
       ...plKioAdapter,
       fetchPage: async () => await Promise.reject(cause),
