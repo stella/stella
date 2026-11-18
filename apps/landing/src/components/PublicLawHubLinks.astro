@@ -6,9 +6,9 @@ import { getTranslations } from "../i18n/utils";
 
 // Plain links from the marketing site into the public legal database's
 // crawlable jurisdiction hubs, one per jurisdiction whose pages are public.
-interface Props {
+type Props = {
   locale: Locale;
-}
+};
 
 const { locale } = Astro.props;
 const t = getTranslations(locale);

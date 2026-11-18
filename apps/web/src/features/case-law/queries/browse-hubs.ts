@@ -10,10 +10,13 @@ import {
   unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /**
  * The crawlable browse tree's reads: every one a bounded index read the API
  * owns (see `browse-hubs.ts` there), and the listing the public table uses.
+ * Public corpus reads that no client write changes, so each declares no
+ * resource dependency.
  */
 
 type ListingRequest = {
@@ -43,18 +46,21 @@ const timeout = (signal: AbortSignal) =>
 
 /** Every court of a jurisdiction a public page may name. */
 export const caseLawBrowseCourtsOptions = (country: string) =>
-  queryOptions({
-    queryKey: browseKeys.courts(country),
-    queryFn: async ({ signal }) =>
-      unwrapPublicLawResponse(
-        await api.case.browse.courts.get({
-          query: { country },
-          fetch: { signal: timeout(signal) },
-        }),
-        "listPublicCaseLawBrowseCourts",
-      ),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: browseKeys.courts(country),
+      queryFn: async ({ signal }) =>
+        unwrapPublicLawResponse(
+          await api.case.browse.courts.get({
+            query: { country },
+            fetch: { signal: timeout(signal) },
+          }),
+          "listPublicCaseLawBrowseCourts",
+        ),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    { type: "independent" },
+  );
 
 type CalendarRequest = {
   country: string;
@@ -70,23 +76,31 @@ export const caseLawBrowseCalendarOptions = ({
   month,
   year,
 }: CalendarRequest) =>
-  queryOptions({
-    queryKey: browseKeys.calendar(country, court, year ?? null, month ?? null),
-    queryFn: async ({ signal }) =>
-      unwrapPublicLawResponse(
-        await api.case.browse.calendar.get({
-          query: {
-            country,
-            court,
-            ...(year !== undefined && { year }),
-            ...(month !== undefined && { month }),
-          },
-          fetch: { signal: timeout(signal) },
-        }),
-        "readPublicCaseLawBrowseCalendar",
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: browseKeys.calendar(
+        country,
+        court,
+        year ?? null,
+        month ?? null,
       ),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+      queryFn: async ({ signal }) =>
+        unwrapPublicLawResponse(
+          await api.case.browse.calendar.get({
+            query: {
+              country,
+              court,
+              ...(year !== undefined && { year }),
+              ...(month !== undefined && { month }),
+            },
+            fetch: { signal: timeout(signal) },
+          }),
+          "readPublicCaseLawBrowseCalendar",
+        ),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    { type: "independent" },
+  );
 
 const readBrowseListing = async (
   { country, court, readingLanguages, target }: ListingRequest,
@@ -120,8 +134,11 @@ export type CaseLawBrowseDecision = Awaited<
  * the period's dates, addressed by offset within its depth bound.
  */
 export const caseLawBrowseListingOptions = (request: ListingRequest) =>
-  queryOptions({
-    queryKey: browseKeys.listing(request),
-    queryFn: async ({ signal }) => await readBrowseListing(request, signal),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: browseKeys.listing(request),
+      queryFn: async ({ signal }) => await readBrowseListing(request, signal),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    { type: "independent" },
+  );
