@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import * as v from "valibot";
 
 import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
@@ -17,8 +18,13 @@ const sessionLocale = async (page: Page) => {
     `${E2E_API_ORIGIN}/api/auth/get-session`,
   );
   expect(response.ok()).toBe(true);
-  const session = await response.json();
-  return session?.user?.locale ?? null;
+  const session = v.parse(
+    v.nullable(
+      v.object({ user: v.object({ locale: v.nullish(v.string(), null) }) }),
+    ),
+    await response.json(),
+  );
+  return session?.user.locale ?? null;
 };
 
 const presentationPrefs = async (page: Page) => {
