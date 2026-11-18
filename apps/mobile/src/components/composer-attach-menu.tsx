@@ -1,5 +1,7 @@
-import { Pressable } from "react-native";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer-tokens";
 
 import { PlusIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
@@ -23,13 +25,14 @@ export const ComposerAttachMenu = ({
   const t = useTranslations("chat");
 
   return (
-    <Pressable
+    <Button
       accessibilityLabel={t("attachFile")}
-      accessibilityRole="button"
-      className="border-border bg-secondary mb-[3px] size-9 items-center justify-center rounded-full border"
+      className="border-border mb-[3px] size-9 rounded-full"
       onPress={onAttachFile}
+      size={COMPOSER_CONTROL_BUTTON_SIZE}
+      variant="secondary"
     >
       <PlusIcon color={ui.secondaryForeground} size={18} />
-    </Pressable>
+    </Button>
   );
 };

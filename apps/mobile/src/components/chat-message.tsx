@@ -2,7 +2,7 @@ import { use } from "react";
 import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
-import { Pressable, Share, View } from "react-native";
+import { Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
@@ -131,7 +131,7 @@ const UserMessage = ({
     return <View className="items-end gap-1.5">{children}</View>;
   }
   return (
-    <Pressable
+    <Button
       accessibilityActions={[{ name: "longpress", label: t("edit.action") }]}
       className="items-end gap-1.5"
       onAccessibilityAction={({ nativeEvent }) => {
@@ -140,9 +140,10 @@ const UserMessage = ({
         }
       }}
       onLongPress={onLongPress}
+      variant="plain"
     >
       {children}
-    </Pressable>
+    </Button>
   );
 };
 
@@ -229,10 +230,8 @@ const ShareAnswer = ({ text }: { text: string }) => {
   const t = useTranslations("link");
   const matterId = use(ThreadMatter);
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
       className="self-start"
-      hitSlop={8}
       onPress={() => {
         const message = plainText(text, {
           appScheme: MOBILE_REDIRECT_SCHEMES[APP_VARIANT],
@@ -240,9 +239,11 @@ const ShareAnswer = ({ text }: { text: string }) => {
         });
         void Share.share({ message });
       }}
+      size="inline"
+      variant="muted"
     >
       <Text variant="caption">{t("share")}</Text>
-    </Pressable>
+    </Button>
   );
 };
 
