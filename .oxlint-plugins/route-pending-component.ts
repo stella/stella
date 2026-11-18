@@ -290,12 +290,18 @@ const routePendingComponent = {
       },
     };
 
-    function importedFrom(value, suffix: string) {
+    // The module stem an identifier was imported from with `suffix`
+    // (`./x.page` gives `./x`), or null.
+    function importedStem(value, suffix: string): string | null {
       if (!isIdentifier(value)) {
-        return false;
+        return null;
       }
       const source = importSources.get(value.name);
-      return source !== undefined && stripExtension(source).endsWith(suffix);
+      if (source === undefined) {
+        return null;
+      }
+      const bare = stripExtension(source);
+      return bare.endsWith(suffix) ? bare.slice(0, -suffix.length) : null;
     }
 
     function checkRoute(call) {
@@ -334,9 +340,12 @@ const routePendingComponent = {
         findings.push({ node: pending, messageId: "defaultPendingComponent" });
         return;
       }
+      // The page and its pending view come from one pair of siblings, so a
+      // route never waits on another page's shell.
+      const pageStemOfRoute = importedStem(component.value, ".page");
       const paired =
-        importedFrom(component.value, ".page") &&
-        importedFrom(pending.value, ".pending") &&
+        pageStemOfRoute !== null &&
+        importedStem(pending.value, ".pending") === pageStemOfRoute &&
         component.value.name !== pending.value.name;
       if (!paired) {
         findings.push({ node: pending, messageId: "pageModulePair" });
@@ -359,27 +368,53 @@ const pendingModuleImports = {
     schema: [],
   },
   createOnce(context) {
+    // Local names bound to the router's URL hooks, aliases included.
+    const urlHookLocals = new Set<string>();
+    const checkSource = (node) => {
+      if (
+        isTypeOnlyImport(node) ||
+        node.exportKind === "type" ||
+        isPendingSafeSource(node.source.value) ||
+        importsOnlySafeNames(node)
+      ) {
+        return;
+      }
+      context.report({ node, messageId: "closedImport" });
+    };
     return {
+      Program() {
+        urlHookLocals.clear();
+      },
       ImportDeclaration(node) {
-        if (
-          isTypeOnlyImport(node) ||
-          isPendingSafeSource(node.source.value) ||
-          importsOnlySafeNames(node)
-        ) {
-          return;
+        for (const specifier of node.specifiers ?? []) {
+          const imported =
+            specifier.type === "ImportSpecifier"
+              ? getPropertyName(specifier.imported)
+              : null;
+          if (imported !== null && LOOSE_URL_HOOKS.has(imported)) {
+            urlHookLocals.add(specifier.local.name);
+          }
         }
-        context.report({ node, messageId: "closedImport" });
+        checkSource(node);
+      },
+      // A re-export is a runtime dependency of the pending half too.
+      ExportNamedDeclaration(node) {
+        if (node.source) {
+          checkSource(node);
+        }
+      },
+      ExportAllDeclaration(node) {
+        checkSource(node);
       },
       ImportExpression(node) {
         context.report({ node, messageId: "dynamicImport" });
       },
       CallExpression(node) {
         const callee = node.callee;
-        if (
-          callee?.type === "Identifier" &&
-          LOOSE_URL_HOOKS.has(callee.name) &&
-          isLooseCall(node)
-        ) {
+        if (callee?.type === "Identifier" && urlHookLocals.has(callee.name)) {
+          if (!isLooseCall(node)) {
+            context.report({ node, messageId: "bannedCall" });
+          }
           return;
         }
         const name =
@@ -401,16 +436,20 @@ const pageModuleShell = {
     type: "problem" as const,
     messages: {
       missingShellImport:
-        "A page module renders the shell its sibling `.pending` module exports, so the two phases cannot drift: import it from `./{{stem}}.pending`.",
+        "A page module renders the shell its sibling `.pending` module exports, so the two phases cannot drift: import it from `./{{stem}}.pending` and render it.",
     },
     schema: [],
   },
   createOnce(context) {
-    let importsSibling = false;
+    // Value bindings imported from the sibling pending module, and whether
+    // the page renders one of them as an element.
+    const siblingLocals = new Set<string>();
+    let rendersSibling = false;
     let firstStatement: unknown = null;
     return {
       Program(node) {
-        importsSibling = false;
+        siblingLocals.clear();
+        rendersSibling = false;
         // Reported on the module's first statement, where a reader looks for
         // its imports.
         firstStatement = node.body?.[0] ?? node;
@@ -418,15 +457,29 @@ const pageModuleShell = {
       ImportDeclaration(node) {
         const stem = pageStem(context);
         if (
-          stem !== null &&
-          stripExtension(node.source.value).endsWith(`/${stem}.pending`)
+          stem === null ||
+          node.importKind === "type" ||
+          !stripExtension(node.source.value).endsWith(`/${stem}.pending`)
         ) {
-          importsSibling = true;
+          return;
+        }
+        for (const specifier of node.specifiers ?? []) {
+          if (specifier.importKind !== "type") {
+            siblingLocals.add(specifier.local.name);
+          }
+        }
+      },
+      JSXOpeningElement(node) {
+        if (
+          node.name?.type === "JSXIdentifier" &&
+          siblingLocals.has(node.name.name)
+        ) {
+          rendersSibling = true;
         }
       },
       "Program:exit"() {
         const stem = pageStem(context);
-        if (stem !== null && !importsSibling && isAstNode(firstStatement)) {
+        if (stem !== null && !rendersSibling && isAstNode(firstStatement)) {
           context.report({
             node: firstStatement,
             messageId: "missingShellImport",

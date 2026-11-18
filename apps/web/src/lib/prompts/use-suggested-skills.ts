@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
 import type { SkillLastEdit } from "@/components/chat-editor-slash-items";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -7,6 +5,7 @@ import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
+import { suggestedSkillsFrom } from "@/lib/prompts/suggested-skills.logic";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -91,34 +90,22 @@ export const useSuggestedSkills = (): SuggestedSkills => {
   if (activeOrganizationId === undefined || userId === undefined) {
     return NO_MEMBER_SUGGESTIONS;
   }
-  switch (skillPagesView.type) {
-    case "pending":
-      return { type: "pending" };
-    case "error":
-      return { type: "error", feedback: skillPagesView };
-    case "empty":
-    case "items": {
-      const rows = commandShortcutRowsFromSkillPages(
-        skillPages?.pages,
-        unavailableSkillIds,
-      );
-      return {
-        type: "loaded",
-        feedback: skillPagesView,
-        skills: rows.slice(0, MAX_SUGGESTIONS).map((row) => ({
-          id: row.id,
-          scope: row.scope,
-          name: row.name,
-          command: row.command,
-          body: row.prompt,
-          lastEdit: row.lastEdit,
-        })),
-      };
-    }
-    default:
-      skillPagesView satisfies never;
-      return panic("Unhandled suggested skills state");
-  }
+  const rows = commandShortcutRowsFromSkillPages(
+    skillPages?.pages,
+    unavailableSkillIds,
+  );
+  return suggestedSkillsFrom({
+    hasNextPage,
+    skills: rows.slice(0, MAX_SUGGESTIONS).map((row) => ({
+      id: row.id,
+      scope: row.scope,
+      name: row.name,
+      command: row.command,
+      body: row.prompt,
+      lastEdit: row.lastEdit,
+    })),
+    view: skillPagesView,
+  });
 };
 
 /** The suggestions to offer now: none until they have loaded. */

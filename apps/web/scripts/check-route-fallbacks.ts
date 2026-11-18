@@ -123,6 +123,11 @@ const SHELL_SYMBOLS = new Set([
   "StellaMark",
 ]);
 const LOGO_LOADER_MODULE = "@stll/ui/loader";
+// The modules that export the shared landing greeting.
+const LANDING_GREETING_MODULES: ReadonlySet<string> = new Set([
+  "@stll/ui/landing",
+  "@stll/ui/landing-shell",
+]);
 
 class FallbackSymbols {
   private readonly modules = new Map<string, Module>();
@@ -507,7 +512,15 @@ class FallbackSymbols {
     if (this.isInlineLoader(file, node)) {
       return [];
     }
-    if (this.text(file, node.name) !== "LandingGreeting") {
+    // Only the shared greeting: a local component of the same name is
+    // inspected like any other.
+    const name = this.text(file, node.name);
+    const binding = this.load(file).imports.get(name);
+    if (
+      name !== "LandingGreeting" ||
+      binding?.name !== "LandingGreeting" ||
+      !LANDING_GREETING_MODULES.has(binding.module)
+    ) {
       return undefined;
     }
     return node.attributes.flatMap((attribute) =>

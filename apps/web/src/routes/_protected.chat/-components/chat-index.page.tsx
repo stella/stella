@@ -20,6 +20,7 @@ import {
   LANDING_SECTION_HEADING_CLASS,
   LandingEmpty,
   LandingItemText,
+  LandingSectionHeadingPending,
 } from "@stll/ui/landing";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -277,8 +278,10 @@ function ChatIndex() {
 
   // Mirror the per-thread seeding from ChatThreadPage: if the user
   // previously enabled web search and the draft thread doesn't have
-  // it on, PATCH it on. Marks seeded only on success so a transient
-  // failure can retry on the next render.
+  // it on, PATCH it on. Marks seeded only on success; a failed seed is
+  // not retried on its own (mutations never retry silently): the
+  // composer's web search control keeps showing the draft's real "off"
+  // state, and the member switches it on there.
   const enabledPreference = useChatWebSearchPreferenceStore(
     (state) => state.enabledPreference,
   );
@@ -569,7 +572,9 @@ function ChatIndex() {
     await navigate({
       to: "/chat/$threadId",
       params: {
-        threadId: threadIdRef.current ?? createChatThreadId(),
+        // The thread this send started on: a `/new` typed meanwhile rotates
+        // the draft, and the member follows the message they sent.
+        threadId: threadRef.threadId,
       },
     });
     detached(
@@ -659,24 +664,30 @@ function ChatIndex() {
         </>
       }
       matters={{
-        heading: (
-          <Tooltip
-            content={t("chat.landing.openAllMatters")}
-            render={
-              <Link
-                className={LANDING_SECTION_HEADING_CLASS}
-                to="/workspaces"
-              />
-            }
-          >
-            {pinnedMatters.length > 0 ? (
-              <PinIcon className="size-4" />
-            ) : (
-              <MatterIcon className="size-4" variant="all" />
-            )}
-            {mattersHeading}
-          </Tooltip>
-        ),
+        // Pinned or last accessed is known only once the matters arrive:
+        // until then the heading waits, as in the pending phase, rather than
+        // naming one and switching to the other.
+        heading:
+          workspacesDataView.type === "pending" ? (
+            <LandingSectionHeadingPending />
+          ) : (
+            <Tooltip
+              content={t("chat.landing.openAllMatters")}
+              render={
+                <Link
+                  className={LANDING_SECTION_HEADING_CLASS}
+                  to="/workspaces"
+                />
+              }
+            >
+              {pinnedMatters.length > 0 ? (
+                <PinIcon className="size-4" />
+              ) : (
+                <MatterIcon className="size-4" variant="all" />
+              )}
+              {mattersHeading}
+            </Tooltip>
+          ),
         rows: (
           <>
             <LandingQueryFeedback view={workspacesDataView} />

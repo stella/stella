@@ -170,18 +170,66 @@ test("a pending half may read the URL loosely and the cache synchronously", asyn
   ).toEqual([1, 2, 3, 4, 5]);
 });
 
+test("an aliased URL hook and a re-export are checked like the originals", async () => {
+  expect(
+    await pendingRule(
+      [
+        'import { useParams as readParams } from "@tanstack/react-router";',
+        "const A = () => readParams({ strict: false });",
+        "const B = () => readParams({ from: '/x' });",
+        'export { Menu } from "@stll/ui/menu";',
+        'export * from "@tanstack/react-query";',
+        'export { RowsPending } from "./rows.pending";',
+        'export type { Props } from "@stll/ui/menu";',
+      ].join("\n"),
+    ),
+  ).toEqual([3, 4, 5]);
+});
+
+test("a route pairs the page and pending view of one module stem", async () => {
+  expect(
+    await routeRule(
+      [
+        'import { APage } from "./-a.page";',
+        'import { BPending } from "./-b.pending";',
+        'createFileRoute("/a")({ component: APage, pendingComponent: BPending });',
+      ].join("\n"),
+    ),
+  ).toEqual([3]);
+});
+
 test("a page module renders the shell from its sibling pending module", async () => {
   expect(
     await lintSingleRule(
       "page-module-shell",
-      'import { ChatIndexShell } from "@/routes/_protected.chat/-components/chat-index.pending";',
+      [
+        'import type { ShellProps } from "./chat-index.pending";',
+        'import { ChatIndexShell } from "./chat-index.pending";',
+        "export const ChatIndexPage = (props: ShellProps) => <div {...props} />;",
+      ].join("\n"),
+      { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
+    ),
+  ).toEqual([1]);
+});
+
+test("a page module that imports and renders its sibling shell passes", async () => {
+  expect(
+    await lintSingleRule(
+      "page-module-shell",
+      [
+        'import { ChatIndexShell } from "@/routes/_protected.chat/-components/chat-index.pending";',
+        "export const ChatIndexPage = () => <ChatIndexShell rows={null} />;",
+      ].join("\n"),
       { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
     ),
   ).toEqual([]);
   expect(
     await lintSingleRule(
       "page-module-shell",
-      'import { OtherShell } from "./other.pending";',
+      [
+        'import { OtherShell } from "./other.pending";',
+        "export const ChatIndexPage = () => <OtherShell />;",
+      ].join("\n"),
       { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
     ),
   ).toEqual([1]);

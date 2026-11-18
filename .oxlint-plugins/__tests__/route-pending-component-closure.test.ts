@@ -77,6 +77,29 @@ for (const entry of policy.pendingSafeModules) {
   });
 }
 
+// The pending halves themselves, so a `.logic` module or a re-export they
+// pull in is walked too, not only the allowlisted modules.
+const PENDING_MODULES = [
+  ...new Bun.Glob("**/*.pending.tsx").scanSync({
+    cwd: path.join(REPOSITORY_ROOT, "apps/web/src"),
+  }),
+].map((file) => path.join(REPOSITORY_ROOT, "apps/web/src", file));
+
+test("the walk finds the route pending halves", () => {
+  expect(PENDING_MODULES.length).toBeGreaterThan(0);
+});
+
+for (const module of PENDING_MODULES) {
+  test(`pending half ${repoRelativePath(REPOSITORY_ROOT, module)} reaches nothing heavy`, () => {
+    const { reached, unresolved } = importClosure(module);
+    expect(unresolved).toBe(false);
+    const offenders = reached.flatMap(({ from, specifier }) =>
+      banned(specifier) === undefined ? [] : [`${from} -> ${specifier}`],
+    );
+    expect(offenders).toEqual([]);
+  });
+}
+
 test("the closure walk reaches a banned module when one is imported", () => {
   // A known-heavy module, so a walk that silently stops early fails here.
   const { reached } = importClosure("@stll/ui/menu");
