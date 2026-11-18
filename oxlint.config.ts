@@ -1648,11 +1648,6 @@ const config = defineConfig({
     // Effects and fire-and-forget calls run outside an async function (485
     // findings).
     "promise/prefer-await-to-then": "off",
-    // Since oxlint 1.93 it checks every `.then` call, not only statements.
-    // `then(onFulfilled, onRejected)` settles both outcomes in one step and
-    // has no behaviour-preserving `catch` rewrite: `then(a).catch(b)` also
-    // catches a throw from `a` (603 findings).
-    "promise/prefer-catch": "off",
     // Arrow functions take the name of their binding (1086 findings).
     "func-names": "off",
     // Style only; `function-component-definition` owns component style (343
@@ -6550,16 +6545,6 @@ const config = defineConfig({
       files: ["apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: {
         "no-raw-mcp-error-result/no-raw-mcp-error-result": "error",
-      },
-    },
-    {
-      // Under oxlint 1.93 this rule's type queries raise TS2590 ("union type
-      // too complex to represent") when checking
-      // toOutputContractMap(DEFAULT_MCP_TOOL_SETS) against the generic
-      // McpToolSet. Off for this file only; revisit when upstream fixes it.
-      files: ["apps/api/src/mcp/static-tool-definitions.ts"],
-      rules: {
-        "typescript/no-unsafe-enum-assignment": "off",
       },
     },
     {

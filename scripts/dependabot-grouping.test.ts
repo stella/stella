@@ -90,7 +90,16 @@ const ignorePolicies = {
   },
   "oxlint-tsgolint": {
     reason:
-      "7.0.2006 fails the type-aware lint on Linux CI runners; held until upstream fixes it.",
+      "Stays on the release that pairs with oxlint 1.90 while oxlint is held.",
+    type: "documented_policy",
+  },
+  oxlint: {
+    reason:
+      "1.93 makes the root-script type-aware lint about 3x slower; held at 1.90.",
+    type: "documented_policy",
+  },
+  "@oxlint/plugins": {
+    reason: "Moves with oxlint, which is held at 1.90.",
     type: "documented_policy",
   },
   "lucide-static": {

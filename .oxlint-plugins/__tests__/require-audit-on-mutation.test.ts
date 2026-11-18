@@ -64,10 +64,6 @@ export const second = (tx: Writer) => attempt({ try: () => tx.insert(audits) });
 
 type Budgets = Record<string, Record<string, number>>;
 
-// A file-level diagnostic sits on the Program node, which spans the whole
-// source text (including the leading newline), so it reports on line 1.
-const PROGRAM_LINE = 1;
-
 const AT_BUDGET: Budgets = {
   saveRow: { "insert:rows": 2 },
   clearRows: { "delete:rows": 1 },
@@ -170,7 +166,7 @@ export const save = () => {
         "first.try": { "insert:rows": 1, "insert:audits": 1 },
         "second.try": {},
       }),
-    ).toEqual([PROGRAM_LINE, 20]);
+    ).toEqual([2, 20]);
   });
 
   test("an owner the ledger does not name has no budget", async () => {
@@ -187,7 +183,7 @@ export const save = () => {
 
 const MEMBER_RUN_PATH = "apps/api/src/lib/flows/flow-executor.ts";
 // Every write in the fixture, reported when no budget or registration covers
-// the file; a rejected registration also reports the program.
+// the file; a rejected registration also reports the program (line 2).
 const FIXTURE_WRITE_LINES = [10, 11, 16, 19, 20];
 
 const lintSystemModule = async (
@@ -213,7 +209,7 @@ describe("require-audit-on-mutation system modules", () => {
       await lintSystemModule(SOURCE_PATH, {
         [SOURCE_PATH]: "system:not-an-actor",
       }),
-    ).toEqual([PROGRAM_LINE, ...FIXTURE_WRITE_LINES]);
+    ).toEqual([2, ...FIXTURE_WRITE_LINES]);
   });
 
   test("a member-run module cannot be registered as a system module", async () => {
@@ -221,7 +217,7 @@ describe("require-audit-on-mutation system modules", () => {
       await lintSystemModule(MEMBER_RUN_PATH, {
         [MEMBER_RUN_PATH]: "system:file-comparison-sweep",
       }),
-    ).toEqual([PROGRAM_LINE, ...FIXTURE_WRITE_LINES]);
+    ).toEqual([2, ...FIXTURE_WRITE_LINES]);
   });
 
   test("another file's registration does not cover this one", async () => {

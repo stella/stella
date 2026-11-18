@@ -392,10 +392,16 @@ updates:
       - dependency-name: "lucide-static"
         versions:
           - ">1.70.0"
-      # oxlint-tsgolint 7.0.2006 fails on the Linux CI runners under oxlint
-      # 1.93 (tsgolint exits with os error 11, and the type-aware lint in
-      # scripts/code-check-affected.test.ts times out). Remove this when an
-      # upstream release runs cleanly there.
+      # oxlint 1.93 makes the root-script type-aware lint in
+      # scripts/code-check-affected.test.ts about 3x slower (7-11 s to 28-30 s
+      # on CI). oxlint, @oxlint/plugins and oxlint-tsgolint stay on the
+      # versions that pair with oxlint 1.90 until that is fixed.
+      - dependency-name: "oxlint"
+        versions:
+          - ">1.90.0"
+      - dependency-name: "@oxlint/plugins"
+        versions:
+          - ">1.90.0"
       - dependency-name: "oxlint-tsgolint"
         versions:
           - ">7.0.2005"
