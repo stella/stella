@@ -124,7 +124,10 @@ describe("public read continuation over MCP", () => {
       name: "a page whose partial-match top-up was skipped",
       answer: () =>
         toolDataResult<Data, Data>({
-          warnings: [{ code: "partial_matches_unread" }],
+          paginationOutcome: {
+            type: "truncated",
+            reason: "partial_matches_budget",
+          },
         }),
     },
     {

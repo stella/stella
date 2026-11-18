@@ -219,6 +219,7 @@ const isInvoiceAccessPredicate = (expression: string | null): boolean =>
 const INVOICE_CHILD_TABLES: ReadonlySet<string> = new Set([
   "invoice_lines",
   "invoice_payments",
+  "invoice_sends",
 ]);
 
 const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
@@ -606,6 +607,11 @@ describe("policy coverage", () => {
     // workspace policies would hide exactly the rows the check exists to
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
+    // An invoice's email sends are visible exactly when their invoice is: a
+    // restrictive policy reads invoices under their own row security, and the
+    // rows leave only with the invoice, so the app role has no DELETE.
+    // invoice-links.integration.test.ts asserts that boundary.
+    "invoice_sends",
     // A legal hold is an organization record: an item hold carries no
     // workspace_id, so workspace policies would hide it from the deletion
     // checks that must see it. The request role places and releases holds but

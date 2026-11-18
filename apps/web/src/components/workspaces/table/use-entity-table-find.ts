@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { resolveEntityFind } from "@/components/workspaces/table/entity-find.logic";
 import type { EntityFindResolution } from "@/components/workspaces/table/entity-find.logic";
 import { UNRESTRICTED_FIND } from "@/components/workspaces/table/table-find.logic";
@@ -38,17 +36,13 @@ export const useEntityTableFind = ({
     (state) => state.find[workspaceId]?.[viewId]?.scope ?? UNRESTRICTED_FIND,
   );
 
-  return useMemo(
-    () =>
-      resolveEntityFind({
-        hasNameColumn,
-        hiddenProperties,
-        properties,
-        selection,
-        term,
-      }),
-    [hasNameColumn, hiddenProperties, properties, selection, term],
-  );
+  return resolveEntityFind({
+    hasNameColumn,
+    hiddenProperties,
+    properties,
+    selection,
+    term,
+  });
 };
 
 /**

@@ -256,7 +256,7 @@ const facetAggregations = ({
  * with a JSON float from a sketch, and a fractional "3.0000000001 decisions"
  * is not a number to put in front of a reader. Null when the shape is not one.
  */
-const readCardinality = (aggregation: unknown): number | null => {
+export const readCardinality = (aggregation: unknown): number | null => {
   if (!isRecord(aggregation)) {
     return null;
   }

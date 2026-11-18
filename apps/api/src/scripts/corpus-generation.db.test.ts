@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexFlipEngine } from "@/api/lib/legal-search/corpus-index-generation-flip";
+import type { CorpusIndexRetireEngine } from "@/api/lib/legal-search/corpus-index-generation-retire";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -182,6 +183,8 @@ type RunOptions = {
   engine?: EngineState;
   /** An engine for serve that answers the route census fixture's index. */
   flipEngine?: CorpusIndexFlipEngine;
+  /** The engine retire lists and deletes indexes on. */
+  retireEngine?: CorpusIndexRetireEngine;
   database?: WithCorpusDatabase;
   searchEndpoint?: string | null;
   seeding?: SeedingLoad;
@@ -189,10 +192,33 @@ type RunOptions = {
 
 type RunOutcome = { code: number; out: string; err: string };
 
+/** An engine holding `indexIds`, which retire lists and deletes from. */
+const retireEngineWith = (
+  indexIds: readonly string[],
+): CorpusIndexRetireEngine & { indexes: Set<string> } => {
+  const indexes = new Set(indexIds);
+  return {
+    indexes,
+    readPublishedSplitCounts: async ({ includes }) =>
+      await Promise.resolve(
+        Result.ok(
+          [...indexes]
+            .filter((indexId) => includes(indexId))
+            .map((indexId) => ({ indexId, publishedSplits: 2 })),
+        ),
+      ),
+    deleteIndex: async (indexId) => {
+      indexes.delete(indexId);
+      return await Promise.resolve(Result.ok());
+    },
+  };
+};
+
 const run = async ({
   args,
   engine = engineWith([]),
   flipEngine,
+  retireEngine = retireEngineWith([]),
   database = testDatabase(),
   searchEndpoint = SEARCH_ENDPOINT,
   seeding = { verdict: "normal" },
@@ -216,6 +242,7 @@ const run = async ({
       maxWaitMs: 0,
     },
     searchEndpoint: () => searchEndpoint,
+    retireEngine: () => retireEngine,
     indexClient: () =>
       flipEngine ?? {
         readIndexIncarnation: async (indexId) =>
@@ -865,5 +892,219 @@ describe("corpus generation operator command", () => {
       ).code,
     ).toBe(6);
     expect(exit({ type: "inactive", status: "retiring" }, null).code).toBe(1);
+  });
+});
+
+describe("retire", () => {
+  // The cleanup's page runtime keeps its checkpoint and any brake hold by
+  // run name, outside the tables the suite truncates.
+  const clearCleanupCheckpoints = async () => {
+    await db
+      .delete(databaseBackfillStates)
+      .where(sql`${databaseBackfillStates.name} LIKE 'corpus-retire:%'`);
+  };
+  beforeEach(clearCleanupCheckpoints);
+  const registerRow = async (
+    generation: "case_law_v6" | "case_law_v7",
+    status: "building" | "serving",
+  ) => {
+    await db.insert(corpusIndexGenerations).values({
+      family: "case_law",
+      generation,
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS[generation],
+      ),
+      status,
+    });
+  };
+  const retireAuditCounts = async () =>
+    (
+      await db
+        .select({ counts: systemAuditRuns.counts })
+        .from(systemAuditRuns)
+        .where(eq(systemAuditRuns.actor, "system:corpus-generation-retire"))
+        .orderBy(systemAuditRuns.id)
+    ).map(({ counts }) => counts);
+  const historyOf = async (generation: string) => ({
+    states: (
+      await db
+        .select({ entityId: corpusIndexProjectionStates.entityId })
+        .from(corpusIndexProjectionStates)
+        .where(eq(corpusIndexProjectionStates.generation, generation))
+    ).length,
+    intents: (
+      await db
+        .select({ id: corpusIndexProjectionIntents.id })
+        .from(corpusIndexProjectionIntents)
+        .where(eq(corpusIndexProjectionIntents.generation, generation))
+    ).length,
+  });
+  const APPLY = [
+    "--apply",
+    "--actor",
+    "operator:test",
+    "--reason",
+    "never serves",
+  ];
+
+  test("a dry run plans and writes nothing; --apply retires, deletes the generation's indexes and its history; a rerun finds nothing left", async () => {
+    await registerRow("case_law_v7", "serving");
+    await registerRow("case_law_v6", "building");
+    await seedConvergedProjection("case_law_v7");
+    await seedConvergedProjection("case_law_v6");
+    const engine = retireEngineWith([
+      "case_law_v6_cs_sk",
+      "case_law_v6_eu",
+      "case_law_v7_cs_sk",
+      "case_law_v60_cze",
+    ]);
+
+    const report = await run({
+      args: caseLaw("retire", "case_law_v6"),
+      retireEngine: engine,
+    });
+    expect(report.code).toBe(0);
+    expect(report.out).toContain(
+      "plan: case_law_v6 building -> retired; no writer projects it from that commit on",
+    );
+    expect(report.out).toContain("holds: 1 projection states, 1 revisions");
+    expect(report.out).toContain(
+      "plan: delete 2 engine indexes: case_law_v6_cs_sk (2 splits), case_law_v6_eu (2 splits)",
+    );
+    expect(report.out).toContain("Dry run: nothing written");
+    expect(await statusOf("case_law_v6")).toBe("building");
+    expect(engine.indexes.size).toBe(4);
+
+    const unsigned = await run({
+      args: caseLaw("retire", "case_law_v6", "--apply"),
+      retireEngine: engine,
+    });
+    expect(unsigned.code).toBe(1);
+    expect(unsigned.err).toContain("retire --apply needs --actor and --reason");
+
+    const applied = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: engine,
+    });
+    expect(applied.err).toBe("");
+    expect(applied.code).toBe(0);
+    expect(applied.out).toContain(
+      "Applied: case_law/case_law_v6 is retired as of",
+    );
+    expect(applied.out).toContain("deleted engine index case_law_v6_cs_sk");
+    expect(applied.out).toContain("left: 0 projection states, 0 revisions");
+    expect(await statusOf("case_law_v6")).toBe("retired");
+    expect([...engine.indexes].toSorted()).toEqual([
+      "case_law_v60_cze",
+      "case_law_v7_cs_sk",
+    ]);
+    expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
+    expect(await historyOf("case_law_v7")).toEqual({ states: 1, intents: 1 });
+    expect(await retireAuditCounts()).toEqual([
+      { retired: 1, deletedIndexes: 0, deletedStates: 0, deletedIntents: 0 },
+      { retired: 0, deletedIndexes: 2, deletedStates: 1, deletedIntents: 1 },
+    ]);
+
+    const rerun = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: engine,
+    });
+    expect(rerun.code).toBe(0);
+    expect(rerun.out).toContain("checked: already retired at");
+    expect(rerun.out).toContain("by operator:test (never serves)");
+    // A run that deleted nothing records nothing.
+    expect(await retireAuditCounts()).toHaveLength(2);
+  });
+
+  test("retire refuses the serving generation with its exit code, and the brake pauses the cleanup until a rerun", async () => {
+    await registerRow("case_law_v7", "serving");
+    await registerRow("case_law_v6", "building");
+    await seedConvergedProjection("case_law_v6");
+
+    const serving = await run({
+      args: caseLaw("retire", "case_law_v7", ...APPLY),
+    });
+    expect(serving.code).toBe(10);
+    expect(serving.err).toContain("refused (registry: serving)");
+    expect(await statusOf("case_law_v7")).toBe("serving");
+
+    const braked = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      seeding: { verdict: "stop" },
+    });
+    expect(braked.code).toBe(6);
+    expect(braked.err).toContain("run retire again to resume");
+    // Retired at once; the history waits for the brake.
+    expect(await statusOf("case_law_v6")).toBe("retired");
+    expect(await historyOf("case_law_v6")).toEqual({ states: 1, intents: 1 });
+    // The hold the brake left on the run's checkpoint has run out.
+    await clearCleanupCheckpoints();
+
+    const resumed = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+    });
+    expect(resumed.code).toBe(0);
+    expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
+  });
+  test("an engine that cannot delete leaves the history cleanup to run, exits engine, and a rerun finishes the indexes", async () => {
+    await registerRow("case_law_v6", "building");
+    await seedConvergedProjection("case_law_v6");
+    const engine = retireEngineWith(["case_law_v6_cs_sk", "case_law_v7_cs_sk"]);
+    const down: CorpusIndexRetireEngine = {
+      readPublishedSplitCounts: engine.readPublishedSplitCounts,
+      deleteIndex: async () =>
+        await Promise.resolve(
+          Result.err(
+            new CorpusIndexError({ message: "build lane parked", status: 503 }),
+          ),
+        ),
+    };
+    const failed = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: down,
+    });
+    expect(failed.code).toBe(15);
+    expect(failed.err).toContain("did not delete case_law_v6_cs_sk");
+    expect(await statusOf("case_law_v6")).toBe("retired");
+    expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
+    expect([...engine.indexes].toSorted()).toEqual([
+      "case_law_v6_cs_sk",
+      "case_law_v7_cs_sk",
+    ]);
+
+    const rerun = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: engine,
+    });
+    expect(rerun.code).toBe(0);
+    expect([...engine.indexes]).toEqual(["case_law_v7_cs_sk"]);
+  });
+  test("an engine that cannot list refuses the dry run, and an apply still retires and cleans the history", async () => {
+    await registerRow("case_law_v6", "building");
+    await seedConvergedProjection("case_law_v6");
+    const unlisted: CorpusIndexRetireEngine = {
+      readPublishedSplitCounts: async () =>
+        await Promise.resolve(
+          Result.err(
+            new CorpusIndexError({ message: "search lane down", status: 503 }),
+          ),
+        ),
+      deleteIndex: async () => await Promise.resolve(Result.ok()),
+    };
+    const report = await run({
+      args: caseLaw("retire", "case_law_v6"),
+      retireEngine: unlisted,
+    });
+    expect(report.code).toBe(15);
+    expect(await statusOf("case_law_v6")).toBe("building");
+
+    const applied = await run({
+      args: caseLaw("retire", "case_law_v6", ...APPLY),
+      retireEngine: unlisted,
+    });
+    expect(applied.code).toBe(15);
+    expect(await statusOf("case_law_v6")).toBe("retired");
+    expect(await historyOf("case_law_v6")).toEqual({ states: 0, intents: 0 });
   });
 });

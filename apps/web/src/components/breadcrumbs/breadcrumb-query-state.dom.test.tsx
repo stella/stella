@@ -115,7 +115,7 @@ const organizationSettings = {
   aiInstructions: "",
   aiInstructionsMaxLength: 3000,
   declaredFeatureIds: [],
-  deploymentFeatures: { legalLists: true },
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",

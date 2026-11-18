@@ -19,12 +19,16 @@ import { LIMITS } from "@/api/lib/limits";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 
 import {
+  allTermsHeld,
+  distinctRequiredTerms,
+  fewDecisionsHoldEveryWord,
+  hitTermsFromCoverage,
   rankByTermCoverage,
   readTermCoverage,
+  readTermDecisionCounts,
   relaxedFetchLimit,
   relaxedTopUpOutcome,
   shouldRelaxCaseLawSearch,
-  termsForCoverage,
 } from "./search-relaxed";
 
 const ELIGIBLE = {
@@ -53,6 +57,10 @@ describe("when a short strict page is topped up", () => {
     ["a full strict page", { strictHitCount: 10 }],
     ["an identifier lookup", { intentType: "identifier" }],
     ["a single required term", { requiredTermCount: 1 }],
+    [
+      "more words than the phase checks one by one",
+      { requiredTermCount: LIMITS.caseLawSearchTermCountsMax + 1 },
+    ],
     ["a continuation", { strictEnd: SEARCH_PAGE_END.MORE }],
     ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
   ] as const)("%s is not", (_name, override) => {
@@ -66,27 +74,110 @@ describe("when a short strict page is topped up", () => {
   });
 });
 
-describe("termsForCoverage", () => {
-  test("keeps distinct terms, longest first, within the bound", () => {
-    const terms = [
-      "a",
-      "bbbb",
-      "bbbb",
-      "cc",
-      "ddddd",
-      "eee",
-      "ffffff",
-      "ggggggg",
-      "h",
-    ].map((value) => ({ value }));
-    expect(termsForCoverage(terms).map(({ value }) => value)).toEqual([
-      "ggggggg",
-      "ffffff",
-      "ddddd",
-      "bbbb",
-      "eee",
-      "cc",
+describe("matched and missing words", () => {
+  const terms = [
+    { type: "term", value: "loajalita" },
+    { type: "phrase", value: "ušlý zisk" },
+    { type: "term", value: "loajalita" },
+    { type: "term", value: "škoda" },
+  ] as const;
+
+  test("every distinct word is checked, in the query's order", () => {
+    // Nothing is dropped for length: a word left out of the check would be
+    // reported as neither matched nor missing.
+    expect(distinctRequiredTerms(terms).map(({ value }) => value)).toEqual([
+      "loajalita",
+      "ušlý zisk",
+      "škoda",
     ]);
+  });
+
+  test("a hit holds the words its coverage found and lacks the rest", () => {
+    expect(hitTermsFromCoverage(terms, new Set([0, 2]))).toEqual({
+      matchedTerms: ["loajalita", "škoda"],
+      missingTerms: ['"ušlý zisk"'],
+    });
+  });
+
+  test("matched and missing partition the distinct words for every subset", () => {
+    const distinct = distinctRequiredTerms(terms);
+    // Every subset of the word indexes, built by doubling.
+    const subsets: number[][] = [[]];
+    for (const index of distinct.keys()) {
+      for (const set of subsets.slice()) {
+        subsets.push([...set, index]);
+      }
+    }
+    expect(subsets).toHaveLength(2 ** distinct.length);
+    for (const subset of subsets) {
+      const held = new Set(subset);
+      const { matchedTerms, missingTerms } = hitTermsFromCoverage(terms, held);
+      expect(matchedTerms).toHaveLength(held.size);
+      expect(new Set([...matchedTerms, ...missingTerms])).toEqual(
+        new Set(allTermsHeld(terms).matchedTerms),
+      );
+      expect(matchedTerms.length + missingTerms.length).toBe(distinct.length);
+    }
+  });
+});
+
+describe("when the words are counted one by one", () => {
+  const SHORT = {
+    intentType: "text",
+    isFirstPage: true,
+    requiredTermCount: 3,
+    strictHitCount: 2,
+    limit: 10,
+    strictEnd: SEARCH_PAGE_END.COMPLETE,
+  } as const;
+
+  test("a short, exhausted first page is", () => {
+    expect(fewDecisionsHoldEveryWord(SHORT)).toBe(true);
+  });
+
+  test.each([
+    ["a full page", { strictHitCount: 10 }],
+    ["a continuation page", { isFirstPage: false }],
+    ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
+    ["an identifier", { intentType: "identifier" }],
+    ["one word", { requiredTermCount: 1 }],
+  ] as const)("%s is not", (_name, override) => {
+    expect(fewDecisionsHoldEveryWord({ ...SHORT, ...override })).toBe(false);
+  });
+
+  test("each word gets its own distinct decision count", async () => {
+    const asked: unknown[] = [];
+    const counts = await readTermDecisionCounts({
+      observer: "unobserved",
+      indexId: "fixture-index",
+      filter: "jurisdiction:CZE",
+      decisionCountField: "document_id",
+      queries: ["text:a", "text:b"],
+      aggregate: async ({ query, filter, aggs }) => {
+        asked.push({ query, filter, aggs });
+        return Result.ok({
+          decisions: { value: query === "text:a" ? 12.0000001 : 3 },
+        });
+      },
+    });
+    expect(counts.unwrap()).toEqual([12, 3]);
+    expect(asked).toContainEqual({
+      query: "text:b",
+      filter: "jurisdiction:CZE",
+      aggs: { decisions: { cardinality: { field: "document_id" } } },
+    });
+  });
+
+  test("an unreadable count fails rather than reading as zero", async () => {
+    const counts = await readTermDecisionCounts({
+      observer: "unobserved",
+      indexId: "fixture-index",
+      filter: undefined,
+      decisionCountField: "document_id",
+      queries: ["text:a"],
+      aggregate: async () => Result.ok({ decisions: {} }),
+    });
+    expect(Result.isError(counts)).toBe(true);
   });
 });
 
@@ -189,9 +280,14 @@ test.each(["complete", "truncated", "missing"] as const)(
     });
     const coverageById = coverage.unwrap();
     expect(queries).toHaveLength(4);
-    expect([...coverageById]).toEqual([
-      ["two", 2],
-      ["four", 4],
+    expect(
+      [...coverageById].map(([id, held]) => [
+        id,
+        [...held].toSorted((left, right) => left - right),
+      ]),
+    ).toEqual([
+      ["two", [0, 1]],
+      ["four", [0, 1, 2, 3]],
     ]);
     expect(
       rankByTermCoverage({ ranked: candidates, coverageById }).map(
@@ -206,8 +302,8 @@ test("equal engine coverage keeps the blended order", () => {
     rankByTermCoverage({
       ranked: [hit("a", 3), hit("b", 2)],
       coverageById: new Map([
-        ["a", 2],
-        ["b", 2],
+        ["a", new Set([0, 1])],
+        ["b", new Set([1, 2])],
       ]),
     }).map(({ id }) => id),
   ).toEqual(["a", "b"]);

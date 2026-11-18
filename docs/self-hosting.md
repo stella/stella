@@ -53,6 +53,20 @@ Unknown feature IDs are dropped at startup and emit the count-only ERROR event
 `feature_access.unknown_grant`. Invalid JSON or malformed grant shapes remain
 fatal configuration errors.
 
+Organization invitation grants use the same parameter as `activity-timeline`:
+
+```json
+{ "invoice-links": [{ "type": "organization", "organizationId": "org-id" }] }
+```
+
+Invoice links require this organization grant and `FEATURE_INVOICE_LINKS=true`.
+`FEATURE_TIME_BILLING` must also be enabled, and sending requires the caller's time-billing enrolment.
+History and revocation require normal invoice access and time-billing availability,
+without an invoice-links grant or personal enrolment. Member grants for invoice-links
+are rejected as invalid configuration. Removing the organization grant prevents delivery and makes existing links
+unavailable without deleting data. Public recipients need no account. Grant
+changes take effect when the configured parameter refresh is applied.
+
 The optional layout preview for generated views is available only in stella's
 cloud; on a self-hosted instance the assistant is told the preview is
 unavailable and the view is still published.
@@ -291,6 +305,7 @@ by `budgetName`. These observations contain no caller identifiers or addresses.
 | `RATE_LIMIT_API_FOLIO_COLLAB_MAX` / `RATE_LIMIT_API_FOLIO_COLLAB_DURATION_MS`                                                    |                    30 |                                                    60,000 ms |
 | `RATE_LIMIT_API_AGENT_AUTH_MAX` / `RATE_LIMIT_API_AGENT_AUTH_DURATION_MS`                                                        |                    60 |                                                    60,000 ms |
 | `RATE_LIMIT_API_TRANSLATE_MAX` / `RATE_LIMIT_API_TRANSLATE_DURATION_MS`                                                          |                    30 |                                                    60,000 ms |
+| `RATE_LIMIT_API_INVOICE_LINK_MAX` / `RATE_LIMIT_API_INVOICE_LINK_DURATION_MS`                                                    |                    30 |                                                    60,000 ms |
 | `RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_MAX` / `RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_DURATION_MS`                                    |                   300 |                                                    60,000 ms |
 | `RATE_LIMIT_API_DELETE_ACCOUNT_OTP_MAX` / `RATE_LIMIT_API_DELETE_ACCOUNT_OTP_DURATION_MS`                                        |                     5 |                                                    60,000 ms |
 | `RATE_LIMIT_API_TWO_FACTOR_MANAGE_OTP_MAX` / `RATE_LIMIT_API_TWO_FACTOR_MANAGE_OTP_DURATION_MS`                                  |                     5 |                                                    60,000 ms |

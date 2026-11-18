@@ -1,4 +1,4 @@
-import { lazy, useCallback, useState } from "react";
+import { lazy, useState } from "react";
 
 import { cn } from "@stll/ui/utils";
 
@@ -173,7 +173,7 @@ export const FileViewerWithAI = ({
 };
 
 const DocxHorizontalScrollbar = () => {
-  const trackRef = useCallback((track: HTMLDivElement | null) => {
+  const trackRef = (track: HTMLDivElement | null) => {
     if (!track?.parentElement) {
       return () => undefined;
     }
@@ -338,7 +338,7 @@ const DocxHorizontalScrollbar = () => {
       pointerCleanup();
       track.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, []);
+  };
 
   return (
     <div
