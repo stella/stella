@@ -423,7 +423,7 @@ const withOmittedDefaults = (
         }
         return ts.visitEachChild(node, visit, context);
       };
-      return (node) => ts.visitNode(node, visit, ts.isTypeNode) ?? node;
+      return (node) => ts.visitNode(node, visit, ts.isTypeNode);
     },
   ]);
   const result =
