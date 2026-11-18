@@ -162,6 +162,10 @@ import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
 } from "@/api/handlers/chat/local-run-plan";
+import {
+  loadLocalRunSkillTools,
+  type LocalRunSkillTool,
+} from "@/api/handlers/chat/local-run-skills";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -2373,6 +2377,8 @@ export type SendMessageDependencies = {
    * to this process's own.
    */
   localRunRuntime?: ResolveChatLocalRunOptions["runtime"];
+  /** The skill tools a run on the member's computer is served over MCP. */
+  loadLocalRunSkillTools?: typeof loadLocalRunSkillTools;
   /**
    * Rebuilds live authority when a delayed registry tool runs. Defaults to
    * fresh credential-boundary membership, matter, and database scopes.
@@ -2440,6 +2446,7 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
  */
 const turnPromptTarget = (
   runTarget: ChatRunTarget | undefined,
+  skillTools: readonly LocalRunSkillTool[],
 ): ChatPromptTarget =>
   runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
     ? CLOUD_PROMPT_TARGET
@@ -2449,7 +2456,30 @@ const turnPromptTarget = (
           CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
             runTarget.approvals
           ],
+        skillTools,
       };
+
+/**
+ * The turn's prompt target. A run on the member's computer lists the skill
+ * tools its own MCP session will be served, read the way that session reads
+ * them.
+ */
+const loadTurnPromptTarget = async ({
+  loadSkillTools,
+  localRun,
+  runTarget,
+  ...run
+}: Parameters<typeof loadLocalRunSkillTools>[0] & {
+  loadSkillTools: typeof loadLocalRunSkillTools;
+  localRun: LocalChatRun | undefined;
+  runTarget: ChatRunTarget | undefined;
+}): Promise<Result<ChatPromptTarget, HandlerError<500>>> => {
+  if (localRun === undefined) {
+    return Result.ok(turnPromptTarget(runTarget, []));
+  }
+  const skillTools = await loadSkillTools(run);
+  return skillTools.map((tools) => turnPromptTarget(runTarget, tools));
+};
 
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
@@ -3301,10 +3331,24 @@ export const createSendMessage = (
           });
           return skillToolNames;
         };
+        const promptTarget = await loadTurnPromptTarget({
+          loadSkillTools:
+            dependencies.loadLocalRunSkillTools ?? loadLocalRunSkillTools,
+          localRun,
+          organizationId: session.activeOrganizationId,
+          runId: body.runId,
+          runTarget: body.runTarget,
+          userId: user.id,
+          workspaceIds: toolWorkspaceIds,
+        });
+        if (Result.isError(promptTarget)) {
+          await lifecycle.failCurrentTurn("internal", true);
+          return Result.err(promptTarget.error);
+        }
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
-          promptTarget: turnPromptTarget(body.runTarget),
+          promptTarget: promptTarget.value,
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3455,6 +3499,7 @@ export const createSendMessage = (
             load: async () =>
               loadRequestedSkillsPrompt({
                 activeSkillContext: chatContext.activeSkillContext,
+                promptTarget: promptTarget.value,
                 bindingScope: chatContext.skillBindingScope,
                 catalog: chatContext.skillMetadata,
                 messages: chatContext.hydratedMessages,
