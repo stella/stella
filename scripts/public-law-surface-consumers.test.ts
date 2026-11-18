@@ -110,6 +110,7 @@ const CONSUMERS = {
   "apps/web/src/lib/case-law-route.ts": "search",
   "apps/web/src/components/legal-citation-search.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
+  "apps/web/src/routes/law/-law-home/law-home.page.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",

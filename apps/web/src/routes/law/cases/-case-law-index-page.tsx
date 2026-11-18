@@ -129,7 +129,7 @@ import {
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { queryView, queryViewError } from "@/lib/query-view.logic";
-import type { RouteState } from "@/lib/route-state";
+import type { RouteState } from "@/routes/-route-pending-view";
 import {
   PublicLawListFailure,
   PublicLawResultsBoundary,

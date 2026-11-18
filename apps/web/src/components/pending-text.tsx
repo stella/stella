@@ -6,8 +6,6 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import type { TranslationKey } from "@/i18n/types";
-
 // Whether the app's intl is mounted above. A pending view also renders where
 // it is not (the server's cold-load paint, the locale gate), so it may not
 // call `useTranslations` itself.
@@ -18,7 +16,19 @@ export const PendingTextIntlScope = ({ children }: PropsWithChildren) => (
   <PendingIntlContext value>{children}</PendingIntlContext>
 );
 
-const TranslatedText = ({ id }: { id: TranslationKey }) => {
+// The static labels pending views show. A closed union keeps the
+// translator's key type small (`t` checks each one is a real message); a
+// page adds its labels here as it gains a pending view.
+type PendingTextKey =
+  | "chat.greeting"
+  | "chat.landing.recentChats"
+  | "chat.landing.skills"
+  | "lawHome.prompt"
+  | "lawHome.recent"
+  | "lawHome.signals"
+  | "lawHome.topCourts";
+
+const TranslatedText = ({ id }: { id: PendingTextKey }) => {
   const t = useTranslations();
   return t(id);
 };
@@ -34,7 +44,7 @@ export const PendingText = ({
 }: {
   /** The bar's width, roughly the label's. */
   barClassName?: string | undefined;
-  id: TranslationKey;
+  id: PendingTextKey;
 }) =>
   use(PendingIntlContext) ? (
     <TranslatedText id={id} />

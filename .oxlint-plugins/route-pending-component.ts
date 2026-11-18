@@ -149,7 +149,7 @@ const fileStem = (context, suffix: string) => {
 
 const routePendingComponent = {
   meta: {
-    type: "problem",
+    type: "problem" as const,
     messages: {
       missingPendingComponent:
         "A page route declares `pendingComponent`: its page in a pending phase, from a sibling `.pending` module (see apps/web/src/routes/-route-pending-view.tsx). A layout uses `pendingComponent: LeafPendingView`; a route that only redirects uses `component: redirectRouteComponent({ to })`.",
@@ -286,7 +286,7 @@ const routePendingComponent = {
 
 const pendingModuleImports = {
   meta: {
-    type: "problem",
+    type: "problem" as const,
     messages: {
       closedImport:
         "A pending half imports only `.pending` and `.logic` modules, type-only imports and the pending-safe modules in .oxlint-plugins/route-pending-component-policy.json: it ships in the entry chunk and renders before any provider.",
@@ -326,7 +326,7 @@ const pendingModuleImports = {
 
 const pageModuleShell = {
   meta: {
-    type: "problem",
+    type: "problem" as const,
     messages: {
       missingShellImport:
         "A page module renders the shell its sibling `.pending` module exports, so the two phases cannot drift: import it from `./{{stem}}.pending`.",

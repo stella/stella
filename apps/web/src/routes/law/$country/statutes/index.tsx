@@ -98,10 +98,10 @@ import {
 } from "@/lib/public-law-seo";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import type { RouteState } from "@/lib/route-state";
 import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
 import { useQueryViewError } from "@/lib/use-query-view";
+import type { RouteState } from "@/routes/-route-pending-view";
 import {
   PublicLawQueryFeedback,
   PublicLawResultsBoundary,

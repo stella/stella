@@ -1,4 +1,4 @@
-import type { RouteState } from "@/lib/route-state";
+import type { RouteState } from "@/routes/-route-pending-view";
 
 /**
  * Whether the results route holds a navigation until its rows arrive.

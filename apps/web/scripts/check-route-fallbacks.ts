@@ -313,8 +313,11 @@ class FallbackSymbols {
     if (node.type === "JSXClosingElement") {
       return [];
     }
-    if (node.type === "JSXOpeningElement" && this.isInlineLoader(file, node)) {
-      return [];
+    if (node.type === "JSXOpeningElement") {
+      const exempt = this.inspectExemptElement(file, node, visited, locals);
+      if (exempt) {
+        return exempt;
+      }
     }
     if (node.type === "JSXAttribute") {
       return this.inspectAttribute(file, node, visited, locals);
@@ -490,6 +493,29 @@ class FallbackSymbols {
     };
     visitChildren(body, returns);
     return findings;
+  }
+  // Elements whose chrome is not the frame's: an inline loader, and a landing
+  // greeting's tile, which holds the page's own mark (the chat home greets
+  // with the stella mark): page content drawn the same in both phases, not
+  // the frame's logo standing in for a page.
+  inspectExemptElement(
+    file: string,
+    node: JSXOpeningElement,
+    visited: Set<string>,
+    locals: Map<string, Node>,
+  ): string[] | undefined {
+    if (this.isInlineLoader(file, node)) {
+      return [];
+    }
+    if (this.text(file, node.name) !== "LandingGreeting") {
+      return undefined;
+    }
+    return node.attributes.flatMap((attribute) =>
+      attribute.type === "JSXAttribute" &&
+      this.text(file, attribute.name) === "icon"
+        ? []
+        : this.inspectNode(file, attribute, visited, locals),
+    );
   }
   inspectAttribute(
     file: string,

@@ -35,6 +35,13 @@ import type { FileRouteTypes } from "@/routeTree.gen";
  * the frame's last resort, never a page's pending view.
  */
 
+/**
+ * Which phase of its page a component renders, for a page that draws both
+ * from one component: `pending` is the page the URL describes before its
+ * data has arrived, `loaded` is that page with its data.
+ */
+export type RouteState = "pending" | "loaded";
+
 type RedirectRouteComponent = RouteComponent & {
   /** The route this one sends every visitor to. */
   readonly redirectTarget: string;
@@ -47,13 +54,31 @@ const hasRedirectTarget = (
   "redirectTarget" in component &&
   typeof component.redirectTarget === "string";
 
+const isRoute = (value: unknown): value is AnyRoute =>
+  typeof value === "object" &&
+  value !== null &&
+  "options" in value &&
+  "isRoot" in value;
+
+// The router types its route map by the generated ids, so it is read here as
+// the plain object it is at runtime.
+const routeById = (routesById: object, id: string): AnyRoute | undefined => {
+  const route: unknown = Reflect.get(routesById, id);
+  return isRoute(route) ? route : undefined;
+};
+
 const routeByPath = (
-  routesById: Readonly<Record<string, AnyRoute>>,
+  routesById: object,
   path: string,
-): AnyRoute | undefined =>
-  Object.values(routesById).find(
-    (route) => route.fullPath === path || route.to === path,
-  );
+): AnyRoute | undefined => {
+  for (const candidate of Object.values(routesById)) {
+    const route: unknown = candidate;
+    if (isRoute(route) && (route.fullPath === path || route.to === path)) {
+      return route;
+    }
+  }
+  return undefined;
+};
 
 const MAX_REDIRECT_HOPS = 4;
 
@@ -64,11 +89,12 @@ const MAX_REDIRECT_HOPS = 4;
  * layout's delegation to its leaf.
  */
 export const leafPendingView = (
-  routesById: Readonly<Record<string, AnyRoute>>,
+  routesById: object,
   matches: readonly { routeId: string }[],
 ): RouteComponent | undefined => {
   const leaf = matches.at(-1);
-  let route = leaf === undefined ? undefined : routesById[leaf.routeId];
+  let route =
+    leaf === undefined ? undefined : routeById(routesById, leaf.routeId);
   for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop += 1) {
     if (route === undefined || route.isRoot) {
       return undefined;

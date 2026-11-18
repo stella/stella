@@ -4,7 +4,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { LandingEmpty, LandingItemText } from "@stll/ui/landing";
 
-import { LandingQueryFeedback } from "@/components/landing-query-feedback";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
@@ -15,6 +14,7 @@ import type {
   SuggestedSkills,
 } from "@/lib/prompts/use-suggested-skills";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { LandingQueryFeedback } from "@/routes/_protected.chat/-components/landing-query-feedback";
 
 type ChatLandingSkillRowsProps = {
   onSelect: (skill: SuggestedSkill) => void;

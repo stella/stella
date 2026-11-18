@@ -1,6 +1,5 @@
-import type { ComponentType } from "react";
-
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { RouteComponent } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -36,7 +35,7 @@ const Page = () => <p data-testid="page" />;
  */
 const renderAt = async (
   pathname: string,
-  RootComponent: ComponentType = () => (
+  RootComponent: RouteComponent = () => (
     <AppFrameHost>
       <router.Outlet />
     </AppFrameHost>

@@ -51,7 +51,6 @@ import {
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
-import { LandingQueryFeedback } from "@/components/landing-query-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
@@ -78,6 +77,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import {
   getChatSendMode,
   useChatAnonymized,
@@ -109,6 +109,7 @@ import {
   ChatLandingSkillsLabel,
 } from "@/routes/_protected.chat/-components/chat-index.pending";
 import { ChatLandingSkillRows } from "@/routes/_protected.chat/-components/chat-landing-skill-rows";
+import { LandingQueryFeedback } from "@/routes/_protected.chat/-components/landing-query-feedback";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -283,16 +284,18 @@ export function ChatIndexPage() {
   );
   const analytics = useAnalytics();
   const { mutate: seedDraftWebSearch } = useMutation({
-    mutationFn: async () => {
-      const response = await api.chat
-        .threads({
-          threadId: toSafeId<"chatThread">(
-            threadIdRef.current ?? createChatThreadId(),
-          ),
-        })
-        .patch({ webSearchEnabled: true }, { query: {} });
-      return unwrapApiResponse(response);
-    },
+    mutationFn: async () =>
+      await invokeCapability("chat.threads.update", async (request) =>
+        unwrapApiResponse(
+          await api.chat
+            .threads({
+              threadId: toSafeId<"chatThread">(
+                threadIdRef.current ?? createChatThreadId(),
+              ),
+            })
+            .patch({ webSearchEnabled: true }, { ...request, query: {} }),
+        ),
+      ),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "ChatIndex:failure",
