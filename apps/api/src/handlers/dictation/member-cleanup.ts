@@ -48,7 +48,7 @@ type MemberDictationCleanupOptions = {
 export const createMemberDictationCleanupEndpoint = ({
   admit,
   limit = consumeDictationLimit,
-  generateObjectForTask,
+  ...generation
 }: MemberDictationCleanupOptions = {}) =>
   createSafeRootHandler(
     config,
@@ -85,9 +85,7 @@ export const createMemberDictationCleanupEndpoint = ({
           body,
           modelAdmission: configuredModelAdmission({ modelAdmission }),
           actionSignal: actionSignal ?? request.signal,
-          ...(generateObjectForTask === undefined
-            ? {}
-            : { generateObjectForTask }),
+          ...generation,
         }),
       );
       return Result.ok(segments);

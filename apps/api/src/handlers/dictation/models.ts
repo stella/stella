@@ -16,7 +16,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   contract: "patch",
   permissions: { chat: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   // The model picker of a member's dictation; agents do not dictate.
   mcp: { type: "internal", reason: "native_tool_ui" },

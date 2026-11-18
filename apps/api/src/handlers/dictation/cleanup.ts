@@ -52,7 +52,7 @@ const CLEANUP_DEADLINE_MS = 5000;
 const CLEANUP_OUTPUT_TOKENS = 8000;
 
 /** Who a cleanup runs for, with the organization's AI settings. */
-export type DictationCleanupCaller = OrgAISettings & {
+type DictationCleanupCaller = OrgAISettings & {
   readonly organizationId: SafeId<"organization">;
   readonly userId: SafeId<"user">;
   readonly safeDb: SafeDb;
@@ -181,7 +181,7 @@ type DictationCleanupEndpointOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadAISettings?: typeof loadOrgAISettings;
   limit?: typeof consumeDictationLimit;
-  generateObjectForTask?: typeof generateTanStackObjectForTask;
+  generateObjectForTask?: DictationCleanupOptions["generateObjectForTask"];
   admit?: typeof withActionAdmission;
 };
 
@@ -198,8 +198,8 @@ export const createDictationCleanupEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadAISettings = loadOrgAISettings,
   limit = consumeDictationLimit,
-  generateObjectForTask = generateTanStackObjectForTask,
   admit,
+  ...generation
 }: DictationCleanupEndpointOptions = {}) =>
   declareAggregateMutation(
     createSafeBoundedPublicHandler(
@@ -294,7 +294,7 @@ export const createDictationCleanupEndpoint = ({
                       body,
                       modelAdmission,
                       actionSignal,
-                      generateObjectForTask,
+                      ...generation,
                     }),
                   );
                   return Result.ok(segments);
