@@ -164,8 +164,10 @@ test("profile language and collapsed sidebar render in the first HTML response",
       const firstPaintWidth = await page.evaluate(() =>
         performance
           .getEntriesByName("sidebar-first-paint-width")
-          .map((entry) =>
-            entry instanceof PerformanceMark ? entry.detail : null,
+          .map((entry): number | null =>
+            entry instanceof PerformanceMark && typeof entry.detail === "number"
+              ? entry.detail
+              : null,
           )
           .at(0),
       );
