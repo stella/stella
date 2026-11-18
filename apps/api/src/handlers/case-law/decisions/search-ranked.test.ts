@@ -48,6 +48,17 @@ describe("which requests rank whole decisions", () => {
     });
   });
 
+  test("a caller comparing arms sets the unstrict arm; strict still means every word", () => {
+    expect(shapeOf({ unstrictArm: "half" })).toMatchObject({
+      type: "ranked",
+      arm: "half",
+    });
+    expect(shapeOf({ unstrictArm: "half", strict: true })).toMatchObject({
+      type: "ranked",
+      arm: "all",
+    });
+  });
+
   test.each([
     [
       "a passage generation",

@@ -4662,7 +4662,7 @@
       "importSkill": "Importovat z URL",
       "importTitle": "Importovat dovednost",
       "importedSkills": "{count, plural, one {Importována # dovednost} few {Importovány # dovednosti} other {Importováno # dovedností} many {Importováno # dovednosti}}",
-      "invalidPath": "Cesta smí obsahovat pouze malá písmena, číslice, tečky, pomlčky nebo podtržítka",
+      "invalidPath": "Použijte relativní cestu. Názvy souborů a složek nesmí být . ani .., začínat ani končit mezerou, končit tečkou ani obsahovat \\ : * ? \" |, lomené závorky nebo řídicí znaky.",
       "invocationAuto": "Automaticky",
       "invocationAutoHelp": "AI může tuto dovednost použít sama, když se hodí k požadavku.",
       "invocationManual": "Jen na vyžádání",

@@ -19,7 +19,13 @@ const GITHUB_CONTENTS_LISTING_LIMIT = 1000;
 const count = v.pipe(v.number(), v.integer(), v.minValue(0));
 const digest = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
 const fileFields = { sha256: digest, byteLength: count, utf16Length: count };
-const fileSchema = v.strictObject(fileFields);
+// `binary`: not UTF-8 text (or holding a NUL byte), so an install leaves the
+// file out and the check skips it too.
+const resourceSchema = v.strictObject({
+  path: v.string(),
+  ...fileFields,
+  binary: v.optional(v.literal(true)),
+});
 const frontmatterSchema = v.strictObject({
   name: v.string(),
   license: v.nullable(v.string()),
@@ -69,7 +75,7 @@ const entrySchema = v.strictObject({
   target: targetSchema,
   skill: skillSchema,
   directories: v.array(listingSchema),
-  resources: v.array(v.strictObject({ path: v.string(), ...fileFields })),
+  resources: v.array(resourceSchema),
 });
 const snapshotSchema = v.strictObject({
   version: v.literal(2),
@@ -80,7 +86,7 @@ const snapshotSchema = v.strictObject({
 export type GithubTarget = v.InferOutput<typeof targetSchema>;
 export type GithubContentItem = v.InferOutput<typeof itemSchema>;
 export type FrontmatterFacts = v.InferOutput<typeof frontmatterSchema>;
-type FileFacts = v.InferOutput<typeof fileSchema>;
+type ResourceFacts = Omit<v.InferOutput<typeof resourceSchema>, "path">;
 type SkillFacts = v.InferOutput<typeof skillSchema>;
 type EntryFacts = v.InferOutput<typeof entrySchema>;
 type PinnedSnapshotSource = PinnedSource & {
@@ -95,7 +101,7 @@ export type PinnedSource = {
   resource: (args: {
     target: GithubTarget;
     path: string;
-  }) => MaybePromise<FileFacts | null>;
+  }) => MaybePromise<ResourceFacts | null>;
 };
 export const PINNED_SNAPSHOT_PATH = nodePath.resolve(
   import.meta.dir,

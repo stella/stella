@@ -4662,7 +4662,7 @@
       "importSkill": "Import from URL",
       "importTitle": "Import skill",
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}",
-      "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores",
+      "invalidPath": "Use a relative path. File and folder names can't be . or .., start or end with a space, end with a dot, or contain \\ : * ? \" |, angle brackets or control characters.",
       "invocationAuto": "Automatically",
       "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.",
       "invocationManual": "Only when invoked",
