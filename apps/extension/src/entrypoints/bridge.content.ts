@@ -16,7 +16,7 @@ import {
 
 export default defineContentScript({
   matches: [...STELLA_CONTENT_SCRIPT_MATCHES],
-  main() {
+  main(ctx) {
     if (trustedStellaOriginFromUrl(window.location.href) === null) {
       return;
     }
@@ -35,8 +35,14 @@ export default defineContentScript({
       );
     };
 
-    window.addEventListener("message", ({ data, origin, source }) => {
-      if (source !== window || origin !== window.location.origin) {
+    // Registered through the context, so a script left behind when the
+    // extension is updated or disabled stops answering this tab.
+    ctx.addEventListener(window, "message", ({ data, origin, source }) => {
+      if (
+        !ctx.isValid ||
+        source !== window ||
+        origin !== window.location.origin
+      ) {
         return;
       }
 

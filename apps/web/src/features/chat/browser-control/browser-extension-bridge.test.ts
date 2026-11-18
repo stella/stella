@@ -367,7 +367,7 @@ describe("live browser extension state", () => {
     },
   );
 
-  test("an announcement on this protocol heard before mount asks for pairing", () => {
+  test("an announcement on this protocol heard before mount waits for a live answer", () => {
     jest.useFakeTimers();
     const stopListening = listenForBrowserExtensionAnnouncement();
     try {
@@ -382,13 +382,34 @@ describe("live browser extension state", () => {
       });
       fakeWindow.posted = [];
       unmount = mountBrowserExtensionBridge();
-      // The mount ping, then the one the replayed announcement asks for.
-      expect(fakeWindow.posted.map(({ type }) => type)).toEqual([
-        "ping",
-        "ping",
-      ]);
+      // Only the mount ping: the extension on this version answers it.
+      expect(fakeWindow.posted.map(({ type }) => type)).toEqual(["ping"]);
+      expect(getBrowserExtensionState().status).toBe("checking");
+      report(null, null, false);
       jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
       expect(getBrowserExtensionState().status).toBe("needs-site-access");
+    } finally {
+      stopListening();
+    }
+  });
+
+  test("an announcement on this protocol with no live answer after mount is not installed", () => {
+    jest.useFakeTimers();
+    const stopListening = listenForBrowserExtensionAnnouncement();
+    try {
+      // Disabled after it announced itself: nothing answers the mount ping.
+      deliver({
+        allSitesGranted: false,
+        controlledTabId: null,
+        controllerId: null,
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        requestId: "extension-ready",
+        source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+        type: "pong",
+      });
+      unmount = mountBrowserExtensionBridge();
+      jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+      expect(getBrowserExtensionState().status).toBe("not-installed");
     } finally {
       stopListening();
     }

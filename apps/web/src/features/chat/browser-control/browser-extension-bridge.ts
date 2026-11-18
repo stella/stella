@@ -281,8 +281,10 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }, BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
     // An extension on another protocol version ignores the ping; its load
     // announcement, heard before this mount, is all that says it is there.
+    // One on this version answers the ping, so only a live answer counts:
+    // an extension disabled since it announced itself lets the deadline pass.
     const announcement = latestBrowserExtensionAnnouncement();
-    if (announcement !== null) {
+    if (announcement !== null && !parseBrowserExtensionResponse(announcement)) {
       handleExtensionMessage(announcement);
     }
   }
