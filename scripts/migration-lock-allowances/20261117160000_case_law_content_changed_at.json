@@ -1,0 +1,5 @@
+{
+  "add-column": "The nullable content_changed_at column has no default, so no stored decision row is rewritten. ACCESS EXCLUSIVE covers the catalog change only, under 1s lock_timeout and 5s statement_timeout.",
+  "replace-view": "Re-creating the published and unredacted decision views appends the new column without changing their row predicates or scanning stored decisions. Catalog locks are bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "Creating the row trigger reads and rewrites no stored decision; SHARE ROW EXCLUSIVE is held only for the catalog change, under 1s lock_timeout and 5s statement_timeout."
+}

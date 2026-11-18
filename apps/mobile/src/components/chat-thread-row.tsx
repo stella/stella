@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -11,8 +11,10 @@ import type {
   ChatThreadPinState,
   ChatThreadReadState,
 } from "@stll/api-contract/chat";
+import { Button } from "@stll/ui/button";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { RunStateMark } from "@stll/ui/run-state-mark";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { useOpenThread } from "@/components/open-thread";
@@ -236,43 +238,47 @@ const ThreadPressable = ({
   const open = layout.usesSplitView && selection.thread?.threadId === thread.id;
 
   return (
-    <Pressable
+    <Button
       {...accessibility}
-      accessibilityRole="button"
+      // Selected, the ghost row holds the accent fill while the thread is open.
       accessibilityState={{ selected: open }}
       // Said after the title, so the dot is not the only sign of it.
       accessibilityValue={unread ? { text: t("unread") } : undefined}
-      className={`border-border active:bg-accent gap-0.5 border-b py-3 ${open ? "bg-accent" : ""}`}
       onPress={() => {
         openThread({ matterId: thread.matterId, threadId: thread.id, title });
       }}
+      size="row"
+      variant="ghost"
     >
-      <View className="flex-row items-start gap-3">
-        <View className="flex-1 flex-row items-center gap-1.5">
-          {unread ? <View className="bg-info size-2 rounded-full" /> : null}
-          <View className="flex-1">
-            <Text numberOfLines={2} variant="rowTitle">
-              {title}
-            </Text>
+      <Separator className="absolute inset-x-0 bottom-0" />
+      <View className="flex-1 gap-0.5">
+        <View className="flex-row items-start gap-3">
+          <View className="flex-1 flex-row items-center gap-1.5">
+            {unread ? <View className="bg-info size-2 rounded-full" /> : null}
+            <View className="flex-1">
+              <Text numberOfLines={2} variant="rowTitle">
+                {title}
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-center gap-1.5">
+            {runState === undefined ? null : <RunStateMark state={runState} />}
+            <Text variant="caption">{when}</Text>
           </View>
         </View>
-        <View className="flex-row items-center gap-1.5">
-          {runState === undefined ? null : <RunStateMark state={runState} />}
-          <Text variant="caption">{when}</Text>
-        </View>
+        {thread.matterName === undefined ||
+        thread.matterId === undefined ? null : (
+          <View className="flex-row items-center gap-1.5">
+            <MatterIcon matter={{ id: thread.matterId }} size={12} />
+            <View className="flex-1">
+              <Text numberOfLines={1} variant="caption">
+                {thread.matterName}
+              </Text>
+            </View>
+          </View>
+        )}
+        {children}
       </View>
-      {thread.matterName === undefined ||
-      thread.matterId === undefined ? null : (
-        <View className="flex-row items-center gap-1.5">
-          <MatterIcon matter={{ id: thread.matterId }} size={12} />
-          <View className="flex-1">
-            <Text numberOfLines={1} variant="caption">
-              {thread.matterName}
-            </Text>
-          </View>
-        </View>
-      )}
-      {children}
-    </Pressable>
+    </Button>
   );
 };

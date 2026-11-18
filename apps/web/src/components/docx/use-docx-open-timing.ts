@@ -28,6 +28,7 @@ export const useDocxOpenTiming = ({
   fieldId,
   surface,
 }: UseDocxOpenTimingOptions) =>
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- this hook's one memo keeps it a hook, so the React Compiler compiles it
   useCallback(
     (editor: TimedDocxEditor | null) => {
       editorRef.current = editor;

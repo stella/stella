@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -49,18 +49,14 @@ export const TimeZonePicker = ({
   const [browserZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
-  const items = useMemo(
-    () =>
-      timeZoneOptions({
-        zones: ["UTC", ...Intl.supportedValuesOf("timeZone")],
-        browserZone,
-        jurisdictionZones: jurisdictionCountries.flatMap(jurisdictionTimeZones),
-        selectedZone: value,
-        follow,
-        now,
-      }),
-    [browserZone, jurisdictionCountries, value, follow, now],
-  );
+  const items = timeZoneOptions({
+    zones: ["UTC", ...Intl.supportedValuesOf("timeZone")],
+    browserZone,
+    jurisdictionZones: jurisdictionCountries.flatMap(jurisdictionTimeZones),
+    selectedZone: value,
+    follow,
+    now,
+  });
   const selected =
     items.find((item) => item.value === value) ??
     panic(`Missing selected time zone ${value}`);

@@ -51,10 +51,15 @@ const totals = v.looseObject({
     }),
   ),
 });
+// An overpaid settlement names the refund the client is owed.
+const invoiceSettlement = v.looseObject({
+  refundAmount: v.optional(moneySchema),
+});
 const invoiceAmounts = {
   totalAmount: moneySchema,
   paidAmount: moneySchema,
   outstandingAmount: moneySchema,
+  settlement: invoiceSettlement,
 };
 const invoiceLine = v.looseObject({
   unitPrice: moneySchema,
@@ -94,6 +99,7 @@ export const invoicePaymentMoneyResponse = payment;
 export const invoicePaymentsMoneyResponse = v.looseObject({
   paidAmount: moneySchema,
   outstandingAmount: moneySchema,
+  settlement: invoiceSettlement,
   items: v.array(payment),
 });
 export const invoiceLineMoneyResponse = v.looseObject({ totals });

@@ -115,6 +115,12 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   ],
   "system:eu-soft-law-ingestion": ["sourcesRegistered"],
   "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
+  "system:corpus-generation-retire": [
+    "retired",
+    "deletedIndexes",
+    "deletedStates",
+    "deletedIntents",
+  ],
   "system:partner-client-operator": ["created", "rotated", "disabled"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 

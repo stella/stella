@@ -417,7 +417,10 @@ describe.skipIf(!runEngineTests)(
         });
         if (result.isOk()) {
           engineReads.push({
-            query: options.query,
+            query:
+              typeof options.query === "string"
+                ? options.query
+                : JSON.stringify(options.query.query),
             documentIds: result.value.hits.map(
               (hit) => hit.fields["document_id"],
             ),

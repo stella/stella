@@ -14,13 +14,15 @@ import {
   entityContextReference,
 } from "@/api/db/entity-feature-policies";
 import { invoices, timeEntries } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import {
+  INVOICE_CREDITED_AMOUNT_EXTRA,
+  invoiceCreditedAmountSql,
   invoicePaidAmountSql,
   invoicePaymentAmounts,
   paidAmountOf,
@@ -1435,6 +1437,7 @@ const readInvoiceDetail = async ({
         RAW: (table) =>
           sql`${invoiceInMatter(table, workspaceId)} AND ${invoiceWithinMatterAllowlist(table, context.accessibleWorkspaceIds)}`,
       },
+      extras: INVOICE_CREDITED_AMOUNT_EXTRA,
       with: INVOICE_DETAIL_RELATIONS,
     }),
   );
@@ -1476,6 +1479,8 @@ const invoiceDetailView = (
     ...invoicePaymentAmounts({
       totalAmount: invoiceRow.totalAmount,
       paidAmount: paidAmountOf(invoiceRow.payments),
+      creditedAmount: invoiceRow.creditedAmount,
+      status: invoiceRow.status,
     }),
     notes: invoiceRow.notes,
     sellerProfileId: invoiceRow.sellerProfileId,
@@ -1633,6 +1638,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         currency: invoices.currency,
         totalAmount: invoices.totalAmount,
         paidAmount: invoicePaidAmountSql(invoices),
+        creditedAmount: invoiceCreditedAmountSql(invoices),
         createdAtCursor: invoicePageCursor.cursorValue.as("created_at_cursor"),
       })
       .from(invoices)
@@ -1664,11 +1670,18 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   });
 
   const invoiceList = page.items.map(
-    ({ createdAtCursor: _createdAtCursor, paidAmount, ...invoice }) => ({
+    ({
+      createdAtCursor: _createdAtCursor,
+      paidAmount,
+      creditedAmount,
+      ...invoice
+    }) => ({
       ...invoice,
       ...invoicePaymentAmounts({
         totalAmount: invoice.totalAmount,
         paidAmount,
+        creditedAmount,
+        status: invoice.status,
       }),
     }),
   );

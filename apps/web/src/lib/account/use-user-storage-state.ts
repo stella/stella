@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import type { StorageArea } from "@/lib/account/storage-families";
 import { useOwnerScopedState } from "@/lib/account/use-owner-scoped-state";
@@ -19,19 +17,13 @@ export const useUserStorageState = <T>({
   decode,
   encode,
 }: UserStorageStateOptions<T>) => {
-  const read = useCallback(
-    (owner: StorageOwner) =>
-      decode(browserStateStorage(area).getItem(userStorageKey(baseKey, owner))),
-    [area, baseKey, decode],
-  );
-  const write = useCallback(
-    (value: T, owner: StorageOwner) =>
-      browserStateStorage(area).setItem(
-        userStorageKey(baseKey, owner),
-        encode(value),
-      ),
-    [area, baseKey, encode],
-  );
-  const getDefaultValue = useCallback(() => decode(null), [decode]);
+  const read = (owner: StorageOwner) =>
+    decode(browserStateStorage(area).getItem(userStorageKey(baseKey, owner)));
+  const write = (value: T, owner: StorageOwner) =>
+    browserStateStorage(area).setItem(
+      userStorageKey(baseKey, owner),
+      encode(value),
+    );
+  const getDefaultValue = () => decode(null);
   return useOwnerScopedState({ read, write, getDefaultValue });
 };

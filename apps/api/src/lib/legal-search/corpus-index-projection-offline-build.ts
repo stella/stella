@@ -325,8 +325,11 @@ export type CorpusProjectionOfflineAdmission = <Value>(
 
 export type CorpusProjectionOfflineBuildOptions<Family extends CorpusFamily> = {
   runInTransaction: ProjectionTransactionRunner;
-  /** Census client of an engine endpoint that reads the route's index. */
-  client: Pick<CorpusIndexClient, "aggregate">;
+  /**
+   * Census client of an engine endpoint that reads the route's index; it also
+   * counts the route's published splits once the run ends.
+   */
+  client: Pick<CorpusIndexClient, "aggregate" | "readPublishedSplitCounts">;
   family: Family;
   generation: string;
   indexId: string;
@@ -479,6 +482,40 @@ export type CorpusProjectionOfflineBuildOutcome = {
     | "rate_too_slow"
     | "infrastructure_failed";
   progress: CorpusProjectionOfflineBuildProgress;
+  /** The route's published splits when the run ended: the build's receipt. */
+  publishedSplits: CorpusProjectionOfflineSplitReceipt;
+};
+
+/**
+ * How many splits the route's index publishes once a run ends, read from the
+ * metastore. Merges never cross the node id an indexer ran under, and each
+ * build slot writes under its own, so this is what a run leaves the searchers
+ * to open. `not_read` when the run never held the route.
+ */
+type CorpusProjectionOfflineSplitReceipt =
+  | { read: "counted"; count: number }
+  | { read: "failed"; message: string }
+  | { read: "not_read" };
+
+/** Bounds the receipt's metastore read; the run's work is already recorded. */
+const SPLIT_RECEIPT_TIMEOUT_MS = 30_000;
+
+const readSplitReceipt = async (
+  client: Pick<CorpusIndexClient, "readPublishedSplitCounts">,
+  indexId: string,
+): Promise<CorpusProjectionOfflineSplitReceipt> => {
+  const read = await client.readPublishedSplitCounts({
+    includes: (candidate) => candidate === indexId,
+    observer: "unobserved",
+    signal: AbortSignal.timeout(SPLIT_RECEIPT_TIMEOUT_MS),
+  });
+  if (Result.isError(read)) {
+    return { read: "failed", message: read.error.message };
+  }
+  const counted = read.value.find((entry) => entry.indexId === indexId);
+  return counted === undefined
+    ? { read: "failed", message: `index ${indexId} is not listed` }
+    : { read: "counted", count: counted.publishedSplits };
 };
 
 /** The advisory lock key of a route's offline build. */
@@ -2274,7 +2311,11 @@ export const buildCorpusProjectionRouteOffline = async <
   const progress = emptyProgress(resumeAfter, plan.shardByteCap);
   const hold = await lock.tryAcquire(lockKeyOf(family, generation, indexId));
   if (hold === null) {
-    return { status: "lock_held", progress };
+    return {
+      status: "lock_held",
+      progress,
+      publishedSplits: { read: "not_read" },
+    };
   }
   try {
     const status = await new OfflineRouteBuild(
@@ -2283,7 +2324,10 @@ export const buildCorpusProjectionRouteOffline = async <
       hold,
       progress,
     ).run();
-    return { status, progress };
+    // Read under the route lock, so no later run of this route can publish
+    // splits between this run's end and its receipt.
+    const publishedSplits = await readSplitReceipt(options.client, indexId);
+    return { status, progress, publishedSplits };
   } finally {
     await hold.release();
   }

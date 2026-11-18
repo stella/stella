@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { RefCallback, RefObject } from "react";
 
 import { panic } from "better-result";
@@ -99,7 +99,7 @@ export const useStickToBottom = () => {
     setIsAtBottom(true);
   };
 
-  const scrollRef = useCallback((el: HTMLDivElement | null) => {
+  const scrollRef = (el: HTMLDivElement | null) => {
     if (!el) {
       return undefined;
     }
@@ -143,9 +143,9 @@ export const useStickToBottom = () => {
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("wheel", onWheel);
     };
-  }, []);
+  };
 
-  const contentRef = useCallback((content: HTMLDivElement | null) => {
+  const contentRef = (content: HTMLDivElement | null) => {
     if (!content) {
       return undefined;
     }
@@ -183,7 +183,7 @@ export const useStickToBottom = () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
     };
-  }, []);
+  };
 
   return {
     scrollRef,

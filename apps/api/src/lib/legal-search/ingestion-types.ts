@@ -1,3 +1,4 @@
+// parser-output-unchanged: a decision type spelled as an address is refused at this boundary; every registered adapter emits printed labels, so their output is unchanged.
 // parser-output-unchanged: Removes migration-only field exclusions after all producers migrate.
 // parser-output-unchanged: Adds nested inventory addresses without changing result construction.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -424,6 +425,25 @@ const requiredLabel = (raw: string) =>
 const optionalPlainText = (raw: string | undefined) =>
   raw === undefined ? Result.ok(undefined) : toPlainText(raw);
 
+const ADDRESS_RE = /^\s*[a-z][a-z\d+.-]*:\/\//iu;
+
+/**
+ * A decision's type is the label its publisher prints ("rozsudek",
+ * "judgment"). A publisher's codelist address names a type without being
+ * one: it belongs in metadata beside the label, and as the type it would be
+ * shown and filtered on as one. Refused here, at the one boundary every
+ * stored decision crosses, so no adapter can store one.
+ */
+const optionalDecisionTypeLabel = (raw: string | undefined) =>
+  raw !== undefined && ADDRESS_RE.test(raw)
+    ? Result.err(
+        new PlainTextError({
+          message: "A decision type is a printed label, not an address",
+          reason: "address-as-label",
+        }),
+      )
+    : optionalPlainText(raw);
+
 /** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
 export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
@@ -467,7 +487,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
-      decisionType: yield* optionalPlainText(raw.decisionType),
+      decisionType: yield* optionalDecisionTypeLabel(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
         raw.metadata,
         metadataUrlSchema,

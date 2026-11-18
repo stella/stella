@@ -295,6 +295,9 @@
     "scripts/typescript-compiler-api-imports.test.ts": ["**"],
     "scripts/ui-playground-selection.test.ts": ["**"],
     "scripts/undeclared-api-client-writes.test.ts": ["**"],
+    "scripts/upload-release-assets.test.ts": [
+      "scripts/upload-release-assets.sh"
+    ],
     "scripts/verify-release-candidate-tree.test.ts": ["**"],
     "scripts/verify-release-tree-proof.test.ts": ["**"],
     "scripts/workflow-api-probes.test.ts": [

@@ -2,10 +2,11 @@ import { Result } from "better-result";
 
 import { withBillingRead } from "@stll/permissions";
 
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
 import {
+  INVOICE_CREDITED_AMOUNT_EXTRA,
   invoicePaymentAmounts,
   invoicePaymentView,
   paidAmountOf,
@@ -47,6 +48,7 @@ const readInvoiceById = createSafeHandler(
             id: { eq: params.invoiceId },
             RAW: (table) => invoiceInMatter(table, workspaceId),
           },
+          extras: INVOICE_CREDITED_AMOUNT_EXTRA,
           with: INVOICE_DETAIL_RELATIONS,
         }),
       ),
@@ -62,9 +64,10 @@ const readInvoiceById = createSafeHandler(
     // for its attached entries until its first line edit materialises them
     // (`lockDraftInvoiceForLines`), and its totals count them in memory.
     const totals = readInvoiceTotals(invoice);
+    const { creditedAmount, ...detail } = invoice;
 
     return Result.ok({
-      ...invoice,
+      ...detail,
       netAmount: totals.netAmountMinor,
       vatAmount: totals.vatAmountMinor,
       lines: invoice.lines.map((line) => ({
@@ -76,6 +79,8 @@ const readInvoiceById = createSafeHandler(
       ...invoicePaymentAmounts({
         totalAmount: invoice.totalAmount,
         paidAmount: paidAmountOf(invoice.payments),
+        creditedAmount,
+        status: invoice.status,
       }),
       sentAt: invoice.sentAt?.toISOString() ?? null,
       paidAt: invoice.paidAt?.toISOString() ?? null,

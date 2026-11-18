@@ -8,6 +8,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { respondToCompatibilityDiscovery } from "../tests/compatibility-discovery.js";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
 import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
@@ -105,6 +106,10 @@ const startMockServer = (
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
+      const discovery = respondToCompatibilityDiscovery(req);
+      if (discovery !== null) {
+        return discovery;
+      }
       if (req.method === "GET") {
         return new Response(null, { status: 405 });
       }
@@ -309,10 +314,9 @@ describe("--server (every command)", () => {
     });
     await server.stop();
 
-    // The mock has no compatibility contract, so the check fails — but on the
-    // resolved origin, not on stricli's "expected input for flag" usage error.
-    expect(result.stderr).toContain(server.url);
-    expect(result.stderr).not.toContain("--server");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(server.url);
+    expect(result.stderr).toBe("");
   });
 });
 

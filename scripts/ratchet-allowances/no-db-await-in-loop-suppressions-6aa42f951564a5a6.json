@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-route-proof-runner.ts",
+  "delta": 2,
+  "reason": "The route proof runner reads each proven generation's proofs in turn (at most three, one bounded read each) and, in its walk loop, re-reads them after a proof lands so an until-current run stops on the exact state. Each await depends on the page before it; the pages themselves are the governed unit."
+}
