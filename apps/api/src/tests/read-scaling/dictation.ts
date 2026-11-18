@@ -44,6 +44,7 @@ import {
 } from "@/api/tests/helpers/desktop-device-proof";
 import {
   createTestHandlerContext,
+  NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
@@ -368,11 +369,15 @@ export const dictationModelsScalingScenario = {
             userId: fixture.userId,
           }),
       );
+      if (settings.orgAIConfigStatus === "unreadable") {
+        return panic("Dictation models scaling requires readable AI settings");
+      }
       const response = await readDictationModels.handler(
         createTestHandlerContext<
           Parameters<typeof readDictationModels.handler>[0]
         >({
           ...settings,
+          audit: NO_AUDIT,
           session: { activeOrganizationId: fixture.organizationId },
           user: { id: fixture.userId },
           safeDb: NO_DB,
