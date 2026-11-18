@@ -43,6 +43,7 @@ import {
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
   type CorpusFamily,
@@ -173,15 +174,21 @@ const readCorpusIndexProofGenerationsTx = async (
   | { type: "resolved"; generations: CorpusIndexProofGeneration[] }
   | GenerationsRefusal
 > => {
-  const active = await tx
-    .select({
-      generation: corpusIndexGenerations.generation,
-      status: corpusIndexGenerations.status,
-    })
-    .from(corpusIndexGenerations)
-    .where(eq(corpusIndexGenerations.family, family))
-    .orderBy(corpusIndexGenerations.generation)
-    .limit(ROUTES_MAX);
+  const registry = await readBounded(
+    tx
+      .select({
+        generation: corpusIndexGenerations.generation,
+        status: corpusIndexGenerations.status,
+      })
+      .from(corpusIndexGenerations)
+      .where(eq(corpusIndexGenerations.family, family))
+      .orderBy(corpusIndexGenerations.generation),
+    ROUTES_MAX,
+  );
+  const active =
+    registry.type === "overflow"
+      ? panic(`More generations registered than a family holds: ${family}`)
+      : registry.rows;
   const requestedRow = active.find(
     ({ generation }) => generation === requested,
   );
