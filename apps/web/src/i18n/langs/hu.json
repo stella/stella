@@ -4654,7 +4654,7 @@
       "importSkill": "Importálás URL-ből",
       "importTitle": "Készség importálása",
       "importedSkills": "{count, plural, one {# készség importálva} other {# készség importálva}}",
-      "invalidPath": "Relatív útvonalat használjon. A fájl- és mappanevek nem lehetnek . vagy .., nem kezdődhetnek és nem végződhetnek szóközzel, és nem tartalmazhatnak \\ : * ? \" | karaktert vagy csúcsos zárójelet.",
+      "invalidPath": "Relatív útvonalat használjon. A fájl- és mappanevek nem lehetnek . vagy .., nem kezdődhetnek és nem végződhetnek szóközzel, nem végződhetnek ponttal, és nem tartalmazhatnak \\ : * ? \" | karaktert, csúcsos zárójelet vagy vezérlőkaraktert.",
       "invocationAuto": "Automatikusan",
       "invocationAutoHelp": "Az AI magától is használhatja ezt a készséget, ha illik a kéréshez.",
       "invocationManual": "Csak kérésre",

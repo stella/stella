@@ -152,6 +152,9 @@ const collectPinnedFiles = async (
           message: `resource ${relative} disappeared during validation`,
         });
       }
+      if (resource.binary === true) {
+        continue;
+      }
       files.push({
         content: "x".repeat(resource.utf16Length),
         path: item.path,

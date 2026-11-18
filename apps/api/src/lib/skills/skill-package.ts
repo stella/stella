@@ -472,16 +472,25 @@ export const discoverSkillPackagesFromUrl = async ({
     toError: toHandlerError,
   });
 
+/**
+ * A package of SKILL.md alone. `entrypointOnly` marks a SKILL.md read without
+ * its folder (discovery), whose named files are checked at import instead.
+ */
 const parseMarkdownSkillPackage = (
   source: string,
+  { entrypointOnly = false }: { entrypointOnly?: boolean } = {},
 ): Result<ParsedSkillPackage, HandlerError> =>
-  parseSkillFiles([
-    {
-      content: source,
-      path: SKILL_FILE_NAME,
-      sizeBytes: encodedSize(source),
-    },
-  ]);
+  parseSkillFiles(
+    [
+      {
+        content: source,
+        path: SKILL_FILE_NAME,
+        sizeBytes: encodedSize(source),
+      },
+    ],
+    new Set(),
+    { entrypointOnly },
+  );
 
 const parseMarkdownSkillPackageBytes = (
   buffer: ArrayBuffer | Uint8Array,
@@ -694,8 +703,10 @@ const checkZipUncompressedLimit = (
 export const parseSkillFiles = (
   files: readonly SkillFile[],
   skippedPaths: ReadonlySet<string> = new Set(),
+  { entrypointOnly = false }: { entrypointOnly?: boolean } = {},
 ): Result<ParsedSkillPackage, HandlerError> => {
   const validated = validateSkillPackage({
+    entrypointOnly,
     files,
     skippedPaths,
     tools: { known: skillRequirableToolNames(), type: "check" },
@@ -1848,7 +1859,9 @@ const toDiscoveredGithubSkill = ({
   if (source.isErr()) {
     return Result.err(source.error);
   }
-  const parsed = parseMarkdownSkillPackage(source.value);
+  const parsed = parseMarkdownSkillPackage(source.value, {
+    entrypointOnly: true,
+  });
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }

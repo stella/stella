@@ -4654,7 +4654,7 @@
       "importSkill": "Importar desde URL",
       "importTitle": "Importar habilidad",
       "importedSkills": "{count, plural, one {Se importó # habilidad} other {Se importaron # habilidades} many {Se importaron # habilidades}}",
-      "invalidPath": "Usa una ruta relativa. Los nombres de archivos y carpetas no pueden ser . ni .., empezar ni terminar con un espacio ni contener \\ : * ? \" | ni corchetes angulares.",
+      "invalidPath": "Usa una ruta relativa. Los nombres de archivos y carpetas no pueden ser . ni .., empezar ni terminar con un espacio, terminar en punto ni contener \\ : * ? \" |, corchetes angulares ni caracteres de control.",
       "invocationAuto": "Automáticamente",
       "invocationAutoHelp": "La IA puede usar esta habilidad por su cuenta cuando encaje con la solicitud.",
       "invocationManual": "Solo cuando se invoque",

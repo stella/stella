@@ -189,6 +189,50 @@ describe("skill package format", () => {
     ).toEqual(["resource_duplicate"]);
   });
 
+  test("rejects a file at a path another file needs as its folder", () => {
+    for (const order of [
+      ["skill/docs", "skill/docs/guide.md"],
+      ["skill/docs/guide.md", "skill/docs"],
+      ["skill/Docs/guide.md", "skill/docs"],
+      ["skill/skill.md/guide.md"],
+    ]) {
+      expect(
+        diagnosticTypes([
+          { path: "skill/SKILL.md", content: skill() },
+          ...order.map((path) => ({ path, content: "text" })),
+        ]),
+        order.join(" + "),
+      ).toEqual(["resource_duplicate"]);
+    }
+    expect(
+      validateSkillPackage({
+        files: [
+          { path: "skill/SKILL.md", content: skill() },
+          { path: "skill/docs/a.md", content: "a" },
+          { path: "skill/docs/b.md", content: "b" },
+          { path: "skill/docs/sub/c.md", content: "c" },
+        ],
+        tools: { type: "deferred" },
+      }).isOk(),
+    ).toBe(true);
+  });
+
+  test("an entry point read without its folder names files it cannot check", () => {
+    const files = [
+      { path: "SKILL.md", content: skill("Run `scripts/helper.js`.") },
+    ];
+    expect(
+      validateSkillPackage({ files, tools: { type: "deferred" } }).isErr(),
+    ).toBe(true);
+    expect(
+      validateSkillPackage({
+        entrypointOnly: true,
+        files,
+        tools: { type: "deferred" },
+      }).isOk(),
+    ).toBe(true);
+  });
+
   test("checks references only into folders the package uses", () => {
     expect(
       validateSkillPackage({

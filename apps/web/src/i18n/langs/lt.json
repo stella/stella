@@ -4654,7 +4654,7 @@
       "importSkill": "Importuoti iš URL",
       "importTitle": "Importuoti įgūdį",
       "importedSkills": "{count, plural, one {Importuotas # įgūdis} few {Importuoti # įgūdžiai} other {Importuota # įgūdžių} many {Importuota # įgūdžių}}",
-      "invalidPath": "Naudokite santykinį kelią. Failų ir aplankų pavadinimai negali būti . ar .., prasidėti ar baigtis tarpu arba turėti \\ : * ? \" | ar kampinių skliaustų.",
+      "invalidPath": "Naudokite santykinį kelią. Failų ir aplankų pavadinimai negali būti . ar .., prasidėti ar baigtis tarpu, baigtis tašku arba turėti \\ : * ? \" |, kampinių skliaustų ar valdymo simbolių.",
       "invocationAuto": "Automatiškai",
       "invocationAutoHelp": "DI gali pats naudoti šį įgūdį, kai jis tinka užklausai.",
       "invocationManual": "Tik iškvietus",

@@ -401,6 +401,9 @@ const collectPackageResources = ({
   const paths = new Set<string>();
   // SKILL.md takes its key too: a `skill.md` beside it unpacks onto it.
   const collisionKeys = new Set([resourcePathCollisionKey(SKILL_FILE_NAME)]);
+  // Folders the kept files sit in: a file at one of them, or a file inside
+  // a kept file's path, cannot unpack into one filesystem tree.
+  const folderKeys = new Set<string>();
   for (const file of files) {
     if (!file.path.startsWith(prefix) || file.path === entrypointPath) {
       continue;
@@ -425,11 +428,22 @@ const collectPackageResources = ({
       continue;
     }
     const collisionKey = resourcePathCollisionKey(path);
-    if (collisionKeys.has(collisionKey)) {
+    const folders = collisionKey
+      .split("/")
+      .slice(0, -1)
+      .map((_, index, parts) => parts.slice(0, index + 1).join("/"));
+    if (
+      collisionKeys.has(collisionKey) ||
+      folderKeys.has(collisionKey) ||
+      folders.some((folder) => collisionKeys.has(folder))
+    ) {
       diagnostics.push({ type: "resource_duplicate", path });
       continue;
     }
     collisionKeys.add(collisionKey);
+    for (const folder of folders) {
+      folderKeys.add(folder);
+    }
     paths.add(path);
     exceeds(
       diagnostics,
@@ -496,10 +510,17 @@ const missingReferenceDiagnostics = ({
 };
 
 export const validateSkillPackage = ({
+  entrypointOnly = false,
   files,
   skippedPaths = new Set(),
   tools,
 }: {
+  /**
+   * Only SKILL.md was read (discovery lists a repository's skills before
+   * fetching their folders), so a path it names is not checked against the
+   * package's files; the import of the whole package checks it.
+   */
+  entrypointOnly?: boolean;
   files: readonly SkillPackageFile[];
   /**
    * Package files the caller already left out (binary files it never
@@ -609,13 +630,15 @@ export const validateSkillPackage = ({
       limit: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
     });
   }
-  diagnostics.push(
-    ...missingReferenceDiagnostics({
-      body,
-      paths,
-      skippedPaths: [...skipped.map(({ path }) => path), ...skippedPaths],
-    }),
-  );
+  if (!entrypointOnly) {
+    diagnostics.push(
+      ...missingReferenceDiagnostics({
+        body,
+        paths,
+        skippedPaths: [...skipped.map(({ path }) => path), ...skippedPaths],
+      }),
+    );
+  }
   if (diagnostics.length > 0) {
     return Result.err(diagnostics);
   }

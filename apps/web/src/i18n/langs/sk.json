@@ -4654,7 +4654,7 @@
       "importSkill": "Importovať z URL",
       "importTitle": "Importovať zručnosť",
       "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností} many {Importované # zručnosti}}",
-      "invalidPath": "Použite relatívnu cestu. Názvy súborov a priečinkov nesmú byť . ani .., začínať ani končiť medzerou ani obsahovať \\ : * ? \" | alebo lomené zátvorky.",
+      "invalidPath": "Použite relatívnu cestu. Názvy súborov a priečinkov nesmú byť . ani .., začínať ani končiť medzerou, končiť bodkou ani obsahovať \\ : * ? \" |, lomené zátvorky alebo riadiace znaky.",
       "invocationAuto": "Automaticky",
       "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
       "invocationManual": "Iba na vyžiadanie",

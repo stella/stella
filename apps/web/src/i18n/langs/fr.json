@@ -4654,7 +4654,7 @@
       "importSkill": "Importer depuis une URL",
       "importTitle": "Importer une compétence",
       "importedSkills": "{count, plural, one {# compétence importée} other {# compétences importées} many {# compétences importées}}",
-      "invalidPath": "Utilisez un chemin relatif. Les noms de fichiers et de dossiers ne peuvent pas être . ou .., commencer ou se terminer par une espace, ni contenir \\ : * ? \" | ou des chevrons.",
+      "invalidPath": "Utilisez un chemin relatif. Les noms de fichiers et de dossiers ne peuvent pas être . ou .., commencer ou se terminer par une espace, se terminer par un point, ni contenir \\ : * ? \" |, des chevrons ou des caractères de contrôle.",
       "invocationAuto": "Automatiquement",
       "invocationAutoHelp": "L’IA peut utiliser cette compétence d’elle-même lorsqu’elle correspond à la demande.",
       "invocationManual": "Uniquement sur demande",

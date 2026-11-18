@@ -4654,7 +4654,7 @@
       "importSkill": "Importuj z URL",
       "importTitle": "Importuj umiejętność",
       "importedSkills": "{count, plural, one {Zaimportowano # umiejętność} few {Zaimportowano # umiejętności} many {Zaimportowano # umiejętności} other {Zaimportowano # umiejętności}}",
-      "invalidPath": "Użyj ścieżki względnej. Nazwy plików i folderów nie mogą być . ani .., zaczynać się ani kończyć spacją ani zawierać \\ : * ? \" | ani nawiasów ostrych.",
+      "invalidPath": "Użyj ścieżki względnej. Nazwy plików i folderów nie mogą być . ani .., zaczynać się ani kończyć spacją, kończyć się kropką ani zawierać \\ : * ? \" |, nawiasów ostrych ani znaków sterujących.",
       "invocationAuto": "Automatycznie",
       "invocationAutoHelp": "AI może sama użyć tej umiejętności, gdy pasuje do prośby.",
       "invocationManual": "Tylko na żądanie",

@@ -4654,7 +4654,7 @@
       "importSkill": "Aus URL importieren",
       "importTitle": "Skill importieren",
       "importedSkills": "{count, plural, one {# Skill importiert} other {# Skills importiert}}",
-      "invalidPath": "Verwenden Sie einen relativen Pfad. Datei- und Ordnernamen dürfen nicht . oder .. sein, nicht mit einem Leerzeichen beginnen oder enden und kein \\ : * ? \" | oder spitze Klammern enthalten.",
+      "invalidPath": "Verwenden Sie einen relativen Pfad. Datei- und Ordnernamen dürfen nicht . oder .. sein, nicht mit einem Leerzeichen beginnen oder enden, nicht auf einen Punkt enden und weder \\ : * ? \" | noch spitze Klammern oder Steuerzeichen enthalten.",
       "invocationAuto": "Automatisch",
       "invocationAutoHelp": "Die KI kann diesen Skill selbstständig verwenden, wenn er zur Anfrage passt.",
       "invocationManual": "Nur auf Abruf",
