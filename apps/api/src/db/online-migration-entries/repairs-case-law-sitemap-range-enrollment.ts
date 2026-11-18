@@ -3,7 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 
 export default {
   id: "repairs-case-law-sitemap-range-enrollment",
-  revision: 1483,
+  revision: 1494,
   lifecycle: "pending",
   type: "repairs",
   values: [CASE_LAW_SITEMAP_RANGE_ENROLLMENT],
