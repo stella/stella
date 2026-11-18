@@ -182,7 +182,7 @@ export const verifyActionPins = async ({
 export const actionPinBase = (
   argument: string | undefined,
   mergeBase: () => string,
-) => (argument ? argument : mergeBase());
+) => argument || mergeBase();
 
 if (import.meta.main) {
   const git = (args: string[]) => {
