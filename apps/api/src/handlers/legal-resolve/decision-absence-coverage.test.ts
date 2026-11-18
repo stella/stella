@@ -209,6 +209,86 @@ describe("the absence of a cited decision", () => {
   });
 });
 
+describe("a 1970 Supreme Court docket", () => {
+  /** The collection, registered and holding nothing yet. */
+  const COLLECTION: AbsenceCoverageSource = {
+    adapterKey: "cz-ns-sbirka",
+    name: "Nejvyšší soud",
+    decisionYearFrom: null,
+    decisionYearTo: null,
+    knownGaps: reconciled([]),
+    courts: [],
+  };
+  const declaredFrom = Number(
+    ADAPTER_MANIFESTS["cz-ns-sbirka"].dateRange.fromInclusive.slice(0, 4),
+  );
+
+  test("the collection declares decisions from before 1970", () => {
+    expect(ADAPTER_MANIFESTS["cz-ns-sbirka"].dateRange.type).toBe(
+      "decision-date",
+    );
+    expect(declaredFrom).toBeLessThanOrEqual(1970);
+  });
+
+  test("names the collection over the years its publisher declares", () => {
+    const coverage = decisionAbsenceCoverage({
+      snapshot: {
+        ...SNAPSHOT,
+        countries: [
+          {
+            country: "CZE",
+            sources: [SUPREME, REGIONAL, CONSTITUTIONAL, COLLECTION],
+          },
+        ],
+      },
+      country: "CZE",
+      intent: docketIntent("6 Cz 90/70"),
+      grammar: CZE,
+      namedCourts: [],
+    });
+    const collection = coverage.sources.find(
+      ({ source }) => source === "cz-ns-sbirka",
+    );
+    expect(collection).toEqual({
+      verdict: "incomplete",
+      source: "cz-ns-sbirka",
+      sourceName: "Nejvyšší soud",
+      years: { from: declaredFrom, to: 2026 },
+      gapYears: [],
+      unreconciledYears: [{ from: declaredFrom, to: 2026 }],
+    });
+    expect(decisionAbsenceHint(coverage)).toContain(
+      `cz-ns-sbirka ${String(declaredFrom)}–2026`,
+    );
+  });
+
+  test("names the collection beside the database when the citation names the court", () => {
+    const coverage = decisionAbsenceCoverage({
+      snapshot: {
+        ...SNAPSHOT,
+        countries: [
+          {
+            country: "CZE",
+            sources: [
+              SUPREME,
+              REGIONAL,
+              { ...COLLECTION, courts: [{ court: "Nejvyšší soud" }] },
+            ],
+          },
+        ],
+      },
+      country: "CZE",
+      intent: docketIntent("6 Cz 90/70"),
+      grammar: CZE,
+      namedCourts: ["Nejvyšší soud"],
+    });
+    expect(coverage.sources.map(({ source }) => source)).toEqual([
+      "cz-ns",
+      "cz-ns-sbirka",
+    ]);
+  });
+});
+
 describe("exclusive docket registers", () => {
   test("no register is kept by two sources of one country", () => {
     const byCountry = new Map<string, string[]>();
