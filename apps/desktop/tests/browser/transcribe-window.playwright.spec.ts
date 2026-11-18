@@ -168,6 +168,7 @@ for (const scheme of ["light", "dark"] as const) {
 
 test("a dropped DS2 file is refused with the export note", async ({ page }) => {
   await open(page, "light");
+  await expect(page.getByText(en.transcribe.drop.title)).toBeVisible();
   await emit(page, "transcribe-file", {
     status: "refused",
     name: "Interview.ds2",

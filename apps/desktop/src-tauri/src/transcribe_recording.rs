@@ -83,7 +83,11 @@ pub enum Refused {
 
 /// A chosen file, as the window shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase", tag = "status")]
+#[serde(
+  rename_all = "camelCase",
+  rename_all_fields = "camelCase",
+  tag = "status"
+)]
 pub enum FileChoice {
   Ready {
     name: String,
@@ -157,7 +161,11 @@ pub enum Failure {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "outcome")]
+#[serde(
+  rename_all = "camelCase",
+  rename_all_fields = "camelCase",
+  tag = "outcome"
+)]
 enum Finished {
   Done { job: u64, duration_ms: u64 },
   Stopped { job: u64 },
@@ -1167,6 +1175,14 @@ mod tests {
     assert_eq!(
       serde_json::to_value(&ready).unwrap(),
       serde_json::json!({ "status": "ready", "name": "Hearing.m4a", "format": "M4A", "durationMs": 1_000 })
+    );
+    assert_eq!(
+      serde_json::to_value(Finished::Done {
+        job: 3,
+        duration_ms: 5
+      })
+      .unwrap(),
+      serde_json::json!({ "outcome": "done", "job": 3, "durationMs": 5 })
     );
     assert_eq!(
       serde_json::to_value(Finished::Failed {
