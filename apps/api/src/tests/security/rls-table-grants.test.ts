@@ -252,6 +252,10 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
   // projection drain consumes; request code never reads them.
   "case_law_ranking_signal_changes",
+  // The settlement queue: owner-run triggers enqueue delete tasks, the
+  // ingestion role's settlement leases and drops them; request code never
+  // reads them.
+  "corpus_index_projection_delete_tasks",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
   "case_law_sitemap_touches",

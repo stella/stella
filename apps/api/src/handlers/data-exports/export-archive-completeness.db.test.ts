@@ -264,6 +264,7 @@ const TABLE_CLASSIFICATIONS = {
   corpusIndexGroupEnrollments: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexGroupWithdrawals: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexJurisdictionServing: RESEARCH_CORPUS_EXCLUSION,
+  corpusIndexProjectionDeleteTasks: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexProjectionIntents: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexProjectionRevisions: RESEARCH_CORPUS_EXCLUSION,
   corpusIndexProjectionStates: RESEARCH_CORPUS_EXCLUSION,

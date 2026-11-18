@@ -1580,6 +1580,38 @@ export const installPgliteCaseLawRankingSignalChanges = async (
   }
 };
 
+/**
+ * Install the triggers that queue a delete task when a revision gains its
+ * delete receipt; schema push creates the queue table but not its writers.
+ */
+export const installPgliteCorpusProjectionDeleteTasks = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261118090000_corpus_projection_delete_tasks",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE FUNCTION "queue_corpus_projection_delete_task"',
+      ) ||
+      source.startsWith(
+        'CREATE TRIGGER "corpus_projection_intents_delete_task_',
+      )
+    );
+  });
+  if (statements.length !== 3) {
+    panic("Expected the delete task queue function and its two triggers");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261003120100_organization_member_capacity",

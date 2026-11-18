@@ -9,7 +9,6 @@ import {
   isNull,
   lt,
   lte,
-  min,
   notInArray,
   or,
   type SQL,
@@ -20,13 +19,16 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  corpusIndexProjectionDeleteTasks,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  lockCorpusProjectionDeleteTask,
   lockCorpusProjectionServingStatesForCleanup,
   lockCorpusProjectionStatesOfRevisions,
+  lockFreeCorpusProjectionDeleteTasks,
   lockPendingCorpusProjectionCleanups,
 } from "@/api/lib/db/aggregate-lock";
 import { transitionBatch } from "@/api/lib/db/transitions";
@@ -736,156 +738,215 @@ type ClaimCorpusProjectionCleanupSettlementOptions<
   newLeaseToken?: () => string;
 };
 
-export const claimCorpusProjectionCleanupSettlementTx = async <
-  Family extends CorpusFamily,
->(
+/**
+ * Tasks the claim plans per task it may lease. The plan reads without locks
+ * or the fence, so a task another turn is leasing at that moment is skipped
+ * under lock; planning a few more keeps such a turn from shrinking this one.
+ */
+const SETTLEMENT_TASK_PLAN_FACTOR = 2;
+
+const settlementTaskLeaseIsFree = or(
+  isNull(corpusIndexProjectionDeleteTasks.leaseExpiresAt),
+  sql`${corpusIndexProjectionDeleteTasks.leaseExpiresAt} <= clock_timestamp()`,
+);
+
+type CorpusProjectionSettlementTaskWalkOptions = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+  limit: number;
+  scopedEntityIds: readonly string[] | null;
+};
+
+/**
+ * The settlement claim's plan: the next delete tasks of one index in queue
+ * order whose lease is free. One range of the task index, at most `limit`
+ * rows past the leased ones it steps over, however many revisions wait in
+ * `cleanup_committed`. Unlocked and unfenced: the claim locks and re-reads
+ * the planned tasks under the fence, and a task another turn took in between
+ * simply yields no lease. A scoped claim plans only the tasks of its
+ * entities' committed revisions. Exported so the plan guard explains the
+ * exact statement the claim issues.
+ */
+export const corpusProjectionSettlementTaskWalk = (
   tx: Transaction,
   {
     family,
     generation,
     indexId,
-    limit: requestedLimit,
-    taskLimit: requestedTaskLimit,
-    leaseMs: requestedLeaseMs,
-    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
-    testNow,
-    newLeaseToken = () => Bun.randomUUIDv7(),
-  }: ClaimCorpusProjectionCleanupSettlementOptions<Family>,
-): Promise<CorpusProjectionCleanupSettlementLease[]> => {
-  const limit = validateCleanupBatchSize(requestedLimit);
-  const taskLimit = validateSettlementTaskLimit(requestedTaskLimit);
-  const leaseMs = validateLeaseMs(requestedLeaseMs);
-  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
-  await lockRegisteredCorpusProjectionManifestForMutation(
-    tx,
-    family,
-    generation,
-  );
-  const settleable = and(
-    eq(corpusIndexProjectionIntents.family, family),
-    eq(corpusIndexProjectionIntents.generation, generation),
-    eq(corpusIndexProjectionIntents.indexId, indexId),
-    scopedEntityIds === null
-      ? undefined
-      : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
-    eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
-    // A receipt written before the delete instant was persisted cannot be
-    // proved against the splits that could hold its revisions. The online
-    // repair behind the paired-receipt constraint fills those rows in, and
-    // they become settleable again with no further transition.
-    isNotNull(corpusIndexProjectionIntents.deleteTaskCreatedAt),
-    or(
-      isNull(corpusIndexProjectionIntents.leaseExpiresAt),
-      sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
-    ),
-  );
-  // Grouping cannot take row locks, so these identities are only a plan: the
-  // rows behind them are re-read under lock below, and a task another turn
-  // claimed in between simply yields no lease.
-  const tasks = await tx
-    .select({
-      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
-      // One instant per task: the opstamp identifies the task inside this
-      // index, and its receipt wrote both columns in one transition.
-      deleteTaskCreatedAt: min(
-        corpusIndexProjectionIntents.deleteTaskCreatedAt,
-      ),
-    })
-    .from(corpusIndexProjectionIntents)
-    .where(settleable)
-    .groupBy(corpusIndexProjectionIntents.deleteOpstamp)
-    .orderBy(
-      asc(min(corpusIndexProjectionIntents.cleanupStartedAt)),
-      asc(corpusIndexProjectionIntents.deleteOpstamp),
-    )
-    .limit(taskLimit);
-  const taskInstants = new Map<string, Temporal.Instant>();
-  const leasedOpstamps = tasks.map(({ deleteOpstamp, deleteTaskCreatedAt }) => {
-    if (deleteOpstamp === null || deleteTaskCreatedAt === null) {
-      return panic("Committed corpus projection cleanup has no delete receipt");
-    }
-    taskInstants.set(
-      deleteOpstamp.toString(),
-      Temporal.Instant.fromEpochMilliseconds(deleteTaskCreatedAt.getTime()),
-    );
-    return deleteOpstamp;
-  });
-  if (leasedOpstamps.length === 0) {
-    return [];
-  }
-  const leasedTasks = inArray(
-    corpusIndexProjectionIntents.deleteOpstamp,
-    leasedOpstamps,
-  );
-  // Rank inside each delete task so one long task cannot spend the whole
-  // turn's row budget. The ranking cannot lock (a window function and a
-  // locking clause are exclusive), so the outer statement locks the intent
-  // rows the ranking picked.
-  const rankedRevisions = tx.$with("ranked_revisions").as(
-    tx
-      .select({
-        id: corpusIndexProjectionIntents.id,
-        taskRank: sql<number>`row_number() OVER (
-          PARTITION BY ${corpusIndexProjectionIntents.deleteOpstamp}
-          ORDER BY ${corpusIndexProjectionIntents.createdAt}, ${corpusIndexProjectionIntents.id}
-        )`.as("task_rank"),
-      })
-      .from(corpusIndexProjectionIntents)
-      .where(and(settleable, leasedTasks)),
-  );
-  const candidates = await tx
-    .with(rankedRevisions)
-    .select({
-      id: corpusIndexProjectionIntents.id,
-      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
-    })
-    .from(corpusIndexProjectionIntents)
-    .innerJoin(
-      rankedRevisions,
-      and(
-        eq(rankedRevisions.id, corpusIndexProjectionIntents.id),
-        lte(rankedRevisions.taskRank, limit),
-      ),
-    )
-    // Total: two revisions committed by the same cleanup turn share both
-    // timestamps, and the lease order follows this one.
-    .orderBy(
-      asc(corpusIndexProjectionIntents.cleanupStartedAt),
-      asc(corpusIndexProjectionIntents.createdAt),
-      asc(corpusIndexProjectionIntents.id),
-    )
-    .limit(limit * leasedOpstamps.length)
-    .for("update", {
-      of: corpusIndexProjectionIntents,
-      skipLocked: true,
-    });
-  if (candidates.length === 0) {
-    return [];
-  }
-  const leaseToken = newLeaseToken();
-  const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
-  const leaseExpiresAt =
-    testNow === undefined
-      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
-      : new Date(testNow.getTime() + leaseMs);
-  const candidateIds = candidates.map(({ id }) => id);
-  const claimed = await tx
-    .update(corpusIndexProjectionIntents)
-    .set({ leaseToken, leaseExpiresAt, updatedAt: claimAt })
+    limit,
+    scopedEntityIds,
+  }: CorpusProjectionSettlementTaskWalkOptions,
+) =>
+  tx
+    .select({ deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp })
+    .from(corpusIndexProjectionDeleteTasks)
     .where(
       and(
-        inArray(corpusIndexProjectionIntents.id, candidateIds),
-        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+        eq(corpusIndexProjectionDeleteTasks.family, family),
+        eq(corpusIndexProjectionDeleteTasks.generation, generation),
+        eq(corpusIndexProjectionDeleteTasks.indexId, indexId),
+        settlementTaskLeaseIsFree,
+        scopedEntityIds === null
+          ? undefined
+          : inArray(
+              corpusIndexProjectionDeleteTasks.deleteOpstamp,
+              tx
+                .select({
+                  deleteOpstamp: sql<bigint>`${corpusIndexProjectionIntents.deleteOpstamp}`,
+                })
+                .from(corpusIndexProjectionIntents)
+                .where(
+                  and(
+                    eq(corpusIndexProjectionIntents.family, family),
+                    eq(corpusIndexProjectionIntents.generation, generation),
+                    eq(corpusIndexProjectionIntents.indexId, indexId),
+                    inArray(
+                      corpusIndexProjectionIntents.entityId,
+                      scopedEntityIds,
+                    ),
+                    eq(
+                      corpusIndexProjectionIntents.status,
+                      "cleanup_committed",
+                    ),
+                  ),
+                ),
+            ),
       ),
     )
-    .returning({ id: corpusIndexProjectionIntents.id });
-  if (claimed.length !== candidates.length) {
-    return panic(
-      `Corpus projection settlement claimed ${claimed.length} of ${candidates.length} revisions`,
-    );
+    .orderBy(
+      asc(corpusIndexProjectionDeleteTasks.cleanupStartedAt),
+      asc(corpusIndexProjectionDeleteTasks.deleteOpstamp),
+    )
+    .limit(limit);
+
+type CorpusProjectionDeleteTaskKey = {
+  family: CorpusFamily;
+  generation: string;
+  indexId: string;
+};
+
+/** Whether a revision of the task still waits in `cleanup_committed`. */
+const deleteTaskHasCommittedRevision = ({
+  family,
+  generation,
+  indexId,
+}: CorpusProjectionDeleteTaskKey) => sql`EXISTS (
+  SELECT 1
+  FROM ${corpusIndexProjectionIntents} committed
+  WHERE committed.family = ${family}
+    AND committed.generation = ${generation}
+    AND committed.index_id = ${indexId}
+    AND committed.status = 'cleanup_committed'
+    AND committed.delete_opstamp = ${corpusIndexProjectionDeleteTasks.deleteOpstamp}
+)`;
+
+const deleteTaskKeyPredicate = ({
+  family,
+  generation,
+  indexId,
+}: CorpusProjectionDeleteTaskKey) =>
+  and(
+    eq(corpusIndexProjectionDeleteTasks.family, family),
+    eq(corpusIndexProjectionDeleteTasks.generation, generation),
+    eq(corpusIndexProjectionDeleteTasks.indexId, indexId),
+  );
+
+/**
+ * Drop the tasks, of those this transaction holds locked, with no revision
+ * left in `cleanup_committed`. The caller must hold each row's lock before
+ * this statement starts: its existence check then runs on a snapshot taken
+ * after any receipt that wrote the row before us committed, and a receipt
+ * that writes it after us finds no row and queues the task again.
+ */
+const deleteDrainedLockedDeleteTasksTx = async (
+  tx: Transaction,
+  key: CorpusProjectionDeleteTaskKey,
+  deleteOpstamps: readonly bigint[],
+): Promise<bigint[]> => {
+  if (deleteOpstamps.length === 0) {
+    return [];
   }
-  // One token for the turn: each lease settles or releases its own revisions,
-  // and the identity sets behind two delete tasks are disjoint.
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  const removed = await tx
+    .delete(corpusIndexProjectionDeleteTasks)
+    .where(
+      and(
+        deleteTaskKeyPredicate(key),
+        inArray(corpusIndexProjectionDeleteTasks.deleteOpstamp, [
+          ...deleteOpstamps,
+        ]),
+        sql`NOT ${deleteTaskHasCommittedRevision(key)}`,
+      ),
+    )
+    .returning({
+      deleteOpstamp: corpusIndexProjectionDeleteTasks.deleteOpstamp,
+    });
+  return removed.map(({ deleteOpstamp }) => deleteOpstamp);
+};
+
+type FinishCorpusProjectionDeleteTaskTurnOptions =
+  CorpusProjectionDeleteTaskKey & {
+    deleteOpstamp: number;
+    leaseToken: string;
+  };
+
+/**
+ * A settlement turn is done with its task: drop the task when none of its
+ * revisions is left in `cleanup_committed`, or else give up the turn's lease
+ * on it, so the rest of its revisions are claimable at once. A lease another
+ * turn took over after this one expired is left alone.
+ */
+const finishCorpusProjectionDeleteTaskTurnTx = async (
+  tx: Transaction,
+  {
+    deleteOpstamp,
+    leaseToken,
+    ...key
+  }: FinishCorpusProjectionDeleteTaskTurnOptions,
+): Promise<void> => {
+  const opstamp = BigInt(deleteOpstamp);
+  const thisTask = and(
+    deleteTaskKeyPredicate(key),
+    eq(corpusIndexProjectionDeleteTasks.deleteOpstamp, opstamp),
+  );
+  const locked = await lockCorpusProjectionDeleteTask(tx, {
+    ...key,
+    deleteOpstamp: opstamp,
+  });
+  if (locked.length === 0) {
+    return;
+  }
+  const removed = await deleteDrainedLockedDeleteTasksTx(tx, key, [opstamp]);
+  if (removed.length > 0) {
+    return;
+  }
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionDeleteTasks)
+    .set({ leaseToken: null, leaseExpiresAt: null })
+    .where(
+      and(
+        thisTask,
+        eq(corpusIndexProjectionDeleteTasks.leaseToken, leaseToken),
+      ),
+    );
+};
+
+/**
+ * One lease per delete task, revisions in lease order. One token for the
+ * turn: each lease settles or releases its own revisions, and the identity
+ * sets behind two delete tasks are disjoint.
+ */
+const settlementLeasesOf = (
+  { family, generation, indexId }: CorpusProjectionDeleteTaskKey,
+  candidates: readonly {
+    id: ProjectionIntentId;
+    deleteOpstamp: bigint | null;
+  }[],
+  taskInstants: ReadonlyMap<string, Temporal.Instant>,
+  leaseToken: string,
+): CorpusProjectionCleanupSettlementLease[] => {
   const grouped = new Map<string, SettlementTaskGroup>();
   for (const { id, deleteOpstamp } of candidates) {
     if (deleteOpstamp === null) {
@@ -923,6 +984,183 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
       leaseToken,
     }),
   );
+};
+
+/**
+ * Lease up to `taskLimit` delete tasks of one index and up to `limit` of each
+ * one's committed revisions.
+ *
+ * The plan walks the task queue without locks or the fence. The fence is
+ * joined only for the lease: the planned tasks and their revisions are locked
+ * with `SKIP LOCKED` and re-checked, and the leases are written to both. The
+ * claim never waits on a row lock. A planned task none of whose revisions is
+ * left in `cleanup_committed` is dropped from the queue; one whose revisions
+ * are locked or leased elsewhere stays for a later turn.
+ */
+export const claimCorpusProjectionCleanupSettlementTx = async <
+  Family extends CorpusFamily,
+>(
+  tx: Transaction,
+  {
+    family,
+    generation,
+    indexId,
+    limit: requestedLimit,
+    taskLimit: requestedTaskLimit,
+    leaseMs: requestedLeaseMs,
+    scope = CORPUS_PROJECTION_GENERATION_SCOPE,
+    testNow,
+    newLeaseToken = () => Bun.randomUUIDv7(),
+  }: ClaimCorpusProjectionCleanupSettlementOptions<Family>,
+): Promise<CorpusProjectionCleanupSettlementLease[]> => {
+  const limit = validateCleanupBatchSize(requestedLimit);
+  const taskLimit = validateSettlementTaskLimit(requestedTaskLimit);
+  const leaseMs = validateLeaseMs(requestedLeaseMs);
+  const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
+  const taskKey = { family, generation, indexId };
+  const planned = await corpusProjectionSettlementTaskWalk(tx, {
+    ...taskKey,
+    limit: taskLimit * SETTLEMENT_TASK_PLAN_FACTOR,
+    scopedEntityIds,
+  });
+  if (planned.length === 0) {
+    return [];
+  }
+  await lockRegisteredCorpusProjectionManifestForMutation(
+    tx,
+    family,
+    generation,
+  );
+  const lockedTasks = await lockFreeCorpusProjectionDeleteTasks(tx, {
+    ...taskKey,
+    deleteOpstamps: planned.map(({ deleteOpstamp }) => deleteOpstamp),
+    limit: taskLimit,
+  });
+  if (lockedTasks.length === 0) {
+    return [];
+  }
+  const taskInstants = new Map(
+    lockedTasks.map(({ deleteOpstamp, taskCreatedAt }) => [
+      deleteOpstamp.toString(),
+      Temporal.Instant.fromEpochMilliseconds(taskCreatedAt.getTime()),
+    ]),
+  );
+  const leasedOpstamps = lockedTasks.map(({ deleteOpstamp }) => deleteOpstamp);
+  const settleable = and(
+    eq(corpusIndexProjectionIntents.family, family),
+    eq(corpusIndexProjectionIntents.generation, generation),
+    eq(corpusIndexProjectionIntents.indexId, indexId),
+    inArray(corpusIndexProjectionIntents.deleteOpstamp, leasedOpstamps),
+    scopedEntityIds === null
+      ? undefined
+      : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+    eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+    // A receipt written before the delete instant was persisted cannot be
+    // proved against the splits that could hold its revisions. The online
+    // repair behind the paired-receipt constraint fills those rows in, and
+    // they become settleable again with no further transition.
+    isNotNull(corpusIndexProjectionIntents.deleteTaskCreatedAt),
+    // A revision leased on its own row, by a release that leased revisions
+    // before tasks had rows, keeps that lease until it expires.
+    or(
+      isNull(corpusIndexProjectionIntents.leaseExpiresAt),
+      sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+    ),
+  );
+  // Rank inside each delete task so one long task cannot spend the whole
+  // turn's row budget. The ranking cannot lock (a window function and a
+  // locking clause are exclusive), so the outer statement locks the intent
+  // rows the ranking picked.
+  const rankedRevisions = tx.$with("ranked_revisions").as(
+    tx
+      .select({
+        id: corpusIndexProjectionIntents.id,
+        taskRank: sql<number>`row_number() OVER (
+          PARTITION BY ${corpusIndexProjectionIntents.deleteOpstamp}
+          ORDER BY ${corpusIndexProjectionIntents.createdAt}, ${corpusIndexProjectionIntents.id}
+        )`.as("task_rank"),
+      })
+      .from(corpusIndexProjectionIntents)
+      .where(settleable),
+  );
+  const candidates = await tx
+    .with(rankedRevisions)
+    .select({
+      id: corpusIndexProjectionIntents.id,
+      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
+    })
+    .from(corpusIndexProjectionIntents)
+    .innerJoin(
+      rankedRevisions,
+      and(
+        eq(rankedRevisions.id, corpusIndexProjectionIntents.id),
+        lte(rankedRevisions.taskRank, limit),
+      ),
+    )
+    // Total: two revisions committed by the same cleanup turn share both
+    // timestamps, and the lease order follows this one.
+    .orderBy(
+      asc(corpusIndexProjectionIntents.cleanupStartedAt),
+      asc(corpusIndexProjectionIntents.createdAt),
+      asc(corpusIndexProjectionIntents.id),
+    )
+    .limit(limit * leasedOpstamps.length)
+    .for("update", {
+      of: corpusIndexProjectionIntents,
+      skipLocked: true,
+    });
+  const claimedOpstamps = new Set(
+    candidates.map(({ deleteOpstamp }) => String(deleteOpstamp)),
+  );
+  // A planned task with nothing to lease either has no committed revision
+  // left (a settlement or reissue by an earlier release kept its row), and
+  // leaves the queue, or its revisions are busy elsewhere, and it stays.
+  await deleteDrainedLockedDeleteTasksTx(
+    tx,
+    taskKey,
+    leasedOpstamps.filter((opstamp) => !claimedOpstamps.has(String(opstamp))),
+  );
+  if (candidates.length === 0) {
+    return [];
+  }
+  const leaseToken = newLeaseToken();
+  const claimAt = testNow ?? sql<Date>`clock_timestamp()`;
+  const leaseExpiresAt =
+    testNow === undefined
+      ? sql<Date>`clock_timestamp() + ${leaseMs} * INTERVAL '1 millisecond'`
+      : new Date(testNow.getTime() + leaseMs);
+  const candidateIds = candidates.map(({ id }) => id);
+  const claimed = await tx
+    .update(corpusIndexProjectionIntents)
+    .set({ leaseToken, leaseExpiresAt, updatedAt: claimAt })
+    .where(
+      and(
+        inArray(corpusIndexProjectionIntents.id, candidateIds),
+        eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+      ),
+    )
+    .returning({ id: corpusIndexProjectionIntents.id });
+  if (claimed.length !== candidates.length) {
+    return panic(
+      `Corpus projection settlement claimed ${claimed.length} of ${candidates.length} revisions`,
+    );
+  }
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionDeleteTasks)
+    .set({ leaseToken, leaseExpiresAt })
+    .where(
+      and(
+        deleteTaskKeyPredicate(taskKey),
+        inArray(
+          corpusIndexProjectionDeleteTasks.deleteOpstamp,
+          leasedOpstamps.filter((opstamp) =>
+            claimedOpstamps.has(String(opstamp)),
+          ),
+        ),
+      ),
+    );
+  return settlementLeasesOf(taskKey, candidates, taskInstants, leaseToken);
 };
 
 type SurvivorPending = Extract<
@@ -991,6 +1229,8 @@ const REISSUE_CONSTRUCTION: unique symbol = Symbol(
  * remove them.
  */
 export class CorpusProjectionCleanupReissue {
+  readonly family: CorpusFamily;
+  readonly generation: string;
   readonly indexId: string;
   readonly intentIds: readonly ProjectionIntentId[];
   readonly deleteOpstamp: number;
@@ -1006,6 +1246,8 @@ export class CorpusProjectionCleanupReissue {
     if (construction !== REISSUE_CONSTRUCTION) {
       panic("Corpus projection reissue evidence has a foreign constructor");
     }
+    this.family = lease.family;
+    this.generation = lease.generation;
     this.indexId = lease.indexId;
     this.intentIds = [...lease.intentIds];
     this.deleteOpstamp = lease.deleteOpstamp;
@@ -1020,19 +1262,25 @@ export class CorpusProjectionCleanupReissue {
  * remaining documents.
  */
 export class CorpusProjectionCleanupSettlementProof {
+  readonly family: CorpusFamily;
+  readonly generation: string;
   readonly indexId: string;
   readonly intentIds: readonly ProjectionIntentId[];
   readonly deleteOpstamp: number;
   readonly leaseToken: string;
 
-  private constructor(
-    indexId: string,
-    intentIds: readonly ProjectionIntentId[],
-    deleteOpstamp: number,
-    leaseToken: string,
-  ) {
+  private constructor({
+    family,
+    generation,
+    indexId,
+    intentIds,
+    deleteOpstamp,
+    leaseToken,
+  }: CorpusProjectionCleanupSettlementLease) {
+    this.family = family;
+    this.generation = generation;
     this.indexId = indexId;
-    this.intentIds = intentIds;
+    this.intentIds = [...intentIds];
     this.deleteOpstamp = deleteOpstamp;
     this.leaseToken = leaseToken;
   }
@@ -1169,12 +1417,7 @@ export class CorpusProjectionCleanupSettlementProof {
       case "verified":
         return {
           status: "verified",
-          proof: new CorpusProjectionCleanupSettlementProof(
-            lease.indexId,
-            [...lease.intentIds],
-            lease.deleteOpstamp,
-            lease.leaseToken,
-          ),
+          proof: new CorpusProjectionCleanupSettlementProof(lease),
         };
       case "pending":
         return CorpusProjectionCleanupSettlementProof.pendingOf(
@@ -1248,6 +1491,20 @@ export const releaseCorpusProjectionCleanupSettlementTx = async (
       ),
     )
     .returning({ id: corpusIndexProjectionIntents.id });
+  // audit: skip - scheduling bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionDeleteTasks)
+    .set({ leaseToken: null, leaseExpiresAt: null })
+    .where(
+      and(
+        deleteTaskKeyPredicate(lease),
+        eq(
+          corpusIndexProjectionDeleteTasks.deleteOpstamp,
+          BigInt(lease.deleteOpstamp),
+        ),
+        eq(corpusIndexProjectionDeleteTasks.leaseToken, lease.leaseToken),
+      ),
+    );
   if (rows.length === lease.intentIds.length) {
     return rows.length;
   }
@@ -1326,6 +1583,7 @@ export const settleCorpusProjectionCleanupTx = async (
     intentIds: proof.intentIds,
     transitionAt,
   });
+  await finishCorpusProjectionDeleteTaskTurnTx(tx, proof);
   return rows.length;
 };
 
@@ -1501,6 +1759,7 @@ export const reissueCorpusProjectionCleanupTx = async (
       );
     }
   }
+  await finishCorpusProjectionDeleteTaskTurnTx(tx, reissue);
   if (stalledIntentIds.length > 0) {
     logger.warn("corpus_projection.cleanup_stalled", {
       index: reissue.indexId,

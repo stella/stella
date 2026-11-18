@@ -50,6 +50,7 @@ import {
   installPgliteConflictCheckRoutines,
   installPgliteCorpusIndexGenerationRetire,
   installPgliteCorpusIndexSeedingLifecycle,
+  installPgliteCorpusProjectionDeleteTasks,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
@@ -546,6 +547,15 @@ export const ROLE_GRANT_STATEMENTS = [
     TO stella_ingestion
   `,
   `
+    GRANT SELECT, DELETE ON TABLE "corpus_index_projection_delete_tasks"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("lease_token", "lease_expires_at")
+    ON TABLE "corpus_index_projection_delete_tasks"
+    TO stella_ingestion
+  `,
+  `
     GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_sitemap_country_generations"
     TO stella_ingestion
   `,
@@ -834,9 +844,7 @@ const installTestPublicLawViews = async (
       panic(`Public-law view ${config.name} query has bound parameters`);
     }
     await db.execute(sql`
-      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
-        config.name,
-      )}
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
       AS (${sql.raw(rendered.sql)})
     `);
   }
@@ -851,9 +859,7 @@ export const rebuildTestPublicLawViews = async (
   for (const view of publicLawViews) {
     const config = getViewConfig(view);
     await db.execute(sql`
-      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(
-        config.name,
-      )}
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
     `);
   }
   await change();
@@ -939,6 +945,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawContentChangedAt(db);
   await installPgliteCaseLawSitemapChanges(db);
   await installPgliteCaseLawRankingSignalChanges(db);
+  await installPgliteCorpusProjectionDeleteTasks(db);
   await installPgliteCaseLawPopulationCounts(db);
   await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
