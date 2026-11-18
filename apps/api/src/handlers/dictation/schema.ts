@@ -51,11 +51,11 @@ export const dictationBodySchema = v.strictObject({
   [TRANSCRIPTION_LABELS_SHOWN_FIELD]: v.optional(v.literal("1")),
 });
 
-/** What a linked desktop uploads: the audio chunk, a model and a language.
- *  It names no matter and sends no vocabulary, and its route always knows
+/** What a linked desktop uploads: the audio chunk, a model, a language and,
+ *  for a recording filed under a matter, that matter. It sends no
+ *  vocabulary (the API reads the matter's own), and its route always knows
  *  the desktop labels its models, so it sends no labels flag. */
 export const desktopDictationBodySchema = v.omit(dictationBodySchema, [
-  "matterId",
   "vocabulary",
   TRANSCRIPTION_LABELS_SHOWN_FIELD,
 ]);

@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Vajab tähelepanu",
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
-    "reconnectAccount": "Ühenda stella webiga uuesti…"
+    "reconnectAccount": "Ühenda stella webiga uuesti…",
+    "transcribeRecording": "Transkribeeri salvestis…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
@@ -686,7 +687,13 @@
       "passwordField": "Fookuses on paroolivali, seega dikteeritut ei säilitatud ega sisestatud.",
       "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
     },
-    "failureKeptInHistory": "Tekst on lõikelaua ajaloos."
+    "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
+    "transcribeRecording": {
+      "title": "Salvestise transkribeerimine",
+      "description": "Muudab kuni 4 tunni pikkuse diktofonifaili, häälmärkme või koosoleku salvestise tekstiks.",
+      "open": "Ava",
+      "failed": "Akent ei õnnestunud avada. Proovige uuesti."
+    }
   },
   "shortcut": {
     "title": "Lõikelaua otsetee",
@@ -963,6 +970,79 @@
       "network_folder": "See kaust asub võrguketta jagatud alal. Linkige kaust selle arvuti enda kettalt.",
       "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
       "unreadable": "Seda kausta ei õnnestunud lugeda."
+    }
+  },
+  "transcribe": {
+    "title": "Salvestise transkribeerimine",
+    "drop": {
+      "title": "Lohistage salvestis siia",
+      "release": "Laske lahti, et transkribeerida",
+      "description": "Diktofonifailid, häälmärkmed, häälsõnumid, koosolekute salvestised või video heli.",
+      "choose": "Vali fail",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR ning MP4- või MOV-video. Kuni 4 tundi.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR ning MP4- või MOV-video. Kuni 4 tundi."
+    },
+    "destination": {
+      "title": "Transkribeeri kasutades",
+      "thisComputer": "See arvuti",
+      "cloud": "stella AI",
+      "localDescription": "Salvestis jääb sellesse arvutisse.",
+      "cloudDescription": "Heli saadetakse transkribeerimiseks stellale ja dikteerimise seadetes valitud mudeli pakkujale. stella seda ei salvesta.",
+      "cloudDescriptionModel": "Heli saadetakse transkribeerimiseks stellale ja mudeli {model} pakkujale. stella seda ei salvesta.",
+      "localMissing": "Selles arvutis transkribeerimiseks laadige seadetes jaotises Dikteerimine alla kõnemudel.",
+      "localMissingCloud": "Laadige seadetes jaotises Dikteerimine alla kõnemudel või transkribeerige stella AI abil.",
+      "retainsData": "{provider} säilitab kõigi sellele mudelile saadetud salvestiste heli ja transkriptsiooni. Ärge transkribeerige sellega konfidentsiaalseid ega klientide salvestisi või valige seadetes jaotises Dikteerimine muu mudel."
+    },
+    "matter": {
+      "title": "Toimik",
+      "description": "Selle nimed ja asjanumbrid kirjutatakse õigesti ning teksti saab sinna salvestada.",
+      "none": "Puudub",
+      "search": "Otsi toimikuid",
+      "clearSearch": "Tühjenda otsing",
+      "searching": "Otsimine…",
+      "noMatters": "Toimikuid ei leitud",
+      "failed": "Toimikuid ei õnnestunud laadida. Proovige uuesti."
+    },
+    "note": "Philipsi või Olympuse diktofonide DSS- ja DS2-failid salvestage esmalt SpeechExecis või ODMS-is WAV-vormingusse.",
+    "refused": {
+      "unsupported": "stella ei saa faili {name} lugeda. Valige salvestis mõnes ülaltoodud vormingus.",
+      "tooLong": "{name} on pikem kui 4 tundi. Jagage see esmalt lühemateks salvestisteks.",
+      "unreadable": "Faili {name} ei õnnestunud lugeda. See võib olla kahjustatud; eksportige see uuesti ja proovige veel kord."
+    },
+    "failure": {
+      "start": "Transkribeerimist ei õnnestunud alustada. Proovige uuesti.",
+      "modelMissing": "Kõnemudelit pole selles arvutis. Laadige see seadetes jaotises Dikteerimine alla.",
+      "thisComputer": "Selle arvuti kõnemudel ei suutnud osa salvestisest transkribeerida. Seni saadud tekst jääb alles.",
+      "cloud": "stella AI ei suutnud osa salvestisest transkribeerida. Seni saadud tekst jääb alles; proovige hiljem uuesti.",
+      "unreadable": "Salvestist ei õnnestunud lõpuni lugeda. Seni saadud tekst jääb alles.",
+      "tooLong": "Salvestis on pikem kui 4 tundi. Seni saadud tekst jääb alles."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "See arvuti",
+      "cloud": "stella AI, {model}",
+      "matter": "toimik {name}",
+      "copy": "Kopeeri",
+      "copied": "Kopeeritud",
+      "saveAs": "Salvesta kui",
+      "saveWithTimestamps": "Tekst ajatemplitega (.txt)",
+      "saveWithoutTimestamps": "Tekst ajatempliteta (.txt)",
+      "saveToMatter": "Salvesta toimikusse",
+      "savingToMatter": "Salvestamine…",
+      "savedToMatter": "Salvestatud toimikusse {matter} nimega {fileName}.",
+      "saveToMatterFailed": "Transkriptsiooni ei õnnestunud toimikusse salvestada. Proovige uuesti.",
+      "saveFailed": "Transkriptsiooni ei õnnestunud kopeerida ega salvestada. Proovige uuesti.",
+      "noSpeech": "Selles salvestises kõnet ei leitud.",
+      "fileName": "{title} – transkriptsioon.txt",
+      "documentTitle": "{title} – transkriptsioon"
+    },
+    "progress": {
+      "running": "Transkribeerimine: {done, number} / {total, number} min",
+      "runningUnknown": "Transkribeerimine: seni {done, number} min",
+      "stop": "Peata",
+      "stopped": "Peatatud {done, number} min järel. Seni saadud tekst jääb alles.",
+      "done": "Transkribeeritud {total, number} min.",
+      "another": "Transkribeeri järgmine salvestis"
     }
   }
 }

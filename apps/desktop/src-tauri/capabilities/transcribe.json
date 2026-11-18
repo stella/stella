@@ -1,0 +1,25 @@
+{
+  "identifier": "transcribe",
+  "description": "Transcribe a recording the user chose, through restricted native commands",
+  "windows": ["transcribe"],
+  "permissions": [
+    "allow-account-record-use",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-desktop-report-error",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging",
+    "allow-dictation-get-snapshot",
+    "allow-dictation-get-cloud-models",
+    "allow-transcribe-get-snapshot",
+    "allow-transcribe-choose-file",
+    "allow-transcribe-clear-file",
+    "allow-transcribe-start",
+    "allow-transcribe-stop",
+    "allow-transcribe-copy-text",
+    "allow-transcribe-save-text",
+    "allow-transcribe-search-matters",
+    "allow-transcribe-save-to-matter"
+  ]
+}

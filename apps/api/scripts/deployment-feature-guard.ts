@@ -140,7 +140,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
@@ -250,6 +250,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

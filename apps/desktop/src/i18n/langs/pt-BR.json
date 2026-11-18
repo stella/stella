@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Requer atenção",
     "sessionOpeningInOffice": "Abrindo no Office",
     "sessionSavingDraft": "Salvando rascunho",
-    "reconnectAccount": "Reconectar ao stella web…"
+    "reconnectAccount": "Reconectar ao stella web…",
+    "transcribeRecording": "Transcrever uma gravação…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: as alterações permanecem locais e serão reenviadas automaticamente",
@@ -686,7 +687,13 @@
       "passwordField": "Um campo de senha está selecionado, então o ditado não foi guardado nem digitado.",
       "cloudTranscription": "A stella AI não conseguiu transcrever este ditado e o modelo de voz não está neste computador. Tente novamente ou, em “Transcrever com”, escolha “Este computador” e baixe o modelo."
     },
-    "failureKeptInHistory": "O texto está no histórico da área de transferência."
+    "failureKeptInHistory": "O texto está no histórico da área de transferência.",
+    "transcribeRecording": {
+      "title": "Transcrever uma gravação",
+      "description": "Converte em texto um arquivo de gravador, um memorando de voz ou a gravação de uma reunião de até 4 horas.",
+      "open": "Abrir",
+      "failed": "Não foi possível abrir a janela. Tente novamente."
+    }
   },
   "shortcut": {
     "title": "Atalho da área de transferência",
@@ -963,6 +970,79 @@
       "network_folder": "Esta pasta está em um compartilhamento de rede. Vincule uma pasta do disco deste computador.",
       "protected": "Esta pasta contém dados do próprio stella ou uma pasta de habilidades, então o agente não pode trabalhar nela.",
       "unreadable": "Não foi possível ler esta pasta."
+    }
+  },
+  "transcribe": {
+    "title": "Transcrever uma gravação",
+    "drop": {
+      "title": "Solte uma gravação aqui",
+      "release": "Solte para transcrever",
+      "description": "Arquivos de gravador, memorandos de voz, mensagens de voz, gravações de reuniões ou o som de um vídeo.",
+      "choose": "Escolher um arquivo",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR e vídeo MP4 ou MOV. Até 4 horas.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR e vídeo MP4 ou MOV. Até 4 horas."
+    },
+    "destination": {
+      "title": "Transcrever com",
+      "thisComputer": "Este computador",
+      "cloud": "stella AI",
+      "localDescription": "A gravação fica neste computador.",
+      "cloudDescription": "O áudio é enviado para a stella e para o provedor do modelo escolhido nas configurações de Ditado para ser transcrito. A stella não o armazena.",
+      "cloudDescriptionModel": "O áudio é enviado para a stella e para o provedor de {model} para ser transcrito. A stella não o armazena.",
+      "localMissing": "Baixe o modelo de voz em Configurações, em Ditado, para transcrever neste computador.",
+      "localMissingCloud": "Baixe o modelo de voz em Configurações, em Ditado, ou transcreva com a stella AI.",
+      "retainsData": "{provider} guarda o áudio e a transcrição de tudo o que é enviado a este modelo. Não transcreva com ele gravações confidenciais ou de clientes, ou escolha outro modelo em Configurações, em Ditado."
+    },
+    "matter": {
+      "title": "Caso",
+      "description": "Seus nomes e números de processo são escritos corretamente, e você pode salvar o texto nele.",
+      "none": "Nenhum",
+      "search": "Buscar casos",
+      "clearSearch": "Limpar busca",
+      "searching": "Buscando…",
+      "noMatters": "Nenhum caso encontrado",
+      "failed": "Não foi possível carregar os casos. Tente novamente."
+    },
+    "note": "Arquivos DSS e DS2 de gravadores Philips ou Olympus: salve-os primeiro como WAV no SpeechExec ou no ODMS.",
+    "refused": {
+      "unsupported": "A stella não consegue ler {name}. Escolha uma gravação em um dos formatos acima.",
+      "tooLong": "{name} tem mais de 4 horas. Divida-a primeiro em gravações mais curtas.",
+      "unreadable": "Não foi possível ler {name}. O arquivo pode estar danificado; exporte-o de novo e tente outra vez."
+    },
+    "failure": {
+      "start": "Não foi possível iniciar a transcrição. Tente novamente.",
+      "modelMissing": "O modelo de voz não está neste computador. Baixe-o em Configurações, em Ditado.",
+      "thisComputer": "O modelo de voz deste computador não conseguiu transcrever parte da gravação. O texto obtido até agora foi mantido.",
+      "cloud": "A stella AI não conseguiu transcrever parte da gravação. O texto obtido até agora foi mantido; tente mais tarde.",
+      "unreadable": "Não foi possível ler a gravação até o fim. O texto obtido até agora foi mantido.",
+      "tooLong": "A gravação tem mais de 4 horas. O texto obtido até agora foi mantido."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Este computador",
+      "cloud": "stella AI, {model}",
+      "matter": "caso {name}",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "saveAs": "Salvar como",
+      "saveWithTimestamps": "Texto com marcas de tempo (.txt)",
+      "saveWithoutTimestamps": "Texto sem marcas de tempo (.txt)",
+      "saveToMatter": "Salvar no caso",
+      "savingToMatter": "Salvando…",
+      "savedToMatter": "Salvo em {matter} como {fileName}.",
+      "saveToMatterFailed": "Não foi possível salvar a transcrição no caso. Tente novamente.",
+      "saveFailed": "Não foi possível copiar nem salvar a transcrição. Tente novamente.",
+      "noSpeech": "Nenhuma fala foi encontrada nesta gravação.",
+      "fileName": "{title} - transcrição.txt",
+      "documentTitle": "{title} - transcrição"
+    },
+    "progress": {
+      "running": "Transcrevendo {done, number} de {total, number} min",
+      "runningUnknown": "Transcrevendo: {done, number} min até agora",
+      "stop": "Parar",
+      "stopped": "Parado após {done, number} min. O texto obtido até agora foi mantido.",
+      "done": "{total, number} min transcritos.",
+      "another": "Transcrever outra gravação"
     }
   }
 }

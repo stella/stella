@@ -42,10 +42,15 @@ import {
   createDesktopDictationModelsEndpoint,
   createDesktopDictationTranscribeEndpoint,
   listDictationModels,
+  matterTerms,
 } from "./desktop-transcription";
 import type { DictationDependencies } from "./transcribe";
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+type DesktopTranscribeReadMatter = NonNullable<
+  Parameters<typeof createDesktopDictationTranscribeEndpoint>[0]
+>["readMatter"];
 
 const servers: TestServer[] = [];
 afterAll(async () => {
@@ -458,12 +463,16 @@ const exerciseTranscribe = async ({
   text = "Dobrý den.",
   deployment = OPENROUTER_ONLY,
   modelId,
+  matterId,
+  readMatter,
 }: {
   withhold?: () => void;
   email?: string | null;
   text?: string;
   deployment?: ReturnType<DictationDependencies["deployment"]>;
   modelId?: string;
+  matterId?: string;
+  readMatter?: DesktopTranscribeReadMatter;
 } = {}) => {
   withhold();
   const transcribe = mock(
@@ -486,6 +495,7 @@ const exerciseTranscribe = async ({
     authorizeAccount,
     loadSettings,
     readAccountEmail: async () => await Promise.resolve(email),
+    ...(readMatter === undefined ? {} : { readMatter }),
     dependencies: asTestRaw<Partial<DictationDependencies>>({
       transcribe,
       transcribeElevenLabs: transcribe,
@@ -515,6 +525,9 @@ const exerciseTranscribe = async ({
   form.set("language", "cs");
   if (modelId !== undefined) {
     form.set("modelId", modelId);
+  }
+  if (matterId !== undefined) {
+    form.set("matterId", matterId);
   }
   const response = await server.fetch(
     new Request("http://localhost/transcribe", { method: "POST", body: form }),
@@ -611,4 +624,81 @@ test("a linked account that no longer exists never transcribes", async () => {
   const { response, transcribe } = await exerciseTranscribe({ email: null });
   expect(response.status).toBe(403);
   expect(transcribe).not.toHaveBeenCalled();
+});
+
+const MATTER_ID = "0198c5e2-7c1f-7a6e-9a3b-2f4d5e6f7a8b";
+const VOCABULARY_MODEL = "openai/whisper-large-v3";
+
+const matterReader = (visible: boolean) =>
+  mock(
+    async (_account: unknown, matterId: string) =>
+      await Promise.resolve({
+        workspace: visible
+          ? { id: toSafeId<"workspace">(matterId), status: "active" as const }
+          : null,
+        vocabulary: ["Novák v Stavby Praha", "22 Cdo 120/2026", "Libeňská"],
+      }),
+  );
+
+test("a piece of a recording filed under a matter gives a model that reads vocabulary the matter's names", async () => {
+  expect(TRANSCRIPTION_MODELS[VOCABULARY_MODEL].vocabularyMechanism).toBe(
+    "groq-prompt",
+  );
+  const readMatter = matterReader(true);
+  const { response, transcribe } = await exerciseTranscribe({
+    modelId: VOCABULARY_MODEL,
+    matterId: MATTER_ID,
+    readMatter: asTestRaw<DesktopTranscribeReadMatter>(readMatter),
+  });
+  expect(response.status).toBe(200);
+  expect(readMatter.mock.calls.at(0)?.[1]).toBe(MATTER_ID);
+  expect(transcribe.mock.calls.at(0)?.[0]).toMatchObject({
+    modelId: VOCABULARY_MODEL,
+    vocabulary: ["Novák v Stavby Praha", "22 Cdo 120/2026", "Libeňská"],
+  });
+});
+
+test("a model that takes no vocabulary gets none, and a piece without a matter reads none", async () => {
+  const readMatter = matterReader(true);
+  const regional = await exerciseTranscribe({
+    matterId: MATTER_ID,
+    readMatter: asTestRaw<DesktopTranscribeReadMatter>(readMatter),
+  });
+  expect(regional.response.status).toBe(200);
+  expect(regional.transcribe.mock.calls.at(0)?.[0].vocabulary).toBeUndefined();
+  const unfiled = matterReader(true);
+  const plain = await exerciseTranscribe({
+    modelId: VOCABULARY_MODEL,
+    readMatter: asTestRaw<DesktopTranscribeReadMatter>(unfiled),
+  });
+  expect(plain.response.status).toBe(200);
+  expect(unfiled).not.toHaveBeenCalled();
+  expect(plain.transcribe.mock.calls.at(0)?.[0].vocabulary).toBeUndefined();
+});
+
+test("a matter the member cannot see is not found and nothing is transcribed", async () => {
+  const { response, transcribe } = await exerciseTranscribe({
+    modelId: VOCABULARY_MODEL,
+    matterId: MATTER_ID,
+    readMatter: asTestRaw<DesktopTranscribeReadMatter>(matterReader(false)),
+  });
+  expect(response.status).toBe(404);
+  expect(transcribe).not.toHaveBeenCalled();
+});
+
+test("a matter's vocabulary is each term once, short enough for a hint, and bounded", () => {
+  expect(
+    matterTerms([
+      { term: " Novák " },
+      { term: "Novák" },
+      { term: "" },
+      { term: "x".repeat(101) },
+      { term: "Stavby Praha" },
+    ]),
+  ).toEqual(["Novák", "Stavby Praha"]);
+  expect(
+    matterTerms(
+      Array.from({ length: 150 }, (_unused, index) => ({ term: `t${index}` })),
+    ),
+  ).toHaveLength(100);
 });

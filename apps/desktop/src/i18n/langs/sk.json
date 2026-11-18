@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Vyžaduje pozornosť",
     "sessionOpeningInOffice": "Otváranie v Office",
     "sessionSavingDraft": "Ukladanie konceptu",
-    "reconnectAccount": "Znova pripojiť k stella web…"
+    "reconnectAccount": "Znova pripojiť k stella web…",
+    "transcribeRecording": "Prepísať nahrávku…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmeny zostávajú lokálne a budú automaticky zopakované",
@@ -686,7 +687,13 @@
       "passwordField": "Je vybrané pole na heslo, preto sa diktát neuložil ani nenapísal.",
       "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite."
     },
-    "failureKeptInHistory": "Text nájdete v histórii schránky."
+    "failureKeptInHistory": "Text nájdete v histórii schránky.",
+    "transcribeRecording": {
+      "title": "Prepísať nahrávku",
+      "description": "Súbor z diktafónu, hlasovú poznámku alebo záznam z rokovania do 4 hodín prevedie na text.",
+      "open": "Otvoriť",
+      "failed": "Okno sa nepodarilo otvoriť. Skúste to znova."
+    }
   },
   "shortcut": {
     "title": "Skratka schránky",
@@ -963,6 +970,79 @@
       "network_folder": "Tento priečinok je na sieťovom úložisku. Prepojte priečinok na vlastnom disku tohto počítača.",
       "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
       "unreadable": "Tento priečinok sa nepodarilo prečítať."
+    }
+  },
+  "transcribe": {
+    "title": "Prepísať nahrávku",
+    "drop": {
+      "title": "Presuňte sem nahrávku",
+      "release": "Pustite ju a začne sa prepis",
+      "description": "Súbory z diktafónu, hlasové poznámky a správy, záznamy z rokovaní alebo zvuk z videa.",
+      "choose": "Vybrať súbor",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR a video MP4 alebo MOV. Najviac 4 hodiny.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR a video MP4 alebo MOV. Najviac 4 hodiny."
+    },
+    "destination": {
+      "title": "Prepísať pomocou",
+      "thisComputer": "Tento počítač",
+      "cloud": "stella AI",
+      "localDescription": "Nahrávka zostane v tomto počítači.",
+      "cloudDescription": "Zvuk sa na prepis odošle do stella AI a poskytovateľovi modelu vybraného v nastaveniach Diktovania. stella ho neukladá.",
+      "cloudDescriptionModel": "Zvuk sa na prepis odošle do stella AI a poskytovateľovi modelu {model}. stella ho neukladá.",
+      "localMissing": "Ak chcete prepisovať v tomto počítači, stiahnite si v Nastaveniach v časti Diktovanie rečový model.",
+      "localMissingCloud": "Stiahnite si v Nastaveniach v časti Diktovanie rečový model alebo prepisujte pomocou stella AI.",
+      "retainsData": "{provider} uchováva zvuk aj prepis všetkého, čo tomuto modelu pošlete. Neprepisujte s ním dôverné nahrávky ani nahrávky klientov, alebo v Nastaveniach v časti Diktovanie vyberte iný model."
+    },
+    "matter": {
+      "title": "Spis",
+      "description": "Mená a spisové značky z neho sa napíšu správne a text doň môžete uložiť.",
+      "none": "Žiadny",
+      "search": "Hľadať spisy",
+      "clearSearch": "Vymazať hľadanie",
+      "searching": "Hľadá sa…",
+      "noMatters": "Nenašli sa žiadne spisy",
+      "failed": "Spisy sa nepodarilo načítať. Skúste to znova."
+    },
+    "note": "Súbory DSS a DS2 z diktafónov Philips alebo Olympus najprv uložte ako WAV v SpeechExec alebo ODMS.",
+    "refused": {
+      "unsupported": "Súbor {name} stella nevie prečítať. Vyberte nahrávku v jednom z formátov uvedených vyššie.",
+      "tooLong": "Nahrávka {name} je dlhšia ako 4 hodiny. Najprv ju rozdeľte na kratšie.",
+      "unreadable": "Súbor {name} sa nepodarilo prečítať. Môže byť poškodený; exportujte ho znova a skúste to ešte raz."
+    },
+    "failure": {
+      "start": "Prepis sa nepodarilo spustiť. Skúste to znova.",
+      "modelMissing": "Rečový model v tomto počítači nie je. Stiahnite si ho v Nastaveniach v časti Diktovanie.",
+      "thisComputer": "Rečový model v tomto počítači nedokázal prepísať časť nahrávky. Doterajší text zostáva.",
+      "cloud": "stella AI nedokázala prepísať časť nahrávky. Doterajší text zostáva; skúste to neskôr.",
+      "unreadable": "Nahrávku sa nepodarilo prečítať až do konca. Doterajší text zostáva.",
+      "tooLong": "Nahrávka je dlhšia ako 4 hodiny. Doterajší text zostáva."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Tento počítač",
+      "cloud": "stella AI, {model}",
+      "matter": "spis {name}",
+      "copy": "Kopírovať",
+      "copied": "Skopírované",
+      "saveAs": "Uložiť ako",
+      "saveWithTimestamps": "Text s časmi (.txt)",
+      "saveWithoutTimestamps": "Text bez časov (.txt)",
+      "saveToMatter": "Uložiť do spisu",
+      "savingToMatter": "Ukladá sa…",
+      "savedToMatter": "Uložené do spisu {matter} ako {fileName}.",
+      "saveToMatterFailed": "Prepis sa nepodarilo uložiť do spisu. Skúste to znova.",
+      "saveFailed": "Prepis sa nepodarilo skopírovať ani uložiť. Skúste to znova.",
+      "noSpeech": "V nahrávke sa nenašla žiadna reč.",
+      "fileName": "{title} – prepis.txt",
+      "documentTitle": "{title} – prepis"
+    },
+    "progress": {
+      "running": "Prepisuje sa {done, number} z {total, number} min",
+      "runningUnknown": "Prepisuje sa: zatiaľ {done, number} min",
+      "stop": "Zastaviť",
+      "stopped": "Zastavené po {done, number} min. Doterajší text zostáva.",
+      "done": "Prepísané: {total, number} min.",
+      "another": "Prepísať ďalšiu nahrávku"
     }
   }
 }

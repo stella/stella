@@ -505,7 +505,48 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           )}
         </>
       )}
+      <TranscribeRecordingGroup />
     </div>
+  );
+};
+
+/** Where a recording on disk is transcribed: its own window, offered
+ *  wherever dictation is, whether or not the shortcut is on. */
+const TranscribeRecordingGroup = () => {
+  const t = useTranslations("dictation.transcribeRecording");
+  const [openFailed, setOpenFailed] = useState(false);
+  const open = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("transcribe_open"),
+    );
+    setOpenFailed(Result.isError(result));
+  };
+  return (
+    <SettingsGroup>
+      <SettingsRow
+        description={t("description")}
+        id="dictation-transcribe-recording"
+        title={t("title")}
+      >
+        <Button
+          onClick={() => {
+            void open();
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("open")}
+        </Button>
+      </SettingsRow>
+      {openFailed ? (
+        <li
+          className="text-destructive-foreground px-4 pb-3 text-xs"
+          role="alert"
+        >
+          {t("failed")}
+        </li>
+      ) : null}
+    </SettingsGroup>
   );
 };
 

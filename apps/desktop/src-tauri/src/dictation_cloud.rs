@@ -66,6 +66,8 @@ struct Contract {
   /// version shows only with a warning.
   models_retention_query: String,
   transcribe_path: String,
+  /// Where a recording's transcript is filed in a matter.
+  transcripts_path: String,
   max_audio_bytes: usize,
   max_audio_seconds: usize,
 }
@@ -73,6 +75,11 @@ struct Contract {
 const CONTRACT: &str = include_str!(
   "../../../../packages/api-contract/src/desktop-dictation-transcription.json"
 );
+
+/// Where a recording's transcript is filed in a matter.
+pub(crate) fn transcripts_path() -> &'static str {
+  &contract().transcripts_path
+}
 
 fn contract() -> &'static Contract {
   static PARSED: OnceLock<Contract> = OnceLock::new();
@@ -331,25 +338,37 @@ struct Transcript {
   text: String,
 }
 
+/// Where a chunk goes besides its audio: the model, the language and, for
+/// a recording filed under a matter, that matter, whose names the API hands
+/// the model as vocabulary.
+struct ChunkRequest<'a> {
+  model_id: Option<&'a str>,
+  language: Option<&'a str>,
+  matter_id: Option<&'a str>,
+  timeout: Duration,
+}
+
 async fn send_chunk(
   account: &AccountRequest,
   wav: Vec<u8>,
-  model_id: Option<&str>,
-  language: Option<&str>,
+  chunk: ChunkRequest<'_>,
 ) -> Result<String, String> {
   let file = reqwest::multipart::Part::bytes(wav)
     .file_name("dictation.wav")
     .mime_str("audio/wav")
     .map_err(request_cause_logged(FAILURE))?;
   let mut form = reqwest::multipart::Form::new().part("file", file);
-  if let Some(model_id) = model_id {
+  if let Some(model_id) = chunk.model_id {
     form = form.text("modelId", model_id.to_string());
   }
-  if let Some(language) = language {
+  if let Some(language) = chunk.language {
     form = form.text("language", language.to_string());
   }
+  if let Some(matter_id) = chunk.matter_id {
+    form = form.text("matterId", matter_id.to_string());
+  }
   let response = crate::http_client::device_proof_request(
-    client(CHUNK_TIMEOUT)?
+    client(chunk.timeout)?
       .post(format!(
         "{}{}",
         account.api_base_url,
@@ -544,7 +563,17 @@ impl CloudSession {
         let model_id = model_id.clone();
         async move {
           let account = cloud_account(app).await?;
-          let text = send_chunk(&account, piece, Some(&model_id), language).await;
+          let text = send_chunk(
+            &account,
+            piece,
+            ChunkRequest {
+              model_id: Some(&model_id),
+              language,
+              matter_id: None,
+              timeout: CHUNK_TIMEOUT,
+            },
+          )
+          .await;
           drop(account);
           text
         }
@@ -552,6 +581,67 @@ impl CloudSession {
     )
     .await
   }
+}
+
+/// The model a recording is transcribed with: the one dictation uses, the
+/// region's default where none is stored or the stored one is gone.
+pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
+  let offered = models(app).await?;
+  let (_, stored) = dictation::destination(app);
+  let choice =
+    choose_model(stored.as_deref(), &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
+  if choice.replaces_stored {
+    dictation::adopt_cloud_model(app, &choice.model_id)?;
+  }
+  let model = offered
+    .models
+    .iter()
+    .find(|model| model.id == choice.model_id)
+    .ok_or_else(|| UNAVAILABLE.to_string())?;
+  Ok(RecordingModel {
+    id: model.id.clone(),
+    display_name: model.display_name.clone(),
+    retains_data: model.retains_data,
+  })
+}
+
+/// The model a recording goes to, as its window names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecordingModel {
+  pub id: String,
+  pub display_name: String,
+  /// The provider keeps the audio; the window warns.
+  pub retains_data: bool,
+}
+
+/// One piece of a recording, already 16 kHz WAV, transcribed by stella AI
+/// for the account the server still enables it for.
+pub(crate) async fn transcribe_recording_piece(
+  app: &AppHandle,
+  wav: Vec<u8>,
+  model_id: &str,
+  language: Option<&str>,
+  matter_id: Option<&str>,
+  timeout: Duration,
+) -> Result<String, String> {
+  if wav.len() > contract().max_audio_bytes {
+    return Err("the piece is larger than stella AI accepts".to_string());
+  }
+  let account = cloud_account(app).await?;
+  let text = send_chunk(
+    &account,
+    wav,
+    ChunkRequest {
+      model_id: Some(model_id),
+      language,
+      matter_id,
+      timeout,
+    },
+  )
+  .await;
+  drop(account);
+  text
 }
 
 /// One model stella AI offers this organization. Fields a newer API adds are
