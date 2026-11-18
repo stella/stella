@@ -567,7 +567,8 @@ const ToolCallCardComponent = ({
           unitDisplay: "narrow",
         })
       : null;
-  const hasOutput = part.output !== undefined;
+  const output: unknown = part.output;
+  const hasOutput = output !== undefined;
   // Raw tool errors are written for the model (they drive its retry policy),
   // not for people: render a short human line instead and keep the raw text
   // behind a collapsed disclosure for debugging. A tool-call rewritten to the
@@ -777,7 +778,7 @@ const ToolCallCardComponent = ({
           rawErrorDetails={rawErrorDetails}
         />
       )}
-      <UnrestoredFieldsNotice output={part.output} />
+      <UnrestoredFieldsNotice output={output} />
     </div>
   );
 };

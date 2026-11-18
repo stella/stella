@@ -123,6 +123,7 @@ import { configuredAppleSignIn } from "@/api/lib/auth/apple-sign-in-env";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   AUTH_API_PATH,
+  getAgentRedirectUri,
   getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
@@ -2670,6 +2671,11 @@ export const createAuth = (
           // a missed migration and add an owner-DB write to auth startup.
           resourceSeedMode: "none",
           enforcePerClientResources: true,
+          // The agent clients' code sink is read server-side and never
+          // navigated to. A local or test issuer serves it over loopback
+          // `http:`, which the provider refuses for web clients unless this
+          // accepts it; deployed issuers are https and never reach here.
+          allowInsecureRedirectUri: (url) => url.href === getAgentRedirectUri(),
           clientRegistrationDefaultResources:
             getDefaultClientResourceIdentifiers(),
           clientRegistrationAllowedResources:
