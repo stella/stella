@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -22,6 +23,7 @@ import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
+import { cachedRoleGrants } from "@/lib/cached-permissions.logic";
 
 export type ContactFilter = "all" | ContactType;
 
@@ -262,35 +264,45 @@ export const ContactsSkeletonRows = ({
   ));
 
 /**
- * The contacts page while its first page of contacts loads. The role is not
- * read here, so the chrome is the one most roles get: selection, import and
- * new contact, all inert until the page is there.
+ * The contacts page while its first page of contacts loads: the chrome the
+ * cached role gets (selection for those who may delete, import and new
+ * contact for those who may create), all inert until the page is there.
  */
 export const ContactsPending = () => {
   const t = useTranslations();
-  const columns = contactColumns(true);
+  const queryClient = useQueryClient();
+  const canCreateContact = cachedRoleGrants(queryClient, {
+    contact: ["create"],
+  });
+  const columns = contactColumns(
+    cachedRoleGrants(queryClient, { contact: ["delete"] }),
+  );
   return (
     <ContactsShell>
       <ContactsToolbar
         actions={
           <>
-            <ContactsToolbarButton
-              disabled
-              icon={<UploadIcon />}
-              label={t("common.import")}
-              variant="outline"
-            />
+            {canCreateContact && (
+              <ContactsToolbarButton
+                disabled
+                icon={<UploadIcon />}
+                label={t("common.import")}
+                variant="outline"
+              />
+            )}
             <ContactsToolbarButton
               disabled
               icon={<DownloadIcon />}
               label={t("workspaces.views.exportCsv")}
               variant="outline"
             />
-            <ContactsToolbarButton
-              disabled
-              icon={<PlusIcon />}
-              label={t("contacts.newContact")}
-            />
+            {canCreateContact && (
+              <ContactsToolbarButton
+                disabled
+                icon={<PlusIcon />}
+                label={t("contacts.newContact")}
+              />
+            )}
           </>
         }
         filters={<ContactFilterButtons filter="all" />}

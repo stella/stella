@@ -1,8 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { memberHasPermissions } from "@stll/permissions";
-
-import { roleOptions } from "@/lib/auth-queries";
+import { cachedRoleGrants } from "@/lib/cached-permissions.logic";
 import { callerFeatureEnabled } from "@/lib/organization/feature-access/access.logic";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type { WorkspaceView } from "@/lib/types";
@@ -77,15 +75,8 @@ export const cachedViewChrome = (
     hasSettledData(queryClient, settingsKey) &&
     callerFeatureEnabled(settings, CALLER_FEATURE.verification);
 
-  const role = queryClient.getQueryData(roleOptions.queryKey);
   const granted = (permission: "create" | "update" | "delete") =>
-    role !== undefined &&
-    hasSettledData(queryClient, roleOptions.queryKey) &&
-    memberHasPermissions({
-      role,
-      billingAccess: false,
-      permissions: { view: [permission] },
-    });
+    cachedRoleGrants(queryClient, { view: [permission] });
   const canCreateView = granted("create");
 
   return {
