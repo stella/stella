@@ -121,10 +121,10 @@ export const caseLawSearchWarnings = ({
  *   nothing for it.
  * - `filter_unread`: the known values could not be read within the search's
  *   budget, so the value was used exactly as sent, unread.
- * - `many_required_terms`: a phrasing required many words in one passage and
- *   filled fewer result slots than it was given, so dropping a word is the
- *   likelier fix than paging. Raised only under `MCP_CASE_LAW_SEARCH_GUIDANCE`
- *   `v1`, from the page already returned: it costs no search.
+ * - `many_required_terms`: a phrasing has many words and fewer decisions
+ *   than its result slots hold every one, so dropping a word is the likelier
+ *   fix than paging. Raised in every guidance mode, from the page already
+ *   returned: it costs no search.
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
@@ -353,8 +353,8 @@ export const manyRequiredTermsWarning = ({
   slots: number;
 }): AgentCaseLawSearchWarning => ({
   code: "many_required_terms",
-  message: `This phrasing required ${String(wordCount)} words in one passage and filled fewer than its ${String(slots)} result slots: ${terms.join(", ")}.`,
-  hint: "Drop the least central of these words, or move an alternative wording into a phrasing of its own: a hit holds every required word in the same passage.",
+  message: `This phrasing has ${String(wordCount)} words and fewer decisions than its ${String(slots)} result slots hold every one of them: ${terms.join(", ")}.`,
+  hint: "Each hit's terms.missing names the words it lacks. Drop the least central of these words, or move an alternative wording into a phrasing of its own, to find decisions that hold all of them.",
 });
 
 export const provisionCitedWidelyWarning = ({

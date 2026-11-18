@@ -75,6 +75,7 @@ const response = (offset: number) =>
           },
     total:
       offset > 0 ? SEARCH_TOTAL_NOT_COUNTED : { type: "estimate", count: 366 },
+    hitOrder: "all_words_first",
     relaxedHitCount: 0,
     termDecisionCounts: null,
     nextCursor: "fixture-next-cursor",

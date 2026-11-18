@@ -7,6 +7,7 @@ import concurrencyExceptions from "./.oxlint-plugins/no-hand-rolled-concurrency-
 import {
   nativeEntries,
   nativeRuleId,
+  reactNativeRuleModules,
 } from "./.oxlint-plugins/no-native-ui-registry.ts";
 import { GLOBALLY_MOUNTED_UI } from "./.oxlint-plugins/no-route-context-in-panel-tabs.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
@@ -38,8 +39,10 @@ import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
 import {
   DESIGN_SYSTEM_CONSUMER_FILES,
   PRODUCT_FRONTEND_FILES,
+  REACT_NATIVE_CONSUMER_FILES,
 } from "./scripts/product-frontend-files.ts";
 import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
+import reactCompilerBailouts from "./scripts/react-compiler-bailouts.json" with { type: "json" };
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -317,6 +320,11 @@ const NO_NATIVE_UI_RULE_IDS = nativeEntries().map(({ module }) =>
   nativeRuleId(module),
 );
 
+// The same rules for components that have a React Native renderer, for the
+// app that renders through them.
+const NO_NATIVE_UI_REACT_NATIVE_RULE_IDS =
+  reactNativeRuleModules().map(nativeRuleId);
+
 const fixtureRuleOverrides = [
   {
     files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
@@ -486,6 +494,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
     "no-first-observer-entry/no-first-observer-entry",
+  ]),
+  fixtureRuleOverride("no-manual-memo.fixture.tsx", [
+    "no-manual-memo/no-manual-memo",
   ]),
   fixtureRuleOverride("no-hookless-use-function.fixture.ts", [
     "no-hookless-use-function/no-hookless-use-function",
@@ -2129,6 +2140,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-manual-memo.ts",
     "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
@@ -4985,6 +4997,22 @@ const config = defineConfig({
         // the compiler cannot analyze them as ordinary component hooks.
         ...reactCompilerRulesOff,
       },
+    },
+    {
+      // The React Compiler memoizes every function it compiles. A file holding
+      // a function it skips keeps its manual memoization until the bailout is
+      // fixed; `scripts/rc-bailouts.ts --check` guards those functions.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/web/src/hooks/use-effect.ts",
+        ...new Set(
+          Object.keys(reactCompilerBailouts).map((key) =>
+            key.slice(0, key.indexOf("::")),
+          ),
+        ),
+      ],
+      rules: { "no-manual-memo/no-manual-memo": "error" },
     },
     {
       files: [...PRODUCT_FRONTEND_FILES],
@@ -7886,6 +7914,24 @@ const config = defineConfig({
       ],
       rules: Object.fromEntries(
         NO_NATIVE_UI_RULE_IDS.map((rule) => [rule, "error"] as const),
+      ),
+    },
+    {
+      // The React Native app renders through @stll/ui's native renderers
+      // (`<component>.native.tsx`) and never the React Native component one
+      // of them replaces (a raw Pressable, ActivityIndicator, Modal or Text).
+      // Only components with a native renderer have a rule here. Tests render
+      // bare harness markup.
+      files: [...REACT_NATIVE_CONSUMER_FILES],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: Object.fromEntries(
+        NO_NATIVE_UI_REACT_NATIVE_RULE_IDS.map(
+          (rule) => [rule, "error"] as const,
+        ),
       ),
     },
     {

@@ -5,6 +5,7 @@ import {
   isWholeEntryIdentifier,
 } from "@stll/api-contract/decision-query-intent";
 import type {
+  CaseLawHitOrder,
   CaseLawSearchWarning,
   SearchPhaseState,
 } from "@stll/api-contract/search";
@@ -215,9 +216,12 @@ type SearchAnswerOptions = {
   partialMatches?: SearchPhaseState;
   /** Per-word decision counts, when few decisions hold every word. */
   termDecisionCounts?: TermDecisionCounts | null;
+  /** The order the page's hits are in; passage pages tier by construction. */
+  hitOrder?: CaseLawHitOrder;
 };
 
 export type SearchAnswer = {
+  hitOrder: CaseLawHitOrder;
   queryUsed: string;
   relaxedHitCount: number;
   termDecisionCounts: TermDecisionCounts | null;
@@ -236,7 +240,9 @@ export const searchAnswer = ({
   countsResultSet,
   partialMatches = "not_due",
   termDecisionCounts = null,
+  hitOrder = "all_words_first",
 }: SearchAnswerOptions): SearchAnswer => ({
+  hitOrder,
   queryUsed: interpretation.queryUsed,
   relaxedHitCount: partialHitCount,
   termDecisionCounts,

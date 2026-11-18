@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 62,
+  "reason": "no-manual-memo rejects manual memoization in compiled web files. The 62 reasoned suppressions keep 34 memos the React Compiler does not replace (without the boundary it computes the value on every render), 22 that react/exhaustive-deps needs as stable effect dependencies (it cannot see compiler memoization), one Base UI item list whose identity the combobox relies on, a memo in each of two hooks that keeps it a hook the compiler compiles, two conditionals whose inlining exceeds the complexity limit, and one search the mutation/query census would read as a new unclassified reader."
+}

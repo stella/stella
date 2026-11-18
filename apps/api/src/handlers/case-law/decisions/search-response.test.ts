@@ -92,6 +92,7 @@ const responseWithText = (text: string): SearchResponse => {
       language: [bucket],
     },
     total: SEARCH_TOTAL_NOT_COUNTED,
+    hitOrder: "all_words_first",
     relaxedHitCount: 0,
     termDecisionCounts: null,
     nextCursor: text,

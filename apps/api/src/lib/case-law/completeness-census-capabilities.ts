@@ -1,4 +1,7 @@
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  AdapterKey,
+  ImportSourceKey,
+} from "@/api/lib/legal-search/ingestion-constants";
 
 export type CensusCapability =
   | {
@@ -258,7 +261,17 @@ export const CENSUS_CAPABILITIES = {
     evidenceRef:
       "apps/api/src/handlers/case-law/ingestion/adapters/br-tjdft.ts",
   },
-} as const satisfies Record<AdapterKey, CensusCapability>;
+  "us-courtlistener": {
+    type: "none-exposed",
+    evidence: {
+      type: "unverified",
+      reason:
+        "A bulk import reads one dated publisher snapshot; no live publisher listing is enumerated against it.",
+    },
+    evidenceRef:
+      "apps/api/src/handlers/case-law/ingestion/adapters/courtlistener/import.ts",
+  },
+} as const satisfies Record<AdapterKey | ImportSourceKey, CensusCapability>;
 
 const CAPABILITY_BY_KEY: ReadonlyMap<string, CensusCapability> = new Map(
   Object.entries(CENSUS_CAPABILITIES),

@@ -8,7 +8,7 @@
  * not compile until it draws.
  */
 
-import { createContext, use, useMemo } from "react";
+import { createContext, use } from "react";
 
 import type { SortingState } from "@tanstack/react-table";
 import { panic } from "better-result";
@@ -246,26 +246,22 @@ export const useDecisionTableSchema = ({
   // drops it.
   const withQuestionSurface = questions.type !== "hidden";
 
-  return useMemo(
-    () =>
-      decisionTableSchema({
-        extraColumns,
-        labels: {
-          caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
-          summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
-          court: t(DECISION_COLUMN_LABEL_KEYS.court),
-          country: t(DECISION_COLUMN_LABEL_KEYS.country),
-          date: t(DECISION_COLUMN_LABEL_KEYS.date),
-          type: t(DECISION_COLUMN_LABEL_KEYS.type),
-          headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
-          citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
-          language: t(DECISION_COLUMN_LABEL_KEYS.language),
-        },
-        questionColumns,
-        withQuestionSurface,
-      }),
-    [extraColumns, questionColumns, referenceKind, t, withQuestionSurface],
-  );
+  return decisionTableSchema({
+    extraColumns,
+    labels: {
+      caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
+      summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
+      court: t(DECISION_COLUMN_LABEL_KEYS.court),
+      country: t(DECISION_COLUMN_LABEL_KEYS.country),
+      date: t(DECISION_COLUMN_LABEL_KEYS.date),
+      type: t(DECISION_COLUMN_LABEL_KEYS.type),
+      headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
+      citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
+      language: t(DECISION_COLUMN_LABEL_KEYS.language),
+    },
+    questionColumns,
+    withQuestionSurface,
+  });
 };
 
 /**
@@ -292,12 +288,8 @@ export const useDecisionTableColumns = ({
   });
   const available = questions.type === "available" ? questions : null;
 
-  return useMemo(
-    () =>
-      schema.columns.map((column) =>
-        toDecisionColumnDef({ column, ordering, questions: available }),
-      ),
-    [available, ordering, schema.columns],
+  return schema.columns.map((column) =>
+    toDecisionColumnDef({ column, ordering, questions: available }),
   );
 };
 
