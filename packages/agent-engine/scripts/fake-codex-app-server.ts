@@ -1551,7 +1551,7 @@ export const FAKE_SCENARIOS = {
       result: rateLimitsRead(planLimits(100)),
     },
   ],
-} as const satisfies Record<string, readonly FakeStep[]>;
+} satisfies Record<string, readonly FakeStep[]>;
 
 /** A text-only model, beside `gpt-test`, which reads images too. */
 export const FAKE_TEXT_ONLY_MODEL = "gpt-text";

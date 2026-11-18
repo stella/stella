@@ -177,6 +177,7 @@ export { default as repairs_contact_vat_id_repair } from "./online-migration-ent
 export { default as repairs_corpus_projection_applied_revision_settled } from "./online-migration-entries/repairs-corpus-projection-applied-revision-settled";
 export { default as repairs_corpus_projection_cleanup_stall_repair } from "./online-migration-entries/repairs-corpus-projection-cleanup-stall-repair";
 export { default as repairs_corpus_projection_delete_receipt_repair } from "./online-migration-entries/repairs-corpus-projection-delete-receipt-repair";
+export { default as repairs_corpus_projection_delete_tasks } from "./online-migration-entries/repairs-corpus-projection-delete-tasks";
 export { default as repairs_corpus_projection_offline_delivery_constraint_validations } from "./online-migration-entries/repairs-corpus-projection-offline-delivery-constraint-validations";
 export { default as repairs_corpus_projection_offline_fault_constraint_validations } from "./online-migration-entries/repairs-corpus-projection-offline-fault-constraint-validations";
 export { default as repairs_data_box_constraint_validations } from "./online-migration-entries/repairs-data-box-constraint-validations";

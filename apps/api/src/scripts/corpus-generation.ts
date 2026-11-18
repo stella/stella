@@ -9,7 +9,7 @@ import { panic, Result, TaggedError } from "better-result";
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
  *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--concurrency 4]
- *   bun run src/scripts/corpus-generation.ts retire --family case_law --generation case_law_v8 [--actor <id> --reason <text> --apply]
+ *   bun run src/scripts/corpus-generation.ts retire --family case_law --generation case_law_v8 [--defer-cleanup] [--actor <id> --reason <text> --apply]
  *
  * `serve` runs the guarded flip (`corpus-index-generation-flip.ts`), the one
  * owner of the decision: phase 1 reads the engine and walks the parity
@@ -222,6 +222,12 @@ Options (serve, retire):
   --actor <id>           Who makes the change, for its receipt; required with --apply.
   --reason <text>        Why (the go it rests on), for its receipt; required with --apply.
 
+Options (retire):
+  --defer-cleanup        Retire and delete the engine indexes, but leave the
+                         projection history for a later run of retire, which
+                         deletes it (after other work that must not share the
+                         database with it).
+
 Options (serve):
   --replacing <g|none>   The generation the flip replaces, as the operator expects
                          it; required with --apply.
@@ -265,8 +271,8 @@ spent with a route not current, 6 paused by the database-load brake, 7 locks
 refused past 15 minutes (a flip holds the projection fence), 8 a route set
 aside (not attested, index missing or unknown documents), 9 a route failed
 repeatedly, 1 refused.
-Exit codes (retire): 0 retired and cleaned up (or, dry run, nothing refuses
-it), 6 paused by the database-load brake (run it again to resume), 10
+Exit codes (retire): 0 retired and cleaned up, or with --defer-cleanup retired
+with its history left for a later run (or, dry run, nothing refuses it), 6 paused by the database-load brake (run it again to resume), 10
 registry, 11 a flip within the keep window, 12 a jurisdiction pointer, 13 a
 runner holds leases, 14 busy (nothing changed), 15 engine, 1 refused.
 `;
@@ -383,6 +389,8 @@ type CorpusGenerationCommand =
       target: DeclaredTarget;
       mode: Mode;
       receipt: { actor: string; reason: string } | null;
+      /** Leave the projection history for a later run. */
+      deferCleanup: boolean;
     };
 
 type GenerationRow = Pick<
@@ -464,6 +472,7 @@ type CommandValues = {
   actor?: string | undefined;
   reason?: string | undefined;
   "max-proof-age-hours"?: string | undefined;
+  "defer-cleanup"?: boolean | undefined;
   hours?: string | undefined;
   "until-current"?: boolean | undefined;
   concurrency?: string | undefined;
@@ -505,6 +514,9 @@ const commandOptionRefusal = (
   const proveRefusal = proveOptionRefusal(name, values);
   if (proveRefusal !== null) {
     return proveRefusal;
+  }
+  if (name !== "retire" && values["defer-cleanup"] === true) {
+    return "--defer-cleanup belongs to retire.";
   }
   if (name === "status") {
     return values.family === undefined &&
@@ -622,7 +634,13 @@ const parseRetireCommand = (
       );
     }
   }
-  return Result.ok({ type: "retire", target, mode, receipt });
+  return Result.ok({
+    type: "retire",
+    target,
+    mode,
+    receipt,
+    deferCleanup: values["defer-cleanup"] === true,
+  });
 };
 
 const parseCorpusGenerationCommand = (
@@ -651,6 +669,7 @@ const parseCorpusGenerationCommand = (
           actor: { type: "string" },
           reason: { type: "string" },
           "max-proof-age-hours": { type: "string" },
+          "defer-cleanup": { type: "boolean" },
           hours: { type: "string" },
           "until-current": { type: "boolean" },
           concurrency: { type: "string" },
@@ -2172,6 +2191,45 @@ const purgeRetiredHistory = async (
   });
 };
 
+/**
+ * End a `--defer-cleanup` run: record the indexes it deleted and say that the
+ * history stays for a later run. The generation is retired, so no writer adds
+ * to that history meanwhile; a later `retire` of it goes straight to the
+ * cleanup.
+ */
+const deferRetiredHistory = async (
+  context: CommandContext,
+  target: DeclaredTarget,
+  {
+    deletedIndexes,
+    engineFailure,
+  }: { deletedIndexes: number; engineFailure: string | null },
+): Promise<Result<number, CorpusGenerationRefusal>> => {
+  if (deletedIndexes > 0) {
+    await context.withSeedingDatabase(
+      async (rootDb) =>
+        await withAggregateTransaction(
+          rootDb,
+          async (tx) =>
+            await recordCorpusIndexRetireCleanupTx(tx, {
+              indexes: deletedIndexes,
+              states: 0,
+              intents: 0,
+            }),
+        ),
+    );
+  }
+  context.write(await retireHistoryLine(context, target, "left"));
+  context.write(
+    `Deferred: history cleanup of ${target.family}/${target.generation} is left for a later run; run retire again without --defer-cleanup to delete it.`,
+  );
+  if (engineFailure !== null) {
+    context.writeError(`refused (engine): ${engineFailure}; run retire again`);
+    return Result.ok(RETIRE_EXIT.engine);
+  }
+  return Result.ok(RETIRE_EXIT.done);
+};
+
 const runRetire = async (
   context: CommandContext,
   command: RetireCommand,
@@ -2229,7 +2287,9 @@ const runRetire = async (
     );
   }
   write(
-    `plan: delete its projection history in pages of at most ${String(RETIRE_PAGE_LIMIT)} decisions, under the database-load brake`,
+    command.deferCleanup
+      ? "plan: leave its projection history for a later run of retire (--defer-cleanup)"
+      : `plan: delete its projection history in pages of at most ${String(RETIRE_PAGE_LIMIT)} decisions, under the database-load brake`,
   );
   if (mode === MODES.dryRun || receipt === null) {
     write(modeLine(MODES.dryRun, ""));
@@ -2272,6 +2332,12 @@ const runRetire = async (
     write(
       `Applied: the engine holds no index of ${target.generation} (${String(deletedIndexes.length)} deleted).`,
     );
+  }
+  if (command.deferCleanup) {
+    return await deferRetiredHistory(context, target, {
+      deletedIndexes: deletedIndexes.length,
+      engineFailure: indexes.isErr() ? indexes.error.message : null,
+    });
   }
   // The history goes either way: nothing reads it once the generation is
   // retired, and an engine that is down only delays its own step.

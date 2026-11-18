@@ -9,7 +9,8 @@
 //! Only when the user chooses stella AI for transcription does the audio
 //! leave this computer.
 //!
-//! This module owns the preferences, the speech model file and the shortcut.
+//! This module owns the preferences, the speech model file and the key it
+//! listens for (`dictation_hold_key` holds the rules for that key).
 //! `dictation_engine` owns capture, transcription and insertion on one thread;
 //! `dictation_live` transcribes each stretch of speech while the key is down.
 
@@ -37,6 +38,7 @@ use crate::{
   device_preference::DevicePreference,
   dictation_cloud::{self, CloudModels, Destination},
   dictation_context::{self, Sharing},
+  dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
@@ -57,6 +59,8 @@ const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-ti
 /// cursor.
 const SHARE_TEXT_BEFORE_CURSOR_PREFERENCE_FILE_NAME: &str =
   "dictation-share-text-before-cursor";
+/// The key dictation listens for; absent: this computer's default.
+const HOLD_KEY_PREFERENCE_FILE_NAME: &str = "dictation-hold-key";
 const MAX_MODEL_ID_BYTES: usize = 128;
 const ENABLED_VALUE: &str = "on";
 const DISABLED_VALUE: &str = "off";
@@ -83,6 +87,8 @@ fn shortcut() -> Shortcut {
 pub enum Command {
   Press,
   Release,
+  /// Stop recording and discard it: a tap or a shortcut on the hold key.
+  Cancel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -168,8 +174,26 @@ pub struct DictationSnapshot {
   failure: Option<Failure>,
   /// Whether the failed dictation's text is in clipboard history.
   failure_kept_in_history: bool,
+  /// The combination of Control, Option (Alt) and Space, one of the choices.
   keys: ShortcutKeys,
   shortcut_taken: bool,
+  /// The key dictation listens for, and what this computer offers.
+  hold_key: HoldChoice,
+  hold_keys: &'static [HoldChoice],
+  /// The hold key cannot be heard yet: on a Mac, until stella has
+  /// Accessibility access.
+  hold_key_waiting: bool,
+}
+
+/// What listens for the key while dictation runs.
+enum Listening {
+  None,
+  Combination,
+  #[cfg(any(target_os = "macos", target_os = "windows"))]
+  Hold(
+    #[allow(dead_code, reason = "held only so that dropping it stops the listener")]
+    stella_desktop_macos::HoldKeyListener,
+  ),
 }
 
 struct Inner {
@@ -184,6 +208,11 @@ struct Inner {
   phase: Phase,
   failure: Option<Failed>,
   shortcut_taken: bool,
+  hold_key: HoldChoice,
+  hold_key_waiting: bool,
+  listening: Listening,
+  /// Counts listeners started, so a stopped one cannot report its state.
+  listener_generation: u64,
   commands: Option<Sender<Command>>,
 }
 
@@ -216,6 +245,11 @@ impl DictationState {
     let cloud_model = DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME)
       .read()
       .filter(|model_id| valid_model_id(model_id));
+    let hold_key = HoldChoice::parse(
+      DevicePreference::in_app_data(HOLD_KEY_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
@@ -232,6 +266,10 @@ impl DictationState {
       phase: Phase::Idle,
       failure: None,
       shortcut_taken: false,
+      hold_key,
+      hold_key_waiting: false,
+      listening: Listening::None,
+      listener_generation: 0,
       commands: None,
     }))
   }
@@ -266,6 +304,9 @@ impl DictationState {
         .is_some_and(|failed| failed.kept_in_history),
       keys: ShortcutKeys::of(&shortcut()),
       shortcut_taken: inner.shortcut_taken,
+      hold_key: inner.hold_key,
+      hold_keys: HoldChoice::OFFERED,
+      hold_key_waiting: inner.hold_key_waiting,
     }
   }
 
@@ -482,11 +523,7 @@ fn show_phase_in_tray(app: &AppHandle, phase: Phase) {
   crate::tray::set_status_mark(app, mark);
 }
 
-fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
-  let command = match event.state {
-    ShortcutState::Pressed => Command::Press,
-    ShortcutState::Released => Command::Release,
-  };
+fn send_command(app: &AppHandle, command: Command) {
   let sender = app
     .state::<DictationState>()
     .update(|inner| inner.commands.clone());
@@ -497,6 +534,147 @@ fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
   }
 }
 
+impl DictationState {
+  /// Sends `command` from the hold key listener started as `generation`,
+  /// under the lock `unlisten` advances the generation under: a stopped
+  /// listener's command is dropped, so it can never follow the `Cancel` that
+  /// replaced the listener. The channel is unbounded, so sending under the
+  /// lock never blocks.
+  fn send_from_listener(&self, generation: u64, command: Command) {
+    let delivered = self.update(|inner| {
+      if inner.listener_generation != generation {
+        return true;
+      }
+      inner
+        .commands
+        .as_ref()
+        .is_none_or(|sender| sender.send(command).is_ok())
+    });
+    if !delivered {
+      tracing::warn!("dictation engine stopped");
+    }
+  }
+}
+
+fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+  send_command(
+    app,
+    match event.state {
+      ShortcutState::Pressed => Command::Press,
+      ShortcutState::Released => Command::Release,
+    },
+  );
+}
+
+/// Starts listening for the chosen key. A listener that cannot start leaves
+/// the reason in the snapshot.
+fn listen(app: &AppHandle) {
+  let (choice, generation) = app.state::<DictationState>().update(|inner| {
+    inner.listener_generation += 1;
+    (inner.hold_key, inner.listener_generation)
+  });
+  let listening = match choice {
+    HoldChoice::Combination => {
+      match app.global_shortcut().on_shortcut(shortcut(), on_shortcut) {
+        Ok(()) => Listening::Combination,
+        Err(error) => {
+          tracing::warn!(%error, "dictation shortcut could not be registered");
+          change(app, |inner| inner.shortcut_taken = true);
+          Listening::None
+        }
+      }
+    }
+    _ => listen_for_hold_key(app, choice, generation),
+  };
+  change(app, |inner| inner.listening = listening);
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn listen_for_hold_key(
+  app: &AppHandle,
+  choice: HoldChoice,
+  generation: u64,
+) -> Listening {
+  use std::cell::Cell;
+
+  use stella_desktop_macos::{HoldEdge, HoldKey};
+
+  let key = match choice {
+    HoldChoice::Fn => HoldKey::Fn,
+    HoldChoice::RightOption => HoldKey::RightOption,
+    HoldChoice::RightCommand => HoldKey::RightCommand,
+    HoldChoice::RightControl => HoldKey::RightControl,
+    HoldChoice::ControlWindows | HoldChoice::Combination => HoldKey::ControlWindows,
+  };
+  let edges_app = app.clone();
+  let gesture = Cell::new(Gesture::default());
+  let started = std::time::Instant::now();
+  let on_edge = move |edge: HoldEdge| {
+    let input = match edge {
+      HoldEdge::Down { others_held } => dictation_hold_key::Input::Down { others_held },
+      HoldEdge::Up => dictation_hold_key::Input::Up,
+      HoldEdge::OtherKey => dictation_hold_key::Input::OtherKey,
+    };
+    let mut current = gesture.get();
+    let action = current.handle(input, started.elapsed());
+    gesture.set(current);
+    if let Some(action) = action {
+      edges_app.state::<DictationState>().send_from_listener(
+        generation,
+        match action {
+          Action::Start => Command::Press,
+          Action::Transcribe => Command::Release,
+          Action::Cancel => Command::Cancel,
+        },
+      );
+    }
+  };
+  let state_app = app.clone();
+  let on_listening = move |listening: bool| {
+    change(&state_app, |inner| {
+      if inner.listener_generation == generation {
+        inner.hold_key_waiting = !listening;
+      }
+    });
+  };
+  match stella_desktop_macos::listen_for_hold_key(key, on_edge, on_listening) {
+    Ok(listener) => Listening::Hold(listener),
+    Err(_unsupported) => {
+      tracing::warn!("dictation hold key could not be watched");
+      change(app, |inner| inner.hold_key_waiting = true);
+      Listening::None
+    }
+  }
+}
+
+/// No other platform offers a hold key.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn listen_for_hold_key(
+  _app: &AppHandle,
+  _choice: HoldChoice,
+  _generation: u64,
+) -> Listening {
+  Listening::None
+}
+
+/// Stops listening; a recording in progress is left to its release or to
+/// the engine stopping.
+fn unlisten(app: &AppHandle) {
+  let listening = change(app, |inner| {
+    inner.listener_generation += 1;
+    inner.shortcut_taken = false;
+    inner.hold_key_waiting = false;
+    std::mem::replace(&mut inner.listening, Listening::None)
+  });
+  if matches!(listening, Listening::Combination)
+    && let Err(error) = app.global_shortcut().unregister(shortcut())
+  {
+    tracing::warn!(%error, "dictation shortcut could not be released");
+  }
+  // Dropping a hold key listener stops it.
+  drop(listening);
+}
+
 fn start(app: &AppHandle) {
   #[cfg(dictation)]
   {
@@ -504,24 +682,14 @@ fn start(app: &AppHandle) {
     let sender = crate::dictation_engine::spawn(app.clone());
     change(app, |inner| inner.commands = sender);
   }
-  let taken = match app.global_shortcut().on_shortcut(shortcut(), on_shortcut) {
-    Ok(()) => false,
-    Err(error) => {
-      tracing::warn!(%error, "dictation shortcut could not be registered");
-      true
-    }
-  };
-  change(app, |inner| inner.shortcut_taken = taken);
+  listen(app);
 }
 
 fn stop(app: &AppHandle) {
-  if let Err(error) = app.global_shortcut().unregister(shortcut()) {
-    tracing::warn!(%error, "dictation shortcut could not be released");
-  }
+  unlisten(app);
   // Dropping the sender ends the engine thread and with it the worker.
   change(app, |inner| {
     inner.commands = None;
-    inner.shortcut_taken = false;
     inner.failure = None;
   });
 }
@@ -703,6 +871,40 @@ pub fn dictation_set_destination(
 /// The models stella AI offers this organization; the window picks from it.
 /// A stored model the region no longer offers is replaced by the one
 /// dictation would use, so the window shows what is used.
+/// The key dictation listens for, from what this computer offers. Applies
+/// from the next press.
+#[tauri::command]
+pub fn dictation_set_hold_key(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  hold_key: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let Some(choice) = HoldChoice::offered(&hold_key) else {
+    return Err("this key is not offered for dictation".to_string());
+  };
+  if state.update(|inner| inner.hold_key) != choice {
+    change_preference(
+      &app,
+      HOLD_KEY_PREFERENCE_FILE_NAME,
+      choice.stored(),
+      |inner| {
+        inner.hold_key = choice;
+      },
+    )?;
+    if state.update(|inner| inner.commands.is_some()) {
+      unlisten(&app);
+      // The old key's release will never be heard: a recording it started
+      // is discarded.
+      send_command(&app, Command::Cancel);
+      listen(&app);
+    }
+  }
+  Ok(read_snapshot(&app, &state))
+}
+
 #[tauri::command]
 pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, String> {
   if !cloud_available(&app) {
@@ -945,8 +1147,44 @@ mod tests {
       phase: Phase::Idle,
       failure: None,
       shortcut_taken: false,
+      hold_key: HoldChoice::parse(None),
+      hold_key_waiting: false,
+      listening: Listening::None,
+      listener_generation: 0,
       commands: None,
     }))
+  }
+
+  #[test]
+  fn the_snapshot_names_the_hold_key_and_what_is_offered() {
+    let snapshot =
+      serde_json::to_value(state(true).snapshot(true, false, Vec::new(), false))
+        .unwrap();
+
+    assert_eq!(
+      snapshot["holdKey"],
+      serde_json::json!(HoldChoice::OFFERED[0].stored())
+    );
+    assert_eq!(
+      snapshot["holdKeys"].as_array().map(Vec::len),
+      Some(HoldChoice::OFFERED.len())
+    );
+    assert_eq!(snapshot["holdKeyWaiting"], serde_json::json!(false));
+  }
+
+  #[test]
+  fn a_stopped_listener_sends_no_command() {
+    let state = state(true);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    state.update(|inner| {
+      inner.commands = Some(sender);
+      inner.listener_generation = 2;
+    });
+
+    state.send_from_listener(1, Command::Press);
+    state.send_from_listener(2, Command::Release);
+
+    assert_eq!(receiver.try_iter().collect::<Vec<_>>(), [Command::Release]);
   }
 
   fn temp_preference() -> (DevicePreference, PathBuf) {

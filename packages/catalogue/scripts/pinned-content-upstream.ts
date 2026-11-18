@@ -123,7 +123,7 @@ type FetchPinnedTextFileOptions = {
 
 type PinnedTextFile = { byteLength: number; content: string; sha256: string };
 
-export const fetchPinnedTextFile = async ({
+const fetchPinnedBytes = async ({
   allowNotFound = false,
   fetcher = fetch,
   label,
@@ -131,7 +131,7 @@ export const fetchPinnedTextFile = async ({
   repoRelativePath,
   sleep: wait = ownerSleep,
   target,
-}: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
+}: FetchPinnedTextFileOptions): Promise<Uint8Array | null> => {
   const fetchValue = async () => {
     const response = await fetcher(rawContentUrl(target, repoRelativePath), {
       headers: githubHeaders("text/plain"),
@@ -165,16 +165,43 @@ export const fetchPinnedTextFile = async ({
     }
     return bytes;
   };
-  const file = await fetchWithBoundedRetry({
+  return await fetchWithBoundedRetry({
     fetchValue,
     sleep: wait,
   });
+};
+
+export const fetchPinnedTextFile = async (
+  options: FetchPinnedTextFileOptions,
+): Promise<PinnedTextFile | null> => {
+  const file = await fetchPinnedBytes(options);
   if (file === null) {
     return null;
   }
   return {
     byteLength: file.byteLength,
     content: UTF8_DECODER.decode(file),
+    sha256: sha256Hex(file),
+  };
+};
+
+/**
+ * A package resource as an install reads it: text when it is UTF-8 without
+ * a NUL byte, otherwise binary (`content` null), which an install leaves out.
+ */
+export const fetchPinnedResourceFile = async (
+  options: FetchPinnedTextFileOptions,
+): Promise<
+  (Omit<PinnedTextFile, "content"> & { content: string | null }) | null
+> => {
+  const file = await fetchPinnedBytes(options);
+  if (file === null) {
+    return null;
+  }
+  const content = Result.try(() => UTF8_DECODER.decode(file)).unwrapOr(null);
+  return {
+    byteLength: file.byteLength,
+    content: content === null || content.includes("\0") ? null : content,
     sha256: sha256Hex(file),
   };
 };
@@ -286,14 +313,22 @@ export const upstreamPinnedSource: PinnedSource = {
   directory: async ({ directory, target }) =>
     await fetchDirectoryContents({ repoRelativePath: directory, target }),
   resource: async ({ path, target }) => {
-    const file = await fetchPinnedTextFile({
+    const file = await fetchPinnedResourceFile({
       label: `resource ${path}`,
       maxBytes: RESOURCE_MAX_BYTES,
       repoRelativePath: path,
       target,
     });
-    return file === null
-      ? null
+    if (file === null) {
+      return null;
+    }
+    return file.content === null
+      ? {
+          sha256: file.sha256,
+          byteLength: file.byteLength,
+          utf16Length: 0,
+          binary: true,
+        }
       : {
           sha256: file.sha256,
           byteLength: file.byteLength,

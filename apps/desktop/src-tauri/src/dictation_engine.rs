@@ -95,6 +95,13 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           capture.listen();
         }
       }
+      Ok(Command::Cancel) => {
+        // A tap or a shortcut on the hold key: nothing is transcribed.
+        if let Some((capture, ..)) = active.take() {
+          capture.cancel(&mut worker);
+          dictation::set_phase(app, Phase::Idle);
+        }
+      }
       Ok(Command::Release) => {
         if let Some((capture, focus, context)) = active.take() {
           dictation::set_phase(app, Phase::Transcribing);

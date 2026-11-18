@@ -1521,6 +1521,7 @@
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/sha256/**",
+        "$TURBO_ROOT$/packages/skills/**",
         "$TURBO_ROOT$/packages/stable-stringify/**",
         "$TURBO_ROOT$/packages/template-conditions/**",
         "$TURBO_ROOT$/packages/template-packs/**",
@@ -1858,6 +1859,14 @@
     "@stll/html#test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
     },
+    // The path-grammar test pins api-contract's browser copy of the pattern.
+    "@stll/skills#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/api-contract/src/agent-skills.ts"
+      ]
+    },
     "@stll/api#test": {
       "dependsOn": [
         "transit",
@@ -1990,7 +1999,7 @@
         "src/i18n/langs/**",
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
-        "src/mainview/App.tsx",
+        "src/mainview/settings-pages.ts",
         "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-link.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",

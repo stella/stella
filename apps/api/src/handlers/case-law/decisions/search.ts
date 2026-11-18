@@ -266,6 +266,7 @@ import {
   type CorpusIndexQueryVariant,
   corpusQueryVariantCursorTarget,
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import type { DecisionRankingArm } from "@/api/lib/legal-search/corpus-ranked-decision-query";
 import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
@@ -3164,6 +3165,11 @@ const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
 
 type SearchCorpusIndexDependencies = {
   readServingTarget?: () => ReturnType<typeof readServingCorpusIndexTargetTx>;
+  /**
+   * The ranking arm of a request without `strict`, for in-process callers
+   * that compare the arms; no route sets it. Part of the cursor identity.
+   */
+  rankingArm?: DecisionRankingArm;
   configuredVariant?: CorpusIndexQueryVariant;
   loadCourtWeights?: typeof loadPublicCourtWeights;
   readSourceRegistry?: typeof readCaseLawSourceRegistry;
@@ -3536,6 +3542,7 @@ export const searchCorpusIndexDecisions = async (
     functionWords: interpretation.functionWords,
     queryVariant: interpretation.queryVariant,
     jurisdiction: body.country,
+    unstrictArm: dependencies.rankingArm,
   });
   const cursorTarget = rankedCursorTarget(
     corpusQueryVariantCursorTarget(

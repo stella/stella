@@ -16,6 +16,28 @@ pub use focused_window::{
   request_accessibility_permission, text_before_cursor,
 };
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg_attr(
+  not(target_os = "windows"),
+  allow(
+    dead_code,
+    reason = "the Windows matcher is tested everywhere, used on Windows"
+  )
+)]
+mod hold_key_edges;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub use hold_key_edges::{HoldEdge, HoldKey};
+
+#[cfg(target_os = "macos")]
+mod hold_key;
+#[cfg(target_os = "macos")]
+pub use hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
+
+#[cfg(target_os = "windows")]
+mod windows_hold_key;
+#[cfg(target_os = "windows")]
+pub use windows_hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
+
 #[cfg(target_os = "macos")]
 mod managed_preferences;
 #[cfg(target_os = "macos")]
