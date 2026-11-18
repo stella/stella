@@ -94,11 +94,12 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
         </DetailsGrid>
         {/* This panel answers whether to trust a search here; the coverage
             page answers why, source by source and court by court, and opens
-            on this country. */}
+            on this country. Styled as the page's other secondary action,
+            the Recent list's "Show more". */}
         <Link
           className={cn(
-            buttonVariants({ size: "sm", variant: "outline" }),
-            "justify-between",
+            buttonVariants({ size: "xs", variant: "ghost" }),
+            "self-start",
           )}
           hash={caseLawCoverageAnchor(country)}
           to="/law/coverage"
