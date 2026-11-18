@@ -143,6 +143,21 @@ describe("no-native-ui edge cases", () => {
   );
 
   test.concurrent(
+    "a React Native component used above its import is still reported",
+    async () => {
+      const source = [
+        "export const a = <Touchable onPress={go} />;",
+        "export const b = <RN.TouchableOpacity onPress={go} />;",
+        'import { Pressable as Touchable } from "react-native";',
+        'import * as RN from "react-native";',
+        'import type { View } from "react-native";',
+        "export const c = <View />;",
+      ].join("\n");
+      expect(await lint("button", source)).toEqual([1, 2]);
+    },
+  );
+
+  test.concurrent(
     "a multi-line TextInput is the textarea's, a single-line one the input's",
     async () => {
       const source = [

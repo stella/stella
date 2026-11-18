@@ -38,6 +38,7 @@ import {
   REACT_NATIVE_MODULE,
 } from "./no-native-ui-registry.ts";
 import {
+  type AstNode,
   isAstNode,
   jsxName,
   resolveVariable,
@@ -145,98 +146,46 @@ const isInputRuleType = (type: string): boolean =>
 const ROLE_ATTRIBUTES = new Set(["role", "accessibilityRole"]);
 
 /**
- * What a file imports from "react-native": local name to imported name, and
- * the namespaces (`import * as RN`) that reach every component.
+ * The "react-native" import specifier a tag's identifier binds to, lexically:
+ * a parameter or local named `Text` shadows the import. Read from the binding
+ * itself, so a tag above its import declaration resolves too.
  */
-type ReactNativeImports = {
-  readonly named: Map<string, string>;
-  readonly namespaces: Set<string>;
-};
-
-const importedName = (specifier: unknown): string | null => {
-  if (!isAstNode(specifier) || specifier.type !== "ImportSpecifier") {
-    return null;
-  }
-  const imported: unknown = specifier.imported;
-  if (!isAstNode(imported)) {
-    return null;
-  }
-  if (imported.type === "Identifier" && typeof imported.name === "string") {
-    return imported.name;
-  }
-  return typeof imported.value === "string" ? imported.value : null;
-};
-
-const localName = (specifier: unknown): string | null => {
-  if (!isAstNode(specifier) || !isAstNode(specifier.local)) {
-    return null;
-  }
-  return typeof specifier.local.name === "string" ? specifier.local.name : null;
-};
-
-const recordReactNativeImports = (
-  declaration: unknown,
-  imports: ReactNativeImports,
-): void => {
-  if (
-    !isAstNode(declaration) ||
-    !isAstNode(declaration.source) ||
-    declaration.source.value !== REACT_NATIVE_MODULE ||
-    declaration.importKind === "type" ||
-    !Array.isArray(declaration.specifiers)
-  ) {
-    return;
-  }
-  for (const specifier of declaration.specifiers) {
-    const local = localName(specifier);
-    if (local === null || !isAstNode(specifier)) {
-      continue;
-    }
-    if (specifier.type === "ImportNamespaceSpecifier") {
-      imports.namespaces.add(local);
-      continue;
-    }
-    const imported = importedName(specifier);
-    if (imported !== null && specifier.importKind !== "type") {
-      imports.named.set(local, imported);
-    }
-  }
-};
-
-/**
- * Whether a tag's identifier binds, lexically, to an import from
- * "react-native": a parameter or local named `Text` shadows the import.
- */
-const bindsReactNativeImport = (
+const reactNativeSpecifier = (
   context: ScopeContext,
   identifier: ESTree.JSXIdentifier,
-): boolean => {
+): AstNode | null => {
   const definition = resolveVariable(context, identifier)?.defs.at(0);
-  return (
-    definition?.type === "ImportBinding" &&
-    isAstNode(definition.parent) &&
-    isAstNode(definition.parent.source) &&
-    definition.parent.source.value === REACT_NATIVE_MODULE
-  );
+  if (
+    definition?.type !== "ImportBinding" ||
+    !isAstNode(definition.parent) ||
+    !isAstNode(definition.parent.source) ||
+    definition.parent.source.value !== REACT_NATIVE_MODULE ||
+    definition.parent.importKind === "type"
+  ) {
+    return null;
+  }
+  const specifier: unknown = definition.node;
+  return isAstNode(specifier) && specifier.importKind !== "type"
+    ? specifier
+    : null;
 };
 
 /** The React Native component a JSX tag renders, or null for any other tag. */
 const reactNativeComponent = (
   context: ScopeContext,
   name: ESTree.JSXElementName,
-  imports: ReactNativeImports,
 ): string | null => {
   if (name.type === "JSXIdentifier") {
-    const component = imports.named.get(name.name);
-    return component !== undefined && bindsReactNativeImport(context, name)
-      ? component
+    const specifier = reactNativeSpecifier(context, name);
+    return specifier?.type === "ImportSpecifier"
+      ? importedName(specifier)
       : null;
   }
   if (
     name.type === "JSXMemberExpression" &&
     name.object.type === "JSXIdentifier" &&
-    imports.namespaces.has(name.object.name) &&
-    bindsReactNativeImport(context, name.object)
+    reactNativeSpecifier(context, name.object)?.type ===
+      "ImportNamespaceSpecifier"
   ) {
     return jsxName(name.property);
   }
@@ -324,19 +273,7 @@ const nativeRule = (module: string): CreateOnceRule => {
           context.report({ node, messageId: "native", data: { found, use } });
         }
       };
-      const imports: ReactNativeImports = {
-        named: new Map(),
-        namespaces: new Set(),
-      };
       return {
-        before() {
-          imports.named.clear();
-          imports.namespaces.clear();
-          return true;
-        },
-        ImportDeclaration(node) {
-          recordReactNativeImports(node, imports);
-        },
         JSXOpeningElement(node) {
           if (!isAstNode(node)) {
             return;
@@ -345,7 +282,7 @@ const nativeRule = (module: string): CreateOnceRule => {
           if (element === null) {
             return;
           }
-          const component = reactNativeComponent(context, node.name, imports);
+          const component = reactNativeComponent(context, node.name);
           if (
             component !== null &&
             reactNative.some((selector) =>
