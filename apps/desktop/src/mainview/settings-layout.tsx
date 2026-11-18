@@ -124,12 +124,16 @@ export const SettingsRow = ({
     >
       <div
         className={cn(
-          "flex min-h-14 w-full items-center gap-3 py-2.5 pe-4 text-start",
+          // A row too narrow for its text and its control wraps the control
+          // under the text rather than squeezing the text.
+          "flex min-h-14 w-full flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pe-4 text-start",
           ROW_DEPTH_CLASS[depth],
         )}
       >
         {media}
-        <ListItemContent className={cn(disabled && "opacity-64")}>
+        <ListItemContent
+          className={cn("min-w-48 basis-48", disabled && "opacity-64")}
+        >
           <ListItemTitle id={ids.label} variant="statement">
             {title}
           </ListItemTitle>
@@ -144,7 +148,7 @@ export const SettingsRow = ({
           )}
         </ListItemContent>
         {children === undefined ? null : (
-          <ListItemActions>{children}</ListItemActions>
+          <ListItemActions className="ms-auto">{children}</ListItemActions>
         )}
       </div>
       {footer === undefined || footer === null ? null : (

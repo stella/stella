@@ -88,7 +88,7 @@ export const PermissionRow = ({
 
   return (
     <div
-      className="flex min-h-14 items-center gap-3 px-4 py-2.5"
+      className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5"
       data-permission={row.permission}
     >
       {media === "icon" ? (
@@ -96,7 +96,7 @@ export const PermissionRow = ({
           <Icon />
         </ListItemMedia>
       ) : null}
-      <ListItemContent>
+      <ListItemContent className="min-w-48 basis-48">
         <ListItemTitle id={labelId} variant="statement">
           {t(copy.label)}
         </ListItemTitle>
@@ -104,7 +104,7 @@ export const PermissionRow = ({
           {description ?? t(copy.description)}
         </ListItemDescription>
       </ListItemContent>
-      <ListItemActions>
+      <ListItemActions className="ms-auto">
         {usesSwitch ? (
           <Switch
             aria-describedby={descriptionId}
