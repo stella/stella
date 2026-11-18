@@ -148,10 +148,17 @@ const enterPublicDocument = async ({
     return;
   }
   const { cause } = entered.error;
-  if (!isRedirect(cause)) {
-    throw cause;
+  if (isRedirect(cause)) {
+    await router.navigate({ ...cause.options, replace: true });
+    return;
   }
-  await router.navigate({ ...cause.options, replace: true });
+  // A guard that failed otherwise re-runs as a navigation, so the router's
+  // own boundaries handle the failure as they did before.
+  await router.navigate({
+    href: location.publicHref,
+    replace: true,
+    resetScroll: false,
+  });
 };
 
 /**

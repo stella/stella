@@ -209,12 +209,12 @@ const updateProfileLocale = async (locale: SupportedLanguage) => {
 const clientLocaleOwner = createClientDocumentLocaleOwner({
   readBootUser: async (queryClient) => {
     const { user } = await loadAuthContext(queryClient);
-    return user === null ? null : { id: user.id, locale: user.locale ?? null };
+    return user === null ? null : { id: user.id, locale: user.locale };
   },
   readSelectionUser: async () => {
     const session = await fetchSession();
     return session?.user !== undefined
-      ? { id: session.user.id, locale: session.user.locale ?? null }
+      ? { id: session.user.id, locale: session.user.locale }
       : null;
   },
   isCurrent: isCurrentDocumentSession,
