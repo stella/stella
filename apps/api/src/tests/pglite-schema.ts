@@ -2068,3 +2068,38 @@ export const installPgliteCorpusIndexSeedingLifecycle = async (
     await db.execute(sql.raw(statement));
   }
 };
+
+const CORPUS_INDEX_GENERATION_RETIRE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261117203000_corpus_index_generation_retire",
+  "migration.sql",
+);
+
+/**
+ * Apply what schema push omits from the retire migration: the guard that
+ * refuses every projection write to a retired generation and the page
+ * function that deletes its history. The history delete guard and the
+ * registry's terminal guard it also replaces are not installed in tests
+ * (their triggers are allowlisted), so their new bodies are left out.
+ */
+export const installPgliteCorpusIndexGenerationRetire = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CORPUS_INDEX_GENERATION_RETIRE_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.includes("refuse_retired_corpus_index_projection_write") ||
+      source.includes("purge_retired_corpus_index_generation_page")
+    );
+  });
+  if (statements.length !== 7) {
+    panic(
+      `Corpus index generation retire migration statements changed: ${statements.length}`,
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};

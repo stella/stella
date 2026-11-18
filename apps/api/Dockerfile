@@ -163,10 +163,12 @@ RUN bun build \
 #   `--apply`.
 #     ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
 #      "--results", "/tmp/results.jsonl", "--apply"]
-# - corpus-generation.js: corpus generation registry: status, register, and
-#   the serving flip, which checks the target's indexes on the search endpoint
-#   first; reports without writing until `--apply`.
+# - corpus-generation.js: corpus generation registry: status, register, the
+#   serving flip, which checks the target's indexes on the search endpoint
+#   first, and retire, which deletes a retired generation's engine indexes
+#   and projection history; reports without writing until `--apply`.
 #     ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+#     ["bun", "/app/corpus-generation.js", "retire", "--family", "case_law", "--generation", "<generation>"]
 # - corpus-snippet-compare.js: read-only snippet comparison over the serving
 #   corpus index. It reads its query set from a JSON file, so the committed
 #   sample ships next to the bundle.
