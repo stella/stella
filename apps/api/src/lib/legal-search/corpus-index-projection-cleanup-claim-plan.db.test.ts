@@ -282,16 +282,21 @@ test("the settlement claim plans one page of tasks, however long the committed b
   );
   // The fixture reaches the queue: every task got its row from the trigger.
   expect(queued.rows).toEqual([{ count: TASKS }]);
+  // Both backlogs walk the queue's claim index alone: no sequential scan,
+  // no revision lookup.
+  const expectTaskWalk = (plan: Plan) => {
+    const text = plan.lines.join("\n");
+    expect(plan.rows).toBe(SETTLEMENT_PLAN);
+    expect(text).not.toContain("Seq Scan");
+    expect(text).not.toContain("corpus_index_projection_intents");
+    const taskScan =
+      /Index Scan using corpus_index_projection_delete_tasks_claim_idx on corpus_index_projection_delete_tasks \(actual [^)]*rows=(\d+)/u.exec(
+        text,
+      );
+    expect(Number(taskScan?.[1])).toBe(SETTLEMENT_PLAN);
+  };
   const small = await explain(settlementPlan);
-  const smallText = small.lines.join("\n");
-  expect(small.rows).toBe(SETTLEMENT_PLAN);
-  expect(smallText).not.toContain("Seq Scan");
-  expect(smallText).not.toContain("corpus_index_projection_intents");
-  const taskScan =
-    /Index Scan using corpus_index_projection_delete_tasks_claim_idx on corpus_index_projection_delete_tasks \(actual [^)]*rows=(\d+)/u.exec(
-      smallText,
-    );
-  expect(Number(taskScan?.[1])).toBe(SETTLEMENT_PLAN);
+  expectTaskWalk(small);
 
   // Ten times the committed backlog costs the plan nothing.
   await seedCommittedTasks(TASKS, 9 * TASKS, PER_TASK);
@@ -300,7 +305,7 @@ test("the settlement claim plans one page of tasks, however long the committed b
     sql.raw("VACUUM ANALYZE corpus_index_projection_delete_tasks"),
   );
   const large = await explain(settlementPlan);
-  expect(large.rows).toBe(SETTLEMENT_PLAN);
+  expectTaskWalk(large);
   expect(large.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.25));
   expect(large.buffers / large.rows).toBeLessThanOrEqual(3);
 }, 600_000);

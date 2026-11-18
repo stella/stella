@@ -74,13 +74,19 @@ const keyAtMost = (first: number) =>
   `(family, generation, index_id, status, delete_opstamp)
     <= ($${first}, $${first + 1}, $${first + 2}, 'cleanup_committed', $${first + 3}::bigint)`;
 
+// The page is cut on the opstamp as a number; only its output is text, so a
+// page ending at opstamp 2 never stops before 10 the way text order would.
 const READ_TASK_KEYS_SQL = `
-  SELECT DISTINCT family, generation, index_id, delete_opstamp::text AS delete_opstamp
-  FROM public."${INTENTS_TABLE}"
-  WHERE status = 'cleanup_committed'
-    AND ${keyAbove(1)}
-  ORDER BY family, generation, index_id, delete_opstamp
-  LIMIT $5
+  SELECT family, generation, index_id, delete_opstamp::text AS delete_opstamp
+  FROM (
+    SELECT DISTINCT family, generation, index_id, delete_opstamp
+    FROM public."${INTENTS_TABLE}"
+    WHERE status = 'cleanup_committed'
+      AND ${keyAbove(1)}
+    ORDER BY family, generation, index_id, delete_opstamp
+    LIMIT $5
+  ) page
+  ORDER BY page.family, page.generation, page.index_id, page.delete_opstamp
 `;
 
 const QUEUE_TASKS_SQL = `
@@ -293,7 +299,16 @@ export const createCorpusProjectionDeleteTaskRepair = (
     };
   },
   repair: async (connection) => {
+    const checkpoint = (
+      await connection.query(READ_CHECKPOINT_SQL, [REPAIR_NAME])
+    ).at(0);
+    if (isRecord(checkpoint) && checkpoint["cursor"] === WALK_COMPLETE) {
+      return { type: "complete" };
+    }
     // Empty fresh databases have no heavy data work and no metric source yet.
+    // A walk stopped after its last batch, whose tasks settlement has drained
+    // since, ends here too: its checkpoint (a fresh database has none) is
+    // marked complete like a finished walk's, or it would read pending.
     if (
       (
         await connection.query(
@@ -301,6 +316,10 @@ export const createCorpusProjectionDeleteTaskRepair = (
         )
       ).length === 0
     ) {
+      await connection.execute(RECORD_WALK_COMPLETE_SQL, [
+        WALK_COMPLETE,
+        REPAIR_NAME,
+      ]);
       return { type: "complete" };
     }
     const pass = await walkDeleteTasks(connection, options);

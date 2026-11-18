@@ -555,9 +555,15 @@ class Run {
         return;
       }
       case "abandon": {
-        // The turn died holding its lease, and the lease ran out since.
+        // The turn died holding its lease, and the lease ran out since. One
+        // claim can lease several tasks under one turn token; all of them
+        // ran out with it.
         await this.expire(lease.leaseToken);
-        this.live.splice(index, 1);
+        for (let at = this.live.length - 1; at >= 0; at -= 1) {
+          if (this.live[at]?.leaseToken === lease.leaseToken) {
+            this.live.splice(at, 1);
+          }
+        }
         return;
       }
       default: {
@@ -789,9 +795,11 @@ if (!databaseUrl || !runPostgresTests) {
           }),
         });
         try {
-          const indexId = await seedIndex(db, suite, ENTITIES_PER_RUN);
+          const indexId = await seedIndex(db, suite, 24);
           const run = new Run(db, db, connectionOver(repairClient), indexId);
-          for (let task = 0; task < 5; task += 1) {
+          // Twelve tasks give opstamps of one and two digits in one index,
+          // which a page cut in text order would skip or overfill.
+          for (let task = 0; task < 12; task += 1) {
             // db-await-in-loop: one receipt per delete task.
             await run.record({
               kind: "record",
@@ -801,7 +809,7 @@ if (!databaseUrl || !runPostgresTests) {
             });
           }
           // The fixture reaches the repair's case: committed tasks, no rows.
-          expect(run.legacy.size).toBe(5);
+          expect(run.legacy.size).toBe(12);
           expect(
             await db
               .select()
@@ -834,7 +842,7 @@ if (!databaseUrl || !runPostgresTests) {
             queued
               .map(({ deleteOpstamp }) => deleteOpstamp)
               .toSorted((left, right) => (left < right ? -1 : 1)),
-          ).toEqual([1n, 2n, 3n, 4n, 5n]);
+          ).toEqual(Array.from({ length: 12 }, (_, at) => BigInt(at + 1)));
           expect(
             queued.every(
               ({ taskCreatedAt }) =>
@@ -856,7 +864,7 @@ if (!databaseUrl || !runPostgresTests) {
               .select({ count: sql<number>`count(*)::int` })
               .from(corpusIndexProjectionDeleteTasks)
               .where(eq(corpusIndexProjectionDeleteTasks.indexId, indexId)),
-          ).toEqual([{ count: 5 }]);
+          ).toEqual([{ count: 12 }]);
           await run.drain();
         } finally {
           await repairClient.sql.unsafe(

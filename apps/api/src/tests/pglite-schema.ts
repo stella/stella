@@ -1601,11 +1601,17 @@ export const installPgliteCorpusProjectionDeleteTasks = async (
       ) ||
       source.startsWith(
         'CREATE TRIGGER "corpus_projection_intents_delete_task_',
+      ) ||
+      source.startsWith(
+        'ALTER TABLE "corpus_index_projection_delete_tasks" FORCE ROW LEVEL SECURITY',
       )
     );
   });
-  if (statements.length !== 3) {
-    panic("Expected the delete task queue function and its two triggers");
+  // Schema push enables row security but does not force it; production does.
+  if (statements.length !== 4) {
+    panic(
+      "Expected the delete task queue function, its two triggers and forced row security",
+    );
   }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));

@@ -1047,13 +1047,116 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
     family,
     generation,
   );
-  const lockedTasks = await lockFreeCorpusProjectionDeleteTasks(tx, {
-    ...taskKey,
-    deleteOpstamps: planned.map(({ deleteOpstamp }) => deleteOpstamp),
-    limit: taskLimit,
-  });
-  if (lockedTasks.length === 0) {
-    return [];
+  // The committed revisions of some locked tasks, at most `limit` per task.
+  const committedRevisionsOf = async (leasedOpstamps: bigint[]) => {
+    const settleable = and(
+      eq(corpusIndexProjectionIntents.family, family),
+      eq(corpusIndexProjectionIntents.generation, generation),
+      eq(corpusIndexProjectionIntents.indexId, indexId),
+      inArray(corpusIndexProjectionIntents.deleteOpstamp, leasedOpstamps),
+      scopedEntityIds === null
+        ? undefined
+        : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+      eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
+      // A receipt written before the delete instant was persisted cannot be
+      // proved against the splits that could hold its revisions. The online
+      // repair behind the paired-receipt constraint fills those rows in, and
+      // they become settleable again with no further transition.
+      isNotNull(corpusIndexProjectionIntents.deleteTaskCreatedAt),
+      // A revision leased on its own row, by a release that leased revisions
+      // before tasks had rows, keeps that lease until it expires.
+      or(
+        isNull(corpusIndexProjectionIntents.leaseExpiresAt),
+        sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+      ),
+    );
+    // Rank inside each delete task so one long task cannot spend the whole
+    // turn's row budget. The ranking cannot lock (a window function and a
+    // locking clause are exclusive), so the outer statement locks the intent
+    // rows the ranking picked.
+    const rankedRevisions = tx.$with("ranked_revisions").as(
+      tx
+        .select({
+          id: corpusIndexProjectionIntents.id,
+          taskRank: sql<number>`row_number() OVER (
+            PARTITION BY ${corpusIndexProjectionIntents.deleteOpstamp}
+            ORDER BY ${corpusIndexProjectionIntents.createdAt}, ${corpusIndexProjectionIntents.id}
+          )`.as("task_rank"),
+        })
+        .from(corpusIndexProjectionIntents)
+        .where(settleable),
+    );
+    return await tx
+      .with(rankedRevisions)
+      .select({
+        id: corpusIndexProjectionIntents.id,
+        deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
+      })
+      .from(corpusIndexProjectionIntents)
+      .innerJoin(
+        rankedRevisions,
+        and(
+          eq(rankedRevisions.id, corpusIndexProjectionIntents.id),
+          lte(rankedRevisions.taskRank, limit),
+        ),
+      )
+      // Total: two revisions committed by the same cleanup turn share both
+      // timestamps, and the lease order follows this one.
+      .orderBy(
+        asc(corpusIndexProjectionIntents.cleanupStartedAt),
+        asc(corpusIndexProjectionIntents.createdAt),
+        asc(corpusIndexProjectionIntents.id),
+      )
+      .limit(limit * leasedOpstamps.length)
+      .for("update", {
+        of: corpusIndexProjectionIntents,
+        skipLocked: true,
+      });
+  };
+  // A locked task that yields no revision (drained, or its revisions busy or
+  // leased by an earlier release) does not spend the turn's task quota: the
+  // next planned tasks are locked in its place until the quota is filled or
+  // the planned window runs out, so an empty result means no task in it was
+  // runnable.
+  const lockedTasks: Awaited<
+    ReturnType<typeof lockFreeCorpusProjectionDeleteTasks>
+  > = [];
+  const candidates: Awaited<ReturnType<typeof committedRevisionsOf>> = [];
+  const claimedOpstamps = new Set<string>();
+  let unlocked = planned.map(({ deleteOpstamp }) => deleteOpstamp);
+  while (claimedOpstamps.size < taskLimit && unlocked.length > 0) {
+    // db-await-in-loop: each pass locks only the tasks the last one could not fill the quota with.
+    const locked = await lockFreeCorpusProjectionDeleteTasks(tx, {
+      ...taskKey,
+      deleteOpstamps: unlocked,
+      limit: taskLimit - claimedOpstamps.size,
+    });
+    if (locked.length === 0) {
+      break;
+    }
+    // A task this turn locked is not skipped by a later SKIP LOCKED read, so
+    // the next pass looks only past it.
+    const lockedKeys = new Set(
+      locked.map(({ deleteOpstamp }) => String(deleteOpstamp)),
+    );
+    unlocked = unlocked.filter((opstamp) => !lockedKeys.has(String(opstamp)));
+    lockedTasks.push(...locked);
+    const opstamps = locked.map(({ deleteOpstamp }) => deleteOpstamp);
+    // db-await-in-loop: the revisions of this pass's tasks only.
+    const found = await committedRevisionsOf(opstamps);
+    for (const { deleteOpstamp } of found) {
+      claimedOpstamps.add(String(deleteOpstamp));
+    }
+    candidates.push(...found);
+    // A planned task with nothing to lease either has no committed revision
+    // left (a settlement or reissue by an earlier release kept its row), and
+    // leaves the queue, or its revisions are busy elsewhere, and it stays.
+    // db-await-in-loop: drops this pass's drained tasks.
+    await deleteDrainedLockedDeleteTasksTx(
+      tx,
+      taskKey,
+      opstamps.filter((opstamp) => !claimedOpstamps.has(String(opstamp))),
+    );
   }
   const taskInstants = new Map(
     lockedTasks.map(({ deleteOpstamp, taskCreatedAt }) => [
@@ -1061,81 +1164,7 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
       Temporal.Instant.fromEpochMilliseconds(taskCreatedAt.getTime()),
     ]),
   );
-  const leasedOpstamps = lockedTasks.map(({ deleteOpstamp }) => deleteOpstamp);
-  const settleable = and(
-    eq(corpusIndexProjectionIntents.family, family),
-    eq(corpusIndexProjectionIntents.generation, generation),
-    eq(corpusIndexProjectionIntents.indexId, indexId),
-    inArray(corpusIndexProjectionIntents.deleteOpstamp, leasedOpstamps),
-    scopedEntityIds === null
-      ? undefined
-      : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
-    eq(corpusIndexProjectionIntents.status, "cleanup_committed"),
-    // A receipt written before the delete instant was persisted cannot be
-    // proved against the splits that could hold its revisions. The online
-    // repair behind the paired-receipt constraint fills those rows in, and
-    // they become settleable again with no further transition.
-    isNotNull(corpusIndexProjectionIntents.deleteTaskCreatedAt),
-    // A revision leased on its own row, by a release that leased revisions
-    // before tasks had rows, keeps that lease until it expires.
-    or(
-      isNull(corpusIndexProjectionIntents.leaseExpiresAt),
-      sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
-    ),
-  );
-  // Rank inside each delete task so one long task cannot spend the whole
-  // turn's row budget. The ranking cannot lock (a window function and a
-  // locking clause are exclusive), so the outer statement locks the intent
-  // rows the ranking picked.
-  const rankedRevisions = tx.$with("ranked_revisions").as(
-    tx
-      .select({
-        id: corpusIndexProjectionIntents.id,
-        taskRank: sql<number>`row_number() OVER (
-          PARTITION BY ${corpusIndexProjectionIntents.deleteOpstamp}
-          ORDER BY ${corpusIndexProjectionIntents.createdAt}, ${corpusIndexProjectionIntents.id}
-        )`.as("task_rank"),
-      })
-      .from(corpusIndexProjectionIntents)
-      .where(settleable),
-  );
-  const candidates = await tx
-    .with(rankedRevisions)
-    .select({
-      id: corpusIndexProjectionIntents.id,
-      deleteOpstamp: corpusIndexProjectionIntents.deleteOpstamp,
-    })
-    .from(corpusIndexProjectionIntents)
-    .innerJoin(
-      rankedRevisions,
-      and(
-        eq(rankedRevisions.id, corpusIndexProjectionIntents.id),
-        lte(rankedRevisions.taskRank, limit),
-      ),
-    )
-    // Total: two revisions committed by the same cleanup turn share both
-    // timestamps, and the lease order follows this one.
-    .orderBy(
-      asc(corpusIndexProjectionIntents.cleanupStartedAt),
-      asc(corpusIndexProjectionIntents.createdAt),
-      asc(corpusIndexProjectionIntents.id),
-    )
-    .limit(limit * leasedOpstamps.length)
-    .for("update", {
-      of: corpusIndexProjectionIntents,
-      skipLocked: true,
-    });
-  const claimedOpstamps = new Set(
-    candidates.map(({ deleteOpstamp }) => String(deleteOpstamp)),
-  );
-  // A planned task with nothing to lease either has no committed revision
-  // left (a settlement or reissue by an earlier release kept its row), and
-  // leaves the queue, or its revisions are busy elsewhere, and it stays.
-  await deleteDrainedLockedDeleteTasksTx(
-    tx,
-    taskKey,
-    leasedOpstamps.filter((opstamp) => !claimedOpstamps.has(String(opstamp))),
-  );
+  const lockedOpstamps = lockedTasks.map(({ deleteOpstamp }) => deleteOpstamp);
   if (candidates.length === 0) {
     return [];
   }
@@ -1170,7 +1199,7 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
         deleteTaskKeyPredicate(taskKey),
         inArray(
           corpusIndexProjectionDeleteTasks.deleteOpstamp,
-          leasedOpstamps.filter((opstamp) =>
+          lockedOpstamps.filter((opstamp) =>
             claimedOpstamps.has(String(opstamp)),
           ),
         ),
