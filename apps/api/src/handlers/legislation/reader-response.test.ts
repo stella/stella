@@ -489,7 +489,7 @@ test("an instruction the publisher restates under several links reads once and k
       {
         ...relation,
         publisherId: "cz-esbirka:link/981086",
-        changeKind: "inserted",
+        changeKind: "inserted" as const,
       },
       {
         ...relation,
