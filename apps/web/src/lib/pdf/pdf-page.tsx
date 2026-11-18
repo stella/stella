@@ -76,8 +76,7 @@ export const PDFPage = ({
   return (
     <div
       ref={(el) => {
-        const shouldScrollToPage =
-          scrollTo !== null && scrollTo.pageId === pageId;
+        const shouldScrollToPage = scrollTo?.pageId === pageId;
 
         if (!el || !shouldScrollToPage) {
           return;
