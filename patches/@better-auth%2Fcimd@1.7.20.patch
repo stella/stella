@@ -1,7 +1,7 @@
 diff --git a/dist/node.d.mts b/dist/node.d.mts
 --- a/dist/node.d.mts
 +++ b/dist/node.d.mts
-@@ -4,8 +4,9 @@
+@@ -4,8 +4,9 @@ import { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
   * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
   * connection pinning.
   *
@@ -16,7 +16,7 @@ diff --git a/dist/node.d.mts b/dist/node.d.mts
 diff --git a/dist/node.mjs b/dist/node.mjs
 --- a/dist/node.mjs
 +++ b/dist/node.mjs
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,7 @@ import { request } from "node:https";
  import { isIP } from "node:net";
  import { Readable } from "node:stream";
  //#region src/node.ts
@@ -24,7 +24,7 @@ diff --git a/dist/node.mjs b/dist/node.mjs
  const BODY_FORBIDDEN_RESPONSE_STATUSES = /* @__PURE__ */ new Set([
  	204,
  	205,
-@@ -19,8 +20,9 @@
+@@ -19,8 +20,9 @@ function responseHeaders(headers) {
  * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
  * connection pinning.
  *
@@ -36,7 +36,7 @@ diff --git a/dist/node.mjs b/dist/node.mjs
  * and certificate-verification identity. Redirect responses are returned to
  * the caller and are never followed.
  */
-@@ -29,53 +31,88 @@
+@@ -29,53 +31,88 @@ const fetchClientMetadataResource = async (input, init) => {
  	const url = new URL(webRequest.url);
  	if (url.protocol !== "https:") throw new TypeError("CIMD Node transport requires an HTTPS URL");
  	if (webRequest.method !== "GET" && webRequest.method !== "HEAD") throw new TypeError("CIMD Node transport supports only GET and HEAD");
