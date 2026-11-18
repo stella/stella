@@ -30,6 +30,8 @@ export const ADAPTER_KEYS = {
 
   BR_TST: "br-tst",
 
+  CZ_NS_SBIRKA: "cz-ns-sbirka",
+
   CZ_NS: "cz-ns",
 
   CZ_NSS: "cz-nss",
@@ -100,6 +102,8 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.BR_TST]: 2,
 
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: 1,
+
   [ADAPTER_KEYS.CZ_NS]: 34,
 
   [ADAPTER_KEYS.CZ_NSS]: 41,
@@ -112,7 +116,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.EU_ECJ]: 28,
 
-  [ADAPTER_KEYS.HU_BHGY]: 32,
+  [ADAPTER_KEYS.HU_BHGY]: 33,
 
   [ADAPTER_KEYS.PL_COURTS]: 39,
 
@@ -166,6 +170,8 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.BR_TJDFT]: 0,
 
   [ADAPTER_KEYS.BR_TST]: 0,
+
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: 0,
 
   [ADAPTER_KEYS.CZ_NS]: 0,
 
@@ -236,6 +242,8 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.BR_TST]: { version: PARSER_VERSIONS[ADAPTER_KEYS.BR_TST], scope: {"type":"all","reason":"Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS_SBIRKA], scope: {"type":"all","reason":"the source's first parser; there are no stored rows to narrow"} },
+
   [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Recompute procedural review links from the stored opening and holding text; parsed document output is otherwise unchanged."} },
 
   [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Recompute procedural review links from the publisher's review table on every held detail page and from the stored opening and holding text; document-only legacy raw retains its existing metadata."} },
@@ -248,7 +256,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs. Derive the case number from every case-law CELEX document form by its court letter, so a Civil Service Tribunal order (62013FO0060) reads F-60/13 instead of the raw CELEX; the case number has no separate feature storage. A bare number after a dash in the keyword chain closes a range inside the keyword before it instead of standing as a keyword of its own; keywords have no separate feature storage. Retain the publisher's excluded notice fields in the stored notice instead of naming them as exclusions. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-read stored CJEU documents: a title set over several lines (an opinion's author and delivery line, a judgment's chamber and date) is one decision-title heading, and each footnote-list entry is a footnote note keyed by its anchor; headings and notes have no separate feature storage. Read the converter's table of contents after the signatures (coj-NTOCn entries) as publisher notes instead of continuing the operative part; roles have no separate feature storage. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 
-  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST. Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-mark anonymisation placeholders from stored Hungarian documents: a placeholder's number and field word end the token, so amounts, years and longer words beside a party label stay text; inline anonymisation marks have no separate feature storage. Read the titles a court prints inside its reasons (short, capitalised, unnumbered lines with no closing punctuation under Indokolás that head the court's next numbered paragraph or the closing place and date, on a line of their own or before a soft break) as level-2 headings instead of argumentation paragraphs; after a paragraph without closing punctuation only a title set in bold qualifies. AST roles and the outline have no separate feature storage. Read a character an RTF writes in a double-byte font as one lead and trail byte (\"§\" in a Japanese font), a byte the code page leaves undefined as U+FFFD with a reader warning rather than a C1 control character, and the Latin-1 stand-ins \"õ\" and \"û\" as the Hungarian \"ő\" and \"ű\", in block and full text; characters have no separate feature storage. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
+  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST. Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent. Block text folds letter-spaced emphasis through the one shared reading, which also reads a short spaced word beside a spaced word and treats a no-break space as a word gap; only whitespace in block text changes and it has no feature storage of its own. Re-mark anonymisation placeholders from stored Hungarian documents: a placeholder's number and field word end the token, so amounts, years and longer words beside a party label stay text; inline anonymisation marks have no separate feature storage. Read the titles a court prints inside its reasons (short, capitalised, unnumbered lines with no closing punctuation under Indokolás that head the court's next numbered paragraph or the closing place and date, on a line of their own or before a soft break) as level-2 headings instead of argumentation paragraphs; after a paragraph without closing punctuation only a title set in bold qualifies. AST roles and the outline have no separate feature storage. Read a character an RTF writes in a double-byte font as one lead and trail byte (\"§\" in a Japanese font), a byte the code page leaves undefined as U+FFFD with a reader warning rather than a C1 control character, and the Latin-1 stand-ins \"õ\" and \"û\" as the Hungarian \"ő\" and \"ű\", in block and full text; characters have no separate feature storage. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change. Read the decision type from a title-block possessive in either vowel harmony (\"határozata\", \"állásfoglalása\" as well as \"ítélete\", \"végzése\"), so a Kúria self-government panel's ruling is typed; the decision type has no separate feature storage."} },
 
   [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Recount a court's printed paragraph numbers with the shared reading: a run that counts up through the whole reasoning is numbered even where many unnumbered paragraphs sit between its numbers; only paragraph numbering in block text changes and it has no feature storage of its own. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."} },
 

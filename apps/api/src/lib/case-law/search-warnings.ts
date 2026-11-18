@@ -337,7 +337,7 @@ export const partialMatchesUnreadWarning = ({
 }): AgentCaseLawSearchWarning => ({
   code: "partial_matches_unread",
   message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
-  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again with its partial matches; it may repeat the hits above. Pass strict: true if only decisions holding every word are wanted.",
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again with its partial matches; it may repeat the hits above. If they stay unread after a rerun, search this phrasing on its own or narrow it with a court, date range or provision filter. Pass strict: true if only decisions holding every word are wanted.",
 });
 
 export const manyRequiredTermsWarning = ({

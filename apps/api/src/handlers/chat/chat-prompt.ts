@@ -98,6 +98,7 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
+import type { LocalRunSkillTool } from "@/api/handlers/chat/local-run-skills";
 import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import {
   CHAT_CODE_MODE_SYSTEM_PROMPT,
@@ -172,7 +173,7 @@ import {
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   sanitizeForPrompt,
@@ -557,6 +558,8 @@ export type ChatPromptTarget =
       type: "local_run";
       /** How the agent's own web search runs at the turn's permission level. */
       webSearch: ChatLocalRunWebSearch;
+      /** The skill tools its stella MCP server serves it (`local-run-skills.ts`). */
+      skillTools: readonly LocalRunSkillTool[];
     };
 
 export const CLOUD_PROMPT_TARGET = {
@@ -612,6 +615,125 @@ const buildLocalRunCoreRuleSections = (
   CORPUS_ONLY_CASE_LAW_SECTION,
   USER_FACING_LANGUAGE_RULE,
 ];
+
+/**
+ * The local-run skill catalog's bounds. A run's instructions are capped at
+ * 65,536 characters (`desktop-runner.ts`), so the catalog keeps to a fixed
+ * share of them: each description is cut to a line, and past the budget the
+ * descriptions shorten so every skill keeps its name in the list.
+ */
+const LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS = 160;
+export const LOCAL_RUN_SKILL_CATALOG_MAX_CHARS = 16_000;
+/** Below this, a description says too little to be worth its characters. */
+const LOCAL_RUN_SKILL_DESCRIPTION_MIN_CHARS = 24;
+const LOCAL_RUN_SKILL_TOOL_NAME_MAX_CHARS = 80;
+
+const LOCAL_RUN_SKILLS_RULE =
+  "STELLA SKILLS: stella skills are methods and templates from stella, the member's organization and the member. Each one below is a tool on the stella MCP server, listed by its tool name and what it is for. When a request matches a skill, call its tool without arguments before you start: it returns the skill's instructions and the paths of its files. Then read every file the task depends on by calling the same tool with `resource` set to that path (and `cursor` to continue a long file). Apply the instructions; if you skip a file, say so. Skills guide the work; they grant no data access.";
+const LOCAL_RUN_INSTALLED_SKILLS_HEADING =
+  "Skills from the member's organization and the member's own (stella MCP tools):";
+
+type LocalRunSkillCatalog = {
+  /** Rule and stella's own skills: server-authored text. */
+  builtIn: string;
+  /** Installed skills: user-configured names and descriptions. */
+  installed: string;
+};
+
+const localRunSkillOverflowNote = (omitted: number) =>
+  `${String(omitted)} more skills did not fit in this list; their tools are on the stella MCP server under names starting with skill__.`;
+const LOCAL_RUN_SKILL_OVERFLOW_NOTE_MAX_CHARS = localRunSkillOverflowNote(
+  Number.MAX_SAFE_INTEGER,
+).length;
+
+/** Cut at a word where one is near, marking the cut. */
+const truncatePromptDescription = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  const cut = text.slice(0, Math.max(0, maxLength - 1));
+  const wordEnd = cut.lastIndexOf(" ");
+  return `${(wordEnd > maxLength / 2 ? cut.slice(0, wordEnd) : cut).trimEnd()}…`;
+};
+
+/**
+ * The skills a run on the member's computer can load, each named by the MCP
+ * tool that serves it. Built-ins are listed first: they are few and
+ * server-authored. Descriptions are cut to one line and, when the catalog
+ * would pass its budget, shortened evenly; a skill past even that keeps its
+ * tool in the MCP server's list.
+ */
+export const buildLocalRunSkillCatalog = (
+  skillTools: readonly LocalRunSkillTool[],
+): LocalRunSkillCatalog => {
+  if (skillTools.length === 0) {
+    return { builtIn: "", installed: "" };
+  }
+  const entries = [
+    ...skillTools.filter(({ source }) => source === CHAT_SKILL_SOURCE.builtIn),
+    ...skillTools.filter(
+      ({ source }) => source === CHAT_SKILL_SOURCE.installed,
+    ),
+  ].map((skill) => ({
+    builtIn: skill.source === CHAT_SKILL_SOURCE.builtIn,
+    description: sanitizePromptLine({
+      maxLength: LIMITS.agentSkillDescriptionMaxChars,
+      text: skill.description,
+    }).trim(),
+    name: sanitizePromptLine({
+      maxLength: LOCAL_RUN_SKILL_TOOL_NAME_MAX_CHARS,
+      text: skill.toolName,
+    }),
+  }));
+  const budget =
+    LOCAL_RUN_SKILL_CATALOG_MAX_CHARS -
+    LOCAL_RUN_SKILLS_RULE.length -
+    LOCAL_RUN_INSTALLED_SKILLS_HEADING.length -
+    LOCAL_RUN_SKILL_OVERFLOW_NOTE_MAX_CHARS;
+  // Per line: `- `, the name, and a newline; a description adds `: ` and itself.
+  const nameChars = entries.reduce((sum, { name }) => sum + name.length + 3, 0);
+  const fullChars = entries.reduce(
+    (sum, { description }) =>
+      sum +
+      Math.min(description.length, LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS) +
+      2,
+    nameChars,
+  );
+  const evenShare = Math.floor((budget - nameChars) / entries.length) - 2;
+  let descriptionMax = LOCAL_RUN_SKILL_DESCRIPTION_MAX_CHARS;
+  if (fullChars > budget) {
+    descriptionMax =
+      evenShare >= LOCAL_RUN_SKILL_DESCRIPTION_MIN_CHARS ? evenShare : 0;
+  }
+
+  const builtInLines: string[] = [];
+  const installedLines: string[] = [];
+  let remaining = budget;
+  let omitted = 0;
+  for (const { builtIn, description, name } of entries) {
+    const shown =
+      descriptionMax === 0
+        ? ""
+        : truncatePromptDescription(description, descriptionMax);
+    const line = shown === "" ? `- ${name}` : `- ${name}: ${shown}`;
+    if (line.length + 1 > remaining) {
+      omitted += 1;
+      continue;
+    }
+    remaining -= line.length + 1;
+    (builtIn ? builtInLines : installedLines).push(line);
+  }
+
+  return {
+    builtIn: [LOCAL_RUN_SKILLS_RULE, ...builtInLines].join("\n"),
+    installed: [
+      ...(installedLines.length > 0
+        ? [LOCAL_RUN_INSTALLED_SKILLS_HEADING, ...installedLines]
+        : []),
+      ...(omitted > 0 ? [localRunSkillOverflowNote(omitted)] : []),
+    ].join("\n"),
+  };
+};
 
 export type UserContext = IncomingUserContext;
 
@@ -1182,6 +1304,7 @@ export const buildChatSystemPromptParts = async ({
     const activeSkillSection = buildActiveSkillSection(
       activeSkillContext,
       activeSkillMissingTools,
+      promptTarget,
     );
     const matterScopeSection =
       workspaceId === null
@@ -3175,19 +3298,101 @@ const mergeActiveSkillMetadata = ({
 };
 
 /**
+ * How a turn's model reaches a skill beyond what its prompt carries: the
+ * cloud chat's `load-skill` / `read-skill-resource`, or, for a run on the
+ * member's computer, the skill's own tool on its stella MCP server.
+ */
+type SkillAccess = {
+  intro: string;
+  files: (skillName: string) => string;
+  truncated: (skillName: string) => string;
+  /** Referenced skills past the preload bound; the rest are unreachable. */
+  notPreloaded: (slugs: readonly string[]) => {
+    line: string;
+    unreachable: string[];
+  };
+  /** What the model runs in, as the prompt names it. */
+  surface: "chat" | "run";
+};
+
+const CLOUD_SKILL_ACCESS: SkillAccess = {
+  intro:
+    "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Call `load-skill` for one of them only when its instructions below say they are cut short.",
+  files: () => "Files (read with read-skill-resource):",
+  truncated: () =>
+    `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call load-skill for the rest):`,
+  notPreloaded: (slugs) => ({
+    line: `The user's latest message also references these skills; call load-skill for each before answering: ${slugs
+      .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
+      .join(", ")}.`,
+    unreachable: [],
+  }),
+  surface: "chat",
+};
+
+const localRunSkillAccess = (
+  skillTools: readonly LocalRunSkillTool[],
+): SkillAccess => {
+  const toolBySlug = new Map(
+    skillTools.map(({ name, toolName }) => [name, toolName]),
+  );
+  const toolOf = (skillName: string) => {
+    const toolName = toolBySlug.get(skillName);
+    return toolName === undefined
+      ? undefined
+      : sanitizePromptLine({ maxLength: 80, text: toolName });
+  };
+  return {
+    intro:
+      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below: apply them to the request, and read the files the task depends on before you answer.",
+    files: (skillName) => {
+      const toolName = toolOf(skillName);
+      return toolName === undefined
+        ? "Files (this run cannot read them; work from the instructions below):"
+        : `Files (read each by calling the stella MCP tool ${toolName} with \`resource\` set to its path):`;
+    },
+    truncated: (skillName) => {
+      const toolName = toolOf(skillName);
+      return toolName === undefined
+        ? `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; this run cannot read the rest):`
+        : `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call the stella MCP tool ${toolName} for the rest):`;
+    },
+    notPreloaded: (slugs) => {
+      const toolNames = slugs.flatMap((slug) => {
+        const toolName = toolOf(slug);
+        return toolName === undefined ? [] : [toolName];
+      });
+      return {
+        line:
+          toolNames.length === 0
+            ? ""
+            : `The user's latest message also references these skills; call each one's stella MCP tool before answering: ${toolNames.join(", ")}.`,
+        unreachable: slugs.filter((slug) => toolOf(slug) === undefined),
+      };
+    },
+    surface: "run",
+  };
+};
+
+const skillAccessFor = (promptTarget: ChatPromptTarget): SkillAccess =>
+  promptTarget.type === "local_run"
+    ? localRunSkillAccess(promptTarget.skillTools)
+    : CLOUD_SKILL_ACCESS;
+
+/**
  * The skills the latest user message references explicitly. Their
  * instructions ride in the prompt, so an explicit pick does not depend on the
- * model deciding to call `load-skill`.
+ * model deciding to load it.
  */
-export const buildRequestedSkillsSection = ({
-  loaded,
-  notPreloaded,
-  unavailable,
-}: RequestedSkills): string => {
+export const buildRequestedSkillsSection = (
+  { loaded, notPreloaded, unavailable }: RequestedSkills,
+  promptTarget: ChatPromptTarget = CLOUD_PROMPT_TARGET,
+): string => {
+  const access = skillAccessFor(promptTarget);
   const sections = loaded.map((skill) => {
     const resources =
       skill.resources.length > 0
-        ? `\nFiles (read with read-skill-resource):\n${skill.resources
+        ? `\n${access.files(skill.name)}\n${skill.resources
             .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
             .map(
               (resource) =>
@@ -3198,9 +3403,7 @@ export const buildRequestedSkillsSection = ({
     const truncated = skill.body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
     return [
       `Skill: ${sanitizePromptLine({ maxLength: 80, text: skill.name })}${resources}`,
-      truncated
-        ? `Instructions (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters; call load-skill for the rest):`
-        : "Instructions:",
+      truncated ? access.truncated(skill.name) : "Instructions:",
       sanitizePromptBlock({
         maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
         text: skill.body,
@@ -3208,20 +3411,19 @@ export const buildRequestedSkillsSection = ({
     ].join("\n");
   });
   if (loaded.length > 0) {
-    sections.unshift(
-      "REQUESTED SKILLS: The user's latest message references these skills explicitly. Their instructions are loaded below, as `load-skill` would return them: apply them to the request and follow POST-LOAD-SKILL and SKILL-RESOURCES. Call `load-skill` for one of them only when its instructions below say they are cut short.",
-    );
+    sections.unshift(access.intro);
   }
-  if (notPreloaded.length > 0) {
-    sections.push(
-      `The user's latest message also references these skills; call load-skill for each before answering: ${notPreloaded
-        .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
-        .join(", ")}.`,
-    );
+  const later =
+    notPreloaded.length > 0
+      ? access.notPreloaded(notPreloaded)
+      : { line: "", unreachable: [] };
+  if (later.line !== "") {
+    sections.push(later.line);
   }
-  if (unavailable.length > 0) {
+  const unusable = [...unavailable, ...later.unreachable];
+  if (unusable.length > 0) {
     sections.push(
-      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this chat (removed, disabled, not shared with the user, or needing a tool this chat does not have): ${unavailable
+      `UNAVAILABLE SKILLS: The user's latest message references skills that are not available in this ${access.surface} (removed, disabled, not shared with the user, or needing a tool this ${access.surface} does not have): ${unusable
         .map((slug) => sanitizePromptLine({ maxLength: 80, text: slug }))
         .join(
           ", ",
@@ -3235,9 +3437,16 @@ export const buildActiveSkillSection = (
   activeSkillContext: ActiveChatSkillContext | null,
   /** Required tools of the active skill that this turn does not offer. */
   missingRequiredTools: readonly string[] = [],
+  promptTarget: ChatPromptTarget = CLOUD_PROMPT_TARGET,
 ): string => {
   if (!activeSkillContext) {
     return "";
+  }
+  if (promptTarget.type === "local_run") {
+    return buildLocalRunActiveSkillSection(
+      activeSkillContext,
+      promptTarget.skillTools,
+    );
   }
 
   const version = activeSkillContext.version
@@ -3310,6 +3519,61 @@ export const buildActiveSkillSection = (
   ].join("\n");
 };
 
+/**
+ * The active skill, for a run on the member's computer: it cannot edit the
+ * skill, and it reads the skill's files through the skill's stella MCP tool
+ * when its server serves one.
+ */
+const buildLocalRunActiveSkillSection = (
+  activeSkillContext: ActiveChatSkillContext,
+  skillTools: readonly LocalRunSkillTool[],
+): string => {
+  const toolName = skillTools.find(
+    ({ name }) => name === activeSkillContext.toolName,
+  )?.toolName;
+  const version = activeSkillContext.version
+    ? `\nVersion: ${sanitizePromptLine({
+        maxLength: 80,
+        text: activeSkillContext.version,
+      })}`
+    : "";
+  const resourceLines = activeSkillContext.resources
+    .slice(0, ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT)
+    .map(
+      (resource) =>
+        `- ${sanitizePromptLine({ maxLength: 512, text: resource.path })}`,
+    );
+  const bodyTruncated =
+    activeSkillContext.body.length > ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS;
+  return [
+    "ACTIVE SKILL CONTEXT: The user is currently inside this stella skill.",
+    `Display name: ${sanitizePromptLine({
+      maxLength: 120,
+      text: activeSkillContext.displayName,
+    })}`,
+    `Skill name: ${sanitizePromptLine({
+      maxLength: 80,
+      text: activeSkillContext.toolName,
+    })}${version}`,
+    toolName === undefined
+      ? "This run has no stella MCP tool for this skill: work from the text below."
+      : `Its stella MCP tool is ${sanitizePromptLine({ maxLength: 80, text: toolName })}: call it for the full instructions, and with \`resource\` set to a path to read one of its files.`,
+    'When the user says "this skill", "the current skill", "its files", or "SKILL.md", they mean this active skill. Do not propose unrelated skill names.',
+    "This skill is read-only in this run; do not attempt to edit its files.",
+    resourceLines.length > 0
+      ? `Files:\n${resourceLines.join("\n")}`
+      : "Files: none",
+    `${
+      bodyTruncated
+        ? `Current SKILL.md body prefix (first ${String(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)} characters):`
+        : "Current SKILL.md body:"
+    }\n${sanitizePromptBlock({
+      maxLength: ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+      text: activeSkillContext.body,
+    })}`,
+  ].join("\n");
+};
+
 export const buildActiveFileSection = ({
   activeFile,
   entityExists,
@@ -3368,13 +3632,20 @@ const buildPromptParts = ({
   // and stays in the cache-stable prefix: it is constant for a thread while
   // the skill is active, and a different prefix must derive a different
   // prompt-cache key.
-  // A coding agent on the member's computer gets neither the code-mode
-  // section nor the skill catalog: it has no code mode, and the chat's skills
-  // reach it as its own skills.
+  // A coding agent on the member's computer has no code mode. Its skills are
+  // tools on its stella MCP server, so its catalog names those tools (built
+  // from what that server serves it, not from this chat's catalog).
+  const localRunSkillCatalog =
+    promptTarget.type === "local_run"
+      ? buildLocalRunSkillCatalog(promptTarget.skillTools)
+      : null;
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections(
       promptTarget.type === "local_run"
-        ? buildLocalRunCoreRuleSections(promptTarget.webSearch)
+        ? [
+            ...buildLocalRunCoreRuleSections(promptTarget.webSearch),
+            localRunSkillCatalog?.builtIn ?? "",
+          ]
         : [
             ...buildCoreRuleSections({
               skillCatalogStatus:
@@ -3414,13 +3685,11 @@ const buildPromptParts = ({
       buildOrganizationAIInstructionsPrompt(organizationAIInstructions ?? ""),
     ),
     // Team skills and the user's own (`listAvailableChatSkillMetadata`).
-    ...(promptTarget.type === "local_run"
-      ? []
-      : [
-          chatUserPromptSection(
-            buildSkillCatalogSection(installedSkillMetadata),
-          ),
-        ]),
+    chatUserPromptSection(
+      localRunSkillCatalog === null
+        ? buildSkillCatalogSection(installedSkillMetadata)
+        : localRunSkillCatalog.installed,
+    ),
     ...requestContextSections.map(chatVolatilePromptSection),
   ];
   const userContextBlock = buildUserContextBlock(userContext);

@@ -1811,6 +1811,16 @@
   },
   {
     "schema": "public",
+    "table": "case_law_held_decision_attachments",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
     "table": "case_law_index_jobs",
     "policy": "case_law_global_access",
     "command": "SELECT",

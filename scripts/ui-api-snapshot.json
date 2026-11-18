@@ -1675,6 +1675,19 @@
       "PaginationNext",
       "PaginationPrevious"
     ],
+    "./pane-width": [
+      "INSPECTOR_CONTENT_MIN_WIDTH",
+      "INSPECTOR_EDITOR_MIN_WIDTH",
+      "INSPECTOR_PANE_DEFAULT_WIDTH",
+      "INSPECTOR_PANE_MAX_WIDTH",
+      "INSPECTOR_PANE_MIN_WIDTH",
+      "INSPECTOR_RAIL_WIDTH",
+      "clampInspectorPaneWidth",
+      "resolveInspectorDockWidth",
+      "resolveInspectorPaneMaxWidth",
+      "resolveInspectorPaneWidth",
+      "shouldForceSidebarCollapsed"
+    ],
     "./panel-inset": [
       "DOCUMENT_PANEL_BOTTOM_INSET",
       "DOCUMENT_PANEL_SAFE_BOTTOM",

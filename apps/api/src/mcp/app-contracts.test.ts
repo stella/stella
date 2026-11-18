@@ -78,6 +78,7 @@ const PROVISION_HISTORY_FIXTURE = v.parse(READ_PROVISION_HISTORY_PROJECTION, {
       status: "found",
       nextTextCursor: null,
       text: "The provision wording.",
+      governingText: [],
       truncated: false,
     },
     {
@@ -109,6 +110,7 @@ const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
       status: "found",
       nextTextCursor: null,
       text: "The full provision wording.",
+      governingText: [],
       truncated: false,
       versionValidFrom: "2020-01-01",
       versionValidTo: "2020-12-31",

@@ -113,6 +113,9 @@ export const ENUM_COLUMN_ROLES = {
   case_law_decisions: {
     case_number_type: ATTRIBUTE,
   },
+  case_law_held_decision_attachments: {
+    match_basis: ATTRIBUTE,
+  },
   case_law_polarity_rules: {
     kind: ATTRIBUTE,
   },
@@ -718,6 +721,7 @@ export const ENUM_COLUMN_ROLES = {
     result: LIFECYCLE,
   },
   user: {
+    locale: ATTRIBUTE,
     reader_answer_language: ATTRIBUTE,
   },
   user_professional_use_acceptances: {

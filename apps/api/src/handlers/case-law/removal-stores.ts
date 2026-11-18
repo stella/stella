@@ -159,6 +159,10 @@ export const CASE_LAW_REMOVAL_STORES = {
     type: "removed-by-owner",
     owner: "erasure supplement cleanup",
   },
+  case_law_held_decision_attachments: {
+    type: "tombstone",
+    owner: "erasure held-decision attachment park",
+  },
   case_law_search_documents: {
     type: "removed-by-owner",
     owner: "removeDecisionFromIndex",

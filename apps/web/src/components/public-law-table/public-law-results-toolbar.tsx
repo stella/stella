@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AlignJustifyIcon, WrapTextIcon, XIcon } from "@stll/ui/icons";
@@ -15,11 +16,13 @@ import {
 } from "@stll/ui/select";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
+import type {
+  PublicLawTableLayout,
+  PublicLawTableLayoutUpdate,
+} from "@/components/public-law-table/public-law-table-layout.logic";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import type { TranslationKey } from "@/i18n/types";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
   /**
@@ -46,7 +49,7 @@ type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
   /** Find-in-table: the shared bar, in the place a matter's toolbar keeps it. */
   find: ReactNode;
   layout: TLayout;
-  onLayoutChange: (layout: TLayout) => void;
+  onLayoutChange: (update: PublicLawTableLayoutUpdate<TLayout>) => void;
   /** The order control, or nothing where no order is the reader's to choose. */
   sort?: ReactNode | undefined;
   /** What the list is: a count, or what the query matched. */
@@ -102,7 +105,9 @@ export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
         )}
         <ToolbarDivider />
         <SegmentedIconToggle
-          onChange={(contentMode) => onLayoutChange({ ...layout, contentMode })}
+          onChange={(contentMode) =>
+            onLayoutChange((latest) => ({ ...latest, contentMode }))
+          }
           options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
             value: option.mode,
             icon: option.icon,
@@ -119,7 +124,9 @@ export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
         <ColumnToggle
           groups={columnGroups}
           hidden={layout.hidden}
-          onChange={(hidden) => onLayoutChange({ ...layout, hidden })}
+          onChange={(hidden) =>
+            onLayoutChange((latest) => ({ ...latest, hidden }))
+          }
         />
       </div>
       {actions !== undefined && (

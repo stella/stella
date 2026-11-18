@@ -255,6 +255,49 @@ export const fetchElevenLabsTranscription = async (
   return await fetchWithTimeout(target, { ...init, redirect: "error" });
 };
 
+const ELEVENLABS_TRANSCRIPTS_PATH = "/v1/speech-to-text/transcripts/";
+// The ids ElevenLabs issues; anything else could escape the path.
+const ELEVENLABS_TRANSCRIPT_ID = /^[A-Za-z0-9_-]{1,128}$/u;
+
+/** Where ElevenLabs deletes a transcript it kept, or `null` for an id it
+ *  would not issue. */
+export const elevenLabsTranscriptUrl = (
+  environment: ElevenLabsEnvironment,
+  transcriptionId: string,
+) =>
+  ELEVENLABS_TRANSCRIPT_ID.test(transcriptionId)
+    ? `${ELEVENLABS_ORIGINS[environment]}${ELEVENLABS_TRANSCRIPTS_PATH}${transcriptionId}`
+    : null;
+
+/** A kept transcript is deleted only at the transcript URL of a known
+ *  ElevenLabs environment, and redirects are refused. */
+export const deleteElevenLabsTranscript = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ELEVENLABS_TRANSCRIPTION_ORIGINS,
+    },
+    pathPrefixes: [ELEVENLABS_TRANSCRIPTS_PATH],
+  });
+  if (
+    target?.search !== "" ||
+    !ELEVENLABS_TRANSCRIPT_ID.test(
+      target.pathname.slice(ELEVENLABS_TRANSCRIPTS_PATH.length),
+    )
+  ) {
+    return panic("Transcript deletion target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, {
+    ...init,
+    method: "DELETE",
+    redirect: "error",
+  });
+};
+
 export const isManagedProviderAvailable = (
   provider: ManagedProvider,
   dataClass: AIDataClass,

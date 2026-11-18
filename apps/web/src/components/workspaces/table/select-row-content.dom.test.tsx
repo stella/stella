@@ -8,6 +8,8 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { TABLE_CONTENT_MODES } from "@stll/api-contract/public-law-table";
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -17,8 +19,6 @@ import type {
   DecisionRowData,
   TableTreeNode,
 } from "@/components/workspaces/table/types";
-import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 

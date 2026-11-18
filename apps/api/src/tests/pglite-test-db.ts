@@ -512,6 +512,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_source_identities",
       "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
+      "case_law_held_decision_attachments",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",
