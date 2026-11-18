@@ -131,7 +131,7 @@ const UserMessage = ({
     return <View className="items-end gap-1.5">{children}</View>;
   }
   return (
-    <Pressable
+    <Button
       accessibilityActions={[{ name: "longpress", label: t("edit.action") }]}
       className="items-end gap-1.5"
       onAccessibilityAction={({ nativeEvent }) => {
@@ -140,9 +140,10 @@ const UserMessage = ({
         }
       }}
       onLongPress={onLongPress}
+      variant="plain"
     >
       {children}
-    </Pressable>
+    </Button>
   );
 };
 
