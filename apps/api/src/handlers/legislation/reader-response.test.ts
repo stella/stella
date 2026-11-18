@@ -164,10 +164,7 @@ test("provision history pages keep each preview wording inside its byte budget",
         windowDisposition: "effective",
         windowDispositionBasis: null,
         text,
-        governingText: Array.from(
-          { length: LIMITS.legislationGoverningTextMax },
-          () => ({ anchor: text, position: "closing" as const, text }),
-        ),
+        governingText: [{ anchor: text, position: "closing" as const, text }],
       } as const;
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
       const item = projectProvisionHistoryItem({

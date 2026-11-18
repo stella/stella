@@ -7,6 +7,7 @@ import {
   provisionPreviewBlocks,
 } from "@stll/legal-ast/provision-preview";
 import type { GoverningWordingPosition } from "@stll/legal-ast/provision-preview";
+import { unfiledAnchor } from "@stll/legal-ast/statute-anchor-scheme";
 import type { StatuteBlocks } from "@stll/legal-ast/statute-anchor-scheme";
 
 type SubdivisionTarget = { provisionAnchorId: string; citedAnchorId: string };
@@ -94,8 +95,8 @@ const joinedText = (blocks: readonly Block[]): string =>
  * (`governingWording`), so a read of one letter never silently drops the
  * sentence its parent closes the list with.
  *
- * Every block is readable by its own anchor: one that continues no heading's
- * path is read under the heading it is printed in.
+ * Every block is readable by its own anchor: unfiled wording, whose anchor
+ * continues no heading's path, is read under the heading it is printed in.
  *
  * Returns null when the consolidation carries no such anchor, which is how an
  * unknown anchor is told apart from a provision that exists and is empty. An
@@ -121,7 +122,9 @@ export const readProvision = (
   }
   const provisionAnchorId =
     enclosingHeadingAnchor(statute, cited.anchorId) ??
-    headingHolding(statute, cited);
+    (unfiledAnchor(statute.scheme, cited.anchorId)
+      ? headingHolding(statute, cited)
+      : null);
   if (provisionAnchorId === null) {
     return null;
   }
