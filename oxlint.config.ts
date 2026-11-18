@@ -6553,6 +6553,16 @@ const config = defineConfig({
       },
     },
     {
+      // Under oxlint 1.93 this rule's type queries raise TS2590 ("union type
+      // too complex to represent") when checking
+      // toOutputContractMap(DEFAULT_MCP_TOOL_SETS) against the generic
+      // McpToolSet. Off for this file only; revisit when upstream fixes it.
+      files: ["apps/api/src/mcp/static-tool-definitions.ts"],
+      rules: {
+        "typescript/no-unsafe-enum-assignment": "off",
+      },
+    },
+    {
       // This sink contract deliberately injects unsafe records and verifies redaction.
       files: ["apps/api/src/lib/errors/query-error-output.test.ts"],
       rules: {
