@@ -2095,10 +2095,9 @@ const prepareValidatedIncomingMessage = async ({
           activeDraftContext === null
             ? []
             : activeDraftContext.originDataWorkspaceIds,
-        initialContextMatterIds:
-          body.contextMatterIds === undefined
-            ? undefined
-            : requestedContextMatterIds,
+        // The pins as sent (validated with `requestedContextMatterIds`);
+        // undefined when the send names none.
+        initialContextMatterIds: body.contextMatterIds,
         initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,

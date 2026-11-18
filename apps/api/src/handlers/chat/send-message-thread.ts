@@ -18,9 +18,11 @@ import {
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import {
   resolveSendThreadFields,
+  resolveSendThreadSkill,
   type SendThreadFields,
   sendThreadFieldsAuditChanges,
   sendThreadFieldsChanged,
+  type SendThreadFieldsRequest,
 } from "@/api/handlers/chat/send-thread-fields";
 import type {
   ChatMessage,
@@ -147,14 +149,15 @@ export const readThreadValidationState = async ({
       }),
     );
 
-    // Validation knows only the send's skill. The other fields the send
-    // decides never change which skill it runs with.
-    const sendRequest = { activeSkill: initialActiveSkill };
+    // Validation knows only the send's skill, which the rest of what the send
+    // carries never changes.
     if (read === null) {
       return Result.ok({
         activeSkill:
-          resolveSendThreadFields({ request: sendRequest, stored: null })
-            .activeSkill ?? undefined,
+          resolveSendThreadSkill({
+            activeSkill: initialActiveSkill,
+            stored: null,
+          }) ?? undefined,
         persistedMessage: null,
         runTarget: CHAT_CLOUD_RUN_TARGET,
         threadNames: EMPTY_CHAT_THREAD_NAMES_READ,
@@ -174,8 +177,8 @@ export const readThreadValidationState = async ({
     }
 
     const persistedMessage = thread.messages.at(0);
-    const { activeSkill } = resolveSendThreadFields({
-      request: sendRequest,
+    const activeSkill = resolveSendThreadSkill({
+      activeSkill: initialActiveSkill,
       stored: { fields: storedSendThreadFieldsOf(thread), hasMessages },
     });
     return Result.ok({
@@ -316,7 +319,7 @@ const loadThreadAttempt = async ({
     if (workspaceId !== null && !sendDataWorkspaceIds.includes(workspaceId)) {
       sendDataWorkspaceIds.unshift(workspaceId);
     }
-    const sendRequest = {
+    const sendRequest: SendThreadFieldsRequest = {
       activeSkill: initialActiveSkill,
       contextMatterIds: initialContextMatterIds,
       dataWorkspaceIds: sendDataWorkspaceIds,

@@ -4,9 +4,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   resolveSendThreadFields,
+  resolveSendThreadSkill,
   type SendThreadFields,
   sendThreadFieldsAuditChanges,
   sendThreadFieldsChanged,
+  type SendThreadFieldsRequest,
 } from "./send-thread-fields";
 
 const matterA = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000a");
@@ -29,11 +31,19 @@ const placeholder: SendThreadFields = {
   subjectDecisionId: null,
 };
 
-const fullSend = {
+const fullSend: SendThreadFieldsRequest = {
   activeSkill: reviewSkill,
   contextMatterIds: [matterB],
   dataWorkspaceIds: [matterA, matterC],
   subjectDecisionId: decisionA,
+};
+
+/** A send that carries none of the fields its first message decides. */
+const emptySend: SendThreadFieldsRequest = {
+  activeSkill: undefined,
+  contextMatterIds: undefined,
+  dataWorkspaceIds: [],
+  subjectDecisionId: null,
 };
 
 describe("the fields a send runs its thread with", () => {
@@ -48,7 +58,7 @@ describe("the fields a send runs its thread with", () => {
     });
     expect(
       resolveSendThreadFields({
-        request: { activeSkill: undefined },
+        request: emptySend,
         stored: null,
       }),
     ).toEqual({
@@ -80,12 +90,13 @@ describe("the fields a send runs its thread with", () => {
       hasMessages: false,
     };
 
-    expect(
-      resolveSendThreadFields({ request: { activeSkill: undefined }, stored }),
-    ).toEqual(stored.fields);
+    expect(resolveSendThreadFields({ request: emptySend, stored })).toEqual(
+      stored.fields,
+    );
     expect(
       resolveSendThreadFields({
         request: {
+          ...emptySend,
           activeSkill: reviewSkill,
           contextMatterIds: [],
           subjectDecisionId: decisionA,
@@ -101,13 +112,43 @@ describe("the fields a send runs its thread with", () => {
     });
   });
 
+  test("validation reads the same skill the thread is loaded with", () => {
+    const threads = [
+      null,
+      { fields: placeholder, hasMessages: false },
+      { fields: placeholder, hasMessages: true },
+      {
+        fields: { ...placeholder, activeSkill: builderSkill },
+        hasMessages: false,
+      },
+      {
+        fields: { ...placeholder, activeSkill: builderSkill },
+        hasMessages: true,
+      },
+    ];
+    for (const request of [fullSend, emptySend]) {
+      expect(
+        threads.map((stored) =>
+          resolveSendThreadSkill({
+            activeSkill: request.activeSkill,
+            stored,
+          }),
+        ),
+      ).toEqual(
+        threads.map(
+          (stored) => resolveSendThreadFields({ request, stored }).activeSkill,
+        ),
+      );
+    }
+  });
+
   test("adopting an empty row only widens its data scope", () => {
     const stored = {
       fields: { ...placeholder, dataWorkspaceIds: [matterA, matterB] },
       hasMessages: false,
     };
     const adopted = resolveSendThreadFields({
-      request: { activeSkill: undefined, dataWorkspaceIds: [matterC, matterA] },
+      request: { ...emptySend, dataWorkspaceIds: [matterC, matterA] },
       stored,
     });
 
@@ -147,7 +188,7 @@ describe("the fields a send runs its thread with", () => {
   test("an unchanged adoption needs no write and names no change", () => {
     const stored = { fields: placeholder, hasMessages: false };
     const adopted = resolveSendThreadFields({
-      request: { activeSkill: undefined, dataWorkspaceIds: [matterA] },
+      request: { ...emptySend, dataWorkspaceIds: [matterA] },
       stored,
     });
 

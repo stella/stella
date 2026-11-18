@@ -22,15 +22,17 @@ export type SendThreadFields = {
 
 /** What a send carries for the fields its thread's first message decides. */
 export type SendThreadFieldsRequest = {
-  activeSkill: ChatSendRequest["activeSkill"];
-  /** Omitted when the send names no pins: an empty thread keeps its own. */
-  contextMatterIds?: readonly SafeId<"workspace">[];
+  /** Undefined when the send names no skill. */
+  activeSkill: NonNullable<ChatSendRequest["activeSkill"]> | undefined;
+  /** Undefined when the send names no pins: an empty thread keeps its own. */
+  contextMatterIds: readonly SafeId<"workspace">[] | undefined;
   /**
    * Server-derived workspaces whose content the send's context embeds (an
    * origin draft's scope, the chat's own matter). Only ever widens the scope.
    */
-  dataWorkspaceIds?: readonly SafeId<"workspace">[];
-  subjectDecisionId?: SafeId<"caseLawDecision"> | null;
+  dataWorkspaceIds: readonly SafeId<"workspace">[];
+  /** Null when the send is about no decision. */
+  subjectDecisionId: SafeId<"caseLawDecision"> | null;
 };
 
 /** A stored thread row, as far as the send's thread fields go. */
@@ -46,6 +48,22 @@ const NO_STORED_FIELDS: SendThreadFields = {
   dataWorkspaceIds: [],
   subjectDecisionId: null,
 };
+
+/**
+ * The skill a send runs its thread with, by the rule of
+ * `resolveSendThreadFields`. Validation knows the send's skill before the
+ * rest of what it carries, so it reads the skill here.
+ */
+export const resolveSendThreadSkill = ({
+  activeSkill,
+  stored,
+}: {
+  activeSkill: SendThreadFieldsRequest["activeSkill"];
+  stored: StoredSendThread | null;
+}): SendThreadFields["activeSkill"] =>
+  stored?.hasMessages === true
+    ? stored.fields.activeSkill
+    : (activeSkill ?? stored?.fields.activeSkill ?? null);
 
 /**
  * The fields a send runs its thread with, and the values a row it creates or
@@ -66,13 +84,16 @@ export const resolveSendThreadFields = ({
   }
   const base = stored?.fields ?? NO_STORED_FIELDS;
   return {
-    activeSkill: request.activeSkill ?? base.activeSkill,
+    activeSkill: resolveSendThreadSkill({
+      activeSkill: request.activeSkill,
+      stored,
+    }),
     contextMatterIds:
       request.contextMatterIds === undefined
         ? base.contextMatterIds
         : [...request.contextMatterIds],
     dataWorkspaceIds: appendMissingWorkspaceIds({
-      additions: request.dataWorkspaceIds ?? [],
+      additions: request.dataWorkspaceIds,
       base: base.dataWorkspaceIds,
     }),
     subjectDecisionId: request.subjectDecisionId ?? base.subjectDecisionId,
