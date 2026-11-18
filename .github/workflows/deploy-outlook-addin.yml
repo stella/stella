@@ -39,7 +39,7 @@ jobs:
       affected: ${{ steps.scope.outputs.affected }}
     steps:
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           # The pushed range can span several commits; blobless keeps the
           # history cheap and fetches only the files the check reads.
@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -108,7 +108,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -224,13 +224,13 @@ jobs:
       ARTIFACT_DIGEST: ${{ needs.build.outputs.staging-artifact-digest }}
     steps: &deploy-steps
       - name: Checkout
-        uses: stella/.github/actions/partial-clone-checkout@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"

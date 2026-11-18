@@ -38,7 +38,7 @@ jobs:
       # Pull requests and merge groups audit their changed resolutions in
       # ci.yml; this workflow audits the whole lockfile on main.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -146,7 +146,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/actions/setup-bun-cached@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           bun-version-file: "package.json"
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -179,7 +179,7 @@ jobs:
       - name: Open one remediation
         id: signed-commit
         if: steps.remediation.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@0cc2def60afb3e0fac0df9f541baf926f77889fa
+        uses: stella/.github/.github/actions/signed-commit@41fbea3b521bfc57b791003918de97f153d790a7
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
