@@ -6322,6 +6322,7 @@
       "withdrawn": "Väljaandja seda enam ei avalda"
     },
     "inForceSince": "Kehtib alates {date}",
+    "inForceSinceAtLeast": "Kehtib hiljemalt alates {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Juhtiv lahend",
     "leadingDecisionsExplanation": "Iga lahendi esimene viide, järjestatud viite kaalukuse järgi: kaalutud saabuvad viited, arvestades kohtu taset, viite polaarsust ja vanust.",

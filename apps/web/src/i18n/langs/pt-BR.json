@@ -6322,6 +6322,7 @@
       "withdrawn": "O editor não o publica mais"
     },
     "inForceSince": "Em vigor desde {date}",
+    "inForceSinceAtLeast": "Em vigor pelo menos desde {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Decisão de referência",
     "leadingDecisionsExplanation": "A primeira menção em cada decisão, classificada pela autoridade da citação: citações recebidas ponderadas, ajustadas pelo nível do tribunal, pela polaridade da citação e pela idade.",

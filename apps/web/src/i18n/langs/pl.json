@@ -6322,6 +6322,7 @@
       "withdrawn": "Wydawca już go nie publikuje"
     },
     "inForceSince": "Obowiązuje od {date}",
+    "inForceSinceAtLeast": "Obowiązuje co najmniej od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Orzeczenie wiodące",
     "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",

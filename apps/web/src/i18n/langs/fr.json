@@ -6322,6 +6322,7 @@
       "withdrawn": "N'est plus publié par l'éditeur"
     },
     "inForceSince": "En vigueur depuis le {date}",
+    "inForceSinceAtLeast": "En vigueur au moins depuis le {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Décision de principe",
     "leadingDecisionsExplanation": "La première mention dans chaque décision, classée selon l’autorité de la citation : citations entrantes pondérées, ajustées selon le rang de la juridiction, la polarité de la citation et son ancienneté.",

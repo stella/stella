@@ -106,21 +106,29 @@ export const ProvisionHistory = ({
     historyAnchor.type === "resolved" ? historyAnchor.anchor : anchorId;
   // A wording that cannot apply was never in force from its start date: it
   // is named for what it is, beside the dates its publisher stated.
-  const versionLabel = (version: ProvisionHistoryItem): string => {
+  // A wording whose start lies on a page not read yet is dated by the oldest
+  // version read so far, and says it may reach further back.
+  const versionLabel = (
+    version: ProvisionHistoryItem,
+    startKnown = true,
+  ): string => {
     const ineligibleLabel = ineligibleExpressionLabelKey(version);
-    return ineligibleLabel === null
-      ? t("statutes.inForceSince", {
-          date: formatValidityDate(version.versionValidFrom, format) ?? EM_DASH,
-        })
-      : t("statutes.ineligibleVersion", {
-          label: t(ineligibleLabel),
-          range: formatValidityRange({
-            format,
-            openEnded: t("statutes.openEnded"),
-            validFrom: version.versionValidFrom,
-            validTo: version.versionValidTo,
-          }),
-        });
+    const date =
+      formatValidityDate(version.versionValidFrom, format) ?? EM_DASH;
+    if (ineligibleLabel === null) {
+      return startKnown
+        ? t("statutes.inForceSince", { date })
+        : t("statutes.inForceSinceAtLeast", { date });
+    }
+    return t("statutes.ineligibleVersion", {
+      label: t(ineligibleLabel),
+      range: formatValidityRange({
+        format,
+        openEnded: t("statutes.openEnded"),
+        validFrom: version.versionValidFrom,
+        validTo: version.versionValidTo,
+      }),
+    });
   };
 
   return (
@@ -145,7 +153,7 @@ export const ProvisionHistory = ({
           if (version === undefined) {
             return null;
           }
-          const label = versionLabel(version);
+          const label = versionLabel(version, group.start !== null);
           const onScreen = group.members.some(
             (member) => member.documentId === documentId,
           );

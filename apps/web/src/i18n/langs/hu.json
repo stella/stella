@@ -6322,6 +6322,7 @@
       "withdrawn": "A kiadó már nem közli"
     },
     "inForceSince": "Hatályos {date} óta",
+    "inForceSinceAtLeast": "Hatályos legkésőbb {date} óta",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Irányadó határozat",
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",

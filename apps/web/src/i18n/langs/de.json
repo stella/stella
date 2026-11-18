@@ -6322,6 +6322,7 @@
       "withdrawn": "Vom Herausgeber nicht mehr geführt"
     },
     "inForceSince": "In Kraft seit {date}",
+    "inForceSinceAtLeast": "In Kraft spätestens seit {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Leitentscheidung",
     "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",

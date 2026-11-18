@@ -6322,6 +6322,7 @@
       "withdrawn": "لم يعد الناشر يدرجه"
     },
     "inForceSince": "نافذ منذ {date}",
+    "inForceSinceAtLeast": "نافذ منذ {date} على الأقل",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "قرار رائد",
     "leadingDecisionsExplanation": "أول إشارة في كل قرار، مرتبة حسب حجية الاستشهاد: الاستشهادات الواردة الموزونة، مع مراعاة مرتبة المحكمة ودلالة الاستشهاد وحداثته.",

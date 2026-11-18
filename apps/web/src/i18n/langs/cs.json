@@ -6322,6 +6322,7 @@
       "withdrawn": "Vydavatel již neuvádí"
     },
     "inForceSince": "Účinné od {date}",
+    "inForceSinceAtLeast": "Účinné nejpozději od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Klíčové rozhodnutí",
     "leadingDecisionsExplanation": "První zmínka v každém rozhodnutí, seřazená podle váhy citace: vážené příchozí citace zohledňující úroveň soudu, povahu citace a její stáří.",

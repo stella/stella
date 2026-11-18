@@ -5265,6 +5265,7 @@
   "statutes.expression.promulgated": "Text as promulgated",
   "statutes.expression.withdrawn": "No longer listed by the publisher",
   "statutes.inForceSince": "In force since {date}",
+  "statutes.inForceSinceAtLeast": "In force since {date} or earlier",
   "statutes.ineligibleVersion": "{range} ({label})",
   "statutes.leadingDecision": "Leading decision",
   "statutes.leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",

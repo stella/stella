@@ -6322,6 +6322,7 @@
       "withdrawn": "No longer listed by the publisher"
     },
     "inForceSince": "In force since {date}",
+    "inForceSinceAtLeast": "In force since {date} or earlier",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Leading decision",
     "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",

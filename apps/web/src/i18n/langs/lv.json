@@ -6322,6 +6322,7 @@
       "withdrawn": "Izdevējs to vairs nepublicē"
     },
     "inForceSince": "Spēkā no {date}",
+    "inForceSinceAtLeast": "Spēkā vēlākais no {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Vadošais nolēmums",
     "leadingDecisionsExplanation": "Pirmā pieminēšana katrā nolēmumā, sarindota pēc citēšanas autoritātes: svērti ienākošie citējumi, ņemot vērā tiesas līmeni, citējuma polaritāti un vecumu.",

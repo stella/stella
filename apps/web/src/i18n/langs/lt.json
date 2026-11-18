@@ -6322,6 +6322,7 @@
       "withdrawn": "Leidėjas jo nebeskelbia"
     },
     "inForceSince": "Galioja nuo {date}",
+    "inForceSinceAtLeast": "Galioja ne vėliau kaip nuo {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Pagrindinis sprendimas",
     "leadingDecisionsExplanation": "Pirmasis paminėjimas kiekviename sprendime, surikiuotas pagal citavimo autoritetą: įvertintos gaunamos citatos, atsižvelgiant į teismo rangą, citatos pobūdį ir senumą.",
