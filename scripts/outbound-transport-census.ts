@@ -126,6 +126,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "apps/api/scripts/case-law-ranked-arm-latency.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Sends read-only ranked searches to the corpus index endpoint the operator names.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "apps/api/scripts/mcp-surface-token-calibration.ts",
     class: "vendor-sdk",
     reason: "Requests token counts from the configured Anthropic endpoint.",
