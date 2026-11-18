@@ -5,7 +5,6 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  isAllowedFirstPartySkillPackageSkip,
   isSkillResourceFolder,
   SKILL_FILE_NAME,
   SKILL_RESOURCE_EXTENSIONS,
@@ -14,6 +13,10 @@ import {
 import type { SkillPackageFile } from "../src/format";
 
 const packageRoot = path.join(import.meta.dirname, "..");
+// Shipped skills keep the conventional layout, stricter than what an import
+// accepts: lowercase paths in assets/, references/ or scripts/.
+const FIRST_PARTY_RESOURCE_PATH_PATTERN =
+  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
 
 type ResourceEntry = {
   importName: string;
@@ -130,12 +133,12 @@ function readPackageEntry(
       `Invalid first-party skill package ${manifest.rootName}/${id}: ${JSON.stringify(validated.error)}`,
     );
   }
-  const disallowedSkip = validated.value.skipped.find(
-    (skipped) => !isAllowedFirstPartySkillPackageSkip(skipped),
-  );
-  if (disallowedSkip !== undefined) {
+  // A shipped skill keeps every file it carries; imports may leave binary
+  // files out, a first-party package may not hold one.
+  const skippedFile = validated.value.skipped.at(0);
+  if (skippedFile !== undefined) {
     panic(
-      `Invalid first-party skill package ${manifest.rootName}/${id}: skipped ${disallowedSkip.path} (${disallowedSkip.reason})`,
+      `Invalid first-party skill package ${manifest.rootName}/${id}: skipped ${skippedFile.path} (${skippedFile.reason})`,
     );
   }
 
@@ -143,8 +146,12 @@ function readPackageEntry(
     id,
     importName: `${manifest.entryPrefix}${index}`,
     resources: validated.value.resources.map((resource, resourceIndex) => {
+      // Shipped skills keep the conventional layout: lowercase files in
+      // assets/, references/ or scripts/, with a type the bundler imports.
       if (!isSupportedResourcePath(resource.path)) {
-        panic(`Validator returned an unsupported resource: ${resource.path}`);
+        panic(
+          `First-party skill resource must be a lowercase file in a resource folder: ${resource.path}`,
+        );
       }
       return {
         importName: `${manifest.entryPrefix}${index}Resource${resourceIndex}`,
@@ -190,6 +197,7 @@ function collectPackageFiles(
 function isSupportedResourcePath(resourcePath: string): boolean {
   const folder = resourcePath.split("/").at(0) ?? "";
   return (
+    FIRST_PARTY_RESOURCE_PATH_PATTERN.test(resourcePath) &&
     isSkillResourceFolder(folder) &&
     SKILL_RESOURCE_EXTENSIONS.some((extension) =>
       resourcePath.endsWith(extension),
