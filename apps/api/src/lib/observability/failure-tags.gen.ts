@@ -414,7 +414,6 @@ export const FAILURE_TAGS = [
   "ReadCommittedUnitError",
   "ReaderAnswerCorpusError",
   "ReaderProvisionSpanMismatchError",
-  "ReaderTextScaleStorageError",
   "ReconciliationPayloadSerializationError",
   "RedirectChainError",
   "RedisClientClosedError",

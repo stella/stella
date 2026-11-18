@@ -803,7 +803,9 @@ export function PublicCaseLawIndex({
             filters.search === undefined ? undefined : (
               <DecisionExcerptControl
                 excerpt={layout.excerpt}
-                onExcerptChange={(excerpt) => setLayout({ ...layout, excerpt })}
+                onExcerptChange={(excerpt) =>
+                  setLayout((latest) => ({ ...latest, excerpt }))
+                }
               />
             )
           }

@@ -64,7 +64,7 @@ export const StatuteInspectorView = ({
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale("statute");
+  const textScale = useReaderTextScale();
   const {
     data: statute,
     isError,

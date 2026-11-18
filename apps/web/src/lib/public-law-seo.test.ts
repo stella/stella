@@ -407,7 +407,7 @@ describe("public law metadata language", () => {
     const initialLocale = useI18nStore.getState().loadedLang;
     try {
       for (const locale of supportedLanguages) {
-        await useI18nStore.getState().setLang(locale);
+        await useI18nStore.getState().loadMessages(locale);
         const interfaceTranslator = getTranslator();
         for (const language of ["it", "fi", "nl", "it-IT"]) {
           const decision = await createCaseLawDecisionJsonLd({
@@ -430,7 +430,7 @@ describe("public law metadata language", () => {
         }
       }
     } finally {
-      await useI18nStore.getState().setLang(initialLocale);
+      await useI18nStore.getState().loadMessages(initialLocale);
     }
   });
 

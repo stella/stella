@@ -21,10 +21,9 @@ import type {
   TemplateDensity,
   TemplateTagFilter,
 } from "@/features/knowledge/views/templates/templates-seam";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { deviceStorage } from "@/lib/account/browser-storage";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { optionalArray } from "@/lib/arrays";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
@@ -62,21 +61,6 @@ type TemplateListViewProps = {
 // carries its own MIME type, not files) — should light up the list.
 const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
-const DENSITY_STORAGE_KEY = "stella.templates.density";
-
-/** Compact by default, for fast scanning. */
-const DEFAULT_TEMPLATE_DENSITY: TemplateDensity = "compact";
-
-/** Persisted list density. */
-const readTemplateDensity = (): TemplateDensity =>
-  deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
-    ? "comfortable"
-    : DEFAULT_TEMPLATE_DENSITY;
-
-const writeTemplateDensity = (density: TemplateDensity): void => {
-  deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
-};
-
 const TEMPLATE_TOOLBAR_CLASS = cn(
   "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 md:py-0",
   TOOLBAR_ROW_MIN_HEIGHT,
@@ -99,13 +83,15 @@ const TemplateListView = ({
   const lang = useI18nStore((s) => s.lang);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [density, setDensity] = useState<TemplateDensity>(readTemplateDensity);
+  const {
+    prefs: { templateDensity: density },
+    setPrefs,
+  } = usePresentationPrefs();
   const { templates, selectedCategoryId } = source;
   const { dropFile } = actions;
 
   const changeDensity = (next: TemplateDensity) => {
-    setDensity(next);
-    writeTemplateDensity(next);
+    setPrefs(() => ({ templateDensity: next }));
   };
 
   const handleDragOver = (e: DragEvent) => {
@@ -284,16 +270,16 @@ type TemplateListLayout =
 
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
-// shape while templates load; only the values fade in. The server renders it
-// while the session is unknown, so the stored density applies only after
-// hydration: the server and the hydrating browser both draw the default.
+// shape while templates load; only the values fade in. The density comes from
+// the presentation cookie, so the server and the hydrating browser agree.
 export const TemplateListSkeleton = ({
   layout,
 }: {
   layout: TemplateListLayout;
 }) => {
-  const hydrated = useHydrated();
-  const density = hydrated ? readTemplateDensity() : DEFAULT_TEMPLATE_DENSITY;
+  const {
+    prefs: { templateDensity: density },
+  } = usePresentationPrefs();
   const hasLibraryChrome = layout === TEMPLATE_LIST_LAYOUT.library;
   const t = useTranslations();
   return (

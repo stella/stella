@@ -276,6 +276,7 @@ import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
+import { validateUserLocale } from "@/api/lib/auth/user-locale";
 import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -2423,6 +2424,7 @@ export const createAuth = (
                 path: ctx?.path,
               });
               yield* validateTimezoneId(user["timezoneId"]);
+              yield* validateUserLocale(user["locale"]);
               // Email-OTP and some social providers leave `name` blank.
               // The `notNull` schema constraint allows empty strings, which
               // surfaces as a blank "Author" everywhere the user is shown.
@@ -2456,9 +2458,9 @@ export const createAuth = (
         },
         update: {
           before: async (user, ctx) => {
-            const data = validateTimezoneId(user["timezoneId"]).andThen(() =>
-              normalizeUserPreferences(ensureDisplayName(user)),
-            );
+            const data = validateTimezoneId(user["timezoneId"])
+              .andThen(() => validateUserLocale(user["locale"]))
+              .andThen(() => normalizeUserPreferences(ensureDisplayName(user)));
             if (Result.isError(data)) {
               throw data.error;
             }

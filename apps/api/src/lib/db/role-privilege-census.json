@@ -1875,6 +1875,8 @@
         "column:public.user.id:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.user.image:SELECT:EFFECTIVE",
         "column:public.user.image:SELECT:GRANTOR:census_admin:GRANTABLE:false",
+        "column:public.user.locale:SELECT:EFFECTIVE",
+        "column:public.user.locale:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.user.name:SELECT:EFFECTIVE",
         "column:public.user.name:SELECT:GRANTOR:census_admin:GRANTABLE:false",
         "column:public.user.preferred_name:SELECT:EFFECTIVE",
