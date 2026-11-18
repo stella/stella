@@ -1,4 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
 import { foldDecisionIdentifierInput } from "./decision-docket-grammar";
 import type { DecisionReporterGrammar } from "./decision-query-intent";
@@ -139,6 +141,15 @@ const partOfWord = (word: string): CzNsCollectionPart => {
   }
 };
 
+/** The entry without the commas or semicolons a list left after it. */
+const withoutTrailingSeparators = (text: string): string => {
+  let end = text.length;
+  while (end > 0 && (text[end - 1] === "," || text[end - 1] === ";")) {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
 /**
  * A citation of the collection, read from a whole entry, or null when the
  * entry is not one. A citation stating its part twice must state it alike.
@@ -146,21 +157,23 @@ const partOfWord = (word: string): CzNsCollectionPart => {
 export const parseCzNsCollectionCitation = (
   raw: string,
 ): CzNsCollectionCitation | null => {
-  const text = foldDecisionIdentifierInput(raw).replace(/[;,]+$/u, "");
+  const text = withoutTrailingSeparators(foldDecisionIdentifierInput(raw));
   for (const spelling of SPELLINGS) {
     const groups = spelling.exec(text)?.groups;
     if (groups === undefined) {
       continue;
     }
-    const number = Number(groups["number"]);
-    const year = Number(groups["year"]);
-    if (
-      !Number.isSafeInteger(number) ||
-      number < 1 ||
-      number > MAX_NUMBER ||
-      year < FIRST_YEAR ||
-      year > LAST_YEAR
-    ) {
+    const number = parseIntegerToken(groups["number"], {
+      sign: "unsigned",
+      min: 1,
+      max: MAX_NUMBER,
+    });
+    const year = parseIntegerToken(groups["year"], {
+      sign: "unsigned",
+      min: FIRST_YEAR,
+      max: LAST_YEAR,
+    });
+    if (Result.isError(number) || Result.isError(year)) {
       return null;
     }
     const stated = [
@@ -174,7 +187,7 @@ export const parseCzNsCollectionCitation = (
     if (others.some((other) => other !== part)) {
       return null;
     }
-    return { part, number, year };
+    return { part, number: number.value, year: year.value };
   }
   return null;
 };
