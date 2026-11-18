@@ -13,12 +13,14 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { selectChangedVersions } from "@/features/statutes/provision-diff";
+import { groupWordingRuns } from "@/features/statutes/provision-version-runs.logic";
+import type { ProvisionHistoryItem } from "@/features/statutes/queries/provision-history";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import {
   EM_DASH,
   formatValidityDate,
@@ -49,37 +51,21 @@ export const ProvisionHistory = ({
 }: ProvisionHistoryProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const {
-    data: statute,
-    isError: isStatuteError,
-    isPending: isStatutePending,
-  } = useQuery(statuteOptions(documentId));
-  const ast =
-    statute === undefined ? null : parseDocumentAst(statute.documentAst);
-  const resolvedAnchor =
-    statute === undefined || ast === null
-      ? null
-      : (resolveDocumentHeadingAnchor(
-          {
-            blocks: ast.blocks,
-            scheme: statuteAnchorSchemeFor(statute.country),
-          },
-          anchorId,
-        )?.anchorId ?? null);
+  const { anchor: historyAnchor, statute } = useProvisionHistoryAnchor({
+    anchorId,
+    documentId,
+  });
   const { data, fetchNextPage, hasNextPage, isError, isFetchingNextPage } =
     useInfiniteQuery({
       ...provisionHistoryOptions({
-        anchor: resolvedAnchor ?? anchorId,
+        anchor:
+          historyAnchor.type === "resolved" ? historyAnchor.anchor : anchorId,
         documentId,
       }),
-      enabled: resolvedAnchor !== null,
+      enabled: historyAnchor.type === "resolved",
     });
 
-  if (
-    isError ||
-    isStatuteError ||
-    (!isStatutePending && resolvedAnchor === null)
-  ) {
+  if (isError || historyAnchor.type === "unavailable") {
     return (
       <p className="text-muted-foreground text-xs">
         {t("statutes.provisionHistoryUnavailable")}
@@ -87,7 +73,7 @@ export const ProvisionHistory = ({
     );
   }
 
-  if (data === undefined || isStatutePending) {
+  if (data === undefined || statute === undefined) {
     return (
       <div aria-busy="true" className="flex flex-col gap-1">
         <Skeleton className="h-8 w-full" />
@@ -96,10 +82,12 @@ export const ProvisionHistory = ({
     );
   }
 
-  const consolidations = data.pages.flatMap((page) => page.items);
-  const versions = selectChangedVersions(consolidations);
+  // One row per wording, dated by the consolidation that brought it in. A
+  // consolidation that reissues the wording unchanged is folded into it, as
+  // the server compared it on the full text.
+  const groups = groupWordingRuns(data.pages.flatMap((page) => page.items));
 
-  if (versions.length === 0) {
+  if (groups.length === 0) {
     return (
       <p className="text-muted-foreground text-xs">
         {t("statutes.provisionHistoryEmpty")}
@@ -107,11 +95,6 @@ export const ProvisionHistory = ({
     );
   }
 
-  // The consolidation on screen may reissue a wording an older one brought
-  // in; the row of that wording is the one on screen.
-  const onScreenText = consolidations.find(
-    (version) => version.documentId === documentId,
-  )?.text;
   const comparisonTarget = createStatuteLinkTarget({
     country: statute.country,
     documentId,
@@ -119,10 +102,11 @@ export const ProvisionHistory = ({
     slug: statute.slug,
     versionValidFrom: statute.versionValidFrom,
   });
-  const provision = resolvedAnchor ?? anchorId;
+  const provision =
+    historyAnchor.type === "resolved" ? historyAnchor.anchor : anchorId;
   // A wording that cannot apply was never in force from its start date: it
   // is named for what it is, beside the dates its publisher stated.
-  const versionLabel = (version: (typeof versions)[number]): string => {
+  const versionLabel = (version: ProvisionHistoryItem): string => {
     const ineligibleLabel = ineligibleExpressionLabelKey(version);
     return ineligibleLabel === null
       ? t("statutes.inForceSince", {
@@ -142,10 +126,29 @@ export const ProvisionHistory = ({
   return (
     <div className="flex flex-col gap-1">
       <ol aria-label={t("common.history")} className="m-0 list-none p-0">
-        {versions.map((version) => {
+        {groups.map((group) => {
+          if (group.type === "unavailable") {
+            return (
+              <li key={group.item.documentId}>
+                <span className={HISTORY_ROW_CLASS}>
+                  <span className="text-muted-foreground">
+                    {versionLabel(group.item)}
+                    {" · "}
+                    {t("statutes.provisionTextUnavailable")}
+                  </span>
+                </span>
+              </li>
+            );
+          }
+          // The row of a wording is the consolidation that brought it in.
+          const version = group.members.at(-1);
+          if (version === undefined) {
+            return null;
+          }
           const label = versionLabel(version);
-          const onScreen =
-            version.documentId === documentId || version.text === onScreenText;
+          const onScreen = group.members.some(
+            (member) => member.documentId === documentId,
+          );
           // As in the version menu, a wording that cannot apply offers no
           // window to compare by.
           const compareFrom =
@@ -203,4 +206,42 @@ export const ProvisionHistory = ({
       )}
     </div>
   );
+};
+
+/** Whether the provision's history can be read yet, and under which anchor. */
+export type ProvisionHistoryAnchor =
+  | { type: "pending" }
+  | { type: "resolved"; anchor: string }
+  | { type: "unavailable" };
+
+/**
+ * The heading anchor a provision's history is filed under, resolved in the
+ * consolidation on screen: a tab may be opened on a subdivision or on an
+ * alias of the heading. Reads the act the wording pane already loads.
+ */
+export const useProvisionHistoryAnchor = ({
+  anchorId,
+  documentId,
+}: ProvisionHistoryProps) => {
+  const statuteView = queryView(useQuery(statuteOptions(documentId)));
+  const statute = statuteView.type === "items" ? statuteView.items : undefined;
+  const ast =
+    statute === undefined ? null : parseDocumentAst(statute.documentAst);
+  const resolved =
+    statute === undefined || ast === null
+      ? null
+      : (resolveDocumentHeadingAnchor(
+          {
+            blocks: ast.blocks,
+            scheme: statuteAnchorSchemeFor(statute.country),
+          },
+          anchorId,
+        )?.anchorId ?? null);
+  let anchor: ProvisionHistoryAnchor = { type: "pending" };
+  if (resolved !== null) {
+    anchor = { type: "resolved", anchor: resolved };
+  } else if (statuteView.type !== "pending") {
+    anchor = { type: "unavailable" };
+  }
+  return { anchor, statute };
 };
