@@ -1590,7 +1590,7 @@ export const installPgliteCorpusProjectionDeleteTasks = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261118100000_corpus_projection_delete_tasks",
+      "20261118193000_corpus_projection_delete_tasks",
       "migration.sql",
     ),
   ).filter((statement) => {

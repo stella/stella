@@ -1,6 +1,6 @@
 /**
  * Online repair behind migration
- * 20261118100000_corpus_projection_delete_tasks.
+ * 20261118193000_corpus_projection_delete_tasks.
  *
  * The migration's triggers queue a delete task in the transaction that stamps
  * its receipt on a revision, so every task recorded from then on has its row.
@@ -241,7 +241,7 @@ const walkDeleteTasks = async (
 export const createCorpusProjectionDeleteTaskRepair = (
   options: CorpusProjectionDeleteTaskRepairRuntime = {},
 ): MigrationOwnedOnlineRepair => ({
-  introducedBy: "20261118100000_corpus_projection_delete_tasks",
+  introducedBy: "20261118193000_corpus_projection_delete_tasks",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const checkpoint = (
