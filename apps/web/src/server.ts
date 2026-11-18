@@ -22,7 +22,7 @@ import {
 } from "@/ssr-error-reporter";
 import { renderSsrResponse } from "@/ssr-renderer";
 import { isSsrDocumentRequest } from "@/ssr-request";
-import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
+import { documentStatus, SSR_STATUS_HEADER } from "@/ssr-response-status";
 import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
@@ -87,10 +87,14 @@ export default createServerEntry({
                       throw rendered.error;
                     }
                     // A loader failure renders the error component with a
-                    // 500 instead of throwing, so it is reported here.
+                    // 500 instead of throwing, so it is reported here, by the
+                    // status the document is sent with.
                     reportSsrRouteFailure({
                       matches: router.state.matches,
-                      status: getSsrStatus(router),
+                      status: documentStatus(
+                        responseHeaders,
+                        getSsrStatus(router),
+                      ),
                     });
                     return rendered.value;
                   }),
@@ -106,11 +110,8 @@ export default createServerEntry({
         }
         // A route that rendered a degraded page names the status it wants; the
         // marker is consumed here so only the status crosses the wire.
-        const requestedStatus = ssrStatusFromHeader(
-          headers.get(SSR_STATUS_HEADER),
-        );
+        const status = documentStatus(headers, response.status);
         headers.delete(SSR_STATUS_HEADER);
-        const status = requestedStatus ?? response.status;
         const cacheClass = headers.get(SSR_CACHE_CLASS_HEADER);
         headers.delete(SSR_CACHE_CLASS_HEADER);
         const isSuccessful = status >= 200 && status < 300;
@@ -136,7 +137,9 @@ export default createServerEntry({
         return new Response(response.body, {
           headers,
           status,
-          ...(requestedStatus === null && { statusText: response.statusText }),
+          ...(status === response.status && {
+            statusText: response.statusText,
+          }),
         });
       },
     });
