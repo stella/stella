@@ -21,6 +21,8 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { Streamdown } = await import("streamdown");
 const { ChatTableChart } = await import("./chat-table-chart");
+const { messageComponents } =
+  await import("@/components/ai-elements/message-response-components");
 const { getWorkspaceReconnectQueryActions } =
   await import("@/lib/workspace-realtime");
 const { applyResourceQueryActions } =
@@ -66,6 +68,7 @@ const mount = (
           <Streamdown
             mode="static"
             components={{
+              ...messageComponents,
               table: (props) => (
                 <ChatTableChart
                   {...props}
@@ -91,11 +94,13 @@ test("requests no decision until clicked, switches kind, returns to table and re
     return ready;
   });
   expect(view.getByRole("table")).toBeDefined();
+  const toggle = view.getByRole("button", { name: "Show as chart" });
+  expect(toggle.getAttribute("aria-pressed")).toBe("false");
+  // The chart toggle lives in the table's one header strip, not above it.
+  expect(toggle.closest('[data-slot="answer-table-header"]')).not.toBeNull();
   expect(
-    view
-      .getByRole("button", { name: "Show as chart" })
-      .getAttribute("aria-pressed"),
-  ).toBe("false");
+    view.container.querySelectorAll('[data-slot="answer-table-header"]'),
+  ).toHaveLength(1);
   expect(calls).toBe(0);
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   const image = await view.findByRole("img", { name: "Hours" });
@@ -126,7 +131,7 @@ test("requests no decision until clicked, switches kind, returns to table and re
       }),
     );
   });
-  fireEvent.click(view.getByRole("button", { name: "Show table" }));
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   expect(view.getByRole("table")).toBeDefined();
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   await view.findByRole("img", { name: "Hours" });
@@ -145,6 +150,11 @@ test("a table without a numeric column offers no chart", () => {
   );
   expect(view.getByRole("table")).toBeDefined();
   expect(view.queryByRole("button", { name: "Show as chart" })).toBeNull();
+  // The table keeps its header strip and its own actions.
+  expect(
+    view.container.querySelector('[data-slot="answer-table-header"]'),
+  ).not.toBeNull();
+  expect(view.getByRole("button", { name: "Copy table" })).toBeDefined();
   expect(calls).toBe(0);
 });
 
@@ -215,8 +225,8 @@ test("Arabic controls and chart summary use translated text and local number for
   await view.findByRole("img", { name: "Hours" });
   expect(view.container.textContent).toContain("١٢");
   expect(
-    view.getByRole("button", {
-      name: arabic.workspaces.views.timeline.showTable,
-    }),
-  ).toBeDefined();
+    view
+      .getByRole("button", { name: arabic.chat.tableChart.showChart })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
 });

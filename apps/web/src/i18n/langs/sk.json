@@ -1728,6 +1728,18 @@
       "verified": "Overená citácia",
       "verifiedHint": "Doslovne v {source}"
     },
+    "answerTable": {
+      "copy": "Kopírovať tabuľku",
+      "copyAs": "Kopírovať ako {format}",
+      "download": "Stiahnuť tabuľku",
+      "downloadAs": "Stiahnuť ako {format}",
+      "fullscreen": "Otvoriť na celú obrazovku",
+      "fullscreenTitle": "Tabuľka na celú obrazovku",
+      "singleLine": "Na jeden riadok",
+      "size": "{rows, plural, one {# riadok} few {# riadky} many {# riadka} other {# riadkov}} · {columns, plural, one {# stĺpec} few {# stĺpce} many {# stĺpca} other {# stĺpcov}}",
+      "textMode": "Text buniek",
+      "wrap": "Zalamovať text"
+    },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
       "direct": "Nie, použiť priamo",
@@ -7874,7 +7886,6 @@
         "endDate": "Dátum ukončenia",
         "month": "Mesiac",
         "quarter": "Štvrťrok",
-        "showTable": "Zobraziť tabuľku",
         "startDate": "Dátum začiatku",
         "week": "Týždeň"
       },

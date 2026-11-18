@@ -32,16 +32,31 @@ type TableScroll = "self" | "parent";
  * do not highlight because nothing in them is a row-wide target. A row
  * header (`<TableHead scope="row">`) in a compact body reads as the row's
  * first cell rather than as a column heading.
+ *
+ * `prose` is a table of sentences read across columns (an AI answer's
+ * comparison, a clause review): ruled columns and rows, cells padded and set
+ * at reading leading from their top, a quiet header in normal weight, and a
+ * first column wide enough to hold a few words per line. Its cells wrap or
+ * stay on one line as `cellText` says.
  */
-type TableDensity = "default" | "compact";
+type TableDensity = "default" | "compact" | "prose";
+
+/**
+ * How a `prose` table sets long cell text: `wrap` breaks it over lines,
+ * `single-line` keeps every cell on one line and leaves the table wider than
+ * its box for the scroller around it.
+ */
+type TableCellText = "wrap" | "single-line";
 
 type TableProps = React.ComponentProps<"table"> & {
+  cellText?: TableCellText;
   density?: TableDensity;
   inset?: TableInset;
   scroll?: TableScroll;
 };
 
 const Table = ({
+  cellText = "wrap",
   className,
   density = "default",
   inset = "default",
@@ -52,8 +67,12 @@ const Table = ({
     <table
       className={cn(
         "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
+        // Separate borders: a sticky header keeps only the borders its own
+        // cells draw.
+        density === "prose" && "border-separate border-spacing-0",
         className,
       )}
+      data-cell-text={cellText}
       data-density={density}
       data-inset={inset}
       data-slot="table"
@@ -94,7 +113,7 @@ const TableHeader = ({
 }: TableHeaderProps) => (
   <thead
     className={cn(
-      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
+      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[density=prose]:*:[tr]:hover:bg-transparent in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
       surface === "muted" && "bg-muted/50",
       sticky && "bg-muted/80 sticky top-0 z-10 backdrop-blur",
       className,
@@ -164,6 +183,12 @@ const TABLE_ALIGN_CLASS = {
   start: "text-start",
 } as const satisfies Record<TableAlign, string>;
 
+// A `prose` cell: ruled on its end and bottom, padded, set from the top at
+// reading leading, and wrapped unless the table keeps cells on one line (the
+// base cell already does). The first column keeps a few words per line.
+const PROSE_CELL_CLASS =
+  "in-data-[density=prose]:h-auto in-data-[density=prose]:border-e in-data-[density=prose]:border-b in-data-[density=prose]:px-3 in-data-[density=prose]:py-2 in-data-[density=prose]:align-top in-data-[density=prose]:leading-normal in-data-[density=prose]:last:border-e-0 in-data-[density=prose]:min-w-24 in-data-[density=prose]:first:min-w-36 in-data-[cell-text=wrap]:in-data-[density=prose]:wrap-break-word in-data-[cell-text=wrap]:in-data-[density=prose]:whitespace-normal";
+
 const resolveTableAlign = (
   align: TableAlign | undefined,
   numeric: boolean,
@@ -190,6 +215,8 @@ const TableHead = ({
       "text-muted-foreground h-10 px-2.5 align-middle leading-none font-medium whitespace-nowrap in-data-[inset=card]:px-4 has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
       "in-data-[density=compact]:h-auto in-data-[density=compact]:px-0 in-data-[density=compact]:py-1 in-data-[density=compact]:pe-3 in-data-[density=compact]:text-xs",
       "in-data-[density=compact]:[tbody_&]:py-1.5 in-data-[density=compact]:[tbody_&]:text-sm in-data-[density=compact]:[tbody_&]:leading-6 in-data-[density=compact]:[tbody_&]:font-normal in-data-[density=compact]:[tbody_&]:whitespace-normal in-data-[density=compact]:[tbody_&]:text-inherit",
+      PROSE_CELL_CLASS,
+      "in-data-[density=prose]:font-normal",
       TABLE_ALIGN_CLASS[resolveTableAlign(align, numeric) ?? "start"],
       numeric && "tabular-nums",
       className,
@@ -237,6 +264,8 @@ const TableCell = ({
       ? "p-0"
       : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
     "in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
+    PROSE_CELL_CLASS,
+    "in-data-[density=prose]:[tr:last-child>&]:border-b-0",
     resolvedAlign !== undefined && TABLE_ALIGN_CLASS[resolvedAlign],
     tone === "muted" && "text-muted-foreground",
     numeric && "tabular-nums",
@@ -371,6 +400,7 @@ export {
 export type {
   SortDirection,
   TableAlign,
+  TableCellText,
   TableDensity,
   TableHeadProps,
   TableCellProps,
