@@ -45,6 +45,7 @@ describe("case-law browse paths", () => {
     `${court}/2023/05/page/1`,
     `${court}/2023/05/page/01`,
     `${court}/2023/05/page/${String(CASE_LAW_BROWSE_MAX_PAGES + 1)}`,
+    `${court}/2023/05/page/9007199254740992`,
     `${court}/2023/02/29`,
     `${court}/2023/05/07/extra`,
     `${court}/undated`,

@@ -261,7 +261,10 @@ export const readBrowseCalendarHandler = async (
     );
     return {
       level: "years",
-      periods: rows.filter((row) => row.value >= 0),
+      // A UNION ALL keeps no order: name the years in calendar order.
+      periods: rows
+        .filter((row) => row.value >= 0)
+        .toSorted((left, right) => left.value - right.value),
       undated: rows.find((row) => row.value < 0)?.count ?? 0,
     } satisfies BrowseCalendar;
   }

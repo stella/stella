@@ -109,6 +109,7 @@ const sampleUrls = (country: string): `/${string}`[] => [
   `/law/${country}/statutes`,
   `/law/${country}/statutes?q=civil`,
   `/law/${country}/courts/nejvyssi-soud?page=2`,
+  `/law/${country}/courts/nejvyssi-soud?`,
   `/law?country=${country}`,
   `/law/cases?country=${country}&q=lease`,
 ];

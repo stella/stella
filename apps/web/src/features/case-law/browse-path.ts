@@ -122,8 +122,11 @@ const readPage = (segments: readonly string[]): number | null => {
   if (!PAGE.test(value)) {
     return null;
   }
-  const page = segmentNumber(value);
-  return page <= CASE_LAW_BROWSE_MAX_PAGES ? page : null;
+  // A page past the safe integer range is not found, like one past the cap.
+  const page = parseIntegerToken(value, { sign: "unsigned" });
+  return Result.isOk(page) && page.value <= CASE_LAW_BROWSE_MAX_PAGES
+    ? page.value
+    : null;
 };
 
 const daysInMonth = (year: number, month: number): number =>

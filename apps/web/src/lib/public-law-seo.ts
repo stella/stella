@@ -12,7 +12,10 @@ import {
   type JsonLdObject,
   type PublicHeadInput,
 } from "@/lib/public-seo";
-import { isPublicLawPathIndexable } from "@/public-crawl-policy";
+import {
+  hasPublicLawQuery,
+  isPublicLawPathIndexable,
+} from "@/public-crawl-policy";
 
 type PublicLawHeadInput = Omit<PublicHeadInput, "crawlAllowed"> & {
   crawlAllowed?: boolean;
@@ -107,7 +110,9 @@ export const createPublicLawHead = (input: PublicLawHeadInput) => {
   return createPublicHead({
     ...input,
     crawlAllowed,
-    indexing: url.search === "" ? (input.indexing ?? "default") : "noindex",
+    indexing: hasPublicLawQuery(input.path)
+      ? "noindex"
+      : (input.indexing ?? "default"),
   });
 };
 

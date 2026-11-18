@@ -177,6 +177,14 @@ export const isPublicLawPathIndexable = (
 const CRAWL_URL_BASE = "https://crawl.invalid";
 
 /**
+ * Whether a URL carries a query delimiter before its fragment. A bare
+ * trailing `?` leaves `URL.search` empty, yet robots.txt's `?` rule matches
+ * it, so the delimiter itself decides.
+ */
+export const hasPublicLawQuery = (href: string): boolean =>
+  (href.split("#", 1).at(0) ?? "").includes("?");
+
+/**
  * The same answer for a whole URL a page is served at. A query string makes
  * any law page a search, filter or paging variant of a query-free page, so it
  * is never indexable: robots.txt blocks it (see `publicCrawlRobotsLines`) and
@@ -188,7 +196,7 @@ export const isPublicLawUrlIndexable = (
 ): boolean => {
   const url = new URL(href, CRAWL_URL_BASE);
   return (
-    url.search === "" &&
+    !hasPublicLawQuery(href) &&
     isPublicLawPathIndexable(url.pathname, publicLawCrawlAllowed)
   );
 };

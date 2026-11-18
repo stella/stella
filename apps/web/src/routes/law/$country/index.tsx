@@ -77,8 +77,10 @@ export const Route = createFileRoute("/law/$country/")({
     });
     const path = createCaseLawJurisdictionHubPath(params.country);
     return createPublicLawHead({
-      // Any query string makes this a variant of the hub, never the hub.
+      // Any query string makes this a variant of the hub, never the hub;
+      // the variant's canonical link names the hub.
       indexing: hasSearch(match.search) ? "noindex" : "default",
+      canonicalPath: path,
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

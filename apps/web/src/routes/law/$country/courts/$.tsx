@@ -200,8 +200,10 @@ export const Route = createFileRoute("/law/$country/courts/$")({
         : t("caseLaw.browse.periodDescription", { court, country, period });
     const path = createCaseLawBrowsePath(params.country, page.target);
     return createPublicLawHead({
-      // Any query string makes this a variant of the hub, never the hub.
+      // Any query string makes this a variant of the hub, never the hub;
+      // the variant's canonical link names the hub.
       indexing: hasSearch(match.search) ? "noindex" : "default",
+      canonicalPath: path,
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

@@ -66,6 +66,12 @@ const CONSUMERS = {
     "pages",
   // The iOS app opens decisions as the web's decision pages do.
   "apps/mobile/src/state/case-law.ts": "pages",
+  // Jurisdiction and court hubs: crawlable pages that link into decisions.
+  "apps/api/src/handlers/case-law/decisions/browse-hubs.ts": "pages",
+  "apps/web/src/features/case-law/browse-path.ts": "pages",
+  "apps/web/src/routes/law/$country/index.tsx": "pages",
+  "apps/web/src/routes/law/$country/courts/$.tsx": "pages",
+  "apps/landing/src/data/public-law-hubs.ts": "pages",
   // Sitemaps.
   "apps/api/src/handlers/case-law/decisions/sitemap.ts": "sitemap",
   "apps/api/src/handlers/legislation/sitemap.ts": "sitemap",
@@ -117,6 +123,8 @@ const CONSUMERS = {
   "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts":
     "search",
   // Tests and query-plan fixtures that mirror a surface's country filter.
+  "apps/web/src/__fixtures__/route-shell/route-shell-public-fixtures.ts":
+    "pages",
   "apps/api/src/tests/query-plans/old-sitemap-refresh-fixture.ts": "sitemap",
   "apps/api/src/tests/query-plans/registry.ts": "search",
   "apps/api/src/tests/security/public-law-search-census.ts": "search",
