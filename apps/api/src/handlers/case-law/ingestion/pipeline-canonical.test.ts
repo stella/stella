@@ -194,7 +194,9 @@ afterEach(() => {
 
 const decision: IngestionResult = plainTextIngestionResult({
   caseNumber: "X/1/2026",
-  court: "Test Court",
+  // A directory court under its official name, so the write boundary stores
+  // the name as given.
+  court: "Najvyšší súd Slovenskej republiky",
   country: "SVK",
   language: "sk",
   fulltext: "Rozhodnutie o veci samej.",
@@ -805,7 +807,9 @@ describe("processDecision — canonical storage mode", () => {
     // holds no document, never by where a payload would have lived.
     expect(
       partialObservationFromMetadata(inserted?.["metadata"]),
-    ).toMatchObject({ detail: "listing-only" });
+    ).toMatchObject({
+      detail: "listing-only",
+    });
   });
 
   test("leaves a settled row's payload alone when only the publisher page moved", async () => {
@@ -898,7 +902,9 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
-    const moved = plainTextIngestionResult({ ...decision, country: "CZE" });
+    // Into a jurisdiction that stores the court as printed, so only the
+    // jurisdiction moves.
+    const moved = plainTextIngestionResult({ ...decision, country: "POL" });
     // Not vacuous: the payload is the one the row records.
     expect(
       realCorpusStorage.corpusContentHash(

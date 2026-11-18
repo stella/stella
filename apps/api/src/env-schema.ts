@@ -577,6 +577,12 @@ export const envApiServerSchema = {
   FEATURE_PUBLIC_LAW: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  /**
+   * A stopping API task releases each local chat turn it reads to another
+   * task instead of ending it. Turn on only once every task adopts released
+   * turns.
+   */
+  FEATURE_CHAT_TURN_HANDOVER: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(
     v.pipe(
       v.string(),
@@ -792,6 +798,7 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_INVOICE_LINKS: featureFlagSchema,
   FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,

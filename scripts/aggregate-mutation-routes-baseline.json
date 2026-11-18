@@ -2025,11 +2025,6 @@
     "reason": "Existing PUT route awaits ownership declaration at its route definition."
   },
   {
-    "key": "PUT /v1/flows/:flowId",
-    "count": 1,
-    "reason": "Existing PUT route awaits ownership declaration at its route definition."
-  },
-  {
     "key": "PUT /v1/invoices/:workspaceId",
     "count": 1,
     "reason": "Existing PUT route awaits ownership declaration at its route definition."

@@ -732,7 +732,9 @@ test.each(["ecli", "sheet-number"] as const)(
       plainTextIngestionResult({
         caseNumber: "104 C 16/2024",
         court: "",
-        country: "CZE",
+        // A Czech or Slovak decision names a directory court or is refused,
+        // so an unknown court is one a name-identified jurisdiction states.
+        country: "POL",
         language: "cs",
         ecli:
           evidence === "ecli"

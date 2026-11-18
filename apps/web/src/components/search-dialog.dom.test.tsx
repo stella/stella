@@ -113,6 +113,8 @@ const citationDecision = {
   citationAuthority: 0,
   matchingPassages: 1,
   match: "all_terms",
+  matchedTerms: [],
+  missingTerms: [],
   createdAt: "2026-01-29T00:00:00.000Z",
 } satisfies PublicLawData<
   typeof api.case.decisions.search.post
@@ -126,6 +128,7 @@ const citationResponse = {
   pageReach: SEARCH_PAGE_REACH.REACHED,
   total: { type: "exact", count: 1 },
   relaxedHitCount: 0,
+  termDecisionCounts: null,
   queryUsed: "22 As 40/2025 - 49",
   warnings: [],
 } satisfies PublicLawData<typeof api.case.decisions.search.post>;

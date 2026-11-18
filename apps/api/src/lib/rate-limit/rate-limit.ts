@@ -66,8 +66,10 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   private durationMs = 60_000;
   private readonly store = new Map<string, RateLimitEntry>();
   private readonly cleanupTimer: ReturnType<typeof setInterval>;
+  private readonly now: () => number;
 
-  constructor() {
+  constructor(now = () => Temporal.Now.instant().epochMilliseconds) {
+    this.now = now;
     this.cleanupTimer = setInterval(
       () => this.evictExpired(),
       CLEANUP_INTERVAL_MS,
@@ -81,7 +83,7 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
 
   read(key: string) {
     const entry = this.store.get(key);
-    if (!entry || entry.expiresAt <= Temporal.Now.instant().epochMilliseconds) {
+    if (!entry || entry.expiresAt <= this.now()) {
       return null;
     }
     return {
@@ -93,7 +95,7 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
 
   increment(key: string, duration?: number, requestTime?: number) {
     const effectiveDuration = duration ?? this.durationMs;
-    const now = requestTime ?? Temporal.Now.instant().epochMilliseconds;
+    const now = requestTime ?? this.now();
     const entry = this.store.get(key);
 
     if (entry && entry.expiresAt > now) {
@@ -119,7 +121,7 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   }
 
   decrement(key: string, windowStart?: number) {
-    const now = Temporal.Now.instant().epochMilliseconds;
+    const now = this.now();
     const entry = this.store.get(key);
     if (
       entry &&
@@ -145,7 +147,7 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   }
 
   private evictExpired() {
-    const now = Temporal.Now.instant().epochMilliseconds;
+    const now = this.now();
     for (const [key, entry] of this.store) {
       if (entry.expiresAt <= now) {
         this.store.delete(key);

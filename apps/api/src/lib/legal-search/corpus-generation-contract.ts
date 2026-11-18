@@ -65,6 +65,8 @@ const CORPUS_GENERATIONS = {
     "case_law_v8",
     "case_law_v9",
     "case_law_v10",
+    "case_law_v11",
+    "case_law_v12",
   ],
   legislation: ["legislation_v2", "legislation_v3"],
 } as const satisfies {

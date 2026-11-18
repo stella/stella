@@ -35,15 +35,18 @@ const answer = (
   }
   const court = args["court"];
   if (court === undefined) {
-    return {
-      facets: {
-        court: [
-          { courts: [{ value: CONSTITUTIONAL }] },
-          { courts: [{ value: SUPREME }] },
-        ],
-      },
-      results: [],
-    };
+    // As the deployment answers: court facets only for a search that asks.
+    const requested = args["facets"];
+    const courtFacets =
+      Array.isArray(requested) && requested.includes("court")
+        ? {
+            court: [
+              { courts: [{ value: CONSTITUTIONAL }] },
+              { courts: [{ value: SUPREME }] },
+            ],
+          }
+        : null;
+    return { facets: courtFacets, results: [] };
   }
   const hit = Object.values(hits).find((entry) => entry.court === court);
   return { facets: null, results: hit ? [hit] : [] };

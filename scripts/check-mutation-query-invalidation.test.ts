@@ -1647,6 +1647,95 @@ test("workspace-set reader scopes require their exact identity without becoming 
   ).toBe(true);
 });
 
+test("public token mutations write only public routes and invalidate no session", () => {
+  const sourcesFor = ({
+    mutation,
+    scope,
+    request,
+  }: {
+    mutation: string;
+    scope: string | null;
+    request: string;
+  }) => [
+    validSources[0] ?? panic("Missing resource type fixture"),
+    {
+      file: "apps/web/src/lib/workspace-realtime.ts",
+      text: `
+import { RESOURCE_TYPE } from "@stll/api-contract";
+export const resourceMutation = (options: { mutationFn: () => unknown }) => options.mutationFn;
+export const resourceQueryOptions = (options: unknown) => options;
+export const RESOURCE_MUTATION_CONTRACTS = {
+  renameEntity: {
+    writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }],
+    resources: [RESOURCE_TYPE.ENTITY],
+  },
+  openLinkFile: {
+    writes: [{ method: "POST", route: "/public/links/download" }],
+    resources: [RESOURCE_TYPE.ENTITY],
+  },
+} as const;
+`,
+    },
+    {
+      file: "apps/web/src/link-page.ts",
+      text: `
+import { useMutation } from "@tanstack/react-query";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { api, apiClient } from "@/lib/api";
+export const openFile = () => useMutation({ mutationFn: resourceMutation({
+  mutation: "${mutation}",
+  queryClient,${scope === null ? "" : `\n  scope: ${scope},`}
+  mutationFn: async ({ token }: { token: string }) => ${request},
+}) });
+`,
+    },
+  ];
+  const publicRequest = "apiClient.public.links.download.post({ token })";
+  expect(
+    violations(
+      sourcesFor({
+        mutation: "openLinkFile",
+        scope: '{ type: "public-token" }',
+        request: publicRequest,
+      }),
+    ),
+  ).toEqual([]);
+  const reasons = (sources: typeof validSources) =>
+    violations(sources).map(({ reason }) => reason);
+  expect(
+    reasons(
+      sourcesFor({
+        mutation: "openLinkFile",
+        scope: null,
+        request: publicRequest,
+      }),
+    ),
+  ).toEqual([
+    "A contract whose writes are public routes must use the public token scope.",
+  ]);
+  expect(
+    reasons(
+      sourcesFor({
+        mutation: "renameEntity",
+        scope: '{ type: "public-token" }',
+        request:
+          'api.entities({ workspaceId: "123" }).rename.patch({ entityId: token })',
+      }),
+    ),
+  ).toEqual([
+    "A public token resourceMutation must name a contract whose writes are all public routes.",
+  ]);
+  assertInvalidCannotBeBaselined(
+    violations(
+      sourcesFor({
+        mutation: "openLinkFile",
+        scope: '{ type: "public-token", token: "secret" }',
+        request: publicRequest,
+      }),
+    ),
+  );
+});
+
 test("identity-owned readers require their exact declared identity domain", () => {
   const sourcesFor = (scope: string) =>
     validSources.map((source) => ({

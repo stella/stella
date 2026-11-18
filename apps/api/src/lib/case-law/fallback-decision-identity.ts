@@ -62,6 +62,8 @@ type FallbackDecisionIdentityInput = {
   language: string;
   court: string;
   courtId?: string | null | undefined;
+  /** Decides whether the court is keyed by id (`listingCourtIdentity`). */
+  country?: string | undefined;
   caseNumber: string;
   ecli?: string | null | undefined;
   sheetNumber?: string | null | undefined;
@@ -772,14 +774,7 @@ export const decisionStorageIdentityMatch = (
     return panic("An unkeyable identity cannot select a stored decision");
   }
   const { identity } = storage;
-  const courtFields =
-    identity.court.type === "court-id"
-      ? { courtId: identity.court.courtId }
-      : {
-          courtId: ABSENT_FIELD,
-          court:
-            identity.court.type === "court-name" ? identity.court.name : "",
-        };
+  const courtFields = fallbackDecisionCourtMatch(identity);
   const legacyScope = {
     fallbackIdentityKey: ABSENT_FIELD,
     fallbackCohortKey: ABSENT_FIELD,
@@ -904,13 +899,18 @@ export const fallbackEcliComparisonKey = (value: string) =>
     value,
   });
 
+/**
+ * The stored columns a fallback identity's court is matched on. A court-name
+ * identity matches the name whether or not the row carries an id: a
+ * printed-name jurisdiction's court is keyed by its canonical name, which
+ * rows stored before the id existed already carry without one.
+ */
 export const fallbackDecisionCourtMatch = (
   identity: Exclude<FallbackDecisionIdentity, { type: "unidentifiable" }>,
 ) =>
   identity.court.type === "court-id"
     ? { courtId: identity.court.courtId }
     : {
-        courtId: ABSENT_FIELD,
         court: identity.court.type === "court-name" ? identity.court.name : "",
       };
 

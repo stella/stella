@@ -16,7 +16,6 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   beginCorpusIndexGenerationRebuildTx,
-  resumeRetiringCorpusIndexGenerationTx,
   setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -705,13 +704,11 @@ test("a generation resumed from retiring comes back unseeded, even with a pass w
     seededCount: 2,
     completedAt: new Date("2026-11-01T01:00:00Z"),
   });
-  await inTx(
-    async (tx) =>
-      await resumeRetiringCorpusIndexGenerationTx(tx, {
-        family: "case_law",
-        generation: "case_law_v5",
-      }),
-  );
+  // Back into the active set, by whatever path.
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "building" })
+    .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
   expect(await passGenerations()).toEqual([]);
   expect(
     (await readSeedings(CASE_LAW))?.routes.map(({ state }) => state),
