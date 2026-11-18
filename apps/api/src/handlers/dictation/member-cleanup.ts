@@ -6,7 +6,7 @@ import {
 } from "@stll/api-contract/desktop-dictation-cleanup";
 
 import { cleanUpDictation } from "@/api/handlers/dictation/cleanup";
-import type { DictationCleanupOptions } from "@/api/handlers/dictation/cleanup";
+import type { DictationCleanupGeneration } from "@/api/handlers/dictation/cleanup";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
@@ -33,10 +33,9 @@ const config = {
   requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } as const satisfies HandlerConfig;
 
-type MemberDictationCleanupOptions = {
+type MemberDictationCleanupOptions = DictationCleanupGeneration & {
   admit?: typeof withActionAdmission;
   limit?: typeof consumeDictationLimit;
-  generateObjectForTask?: DictationCleanupOptions["generateObjectForTask"];
 };
 
 /**

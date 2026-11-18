@@ -58,7 +58,7 @@ type DictationCleanupCaller = OrgAISettings & {
   readonly safeDb: SafeDb;
 };
 
-export type DictationCleanupOptions = {
+type DictationCleanupOptions = {
   caller: DictationCleanupCaller;
   body: v.InferOutput<typeof desktopDictationCleanupRequestSchema>;
   /** The admission the caller's action admission granted this cleanup. */
@@ -177,11 +177,16 @@ export const cleanUpDictation = async ({
     return Result.ok(accepted.value);
   });
 
-type DictationCleanupEndpointOptions = {
+/** The model call a test puts in place of the organization's model. */
+export type DictationCleanupGeneration = Pick<
+  DictationCleanupOptions,
+  "generateObjectForTask"
+>;
+
+type DictationCleanupEndpointOptions = DictationCleanupGeneration & {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadAISettings?: typeof loadOrgAISettings;
   limit?: typeof consumeDictationLimit;
-  generateObjectForTask?: DictationCleanupOptions["generateObjectForTask"];
   admit?: typeof withActionAdmission;
 };
 
