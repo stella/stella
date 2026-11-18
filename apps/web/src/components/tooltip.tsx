@@ -13,6 +13,8 @@ type TooltipProps = {
   render: TooltipPrimitive.Trigger.Props["render"];
   content: React.ReactNode | undefined | null;
   align?: TooltipPrimitive.Popup.State["align"];
+  /** Where the popup sits when not beside the whole trigger. */
+  anchor?: TooltipPrimitive.Positioner.Props["anchor"];
   side?: "top" | "bottom" | "left" | "right";
   className?: string;
 };
@@ -22,6 +24,7 @@ const Tooltip = ({
   render,
   content,
   align,
+  anchor,
   side,
   className,
 }: PropsWithChildren<TooltipProps>) => (
@@ -29,6 +32,7 @@ const Tooltip = ({
     <TooltipTrigger render={render}>{children}</TooltipTrigger>
     <TooltipPopup
       {...(align === undefined ? {} : { align })}
+      {...(anchor === undefined ? {} : { anchor })}
       // text nowrap fixes tooltip for buttons in pdf viewer controls
       className={cn("max-w-70 text-nowrap", className)}
       hidden={content === undefined || content === null || content === ""}
