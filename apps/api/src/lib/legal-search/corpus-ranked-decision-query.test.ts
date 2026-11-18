@@ -53,7 +53,8 @@ describe("the ranked decision query", () => {
   });
 
   test("scope filters without scoring, and each word is one should clause", () => {
-    expect<unknown>(query.bool.filter).toEqual([
+    const filter: unknown = query.bool.filter;
+    expect(filter).toEqual([
       {
         query_string: {
           query: 'is_opening:true AND jurisdiction:"CZE"',
@@ -67,7 +68,8 @@ describe("the ranked decision query", () => {
   });
 
   test("a word's publisher leaves carry the boost and count with its text leaves once", () => {
-    expect<unknown>(query.bool.should.at(0)).toEqual({
+    const [first, , third]: unknown[] = query.bool.should;
+    expect(first).toEqual({
       bool: {
         should: [
           {
@@ -87,7 +89,7 @@ describe("the ranked decision query", () => {
         minimum_should_match: 1,
       },
     });
-    expect<unknown>(query.bool.should.at(2)).toEqual({
+    expect(third).toEqual({
       query_string: {
         query: '(decision_terms:"zisk" OR decision_terms:"ušl")',
         default_operator: "AND",
