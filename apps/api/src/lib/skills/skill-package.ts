@@ -659,7 +659,7 @@ const skippedResourcePaths = ({
 
 type DecodePackageFileOptions = {
   bytes: ArrayBuffer | Uint8Array;
-  verdict: Exclude<PackagePathVerdict, { type: "skipped" }>;
+  verdict: Exclude<PackagePathVerdict, { type: "ignored" | "skipped" }>;
 };
 
 /**
