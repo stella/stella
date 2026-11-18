@@ -65,6 +65,8 @@ import {
   type CorpusIndexConfig,
   type CorpusIndexDocstoreSettings,
   type CorpusIndexIndexingSettings,
+  DECISION_TERMS_FIELD,
+  DECISION_TERMS_PARTIAL_FIELD,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
   PROJECTION_GENERATION_FIELD,
@@ -348,6 +350,57 @@ type CaseLawV10Manifest = CaseLawManifestBase & {
   };
 };
 
+/**
+ * Where a generation writes a decision's whole terms, their prefix mark, and
+ * whether opening passages sit in splits of their own (`own_splits`, the
+ * opening partition key) or share splits with every other passage
+ * (`shared_splits`). The engine scores the field with per-split statistics, so
+ * the layout decides what its BM25 counts as the corpus.
+ */
+type CaseLawDecisionTermsContract = {
+  field: typeof DECISION_TERMS_FIELD;
+  partialField: typeof DECISION_TERMS_PARTIAL_FIELD;
+  openingPassages: CaseLawOpeningPassageLayout;
+};
+
+type CaseLawOpeningPassageLayout = "own_splits" | "shared_splits";
+
+/**
+ * v10 plus one decision-level field: the decision's terms on its opening
+ * passage (`DECISION_TERMS_FIELD`), so the engine can rank decisions rather
+ * than passages. Mapped like `text_stem` (frequencies, field norms, the folded
+ * tokenizer, not stored); the mapping is `strict` and fixed at index creation,
+ * so the field arrives with a generation and v10 keeps its bytes.
+ */
+type CaseLawV11Manifest = CaseLawManifestBase & {
+  generation: "case_law_v11";
+  projection: Omit<CaseLawV10Manifest["projection"], "builderVersion"> & {
+    builderVersion: "case-law-passages-v6";
+    decisionTerms: CaseLawDecisionTermsContract & {
+      openingPassages: "own_splits";
+    };
+  };
+};
+
+/**
+ * v11's documents with opening passages sharing splits with the rest, for
+ * Czech decisions only: the other arm of the comparison that decides the
+ * opening partition, built beside v11 on one route and compared on the same
+ * queries. Partial, so it never serves the family; it is retired once the
+ * comparison is read.
+ */
+type CaseLawV12Manifest = Omit<
+  CaseLawV11Manifest,
+  "generation" | "projection"
+> & {
+  generation: "case_law_v12";
+  projection: Omit<CaseLawV11Manifest["projection"], "decisionTerms"> & {
+    decisionTerms: CaseLawDecisionTermsContract & {
+      openingPassages: "shared_splits";
+    };
+  };
+};
+
 type LegislationV2Manifest = CorpusIndexManifestBase & {
   family: "legislation";
   generation: "legislation_v2";
@@ -373,6 +426,8 @@ export type CorpusIndexManifest =
   | CaseLawV8Manifest
   | CaseLawV9Manifest
   | CaseLawV10Manifest
+  | CaseLawV11Manifest
+  | CaseLawV12Manifest
   | LegislationV2Manifest
   | LegislationV3Manifest;
 export type CorpusIndexManifestGeneration = CorpusIndexManifest["generation"];
@@ -534,7 +589,19 @@ type IndexConfigOptions = {
    * has passages.
    */
   defaultSearchFields: string[];
+  /** Absent on every generation before v11, so their digests keep their bytes. */
+  partitionKey?: typeof CASE_LAW_OPENING_PARTITION_KEY;
 };
+
+/**
+ * The partition key that gives opening passages splits of their own. The
+ * engine computes BM25's document count and average field length per split
+ * over every document in it; a field only the opening passage carries would
+ * otherwise be scored against statistics counted over every passage. The
+ * flag has two values, so the key makes two partitions.
+ */
+export const CASE_LAW_OPENING_PARTITION_KEY = "is_opening";
+export const CASE_LAW_OPENING_PARTITION_COUNT = 2;
 
 const indexConfig = ({
   fieldMappings,
@@ -543,6 +610,7 @@ const indexConfig = ({
   docstore,
   indexing,
   defaultSearchFields,
+  partitionKey,
 }: IndexConfigOptions) =>
   ({
     version: CORPUS_FINAL_INDEX_CONFIG_VERSION,
@@ -552,6 +620,7 @@ const indexConfig = ({
       tokenizers: [FOLDED_TOKENIZER],
       tag_fields: tagFields,
       timestamp_field: timestampField ?? null,
+      ...(partitionKey === undefined ? {} : { partition_key: partitionKey }),
       max_num_partitions: CORPUS_FINAL_INDEX_MAX_PARTITIONS,
       index_field_presence: false,
       store_document_size: false,
@@ -835,6 +904,72 @@ const CASE_LAW_V10_INDEX_CONFIG = deepFreeze(
   ),
 );
 
+/**
+ * v10's fields plus the decision's terms and their prefix mark. The terms
+ * field is v10's `text_stem` mapping under another name, derived rather than
+ * restated: the same folding tokenizer, frequencies without positions (a
+ * phrase still runs on a passage's `text`), field norms on, so BM25 normalizes
+ * by the decision's length, and not stored, as nothing reads it back. The mark
+ * is indexed so a count finds every decision written as a prefix, and stored
+ * so a hit can say so.
+ */
+const caseLawV11Fields = (): CorpusIndexFieldMapping[] => {
+  const base = caseLawV10Fields();
+  const textStem =
+    base.find(({ name }) => name === STEM_FIELD_OF.text) ??
+    panic("Case-law fields no longer map the text stem companion");
+  return [
+    ...base,
+    { ...textStem, name: DECISION_TERMS_FIELD },
+    {
+      name: DECISION_TERMS_PARTIAL_FIELD,
+      type: "bool",
+      indexed: true,
+      stored: true,
+      fast: false,
+    },
+  ];
+};
+
+const caseLawV11IndexConfig = (
+  openingPassages: CaseLawOpeningPassageLayout,
+  fieldMappings: CorpusIndexFieldMapping[],
+) =>
+  indexConfig({
+    fieldMappings,
+    tagFields: [...CASE_LAW_TAG_FIELDS],
+    timestampField: DECISION_TIMESTAMP_FIELD,
+    docstore: CORPUS_FINAL_INDEX_DOCSTORE_V7,
+    indexing: CORPUS_FINAL_INDEX_INDEXING_V8,
+    // Unchanged, for the reason stated at v6: the decision's terms live on
+    // its opening passage only, so a query names them or never reaches them.
+    defaultSearchFields: ["title", "text"],
+    ...(openingPassages === "own_splits"
+      ? { partitionKey: CASE_LAW_OPENING_PARTITION_KEY }
+      : {}),
+  });
+
+const CASE_LAW_V11_INDEX_CONFIG = deepFreeze(
+  structuredClone(caseLawV11IndexConfig("own_splits", caseLawV11Fields())),
+);
+
+const CASE_LAW_V12_INDEX_CONFIG = deepFreeze(
+  structuredClone(
+    caseLawV11IndexConfig("shared_splits", [
+      ...caseLawV11Fields(),
+      // A partial generation marks its documents' origin, as v9 does.
+      rawField(PROJECTION_GENERATION_FIELD, { stored: false, fast: false }),
+    ]),
+  ),
+);
+
+/** The Czech decisions the opening-partition comparison is read on. */
+const CASE_LAW_INDEXES_CREATED_WITH_V12 = {
+  type: "case_law_group",
+  byJurisdiction: { CZE: "cze" },
+  scope: "recorded",
+} as const satisfies CaseLawManifestRoute;
+
 const legislationFields = (): CorpusIndexFieldMapping[] => [
   ...commonFields(),
   rawField("status", { stored: false, fast: true }),
@@ -1026,6 +1161,79 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     },
     route: CASE_LAW_INDEXES_CREATED_WITH_V10,
   },
+  case_law_v11: {
+    schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
+    family: "case_law",
+    generation: "case_law_v11",
+    cluster: "q09",
+    engine: {
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
+      indexConfig: CASE_LAW_V11_INDEX_CONFIG,
+    },
+    projection: {
+      layout: "passage",
+      builderVersion: "case-law-passages-v6",
+      documentIdField: "document_id",
+      projectionRevisionField: "projection_revision",
+      openingField: "is_opening",
+      yearFacetField: "decision_year",
+      publisherSummaryField: PUBLISHER_SUMMARY_FIELD,
+      keywordsField: PUBLISHER_KEYWORDS_FIELD,
+      stemFields: {
+        text: STEM_FIELD_OF.text,
+        publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
+      },
+      rankingSignals: {
+        version: CASE_LAW_RANKING_SIGNALS_VERSION,
+        citationAuthorityBuckets: CITATION_AUTHORITY_BUCKETS,
+        fields: CASE_LAW_RANKING_SIGNAL_FIELDS,
+        storedBaseFields: CASE_LAW_RANKING_STORED_BASE_FIELDS,
+      },
+      decisionTerms: {
+        field: DECISION_TERMS_FIELD,
+        partialField: DECISION_TERMS_PARTIAL_FIELD,
+        openingPassages: "own_splits",
+      },
+    },
+    // Created with v10's topology: the same groups, Czech decisions in `cze`.
+    route: CASE_LAW_INDEXES_CREATED_WITH_V10,
+  },
+  case_law_v12: {
+    schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
+    family: "case_law",
+    generation: "case_law_v12",
+    cluster: "q09",
+    engine: {
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
+      indexConfig: CASE_LAW_V12_INDEX_CONFIG,
+    },
+    projection: {
+      layout: "passage",
+      builderVersion: "case-law-passages-v6",
+      documentIdField: "document_id",
+      projectionRevisionField: "projection_revision",
+      openingField: "is_opening",
+      yearFacetField: "decision_year",
+      publisherSummaryField: PUBLISHER_SUMMARY_FIELD,
+      keywordsField: PUBLISHER_KEYWORDS_FIELD,
+      stemFields: {
+        text: STEM_FIELD_OF.text,
+        publisherSummary: STEM_FIELD_OF[PUBLISHER_SUMMARY_FIELD],
+      },
+      rankingSignals: {
+        version: CASE_LAW_RANKING_SIGNALS_VERSION,
+        citationAuthorityBuckets: CITATION_AUTHORITY_BUCKETS,
+        fields: CASE_LAW_RANKING_SIGNAL_FIELDS,
+        storedBaseFields: CASE_LAW_RANKING_STORED_BASE_FIELDS,
+      },
+      decisionTerms: {
+        field: DECISION_TERMS_FIELD,
+        partialField: DECISION_TERMS_PARTIAL_FIELD,
+        openingPassages: "shared_splits",
+      },
+    },
+    route: CASE_LAW_INDEXES_CREATED_WITH_V12,
+  },
   legislation_v2: {
     schemaVersion: CORPUS_INDEX_MANIFEST_SCHEMA_VERSION,
     family: "legislation",
@@ -1086,6 +1294,10 @@ export const requireCorpusIndexManifest = (
           return CORPUS_INDEX_MANIFESTS.case_law_v9;
         case "case_law_v10":
           return CORPUS_INDEX_MANIFESTS.case_law_v10;
+        case "case_law_v11":
+          return CORPUS_INDEX_MANIFESTS.case_law_v11;
+        case "case_law_v12":
+          return CORPUS_INDEX_MANIFESTS.case_law_v12;
         default:
           return panic(`Unknown case-law index manifest: ${generation}`);
       }
@@ -1144,6 +1356,8 @@ export const corpusIndexPublisherFields = (
     case "case_law_v8":
     case "case_law_v9":
     case "case_law_v10":
+    case "case_law_v11":
+    case "case_law_v12":
       return {
         kind: "summary_and_keywords",
         summaryField: manifest.projection.publisherSummaryField,
@@ -1209,6 +1423,8 @@ export const corpusIndexStemFields = (
     case "case_law_v8":
     case "case_law_v9":
     case "case_law_v10":
+    case "case_law_v11":
+    case "case_law_v12":
       return manifest.projection.stemFields;
     case "legislation_v2":
     case "legislation_v3":
@@ -1236,7 +1452,39 @@ export const corpusIndexRankingSignals = (
     case "case_law_v9":
       return null;
     case "case_law_v10":
+    case "case_law_v11":
+    case "case_law_v12":
       return manifest.projection.rankingSignals;
+    case "legislation_v2":
+    case "legislation_v3":
+      return null;
+    default:
+      manifest satisfies never;
+      return panic(`Unhandled manifest: ${String(manifest)}`);
+  }
+};
+
+export type CorpusIndexDecisionTerms = CaseLawDecisionTermsContract;
+
+/**
+ * Where a generation writes a decision's whole terms, or null. Total, like the
+ * stem fields: the writer must not emit a field the generation's `strict`
+ * mapping lacks, and a query must not name one a generation never wrote.
+ */
+export const corpusIndexDecisionTerms = (
+  manifest: CorpusIndexManifest,
+): CorpusIndexDecisionTerms | null => {
+  switch (manifest.generation) {
+    case "case_law_v5":
+    case "case_law_v6":
+    case "case_law_v7":
+    case "case_law_v8":
+    case "case_law_v9":
+    case "case_law_v10":
+      return null;
+    case "case_law_v11":
+    case "case_law_v12":
+      return manifest.projection.decisionTerms;
     case "legislation_v2":
     case "legislation_v3":
       return null;

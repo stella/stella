@@ -97,6 +97,57 @@ export const DECISION_SEARCH_MATCHES = ["all_terms", "some_terms"] as const;
 
 export type DecisionSearchMatch = (typeof DECISION_SEARCH_MATCHES)[number];
 
+/**
+ * How a case-law page orders its hits, named on the page so every reader
+ * (the HTTP search, the agent tools that merge phrasings, the web) applies
+ * one order instead of each deciding its own.
+ *
+ * - `score`: one ranking; a decision lacking a word may stand above one
+ *   holding them all when the ranking puts it there.
+ * - `all_words_first`: every decision holding all the words, then those
+ *   holding some, each group in score order.
+ */
+export const CASE_LAW_HIT_ORDERS = ["score", "all_words_first"] as const;
+
+export type CaseLawHitOrder = (typeof CASE_LAW_HIT_ORDERS)[number];
+
+/**
+ * The order of a page ranked over whole decisions. Pure score until the
+ * evaluation of the decision-level generation settles it. A page of the
+ * passage generations is `all_words_first` by construction: its partial
+ * matches are a second pass appended after the full ones.
+ */
+export const CASE_LAW_RANKED_HIT_ORDER: CaseLawHitOrder = "score";
+
+/** Which group of an order a hit falls in; lower groups come first. */
+export const caseLawHitGroup = (
+  match: DecisionSearchMatch,
+  order: CaseLawHitOrder,
+): number => {
+  switch (order) {
+    case "score":
+      return 0;
+    case "all_words_first":
+      return match === "some_terms" ? 1 : 0;
+    default:
+      order satisfies never;
+      return panic("Unhandled case-law hit order");
+  }
+};
+
+/**
+ * Hits in `order`, stable within each group. Two groups at most, so two
+ * filters rather than a sort: this module also ships to the desktop WebView,
+ * whose minimum version has no `Array#toSorted`.
+ */
+export const orderCaseLawHits = <Hit extends { match: DecisionSearchMatch }>(
+  hits: readonly Hit[],
+  order: CaseLawHitOrder,
+): Hit[] => [
+  ...hits.filter((hit) => caseLawHitGroup(hit.match, order) === 0),
+  ...hits.filter((hit) => caseLawHitGroup(hit.match, order) !== 0),
+];
+
 /** Match semantics shared by HTTP, MCP and persisted chat projections. */
 export const LEGISLATION_SEARCH_MATCH_TYPES = ["strict", "relaxed"] as const;
 
@@ -223,9 +274,59 @@ export const SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET = {
   reason: "time_budget",
 } as const;
 
+/**
+ * A case-law first page whose phase for decisions holding only some of the
+ * words was due and did not finish. The page holds what the finished phases
+ * found, which is not the whole answer: it never ends `complete`, and the
+ * agent tools rerun the phrasing from its next cursor.
+ */
+export const SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET = {
+  type: "truncated",
+  reason: "partial_matches_budget",
+} as const;
+
 export type SearchPaginationOutcome =
   | typeof SEARCH_PAGINATION_COMPLETE
   | typeof SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET;
+
+/** A case-law page: a scan outcome, or partial matches due and unread. */
+export type CaseLawSearchPaginationOutcome =
+  | SearchPaginationOutcome
+  | typeof SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET;
+
+/**
+ * How each phase a search was due to run ended. A phase that was not due
+ * says so (`not_due`) rather than being left out, so a search that adds a
+ * phase cannot report a page end without deciding what that phase did.
+ */
+export const SEARCH_PHASE_STATES = ["not_due", "finished", "skipped"] as const;
+
+export type SearchPhaseState = (typeof SEARCH_PHASE_STATES)[number];
+
+/**
+ * The outcome a case-law page reports, from the scan's own outcome and every
+ * later phase. The one place a skipped phase turns into a truncated page: a
+ * page whose partial-match phase did not finish is never complete, however
+ * the strict scan ended.
+ */
+export const caseLawPageOutcome = ({
+  scan,
+  partialMatches,
+}: {
+  scan: SearchPaginationOutcome;
+  partialMatches: SearchPhaseState;
+}): CaseLawSearchPaginationOutcome => {
+  switch (partialMatches) {
+    case "skipped":
+      return SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET;
+    case "not_due":
+    case "finished":
+      return scan;
+    default:
+      partialMatches satisfies never;
+      return panic("Unhandled search phase state");
+  }
+};
 
 /**
  * What follows a page of search results, read from everything the search

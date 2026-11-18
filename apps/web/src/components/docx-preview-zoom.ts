@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -69,39 +69,36 @@ export const useDocxFitZoom = ({
   // re-run on ref mutation. The callback-ref form attaches the
   // ResizeObserver exactly once per node lifetime regardless of
   // parent re-renders.
-  const containerRef = useCallback(
-    (node: HTMLElement | null) => {
-      if (!node) {
-        return undefined;
+  const containerRef = (node: HTMLElement | null) => {
+    if (!node) {
+      return undefined;
+    }
+
+    const updateZoom = () => {
+      const { clientWidth } = node;
+      if (clientWidth <= 0) {
+        return;
       }
+      const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
+      const nextFitZoom = availableWidth / fitWidth;
+      const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
+      setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
+    };
 
-      const updateZoom = () => {
-        const { clientWidth } = node;
-        if (clientWidth <= 0) {
-          return;
-        }
-        const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
-        const nextFitZoom = availableWidth / fitWidth;
-        const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
-        setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
-      };
+    updateZoom();
+    // Belt-and-braces retry on the next frame for surfaces
+    // where the parent finishes sizing after our first measure
+    // (e.g., inspector pane expanding on the same commit as
+    // the docx tab opening).
+    const rafId = requestAnimationFrame(updateZoom);
+    const observer = new ResizeObserver(updateZoom);
+    observer.observe(node);
 
-      updateZoom();
-      // Belt-and-braces retry on the next frame for surfaces
-      // where the parent finishes sizing after our first measure
-      // (e.g., inspector pane expanding on the same commit as
-      // the docx tab opening).
-      const rafId = requestAnimationFrame(updateZoom);
-      const observer = new ResizeObserver(updateZoom);
-      observer.observe(node);
-
-      return () => {
-        cancelAnimationFrame(rafId);
-        observer.disconnect();
-      };
-    },
-    [maxAutoZoom, fitWidth],
-  );
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  };
 
   return { containerRef, fitZoom: clampDocxZoom(fitZoom + scaleOffset) };
 };

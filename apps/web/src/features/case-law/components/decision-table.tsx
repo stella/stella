@@ -8,7 +8,7 @@
  * statute tables cannot drift from each other.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -121,15 +121,11 @@ export const DecisionTable = ({
     referenceKind,
   });
   const sorting = decisionTableSorting(dateOrder);
-  const rows = useMemo(
-    () =>
-      decisions.map((decision): DecisionRowData => ({
-        kind: "decision",
-        decision,
-        children: [],
-      })),
-    [decisions],
-  );
+  const rows = decisions.map((decision): DecisionRowData => ({
+    kind: "decision",
+    decision,
+    children: [],
+  }));
   const selection = {
     actions: <QuestionColumnSelectionBar surface={questions} />,
     clearLabel: t("common.clearSelection"),
@@ -162,20 +158,17 @@ export const DecisionTable = ({
     ReadonlySet<string>
   >(NO_EXPANDED_HEADNOTES);
 
-  const renderScope = useMemo(
-    () => ({
-      contentMode: layout.contentMode,
-      expandedHeadnoteIds,
-      onToggleHeadnote: (decisionId: string) => {
-        setExpandedHeadnoteIds((current) =>
-          withHeadnoteToggled(current, decisionId),
-        );
-      },
-      queryTokens: queryHighlightTokens(query),
-      searchQuery: query,
-    }),
-    [expandedHeadnoteIds, layout.contentMode, query],
-  );
+  const renderScope = {
+    contentMode: layout.contentMode,
+    expandedHeadnoteIds,
+    onToggleHeadnote: (decisionId: string) => {
+      setExpandedHeadnoteIds((current) =>
+        withHeadnoteToggled(current, decisionId),
+      );
+    },
+    queryTokens: queryHighlightTokens(query),
+    searchQuery: query,
+  };
 
   return (
     <DecisionRenderScope value={renderScope}>

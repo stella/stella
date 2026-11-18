@@ -283,7 +283,7 @@ const installFixtureNetwork = () => {
   }
   const organizationSettings = {
     declaredFeatureIds: [],
-    deploymentFeatures: { legalLists: true },
+    deploymentFeatures: { legalLists: true, invoiceLinks: true },
     capabilities: {},
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",

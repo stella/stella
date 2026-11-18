@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -20,7 +18,7 @@ export const useEntityTableGroups = (
 ) => {
   const t = useTranslations();
   const schema = useEntityViewGroupingSchema(rows);
-  return useMemo(() => {
+  return (() => {
     const grouping = resolveKanbanGrouping({ groupBy: groupBy ?? "", schema });
     if (grouping.type === "none") {
       return null;
@@ -64,5 +62,5 @@ export const useEntityTableGroups = (
       }
     }
     return groups;
-  }, [groupBy, rows, schema, t]);
+  })();
 };

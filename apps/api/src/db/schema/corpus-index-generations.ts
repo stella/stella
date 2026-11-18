@@ -44,6 +44,16 @@ export const corpusIndexGenerations = p.pgTable(
     cluster: p.text({ enum: QUICKWIT_CLUSTERS }).notNull(),
     manifestDigest: p.varchar("manifest_digest", { length: 64 }).notNull(),
     status: p.text({ enum: CORPUS_INDEX_GENERATION_STATUSES }).notNull(),
+    /**
+     * When the retire command moved the generation to retired; null for a
+     * generation that is not retired, or was retired before the command
+     * existed. Written once, with `retireActor` and `retireReason`.
+     */
+    retiredAt: timestamptz("retired_at"),
+    /** Who retired the generation (the operator id the command was given). */
+    retireActor: p.varchar("retire_actor", { length: 128 }),
+    /** Why the generation was retired (the go it rests on). */
+    retireReason: p.varchar("retire_reason", { length: 2048 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()

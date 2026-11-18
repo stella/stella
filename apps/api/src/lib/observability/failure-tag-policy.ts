@@ -10,6 +10,9 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
  * The generated census contains no policy, so a new tag requires a decision.
  */
 export const TAGGED_FAILURE_REASON = {
+  DoctorError: "tagged_failure",
+  InstallChannelError: "tagged_failure",
+  NativeUpdateError: "tagged_failure",
   AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
   AttachmentCopyFailed: "tagged_failure",
@@ -142,12 +145,15 @@ export const TAGGED_FAILURE_REASON = {
   CorpusIndexFlipPairRefusedError: "tagged_failure",
   CorpusIndexFlipParityReadError: "tagged_failure",
   CorpusIndexGenerationFlipRefusedError: "tagged_failure",
+  CorpusIndexGenerationRetireRefusedError: "tagged_failure",
   CorpusIndexGroupContractMismatchError: "tagged_failure",
   CorpusIndexGroupNotReadyError: "tagged_failure",
   CorpusIndexGroupWithdrawalRefusedError: "tagged_failure",
   CorpusIndexJobDetailBackfillError: "tagged_failure",
+  CorpusIndexProjectionFenceBusyError: "tagged_failure",
   CorpusIndexProjectionSubjectMissingError: "tagged_failure",
   CorpusIndexReadContractError: "tagged_failure",
+  CorpusIndexRetireEngineError: "tagged_failure",
   CorpusMemberDigestMismatchError: "tagged_failure",
   CorpusMemberTombstonedError: "tagged_failure",
   CorpusPackError: "tagged_failure",
