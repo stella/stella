@@ -145,6 +145,21 @@ const isInputRuleType = (type: string): boolean =>
 /** The attributes that carry an element's role, on the web and in React Native. */
 const ROLE_ATTRIBUTES = new Set(["role", "accessibilityRole"]);
 
+/** The name an import specifier takes from its module (`Text` in `Text as T`). */
+const importedName = (specifier: unknown): string | null => {
+  if (!isAstNode(specifier) || specifier.type !== "ImportSpecifier") {
+    return null;
+  }
+  const imported: unknown = specifier.imported;
+  if (!isAstNode(imported)) {
+    return null;
+  }
+  if (imported.type === "Identifier" && typeof imported.name === "string") {
+    return imported.name;
+  }
+  return typeof imported.value === "string" ? imported.value : null;
+};
+
 /**
  * The "react-native" import specifier a tag's identifier binds to, lexically:
  * a parameter or local named `Text` shadows the import. Read from the binding
