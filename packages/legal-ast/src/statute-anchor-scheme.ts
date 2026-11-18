@@ -2,6 +2,7 @@
 // parser-output-unchanged: Minting and nesting provision anchors moved here serve provision keys and previews; decision parsers still call none of this module.
 // parser-output-unchanged: Unnumbered statute wording is read only by provision reads and previews; decision parsers still call none of this module.
 // parser-output-unchanged: Governing wording, unnumbered segments and ancestor paths serve statute provision reads only; decision parsers still call none of this module.
+// parser-output-unchanged: Annex anchor grammars and the reading of a requested annex number serve statute reads only; decision parsers still call none of this module.
 /**
  * The grammar a publisher writes statute anchors in, and every reading of an
  * anchor's path that the readers, previews and provision reads make.
@@ -16,6 +17,8 @@
  * own.
  */
 import { panic } from "better-result";
+
+import { stripDiacritics } from "@stll/text-normalize";
 
 import type { ParagraphListDepth } from "./document-ast.js";
 
@@ -42,6 +45,9 @@ type StatuteAnchorKinds = Readonly<Record<StatuteAnchorLevel, string>>;
  *   `odsek-1.text2`). `unnumberedSegment` matches one segment naming such
  *   wording where the publisher files it under the unit it belongs to
  *   (`par_5-pism_e-frag_6070235`, `odsek-1.text2`, `paragraf-5.text`).
+ *   `annexAnchors` match the anchor of an annex heading, each capturing the
+ *   annex's designator (`3` of `pril_3`) as `designator`, or capturing
+ *   nothing for an act's one unnumbered annex.
  * - `path`: anchors nest on `segmentSeparator`, but their segments name no
  *   list the reader can draw; `reason` says why.
  * - `whole`: anchors are read whole, so none nests under another; `reason`
@@ -57,6 +63,7 @@ export type StatuteAnchorScheme =
       segmentSeparator: string;
       unnumberedAnchor: RegExp | null;
       unnumberedSegment: RegExp;
+      annexAnchors: readonly RegExp[];
     }
   | { type: "path"; reason: string; segmentSeparator: string }
   | { type: "whole"; reason: string };
@@ -87,6 +94,12 @@ export const E_SBIRKA_ANCHORS = {
   segmentSeparator: "-",
   unnumberedAnchor: /^frag_\d+$/u,
   unnumberedSegment: /^frag_\d+$/u,
+  // `pril_3`, `pril_2A`, `pril_A/1`, `pril_4:2`, and in a few older acts
+  // `priloha_27`.
+  annexAnchors: [
+    /^pril_(?<designator>[^-]+)$/u,
+    /^priloha_(?<designator>[^-]+)$/u,
+  ],
 } as const satisfies StatuteAnchorScheme;
 
 const SLOV_LEX_KINDS = {
@@ -107,6 +120,17 @@ export const SLOV_LEX_ANCHORS = {
   segmentSeparator: ".",
   unnumberedAnchor: null,
   unnumberedSegment: /^text\d*$/u,
+  // Every annex is a `prilohy.priloha-…` container whose id the publisher
+  // spells from the annex's own title: `…priloha_c_3_k_zakonu_c_108_2024_z_z`,
+  // `…priloha_ii_k_vyhlasce_…`, `…priloha_a`, `…priloha-1`, and for an act's
+  // one annex `…priloha_k_zakonu_c_106_2024_z_z`. The first pattern that
+  // matches decides; the last names an annex whose number the id omits.
+  annexAnchors: [
+    /^(?:prilohy|predpis)\.priloha-priloha_(?:k|ku|vyhlasky|vyhlasce|zakona|zakonu|nariadenia|nariadeniu|opatrenia|opatreniu)_[^.]*$/u,
+    /^(?:prilohy|predpis)\.priloha-priloha_(?:c_)?(?<designator>[0-9]+[a-z]{0,2}|[a-z]|[ivx]+)(?:_[^.]*)?$/u,
+    /^(?:prilohy|predpis)\.priloha-(?<designator>[0-9]+[a-z]{0,2})$/u,
+    /^(?:prilohy|predpis)\.priloha-[^.]+$/u,
+  ],
 } as const satisfies StatuteAnchorScheme;
 
 /**
@@ -416,4 +440,50 @@ export const provisionAncestorAnchors = (
     ancestors.push(path);
   }
   return ancestors;
+};
+
+/**
+ * The designator of the annex a heading anchor names (`3` for `pril_3`),
+ * `""` for an act's one unnumbered annex, or null when the anchor names no
+ * annex in the scheme's grammar.
+ */
+export const annexDesignator = (
+  scheme: StatuteAnchorScheme,
+  anchor: string,
+): string | null => {
+  if (scheme.type !== "listed") {
+    return null;
+  }
+  for (const pattern of scheme.annexAnchors) {
+    const match = pattern.exec(anchor);
+    if (match !== null) {
+      return (match.groups?.["designator"] ?? "").toLowerCase();
+    }
+  }
+  return null;
+};
+
+/**
+ * The annex a caller's spelling names, whatever grammar it was written in:
+ * `priloha_3`, `příloha č. 3`, `Příloha 3`, `pril_3`, `annex-3`,
+ * `prilohy.priloha-3`, or a bare `priloha` for an act's one annex. Returns
+ * the designator lower-cased, or null when the spelling names no annex.
+ * A designator that the `č.`/`no.` prefix could also have eaten (`pril_c`)
+ * is read as the designator.
+ */
+export const requestedAnnexDesignator = (requested: string): string | null => {
+  const folded = stripDiacritics(requested).toLowerCase().trim();
+  const match =
+    /^(?:prilohy[ ._-]*)?(?:priloha|pril|annex|appendix)(?<prefix>[ ._-]*(?:c|cislo|no|nr)\.?)?[ ._-]*(?<designator>[0-9a-z]+(?:[/:][0-9a-z]+)?)?$/u.exec(
+      folded,
+    );
+  if (match === null) {
+    return null;
+  }
+  const designator = match.groups?.["designator"];
+  if (designator !== undefined) {
+    return designator;
+  }
+  const prefix = match.groups?.["prefix"]?.replace(/[ ._-]/gu, "");
+  return prefix === "c" ? "c" : "";
 };

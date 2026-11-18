@@ -916,7 +916,7 @@
   "no-native-ui/no-native-separator": {},
   "no-native-ui/no-native-table": {
     "apps/web/src/components/workspaces/table/workspace-grid.tsx": 3,
-    "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 1,
+    "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 3,
     "packages/decision-reader/src/document-ast-text.tsx": 3
   },
   "no-native-ui/no-native-textarea": {},

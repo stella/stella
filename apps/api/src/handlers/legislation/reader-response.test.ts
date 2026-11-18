@@ -463,6 +463,76 @@ test("amendment previews preserve same-day actors, staged starts, and source gap
   ).toEqual(snapshot.coverage);
 });
 
+test("an instruction the publisher restates under several links reads once and keeps every link", () => {
+  const sourceId = createSafeId<"legislationSource">();
+  // 408/2023 Sb. amends § 5 písm. e) of 435/2004 Sb. on 2024-01-01; the
+  // publisher's link dataset states it again under another link id.
+  const relation = {
+    sourceId,
+    targetEli: "https://www.e-sbirka.cz/eli/cz/sb/2004/435",
+    language: "cs",
+    publisherId: "cz-esbirka:link/981085",
+    amendingEli: "https://www.e-sbirka.cz/eli/cz/sb/2023/408",
+    amendingTitle: "408/2023 Sb.",
+    amendingAnchor: null,
+    affectedAnchor: "par_5-pism_e",
+    changeKind: "changed",
+    effectiveType: "date",
+    effectiveDate: "2024-01-01",
+    effectiveText: null,
+    publisherInstruction: "UPRAVUJE",
+  } as const;
+  const page = {
+    items: [
+      relation,
+      { ...relation, publisherId: "cz-esbirka:link/1310442" },
+      {
+        ...relation,
+        publisherId: "cz-esbirka:link/981086",
+        changeKind: "inserted" as const,
+      },
+      {
+        ...relation,
+        publisherId: "cz-esbirka:link/981087",
+        affectedAnchor: "par_5-pism_f",
+      },
+    ],
+    limit: 500,
+    nextCursor: null,
+  };
+  const snapshot = {
+    observedAt: new Date("2026-11-18T06:00:00Z"),
+    coverage: { type: "complete" },
+  } as const;
+  const result = projectStatuteAmendments({ page, snapshot });
+  expect(
+    result?.items.map(
+      ({ publisherId, duplicatePublisherIds, affectedAnchor, changeKind }) => [
+        publisherId,
+        duplicatePublisherIds,
+        affectedAnchor,
+        changeKind,
+      ],
+    ),
+  ).toEqual([
+    [
+      "cz-esbirka:link/981085",
+      ["cz-esbirka:link/1310442"],
+      "par_5-pism_e",
+      "changed",
+    ],
+    ["cz-esbirka:link/981086", [], "par_5-pism_e", "inserted"],
+    ["cz-esbirka:link/981087", [], "par_5-pism_f", "changed"],
+  ]);
+  // Every stored link is still named.
+  expect(
+    result?.items.flatMap(({ publisherId, duplicatePublisherIds }) => [
+      publisherId,
+      ...duplicatePublisherIds,
+    ]),
+  ).toHaveLength(page.items.length);
+});
+
 test("effect dates label only eligible version openings across every expression state", () => {
   for (const expressionKind of LEGISLATION_EXPRESSION_KINDS) {
     for (const windowDisposition of LEGISLATION_WINDOW_DISPOSITIONS) {

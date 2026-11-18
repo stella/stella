@@ -721,6 +721,7 @@ export const ENUM_COLUMN_ROLES = {
     result: LIFECYCLE,
   },
   user: {
+    locale: ATTRIBUTE,
     reader_answer_language: ATTRIBUTE,
   },
   user_professional_use_acceptances: {

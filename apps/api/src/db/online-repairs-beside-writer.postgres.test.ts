@@ -954,6 +954,11 @@ const SEEDS = {
     "user_email_undeliverable_check",
     `INSERT INTO "user" (id, name, email, email_undeliverable_address, email_undeliverable_reason, email_undeliverable_at) VALUES ('user', 'User', 'user@example.invalid', 'user@example.invalid', 'hard_bounce', now())`,
   ),
+  user_locale_supported_check: noRowSeed(
+    "user",
+    "user_locale_supported_check",
+    `INSERT INTO "user" (id, name, email, locale) VALUES ('user', 'User', 'user@example.invalid', 'cs')`,
+  ),
   time_entries_internal_shape_check: noRowSeed(
     "time_entries",
     "time_entries_internal_shape_check",

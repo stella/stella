@@ -38,6 +38,8 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "emailVerified",
   // Time formatting preferences are not used by a picker.
   "timezoneId",
+  // Interface language belongs to the member's own preferences.
+  "locale",
   // A picker uses the canonical name, as other matter-team surfaces do.
   "preferredName",
   // Editor shortcut preferences are unrelated to choosing a person.
