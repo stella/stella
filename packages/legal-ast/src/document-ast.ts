@@ -59,7 +59,11 @@ import {
   rawInlineTypes,
 } from "./inline.js";
 import type { Inline } from "./inline.js";
-import { anchorEndsWithPath } from "./statute-anchor-scheme.js";
+import {
+  anchorEndsWithPath,
+  annexDesignator,
+  requestedAnnexDesignator,
+} from "./statute-anchor-scheme.js";
 import type { StatuteBlocks } from "./statute-anchor-scheme.js";
 
 export type {
@@ -328,7 +332,8 @@ export const hasBlockInlines = (block: Block): block is InlineBlock =>
 
 /**
  * Resolve an AST anchor stated without its structural parent path. Exact
- * anchors win; a tail alias is usable only when it identifies one block.
+ * anchors win; a tail alias is usable only when it identifies one block, and
+ * an annex is also found by the number a citation gives it.
  * This lets a legal reference such as `cl_7` reach `prilohy-cl_7` without
  * guessing when several annexes repeat the same local designation. The tail
  * is whole segments of the publisher's scheme, never a substring.
@@ -342,22 +347,39 @@ const resolveAnchorCandidate = <TBlock extends Block>(
     return exact;
   }
 
-  let resolved: TBlock | null = null;
-  for (const block of blocks) {
-    if (
-      !anchorEndsWithPath(scheme, {
-        anchor: block.anchorId,
-        tail: requestedAnchorId,
-      })
-    ) {
-      continue;
-    }
-    if (resolved !== null) {
-      return null;
-    }
-    resolved = block;
+  const tails = blocks.filter((block) =>
+    anchorEndsWithPath(scheme, {
+      anchor: block.anchorId,
+      tail: requestedAnchorId,
+    }),
+  );
+  if (tails.length > 0) {
+    return tails.length === 1 ? (tails[0] ?? null) : null;
   }
-  return resolved;
+  return annexNamed({ blocks, scheme }, requestedAnchorId);
+};
+
+/**
+ * The annex heading a caller's spelling names (`priloha_3`, `příloha č. 3`,
+ * `annex 3` for e-Sbírka's `pril_3` or Slov-Lex's
+ * `prilohy.priloha-priloha_c_3_k_…`), when exactly one heading carries that
+ * designator. An annex is a provision a reader cites by its number, and no
+ * publisher's anchor for it is one a caller can guess.
+ */
+const annexNamed = <TBlock extends Block>(
+  { blocks, scheme }: StatuteBlocks<TBlock>,
+  requestedAnchorId: string,
+): TBlock | null => {
+  const designator = requestedAnnexDesignator(requestedAnchorId);
+  if (designator === null) {
+    return null;
+  }
+  const annexes = blocks.filter(
+    (block) =>
+      block.type === "heading" &&
+      annexDesignator(scheme, block.anchorId) === designator,
+  );
+  return annexes.length === 1 ? (annexes[0] ?? null) : null;
 };
 
 export const resolveDocumentAnchor = (
