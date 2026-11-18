@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
-import { PUBLIC_COUNTRY_CAPABILITIES } from "@stll/api-contract/public-country-capability";
+import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
 import { PROVISION_CITATION_JURISDICTIONS } from "@stll/legal-atlas/provision-citation-profile";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
@@ -63,7 +63,7 @@ const defaultResolveLawCitation: typeof resolveLawCitation = async (...input) =>
  * not advertised.
  */
 const supportedLawCountries = PROVISION_CITATION_JURISDICTIONS.filter(
-  (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "admitted",
+  (country) => isPublicLegislationCountry(country),
 ).join(", ");
 
 const common = {
