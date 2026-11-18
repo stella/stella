@@ -14,6 +14,14 @@ type LoadRouteResourceOptions<T> = {
 const MISSING_RESOURCE_STATUSES = [403, 404] as const;
 
 /**
+ * Whether a read failed because the resource is missing or not visible to
+ * this user. Both read as "not found", so the UI never tells them apart.
+ */
+export const isMissingResourceError = (error: unknown): boolean =>
+  APIError.is(error) &&
+  MISSING_RESOURCE_STATUSES.some((status) => status === error.status);
+
+/**
  * Loads a URL-addressed resource without leaking whether an inaccessible row
  * exists. URL ids and missing outcomes all become the router's 404 boundary.
  */
@@ -32,12 +40,7 @@ export async function routeResourceResult<T>({
   });
   if (loaded.isErr()) {
     const error = loaded.error;
-    return Result.err(
-      APIError.is(error) &&
-        MISSING_RESOURCE_STATUSES.some((status) => status === error.status)
-        ? notFound()
-        : error,
-    );
+    return Result.err(isMissingResourceError(error) ? notFound() : error);
   }
 
   return exists(loaded.value) ? loaded : Result.err(notFound());

@@ -22,12 +22,16 @@ import {
   VOCABULARY_STATUS,
 } from "@/api/handlers/dictation/provider";
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
+import { detached } from "@/api/lib/analytics/capture";
 import {
+  deleteElevenLabsTranscript,
   elevenLabsTranscriptionUrl,
+  elevenLabsTranscriptUrl,
   fetchElevenLabsTranscription,
 } from "@/api/lib/chat/provider-data-policy";
 import type { ElevenLabsEnvironment } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ModelDispatchScope } from "@/api/lib/rate-limit/model-dispatch-admission";
 
@@ -88,6 +92,57 @@ const wireSchema = v.object({
   ),
   audio_duration_secs: v.optional(v.nullable(secondsSchema)),
 });
+
+const keptSchema = v.object({
+  transcription_id: v.optional(v.nullable(v.string())),
+});
+
+/** The id of the transcript ElevenLabs kept for an answer, if it names one. */
+const keptTranscriptId = (body: unknown) => {
+  const parsed = v.safeParse(keptSchema, body);
+  return parsed.success ? (parsed.output.transcription_id ?? null) : null;
+};
+
+type DeleteKeptTranscriptOptions = {
+  deployment: ElevenLabsDeployment;
+  transcriptionId: string;
+  fetch?: typeof deleteElevenLabsTranscript | undefined;
+};
+
+/**
+ * Deletes, in the background, the audio and transcript ElevenLabs kept for
+ * a request made without zero retention. The dictation does not wait for
+ * it; a refused delete is logged and a failed one reported, never shown to
+ * the speaker. A transcript already gone counts as deleted.
+ */
+export const deleteKeptTranscript = ({
+  deployment,
+  transcriptionId,
+  fetch: fetchProvider = deleteElevenLabsTranscript,
+}: DeleteKeptTranscriptOptions) => {
+  detached(async () => {
+    const url = elevenLabsTranscriptUrl(
+      deployment.environment,
+      transcriptionId,
+    );
+    if (url === null) {
+      logger.warn("ElevenLabs kept a transcript under an unexpected id");
+      return;
+    }
+    const response = await fetchProvider(url, {
+      method: "DELETE",
+      headers: { "xi-api-key": deployment.apiKey },
+      redirect: "error",
+      timeout: { type: "headers", ms: PROVIDER_TIMEOUT_MS },
+    });
+    await response.body?.cancel();
+    if (!response.ok && response.status !== 404) {
+      logger.warn("ElevenLabs kept a transcript its delete refused", {
+        "http.status_code": response.status,
+      });
+    }
+  }, "dictation.elevenlabs-transcript-delete");
+};
 
 /**
  * The ElevenLabs answer in the shape every transcription returns. Its
@@ -151,11 +206,14 @@ type TranscribeWithElevenLabsOptions = {
   scope: ModelDispatchScope;
   signal?: AbortSignal | undefined;
   fetch?: typeof fetchElevenLabsTranscription | undefined;
+  deleteKept?: typeof deleteKeptTranscript | undefined;
   scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
 /** One audio chunk transcribed by ElevenLabs with the deployment's key, in
- *  its environment, with zero retention when the account has it. */
+ *  its environment, with zero retention when the account has it. Without
+ *  it, the transcript ElevenLabs kept is deleted once the answer is in,
+ *  whether or not the answer was usable. */
 export const transcribeWithElevenLabs = async ({
   audio,
   modelId,
@@ -164,6 +222,7 @@ export const transcribeWithElevenLabs = async ({
   scope,
   signal,
   fetch: fetchProvider = fetchElevenLabsTranscription,
+  deleteKept = deleteKeptTranscript,
   scheduleTimeout,
 }: TranscribeWithElevenLabsOptions) => {
   const abortSignal = admittedDispatchSignal({ ...scope, abortSignal: signal });
@@ -198,6 +257,7 @@ export const transcribeWithElevenLabs = async ({
   form.append("timestamps_granularity", "word");
   form.append("tag_audio_events", "false");
   form.append("diarize", "false");
+  const kept: { transcriptionId: string | null } = { transcriptionId: null };
   const fetched = await requestTranscription({
     send: async (requestSignal) =>
       await fetchProvider(
@@ -214,11 +274,16 @@ export const transcribeWithElevenLabs = async ({
           timeout: { type: "headers", ms: PROVIDER_TIMEOUT_MS },
         },
       ),
-    normalize: (answer) =>
-      normalizeElevenLabsResponse(answer, modelId, durationMs),
+    normalize: (answer) => {
+      kept.transcriptionId = keptTranscriptId(answer);
+      return normalizeElevenLabsResponse(answer, modelId, durationMs);
+    },
     signal: abortSignal,
     scheduleTimeout,
   });
+  if (!deployment.zeroRetention && kept.transcriptionId !== null) {
+    deleteKept({ deployment, transcriptionId: kept.transcriptionId });
+  }
   if (fetched.isErr()) {
     return Result.err(fetched.error);
   }
