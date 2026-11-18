@@ -392,6 +392,13 @@ updates:
       - dependency-name: "lucide-static"
         versions:
           - ">1.70.0"
+      # oxlint-tsgolint 7.0.2006 fails on the Linux CI runners under oxlint
+      # 1.93 (tsgolint exits with os error 11, and the type-aware lint in
+      # scripts/code-check-affected.test.ts times out). Remove this when an
+      # upstream release runs cleanly there.
+      - dependency-name: "oxlint-tsgolint"
+        versions:
+          - ">7.0.2005"
     commit-message:
       prefix: "chore"
     reviewers:

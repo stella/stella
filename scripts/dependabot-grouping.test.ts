@@ -88,6 +88,11 @@ const ignorePolicies = {
   "react-native-svg": {
     type: "expo_sdk",
   },
+  "oxlint-tsgolint": {
+    reason:
+      "7.0.2006 fails the type-aware lint on Linux CI runners; held until upstream fixes it.",
+    type: "documented_policy",
+  },
   "lucide-static": {
     reason:
       "Its glyphs are native mobile assets; a bump waits for the next store build.",
