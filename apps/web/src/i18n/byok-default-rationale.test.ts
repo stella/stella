@@ -3,6 +3,11 @@ import { expect, test } from "bun:test";
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 import { UI_LOCALES } from "@stll/locales";
 
+// Each provider's roles are distinct literal types, so Object.values needs the
+// shared entry type spelled out.
+type RoleDefault =
+  { kind: "default"; rationaleKey: string } | { kind: "unsupported" };
+
 const messageAt = (messages: unknown, key: string): unknown => {
   let value = messages;
   for (const segment of key.split(".")) {
@@ -24,7 +29,7 @@ test.each(UI_LOCALES)(
       messageAt(messages, "organization.aiConfig.roleUnavailable"),
     ).toContain("{provider}");
     for (const roles of Object.values(BYOK_DEFAULT_MODELS)) {
-      for (const entry of Object.values(roles)) {
+      for (const entry of Object.values<RoleDefault>(roles)) {
         const key =
           entry.kind === "unsupported"
             ? "organization.aiConfig.roleUnavailable"

@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.72.0",
+  "version": "0.74.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -83,6 +83,7 @@
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
     "./file-size": "./src/lib/file-size.ts",
+    "./highlighted-textarea": "./src/components/highlighted-textarea.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./identity-text": "./src/components/identity-text.tsx",
@@ -164,6 +165,7 @@
       "default": "./src/components/loader.tsx"
     },
     "./middle-truncate": "./src/components/middle-truncate.tsx",
+    "./outcome-screen": "./src/components/outcome-screen.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
@@ -265,7 +267,10 @@
     },
     "./components/sidebar": "./src/components/sidebar.tsx",
     "./components/skeleton": "./src/components/skeleton.tsx",
-    "./components/stella-mark": "./src/components/stella-mark.tsx",
+    "./components/stella-mark": {
+      "react-native": "./src/components/stella-mark.native.tsx",
+      "default": "./src/components/stella-mark.tsx"
+    },
     "./components/stella-wordmark": {
       "react-native": "./src/components/stella-wordmark.native.tsx",
       "default": "./src/components/stella-wordmark.tsx"

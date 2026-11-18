@@ -259,7 +259,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await refused(
               role,
-              async (tx) =>
+              async (tx): Promise<unknown> =>
                 await tx`SELECT count(*) FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
@@ -267,7 +267,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await refused(
               role,
-              async (tx) =>
+              async (tx): Promise<unknown> =>
                 await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
             ),
           ).toMatch(/permission denied/u);
@@ -275,7 +275,8 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await refused(
               role,
-              async (tx) => await tx`DELETE FROM case_law_sitemap_changes`,
+              async (tx): Promise<unknown> =>
+                await tx`DELETE FROM case_law_sitemap_changes`,
             ),
           ).toMatch(/permission denied/u);
           // db-await-in-loop: nor read, queue or consume a touch directly
@@ -286,7 +287,10 @@ if (!databaseUrl || !runPostgresTests) {
           ]) {
             // db-await-in-loop: each statement is probed in its own transaction
             expect(
-              await refused(role, async (tx) => await tx.unsafe(statement)),
+              await refused(
+                role,
+                async (tx) => await tx.unsafe<unknown>(statement),
+              ),
             ).toMatch(/permission denied/u);
           }
         }
@@ -442,7 +446,7 @@ if (!databaseUrl || !runPostgresTests) {
                             }
                             return result;
                           }
-                        : Reflect.get(target, property, receiver),
+                        : (Reflect.get(target, property, receiver) as unknown),
                   }),
                 ),
             ),
@@ -576,8 +580,10 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const writer = openClient({ max: 1 });
         const probe = openClient({ max: 1 });
-        const [backend] = await writer.sql`SELECT pg_backend_pid() AS pid`;
-        const writerPid = Number(backend?.["pid"]);
+        const [backend] = await writer.sql<
+          { pid: unknown }[]
+        >`SELECT pg_backend_pid() AS pid`;
+        const writerPid = Number(backend?.pid);
         let writing: Promise<unknown> | undefined;
         await db.transaction(async (tx) => {
           const folded = await foldCaseLawSitemapTouches(
@@ -587,13 +593,14 @@ if (!databaseUrl || !runPostgresTests) {
           expect(folded).toMatchObject({ status: "folded", retained: 0 });
           // A Bun SQL query starts when awaited, so start it without blocking.
           writing = (async () =>
-            await writer.sql`UPDATE case_law_decisions SET updated_at = '2032-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`)();
+            await writer.sql<unknown>`UPDATE case_law_decisions SET updated_at = '2032-01-01T00:00:00Z'::timestamptz WHERE id = ${id}::uuid`)();
           // The write waits on the fold's claim of its decision.
           await waitFor(
             async () => {
-              const [state] =
-                await probe.sql`SELECT wait_event_type FROM pg_stat_activity WHERE pid = ${writerPid}`;
-              return state?.["wait_event_type"] === "Lock" ? true : undefined;
+              const [state] = await probe.sql<
+                { wait_event_type: unknown }[]
+              >`SELECT wait_event_type FROM pg_stat_activity WHERE pid = ${writerPid}`;
+              return state?.wait_event_type === "Lock" ? true : undefined;
             },
             { description: "the writer to wait on the fold's claim" },
           );

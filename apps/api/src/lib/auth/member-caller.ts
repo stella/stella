@@ -8,6 +8,25 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import type { McpSession } from "@/api/mcp/auth";
 
+/**
+ * A chat turn the server starts as the member, with no request of theirs:
+ * the next message they queued (`handlers/chat/queue/chat-queue-drain.ts`,
+ * with the revision the sender read), or their turn stopped by a usage limit
+ * on their computer, sent again once it reset
+ * (`handlers/chat/limit-reminder/limit-resume.ts`). The turn's acceptance
+ * takes what it names, once.
+ */
+export type ServerStartedChatTurn =
+  | {
+      readonly type: "queue";
+      readonly queuedMessageId: SafeId<"chatMessage">;
+      readonly revision: number;
+    }
+  | {
+      readonly type: "limit-resume";
+      readonly failedTurnId: SafeId<"chatTurn">;
+    };
+
 /** Builds a recorder whose events default to another matter (or none). */
 export type AuditRecorderFactory = (opts?: {
   execution?: AuditExecutionContext;
@@ -40,14 +59,10 @@ export type MemberCaller = Readonly<OrgSettingsForAuth> & {
      */
     readonly grantedScopes?: readonly string[];
     /**
-     * Set only when the server sends a message the member queued, as the
-     * member (`handlers/chat/queue/chat-queue-drain.ts`): the queued message and the
-     * revision the sender read. No request can carry it.
+     * Set only when the server starts a chat turn as the member. No request
+     * can carry it.
      */
-    readonly startedFromQueue?: {
-      readonly queuedMessageId: SafeId<"chatMessage">;
-      readonly revision: number;
-    };
+    readonly serverStartedTurn?: ServerStartedChatTurn;
   };
   readonly featureAccessSnapshot?: FeatureAccessSnapshot;
   readonly scopedDb: ScopedDb;

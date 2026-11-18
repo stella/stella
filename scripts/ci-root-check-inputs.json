@@ -1,5 +1,12 @@
 {
   "ci-checks-rest": {
+    "Action commit pins": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-checks/**",
+      "scripts/check-action-commit-pins.ts",
+      "scripts/check-action-commit-pins.test.ts"
+    ],
     "Resolve static check receipts": ["**"],
     "Run repository checks": ["**"],
     "Record static check receipts": ["**"],
@@ -48,6 +55,11 @@
     "Prepare environment": ["**"],
     "Content delivery declarations": ["@stll/api", "@stll/cli"],
     "Test capability shard merge and package parity": [
+      "@stll/api",
+      "@stll/cli",
+      "scripts/**"
+    ],
+    "Test CLI contract changeset guard over derived catalogs": [
       "@stll/api",
       "@stll/cli",
       "scripts/**"
@@ -387,6 +399,7 @@
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
+    "Capability file-transport ledger": ["@stll/api", "@stll/cli"],
     "MCP coverage guard": ["@stll/api", "@stll/cli"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],
@@ -820,6 +833,7 @@
       "scripts/check-ci-job-names.ts"
     ],
     "CI network step retries and timeouts": ["**"],
+    "Workspace test gating ledger": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
       ".github/actions/**",

@@ -69,7 +69,10 @@ export type CalendarTask = Awaited<
   ReturnType<typeof fetchCalendarTasks>
 >[number];
 
-export const calendarTasksOptions = (key: CalendarTasksKey) =>
+export const calendarTasksOptions = (
+  key: CalendarTasksKey,
+  organizationId: string,
+) =>
   resourceQueryOptions(
     queryOptions({
       queryKey: calendarTasksKeys.range(key),
@@ -83,5 +86,6 @@ export const calendarTasksOptions = (key: CalendarTasksKey) =>
         RESOURCE_TYPE.PROPERTY,
       ],
       scope: { type: "workspace", workspaceId: key.workspaceId },
+      organizationReads: { organizationId, resources: [RESOURCE_TYPE.USER] },
     },
   );

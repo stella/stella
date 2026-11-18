@@ -254,18 +254,6 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     requires: CI_PLAN_TRUSTED,
     privileges: ACTIONS_WRITE,
   },
-  ".github/workflows/pr-lint.yml:pr-lint": {
-    reason:
-      "the pinned called workflow only reads pull-request metadata through the API and never checks out or runs pull-request code",
-    covers: ["class 1:pull_request_target"],
-    requires: {
-      unconditional:
-        "the approval rests on the pinned called workflow, not on the job condition",
-    },
-    calls:
-      "stella/.github/.github/workflows/pr-lint.yml@0cc2def60afb3e0fac0df9f541baf926f77889fa",
-    privileges: { write: ["pull-requests"], secrets: [] },
-  },
   ".github/workflows/publish-npm.yml:release-*": {
     reason:
       "a workflow_run publishes only for this repository's release workflow started by a push or dispatch, after release-trigger checks the tag, the receipt and that protected main carries the release commit, and pack succeeds from it",
@@ -805,7 +793,6 @@ const BASE_REVISION_TRIGGERS = new Set([
   "check_run",
   "check_suite",
   "issue_comment",
-  "pull_request_target",
   "workflow_run",
 ]);
 const isPullRequestTrigger = (trigger: string): boolean =>

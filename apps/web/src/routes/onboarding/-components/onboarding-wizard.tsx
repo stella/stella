@@ -177,16 +177,16 @@ export const OnboardingWizard = () => {
   const [previewAiProviders, setPreviewAiProviders] = useState<
     readonly ProviderPreview[]
   >([]);
-  const unavailableNativeToolBackendSlugs = useMemo<
-    ReadonlySet<string> | undefined
-  >(() => {
-    if (!nativeToolDeployAvailability) {
-      return undefined;
-    }
-    return new Set(
-      nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
-    );
-  }, [nativeToolDeployAvailability]);
+  const unavailableNativeToolBackendSlugs: ReadonlySet<string> | undefined =
+    (() => {
+      if (!nativeToolDeployAvailability) {
+        return undefined;
+      }
+      return new Set(
+        nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
+      );
+    })();
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const onboardingCatalogueEntries = useMemo(
     () =>
       loadCatalogue().filter((entry) =>
@@ -297,6 +297,7 @@ export const OnboardingWizard = () => {
     });
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
       setIsCreating(true);
@@ -361,7 +362,19 @@ export const OnboardingWizard = () => {
         // immediately, and since the session now has an
         // `activeOrganizationId`, the guard would redirect away from
         // /onboarding before the wizard ever reaches the apps step.
-        await refreshAuthQueries(queryClient);
+        const refreshed = await Result.tryPromise(
+          async () => await refreshAuthQueries(queryClient),
+        );
+        if (refreshed.isErr()) {
+          analytics.captureError(refreshed.error, {
+            fingerprintKey: "OnboardingWizard.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OnboardingWizard.refresh:failure",
+            },
+          });
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+        }
 
         if (finalData.practiceJurisdictions.length > 0) {
           const { error: jurisdictionError } = await api[
@@ -511,6 +524,7 @@ export const OnboardingWizard = () => {
           fingerprintKey: "OnboardingWizard:failure-5",
           scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
         });
+        notifyUserError(error, t("errors.actionFailed"));
       }
 
       setIsCreating(false);

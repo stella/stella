@@ -1259,11 +1259,30 @@ process.exit(childExitStatus(result));
       expect(taskInputs(tasks, `${name}#typecheck`)).toEqual(
         expect.arrayContaining(taskInputs(tasks, "typecheck")),
       );
-      expect(
-        taskField(tasks, `${name}#typecheck`, "outputs").filter(
-          (output) => !typecheckOutputs.has(output),
-        ),
-      ).not.toEqual([]);
+      const ownsBuild = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).includes("build");
+      if (ownsBuild) {
+        // The build cache restores generated types before typecheck, then lint.
+        // Diagnostics must not restore a second copy over another consumer.
+        expect(taskField(tasks, `${name}#typecheck`, "outputs")).toEqual([]);
+        const genericBuildOutputs = new Set(
+          taskField(tasks, "build", "outputs"),
+        );
+        expect(
+          taskField(tasks, `${name}#build`, "outputs").filter(
+            (output) => !genericBuildOutputs.has(output),
+          ),
+        ).not.toEqual([]);
+      } else {
+        expect(
+          taskField(tasks, `${name}#typecheck`, "outputs").filter(
+            (output) => !typecheckOutputs.has(output),
+          ),
+        ).not.toEqual([]);
+      }
     }
   });
 

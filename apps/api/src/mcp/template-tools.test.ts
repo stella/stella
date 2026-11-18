@@ -334,6 +334,14 @@ const MISSING_TEMPLATE_ID = "00000000-0000-4000-8000-000000000008";
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000009";
 const fakeTransaction = asTestRaw<Transaction>({});
 
+type PersistFilledDocumentInput = {
+  afterCreate: (tx: Transaction, created: unknown) => Promise<void>;
+};
+
+type PersistFilledVersionInput = {
+  afterWrite: (tx: Transaction, created: unknown) => Promise<void>;
+};
+
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
  *  create_template exercises the real validateDocxBuffer — no module mock to
  *  leak across test files. */
@@ -2105,8 +2113,11 @@ describe("MCP template tools", () => {
     expect(envelope["issues"]).toHaveLength(12);
     expect(envelope["issues"]).toEqual(
       expect.arrayContaining(
-        missingFields.map((field) =>
-          expect.objectContaining({ path: `values.${field.path}` }),
+        missingFields.map(
+          (field) =>
+            expect.objectContaining({
+              path: `values.${field.path}`,
+            }) as unknown,
         ),
       ),
     );
@@ -2240,16 +2251,18 @@ describe("MCP template tools", () => {
       clauseWarnings: [],
       aiFieldErrors: [],
     });
-    createEntityFromBufferMock.mockImplementation(async (input) => {
-      const created = {
-        entityId: "entity_new",
-        entityVersionId: "version_new",
-        fieldId: "field_new",
-        fileName: "Example Lease.docx",
-      };
-      await input.afterCreate(fakeTransaction, created);
-      return Result.ok(created);
-    });
+    createEntityFromBufferMock.mockImplementation(
+      async (input: PersistFilledDocumentInput) => {
+        const created = {
+          entityId: "entity_new",
+          entityVersionId: "version_new",
+          fieldId: "field_new",
+          fileName: "Example Lease.docx",
+        };
+        await input.afterCreate(fakeTransaction, created);
+        return Result.ok(created);
+      },
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -2440,16 +2453,18 @@ describe("MCP template tools", () => {
       clauseWarnings: [],
       aiFieldErrors,
     });
-    createEntityFromBufferMock.mockImplementation(async (input) => {
-      const created = {
-        entityId: "entity_partial",
-        entityVersionId: "version_partial",
-        fieldId: "field_partial",
-        fileName: "draft.docx",
-      };
-      await input.afterCreate(fakeTransaction, created);
-      return Result.ok(created);
-    });
+    createEntityFromBufferMock.mockImplementation(
+      async (input: PersistFilledDocumentInput) => {
+        const created = {
+          entityId: "entity_partial",
+          entityVersionId: "version_partial",
+          fieldId: "field_partial",
+          fileName: "draft.docx",
+        };
+        await input.afterCreate(fakeTransaction, created);
+        return Result.ok(created);
+      },
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -2510,16 +2525,18 @@ describe("MCP template tools", () => {
       clauseWarnings: [],
       aiFieldErrors: [],
     });
-    createEntityFromBufferMock.mockImplementation(async (input) => {
-      const created = {
-        entityId: "entity_partial",
-        entityVersionId: "version_partial",
-        fieldId: "field_partial",
-        fileName: "draft.docx",
-      };
-      await input.afterCreate(fakeTransaction, created);
-      return Result.ok(created);
-    });
+    createEntityFromBufferMock.mockImplementation(
+      async (input: PersistFilledDocumentInput) => {
+        const created = {
+          entityId: "entity_partial",
+          entityVersionId: "version_partial",
+          fieldId: "field_partial",
+          fileName: "draft.docx",
+        };
+        await input.afterCreate(fakeTransaction, created);
+        return Result.ok(created);
+      },
+    );
     const args = {
       action: "create_document",
       template_id: TEMPLATE_ID,
@@ -2640,18 +2657,20 @@ describe("MCP template tools", () => {
         },
       ],
     });
-    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
-      const created = {
-        status: "ok",
-        entityId: ENTITY_ID,
-        entityVersionId: "version_partial",
-        fieldId: "field_partial",
-        fileName: "draft.docx",
-        versionNumber: 3,
-      };
-      await input.afterWrite(fakeTransaction, created);
-      return Result.ok(created);
-    });
+    createEntityVersionFromBufferMock.mockImplementation(
+      async (input: PersistFilledVersionInput) => {
+        const created = {
+          status: "ok",
+          entityId: ENTITY_ID,
+          entityVersionId: "version_partial",
+          fieldId: "field_partial",
+          fileName: "draft.docx",
+          versionNumber: 3,
+        };
+        await input.afterWrite(fakeTransaction, created);
+        return Result.ok(created);
+      },
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -2915,18 +2934,20 @@ describe("MCP template tools", () => {
         },
       ],
     });
-    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
-      const created = {
-        status: "ok",
-        entityId: ENTITY_ID,
-        entityVersionId: "version_2",
-        fieldId: "field_2",
-        fileName: "lease.docx",
-        versionNumber: 2,
-      };
-      await input.afterWrite(fakeTransaction, created);
-      return Result.ok(created);
-    });
+    createEntityVersionFromBufferMock.mockImplementation(
+      async (input: PersistFilledVersionInput) => {
+        const created = {
+          status: "ok",
+          entityId: ENTITY_ID,
+          entityVersionId: "version_2",
+          fieldId: "field_2",
+          fileName: "lease.docx",
+          versionNumber: 2,
+        };
+        await input.afterWrite(fakeTransaction, created);
+        return Result.ok(created);
+      },
+    );
 
     const result = await handleMcpToolCall({
       args: {
@@ -3014,18 +3035,20 @@ describe("MCP template tools", () => {
       aiFieldErrors: [],
       structureErrors: [],
     });
-    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
-      const created = {
-        status: "ok",
-        entityId: ENTITY_ID,
-        entityVersionId: "version_3",
-        fieldId: "field_3",
-        fileName: "lease.docx",
-        versionNumber: 3,
-      };
-      await input.afterWrite(fakeTransaction, created);
-      return Result.ok(created);
-    });
+    createEntityVersionFromBufferMock.mockImplementation(
+      async (input: PersistFilledVersionInput) => {
+        const created = {
+          status: "ok",
+          entityId: ENTITY_ID,
+          entityVersionId: "version_3",
+          fieldId: "field_3",
+          fileName: "lease.docx",
+          versionNumber: 3,
+        };
+        await input.afterWrite(fakeTransaction, created);
+        return Result.ok(created);
+      },
+    );
 
     const args = {
       action: "create_version",

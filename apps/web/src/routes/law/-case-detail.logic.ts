@@ -98,6 +98,11 @@ type PublicDecisionRouteLoaderOptions = {
   params: PublicDecisionRouteParams;
   queryClient: QueryClient;
   search: PublicDecisionSearch;
+  /**
+   * Whether to start the secondary reads (provisions, citations) alongside
+   * the decision. Defaults to browser loads only, see `primeDecisionProvisions`.
+   */
+  warmSecondaryReads?: boolean;
 };
 
 type PublicDecisionHeadOptions = {
@@ -149,6 +154,13 @@ export const extractId = (param: string): SafeId<"caseLawDecision"> =>
  * The panels that read them are secondary to the text, so none of this
  * blocks the route: it starts during navigation and each panel takes
  * whatever is warm by the time it renders.
+ *
+ * A server render skips it. Its panels read these queries without suspending,
+ * so the document never waits for them, and the render teardown cancels
+ * whatever is still in flight. Every server render's API reads also share one
+ * upstream request budget: under a crawl, six extra reads per page spent that
+ * budget until the decision read itself was refused and the page failed. The
+ * browser reads the panels' data after hydration instead.
  */
 const primeDecisionProvisions = (
   queryClient: QueryClient,
@@ -407,6 +419,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   params,
   queryClient,
   search,
+  warmSecondaryReads = !import.meta.env.SSR,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
   const routeCountry = publicCaseLawPageCountryFromParam(params.country);
   if (routeCountry === null) {
@@ -426,7 +439,9 @@ export const loadPublicCaseLawDecisionRoute = async ({
     );
     await canonicalizeDecisionPath({ decision, hash, params, search });
 
-    primeDecisionProvisions(queryClient, decision.id);
+    if (warmSecondaryReads) {
+      primeDecisionProvisions(queryClient, decision.id);
+    }
 
     return decision;
   }
@@ -459,7 +474,9 @@ export const loadPublicCaseLawDecisionRoute = async ({
   );
   await canonicalizeDecisionPath({ decision, hash, params, search });
 
-  primeDecisionProvisions(queryClient, decision.id);
+  if (warmSecondaryReads) {
+    primeDecisionProvisions(queryClient, decision.id);
+  }
 
   return decision;
 };

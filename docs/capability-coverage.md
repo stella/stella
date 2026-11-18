@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `place`, `prefill`, `prepare`, `preview`, `release`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `place`, `prefill`, `prepare`, `preview`, `release`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `revoke`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -290,6 +290,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.payments.void` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices payments-void` |
 | `invoices.pdf.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices pdf-export` |
 | `invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices prefill` |
+| `invoices.sends.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-create` |
+| `invoices.sends.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-list` |
+| `invoices.sends.revoke` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices sends-revoke` |
 | `invoices.transition` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition` |
 | `invoices.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update` |
 
@@ -832,6 +835,7 @@ mechanics, and similar), not gaps in coverage.
 | document_processing | 27 |
 | health_infra | 2 |
 | hosted_billing | 7 |
+| human_confirmation | 3 |
 | mcp_transport | 12 |
 | native_device | 5 |
 | native_tool_ui | 11 |
@@ -839,8 +843,8 @@ mechanics, and similar), not gaps in coverage.
 | provider_secret | 34 |
 | public_indexing | 11 |
 | realtime_stream | 10 |
-| search_ui | 21 |
-| session_token_exchange | 21 |
+| search_ui | 22 |
+| session_token_exchange | 23 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 24 |
 | url_preview | 2 |

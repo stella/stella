@@ -37,6 +37,10 @@ export const answerRevisionHistoryOptions = (
     }),
     {
       resources: [RESOURCE_TYPE.CHAT_MESSAGE],
-      scope: { type: "organization" },
+      scope: {
+        type: "organization",
+        organizationId: input.activeOrganizationId,
+        userId: input.userId,
+      },
     },
   );

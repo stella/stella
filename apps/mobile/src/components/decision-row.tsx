@@ -1,7 +1,9 @@
 import { useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import type { DecisionSummary } from "@/state/case-law";
@@ -36,9 +38,7 @@ export const DecisionRow = ({
   );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      className="border-border active:bg-accent gap-1 border-b py-3"
+    <Button
       onPress={
         onPress ??
         (() => {
@@ -51,20 +51,25 @@ export const DecisionRow = ({
           });
         })
       }
+      size="row"
+      variant="ghost"
     >
-      <Text numberOfLines={1} variant="rowTitle">
-        {decision.caseNumber}
-      </Text>
-      <Text numberOfLines={1} variant="caption">
-        {details.join(" · ")}
-      </Text>
-      {decision.preview === null ? null : (
-        <View className="pt-0.5">
-          <Text numberOfLines={3} variant="caption">
-            {decision.preview}
-          </Text>
-        </View>
-      )}
-    </Pressable>
+      <Separator className="absolute inset-x-0 bottom-0" />
+      <View className="flex-1 gap-1">
+        <Text numberOfLines={1} variant="rowTitle">
+          {decision.caseNumber}
+        </Text>
+        <Text numberOfLines={1} variant="caption">
+          {details.join(" · ")}
+        </Text>
+        {decision.preview === null ? null : (
+          <View className="pt-0.5">
+            <Text numberOfLines={3} variant="caption">
+              {decision.preview}
+            </Text>
+          </View>
+        )}
+      </View>
+    </Button>
   );
 };

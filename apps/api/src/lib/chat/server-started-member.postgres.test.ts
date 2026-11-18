@@ -136,6 +136,26 @@ if (!databaseUrl || !enabled) {
       }
     });
 
+    test("a chat continued after its usage limit reset is the member's, from the stopped turn", async () => {
+      const owner = await seedMember({ accepted: true });
+      const turnId = createSafeId<"chatTurn">();
+      try {
+        const resolved = await resolve(owner, {
+          type: "limit-resume",
+          threadId: createSafeId<"chatThread">(),
+          turnId,
+        });
+        const value = resolved.isOk() ? resolved.value : null;
+        expect(value?.type).toBe("member");
+        if (value?.type === "member") {
+          expect(value.caller.user.id).toBe(owner.userId);
+          expect(value.caller.session.id).toBe(`chat-limit-resume:${turnId}`);
+        }
+      } finally {
+        await owner.cleanUp();
+      }
+    });
+
     test("a member removed since queueing is refused", async () => {
       const owner = await seedMember({ accepted: true });
       try {

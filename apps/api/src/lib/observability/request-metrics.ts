@@ -824,6 +824,7 @@ export const ANONYMIZATION_REFUSAL_SITES = [
   "rich_media",
   "external_tool",
   "agent_run",
+  "local_run",
   "file_hydration",
   "mcp_egress",
 ] as const;

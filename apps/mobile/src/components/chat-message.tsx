@@ -1,7 +1,8 @@
 import { use } from "react";
+import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
-import { Pressable, Share, View } from "react-native";
+import { Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
@@ -12,11 +13,15 @@ import { Text } from "@stll/ui/text";
 
 import { AnswerSteps, AnswerSubagent } from "@/components/answer-steps";
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
+import {
+  LimitResetChoice,
+  LimitResetMessage,
+} from "@/components/chat-limit-reset";
 import { MarkdownView } from "@/components/markdown-view";
 import { ThreadMatter } from "@/components/thread-matter";
 import { APP_VARIANT } from "@/env";
 import type { SentFile } from "@/state/chat-attachments";
-import { CHAT_FAILURE_KEYS } from "@/state/chat-failure";
+import { CHAT_FAILURE_KEYS, chatFailureStepsKey } from "@/state/chat-failure";
 import type { ChatEntry } from "@/state/chat-messages";
 import { plainText } from "@/state/markdown";
 
@@ -28,22 +33,25 @@ import { plainText } from "@/state/markdown";
  * model took between them, under what its context left out, if anything,
  * and why it failed when it did. `uploading` marks the files of a message
  * still going up; `live` an answer still arriving, whose last run says the
- * step it is on; `onRetry` answers the message a failed answer was for again.
+ * step it is on; `onRetry` answers the message a failed answer was for again;
+ * `onLongPress` opens what a message of the person's offers, such as editing it.
  */
 export const ChatMessage = ({
   entry,
   live = false,
+  onLongPress,
   onRetry,
   uploading = false,
 }: {
   entry: ChatEntry;
   live?: boolean;
+  onLongPress?: (() => void) | undefined;
   onRetry?: (() => void) | undefined;
   uploading?: boolean;
 }) => {
   if (entry.role === "user") {
     return (
-      <View className="items-end gap-1.5">
+      <UserMessage onLongPress={onLongPress}>
         {keyedFiles(entry.files).map(({ file, key }) => (
           <ChatAttachmentChip
             status={uploading ? "busy" : "idle"}
@@ -57,7 +65,7 @@ export const ChatMessage = ({
             <MarkdownView markdown={entry.text} variant="message" />
           </View>
         )}
-      </View>
+      </UserMessage>
     );
   }
 
@@ -94,32 +102,96 @@ export const ChatMessage = ({
         }
       })}
       {entry.failure === undefined ? null : (
-        <FailedAnswer failure={entry.failure} onRetry={onRetry} />
+        <FailedAnswer
+          failure={entry.failure}
+          limitResetsAt={entry.limitResetsAt}
+          onRetry={onRetry}
+        />
+      )}
+      {entry.ranOnModel === undefined ? null : (
+        <RanOnModel model={entry.ranOnModel} />
       )}
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
   );
 };
 
-/** Why an answer failed, and a way to ask again when the thread offers one. */
+/**
+ * A message of the person's on the right; a long press, or the screen
+ * reader's action of the same name, opens what it offers.
+ */
+const UserMessage = ({
+  children,
+  onLongPress,
+}: PropsWithChildren<{
+  onLongPress: (() => void) | undefined;
+}>) => {
+  const t = useTranslations("chat");
+  if (onLongPress === undefined) {
+    return <View className="items-end gap-1.5">{children}</View>;
+  }
+  return (
+    <Button
+      accessibilityActions={[{ name: "longpress", label: t("edit.action") }]}
+      className="items-end gap-1.5"
+      onAccessibilityAction={({ nativeEvent }) => {
+        if (nativeEvent.actionName === "longpress") {
+          onLongPress();
+        }
+      }}
+      onLongPress={onLongPress}
+      variant="plain"
+    >
+      {children}
+    </Button>
+  );
+};
+
+/**
+ * Why an answer failed (for a usage limit, when it resets), where to fix it
+ * when that is in stella desktop, and a way to ask again when the thread
+ * offers one. The thread's latest answer stopped by a limit also offers to
+ * continue by itself, or notify, once the limit resets.
+ */
 const FailedAnswer = ({
   failure,
+  limitResetsAt,
   onRetry,
 }: {
   failure: AIErrorKind;
+  limitResetsAt: string | undefined;
   onRetry: (() => void) | undefined;
 }) => {
   const t = useTranslations("chat");
+  const steps = chatFailureStepsKey(failure);
   return (
     <View className="items-start gap-2">
-      <Text variant="error">{t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}</Text>
+      {limitResetsAt === undefined ? (
+        <Text variant="error">
+          {t(`failure.${CHAT_FAILURE_KEYS[failure]}`)}
+        </Text>
+      ) : (
+        <LimitResetMessage resetsAt={limitResetsAt} />
+      )}
+      {steps === null ? null : (
+        <Text variant="caption">{t(`localRun.${steps}`)}</Text>
+      )}
       {onRetry === undefined ? null : (
         <Button onPress={onRetry} variant="outline">
           {t("resend")}
         </Button>
       )}
+      {limitResetsAt === undefined || onRetry === undefined ? null : (
+        <LimitResetChoice />
+      )}
     </View>
   );
+};
+
+/** The model a coding agent's answer ran on after the harness rerouted it. */
+const RanOnModel = ({ model }: { model: string }) => {
+  const t = useTranslations("chat");
+  return <Text variant="caption">{t("localRun.ranOnModel", { model })}</Text>;
 };
 
 /**
@@ -158,10 +230,8 @@ const ShareAnswer = ({ text }: { text: string }) => {
   const t = useTranslations("link");
   const matterId = use(ThreadMatter);
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
       className="self-start"
-      hitSlop={8}
       onPress={() => {
         const message = plainText(text, {
           appScheme: MOBILE_REDIRECT_SCHEMES[APP_VARIANT],
@@ -169,9 +239,11 @@ const ShareAnswer = ({ text }: { text: string }) => {
         });
         void Share.share({ message });
       }}
+      size="inline"
+      variant="muted"
     >
       <Text variant="caption">{t("share")}</Text>
-    </Pressable>
+    </Button>
   );
 };
 

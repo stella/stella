@@ -365,8 +365,8 @@ test.each([
   ],
   [
     "base-branch triggers",
-    "on: pull_request_target\njobs: {check: {steps: [{run: bun test one}]}}",
-    "on: pull_request_target\njobs: {check: {steps: [{run: bun test two}]}}",
+    "on: workflow_run\njobs: {check: {steps: [{run: bun test one}]}}",
+    "on: workflow_run\njobs: {check: {steps: [{run: bun test two}]}}",
   ],
   [
     "self-hosted runners",
@@ -422,10 +422,10 @@ test.each([
   },
 );
 
-test("pull_request_target with an untrusted checkout requires approval for every step change", () => {
+test("workflow_run with an untrusted checkout requires approval for every step change", () => {
   const checkout = `{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}`;
-  const before = `on: pull_request_target\njobs: {check: {steps: [${checkout}, {run: echo one}]}}`;
-  const after = `on: pull_request_target\njobs: {check: {steps: [${checkout}, {run: echo two}]}}`;
+  const before = `on: workflow_run\njobs: {check: {steps: [${checkout}, {run: echo one}]}}`;
+  const after = `on: workflow_run\njobs: {check: {steps: [${checkout}, {run: echo two}]}}`;
   const decisions = reviewed(before, "check");
   const { root } = repository(
     { workflow: before, decisions },
@@ -458,7 +458,7 @@ test.each([
   [
     "trigger",
     "on: push\njobs: {check: {steps: []}}",
-    "on: pull_request_target\njobs: {check: {steps: []}}",
+    "on: workflow_run\njobs: {check: {steps: []}}",
   ],
 ] as const)("%s changes the privileged-surface digest", (_, before, after) => {
   expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));

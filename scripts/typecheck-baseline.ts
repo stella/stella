@@ -249,12 +249,13 @@ const measureAll = (
 const emptyCounters = (): Counters => ({ types: 0, instantiations: 0 });
 
 const writeBaseline = (measured: Measured[], file = BASELINE_PATH): void => {
-  // Spelled out per project so the committed JSON has a stable key order.
-  const baseline: Record<string, Counters> = {};
-  for (const { id } of PROJECTS) {
-    const entry = measured.find((m) => m.id === id);
-    baseline[id] = entry?.counters ?? emptyCounters();
-  }
+  // Keep project order stable in the committed JSON.
+  const baseline = Object.fromEntries(
+    PROJECTS.map(({ id }) => {
+      const entry = measured.find((m) => m.id === id);
+      return [id, entry?.counters ?? emptyCounters()] as const;
+    }),
+  );
   writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
 };
 
@@ -262,18 +263,15 @@ const readBaseline = (file = BASELINE_PATH): Baseline => {
   const parsed: Record<string, Partial<Counters>> = JSON.parse(
     readFileSync(file, "utf-8"),
   );
-  const baseline = {
-    api: emptyCounters(),
-    web: emptyCounters(),
-    "web-e2e": emptyCounters(),
+  const counters = (id: ProjectId) => ({
+    types: parsed[id]?.types ?? 0,
+    instantiations: parsed[id]?.instantiations ?? 0,
+  });
+  return {
+    api: counters("api"),
+    web: counters("web"),
+    "web-e2e": counters("web-e2e"),
   };
-  for (const { id } of PROJECTS) {
-    baseline[id] = {
-      types: parsed[id]?.types ?? 0,
-      instantiations: parsed[id]?.instantiations ?? 0,
-    };
-  }
-  return baseline;
 };
 
 const baselineExists = (): boolean => {

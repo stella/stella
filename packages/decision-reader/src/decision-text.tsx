@@ -18,6 +18,11 @@ import {
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
@@ -214,15 +219,24 @@ const groupApparatusWrap = (
     const runBlocks = run;
     run = [];
     out.push(
-      <details
+      <Collapsible
         className="reader-apparatus"
         key={`apparatus-${runBlocks[0]?.id ?? String(out.length)}`}
       >
-        <summary className="reader-apparatus-summary">{apparatusLabel}</summary>
-        {runBlocks.map((block) => (
-          <Fragment key={block.id}>{renderBlock(block)}</Fragment>
-        ))}
-      </details>,
+        <div
+          className="reader-chrome reader-apparatus-label"
+          data-reader-chrome=""
+        >
+          <CollapsibleTrigger render={<Button size="inline" variant="muted" />}>
+            {apparatusLabel}
+          </CollapsibleTrigger>
+        </div>
+        <CollapsiblePanel>
+          {runBlocks.map((block) => (
+            <Fragment key={block.id}>{renderBlock(block)}</Fragment>
+          ))}
+        </CollapsiblePanel>
+      </Collapsible>,
     );
   };
   for (const block of blocks) {
@@ -640,7 +654,7 @@ const buildAnchorsByPieceId = ({
     annotations,
     blocks,
   );
-  const anchorsByPieceId: Record<string, TextAnchor[]> = {};
+  const anchorsByPiece = new Map<string, TextAnchor[]>();
   const blockIds = new Set([
     ...Object.keys(citationSpans),
     ...Object.keys(unresolvedCitationSpans),
@@ -804,8 +818,9 @@ const buildAnchorsByPieceId = ({
     const marks = anchors
       .filter((anchor) => anchor.key.startsWith("annotation:"))
       .flatMap((mark) => splitAroundLinks(mark, links));
-    anchorsByPieceId[blockId] = dropOverlappingSpans([...links, ...marks]);
+    anchorsByPiece.set(blockId, dropOverlappingSpans([...links, ...marks]));
   }
+  const anchorsByPieceId = Object.fromEntries(anchorsByPiece);
   const provisionsByAnchorId = new Map<string, ReactNode>();
   for (const block of blocks) {
     if (!hasBlockInlines(block)) {

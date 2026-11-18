@@ -36,14 +36,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteChatThreadsAndFileLinks",
-    "writes": {
-      "delete:chatThreads": 1,
-      "delete:fileChatThreads": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-steps.ts::deleteConnectedCredentialsAndOAuthState",
     "writes": {
       "delete:agentDelegation": 1,
@@ -951,8 +943,7 @@
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
-      "update:flowRunSteps": 1,
-      "update:flowRuns": 1
+      "update:flowRunSteps": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
@@ -1154,13 +1145,6 @@
     "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::registerCorpusIndexGenerationTx",
     "writes": {
       "insert:corpusIndexGenerations": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::resumeRetiringCorpusIndexGenerationTx",
-    "writes": {
-      "update:corpusIndexGenerations": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1421,13 +1405,6 @@
     "id": "apps/api/src/lib/scheduler/jobs.ts::ensureOneShotSchedulerJob",
     "writes": {
       "insert:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::removeSchedulerJob",
-    "writes": {
-      "delete:schedulerJobs": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },

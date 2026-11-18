@@ -14,6 +14,11 @@ type PgFtsSearchSqlRefs = {
 
 type PgFtsSearchSql = {
   coverage: SQL;
+  /**
+   * Per distinct query term, in the query's order, whether the row's vector
+   * holds it: a `boolean[]` the caller reads matched and missing words from.
+   */
+  termMatches: SQL;
   headlineQuery: SQL;
   predicate: SQL;
   rank: SQL;
@@ -59,16 +64,28 @@ export const buildPgFtsSearchSql = ({
             sql` + `,
           )})`;
 
+    const termMatches =
+      termQueries.length === 0
+        ? sql`ARRAY[]::boolean[]`
+        : sql`ARRAY[${sql.join(
+            termQueries.map(
+              (termQuery) => sql`(${refs.vector} @@ ${termQuery})`,
+            ),
+            sql`, `,
+          )}]::boolean[]`;
+
     return [
       {
         condition: buildConfigCondition(config, knownLanguages, refs),
         tsQuery,
         coverage,
+        termMatches,
       },
       {
         condition: buildStoredRegconfigCompatibilityCondition(config, refs),
         tsQuery,
         coverage,
+        termMatches,
       },
     ];
   });
@@ -81,6 +98,13 @@ export const buildPgFtsSearchSql = ({
         ({ condition, coverage }) => sql`WHEN ${condition} THEN ${coverage}`,
       ),
       fallback: sql`0`,
+    })})`,
+    termMatches: sql`(${sqlCaseFragment({
+      branches: branches.map(
+        ({ condition, termMatches }) =>
+          sql`WHEN ${condition} THEN ${termMatches}`,
+      ),
+      fallback: sql`ARRAY[]::boolean[]`,
     })})`,
     headlineQuery: sql`(${sqlCaseFragment({
       branches: branches.map(

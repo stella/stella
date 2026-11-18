@@ -26,7 +26,10 @@ describe("deleted entity query ownership", () => {
       enabled: false,
     });
     const overviewObserver = new QueryObserver(queryClient, {
-      ...overviewOptions(WORKSPACE_ID),
+      ...overviewOptions({
+        workspaceId: WORKSPACE_ID,
+        organizationId: ORGANIZATION_ID,
+      }),
       enabled: false,
     });
     const workflowObserver = new QueryObserver(queryClient, {

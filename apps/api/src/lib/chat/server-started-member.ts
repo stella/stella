@@ -27,6 +27,15 @@ export type ServerStartedChatWork =
       type: "turn-handover";
       threadId: SafeId<"chatThread">;
       turnId: SafeId<"chatTurn">;
+    }
+  /**
+   * Sending again the message of the member's turn that a usage limit on
+   * their computer stopped (`turnId`), once the limit reset, as they asked.
+   */
+  | {
+      type: "limit-resume";
+      threadId: SafeId<"chatThread">;
+      turnId: SafeId<"chatTurn">;
     };
 
 /** The work the server is about to do, and whose it is. */
@@ -71,6 +80,13 @@ const workOrigin = (
         source: "chat_turn_handover",
         sourceId: work.turnId,
       };
+    case "limit-resume":
+      return {
+        sessionId: `chat-limit-resume:${work.turnId}`,
+        path: `/chat/threads/${work.threadId}/limit-reminder/resume`,
+        source: "chat_limit_resume",
+        sourceId: work.turnId,
+      };
     default:
       work satisfies never;
       return panic("Unknown server-started chat work");
@@ -93,7 +109,8 @@ const workOrigin = (
  * `lib/auth.ts` that builds a `ResolvedIdentity` or calls
  * `resolveValidateAuth` (ownership row `server-started-member`). Every audit
  * event of the work names the member as performer and says what the server
- * started it from (the queued message, or the turn it continued).
+ * started it from (the queued message, the turn it continued, or the turn a
+ * usage limit stopped).
  */
 export const resolveServerStartedMember = async ({
   organizationId,

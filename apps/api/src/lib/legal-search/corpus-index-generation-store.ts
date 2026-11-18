@@ -9,6 +9,7 @@ import {
   corpusIndexProjectionStates,
   legislationSources,
 } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   type CorpusFamily,
@@ -22,6 +23,7 @@ import {
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { isRecord } from "@/api/lib/type-guards";
 
 type GenerationTargetFor<TManifest extends CorpusIndexManifest> =
@@ -173,45 +175,6 @@ const requireActiveGenerationTarget = (
 };
 
 /**
- * Return a retiring generation to the build set before a rollback. Plane must
- * reconcile and prove this generation again before it can become serving.
- */
-export const resumeRetiringCorpusIndexGenerationTx = async (
-  tx: Transaction,
-  target: { family: CorpusFamily; generation: string },
-): Promise<void> => {
-  await lockCorpusIndexGenerationActivationTx(tx, target.family);
-  const rows = await tx
-    .select()
-    .from(corpusIndexGenerations)
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, target.family),
-        eq(corpusIndexGenerations.generation, target.generation),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const row = rows.at(0);
-  if (row?.status !== "retiring") {
-    return panic(
-      `Corpus generation is not retiring: ${target.family}/${target.generation}`,
-    );
-  }
-  requireActiveGenerationTarget(row, target);
-  await tx
-    .update(corpusIndexGenerations)
-    .set({ status: "building", updatedAt: sql`clock_timestamp()` })
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, target.family),
-        eq(corpusIndexGenerations.generation, target.generation),
-        eq(corpusIndexGenerations.status, "retiring"),
-      ),
-    );
-};
-
-/**
  * Register one immutable final-generation contract before any writer targets
  * it. Replays converge; an existing retired or mismatched binding fails closed.
  */
@@ -237,6 +200,13 @@ export const registerCorpusIndexGenerationTx = async (
     (registered.status === "building" || registered.status === "serving")
   ) {
     return requireRegisteredCorpusIndexManifest(registered);
+  }
+  if (registered?.status === "retired") {
+    // Terminal: a retired generation's indexes are gone and its writers are
+    // refused, so it is never built again under the same name.
+    return panic(
+      `Corpus generation is retired and cannot be registered again; declare a new generation: ${target.family}/${target.generation}`,
+    );
   }
   if (registered !== undefined) {
     return panic(
@@ -278,8 +248,11 @@ export const registerCorpusIndexGenerationTx = async (
 };
 
 /**
- * Atomically flip one family to a registered generation. Families route and
- * roll back independently; retired generations cannot be resurrected.
+ * Atomically flip one family to a registered generation. The generation that
+ * served before stays `building`: it keeps taking every change, so the same
+ * guarded flip (`corpus-index-generation-flip.ts`) can move readers back to it.
+ * Families route and roll back independently; retired generations cannot be
+ * resurrected.
  */
 export const setServingCorpusIndexGenerationTx = async (
   tx: Transaction,
@@ -330,7 +303,7 @@ export const setServingCorpusIndexGenerationTx = async (
   await clearJurisdictionServingTx(tx, target.family);
   await tx
     .update(corpusIndexGenerations)
-    .set({ status: "retiring", updatedAt: sql`clock_timestamp()` })
+    .set({ status: "building", updatedAt: sql`clock_timestamp()` })
     .where(
       and(
         eq(corpusIndexGenerations.family, target.family),
@@ -498,4 +471,106 @@ export const completeCorpusIndexGenerationRebuildTx = async (
     );
   }
   await registerCorpusIndexGenerationTx(tx, target);
+};
+
+/**
+ * Move one building generation to retired, with its receipt, in the caller's
+ * transaction. The caller holds the activation and exclusive projection
+ * fences and has decided the retire (`corpus-index-generation-retire.ts`);
+ * the transition records its system audit run in the same transaction.
+ * Retired is terminal: no writer projects the generation from this commit
+ * on, the database refuses any state or revision written to it, and neither
+ * registration nor a rebuild accepts it again.
+ */
+export const markCorpusIndexGenerationRetiredTx = async (
+  tx: Transaction,
+  target: { family: CorpusFamily; generation: string },
+  receipt: { actor: string; reason: string },
+): Promise<{ retiredAt: Date }> => {
+  const retired = await tx
+    .update(corpusIndexGenerations)
+    .set({
+      status: "retired",
+      retiredAt: sql`statement_timestamp()`,
+      retireActor: receipt.actor,
+      retireReason: receipt.reason,
+      updatedAt: sql`statement_timestamp()`,
+    })
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, target.family),
+        eq(corpusIndexGenerations.generation, target.generation),
+        eq(corpusIndexGenerations.status, "building"),
+      ),
+    )
+    .returning({ retiredAt: corpusIndexGenerations.retiredAt });
+  const retiredAt = retired.length === 1 ? retired.at(0)?.retiredAt : null;
+  if (!(retiredAt instanceof Date)) {
+    return panic(
+      `Corpus generation retire lost its building target: ${target.family}/${target.generation}`,
+    );
+  }
+  await recordSystemAudit(tx, "system:corpus-generation-retire", {
+    subject: createSafeId<"systemScriptRun">(),
+    counts: {
+      retired: 1,
+      deletedIndexes: 0,
+      deletedStates: 0,
+      deletedIntents: 0,
+    },
+  });
+  return { retiredAt };
+};
+
+/** Entities one retired-history page may delete: the database's ceiling. */
+const CORPUS_INDEX_RETIRED_HISTORY_PAGE_MAX = 10_000;
+
+export type CorpusIndexRetiredHistoryPage = {
+  deletedStates: number;
+  deletedIntents: number;
+  /** The last entity the page deleted; null when nothing was left after the cursor. */
+  last: string | null;
+};
+
+/**
+ * Delete one page of a retired generation's projection history: every state
+ * and revision of the first `limit` entities after `after` (null: from the
+ * start). Walking the cursor to a null `last` empties the generation; a walk
+ * that crashed starts again from null and finds only what is left, since the
+ * database refuses every new write to a retired generation.
+ */
+export const purgeRetiredCorpusIndexGenerationPageTx = async (
+  tx: Transaction,
+  target: { family: CorpusFamily; generation: string },
+  { after, limit }: { after: string | null; limit: number },
+): Promise<CorpusIndexRetiredHistoryPage> => {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > CORPUS_INDEX_RETIRED_HISTORY_PAGE_MAX
+  ) {
+    return panic(
+      `Retired history page must be 1..${String(CORPUS_INDEX_RETIRED_HISTORY_PAGE_MAX)} entities`,
+    );
+  }
+  const purged = await tx.execute(sql`
+    SELECT deleted_state_count, deleted_intent_count, last_entity::text AS last_entity
+      FROM public.purge_retired_corpus_index_generation_page(
+        ${target.family}, ${target.generation}, ${after}::uuid, ${limit}
+      )
+  `);
+  const row = executedRows(purged).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["deleted_state_count"] !== "number" ||
+    typeof row["deleted_intent_count"] !== "number" ||
+    (row["last_entity"] !== null && typeof row["last_entity"] !== "string")
+  ) {
+    return panic("Retired history purge result is malformed");
+  }
+  return {
+    deletedStates: row["deleted_state_count"],
+    deletedIntents: row["deleted_intent_count"],
+    last: row["last_entity"],
+  };
 };

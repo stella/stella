@@ -65,7 +65,7 @@ const observations = (enabled: boolean | undefined) => ({
             },
           },
           declaredFeatureIds: ["legal-lists", "list-verification"],
-          deploymentFeatures: { legalLists: enabled },
+          deploymentFeatures: { legalLists: enabled, invoiceLinks: true },
         },
 });
 for (const [capability, expected] of Object.entries(cases)) {

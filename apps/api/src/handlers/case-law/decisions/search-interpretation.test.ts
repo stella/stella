@@ -282,23 +282,21 @@ describe("searchAnswer", () => {
   test("an empty page whose partial matches went unread does not say nothing matched", () => {
     const body = request();
     const interpretation = interpret(body);
-    const answer = (relaxedTopUp: "read" | "skipped") =>
+    const answer = (partialMatches: "finished" | "skipped") =>
       searchAnswer({
         body,
         interpretation,
         hitCount: 0,
         countsResultSet: true,
-        relaxedTopUp,
+        partialMatches,
       });
 
-    expect(answer("read").warnings.map(({ code }) => code)).toContain(
+    expect(answer("finished").warnings.map(({ code }) => code)).toContain(
       "no_hits",
     );
-    expect(answer("read").relaxedTopUp).toBeUndefined();
     expect(answer("skipped").warnings.map(({ code }) => code)).not.toContain(
       "no_hits",
     );
-    expect(answer("skipped").relaxedTopUp).toBe("skipped");
   });
 });
 

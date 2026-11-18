@@ -1,24 +1,46 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import {
+  CHAT_LIMIT_RESET_ACTION,
+  type ChatLimitResetAction,
+} from "@stll/api-contract/chat-limit-reminder";
+import { CHAT_QUEUE_HOLD_REASON } from "@stll/api-contract/chat-queue";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import { compareCodeUnit } from "@stll/collation";
 import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { discardChatLimitResume } from "@/api/db/root";
 import {
   chatLimitReminders,
   chatMessages,
+  chatQueueHolds,
   chatThreads,
   chatTurns,
   notifications,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
 } from "@/api/db/schema";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { resumeChatAfterLimit } from "@/api/handlers/chat/limit-reminder/limit-resume";
 import { readLimitedLatestTurn } from "@/api/handlers/chat/limit-reminder/shared";
+import { status } from "@/api/http/status";
+import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  type ChatLimitResumeEnd,
+  endChatLimitResumeOnTx,
+} from "@/api/lib/chat/limit-reset-notification";
+import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
+import {
+  CHAT_LIMIT_RESUME_WINDOW_MS,
+  readDueChatLimitResumesOnTx,
+} from "@/api/lib/db/chat-limit-reminder-system";
+import { takeChatLimitResumeOnTx } from "@/api/lib/db/chat-limit-resume";
 import { takeDueChatLimitReminders } from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -174,6 +196,7 @@ const suite = (
     threadId: SafeId<"chatThread">,
     turnId: SafeId<"chatTurn">,
     remindAt: Date,
+    onReset: ChatLimitResetAction = CHAT_LIMIT_RESET_ACTION.notify,
   ) => {
     await database.insert(chatLimitReminders).values({
       organizationId: owner.organizationId,
@@ -181,8 +204,28 @@ const suite = (
       threadId,
       turnId,
       userId: owner.userId,
+      onReset,
     });
   };
+
+  const remindersOf = async (threadIds: readonly SafeId<"chatThread">[]) =>
+    await database
+      .select({
+        threadId: chatLimitReminders.threadId,
+        onReset: chatLimitReminders.onReset,
+      })
+      .from(chatLimitReminders)
+      .where(inArray(chatLimitReminders.threadId, [...threadIds]));
+
+  /** The resumed turn's acceptance taking the request, under the thread lock. */
+  const takeResume = async (
+    threadId: SafeId<"chatThread">,
+    failedTurnId: SafeId<"chatTurn">,
+  ) =>
+    await database.transaction(async (tx) => {
+      expect(await lockChatThreadForTurnOnTx({ threadId, tx })).toBe(true);
+      return await takeChatLimitResumeOnTx({ failedTurnId, threadId, tx });
+    });
 
   const filedFor = async (threadIds: readonly SafeId<"chatThread">[]) =>
     await database
@@ -262,6 +305,402 @@ const suite = (
       );
       expect(at10.statements).toBeGreaterThan(0);
       expect(readScalingViolations({ small: at10, large: at200 })).toEqual([]);
+    });
+  });
+
+  describe("continuing a chat once its limit reset", () => {
+    test("the resumed turn takes the request once, while the stopped turn is the latest, and frees the held queue", async () => {
+      const owner = await seedOwner();
+      const chat = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      await remind(
+        owner,
+        chat.threadId,
+        chat.firstTurnId,
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      await database.insert(chatQueueHolds).values({
+        organizationId: owner.organizationId,
+        reason: CHAT_QUEUE_HOLD_REASON.turnFailed,
+        threadId: chat.threadId,
+        turnId: chat.firstTurnId,
+        userId: owner.userId,
+        workspaceId: null,
+      });
+
+      expect(await takeResume(chat.threadId, chat.firstTurnId)).toBe("taken");
+      expect(await takeResume(chat.threadId, chat.firstTurnId)).toBe("not-due");
+
+      expect(await remindersOf([chat.threadId])).toEqual([]);
+      const holds = await database
+        .select({ threadId: chatQueueHolds.threadId })
+        .from(chatQueueHolds)
+        .where(eq(chatQueueHolds.threadId, chat.threadId));
+      expect(holds).toEqual([]);
+    });
+
+    test("a newer turn cancels it, and a request to be notified is never taken", async () => {
+      const owner = await seedOwner();
+      const continued = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+        { status: "completed" },
+      ]);
+      const notifyOnly = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      await remind(
+        owner,
+        continued.threadId,
+        continued.firstTurnId,
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      await remind(
+        owner,
+        notifyOnly.threadId,
+        notifyOnly.firstTurnId,
+        at(-60 * 1000),
+      );
+
+      expect(await takeResume(continued.threadId, continued.firstTurnId)).toBe(
+        "not-due",
+      );
+      expect(
+        await takeResume(notifyOnly.threadId, notifyOnly.firstTurnId),
+      ).toBe("not-due");
+      // Neither was the resume's to take; the reminder sweep settles both.
+      expect(
+        (await remindersOf([continued.threadId, notifyOnly.threadId])).length,
+      ).toBe(2);
+    });
+
+    test("two API tasks resuming the same chat at once start one turn", async () => {
+      const owner = await seedOwner();
+      const chat = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      await remind(
+        owner,
+        chat.threadId,
+        chat.firstTurnId,
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+
+      const taken = await Promise.all([
+        takeResume(chat.threadId, chat.firstTurnId),
+        takeResume(chat.threadId, chat.firstTurnId),
+      ]);
+
+      expect(taken.toSorted(compareCodeUnit)).toEqual(["not-due", "taken"]);
+    });
+
+    test("the resumer tries a request only within its window; the reminder sweep notifies the rest", async () => {
+      const owner = await seedOwner();
+      const seedArmed = async (
+        remindAt: Date,
+        onReset: ChatLimitResetAction,
+      ) => {
+        const chat = await seedThread(owner, [
+          { limitResetsAt: remindAt, status: "failed" },
+        ]);
+        await remind(owner, chat.threadId, chat.firstTurnId, remindAt, onReset);
+        return chat.threadId;
+      };
+      const continueNow = await seedArmed(
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      const continueOverdue = await seedArmed(
+        at(-CHAT_LIMIT_RESUME_WINDOW_MS - 60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      const continueLater = await seedArmed(
+        at(HOUR_MS),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      const notifyNow = await seedArmed(
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.notify,
+      );
+      const all = [continueNow, continueOverdue, continueLater, notifyNow];
+
+      const tried = await database.transaction(
+        async (tx) =>
+          await readDueChatLimitResumesOnTx({ limit: 1000, now, tx }),
+      );
+      expect(
+        tried
+          .map(({ threadId }) => threadId)
+          .filter((threadId) => all.includes(threadId)),
+      ).toEqual([continueNow]);
+
+      await takeDueChatLimitReminders({ database, now });
+
+      expect(
+        (await filedFor(all))
+          .flatMap(({ entityId }) => (entityId === null ? [] : [entityId]))
+          .toSorted(compareCodeUnit),
+      ).toEqual([continueOverdue, notifyNow].toSorted(compareCodeUnit));
+      expect(
+        (await remindersOf(all))
+          .map(({ threadId }) => threadId)
+          .toSorted(compareCodeUnit),
+      ).toEqual([continueNow, continueLater].toSorted(compareCodeUnit));
+    });
+
+    test("a request that will not start notifies once, and one for a member who cannot act notifies nothing", async () => {
+      const owner = await seedOwner();
+      const away = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      const gone = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      for (const chat of [away, gone]) {
+        // db-await-in-loop: two fixture rows.
+        await remind(
+          owner,
+          chat.threadId,
+          chat.firstTurnId,
+          at(-60 * 1000),
+          CHAT_LIMIT_RESET_ACTION.continue,
+        );
+      }
+      const end = async (
+        chat: {
+          threadId: SafeId<"chatThread">;
+          firstTurnId: SafeId<"chatTurn">;
+        },
+        how: ChatLimitResumeEnd,
+      ) =>
+        await database.transaction(
+          async (tx) =>
+            await endChatLimitResumeOnTx({
+              end: how,
+              threadId: chat.threadId,
+              turnId: chat.firstTurnId,
+              tx,
+            }),
+        );
+
+      expect((await end(away, "notify")).length).toBeGreaterThan(0);
+      // Once ended, a second task's end finds nothing to tell.
+      expect(await end(away, "notify")).toEqual([]);
+      expect(await end(gone, "discard")).toEqual([]);
+
+      expect(await filedFor([away.threadId, gone.threadId])).toEqual([
+        {
+          entityId: away.threadId,
+          kind: NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET,
+        },
+      ]);
+      expect(await remindersOf([away.threadId, gone.threadId])).toEqual([]);
+    });
+
+    test("a computer away at the reset ends the request in the notification, starting no turn", async () => {
+      const owner = await seedOwner();
+      const accepted = await recordAccountProfessionalUse({
+        userId: owner.userId,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      });
+      expect(accepted.isOk()).toBe(true);
+      const chat = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      await database
+        .update(chatThreads)
+        .set({
+          chatLocalRunTarget: {
+            kind: "local",
+            harness: "codex",
+            model: "gpt-5.5",
+            approvals: "ask",
+            reasoningEffort: null,
+          },
+        })
+        .where(eq(chatThreads.id, chat.threadId));
+      await remind(
+        owner,
+        chat.threadId,
+        chat.firstTurnId,
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      const routed: unknown[] = [];
+
+      const outcome = await resumeChatAfterLimit({
+        dependencies: {
+          discard: discardChatLimitResume,
+          now: () => now,
+          routeLocalRun: async ({ target }) => {
+            routed.push(target);
+            return Result.ok({ type: "no_computer" });
+          },
+          send: async () => panic("A computer that is away gets no turn"),
+          signal: new AbortController().signal,
+        },
+        due: {
+          organizationId: owner.organizationId,
+          threadId: chat.threadId,
+          turnId: chat.firstTurnId,
+          userId: owner.userId,
+        },
+      });
+
+      expect(outcome).toEqual({ type: "ended", end: "notify" });
+      // It asked for the computer the stopped turn ran on.
+      expect(routed).toEqual([
+        expect.objectContaining({ harness: "codex", model: "gpt-5.5" }),
+      ]);
+      expect(await filedFor([chat.threadId])).toEqual([
+        {
+          entityId: chat.threadId,
+          kind: NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET,
+        },
+      ]);
+      expect(await remindersOf([chat.threadId])).toEqual([]);
+      const turns = await database
+        .select({ id: chatTurns.id })
+        .from(chatTurns)
+        .where(eq(chatTurns.threadId, chat.threadId));
+      expect(turns).toEqual([{ id: chat.firstTurnId }]);
+    });
+  });
+
+  describe("a resend refused after the reset", () => {
+    /** A member's chat on their computer, asking to continue after its limit. */
+    const seedLocalResume = async () => {
+      const owner = await seedOwner();
+      const accepted = await recordAccountProfessionalUse({
+        userId: owner.userId,
+        source: PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+      });
+      expect(accepted.isOk()).toBe(true);
+      const chat = await seedThread(owner, [
+        { limitResetsAt: at(-60 * 1000), status: "failed" },
+      ]);
+      await database
+        .update(chatThreads)
+        .set({
+          chatLocalRunTarget: {
+            kind: "local",
+            harness: "codex",
+            model: "gpt-5.5",
+            approvals: "ask",
+            reasoningEffort: null,
+          },
+        })
+        .where(eq(chatThreads.id, chat.threadId));
+      await remind(
+        owner,
+        chat.threadId,
+        chat.firstTurnId,
+        at(-60 * 1000),
+        CHAT_LIMIT_RESET_ACTION.continue,
+      );
+      return { chat, owner };
+    };
+
+    /** The resumed turn the send accepted, then settled as failed. */
+    const acceptRefusedTurn = async (
+      owner: Owner,
+      chat: { threadId: SafeId<"chatThread">; firstTurnId: SafeId<"chatTurn"> },
+    ) => {
+      expect(await takeResume(chat.threadId, chat.firstTurnId)).toBe("taken");
+      const [stopped] = await database
+        .select({ userMessageId: chatTurns.userMessageId })
+        .from(chatTurns)
+        .where(eq(chatTurns.id, chat.firstTurnId));
+      const answerId = createSafeId<"chatMessage">();
+      await database.insert(chatMessages).values({
+        content: toPersistedChatMessageContentV3({ data: [] }),
+        createdAt: now,
+        id: answerId,
+        role: "assistant",
+        threadId: chat.threadId,
+        userId: owner.userId,
+        workspaceId: null,
+      });
+      await database.insert(chatTurns).values({
+        assistantMessageId: answerId,
+        createdAt: now,
+        failureCode: "boundary-refusal",
+        failureRetryable: false,
+        id: createSafeId<"chatTurn">(),
+        organizationId: owner.organizationId,
+        settledAt: now,
+        status: "failed",
+        threadId: chat.threadId,
+        userId: owner.userId,
+        userMessageId:
+          stopped?.userMessageId ?? panic("The stopped turn has a message"),
+        workspaceId: null,
+      });
+    };
+
+    const resumeRefused = async (
+      owner: Owner,
+      chat: { threadId: SafeId<"chatThread">; firstTurnId: SafeId<"chatTurn"> },
+      send: () => Promise<void>,
+    ) =>
+      await resumeChatAfterLimit({
+        dependencies: {
+          discard: discardChatLimitResume,
+          now: () => now,
+          routeLocalRun: async () =>
+            Result.ok({ type: "harness_unavailable", report: null }),
+          send: async () => {
+            await send();
+            return status(503, {
+              code: "service_unavailable",
+              message: "Action admission is unavailable",
+            });
+          },
+          signal: new AbortController().signal,
+        },
+        due: {
+          organizationId: owner.organizationId,
+          threadId: chat.threadId,
+          turnId: chat.firstTurnId,
+          userId: owner.userId,
+        },
+      });
+
+    test("before its acceptance, a refusal that may pass keeps the request for the next sweep", async () => {
+      const { chat, owner } = await seedLocalResume();
+
+      const outcome = await resumeRefused(owner, chat, async () => {});
+
+      expect(outcome).toEqual({ type: "retry-later" });
+      expect(await remindersOf([chat.threadId])).toEqual([
+        {
+          threadId: chat.threadId,
+          onReset: CHAT_LIMIT_RESET_ACTION.continue,
+        },
+      ]);
+      expect(await filedFor([chat.threadId])).toEqual([]);
+    });
+
+    test("after its acceptance took the request, the member is told once", async () => {
+      const { chat, owner } = await seedLocalResume();
+
+      const outcome = await resumeRefused(
+        owner,
+        chat,
+        async () => await acceptRefusedTurn(owner, chat),
+      );
+
+      expect(outcome).toEqual({ type: "ended", end: "notify" });
+      expect(await remindersOf([chat.threadId])).toEqual([]);
+      expect(await filedFor([chat.threadId])).toEqual([
+        {
+          entityId: chat.threadId,
+          kind: NOTIFICATION_KIND.LOCAL_RUN_LIMIT_RESET,
+        },
+      ]);
     });
   });
 

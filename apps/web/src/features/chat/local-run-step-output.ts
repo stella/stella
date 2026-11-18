@@ -18,6 +18,7 @@ import { chatKeys } from "@/features/chat/chat-query-contract";
 import { localRunStepOutputStaleTime } from "@/features/chat/local-run-step-output.logic";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { iterateCursorPages } from "@/lib/infinite-query";
 import type { SafeId } from "@/lib/safe-id";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
@@ -44,23 +45,18 @@ async function* readLocalRunStepContent({
   signal,
 }: ReadStepOptions): AsyncGenerator<ChatLocalRunStepContent> {
   const step = api.chat.threads({ threadId })["local-run-steps"]({ callId });
-  let start = 0;
-  // One window at a time: each starts where the one before ended, which
-  // only that answer says.
-  for (;;) {
-    const content = unwrapApiResponse(
-      await step.content.get({ query: { start }, fetch: { signal } }),
-    );
-    yield content;
-    if (
-      content.state !== CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored ||
-      content.kind === "image" ||
-      content.nextStart === null
-    ) {
-      return;
-    }
-    start = content.nextStart;
-  }
+  yield* iterateCursorPages({
+    initialCursor: 0,
+    getPage: async (start) =>
+      unwrapApiResponse(
+        await step.content.get({ query: { start }, fetch: { signal } }),
+      ),
+    getNextCursor: (content) =>
+      content.state === CHAT_LOCAL_RUN_STEP_CONTENT_STATE.stored &&
+      content.kind !== "image"
+        ? content.nextStart
+        : null,
+  });
 }
 
 /**

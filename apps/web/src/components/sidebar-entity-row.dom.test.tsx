@@ -19,6 +19,8 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { roleOptions } = await import("@/lib/auth-queries");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
 const { SidebarEntityRow } = await import("@/components/sidebar-entity-row");
 
 afterEach(() => {
@@ -60,19 +62,32 @@ const mountRow = (task: { entityId: string; status: "open" } | null = null) => {
   return render(
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={messages}>
-        <ul>
-          <SidebarEntityRow
-            entityId={task?.entityId ?? "entity-1"}
-            entityKind={task === null ? "document" : "task"}
-            name={NAME}
-            onDelete={() => undefined}
-            onOpen={() => undefined}
-            taskStatus={task?.status ?? null}
-            workspaceId="workspace-1"
-          >
-            {NAME}
-          </SidebarEntityRow>
-        </ul>
+        <AuthenticatedUserProvider
+          user={{
+            activeOrganizationId: "organization_sidebar",
+            email: "sidebar@example.test",
+            id: "user_sidebar",
+            image: null,
+            name: "Sidebar User",
+            preferredName: null,
+            timezoneId: "UTC",
+            wordEditShortcut: null,
+          }}
+        >
+          <ul>
+            <SidebarEntityRow
+              entityId={task?.entityId ?? "entity-1"}
+              entityKind={task === null ? "document" : "task"}
+              name={NAME}
+              onDelete={() => undefined}
+              onOpen={() => undefined}
+              taskStatus={task?.status ?? null}
+              workspaceId="workspace-1"
+            >
+              {NAME}
+            </SidebarEntityRow>
+          </ul>
+        </AuthenticatedUserProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );
