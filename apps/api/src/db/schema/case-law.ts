@@ -791,8 +791,12 @@ export const caseLawDecisions = p.pgTable(
     court: p.varchar({ length: 512 }).notNull(),
     /**
      * The court directory's id for `court`, in a jurisdiction that identifies
-     * courts by directory id (`decision-court-identity.ts`); null everywhere
-     * else. `court` is then the directory's canonical name for it.
+     * courts by directory id (`decision-court-identity.ts`): stated by the
+     * source in a directory jurisdiction, read off the printed court name in
+     * a printed-name one (CZE, SVK), where rows stored before that carry none
+     * until repaired. Null everywhere else. `court` is then the directory's
+     * canonical name for it, and the name the publisher printed stays in
+     * `metadata.court`.
      */
     courtId: p.varchar("court_id", { length: DECISION_COURT_ID_MAX_LENGTH }),
     // A migration-owned trigger validates inserts and actual country changes,
@@ -1044,7 +1048,8 @@ export const caseLawDecisions = p.pgTable(
       sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate, t.country)}`,
     ),
     // Added NOT VALID: enforced on every insert and update, so a directory
-    // jurisdiction's row cannot be written or changed without its court id.
+    // jurisdiction's row cannot be written or changed without its court id,
+    // and a printed-name jurisdiction's row may carry one.
     p.check(
       CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
       decisionCourtIdByCountrySql(t.country, t.courtId),
@@ -3614,10 +3619,7 @@ export const caseLawCitationResolutionProgress = p.pgTable(
   (t) => [
     p.check(
       "case_law_citation_resolution_progress_scope_values",
-      sql`${t.scope} IN (${sql.join(
-        CITATION_RESOLUTION_SCOPE_SQL_VALUES,
-        sql.raw(","),
-      )})`,
+      sql`${t.scope} IN (${sql.join(CITATION_RESOLUTION_SCOPE_SQL_VALUES, sql.raw(","))})`,
     ),
     // Half a keyset is not a position. Either both columns name where the
     // walk stopped or neither does and it starts from the beginning.
@@ -3648,10 +3650,7 @@ export const caseLawCitationAuthoritySweep = p.pgTable(
   (t) => [
     p.check(
       "case_law_citation_authority_sweep_scope_values",
-      sql`${t.scope} IN (${sql.join(
-        CITATION_AUTHORITY_SWEEP_SCOPE_SQL_VALUES,
-        sql.raw(","),
-      )})`,
+      sql`${t.scope} IN (${sql.join(CITATION_AUTHORITY_SWEEP_SCOPE_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
   ],
@@ -4472,7 +4471,9 @@ export const caseLawIndexJobs = p.pgTable(
     id: pUuid<"caseLawIndexJob">().primaryKey(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").references(
       () => caseLawDecisions.id,
-      { onDelete: "cascade" },
+      {
+        onDelete: "cascade",
+      },
     ),
     /**
      * The generation an operation targeted, where it targeted one. An erasure

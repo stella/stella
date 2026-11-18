@@ -34,6 +34,7 @@ type SourceRow = {
   adapterKey: string;
   enabled: boolean;
   lastSyncAt: Date | null;
+  importSnapshotDate: string | null;
 };
 
 const sourceOf = (
@@ -45,6 +46,7 @@ const sourceOf = (
   adapterKey,
   enabled,
   lastSyncAt: new Date(NOW.getTime() - syncedDaysAgo * DAY_IN_MS),
+  importSnapshotDate: null,
 });
 
 const CURRENT_CZ_SOURCE = sourceOf(ADAPTER_KEYS.CZ_NS, 0);

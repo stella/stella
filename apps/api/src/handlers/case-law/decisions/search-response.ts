@@ -73,6 +73,11 @@ const projectIdentifiers = ([
     })),
 ];
 
+const projectTerms = (terms: readonly string[]): string[] =>
+  terms
+    .slice(0, LIMITS.caseLawSearchTermsMax)
+    .map((term) => truncateTextBytes(term, bytes.queryUsed));
+
 const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   decisionId: truncateTextBytes(hit.decisionId, bytes.id),
   caseNumber: truncateTextBytes(hit.caseNumber, bytes.caseNumber),
@@ -116,6 +121,8 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   citationAuthority: hit.citationAuthority,
   matchingPassages: hit.matchingPassages,
   match: hit.match,
+  matchedTerms: projectTerms(hit.matchedTerms),
+  missingTerms: projectTerms(hit.missingTerms),
   createdAt: truncateTextBytes(hit.createdAt, bytes.date),
 });
 
@@ -171,9 +178,19 @@ export const projectCaseLawSearchResponse = (
         },
   total: response.total,
   relaxedHitCount: response.relaxedHitCount,
-  ...(response.relaxedTopUp === undefined
-    ? {}
-    : { relaxedTopUp: response.relaxedTopUp }),
+  termDecisionCounts:
+    response.termDecisionCounts === null
+      ? null
+      : {
+          allTerms: response.termDecisionCounts.allTerms,
+          terms: response.termDecisionCounts.terms
+            .slice(0, LIMITS.caseLawSearchTermCountsMax)
+            .map(({ term, count }) => ({
+              term: truncateTextBytes(term, bytes.queryUsed),
+              count,
+            })),
+          countType: response.termDecisionCounts.countType,
+        },
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,

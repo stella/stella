@@ -1,5 +1,35 @@
 # @stll/cli
 
+## 7.0.0
+
+### Major Changes
+
+- [#8799](https://github.com/stella/stella/pull/8799) [`19eceaf`](https://github.com/stella/stella/commit/19eceaf2e74281a6883c86b1236428763841270b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `expectedUpdatedAt` when replacing a workflow definition with `flows.update`. Read the definition with `flows.get` and send its `updatedAt` value with the edited fields. A stale version returns `version_conflict` without changing the workflow; read the current definition and reconcile the intended changes before submitting again. Successful updates return the new `updatedAt` value.
+
+### Minor Changes
+
+- [#5966](https://github.com/stella/stella/pull/5966) [`fc38c10`](https://github.com/stella/stella/commit/fc38c10f9175cc88326b65878c1dea072039768a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage reports publisher slice counts, stored and text counts, and conservative completeness verdicts for each source and country.
+
+### Patch Changes
+
+- [#7269](https://github.com/stella/stella/pull/7269) [`604cc21`](https://github.com/stella/stella/commit/604cc21ae47f2738c83c86c6f3bdae0be4194a6b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include procedural review evidence alongside case-law citation results.
+
+- [#8701](https://github.com/stella/stella/pull/8701) [`d30260f`](https://github.com/stella/stella/commit/d30260fb5afb4282a8a5b175639e0935783db83d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Enforce the shared 500-character search query limit in contact list and search capability schemas.
+
+- [#5572](https://github.com/stella/stella/pull/5572) [`fe13937`](https://github.com/stella/stella/commit/fe1393702ae233ad52d6bd63b7e3a0602baf6909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document citation polarity evidence and the cited opinion part in case-law citation reads.
+
+- [#8770](https://github.com/stella/stella/pull/8770) [`334df25`](https://github.com/stella/stella/commit/334df2523710c3102c0088075a751c3a2423cefa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Apply the existing 500-character search query limit to clause searches in the generated capability contract.
+
+- [#8697](https://github.com/stella/stella/pull/8697) [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation transcribe` accepts the direct ElevenLabs Scribe v3 model id.
+
+- [#8679](https://github.com/stella/stella/pull/8679) [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation transcribe` accepts the refreshed transcription model ids.
+
+- [#8662](https://github.com/stella/stella/pull/8662) [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `OutcomeScreen` (`@stll/ui/outcome-screen`), the one screen a finished flow shows. The CLI's browser sign-in page is now rendered from it.
+
+- [#8706](https://github.com/stella/stella/pull/8706) [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `OutcomeScreen` lists what a flow connected (`details`) and can offer a command to run (`command`). The CLI's browser sign-in page names the signed-in account and organization, and a failed sign-in shows `stella auth login` to try again.
+
+- [#7598](https://github.com/stella/stella/pull/7598) [`d2b14cc`](https://github.com/stella/stella/commit/d2b14ccccc1164d52d47cd3a5a4c69daf4c4e378) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generate the packaged capability manifests from API sources during CLI builds and package preparation.
+
 ## 6.12.1
 
 ### Patch Changes

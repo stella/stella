@@ -79,6 +79,7 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   ADAPTER_MANIFESTS,
   type AdapterEdition,
+  IMPORT_SOURCE_MANIFESTS,
 } from "@/api/lib/legal-search/adapter-manifest";
 import {
   ADAPTER_KEYS,
@@ -332,11 +333,68 @@ export const caseLawSourceJurisdiction = (
     : null;
 };
 
+/**
+ * Where a source row sits on the public pages, and what it states about
+ * itself there. A crawl adapter takes its country and edition from its
+ * manifest. A bulk import takes its country from its manifest and its edition
+ * from the snapshot its last completed run read; until a run completes it has
+ * no edition to state and is not placed. A key neither registry knows cannot
+ * be placed at all. The coverage page and the corpus status both place
+ * sources through this, so they judge a country by the same set.
+ */
+export type CaseLawSourcePlacement =
+  | {
+      type: "placed";
+      country: CaseLawJurisdiction;
+      edition: AdapterEdition;
+      publisher: string;
+      publicHomeUrl: string;
+    }
+  | { type: "import-pending" }
+  | { type: "unregistered" };
+
+export const caseLawSourcePlacement = ({
+  adapterKey,
+  importSnapshotDate,
+}: {
+  adapterKey: string;
+  importSnapshotDate: string | null;
+}): CaseLawSourcePlacement => {
+  const membership = sourceRegistryMembership(adapterKey);
+  if (membership.type === "import") {
+    const manifest = IMPORT_SOURCE_MANIFESTS[membership.importKey];
+    if (!isCaseLawJurisdiction(manifest.country)) {
+      return { type: "unregistered" };
+    }
+    return importSnapshotDate === null
+      ? { type: "import-pending" }
+      : {
+          type: "placed",
+          country: manifest.country,
+          edition: { type: "snapshot", snapshotDate: importSnapshotDate },
+          publisher: manifest.publisher,
+          publicHomeUrl: manifest.publicHomeUrl,
+        };
+  }
+  const manifest = MANIFEST_BY_ADAPTER_KEY.get(adapterKey);
+  const country = caseLawSourceJurisdiction(adapterKey);
+  return manifest === undefined || country === null
+    ? { type: "unregistered" }
+    : {
+        type: "placed",
+        country,
+        edition: manifest.edition,
+        publisher: manifest.publisher,
+        publicHomeUrl: manifest.publicHomeUrl,
+      };
+};
+
 type CaseLawCoverageSourceRow = {
   id: SafeId<"caseLawSource">;
   adapterKey: string;
   enabled: boolean;
   lastSyncAt: Date | null;
+  importSnapshotDate: string | null;
   reportedTotal: number | null;
   reportedTotalAsOf: Date | null;
   reportedTotalOrigin: string | null;
@@ -372,6 +430,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         adapterKey: caseLawSources.adapterKey,
         enabled: caseLawSources.enabled,
         lastSyncAt: caseLawSources.lastSyncAt,
+        importSnapshotDate: caseLawSources.importSnapshotDate,
         reportedTotal: caseLawSources.reportedTotal,
         reportedTotalAsOf: caseLawSources.reportedTotalAsOf,
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
@@ -692,17 +751,14 @@ export const loadCaseLawCoverage = async ({
   >();
 
   for (const source of admitted) {
-    // A bulk import source (CourtListener) is registered, but as an import:
-    // its manifest has no edition, and the page judges a source's health by
-    // its edition. Until an import's edition is read from its own provenance
-    // it is left off the page, and not reported: it is known, not missing.
-    if (sourceRegistryMembership(source.adapterKey).type === "import") {
+    const placement = caseLawSourcePlacement(source);
+    if (placement.type === "import-pending") {
+      // A bulk import that has not finished a run has no edition to state
+      // yet. It is known, not missing, so it is left off without a report.
       continue;
     }
-    const manifest = MANIFEST_BY_ADAPTER_KEY.get(source.adapterKey);
-    const country = caseLawSourceJurisdiction(source.adapterKey);
-    if (manifest === undefined || country === null) {
-      // A row whose adapter is not registered cannot be placed at all: the
+    if (placement.type === "unregistered") {
+      // A row whose key no registry knows cannot be placed at all: the
       // source table carries no country of its own, and the manifest that
       // would supply one is exactly what is missing. Every figure on this
       // page hangs off a country, so the row is left out and reported rather
@@ -712,6 +768,7 @@ export const loadCaseLawCoverage = async ({
       reportUnrecognizedSource(source.adapterKey);
       continue;
     }
+    const { country, edition } = placement;
     const sourceArrivals = arrivals?.get(String(source.id)) ?? UNKNOWN_ARRIVALS;
     const entry = byCountry.get(country) ?? {
       sources: [],
@@ -720,15 +777,15 @@ export const loadCaseLawCoverage = async ({
     };
     entry.sources.push({
       adapterKey: source.adapterKey,
-      name: manifest.publisher,
-      publicHomeUrl: manifest.publicHomeUrl,
+      name: placement.publisher,
+      publicHomeUrl: placement.publicHomeUrl,
       health: caseLawSourceHealth({
-        edition: manifest.edition,
+        edition,
         enabled: source.enabled,
         lastSyncAt: source.lastSyncAt,
         now,
       }),
-      edition: manifest.edition,
+      edition,
       lastSyncAt: source.lastSyncAt?.toISOString() ?? null,
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,

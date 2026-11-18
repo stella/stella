@@ -53,6 +53,7 @@ export const APP_SEARCH_FIXTURE = {
       matchingPassages: 1,
       textAvailability: "available" as const,
       match: "all_terms" as const,
+      terms: { query: 0, matched: ["náhrada", "škody"], missing: [] },
       snippet: "Náhrada škody: <b>právní jistota</b>.",
       keywords: {
         type: "keywords" as const,

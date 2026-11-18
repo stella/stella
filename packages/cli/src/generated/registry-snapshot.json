@@ -62,7 +62,11 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget", "time_budget"],
+              "enum": [
+                "exclusion_budget",
+                "time_budget",
+                "partial_matches_budget"
+              ],
               "type": "string"
             }
           },
@@ -468,7 +472,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
@@ -774,7 +778,11 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget", "time_budget"],
+              "enum": [
+                "exclusion_budget",
+                "time_budget",
+                "partial_matches_budget"
+              ],
               "type": "string"
             }
           },
@@ -793,6 +801,10 @@
                 "type": "string"
               },
               "paginationOutcome": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "termDecisionCounts": {
                 "type": "object",
                 "additionalProperties": true
               },
@@ -910,6 +922,10 @@
                 "enum": ["all_terms", "some_terms"],
                 "type": "string"
               },
+              "terms": {
+                "type": "object",
+                "additionalProperties": true
+              },
               "snippet": {
                 "type": ["string", "null"]
               },
@@ -959,6 +975,7 @@
               "matchingPassages",
               "textAvailability",
               "match",
+              "terms",
               "keywords",
               "headnote"
             ],
@@ -3159,7 +3176,11 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget", "time_budget"],
+              "enum": [
+                "exclusion_budget",
+                "time_budget",
+                "partial_matches_budget"
+              ],
               "type": "string"
             }
           },
@@ -4436,6 +4457,27 @@
           ],
           "type": "string"
         },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": ["read", "unavailable"],
+              "type": "string"
+            },
+            "asOf": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["status"],
+          "additionalProperties": false
+        },
         "candidates": {
           "type": "array",
           "items": {
@@ -4789,6 +4831,27 @@
             "court_unrecognized"
           ],
           "type": "string"
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": ["read", "unavailable"],
+              "type": "string"
+            },
+            "asOf": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": ["status"],
+          "additionalProperties": false
         },
         "candidates": {
           "type": "array",
@@ -8928,7 +8991,7 @@
               "type": "null"
             }
           ],
-          "description": "Registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -8940,7 +9003,7 @@
               "type": "null"
             }
           ],
-          "description": "Tax identifier"
+          "description": "Business tax number"
         },
         "vat_id": {
           "anyOf": [
@@ -8952,7 +9015,7 @@
               "type": "null"
             }
           ],
-          "description": "VAT identifier"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -12998,6 +13061,10 @@
               },
               "outstandingAmount": {
                 "type": "number"
+              },
+              "settlement": {
+                "type": "object",
+                "additionalProperties": true
               }
             },
             "required": [
@@ -13014,7 +13081,8 @@
               "currency",
               "totalAmount",
               "paidAmount",
-              "outstandingAmount"
+              "outstandingAmount",
+              "settlement"
             ],
             "additionalProperties": false
           }
@@ -13070,6 +13138,20 @@
             },
             "outstandingAmount": {
               "type": "number"
+            },
+            "settlement": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": ["open", "paid", "credited", "overpaid"],
+                  "type": "string"
+                },
+                "refundAmount": {
+                  "type": "number"
+                }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
             },
             "notes": {
               "type": ["string", "null"]
@@ -13176,6 +13258,7 @@
             "totalAmount",
             "paidAmount",
             "outstandingAmount",
+            "settlement",
             "notes",
             "sellerProfileId",
             "buyerName",

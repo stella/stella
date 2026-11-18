@@ -28,6 +28,7 @@ const answeringReaders = (): Assembly => ({
         adapterKey: ADAPTER_KEYS.CZ_NS,
         enabled: true,
         lastSyncAt: null,
+        importSnapshotDate: null,
         reportedTotal: null,
         reportedTotalAsOf: null,
         reportedTotalOrigin: null,

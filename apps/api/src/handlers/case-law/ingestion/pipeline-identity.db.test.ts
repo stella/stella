@@ -10,6 +10,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import {
+  directoryCourtIdentities,
+  readPrintedCourt,
+} from "@stll/api-contract/court-identity";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex as hashContent } from "@stll/sha256/node";
@@ -57,26 +61,69 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 /**
+ * The Slovak court a case's label stands for. The write boundary stores a
+ * Slovak decision only under a directory court, so a label that names one is
+ * that court, and any other label is given a court of its own: two labels are
+ * never one court, and one label is always the same court.
+ */
+const SLOVAK_COURTS = directoryCourtIdentities("SVK").map(({ name }) => name);
+/** Courts these cases name outright, never given to another label. */
+const NAMED_COURTS = new Set(
+  [
+    "Mestský súd Košice",
+    "Okresný súd Bardejov",
+    "Okresný súd Prievidza",
+    "Okresný súd Trenčín",
+    "Najvyšší súd SR",
+  ].map((label) => {
+    const reading = readPrintedCourt("SVK", label);
+    return reading.type === "court" ? reading.court.name : label;
+  }),
+);
+const labelOfCourt = new Map<string, string>();
+const courtOfLabel = new Map<string, string>();
+const courtFor = (label: string): string => {
+  const known = courtOfLabel.get(label);
+  if (known !== undefined) {
+    return known;
+  }
+  const reading = readPrintedCourt("SVK", label);
+  const court =
+    reading.type === "court"
+      ? reading.court.name
+      : (SLOVAK_COURTS.find(
+          (name) => !labelOfCourt.has(name) && !NAMED_COURTS.has(name),
+        ) ?? panic("More case labels than Slovak courts"));
+  const holder = labelOfCourt.get(court);
+  if (holder !== undefined) {
+    return panic(`Labels ${holder} and ${label} would share ${court}`);
+  }
+  labelOfCourt.set(court, label);
+  courtOfLabel.set(label, court);
+  return court;
+};
+
+/**
  * Courts number their dockets per court, so one source covering many courts
  * issues the same number repeatedly. These decisions are unrelated and must
  * both survive; identity comes from the publisher's id, not the number.
  */
 const decisionAt = (
-  court: string,
+  label: string,
   sourceDocumentId: string | undefined,
 ): IngestionResult =>
   plainTextIngestionResult({
     caseNumber: "0T/42/2019",
     sourceDocumentId,
-    court,
+    court: courtFor(label),
     country: "SVK",
     language: "sk",
     decisionDate: "2019-05-14",
     decisionType: "rozsudok",
-    fulltext: `Rozsudok ${court}`,
-    metadata: { court },
+    fulltext: `Rozsudok ${label}`,
+    metadata: { court: courtFor(label) },
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    rawHash: `hash-${court}`,
+    rawHash: `hash-${label}`,
     documentAst: EMPTY_AST,
   });
 
@@ -1550,14 +1597,14 @@ if (!databaseUrl || !runPostgresTests) {
                  SELECT count(*)::int
                  FROM case_law_decisions
                  WHERE source_id = ${sourceId}
-                   AND court = 'Distinct row after repair'
+                   AND court = ${courtFor("Distinct row after repair")}
                    AND source_document_id = 'nalus-record:known-repair-collision'
                ) AS "postRepairDistinctCount",
                (
                  SELECT count(*)::int
                  FROM case_law_decisions
                  WHERE source_id = ${sourceId}
-                   AND court LIKE 'Distinct repair row %'
+                   AND court IN (${courtFor("Distinct repair row 0")}, ${courtFor("Distinct repair row 1")})
                ) AS "distinctCount",
                (
                  SELECT count(*)::int
@@ -1989,7 +2036,7 @@ if (!databaseUrl || !runPostgresTests) {
         WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
       `);
       expect(isRecord(row) ? row["court"] : undefined).toBe(
-        "Newest observation",
+        courtFor("Newest observation"),
       );
     });
 
@@ -2039,7 +2086,7 @@ if (!databaseUrl || !runPostgresTests) {
       `,
       );
       expect(isRecord(row) ? row["court"] : undefined).toBe(
-        "Current observation",
+        courtFor("Current observation"),
       );
       expect(isRecord(row) ? row["observedAt"] : undefined).toEqual(
         new Date("2026-07-31T12:02:02.000Z"),
@@ -2116,7 +2163,7 @@ if (!databaseUrl || !runPostgresTests) {
         `,
       );
       expect(row).toMatchObject({
-        court: "Initial content",
+        court: courtFor("Initial content"),
         sourceHash: "hash-Initial content",
         observationOrder: 32n,
       });
@@ -2365,7 +2412,9 @@ if (!databaseUrl || !runPostgresTests) {
         SELECT court FROM case_law_decisions
         WHERE source_id = ${sourceId} AND source_document_id = ${publisherId}
       `);
-      expect(isRecord(row) ? row["court"] : undefined).toBe("Database winner");
+      expect(isRecord(row) ? row["court"] : undefined).toBe(
+        courtFor("Database winner"),
+      );
     });
 
     test("concurrent collision inserts converge to unique stable slugs", async () => {
@@ -2551,7 +2600,7 @@ if (!databaseUrl || !runPostgresTests) {
       const row = Array.isArray(rows) ? rows.at(0) : undefined;
       expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
       expect(isRecord(row) ? row["court"] : undefined).toBe(
-        "Okresný súd Reconciled",
+        courtFor("Okresný súd Reconciled"),
       );
       expect(isRecord(row) ? row["source_hash"] : undefined).toBe(
         "hash-Okresný súd Reconciled",

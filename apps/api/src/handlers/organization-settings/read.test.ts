@@ -348,3 +348,13 @@ describe.serial("undeclared feature deployment discovery", () => {
     }
   });
 });
+
+test("invoice link deployment discovery follows the configured flag", () => {
+  for (const enabled of [false, true]) {
+    testState.setConfig("FEATURE_INVOICE_LINKS", enabled);
+    expect(
+      projectOrganizationSettingsRow(null, emptySnapshot).deploymentFeatures
+        .invoiceLinks,
+    ).toBe(enabled);
+  }
+});

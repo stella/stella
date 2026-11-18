@@ -739,6 +739,18 @@ export const LIMITS = {
   caseLawDecisionBatchHydrationsMax: 3,
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
+  /**
+   * Words one query can hold: every word takes at least one character and a
+   * separator. Bounds the per-hit matched and missing word lists.
+   */
+  caseLawSearchTermsMax: Math.ceil(SEARCH_QUERY_MAX_LENGTH / 2),
+  /**
+   * Distinct required words a search checks one by one: the partial-match
+   * phase and the per-word decision counts each spend one engine
+   * aggregation per word. A query with more required words than this runs
+   * neither, so no hit reports a word it never checked.
+   */
+  caseLawSearchTermCountsMax: 24,
   caseLawResultDepthMax: CASE_LAW_RESULT_DEPTH_MAX,
   /** Max language variants for one decision's languageGroupKey. Bounds the
    *  alternate-language reads (decision detail + sitemap hreflang) so a
