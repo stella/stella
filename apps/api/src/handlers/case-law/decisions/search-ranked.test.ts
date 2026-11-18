@@ -2,17 +2,24 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexDecisionTerms,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
+import {
+  PUBLIC_READ_TIMEOUT_CODE,
+  publicReadTimeoutRefusal,
+} from "@/api/lib/legal-search/public-read-timeout";
+import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
   planRankedSearch,
   rankedCursorTarget,
+  rankedPageWordsRefusal,
   rankedSearchShape,
 } from "./search-ranked";
 
@@ -129,5 +136,32 @@ describe("the ranked plan", () => {
         ...(plan.words.at(0)?.leaves.boostedLeaves ?? []),
       ].join(" OR ")})`,
     );
+  });
+});
+
+describe("a ranked page whose words could not be read", () => {
+  test("answers a budget-ended read as the public-read timeout the tools continue", () => {
+    const answer = rankedPageWordsRefusal(
+      publicReadTimeoutRefusal(new Error("budget")),
+    );
+    expect(answer.code).toBe(503);
+    expect(answer.response).toMatchObject({
+      code: PUBLIC_READ_TIMEOUT_CODE,
+      retryable: true,
+    });
+  });
+
+  test("answers any other failure as the index being unavailable, never a page without its words", () => {
+    const answer = rankedPageWordsRefusal(
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Search term coverage is invalid",
+      }),
+    );
+    expect(answer.code).toBe(503);
+    expect(answer.response).toMatchObject({
+      code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    });
   });
 });

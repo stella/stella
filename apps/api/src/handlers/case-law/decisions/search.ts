@@ -15,12 +15,15 @@ import {
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  CASE_LAW_RANKED_HIT_ORDER,
+  type CaseLawHitOrder,
   caseLawPageOutcome,
   countedSearchTotal,
   type DecisionSearchMatch,
   DEFAULT_CASE_LAW_SEARCH_FACETS,
   DEFAULT_SEARCH_EXCERPT,
   FACET_COUNT_TYPE,
+  orderCaseLawHits,
   SEARCH_PAGE_END,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
@@ -337,6 +340,7 @@ import {
   rankedCursorTarget,
   rankedHitTerms,
   rankedMatch,
+  rankedPageWordsRefusal,
   rankedSearchShape,
   readRankedPageWords,
   readRankedTermDecisionCounts,
@@ -3304,6 +3308,9 @@ const settledRelaxedTopUp = <Hits>(
   }
 };
 
+/** A passage page's partial matches are a second pass, appended. */
+const PASSAGE_HIT_ORDER: CaseLawHitOrder = "all_words_first";
+
 const TERM_DECISION_COUNTS_SKIPPED_SINK = failureSink({
   event: "case_law.search_term_decision_counts.skipped",
   expected: [],
@@ -3964,16 +3971,18 @@ export const searchCorpusIndexDecisions = async (
   // aggregation per word over this page's decisions, each in its applied
   // copy. Not optional and not on a sub-budget: the page states every hit's
   // words, so it is answered with them or fails as a whole.
-  const pageWords = await (async () => {
+  const pageWordsRead = await (async () => {
     const rankedPlan = reads.plan;
     if (rankedPlan === null) {
-      return {
+      return Result.ok({
         termsOf: (id: string) =>
           pinnedIds.has(id) ? NO_HIT_TERMS : strictTerms,
         matchOf: (): DecisionSearchMatch => "all_terms",
-      };
+        // The partial pass appends after the full matches.
+        hitOrder: PASSAGE_HIT_ORDER,
+      });
     }
-    const held = await readRankedPageWords({
+    const read = await readRankedPageWords({
       aggregate: getCorpusIndexClient(serving.cluster).aggregate,
       observer,
       signal,
@@ -3988,11 +3997,16 @@ export const searchCorpusIndexDecisions = async (
         .filter((hit) => !pinnedIds.has(hit.id))
         .map((hit) => hit.id),
     });
-    return {
+    return read.map((held) => ({
       termsOf: rankedHitTerms({ plan: rankedPlan, held, pinnedIds }),
       matchOf: rankedMatch,
-    };
+      hitOrder: CASE_LAW_RANKED_HIT_ORDER,
+    }));
   })();
+  if (Result.isError(pageWordsRead)) {
+    return rankedPageWordsRefusal(pageWordsRead.error);
+  }
+  const pageWords = pageWordsRead.value;
   const strictPage = decisionHitsPage({
     alternatesByGroupKey,
     anchorIdById,
@@ -4011,12 +4025,14 @@ export const searchCorpusIndexDecisions = async (
   });
   // On a ranked page a decision holding every word is a full match and one
   // missing a word is partial, wherever in its text the words stand.
+  // The page's order is the policy's, applied here and named on the page so
+  // every reader keeps it.
   const page = {
     ...strictPage,
-    hits: strictPage.hits.map((hit) => ({
-      ...hit,
-      match: pageWords.matchOf(hit),
-    })),
+    hits: orderCaseLawHits(
+      strictPage.hits.map((hit) => ({ ...hit, match: pageWords.matchOf(hit) })),
+      pageWords.hitOrder,
+    ),
   };
   const strictEnd = searchPageEnd(searchPage);
   // The strict hits stay first and untouched; partial matches only follow.
@@ -4269,6 +4285,7 @@ export const searchCorpusIndexDecisions = async (
     countsResultSet: isFirstPage && strictEnd === SEARCH_PAGE_END.COMPLETE,
     partialMatches,
     termDecisionCounts,
+    hitOrder: pageWords.hitOrder,
   });
   return projectCaseLawSearchResponse(
     {
@@ -5166,6 +5183,7 @@ export const listCaseLawProvisionDecisions = async ({
       ...page,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
+      hitOrder: "all_words_first",
       queryUsed: "",
       relaxedHitCount: 0,
       termDecisionCounts: null,

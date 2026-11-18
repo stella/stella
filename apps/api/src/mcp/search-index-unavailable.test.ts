@@ -963,6 +963,7 @@ describe("public corpus statement budgets", () => {
               pageReach: SEARCH_PAGE_REACH.REACHED,
               queryUsed: body.query,
               warnings: [],
+              hitOrder: "all_words_first",
               relaxedHitCount: 0,
               termDecisionCounts: null,
             };

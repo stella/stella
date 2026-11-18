@@ -4,6 +4,7 @@ import { FACET_COUNT_TYPE } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   CorpusIndexClient,
   CorpusIndexQueryDsl,
@@ -30,7 +31,14 @@ import {
 } from "@/api/lib/legal-search/corpus-ranked-decision-query";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { stemLegalTerm } from "@/api/lib/legal-search/morphology/stem";
+import {
+  PUBLIC_READ_TIMEOUT_CODE,
+  publicReadTimeoutError,
+  publicReadTimeoutResponse,
+} from "@/api/lib/legal-search/public-read-timeout";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 
 import {
   distinctRequiredTerms,
@@ -330,10 +338,13 @@ export const readRankedPageWords = async ({
   appliedRevisionOf,
   ids,
 }: ReadRankedPageWordsOptions): Promise<
-  ReadonlyMap<string, ReadonlySet<number>>
+  Result<
+    ReadonlyMap<string, ReadonlySet<number>>,
+    HandlerError<400 | 502 | 503>
+  >
 > => {
   if (ids.length === 0) {
-    return new Map();
+    return Result.ok(new Map());
   }
   const copies = ids
     .map((id) =>
@@ -344,7 +355,7 @@ export const readRankedPageWords = async ({
       }),
     )
     .join(" OR ");
-  const held = await readTermCoverage({
+  return await readTermCoverage({
     aggregate,
     observer,
     signal,
@@ -354,16 +365,28 @@ export const readRankedPageWords = async ({
       (_, index) => `(${plan.wordQuery(index, "")}) AND (${copies})`,
     ),
   });
-  if (Result.isError(held)) {
-    // A ranked page states every hit's words, so a failed read fails the
-    // page the way the scan's engine failures do today: the scan throws its
-    // HandlerError (`corpusIndexSearchFailure`) and the HTTP core answers
-    // it. Counted by the throw ratchet and funded by
-    // scripts/ratchet-allowances/case-law-ranked-page-words-throw.json.
-    throw held.error;
-  }
-  return held.value;
 };
+
+const RANKED_PAGE_WORDS_TIMEOUT_SINK = failureSink({
+  event: "case_law.search_ranked_words.timed_out",
+  expected: [],
+});
+
+/**
+ * The search's answer when a ranked page's words could not be read. A page
+ * states every hit's words, so it is not served without them: a read the
+ * request's budget ended answers as the public-read timeout, which the agent
+ * tools continue; any other failure answers as the index being unavailable,
+ * as the search does when it cannot reach the index at all.
+ */
+export const rankedPageWordsRefusal = (error: HandlerError) =>
+  error.code === PUBLIC_READ_TIMEOUT_CODE ||
+  publicReadTimeoutError(error) !== null
+    ? publicReadTimeoutResponse({
+        sink: RANKED_PAGE_WORDS_TIMEOUT_SINK,
+        cause: error,
+      })
+    : searchIndexUnavailableResponse(error);
 
 type RankedHitTermsOptions = {
   plan: RankedSearchPlan;

@@ -93,6 +93,7 @@ const validResponse = {
   ],
   facets: null,
   total: SEARCH_TOTAL_NOT_COUNTED,
+  hitOrder: "all_words_first",
   relaxedHitCount: 0,
   termDecisionCounts: null,
   nextCursor: null,
