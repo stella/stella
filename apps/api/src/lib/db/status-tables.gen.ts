@@ -318,6 +318,7 @@ export const ENUM_COLUMNS = {
   case_law_decision_judges: ["role"],
   case_law_decision_reviews: ["evidence_classification", "outcome", "source"],
   case_law_decisions: ["case_number_type"],
+  case_law_held_decision_attachments: ["match_basis"],
   case_law_polarity_rules: ["kind"],
   case_law_population_counts: ["kind"],
   case_law_population_deltas: ["kind"],
@@ -376,6 +377,7 @@ export const ENUM_COLUMNS = {
   corpus_index_group_enrollments: ["contract_version", "family"],
   corpus_index_group_withdrawals: ["family"],
   corpus_index_jurisdiction_serving: ["family"],
+  corpus_index_projection_delete_tasks: ["family"],
   corpus_index_projection_intents: [
     "append_delivery",
     "append_fault",

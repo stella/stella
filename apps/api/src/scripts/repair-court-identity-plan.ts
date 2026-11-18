@@ -38,6 +38,7 @@ import { isRecord } from "@/api/lib/type-guards";
 export const COURT_IDENTITY_REPAIR_ADAPTERS = [
   "cz-regional",
   "cz-ns",
+  "cz-ns-sbirka",
   "cz-nss",
   "cz-us",
   "cz-uohs",

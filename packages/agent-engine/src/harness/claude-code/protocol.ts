@@ -52,11 +52,16 @@ export const InitializeResponseSchema = v.object({
     }),
   ),
   account: v.object({
-    /** `none` when no subscription sign-in is present. */
+    /**
+     * `none` when no subscription sign-in is present. Newer releases leave it
+     * out for a subscription sign-in and report the account instead.
+     */
     tokenSource: v.optional(v.string()),
     /** Where an API key would come from; `none` when no key is in use. */
     apiKeySource: v.optional(v.string()),
     subscriptionType: v.optional(v.string()),
+    /** Read only to tell a sign-in is present; never logged or reported. */
+    email: v.optional(v.string()),
     apiProvider: v.optional(v.string()),
   }),
   claude_code_version: v.optional(v.string()),

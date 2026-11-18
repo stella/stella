@@ -30,6 +30,11 @@ export const orderOnlineMigrationEntries = (
   return ordered;
 };
 
+// Typed per entry first: `Object.values` over the generated namespace itself
+// would build a union of every entry's literal type, too large to represent.
+const generatedEntries: Readonly<Record<string, OnlineMigrationEntry>> =
+  entryModules;
+
 export const ONLINE_MIGRATION_ENTRIES = orderOnlineMigrationEntries(
-  Object.values(entryModules),
+  Object.values(generatedEntries),
 );

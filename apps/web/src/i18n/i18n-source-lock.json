@@ -3847,7 +3847,7 @@
   "knowledge.agentSkills.importSkill": "Import from URL",
   "knowledge.agentSkills.importTitle": "Import skill",
   "knowledge.agentSkills.importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}",
-  "knowledge.agentSkills.invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores",
+  "knowledge.agentSkills.invalidPath": "Use a relative path. File and folder names can't be . or .., start or end with a space, end with a dot, or contain \\ : * ? \" |, angle brackets or control characters.",
   "knowledge.agentSkills.invocationAuto": "Automatically",
   "knowledge.agentSkills.invocationAutoHelp": "The AI can use this skill on its own when it fits the request.",
   "knowledge.agentSkills.invocationManual": "Only when invoked",

@@ -317,6 +317,9 @@
   },
   "noTrackedInputs": {
     "scripts/borrowed-dependencies.test.ts": "Builds all manifests, workspace sources and dependency links in temporary fixtures; uses only its static import closure.",
+    "scripts/bundle-startup-build.test.ts": "Builds its route files, chunks, sourcemaps and Start manifest in a temporary fixture; uses only its static import closure.",
+    "scripts/bundle-startup-gates.test.ts": "Evaluates in-memory startup graphs and ledgers; reads no files.",
+    "scripts/bundle-startup-sourcemap.test.ts": "Builds its chunk and sourcemap from modules written to a temporary fixture; uses only its static import closure.",
     "scripts/oxlint-rule-ids.test.ts": "Exercises plugin aliases and canonicalization with in-memory rule fixtures; does not invoke the filesystem-backed rule catalog.",
     "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure."
   }

@@ -18,6 +18,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 import type { DesktopTelemetryWindow } from "../telemetry/desktop-telemetry";
 import { PermissionRow } from "./PermissionRow";
+import type { PermissionRowMedia } from "./PermissionRow";
 
 /**
  * Live status of the system permissions the app needs on this computer. It
@@ -26,11 +27,13 @@ import { PermissionRow } from "./PermissionRow";
  */
 export const PermissionsSection = ({
   descriptions,
+  media = "icon",
   only,
   window: telemetryWindow,
 }: {
   /** What each permission is for, where one feature asks for it. */
   descriptions?: Partial<Record<Permission, string>>;
+  media?: PermissionRowMedia;
   only?: readonly Permission[];
   window: DesktopTelemetryWindow;
 }) => {
@@ -116,6 +119,7 @@ export const PermissionsSection = ({
       apply={apply}
       descriptions={descriptions}
       failed={failed}
+      media={media}
       snapshot={
         snapshot && only
           ? {
@@ -133,6 +137,7 @@ type PermissionsContentProps = {
   descriptions: Partial<Record<Permission, string>> | undefined;
   failed: boolean;
   apply: (run: () => Promise<unknown>) => Promise<void>;
+  media: PermissionRowMedia;
   snapshot: PermissionsSnapshot | null;
 };
 
@@ -140,6 +145,7 @@ const PermissionsContent = ({
   apply,
   descriptions,
   failed,
+  media,
   snapshot,
 }: PermissionsContentProps) => {
   const t = useTranslations("settings");
@@ -150,6 +156,7 @@ const PermissionsContent = ({
           {index > 0 ? <Separator /> : null}
           <PermissionRow
             description={descriptions?.[row.permission]}
+            media={media}
             onOpenSettings={() => {
               void apply(async () =>
                 invoke("permissions_open_settings", {

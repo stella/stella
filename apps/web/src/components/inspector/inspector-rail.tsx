@@ -37,7 +37,10 @@ import {
 } from "@/components/inspector/inspector-group-rail";
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { planInspectorTabDrop } from "@/components/inspector/inspector-groups.logic";
-import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import {
+  railChatOpenArgs,
+  railChatSkill,
+} from "@/components/inspector/inspector-rail-chat.logic";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -54,6 +57,7 @@ import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useMainSkill } from "@/features/knowledge/use-main-skill";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -91,10 +95,16 @@ export const InspectorRail = ({
     activeSkillCatalogueDataView.type === "items"
       ? activeSkillCatalogueDataView.items
       : undefined;
-  const activeSkill = getActiveSkillChatContext(
-    activeTab,
-    activeSkillCatalogueData?.entries,
-  );
+  // The skill editor in the main view names its skill as the editor's own
+  // new-chat button does.
+  const mainViewSkill = useMainSkill();
+  const activeSkill = railChatSkill({
+    activeTabSkill: getActiveSkillChatContext(
+      activeTab,
+      activeSkillCatalogueData?.entries,
+    ),
+    mainViewSkill,
+  });
   // A new chat is about the matter in the URL, not the matter this rail
   // displays (the active tab's, which the user may have left).
   const routeWorkspaceId = useRouteWorkspaceId();
@@ -601,16 +611,32 @@ const VerticalTabCell = ({
     }),
   });
 
-  // Flash the tab on (re-)activation.
+  // Flash the tab on (re-)activation from elsewhere (a document link, a chat
+  // opening a file, a command), so the eye finds where it lives in the rail.
+  // An activation this cell's own click caused never flashes: the reader is
+  // already looking at the cell, and a fading fill on the tab they just chose
+  // reads as the file still loading. The click records the sequence number it
+  // produced, so only that exact activation is skipped.
   const activationSeq = useInspectorTabsStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
+  const selfActivationSeq = useRef<number | null>(null);
   useExternalSyncEffect(() => {
     const el = tabRef.current;
-    if (el && active && activationSeq !== prevSeq.current) {
+    if (
+      el &&
+      active &&
+      activationSeq !== prevSeq.current &&
+      activationSeq !== selfActivationSeq.current
+    ) {
       flashTabElement(el);
     }
     prevSeq.current = activationSeq;
   }, [active, activationSeq]);
+  const activateFromRail = () => {
+    onActivate();
+    // Store updates are synchronous, so this is the sequence the click made.
+    selfActivationSeq.current = useInspectorTabsStore.getState().activationSeq;
+  };
 
   // Targeted flash: flash this tab when something asks for it by id
   // (e.g. clicking a field in the document, or a chat just opened here),
@@ -669,7 +695,7 @@ const VerticalTabCell = ({
           event.stopPropagation();
           onDropTab({ sourceId, targetId: tab.id });
         }}
-        onSelect={onActivate}
+        onSelect={activateFromRail}
         ref={tabRef}
       />
       {contextMenu.element}

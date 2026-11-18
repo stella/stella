@@ -93,6 +93,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { censusScope } from "@/api/lib/case-law/completeness-census";
 import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
+import { selectAttachmentDocumentIds } from "@/api/lib/case-law/held-attachment-reads";
 import {
   rowHoldsDocumentFor,
   supplementIsMergedFor,
@@ -633,7 +634,7 @@ const selectHeldDocumentIds = async (
     return [];
   }
   const detail = detailCondition(requireDetail, rowRules);
-  const { decisions, supplements } = await scopedDb(async (tx) => ({
+  const { decisions, supplements, attached } = await scopedDb(async (tx) => ({
     decisions: await tx
       .select({
         sourceDocumentId: caseLawDecisions.sourceDocumentId,
@@ -668,6 +669,7 @@ const selectHeldDocumentIds = async (
         ),
       )
       .limit(documentIds.length),
+    attached: await selectAttachmentDocumentIds(tx, { sourceId, documentIds }),
   }));
   const supplementStateById = new Map(
     supplements.map(
@@ -682,6 +684,10 @@ const selectHeldDocumentIds = async (
   );
   return documentIds.filter((sourceDocumentId) => {
     const row = rowsById.get(sourceDocumentId);
+    // A record settled as an attachment to another source's decision.
+    if (row === undefined && attached.has(sourceDocumentId)) {
+      return true;
+    }
     const supplementState = supplementStateById.get(sourceDocumentId);
     if (supplementState === "merged") {
       return row === undefined || row.settled;

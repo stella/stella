@@ -835,6 +835,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               rollbackToken,
               data: {
                 id: threadId,
+                firstSend: true,
+                title: "New thread",
                 workspaceId,
                 contextMatterIds: [],
                 dataWorkspaceIds: [workspaceId],

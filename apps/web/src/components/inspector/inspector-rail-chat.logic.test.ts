@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 
-import { railChatOpenArgs } from "./inspector-rail-chat.logic";
+import { skillEditorChatSkill } from "./inspector-active-skill";
+import { railChatOpenArgs, railChatSkill } from "./inspector-rail-chat.logic";
 
 const decision: ActiveLegalDocument = {
   type: "decision",
@@ -56,5 +57,46 @@ describe("what the rail's new-chat button opens", () => {
       activeLegalKey: "decision:decision-1",
       activeSkill: skill,
     });
+  });
+});
+
+describe("the skill a chat started from the rail is about", () => {
+  const editedSkill = skillEditorChatSkill({
+    name: "Lease review",
+    skillId: "skill-1",
+    slug: "lease-review",
+  });
+  const tabSkill = { skillName: "playbook-builder" };
+
+  test("is the skill the main view's editor shows, named as its own button names it", () => {
+    expect(
+      railChatOpenArgs({
+        activeSkill: railChatSkill({
+          activeTabSkill: undefined,
+          mainViewSkill: editedSkill,
+        }),
+      }),
+    ).toEqual({
+      activeSkill: {
+        skillDisplayName: "Lease review",
+        skillId: "skill-1",
+        skillName: "lease-review",
+      },
+    });
+  });
+
+  test("follows the main view over a skill left open in the Inspector", () => {
+    expect(
+      railChatSkill({ activeTabSkill: tabSkill, mainViewSkill: editedSkill }),
+    ).toBe(editedSkill);
+  });
+
+  test("falls back to the active tab's skill away from a skill editor", () => {
+    expect(
+      railChatSkill({ activeTabSkill: tabSkill, mainViewSkill: undefined }),
+    ).toBe(tabSkill);
+    expect(
+      railChatSkill({ activeTabSkill: undefined, mainViewSkill: undefined }),
+    ).toBeUndefined();
   });
 });

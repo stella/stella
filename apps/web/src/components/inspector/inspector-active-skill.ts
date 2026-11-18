@@ -68,6 +68,21 @@ const getToolDetailActiveSkillContext = (
   return isInstalledActiveSkillContext(activeSkill) ? activeSkill : undefined;
 };
 
+/** An organization skill opened in its editor, named as a chat names it. */
+export const skillEditorChatSkill = ({
+  name,
+  skillId,
+  slug,
+}: {
+  name: string;
+  skillId: string;
+  slug: string;
+}): ActiveSkillChatContext => ({
+  skillDisplayName: name,
+  skillId,
+  skillName: slug,
+});
+
 /** The skill a skill-resource tab belongs to, named as a chat names it. */
 export const skillResourceTabSkill = (
   tab: SkillResourceTab,

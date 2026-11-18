@@ -181,15 +181,14 @@
     "handoffExpired": "Dokumendilink aegus enne, kui stella desktop ühendati. Alustage uuesti stellast."
   },
   "settings": {
-    "about": "Teave",
-    "accountLinked": "Konto lingitud",
+    "accountLinked": "Lingitud",
+    "disconnect": "Katkesta ühendus",
     "connectionExpired": "Ühendus on aegunud",
     "reconnectToStella": "Ühenda uuesti stella webiga",
     "connectionExpiredDescription": "Ühendus on aegunud. Ühenda uuesti stella webiga.",
     "connectToStella": "Ühenda stella webiga",
     "connectToStellaDescription": "Siduge see arvuti oma praeguse stella kontoga ilma dokumenti avamata.",
     "desktopBenefit": "Office’i failid ja kohalik lõikelaua ajalugu",
-    "disconnectAccount": "Katkestage konto ühendus",
     "errorDisconnectAccount": "stella desktop ei saanud teie konto ühendust katkestada.",
     "errorReadAccount": "stella desktop ei saanud teie konto ühendust kontrollida.",
     "stellaWebAccount": "stella veebikonto",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Tehnilised vead, ajamõõtmised ja krahhide kokkuvõtted; ei sisalda dokumente, lõikelaua sisu ega tegevusandmeid.",
     "errorReadTelemetry": "Aruannete saatmise eelistust ei saanud lugeda. Proovige uuesti.",
     "errorSaveTelemetry": "Aruannete saatmise eelistust ei saanud salvestada. Proovige uuesti.",
-    "general": "Üldine",
     "lastVerified": "Viimati kontrollitud",
     "language": "Keel",
-    "languageDescription": "Valige töölauarakenduse keel.",
     "setupGuide": "Seadistusjuhend",
     "setupGuideDescription": "Läbige seadistus uuesti: mida rakendus teeb, õigused ja lõikelaua otsetee.",
     "setupGuideAction": "Käivita seadistus uuesti",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Tugi",
     "title": "Seaded",
-    "serverLabel": "Server",
+    "pages": {
+      "general": "Üldine",
+      "dictation": "Dikteerimine",
+      "clipboard": "Lõikelaud",
+      "agents": "AI ja agendid",
+      "signing": "Allkirjastamine",
+      "activity": "Tegevus",
+      "notifications": "Teavitused",
+      "permissions": "Õigused",
+      "about": "Teave"
+    },
+    "account": "Konto",
+    "app": "Rakendus",
+    "privacy": "Privaatsus",
+    "pageEmpty": "Selles arvutis pole siin midagi seadistada.",
     "connectToHost": "Ühenda: {host}",
     "connectToHostDescription": "Avab brauseris {host}, kus saate selle arvuti kinnitada.",
     "reconnectNeeded": "Vaja uuesti ühendada",
     "reconnect": "Ühenda uuesti",
     "reconnectHostDescription": "Ühendus serveriga {host} tuleb uuendada. Kinnitage see arvuti brauseris uuesti.",
-    "permissions": "Õigused",
     "permissionNotificationsDescription": "Annab teada, kui dokument on valmis või sünkroonimine vajab tähelepanu.",
     "permissionAccessibility": "Juurdepääsetavus",
     "permissionAccessibilityDescription": "Lubab tegevuste ajajoonel salvestada akende pealkirju.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Lubatud",
     "permissionAllow": "Luba",
     "permissionOpenSettings": "Ava seaded",
-    "permissionDenied": "Süsteemi seadetes välja lülitatud.",
+    "permissionTurnedOff": "Välja lülitatud",
+    "permissionsDescription": "Igaüks neist on teie valik ja avab ühe asja.",
+    "neverRequested": "Ei küsita kunagi",
     "permissionManaged": "Haldab teie organisatsioon",
     "errorUpdateAutostart": "stella desktop ei saanud sisselogimisel käivitamist uuendada.",
     "errorPermissions": "stella desktop ei saanud seda õigust lugeda ega muuta.",
@@ -600,6 +612,13 @@
     "title": "Dikteerimine",
     "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
     "descriptionCloud": "Hoidke all klahvi {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne teisendab stella AI ja stella seda ei salvesta.",
+    "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
+    "groups": {
+      "shortcut": "Kiirklahv",
+      "transcription": "Transkribeerimine",
+      "cleanup": "Parandamine",
+      "thisComputer": "Selles arvutis"
+    },
     "cleanup": {
       "title": "Paranda tehisintellektiga",
       "description": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga. stella kaudu saadetakse teie organisatsiooni tehisintellekti teenusepakkujale ainult tekst, mitte heli; stella seda ei salvesta.",
@@ -607,11 +626,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Jaga akna pealkirja tehisintellekti parandusega",
+        "title": "Jaga akna pealkirja",
         "description": "Aitab eristada lepingut memost. Akna pealkirjad võivad sisaldada klientide või asjade nimesid."
       },
       "textBeforeCursor": {
-        "title": "Jaga kursorieelset teksti tehisintellekti parandusega",
+        "title": "Jaga kursorieelset teksti",
         "description": "Kuni {limit, number} märki dokumendist, milles olete, et dikteeritu sobiks kirjutatavaga."
       }
     },
@@ -620,6 +639,7 @@
       "title": "Teisenda kasutades",
       "local": "Seda arvutit",
       "cloud": "stella AI",
+      "localDescription": "Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
       "cloudDescription": "Heli lahkub sellest arvutist: see saadetakse teisendamiseks stellale ja stella tehisintellekti teenusepakkuja kaudu valitud mudeli pakkujale. stella seda ei salvesta.",
       "unavailableRegion": "stella AI ei paku teie organisatsiooni piirkonnas veel kõne teisendamist.",
       "unavailableProvider": "Teie organisatsiooni tehisintellekti teenusepakkuja ei paku kõne teisendamist.",
@@ -627,7 +647,6 @@
       "model": "Teisendusmudel",
       "chooseModel": "Valige mudel",
       "outsideRegion": "Väljaspool teie piirkonda",
-      "outsideRegionNote": "See mudel töötleb heli väljaspool teie organisatsiooni piirkonda.",
       "retainsData": "Säilitab teie heli",
       "retainsDataTitle": "{provider} säilitab, mida dikteerite",
       "retainsDataWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid."
@@ -640,6 +659,7 @@
       "noResults": "Keeli ei leitud"
     },
     "modelNeeded": "Kõnemudel töötab selles arvutis.",
+    "speechModel": "Kõnemudel",
     "modelInstalled": "Kõnemudel ({size} MB) on selles arvutis.",
     "removeModel": "Eemalda",
     "removeFailed": "Kõnemudelit ei õnnestunud eemaldada. Proovige uuesti.",
@@ -648,6 +668,13 @@
     "downloadFailed": "Kõnemudelit ei saanud alla laadida.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
+    "holdKey": {
+      "title": "Allhoitav klahv",
+      "description": "Hoidke ainult seda all, et dikteerida. Lühike vajutus või seda kasutav otsetee ei tee midagi.",
+      "right": "Parem {key}",
+      "waiting": "stella märkab klahvi {shortcut}, kui tal on hõlbustusfunktsioonide juurdepääs.",
+      "unavailable": "stella ei saa selles arvutis klahvi {shortcut} jälgida. Valige teine klahv."
+    },
     "failure": {
       "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",
       "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
@@ -798,6 +825,7 @@
       "screenRecording": "Ekraanisalvestus",
       "camera": "Kaamera",
       "keystrokes": "Klahvivajutused",
+      "keystrokesWithoutHoldKey": "Klahvivajutused, kui te ei vali allhoitavat klahvi",
       "fullDiskAccess": "Täielik kettale juurdepääs",
       "administrator": "Administraatori õigused"
     }

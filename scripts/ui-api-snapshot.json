@@ -1158,6 +1158,7 @@
       "wheelDeltaPixels"
     ],
     "./icons": [
+      "AccessibilityIcon",
       "ActivityIcon",
       "AddCommentIcon",
       "AiActionIcon",
