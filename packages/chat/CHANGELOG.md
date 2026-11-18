@@ -1,5 +1,24 @@
 # @stll/chat
 
+## 0.6.0
+
+### Minor Changes
+
+- [#8725](https://github.com/stella/stella/pull/8725) [`eed7337`](https://github.com/stella/stella/commit/eed73373605dafa4c513e800efeaefa52b7909cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `finishedChatRunResponse` from `@stll/chat/durable-transport`: the stream that only ends a run, which a client reads when it follows the turn in the stored thread instead of its live stream.
+
+### Patch Changes
+
+- Updated dependencies [[`178d3f9`](https://github.com/stella/stella/commit/178d3f9f9007de5933b40fd76f8bbaaf65ad089f), [`d8eea73`](https://github.com/stella/stella/commit/d8eea7352a0a6cdeac6498e6231a17818e8cd2d2), [`f6d0e9c`](https://github.com/stella/stella/commit/f6d0e9c9d9966961d52a3d8038a253193632ef2b), [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e), [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b), [`b9120cd`](https://github.com/stella/stella/commit/b9120cd4f32b6019e3e1db42309ac50960badf2f), [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9), [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005)]:
+  - @stll/ui@0.74.0
+  - @stll/ai-catalog@0.14.0
+
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`501e484`](https://github.com/stella/stella/commit/501e48459f95e38d4594eff47b6daf2040380582), [`64d8cfd`](https://github.com/stella/stella/commit/64d8cfd04b20823f8f8ceabb9dbd0d79bf76ee66), [`c6f510f`](https://github.com/stella/stella/commit/c6f510fb3b4fe3ebcb8a3c761d623dd13cc53c63)]:
+  - @stll/ui@0.73.0
+
 ## 0.5.0
 
 ### Minor Changes

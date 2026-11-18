@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
-import { schedulerJobs } from "@/api/db/schema";
 import { isScheduledFlowDue } from "@/api/lib/flows/flow-trigger-logic";
 import {
   automatedFlowRunDependencies,
@@ -14,6 +12,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { removeOrphanedFlowSchedule } from "@/api/lib/scheduler/flow-schedule-transaction";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 /**
@@ -24,11 +23,6 @@ import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
  * definition + target workspace, then defers to `startAutomatedFlowRun` (actor
  * guarantee + daily cap + run start).
  */
-export const FLOW_RUN_TASK = "flow.run" as const;
-
-/** Deterministic scheduler-job id so one definition owns at most one row. */
-export const flowScheduleJobId = (definitionId: string): string =>
-  `flow.run.${definitionId}`;
 
 const flowRunPayloadSchema = v.strictObject({
   definitionId: v.pipe(v.string(), v.uuid()),
@@ -74,11 +68,7 @@ export const createScheduledFlowTask =
     if (!definition) {
       // Definition deleted without a sync (e.g. cascade from org deletion): drop
       // the orphaned scheduler row so it stops firing.
-      // audit: skip — scheduler bookkeeping for a definition that no longer
-      // exists; no user-owned record changes.
-      await db
-        .delete(schedulerJobs)
-        .where(eq(schedulerJobs.id, flowScheduleJobId(definitionId)));
+      await removeOrphanedFlowSchedule({ database: db, definitionId });
       logger.info("flow.schedule_definition_missing", { definitionId });
       return;
     }

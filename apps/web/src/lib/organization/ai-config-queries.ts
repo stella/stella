@@ -55,7 +55,7 @@ export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
     }),
     {
       resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 
@@ -82,7 +82,7 @@ export const aiDefaultsPreviewOptions = ({
     }),
     {
       resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 
@@ -110,7 +110,7 @@ export const aiAvailabilityOptions = ({
     }),
     {
       resources: [RESOURCE_TYPE.ORGANIZATION],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId },
     },
   );
 

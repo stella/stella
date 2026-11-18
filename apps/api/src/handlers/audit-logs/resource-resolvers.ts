@@ -170,6 +170,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   // A check's title can name a prospective client, so the log never shows it.
   [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]: {
     type: "unresolvable",

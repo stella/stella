@@ -625,8 +625,12 @@
       "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
       "unavailable": "Pārvēršana ar stella AI pašlaik nav pieejama.",
       "model": "Pārvēršanas modelis",
+      "chooseModel": "Izvēlieties modeli",
       "outsideRegion": "Ārpus jūsu reģiona",
-      "outsideRegionNote": "Šis modelis apstrādā audio ārpus jūsu organizācijas reģiona."
+      "outsideRegionNote": "Šis modelis apstrādā audio ārpus jūsu organizācijas reģiona.",
+      "retainsData": "Saglabā jūsu audio",
+      "retainsDataTitle": "{provider} saglabā to, ko diktējat",
+      "retainsDataWarning": "Šis modelis darbojas kontā bez nulles datu glabāšanas. {provider} saskaņā ar saviem noteikumiem, ārpus stella kontroles, glabā visa diktētā audio un transkripciju. Nediktējiet ar to konfidenciālu informāciju vai klientu datus."
     },
     "language": {
       "title": "Diktēšanas valoda",

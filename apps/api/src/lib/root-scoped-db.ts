@@ -183,7 +183,7 @@ const createPinnedSafeDb = (
 export type TokenScopedDatabase = {
   scoped: (scope: {
     organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
+    userId: SafeId<"user"> | null;
     workspaceIds: SafeId<"workspace">[];
   }) => ScopedDb;
   tenantless: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;

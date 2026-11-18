@@ -2,16 +2,11 @@ import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  SectionList,
-  StyleSheet,
-  View,
-} from "react-native";
+import { RefreshControl, SectionList, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useRevisedLoad } from "@/components/changes";
@@ -42,7 +37,6 @@ export const MatterEntities = ({
   source: AccessTokenSource;
   workspaceId: string;
 }) => {
-  const colors = useAppColors();
   const { end } = useSession();
   // The documents column, looked up once: its files name each document's
   // format. Without it the rows still list, only without formats.
@@ -87,11 +81,7 @@ export const MatterEntities = ({
   };
 
   return (
-    <Suspense
-      fallback={
-        <ActivityIndicator color={colors.accent} style={styles.loading} />
-      }
-    >
+    <Suspense fallback={<Loader style={styles.loading} />}>
       <LoadedEntities
         load={load}
         loadingMore={loadingMore}
@@ -142,15 +132,14 @@ const LoadedEntities = ({
   }
 
   const retryButton = (onPress: () => void) => (
-    <Pressable
-      accessibilityRole="button"
+    <Button
+      className="self-start"
       onPress={onPress}
-      style={[styles.button, { borderColor: colors.border }]}
+      size="sm"
+      variant="outline"
     >
-      <Text style={[styles.buttonLabel, { color: colors.accent }]}>
-        {t("retry")}
-      </Text>
-    </Pressable>
+      {t("retry")}
+    </Button>
   );
 
   const footer = (() => {
@@ -158,7 +147,7 @@ const LoadedEntities = ({
       return null;
     }
     if (loadingMore) {
-      return <ActivityIndicator color={colors.accent} style={styles.footer} />;
+      return <Loader style={styles.footer} />;
     }
     if (current.error !== null) {
       return (
@@ -177,17 +166,16 @@ const LoadedEntities = ({
     }
     return (
       <View style={styles.footer}>
-        <Pressable
-          accessibilityRole="button"
+        <Button
+          className="self-start"
           onPress={() => {
             onLoadMore(current);
           }}
-          style={[styles.button, { borderColor: colors.border }]}
+          size="sm"
+          variant="outline"
         >
-          <Text style={[styles.buttonLabel, { color: colors.accent }]}>
-            {t("loadMore")}
-          </Text>
-        </Pressable>
+          {t("loadMore")}
+        </Button>
       </View>
     );
   })();
@@ -268,17 +256,6 @@ const LoadedEntities = ({
 };
 
 const styles = StyleSheet.create({
-  button: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  buttonLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
   content: {
     ...screenStyles.readable,
     paddingBottom: 32,

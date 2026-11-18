@@ -10,6 +10,9 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
  * The generated census contains no policy, so a new tag requires a decision.
  */
 export const TAGGED_FAILURE_REASON = {
+  DoctorError: "tagged_failure",
+  InstallChannelError: "tagged_failure",
+  NativeUpdateError: "tagged_failure",
   AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
   AttachmentCopyFailed: "tagged_failure",
@@ -17,6 +20,7 @@ export const TAGGED_FAILURE_REASON = {
   CheckpointRestoreFailed: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",
+  ImportSnapshotError: "tagged_failure",
   LimiterStoreUnavailableError: "limiter_store_unavailable",
   ActionAdmissionError: "tagged_failure",
   ActionCallObserverError: "tagged_failure",
@@ -75,6 +79,8 @@ export const TAGGED_FAILURE_REASON = {
   CatalogSnapshotError: "tagged_failure",
   CatalogSnapshotRefreshTimeoutError: "tagged_failure",
   ChatAnonInputLimitError: "tagged_failure",
+  // A retry of a command accepted earlier: answered with its turn, no defect.
+  ChatCommandReplayedError: "conflict",
   ChatCompactionError: "tagged_failure",
   ChatConfigurationError: "tagged_failure",
   ChatContentV3UpgradeError: "tagged_failure",
@@ -129,8 +135,6 @@ export const TAGGED_FAILURE_REASON = {
   CorpusGenerationIndexUnreadableError: "tagged_failure",
   CorpusGenerationLaneBusyError: "tagged_failure",
   CorpusGenerationNotConvergedError: "tagged_failure",
-  CorpusGenerationNotRegisteredError: "tagged_failure",
-  CorpusGenerationPartialError: "tagged_failure",
   CorpusGenerationProjectionMovedError: "tagged_failure",
   CorpusGenerationRetiredError: "tagged_failure",
   CorpusGenerationRetiringError: "tagged_failure",
@@ -140,12 +144,19 @@ export const TAGGED_FAILURE_REASON = {
   CorpusIndexError: "tagged_failure",
   CorpusIndexFlipPairRefusedError: "tagged_failure",
   CorpusIndexFlipParityReadError: "tagged_failure",
+  CorpusIndexGenerationFlipRefusedError: "tagged_failure",
+  CorpusIndexGenerationRetireRefusedError: "tagged_failure",
+  // Deploy skew: an older release's writer refused a write it could not make
+  // whole. The caller retries; a process of a newer release takes it.
+  CorpusIndexGenerationUnknownError: "corpus_generation_unknown",
   CorpusIndexGroupContractMismatchError: "tagged_failure",
   CorpusIndexGroupNotReadyError: "tagged_failure",
   CorpusIndexGroupWithdrawalRefusedError: "tagged_failure",
   CorpusIndexJobDetailBackfillError: "tagged_failure",
+  CorpusIndexProjectionFenceBusyError: "tagged_failure",
   CorpusIndexProjectionSubjectMissingError: "tagged_failure",
   CorpusIndexReadContractError: "tagged_failure",
+  CorpusIndexRetireEngineError: "tagged_failure",
   CorpusMemberDigestMismatchError: "tagged_failure",
   CorpusMemberTombstonedError: "tagged_failure",
   CorpusPackError: "tagged_failure",
@@ -523,6 +534,7 @@ export const TAGGED_FAILURE_REASON = {
   Unreachable: "tagged_failure",
   UnrecognizedDerivativeStateError: "tagged_failure",
   UnrecognizedProviderStopReasonError: "tagged_failure",
+  UnregisteredCaseLawSourceError: "tagged_failure",
   UnresolvedActCitationError: "tagged_failure",
   UnsupportedAnalysisLanguageError: "tagged_failure",
   OrgAIConfigReadError: "credentials_token_unreadable",

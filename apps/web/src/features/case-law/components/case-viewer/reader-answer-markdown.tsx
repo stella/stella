@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import type { Element, ElementContent, Root } from "hast";
@@ -211,16 +210,12 @@ export const ReaderAnswerMarkdown = ({
   citations,
   renderCitation,
 }: ReaderAnswerMarkdownProps) => {
-  const options = useMemo(
-    () =>
-      readerAnswerMarkdownOptions({
-        citations: citations.filter((citation) =>
-          content.includes(citationMarker(citation)),
-        ),
-        renderCitation,
-      }),
-    [content, citations, renderCitation],
-  );
+  const options = readerAnswerMarkdownOptions({
+    citations: citations.filter((citation) =>
+      content.includes(citationMarker(citation)),
+    ),
+    renderCitation,
+  });
   let fallback = hidePendingReaderMarkers(content);
   for (const citation of citations) {
     fallback = fallback.replaceAll(citationMarker(citation), "");

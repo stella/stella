@@ -148,11 +148,12 @@ RUN bun build \
 #     ["bun", "/app/decision-analysis-candidates.js", "--country", "CZE"]
 #     ["bun", "/app/decision-analysis-input.js", "--ids-file", "/tmp/ids.txt"]
 #     ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
-# - repair-publisher-absent-text.js, repair-cz-ns-court.js: one-shot repairs
-#   of rows an earlier write path produced; both report without writing until
-#   `--apply`.
+# - repair-publisher-absent-text.js, repair-cz-ns-court.js,
+#   repair-court-identity.js: one-shot repairs of rows an earlier write path
+#   produced; each reports without writing until `--apply`.
 #     ["bun", "/app/repair-publisher-absent-text.js", "--apply"]
 #     ["bun", "/app/repair-cz-ns-court.js", "--apply"]
+#     ["bun", "/app/repair-court-identity.js", "--apply", "--source", "cz-regional"]
 # - classify-citations.js: citation polarity pass. `--recheck` re-reads a
 #   language's labelled citations against the rule tier and tightens a label
 #   only towards a more severe reading, which is the pass to run after new
@@ -163,10 +164,12 @@ RUN bun build \
 #   `--apply`.
 #     ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
 #      "--results", "/tmp/results.jsonl", "--apply"]
-# - corpus-generation.js: corpus generation registry: status, register, and
-#   the serving flip, which checks the target's indexes on the search endpoint
-#   first; reports without writing until `--apply`.
+# - corpus-generation.js: corpus generation registry: status, register, the
+#   serving flip, which checks the target's indexes on the search endpoint
+#   first, and retire, which deletes a retired generation's engine indexes
+#   and projection history; reports without writing until `--apply`.
 #     ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+#     ["bun", "/app/corpus-generation.js", "retire", "--family", "case_law", "--generation", "<generation>"]
 # - corpus-snippet-compare.js: read-only snippet comparison over the serving
 #   corpus index. It reads its query set from a JSON file, so the committed
 #   sample ships next to the bundle.
@@ -235,6 +238,7 @@ RUN bun build \
     apps/api/src/scripts/decision-analysis-save.ts \
     apps/api/src/scripts/repair-publisher-absent-text.ts \
     apps/api/src/scripts/repair-cz-ns-court.ts \
+    apps/api/src/scripts/repair-court-identity.ts \
     apps/api/scripts/classify-citations.ts \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts \
     apps/api/src/scripts/corpus-generation.ts \

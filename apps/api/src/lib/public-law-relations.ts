@@ -602,6 +602,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     reported_total_origin: "required",
     stored_total: "required",
     stored_total_as_of: "required",
+    import_snapshot_date: "required",
   },
   corpus_index_generations: {
     family: "required",

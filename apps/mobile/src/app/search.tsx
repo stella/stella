@@ -2,17 +2,14 @@ import { useEffect, useReducer, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { useRouter } from "expo-router";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { FlatList, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
+import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { DecisionRow } from "@/components/decision-row";
@@ -201,26 +198,27 @@ const SearchStella = ({
             value={query}
           />
           {query === "" ? null : (
-            <Pressable
+            <Button
               accessibilityLabel={t("clear")}
-              accessibilityRole="button"
-              className="absolute end-0 size-10 items-center justify-center active:opacity-60"
+              className="absolute end-1"
               onPress={clear}
+              size="icon-sm"
+              variant="ghost"
             >
               <XIcon color={ui.mutedForeground} size={16} />
-            </Pressable>
+            </Button>
           )}
         </View>
-        <Pressable
-          accessibilityRole="button"
-          className="active:opacity-60"
+        <Button
           hitSlop={8}
           onPress={() => {
             router.back();
           }}
+          size="inline"
+          variant="link"
         >
           <Text variant="label">{t("cancel")}</Text>
-        </Pressable>
+        </Button>
       </View>
       {chips.length === 0 ? null : (
         <QualifierChips chips={chips} onPick={pick} />
@@ -258,7 +256,6 @@ const QualifierChips = ({
   onPick: (chip: QualifierChip) => void;
 }) => {
   const t = useTranslations("search");
-  const ui = useUiColors();
 
   return (
     <View accessibilityLabel={t("filters")} className="pb-3">
@@ -269,29 +266,20 @@ const QualifierChips = ({
         showsHorizontalScrollIndicator={false}
       >
         {chips.map((chip) => (
-          <Pressable
+          <Button
             accessibilityRole="checkbox"
             accessibilityState={{ checked: chip.picked }}
-            className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
-              chip.picked
-                ? "border-foreground bg-foreground"
-                : "border-border bg-card"
-            }`}
             key={`${chip.kind}:${chip.value}`}
             onPress={() => {
               onPick(chip);
             }}
+            size="chip"
+            variant={chip.picked ? "default" : "outline"}
           >
-            <Text
-              numberOfLines={1}
-              style={chip.picked ? { color: ui.background } : undefined}
-              variant="label"
-            >
-              {chip.kind === "type"
-                ? t(`type.${TYPE_LABELS[chip.value]}`)
-                : chip.label}
-            </Text>
-          </Pressable>
+            {chip.kind === "type"
+              ? t(`type.${TYPE_LABELS[chip.value]}`)
+              : chip.label}
+          </Button>
         ))}
       </ScrollView>
     </View>
@@ -330,29 +318,27 @@ const RecentSearches = ({
           <Text accessibilityRole="header" variant="section">
             {t("recent")}
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            className="active:opacity-60"
-            hitSlop={8}
-            onPress={onClear}
-          >
+          <Button hitSlop={8} onPress={onClear} size="inline" variant="link">
             <Text variant="label">{t("clearRecent")}</Text>
-          </Pressable>
+          </Button>
         </View>
       }
       renderItem={({ item: search }) => (
-        <Pressable
-          accessibilityRole="button"
-          className="border-border active:bg-accent flex-row items-center gap-3 border-b py-3"
+        <Button
           onPress={() => {
             onRun(search);
           }}
+          size="row"
+          variant="ghost"
         >
-          <HistoryIcon color={ui.mutedForeground} size={18} />
-          <Text className="flex-1" numberOfLines={1} variant="rowTitle">
-            {search}
-          </Text>
-        </Pressable>
+          <Separator className="absolute inset-x-0 bottom-0" />
+          <View className="flex-1 flex-row items-center gap-3">
+            <HistoryIcon color={ui.mutedForeground} size={18} />
+            <Text className="flex-1" numberOfLines={1} variant="rowTitle">
+              {search}
+            </Text>
+          </View>
+        </Button>
       )}
     />
   );
@@ -371,7 +357,6 @@ const SearchResults = ({
   view: SearchView;
 }) => {
   const t = useTranslations("search");
-  const colors = useAppColors();
   const page = shownPage(view);
 
   if (view.status === "failed") {
@@ -387,7 +372,7 @@ const SearchResults = ({
     );
   }
   if (page === null) {
-    return <ActivityIndicator className="flex-1" color={colors.muted} />;
+    return <Loader className="flex-1" />;
   }
   if (page.results.length === 0 && view.status === "loaded") {
     return (
@@ -407,9 +392,7 @@ const SearchResults = ({
       keyboardShouldPersistTaps="handled"
       keyExtractor={(result) => result.key}
       ListHeaderComponent={
-        view.status === "loading" ? (
-          <ActivityIndicator className="py-2" color={colors.muted} />
-        ) : undefined
+        view.status === "loading" ? <Loader className="py-2" /> : undefined
       }
       renderItem={({ item: result }) => (
         <SearchResultRow

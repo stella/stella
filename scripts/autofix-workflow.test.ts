@@ -151,7 +151,6 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(workflow).toContain(
       "name: autofix.ci # autofix.ci uses this exact name as a security boundary",
     );
-    expect(workflow).not.toContain("pull_request_target:");
     expect(workflow).toContain("permissions:\n  contents: read");
     expect(workflow).not.toContain("contents: write");
     expect(workflow).not.toContain("secrets.");

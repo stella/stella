@@ -1,7 +1,8 @@
 import { use } from "react";
+import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
-import { Pressable, Share, View } from "react-native";
+import { Share, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { AIErrorKind } from "@stll/api-contract/ai-errors";
@@ -32,22 +33,25 @@ import { plainText } from "@/state/markdown";
  * model took between them, under what its context left out, if anything,
  * and why it failed when it did. `uploading` marks the files of a message
  * still going up; `live` an answer still arriving, whose last run says the
- * step it is on; `onRetry` answers the message a failed answer was for again.
+ * step it is on; `onRetry` answers the message a failed answer was for again;
+ * `onLongPress` opens what a message of the person's offers, such as editing it.
  */
 export const ChatMessage = ({
   entry,
   live = false,
+  onLongPress,
   onRetry,
   uploading = false,
 }: {
   entry: ChatEntry;
   live?: boolean;
+  onLongPress?: (() => void) | undefined;
   onRetry?: (() => void) | undefined;
   uploading?: boolean;
 }) => {
   if (entry.role === "user") {
     return (
-      <View className="items-end gap-1.5">
+      <UserMessage onLongPress={onLongPress}>
         {keyedFiles(entry.files).map(({ file, key }) => (
           <ChatAttachmentChip
             status={uploading ? "busy" : "idle"}
@@ -61,7 +65,7 @@ export const ChatMessage = ({
             <MarkdownView markdown={entry.text} variant="message" />
           </View>
         )}
-      </View>
+      </UserMessage>
     );
   }
 
@@ -109,6 +113,37 @@ export const ChatMessage = ({
       )}
       {live || entry.text === "" ? null : <ShareAnswer text={entry.text} />}
     </View>
+  );
+};
+
+/**
+ * A message of the person's on the right; a long press, or the screen
+ * reader's action of the same name, opens what it offers.
+ */
+const UserMessage = ({
+  children,
+  onLongPress,
+}: PropsWithChildren<{
+  onLongPress: (() => void) | undefined;
+}>) => {
+  const t = useTranslations("chat");
+  if (onLongPress === undefined) {
+    return <View className="items-end gap-1.5">{children}</View>;
+  }
+  return (
+    <Button
+      accessibilityActions={[{ name: "longpress", label: t("edit.action") }]}
+      className="items-end gap-1.5"
+      onAccessibilityAction={({ nativeEvent }) => {
+        if (nativeEvent.actionName === "longpress") {
+          onLongPress();
+        }
+      }}
+      onLongPress={onLongPress}
+      variant="plain"
+    >
+      {children}
+    </Button>
   );
 };
 
@@ -195,10 +230,8 @@ const ShareAnswer = ({ text }: { text: string }) => {
   const t = useTranslations("link");
   const matterId = use(ThreadMatter);
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
       className="self-start"
-      hitSlop={8}
       onPress={() => {
         const message = plainText(text, {
           appScheme: MOBILE_REDIRECT_SCHEMES[APP_VARIANT],
@@ -206,9 +239,11 @@ const ShareAnswer = ({ text }: { text: string }) => {
         });
         void Share.share({ message });
       }}
+      size="inline"
+      variant="muted"
     >
       <Text variant="caption">{t("share")}</Text>
-    </Pressable>
+    </Button>
   );
 };
 

@@ -36,8 +36,10 @@ import {
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import {
+  advanceLegislationCorpusStorageResume,
   backfillLegislationCorpusStorageRow,
   type LegislationCorpusStorageOutcome,
+  type LegislationCorpusStorageResume,
   readLegislationCorpusStoragePage,
 } from "@/api/lib/legal-search/legislation-corpus-storage-backfill";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -92,6 +94,10 @@ await runScriptWithErrorOutput(async () => {
   let written = 0;
   let skipped = 0;
   let failed = 0;
+  let resume: LegislationCorpusStorageResume<SafeId<"legislationDocument">> = {
+    after: cursor,
+    held: false,
+  };
   const progress = { reachedEnd: false };
 
   const pass = await runBackfillPass({
@@ -153,6 +159,15 @@ await runScriptWithErrorOutput(async () => {
       }
       cursor = last.id;
       examined += rows.length;
+      const failedIds = new Set(
+        outcomes.flatMap(([documentId, outcome]) =>
+          outcome.type === "failed" ? [documentId] : [],
+        ),
+      );
+      resume = advanceLegislationCorpusStorageResume(
+        resume,
+        rows.map((row) => ({ id: row.id, failed: failedIds.has(row.id) })),
+      );
       for (const [documentId, outcome] of outcomes) {
         switch (outcome.type) {
           case "written":
@@ -190,7 +205,9 @@ await runScriptWithErrorOutput(async () => {
   );
   if (!progress.reachedEnd && cursor !== null) {
     console.info(
-      `Stopped at --limit ${String(limit)}; resume with --after ${cursor}.`,
+      resume.after === null
+        ? `Stopped at --limit ${String(limit)}; resume without --after to retry the failed documents.`
+        : `Stopped at --limit ${String(limit)}; resume with --after ${resume.after}${resume.held ? " (before the first failed document, so it is retried)" : ""}.`,
     );
   }
   // Non-zero on partial failure; a rerun retries the documents still unwritten.

@@ -959,86 +959,95 @@ export const createPostHogAnalytics = ({
 } => {
   const localDebugEnabled = import.meta.env.DEV && env.VITE_POSTHOG_LOCAL_DEBUG;
   const routeTemplateHistory: RouteTemplateHistory = new Map();
-  const client = posthog.init(key, {
-    opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
-    api_host: host,
-    ...(uiHost === undefined ? {} : { ui_host: uiHost }),
-    defaults: "2025-05-24",
-    advanced_disable_feature_flags: true,
-    advanced_disable_flags: true,
-    autocapture: false,
-    capture_exceptions: {
-      capture_console_errors: false,
-      capture_unhandled_errors: true,
-      capture_unhandled_rejections: true,
-    },
-    rageclick: false,
-    capture_dead_clicks: false,
-    disable_persistence: true,
-    disable_product_tours: true,
-    disable_session_recording: true,
-    disable_surveys: true,
-    disable_surveys_automatic_display: true,
-    disable_web_experiments: true,
-    mask_all_text: true,
-    mask_personal_data_properties: true,
-    person_profiles: "identified_only",
-    capture_heatmaps: false,
-    capture_performance: { network_timing: false, web_vitals: true },
-    capture_pageview: false,
-    // The SDK's pageleave is what web analytics derives bounce rate and page
-    // duration from; the default ties it to `capture_pageview`, which stays
-    // off because page views are captured manually with route templates.
-    capture_pageleave: true,
-    before_send: (event) => {
-      if (import.meta.env.DEV && !localDebugEnabled) {
-        return null;
-      }
-      if (!isWebAnalyticsEvent(event.event)) {
-        return null;
-      }
-      switch (event.event) {
-        case WEB_ANALYTICS_EVENTS.exception:
-          return isNoiseException(event)
-            ? null
-            : sanitizeExceptionEvent(event, routeTemplateHistory);
-        case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
-          return routeErrorLifecycleSanitizer?.(event) ?? null;
-        case WEB_ANALYTICS_EVENTS.pageHangSuspected:
-        case WEB_ANALYTICS_EVENTS.longAnimationFrame:
-          return sanitizeHangDiagnosticEvent({
-            event,
-            appUrl: env.VITE_PUBLIC_APP_URL,
-            routeTemplates,
-          });
-        case WEB_ANALYTICS_EVENTS.webVitals:
-          return sanitizeWebVitalsEvent(event, routeTemplateHistory);
-        case WEB_ANALYTICS_EVENTS.pageViewed:
-          return sanitizeSdkUrlContext(
-            event,
-            routeTemplateHistory,
-            "route-template",
-          );
-        case WEB_ANALYTICS_EVENTS.pageLeft:
-        case WEB_ANALYTICS_EVENTS.identify:
-        case WEB_ANALYTICS_EVENTS.guideStepSkipped:
-        case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
-        case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
-        case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
-        case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
-        case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
-        case WEB_ANALYTICS_EVENTS.followupShown:
-        case WEB_ANALYTICS_EVENTS.followupSelected:
-        case WEB_ANALYTICS_EVENTS.keyActionTimed:
-        case WEB_ANALYTICS_EVENTS.clientTransient:
-          return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
-        default: {
-          event.event satisfies never;
-          return panic(`Unhandled event: ${String(event.event)}`);
-        }
-      }
-    },
-  });
+  // The SDK is one module-level instance. The server builds a router, and so
+  // this analytics value, for every document it renders; a second `init` is a
+  // no-op that only warns, once per render, so it is skipped.
+  const client = posthog.__loaded
+    ? posthog
+    : posthog.init(key, {
+        opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
+        api_host: host,
+        ...(uiHost === undefined ? {} : { ui_host: uiHost }),
+        defaults: "2025-05-24",
+        advanced_disable_feature_flags: true,
+        advanced_disable_flags: true,
+        autocapture: false,
+        capture_exceptions: {
+          capture_console_errors: false,
+          capture_unhandled_errors: true,
+          capture_unhandled_rejections: true,
+        },
+        rageclick: false,
+        capture_dead_clicks: false,
+        disable_persistence: true,
+        disable_product_tours: true,
+        disable_session_recording: true,
+        disable_surveys: true,
+        disable_surveys_automatic_display: true,
+        disable_web_experiments: true,
+        mask_all_text: true,
+        mask_personal_data_properties: true,
+        person_profiles: "identified_only",
+        capture_heatmaps: false,
+        capture_performance: { network_timing: false, web_vitals: true },
+        capture_pageview: false,
+        // The SDK's pageleave is what web analytics derives bounce rate and page
+        // duration from; the default ties it to `capture_pageview`, which stays
+        // off because page views are captured manually with route templates.
+        capture_pageleave: true,
+        before_send: (event) => {
+          if (import.meta.env.DEV && !localDebugEnabled) {
+            return null;
+          }
+          if (!isWebAnalyticsEvent(event.event)) {
+            return null;
+          }
+          switch (event.event) {
+            case WEB_ANALYTICS_EVENTS.exception:
+              return isNoiseException(event)
+                ? null
+                : sanitizeExceptionEvent(event, routeTemplateHistory);
+            case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
+              return routeErrorLifecycleSanitizer?.(event) ?? null;
+            case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+            case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+              return sanitizeHangDiagnosticEvent({
+                event,
+                appUrl: env.VITE_PUBLIC_APP_URL,
+                routeTemplates,
+              });
+            case WEB_ANALYTICS_EVENTS.webVitals:
+              return sanitizeWebVitalsEvent(event, routeTemplateHistory);
+            case WEB_ANALYTICS_EVENTS.pageViewed:
+              return sanitizeSdkUrlContext(
+                event,
+                routeTemplateHistory,
+                "route-template",
+              );
+            case WEB_ANALYTICS_EVENTS.pageLeft:
+            case WEB_ANALYTICS_EVENTS.identify:
+            case WEB_ANALYTICS_EVENTS.guideStepSkipped:
+            case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
+            case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
+            case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+            case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
+            case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
+            case WEB_ANALYTICS_EVENTS.followupShown:
+            case WEB_ANALYTICS_EVENTS.followupSelected:
+            case WEB_ANALYTICS_EVENTS.keyActionTimed:
+            case WEB_ANALYTICS_EVENTS.clientTransient:
+              return sanitizeSdkUrlContext(
+                event,
+                routeTemplateHistory,
+                "resolved",
+              );
+            default: {
+              event.event satisfies never;
+              return panic(`Unhandled event: ${String(event.event)}`);
+            }
+          }
+        },
+      });
 
   // Attach build metadata as super-properties so every captured
   // event carries the exact deployed build. `reset` clears super-properties,

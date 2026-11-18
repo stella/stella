@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { updateUser } from "better-auth/api";
 import { organization } from "better-auth/plugins";
+import { panic } from "better-result";
 import { expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -27,8 +28,9 @@ import {
   verificationRunOptions,
 } from "@/features/avt/queries";
 import { linkIconOptions } from "@/features/chat/link-icons";
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { rootKeys } from "@/lib/auth-query-options";
+import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
@@ -79,6 +81,15 @@ const RUN_ID = "00000000-0000-4000-8000-0000000000a1";
 const ENTITY_ID = "00000000-0000-4000-8000-0000000000e1";
 const ORGANIZATION_ID = "organization-rename";
 const USER_ID = "user-rename";
+const CONTRACT_SESSION = {
+  ...MEMBER_SESSION,
+  user: { ...MEMBER_SESSION.user, id: USER_ID },
+  session: {
+    ...MEMBER_SESSION.session,
+    userId: USER_ID,
+    activeOrganizationId: ORGANIZATION_ID,
+  },
+} satisfies typeof MEMBER_SESSION;
 const coverageLayout = {
   version: 1,
   type: "table",
@@ -307,7 +318,11 @@ test("each migrated mutation still invalidates every prior cache target", async 
   const migrated = Object.entries(migratedMutationTargets);
   expect(migrated.length).toBeGreaterThan(0);
   for (const [mutation, factories] of migrated) {
-    if (!isContractName(mutation) || mutation === "updateUser") {
+    if (
+      !isContractName(mutation) ||
+      mutation === "updateUser" ||
+      isPublicTokenMutation(mutation)
+    ) {
       throw new TypeError(`Frozen targets name no contract: ${mutation}`);
     }
     expect({ mutation, factories: factories.length > 0 }).toEqual({
@@ -318,6 +333,7 @@ test("each migrated mutation still invalidates every prior cache target", async 
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     });
+    queryClient.setQueryData(sessionOptions.queryKey, CONTRACT_SESSION);
     try {
       for (const { target, readers } of targets) {
         expect(readers.length).toBeGreaterThan(0);
@@ -368,6 +384,7 @@ test("organization mutations invalidate organization readers without touching wo
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  queryClient.setQueryData(sessionOptions.queryKey, CONTRACT_SESSION);
   const organizationReader = resourceQueryOptions(
     queryOptions({
       queryKey: ["mcp", "organization"],
@@ -375,7 +392,7 @@ test("organization mutations invalidate organization readers without touching wo
     }),
     {
       resources: [RESOURCE_TYPE.MCP_CONNECTOR],
-      scope: { type: "organization" },
+      scope: { type: "organization", organizationId: ORGANIZATION_ID },
     },
   );
   const workspaceReader = resourceQueryOptions(
@@ -419,10 +436,64 @@ test("organization mutations invalidate organization readers without touching wo
   }
 });
 
+// A public page's token write has no member session to refresh.
+const PUBLIC_TOKEN_MUTATIONS = ["openInvoiceLinkFile"] as const;
+type PublicTokenMutation = (typeof PUBLIC_TOKEN_MUTATIONS)[number];
+const isPublicTokenMutation = (name: string): name is PublicTokenMutation =>
+  PUBLIC_TOKEN_MUTATIONS.some((mutation) => mutation === name);
+
+test("public token contracts write only public routes", () => {
+  for (const [name, contract] of Object.entries(RESOURCE_MUTATION_CONTRACTS)) {
+    expect(
+      contract.writes.every(({ route }) => route.startsWith("/public/")),
+    ).toBe(isPublicTokenMutation(name));
+  }
+});
+
+test("a public token write settles without touching any session query", async () => {
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(rootKeys.session, {
+    user: { id: "profile-user" },
+    session: { activeOrganizationId: "profile-organization" },
+  });
+  queryClient.getQueryCache().build(queryClient, {
+    queryKey: ["registered-reader", "invoice"],
+    queryFn: async () => null,
+    meta: {
+      resourceReads: {
+        resources: [RESOURCE_TYPE.INVOICE],
+        scope: { type: "workspace", workspaceId: WORKSPACE_ID },
+      },
+    },
+  });
+  const invalidate = spyOn(queryClient, "invalidateQueries");
+  const committed = new Blob(["invoice"]);
+  try {
+    const write = resourceMutation({
+      mutation: "openInvoiceLinkFile",
+      queryClient,
+      scope: { type: "public-token" },
+      mutationFn: async ({ token }: { token: string }) =>
+        token === "link-token" ? committed : panic("Unexpected link token"),
+    });
+    expect(await write({ token: "link-token" })).toBe(committed);
+    expect(invalidate).not.toHaveBeenCalled();
+  } finally {
+    invalidate.mockRestore();
+    queryClient.clear();
+  }
+});
+
 test("cache invalidation failures preserve every registered mutation's committed result", async () => {
   const mutationNames = Object.keys(RESOURCE_MUTATION_CONTRACTS).filter(
-    (name): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
-      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name),
+    (
+      name,
+    ): name is Exclude<
+      keyof typeof RESOURCE_MUTATION_CONTRACTS,
+      PublicTokenMutation
+    > =>
+      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name) &&
+      !isPublicTokenMutation(name),
   );
   for (const mutation of mutationNames) {
     const queryClient = new QueryClient();
@@ -507,6 +578,7 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  queryClient.setQueryData(sessionOptions.queryKey, CONTRACT_SESSION);
   const layout = {
     version: 1,
     type: "table",
@@ -519,8 +591,8 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
   } as const satisfies ViewLayout;
   const matterView = (matterId: string) =>
     entityViewRowsOptions({
-      organizationId: "organization",
-      userId: "user",
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
       scope: { type: "matter", matterId },
       layout,
       inboxView: SIGNAL_VIEW.OPEN,
@@ -529,14 +601,14 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
     matterView(WORKSPACE_ID),
     matterView(OTHER_WORKSPACE_ID),
     entityViewRowsOptions({
-      organizationId: "organization",
-      userId: "user",
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
       scope: { type: "organization" },
       layout,
       inboxView: SIGNAL_VIEW.OPEN,
     }),
-    inboxCountOptions("organization", "user"),
-    inboxSignalOptions("organization", "user", "signal"),
+    inboxCountOptions(ORGANIZATION_ID, USER_ID),
+    inboxSignalOptions(ORGANIZATION_ID, USER_ID, "signal"),
   ];
   const isolated = fileMetadataOptions({
     workspaceId: OTHER_WORKSPACE_ID,

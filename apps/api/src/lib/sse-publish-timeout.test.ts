@@ -21,6 +21,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 let peerAnswers = true;
+let acceptedPublishes = 0;
 
 // Speaks just enough RESP to complete a handshake and acknowledge a PUBLISH,
 // so the client reaches a genuinely connected state. Once `peerAnswers` flips,
@@ -35,6 +36,9 @@ const partitionedPeer = Bun.listen({
       if (isPublish && !peerAnswers) {
         return;
       }
+      if (isPublish) {
+        acceptedPublishes += 1;
+      }
       socket.write(isPublish ? ":0\r\n" : "+OK\r\n");
     },
   },
@@ -43,8 +47,31 @@ const partitionedPeer = Bun.listen({
 const { createSseBroadcastPublisher, SSEBroadcastError } =
   await import("@/api/lib/sse-broadcast");
 const { publishWorkspaceEvent } = createSseBroadcastPublisher({
-  createClient: ({ overrides }) =>
-    new RedisClient(`redis://127.0.0.1:${partitionedPeer.port}`, overrides),
+  createClient: ({ overrides }) => {
+    const client = new RedisClient(
+      `redis://127.0.0.1:${partitionedPeer.port}`,
+      overrides,
+    );
+    const closeHandlers = new Set<() => void>();
+    Reflect.set(client, "onclose", () => {
+      for (const handler of closeHandlers) {
+        handler();
+      }
+    });
+    return {
+      connect: async () => {
+        await client.connect();
+      },
+      close: () => client.close(),
+      onClose: (handler) => {
+        closeHandlers.add(handler);
+        return () => {
+          closeHandlers.delete(handler);
+        };
+      },
+      publish: client.publish.bind(client),
+    };
+  },
 });
 const { resourceUpdatedRealtimeEvent } = await import("@stll/api-contract");
 const { brandPersistedWorkspaceId, brandPersistedEntityId } =
@@ -65,40 +92,16 @@ const EVENT = resourceUpdatedRealtimeEvent(
 // hanging the batch.
 const PUBLISH_DEADLINE_MS = 15_000;
 
-const CONNECT_POLL_MS = 50;
-const CONNECT_ATTEMPTS = 40;
-
-/**
- * The publisher disables the offline queue, so a command issued before the
- * client finishes connecting rejects at once while it connects in the
- * background. Publish until one succeeds, so the command under test is issued
- * on a live socket: a publish rejected for being offline would pass this test
- * for entirely the wrong reason.
- */
-const publishUntilConnected = async (attemptsLeft: number): Promise<void> => {
-  const published = await publishWorkspaceEvent(WORKSPACE_ID, EVENT).then(
-    () => true,
-    () => false,
-  );
-  if (published) {
-    return;
-  }
-  if (attemptsLeft <= 1) {
-    throw new Error("the publisher never reached the local peer");
-  }
-  await Bun.sleep(CONNECT_POLL_MS);
-  await publishUntilConnected(attemptsLeft - 1);
-};
-
 afterAll(() => {
   partitionedPeer.stop(true);
 });
 
 describe("SSE publish against a peer that stops replying", () => {
   test(
-    "rejects on the command timeout instead of waiting on the peer forever",
+    "publishes its first event after connecting and bounds a silent peer",
     async () => {
-      await publishUntilConnected(CONNECT_ATTEMPTS);
+      await publishWorkspaceEvent(WORKSPACE_ID, EVENT);
+      expect(acceptedPublishes).toBe(1);
       peerAnswers = false;
 
       const rejection = await publishWorkspaceEvent(WORKSPACE_ID, EVENT).then(

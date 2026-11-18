@@ -1239,6 +1239,47 @@ export const sharepointOAuthStatePolicies = () => [
   }),
 ];
 
+// Outbound actions act as one user outside stella: only that user in the
+// active org reads, prepares, confirms or discards them. Previews inherit the
+// owning thread's current matter and embedded-data scope. Row security is
+// forced, so the owner role used by member offboarding has its own policy.
+const outboundActionCheck = sql`(
+  ${organizationCheck} AND ${userCheck} AND
+  ${chatDerivedThreadScopeCheck(sql`outbound_actions.chat_thread_id`)}
+)`;
+const outboundActionOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass)`;
+
+export const outboundActionPolicies = () => [
+  p.pgPolicy("outbound_action_owner", {
+    for: "all",
+    to: "public",
+    using: outboundActionOwnerCheck,
+    withCheck: outboundActionOwnerCheck,
+  }),
+  p.pgPolicy("outbound_action_select", {
+    for: "select",
+    to: stella,
+    using: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_update", {
+    for: "update",
+    to: stella,
+    using: outboundActionCheck,
+    withCheck: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 // Stored chat tool approval grants are per user+org: only the owning user in
 // the active org reads, adds or removes them. A grant is never edited in
 // place; changing one is a delete and a new insert.
@@ -1903,6 +1944,47 @@ export const chatQueueHoldPolicies = () => [
   }),
 ];
 
+// A receipt names its thread and is seen only with it: the thread's own
+// policy decides the matter and data scope, so the receipt keeps no copy of
+// the thread's workspace that could go stale.
+const commandReceiptScopeCheck = sql`(
+  ${userCheck} AND ${organizationCheck} AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_command_receipts.thread_id
+      AND ct.organization_id = chat_command_receipts.organization_id
+      AND ct.user_id = chat_command_receipts.user_id
+  )
+)`;
+
+/**
+ * A receipt is written once and never changed; its update policy holds a
+ * changed row to the same scope as every other request-role table.
+ */
+export const chatCommandReceiptPolicies = () => [
+  p.pgPolicy("chat_command_receipt_select", {
+    for: "select",
+    to: stella,
+    using: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_update", {
+    for: "update",
+    to: stella,
+    using: commandReceiptScopeCheck,
+    withCheck: commandReceiptScopeCheck,
+  }),
+  p.pgPolicy("chat_command_receipt_delete", {
+    for: "delete",
+    to: stella,
+    using: commandReceiptScopeCheck,
+  }),
+];
+
 const chatSecretScopeCheck = sql`(
   ${userCheck} AND ${organizationCheck} AND
   EXISTS (
@@ -2188,7 +2270,7 @@ export const invoicePolicies = (table: InvoicePolicyColumns) => {
  * whole-invoice access, so a caller never sees part of an invoice it cannot open.
  */
 export const completeInvoiceVisibilityPolicy = (
-  tableName: "invoice_lines" | "invoice_payments",
+  tableName: "invoice_lines" | "invoice_payments" | "invoice_sends",
   table: { invoiceId: p.AnyPgColumn },
 ) =>
   p.pgPolicy(`${tableName}_complete_invoice`, {

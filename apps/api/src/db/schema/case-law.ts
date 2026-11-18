@@ -409,6 +409,13 @@ export const caseLawSources = p.pgTable(
     /** Weekly publisher-removal checkpoint; null begins the next bounded cycle. */
     removalCheckpoint: jsonb("removal_checkpoint").$type<RemovalCheckpoint>(),
     lastSyncAt: timestamptz("last_sync_at"),
+    /**
+     * The publisher snapshot day the source's last completed bulk import
+     * read. Null for a crawl adapter and for an import that has not finished
+     * a run. It is the import's edition, which the public pages state, so it
+     * is public bookkeeping and kept apart from the sync cursor.
+     */
+    importSnapshotDate: p.date("import_snapshot_date"),
     observationOrder: p
       .bigint("observation_order", { mode: "bigint" })
       .default(0n)
@@ -725,6 +732,21 @@ const publishedLanguageDateIndex = (
     )
     .where(publishedCaseLawDecisionFor(t));
 
+/**
+ * A source's decisions in the order their content changed. A row unchanged
+ * since the column was added holds NULL and is never read through it, so the
+ * index starts small.
+ */
+const sourceContentChangedIndex = (t: {
+  sourceId: PgColumn;
+  contentChangedAt: PgColumn;
+  id: PgColumn;
+}) =>
+  p
+    .index("case_law_decisions_source_content_changed_idx")
+    .on(t.sourceId, t.contentChangedAt, t.id)
+    .where(isNotNull(t.contentChangedAt));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -769,8 +791,12 @@ export const caseLawDecisions = p.pgTable(
     court: p.varchar({ length: 512 }).notNull(),
     /**
      * The court directory's id for `court`, in a jurisdiction that identifies
-     * courts by directory id (`decision-court-identity.ts`); null everywhere
-     * else. `court` is then the directory's canonical name for it.
+     * courts by directory id (`decision-court-identity.ts`): stated by the
+     * source in a directory jurisdiction, read off the printed court name in
+     * a printed-name one (CZE, SVK), where rows stored before that carry none
+     * until repaired. Null everywhere else. `court` is then the directory's
+     * canonical name for it, and the name the publisher printed stays in
+     * `metadata.court`.
      */
     courtId: p.varchar("court_id", { length: DECISION_COURT_ID_MAX_LENGTH }),
     // A migration-owned trigger validates inserts and actual country changes,
@@ -962,6 +988,14 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /**
+     * When the decision's content last changed: stamped by a migration-owned
+     * trigger on insert and on every write that changes a content column
+     * (`case-law-content-changed-at.ts`), whatever the writer; a value a
+     * writer sets is discarded. NULL means unchanged since the column was
+     * added.
+     */
+    contentChangedAt: timestamptz("content_changed_at"),
     /** NSS reporter entry number as published. */
     nssReporterNumber: p.text("nss_reporter_number"),
     /** NSS reporter year as published. */
@@ -1014,7 +1048,8 @@ export const caseLawDecisions = p.pgTable(
       sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate, t.country)}`,
     ),
     // Added NOT VALID: enforced on every insert and update, so a directory
-    // jurisdiction's row cannot be written or changed without its court id.
+    // jurisdiction's row cannot be written or changed without its court id,
+    // and a printed-name jurisdiction's row may carry one.
     p.check(
       CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
       decisionCourtIdByCountrySql(t.country, t.courtId),
@@ -1112,6 +1147,7 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
     p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
+    sourceContentChangedIndex(t),
     p
       .index("case_law_decisions_textless_detail_recheck_idx")
       .on(
@@ -2593,10 +2629,12 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_cited_page_idx")
       .on(t.citedDecisionId, t.id)
       .where(isNotNull(t.citedDecisionId)),
+    // The unclassified precedent citations in id order: a walk of the queue
+    // keysets over this index and reads only the rows still in it.
     p
-      .index("case_law_citations_polarity_null_idx")
-      .on(t.polarity)
-      .where(isNull(t.polarity)),
+      .index("case_law_citations_polarity_pending_idx")
+      .on(t.id)
+      .where(sql`${t.polarity} IS NULL AND ${t.kind} = 'precedent'`),
     p
       .index("case_law_citations_doctrine_cited_idx")
       .on(t.citedDecisionId)
@@ -3585,10 +3623,7 @@ export const caseLawCitationResolutionProgress = p.pgTable(
   (t) => [
     p.check(
       "case_law_citation_resolution_progress_scope_values",
-      sql`${t.scope} IN (${sql.join(
-        CITATION_RESOLUTION_SCOPE_SQL_VALUES,
-        sql.raw(","),
-      )})`,
+      sql`${t.scope} IN (${sql.join(CITATION_RESOLUTION_SCOPE_SQL_VALUES, sql.raw(","))})`,
     ),
     // Half a keyset is not a position. Either both columns name where the
     // walk stopped or neither does and it starts from the beginning.
@@ -3619,10 +3654,7 @@ export const caseLawCitationAuthoritySweep = p.pgTable(
   (t) => [
     p.check(
       "case_law_citation_authority_sweep_scope_values",
-      sql`${t.scope} IN (${sql.join(
-        CITATION_AUTHORITY_SWEEP_SCOPE_SQL_VALUES,
-        sql.raw(","),
-      )})`,
+      sql`${t.scope} IN (${sql.join(CITATION_AUTHORITY_SWEEP_SCOPE_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
   ],
@@ -4443,7 +4475,9 @@ export const caseLawIndexJobs = p.pgTable(
     id: pUuid<"caseLawIndexJob">().primaryKey(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").references(
       () => caseLawDecisions.id,
-      { onDelete: "cascade" },
+      {
+        onDelete: "cascade",
+      },
     ),
     /**
      * The generation an operation targeted, where it targeted one. An erasure
