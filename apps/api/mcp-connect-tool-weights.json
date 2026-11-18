@@ -593,9 +593,9 @@
       "name": "search_legislation",
       "nameChars": 18,
       "descriptionChars": 783,
-      "inputSchemaChars": 2503,
-      "totalChars": 3304,
-      "estimatedTokens": 1310
+      "inputSchemaChars": 2514,
+      "totalChars": 3315,
+      "estimatedTokens": 1315
     },
     {
       "name": "set_field_value",
@@ -663,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140613,
-    "estimatedTokens": 55854
+    "characters": 140624,
+    "estimatedTokens": 55859
   }
 }

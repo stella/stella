@@ -3,10 +3,8 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
-import {
-  PUBLIC_COUNTRIES,
-  PUBLIC_COUNTRY_CAPABILITIES,
-} from "@stll/api-contract/public-country-capability";
+import { PUBLIC_COUNTRY_CAPABILITIES } from "@stll/api-contract/public-country-capability";
+import { PROVISION_CITATION_JURISDICTIONS } from "@stll/legal-atlas/provision-citation-profile";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
@@ -59,7 +57,12 @@ const defaultResolveLawCitation: typeof resolveLawCitation = async (...input) =>
     await import("@/api/handlers/legal-resolve/law")
   ).resolveLawCitation(...input);
 
-const supportedLawCountries = PUBLIC_COUNTRIES.filter(
+/**
+ * Admitted statute countries whose citations this build reads. An admitted
+ * country without a citation profile answers `country_unavailable`, so it is
+ * not advertised.
+ */
+const supportedLawCountries = PROVISION_CITATION_JURISDICTIONS.filter(
   (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "admitted",
 ).join(", ");
 

@@ -323,7 +323,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
-  - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--country` — Required corpus country. Admitted: CZE, HUN, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --document-type, --status, --language, --date-from, --date-to, --as-of, --continuation-token
 - `stella matter add-member`
   - `--matter-id` — Matter ID (string)

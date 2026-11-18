@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
+import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
@@ -261,6 +262,32 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
         },
       ],
     ]);
+  });
+
+  test("resolve_law_citation advertises exactly the countries whose citations resolve", async () => {
+    const definition = LEGAL_RESOLVE_TOOL_SET.definitions.find(
+      ({ name }) => name === "resolve_law_citation",
+    );
+    const advertised =
+      /Supported countries: (?<countries>[^;]*);/u
+        .exec(definition?.description ?? "")
+        ?.groups?.["countries"]?.split(", ") ?? [];
+    const admission = Result.isOk(admitted)
+      ? admitted.value
+      : panic("expected fixture admission");
+    const resolving: string[] = [];
+    for (const country of PUBLIC_COUNTRIES) {
+      const answer = await resolveLawCitation({
+        admission,
+        country,
+        input: { citation: "0/0000" },
+      });
+      if (answer.status !== "country_unavailable") {
+        resolving.push(country);
+      }
+    }
+    expect(resolving.length).toBeGreaterThan(0);
+    expect(advertised).toEqual(resolving);
   });
 
   test.each(LEGAL_RESOLVE_TOOL_SET.definitions)(
