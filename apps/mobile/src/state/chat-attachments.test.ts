@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
+
 import { ApiRequestError } from "./api-request";
 import {
   admitPickedFiles,
+  asWrittenGetsPast,
   attachmentParts,
   attachmentsSendable,
   base64Bytes,
@@ -12,8 +15,15 @@ import {
   readAttachment,
   readyFiles,
   sendRefusal,
+  sendsAnonymized,
+  steersDraft,
+  waitSendRoute,
 } from "./chat-attachments";
-import type { ChatAttachment } from "./chat-attachments";
+import type {
+  ChatAttachment,
+  ChatDraft,
+  SendRefusal,
+} from "./chat-attachments";
 
 const DOCX =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -218,5 +228,75 @@ describe("sending files", () => {
     expect(sendRefusal(answered(), true)).toBe("failed");
     // Without files the server refused the message itself.
     expect(sendRefusal(answered(422), false)).toBe("failed");
+  });
+
+  test("says an anonymized message to the agent on the computer was refused for that", () => {
+    const refused = new ApiRequestError({
+      message: "refused",
+      status: 422,
+      code: CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE,
+    });
+    for (const withFiles of [false, true]) {
+      expect(sendRefusal(refused, withFiles)).toBe(
+        "local-run-not-anonymizable",
+      );
+    }
+  });
+});
+
+describe("sending a refused draft as written", () => {
+  test("is offered only where the agent on the computer refused it anonymized", () => {
+    const refusals = {
+      failed: false,
+      "file-refused": false,
+      "file-not-anonymizable": false,
+      "local-run-not-anonymizable": true,
+    } as const satisfies Record<SendRefusal, boolean>;
+    const isRefusal = (key: string): key is SendRefusal => key in refusals;
+    for (const refusal of Object.keys(refusals).filter(isRefusal)) {
+      expect(asWrittenGetsPast(refusal)).toBe(refusals[refusal]);
+    }
+    expect(asWrittenGetsPast(undefined)).toBe(false);
+  });
+
+  test("goes as written on an anonymized thread, and otherwise as the thread sends", () => {
+    expect(
+      sendsAnonymized({ mode: "as-written", threadAnonymized: true }),
+    ).toBe(false);
+    expect(sendsAnonymized({ mode: "as-thread", threadAnonymized: true })).toBe(
+      true,
+    );
+    expect(
+      sendsAnonymized({ mode: "as-thread", threadAnonymized: false }),
+    ).toBe(false);
+  });
+});
+
+describe("a draft sent while a turn waits on the member", () => {
+  const text: ChatDraft = { text: "Use the 2024 lease.", files: [] };
+  const withFile: ChatDraft = {
+    text: "Use this lease.",
+    files: [
+      {
+        name: "Lease.pdf",
+        mimeType: "application/pdf",
+        dataUrl: "data:application/pdf;base64,QUI=",
+      },
+    ],
+  };
+
+  test("steers the turn with text only", () => {
+    expect(steersDraft(text)).toBe(true);
+    expect(steersDraft(withFile)).toBe(false);
+  });
+
+  test("declines and steers with text, and sends a draft with files to the queue", () => {
+    expect(waitSendRoute({ declineOffered: true, draft: text })).toBe(
+      "decline-and-steer",
+    );
+    expect(waitSendRoute({ declineOffered: true, draft: withFile })).toBe(
+      "send",
+    );
+    expect(waitSendRoute({ declineOffered: false, draft: text })).toBe("send");
   });
 });

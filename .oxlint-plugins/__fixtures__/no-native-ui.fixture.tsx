@@ -8,9 +8,18 @@
 
 import type { ComponentProps } from "react";
 
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  Text as PlatformText,
+  TextInput,
+} from "react-native";
+
 import { Input } from "@stll/ui/input";
 import { MenuCheckboxItem } from "@stll/ui/menu";
 import { Switch } from "@stll/ui/switch";
+import { Text } from "@stll/ui/text";
 
 const Box = (props: ComponentProps<"span">) => <span {...props} />;
 
@@ -66,6 +75,24 @@ export const _flagged = ({ id, label }: { id: string; label: string }) => (
   </>
 );
 
+// --- Flagged: React Native components a native renderer already wraps ---
+export const _flaggedReactNative = ({ label }: { label: string }) => (
+  <>
+    {/* oxlint-disable-next-line no-native-ui/no-native-button */}
+    <Pressable accessibilityLabel={label} />
+    {/* oxlint-disable-next-line no-native-ui/no-native-loader */}
+    <ActivityIndicator />
+    {/* oxlint-disable-next-line no-native-ui/no-native-sheet */}
+    <Modal visible={false} />
+    {/* oxlint-disable-next-line no-native-ui/no-native-text */}
+    <PlatformText>{label}</PlatformText>
+    {/* oxlint-disable-next-line no-native-ui/no-native-input */}
+    <TextInput accessibilityLabel={label} />
+    {/* oxlint-disable-next-line no-native-ui/no-native-textarea */}
+    <TextInput accessibilityLabel={label} multiline />
+  </>
+);
+
 // --- Allowed: the design-system components and their near misses ---
 export const _allowed = ({
   label,
@@ -85,5 +112,7 @@ export const _allowed = ({
     <Input aria-label={label} type="search" />
     {/* expect-clean: no-native-ui/no-native-tooltip */}
     <abbr title={label}>{label}</abbr>
+    {/* expect-clean: no-native-ui/no-native-loader, no-native-ui/no-native-sheet, no-native-ui/no-native-text */}
+    <Text variant="caption">{label}</Text>
   </>
 );

@@ -83,7 +83,11 @@ export const sitemapSources = ({
   }
   if (head === "docs") {
     const entry = tail.length === 0 ? "index" : tail.join("/");
-    return [`${DOCS}/${entry}.md`, `${DOCS}/${entry}.mdx`];
+    const sources = [`${DOCS}/${entry}.md`, `${DOCS}/${entry}.mdx`];
+    if (entry === "reference/tools") {
+      sources.push("packages/cli/src/generated/tool-reference.json");
+    }
+    return sources;
   }
   if (head === "blog" && slug !== undefined && tail.length === 1) {
     return [`${BLOG}/${slug}.md`];

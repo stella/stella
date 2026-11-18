@@ -5,6 +5,7 @@ import {
   eq,
   gt,
   inArray,
+  isNull,
   notInArray,
   or,
   type SQL,
@@ -164,14 +165,21 @@ export const reserveCorpusProjectionIntentsTx = async <
   tx: Transaction,
   options: ReserveCorpusProjectionIntentsOptions<Family>,
 ): Promise<CorpusProjectionIntentLease[]> =>
-  (await reserveFromQueueTx(tx, options, { after: null, batchableOnly: false }))
-    .leases;
+  (
+    await reserveFromQueueTx(tx, options, {
+      after: null,
+      batchableOnly: false,
+      skipEntityIds: [],
+    })
+  ).leases;
 
 type ReserveCorpusProjectionRoutePageOptions<Family extends CorpusFamily> =
   Omit<ReserveCorpusProjectionIntentsOptions<Family>, "scope"> & {
     indexId: string;
     /** The previous page's `cursor`, or null to walk from the queue's head. */
     after: CorpusProjectionReservationQueueKey | null;
+    /** Entities the walker will not take this time; they keep their place. */
+    skipEntityIds: readonly string[];
   };
 
 export type CorpusProjectionRoutePage = {
@@ -205,6 +213,7 @@ export const reserveCorpusProjectionRoutePageTx = async <
   {
     indexId,
     after,
+    skipEntityIds,
     ...options
   }: ReserveCorpusProjectionRoutePageOptions<Family>,
 ): Promise<CorpusProjectionRoutePage | { type: "generation_not_building" }> => {
@@ -230,7 +239,7 @@ export const reserveCorpusProjectionRoutePageTx = async <
   return await reserveFromQueueTx(
     tx,
     { ...options, scope: { type: "route", indexId } },
-    { after, batchableOnly: true },
+    { after, batchableOnly: true, skipEntityIds },
   );
 };
 
@@ -249,9 +258,11 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
   {
     after,
     batchableOnly,
+    skipEntityIds,
   }: {
     after: CorpusProjectionReservationQueueKey | null;
     batchableOnly: boolean;
+    skipEntityIds: readonly string[];
   },
 ): Promise<CorpusProjectionRoutePage> => {
   // audit: skip - reservation bookkeeping on the derived public corpus projection
@@ -279,6 +290,7 @@ const reserveFromQueueTx = async <Family extends CorpusFamily>(
     excludedIndexIds,
     after,
     batchableOnly,
+    skipEntityIds,
   });
 
   const last = candidates.at(-1);
@@ -849,7 +861,8 @@ const deliveredTogetherTx = async (
 /**
  * The largest offline request a revision may start in, given the fewest
  * revisions delivered together with one of its entity's earlier revisions at
- * the same epoch that was withdrawn: half of them, at least one. An offline
+ * the same epoch that was withdrawn, or retired from a request killed at its
+ * deadline without ever being applied: half of them, at least one. An offline
  * run that publishes nothing cannot say which revision, if any, was at fault,
  * so a withdrawal from a request of several revisions charges no one and
  * switches no mode; each one halves the request instead. A revision that
@@ -871,8 +884,9 @@ const corpusProjectionOfflineRequestCap = (
 /**
  * Each lease's request cap (`corpusProjectionOfflineRequestCap`), from the
  * withdrawn revisions of its entity at its epoch whose delivery could have
- * failed on its documents, and the number each one's request actually
- * delivered. Those rows are history, so the cap survives
+ * failed on its documents, and those retired from a request killed at its
+ * deadline, and the number each one's request actually delivered. Those
+ * rows are history, so the cap survives
  * any crash, and the lease is the entity's only outstanding revision, so it
  * cannot shrink while the lease is held.
  */
@@ -906,13 +920,34 @@ export const readCorpusProjectionOfflineRequestCapsTx = async (
         inArray(corpusIndexProjectionIntents.entityId, [
           ...new Set(leases.map(({ entityId }) => entityId)),
         ]),
-        eq(corpusIndexProjectionIntents.status, "withdrawn"),
-        // A withdrawal whose delivery said nothing about its documents (a
-        // refusal, a crash, a failure outside the indexer) halves nothing.
-        inArray(corpusIndexProjectionIntents.appendFault, [
-          "documents",
-          "killed",
-        ]),
+        or(
+          // A withdrawal whose delivery said nothing about its documents (a
+          // refusal, a crash, a failure outside the indexer) halves nothing.
+          and(
+            eq(corpusIndexProjectionIntents.status, "withdrawn"),
+            inArray(corpusIndexProjectionIntents.appendFault, [
+              "documents",
+              "killed",
+            ]),
+          ),
+          // A revision retired from a request killed at its deadline (part
+          // of it published, part not) is no less suspect than one withdrawn
+          // from it: it halves too. One retired from a request its indexer
+          // ran to a verdict left its entity in single requests instead.
+          and(
+            eq(corpusIndexProjectionIntents.appendFault, "killed"),
+            // Retired, never applied: an applied revision a later exact
+            // repair cleaned up was delivered in full and halves nothing.
+            isNull(corpusIndexProjectionIntents.appliedAt),
+            inArray(corpusIndexProjectionIntents.status, [
+              "cleanup_pending",
+              "cleanup_started",
+              "cleanup_committed",
+              "cleanup_stalled",
+              "settled",
+            ]),
+          ),
+        ),
       ),
     );
   const delivered = await readOfflineDeliveredCountsTx(
@@ -1636,6 +1671,15 @@ type AcceptedProjectionAppend = {
   documentCount: number;
 };
 
+/**
+ * The recorded reason of a revision whose indexer was killed at its deadline
+ * with the revision alone in its file: stored on the intent with its record,
+ * and on its entity when that failure is charged, so blocks of this kind can
+ * be found and unparked together.
+ */
+export const CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE =
+  "offline projection revision kept its indexer running to its kill deadline alone";
+
 type RecordAcceptedCorpusProjectionAppendsOptions = {
   /** Revisions of one index whose append the engine accepted. */
   accepted: readonly AcceptedProjectionAppend[];
@@ -1646,7 +1690,15 @@ type RecordAcceptedCorpusProjectionAppendsOptions = {
    */
   delivery:
     | { type: "ingest_api" }
-    | { type: "offline_indexer"; fault: CorpusIndexAppendFault };
+    | {
+        type: "offline_indexer";
+        fault: CorpusIndexAppendFault;
+        /**
+         * Killed at its deadline alone in its file: recorded with
+         * `CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE`.
+         */
+        killedAlone?: boolean;
+      };
   testNow?: Date | undefined;
 };
 
@@ -1871,7 +1923,9 @@ export const recordAcceptedCorpusProjectionAppendsTx = async (
         lastError: byIntent(
           stale,
           () => sql`${STALE_ACCEPTED_APPEND_MESSAGE}`,
-          sql`${corpusIndexProjectionIntents.lastError}`,
+          delivery.type === "offline_indexer" && delivery.killedAlone === true
+            ? sql`${CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE}`
+            : sql`${corpusIndexProjectionIntents.lastError}`,
         ),
         appendFault:
           delivery.type === "offline_indexer" ? delivery.fault : null,
@@ -2274,13 +2328,17 @@ const decideUnprovenRevision = (
   // (`corpusProjectionOfflineRequestCap`). Alone in a request its indexer ran
   // to a verdict, it is a document fault like any other; one whose delivery
   // says nothing about its documents is never charged. A state that moved on
-  // has nothing to retry.
+  // has nothing to retry. A lone kill keeps the reason its record stored.
+  const killedAlone =
+    committed.lastError === CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE;
   if (offlineFinal && revision.observedDocumentCount === 0) {
     const isolated = deliveredTogether === 1;
     return {
       type: "withdraw",
       intent: committed,
-      message: WITHDRAWN_OFFLINE_APPEND_MESSAGE,
+      message: killedAlone
+        ? CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE
+        : WITHDRAWN_OFFLINE_APPEND_MESSAGE,
       charge: stillDesired
         ? charge("unknown", isolated ? "document" : "engine")
         : null,
@@ -2310,7 +2368,12 @@ const decideUnprovenRevision = (
     case "after_barrier":
       if (committed.appendDelivery === "offline_indexer") {
         return offlineFinal
-          ? retire("unknown", UNDELIVERED_OFFLINE_APPEND_MESSAGE)
+          ? retire(
+              "unknown",
+              killedAlone
+                ? CORPUS_PROJECTION_OFFLINE_LONE_KILL_MESSAGE
+                : UNDELIVERED_OFFLINE_APPEND_MESSAGE,
+            )
           : awaitingPublication(committed);
       }
       return transitionAt.getTime() <

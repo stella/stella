@@ -357,12 +357,12 @@ const gradients = [
     document.addEventListener("astro:page-load", () => {
       // Copy boilerplate paragraph
       for (const btn of document.querySelectorAll<HTMLElement>(".copy-btn")) {
-        if (btn.dataset.copyBound) {
+        if (btn.dataset["copyBound"]) {
           continue;
         }
-        btn.dataset.copyBound = "true";
+        btn.dataset["copyBound"] = "true";
         btn.addEventListener("click", async () => {
-          const targetId = btn.dataset.copyTarget;
+          const targetId = btn.dataset["copyTarget"];
           if (!targetId) {
             return;
           }
@@ -388,12 +388,12 @@ const gradients = [
 
       // Copy hex on click
       for (const btn of document.querySelectorAll<HTMLElement>(".copy-hex")) {
-        if (btn.dataset.copyBound) {
+        if (btn.dataset["copyBound"]) {
           continue;
         }
-        btn.dataset.copyBound = "true";
+        btn.dataset["copyBound"] = "true";
         btn.addEventListener("click", async () => {
-          const hex = btn.dataset.hex;
+          const hex = btn.dataset["hex"];
           if (!hex) {
             return;
           }

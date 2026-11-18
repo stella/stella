@@ -32,15 +32,17 @@ export const propertyFacetsOptions = (key: PropertyFacetsOptionsInput) =>
   queryOptions({
     queryKey: propertyFacetsKeys.facets(key),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["property-facets"].post(
-          {
-            propertyId: toSafeId<"property">(key.propertyId),
-            filters: key.filters,
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
+
+      const response = await entitiesApi["property-facets"].post(
+        {
+          propertyId: toSafeId<"property">(key.propertyId),
+          filters: key.filters,
+        },
+        { fetch: { signal } },
+      );
 
       const data = unwrapApiResponse(response);
 

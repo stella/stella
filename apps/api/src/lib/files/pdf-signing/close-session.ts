@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -7,6 +7,8 @@ import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ClosePdfSigningSessionOptions = {
@@ -37,30 +39,32 @@ export const closePdfSigningSession = async ({
   sessionId,
 }: ClosePdfSigningSessionOptions): Promise<Result<void, HandlerError>> => {
   const closed = await safeDb(async (tx) => {
-    const rows = await tx
-      .update(pdfSigningSessions)
-      .set({ closeReason, closedAt: new Date(), status: "cancelled" })
-      .where(
-        and(
-          eq(pdfSigningSessions.id, sessionId),
-          eq(pdfSigningSessions.status, "open"),
-          attempt === undefined
-            ? undefined
-            : eq(pdfSigningSessions.finalizeAttempts, attempt),
-        ),
-      )
-      .returning({ id: pdfSigningSessions.id });
-
-    if (!rows.at(0)) {
-      return;
-    }
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-      resourceId: sessionId,
-      changes: { status: { old: "open", new: "cancelled" } },
-      metadata: { closeReason },
+    await transitionBatch({
+      tx,
+      spec: TRANSITIONS.pdfSigningSessions,
+      ids: [sessionId],
+      options: {
+        from: ["open"],
+        to: "cancelled",
+        set: { closeReason, closedAt: new Date() },
+        guard:
+          and(
+            eq(pdfSigningSessions.id, sessionId),
+            eq(pdfSigningSessions.status, "open"),
+            attempt === undefined
+              ? undefined
+              : eq(pdfSigningSessions.finalizeAttempts, attempt),
+          ) ?? panic("The signing session close has no guard"),
+      },
+      recordTransitionAuditEvent: async (auditTx) => {
+        await recordAuditEvent(auditTx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+          resourceId: sessionId,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { closeReason },
+        });
+      },
     });
   });
 

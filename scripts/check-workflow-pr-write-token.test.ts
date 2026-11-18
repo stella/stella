@@ -80,7 +80,7 @@ describe("privileged workflow policy", () => {
   });
   test("an exemption covers only its approved findings", () => {
     const source = `
-on: pull_request_target
+on: workflow_run
 permissions:
   contents: write
 jobs:
@@ -117,11 +117,11 @@ ${condition}    steps:
       0,
     );
   });
-  test("refuses pull_request_target head tooling with write access", () => {
+  test("refuses workflow_run head tooling with write access", () => {
     expect(
       check(
         workflow(
-          "pull_request_target",
+          "workflow_run",
           `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - run: bash scripts/x.sh`,
         ),
       ),
@@ -131,17 +131,17 @@ ${condition}    steps:
     expect(
       check(
         workflow(
-          "pull_request_target",
+          "workflow_run",
           `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.base.sha }}\n          path: .trusted\n      - run: .trusted/scripts/x.sh`,
         ),
       ),
     ).not.toHaveLength(0);
   });
-  test("refuses pull_request_target head tooling checked out to an explicit path", () => {
+  test("refuses workflow_run head tooling checked out to an explicit path", () => {
     expect(
       check(
         workflow(
-          "pull_request_target",
+          "workflow_run",
           `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: bash untrusted/scripts/x.sh`,
         ),
       ),
@@ -149,28 +149,28 @@ ${condition}    steps:
     expect(
       check(
         workflow(
-          "pull_request_target",
+          "workflow_run",
           `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: release-v1\n          path: trusted\n      - run: bash trusted/scripts/x.sh`,
         ),
       ),
     ).toHaveLength(0);
   });
-  test("refuses env-indirected tooling under pull_request_target", () => {
+  test("refuses env-indirected tooling under workflow_run", () => {
     const body = `    env:\n      PR_HEAD: \${{ github.event.pull_request.head.sha }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ env.PR_HEAD }}\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
-  test("refuses interpolated refs and repositories under pull_request_target", () => {
+  test("refuses interpolated refs and repositories under workflow_run", () => {
     for (const field of [
       `ref: refs/heads/\${{ env.PR_BRANCH }}`,
       `repository: \${{ inputs.owner }}/repo`,
     ]) {
       const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ${field}\n      - run: bash scripts/x.sh`;
-      expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+      expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
     }
   });
   test("a conditional trusted checkout never clears an earlier head checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - if: false\n        uses: actions/checkout@pin\n        with:\n          ref: main\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("treats every spelling of the workspace root and expression paths as the root", () => {
     for (const checkoutPath of [
@@ -180,7 +180,7 @@ ${condition}    steps:
       `\${{ env.TOOLING_DIR }}`,
     ]) {
       const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: ${checkoutPath}\n      - run: bash tooling/scripts/x.sh`;
-      expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+      expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
     }
   });
   test("refuses remote actions whose inputs name a head checkout", () => {
@@ -189,27 +189,24 @@ ${condition}    steps:
       `    steps:\n${head}\n          path: untrusted\n      - uses: docker/build-push-action@pin\n        with:\n          context: untrusted`,
       `    steps:\n${head}\n      - uses: docker/build-push-action@pin\n        with:\n          context: .`,
     ]) {
-      expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+      expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
     }
     const unrelated = `    steps:\n${head}\n      - uses: actions/upload-artifact@pin\n        with:\n          name: report`;
-    expect(check(workflow("pull_request_target", unrelated))).toHaveLength(0);
+    expect(check(workflow("workflow_run", unrelated))).toHaveLength(0);
   });
   test("treats an expression working directory as any checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: \${{ env.DIR }}\n        run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("skips consumer steps whose own condition excludes the event", () => {
-    for (const condition of [
-      "false",
-      "github.event_name != 'pull_request_target'",
-    ]) {
+    for (const condition of ["false", "github.event_name != 'workflow_run'"]) {
       const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - if: ${condition}\n        run: bash scripts/x.sh`;
-      expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+      expect(check(workflow("workflow_run", body))).toHaveLength(0);
     }
   });
   test("follows working directories nested inside a head checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: untrusted/subdir\n        run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("treats secrets mapped into a local reusable workflow as exposed", () => {
     const source = `
@@ -234,7 +231,7 @@ jobs:
   });
   test("recognizes workspace-qualified paths into a head checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: bash "$GITHUB_WORKSPACE/untrusted/scripts/x.sh"`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("treats an empty checkout ref like an omitted one", () => {
     const body = `    env:\n      KEY: \${{ secrets.KEY }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ''\n      - run: bash scripts/x.sh`;
@@ -246,33 +243,29 @@ jobs:
   });
   test("follows defaults.run.working-directory into a head checkout", () => {
     const body = `    defaults:\n      run:\n        working-directory: untrusted\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("refuses a resolver script staged by an untrusted step", () => {
     const checkout = `      - id: target-base\n        run: bash "$RUNNER_TEMP/merge-target-base.sh"\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ steps.target-base.outputs.base_sha }}\n      - run: bash scripts/x.sh`;
     const impostor = `    steps:\n      - run: printf 'echo base_sha=x >> "$GITHUB_OUTPUT"' > "$RUNNER_TEMP/merge-target-base.sh"\n${checkout}`;
-    expect(check(workflow("pull_request_target", impostor))).not.toHaveLength(
-      0,
-    );
+    expect(check(workflow("workflow_run", impostor))).not.toHaveLength(0);
     const staged = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n          path: .workflow-tooling\n      - run: cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh" "$RUNNER_TEMP/merge-target-base.sh"\n${checkout}`;
-    expect(check(workflow("pull_request_target", staged))).toHaveLength(0);
+    expect(check(workflow("workflow_run", staged))).toHaveLength(0);
   });
   test("compares event names case-insensitively, as Actions does", () => {
-    const body = `    if: github.event_name == 'PULL_REQUEST_TARGET'\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    const body = `    if: github.event_name == 'WORKFLOW_RUN'\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("refuses a head checkout entered with cd before execution", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: cd untrusted && bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("trusts the comparison base only from the repository resolver", () => {
     const checkout = `      - uses: actions/checkout@pin\n        with:\n          ref: \${{ steps.target-base.outputs.base_sha }}\n      - run: bash scripts/x.sh`;
     const impostor = `    steps:\n      - id: target-base\n        run: echo "base_sha=\${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"\n${checkout}`;
-    expect(check(workflow("pull_request_target", impostor))).not.toHaveLength(
-      0,
-    );
+    expect(check(workflow("workflow_run", impostor))).not.toHaveLength(0);
     const resolver = `    steps:\n      - id: target-base\n        uses: ./.github/actions/merge-target-base\n${checkout}`;
-    expect(check(workflow("pull_request_target", resolver))).toHaveLength(0);
+    expect(check(workflow("workflow_run", resolver))).toHaveLength(0);
   });
   test("refuses workflow_run artifacts executed with a secret", () => {
     const source = workflow(
@@ -375,26 +368,26 @@ jobs:
   });
   test("accepts tooling pinned to the workflow revision of base-branch events", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).toHaveLength(0);
   });
   test("accepts literal refs", () => {
     for (const ref of ["main", "v1.2.3"]) {
       const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ${ref}\n      - run: bash scripts/x.sh`;
-      expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+      expect(check(workflow("workflow_run", body))).toHaveLength(0);
     }
   });
   test("accepts github.sha only when the event makes it the base", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.sha }}\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).toHaveLength(0);
     expect(check(workflow("pull_request", body))).not.toHaveLength(0);
   });
   test("refuses repositories outside the expression allowlist", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          repository: \${{ inputs.repository }}\n          ref: main\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).not.toHaveLength(0);
   });
   test("accepts the current repository expression", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          repository: \${{ github.repository }}\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+    expect(check(workflow("workflow_run", body))).toHaveLength(0);
   });
   test("does not accept a substring event exclusion inside an always-true disjunction", () => {
     const body = `    if: github.event_name != 'pull_request' || true
@@ -436,13 +429,7 @@ const HEAD_CHECKOUT = `      - uses: actions/checkout@pin
         with:
           ref: \${{ github.event.pull_request.head.sha }}`;
 const target = (steps: string, extra = "", permissions = "contents: write") =>
-  check(
-    workflow(
-      "pull_request_target",
-      `${extra}    steps:\n${steps}`,
-      permissions,
-    ),
-  );
+  check(workflow("workflow_run", `${extra}    steps:\n${steps}`, permissions));
 const CI_FILE = ".github/workflows/ci.yml";
 const ciJob = (job: string, body: string, permissions = "actions: write") =>
   checkWorkflowPrivilegeSource(
@@ -465,29 +452,25 @@ describe("condition reading", () => {
     );
   test("reads a condition only when one expression spans the whole value", () => {
     expect(
-      stepIf(`"\${{ github.event_name != 'pull_request_target' }} "`),
+      stepIf(`"\${{ github.event_name != 'workflow_run' }} "`),
     ).not.toHaveLength(0);
-    expect(
-      stepIf(`\${{ github.event_name != 'pull_request_target' }}`),
-    ).toHaveLength(0);
+    expect(stepIf(`\${{ github.event_name != 'workflow_run' }}`)).toHaveLength(
+      0,
+    );
   });
   test("leaves comparisons of different literal kinds undecided", () => {
     expect(stepIf(`"'1' == true"`)).not.toHaveLength(0);
     expect(stepIf(`"'push' == 'pull'"`)).toHaveLength(0);
   });
   test("reads only single-quoted strings as literals", () => {
-    expect(
-      stepIf(`'github.event_name != "pull_request_target"'`),
-    ).not.toHaveLength(0);
-    expect(stepIf("github.event_name != 'pull_request_target'")).toHaveLength(
-      0,
-    );
+    expect(stepIf(`'github.event_name != "workflow_run"'`)).not.toHaveLength(0);
+    expect(stepIf("github.event_name != 'workflow_run'")).toHaveLength(0);
   });
   test("reads job conditions the same way", () => {
     const steps = `${HEAD_CHECKOUT}\n      - run: bash scripts/x.sh`;
     expect(target(steps, `    if: "'1' == true"\n`)).not.toHaveLength(0);
     expect(
-      target(steps, `    if: github.event_name != 'pull_request_target'\n`),
+      target(steps, `    if: github.event_name != 'workflow_run'\n`),
     ).toHaveLength(0);
   });
 });
@@ -530,24 +513,6 @@ jobs:
       reusable(
         `\n      DOCKERHUB_USERNAME: \${{ secrets.DOCKERHUB_USERNAME }}\n      DOCKERHUB_TOKEN: \${{ secrets.DOCKERHUB_TOKEN }}`,
       ),
-    ).toEqual([]);
-  });
-  test("binds a called-workflow exemption to its pinned revision", () => {
-    const caller = (revision: string) =>
-      checkWorkflowPrivilegeSource(
-        ".github/workflows/pr-lint.yml",
-        `
-on: pull_request_target
-permissions:
-  contents: read
-  pull-requests: write
-jobs:
-  pr-lint:
-    uses: stella/.github/.github/workflows/pr-lint.yml@${revision}`,
-      );
-    expect(caller("main")).not.toHaveLength(0);
-    expect(
-      caller(pinnedRevision(".github/workflows/pr-lint.yml:pr-lint")),
     ).toEqual([]);
   });
   test("binds a job-pattern exemption to its gate, privileges and pinned call", () => {
@@ -690,7 +655,7 @@ describe("job privileges", () => {
   test("flags called workflows that receive secrets or write access", () => {
     const caller = (permissions: string, secrets = "") =>
       check(`
-on: pull_request_target
+on: workflow_run
 ${permissions}
 jobs:
   example:

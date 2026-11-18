@@ -1,5 +1,7 @@
+// parser-output-unchanged: Named fetchDecisionContent options preserve its body, argument values and evaluation order.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the stated listing count, including zero for empty slices; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -35,6 +37,8 @@ import {
   parseNssPdf,
   readNssRegistryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
+import { parseCzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
+import type { CzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   readBodyText,
@@ -52,6 +56,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import type { CzechAppealReview } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
@@ -841,6 +846,14 @@ const fetchRichDocument = async (
   return { type: "present", value: html };
 };
 
+type FetchDecisionContentOptions = {
+  documentId: string;
+  row: ParsedRow;
+  detail: CzNssDetailMetadata;
+  session: SessionState;
+  signal: AbortSignal;
+};
+
 /**
  * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse it into a
  * DocumentAst. Falls back to /Text/{id} for plain fulltext where the portal
@@ -848,13 +861,13 @@ const fetchRichDocument = async (
  * read of either endpoint is reported unavailable, never replaced by the
  * other representation.
  */
-const fetchDecisionContent = async (
-  documentId: string,
-  row: ParsedRow,
-  detail: CzNssDetailMetadata,
-  session: SessionState,
-  signal: AbortSignal,
-): Promise<DecisionContentRead> => {
+const fetchDecisionContent = async ({
+  documentId,
+  row,
+  detail,
+  session,
+  signal,
+}: FetchDecisionContentOptions): Promise<DecisionContentRead> => {
   const rich = await fetchRichDocument(documentId, session, signal);
   switch (rich.type) {
     case "present":
@@ -1661,6 +1674,8 @@ type DetailFieldEvidence = {
   values: string[];
 };
 export type CzNssDetailMetadata = CzNssDetailValues & {
+  publisherReviews?: CzechAppealReview[];
+  publisherReviewMetadata?: CzNssPublisherReviewMetadata[];
   detailFieldEvidence?: DetailFieldEvidence[];
   publisherMetadata?: ReturnType<typeof extractNssPublisherMetadata>;
 };
@@ -1764,6 +1779,7 @@ export const parseCzNssDetailMetadata = (html: string): CzNssDetailMetadata => {
     conflictingPrecedents: read("conflictingPrecedents"),
   } satisfies CzNssDetailValues;
   return {
+    ...parseCzNssPublisherReviewMetadata(html),
     ...values,
     publisherMetadata: extractNssPublisherMetadata(html),
     ...(evidence.length === 0 ? {} : { detailFieldEvidence: evidence }),
@@ -1924,6 +1940,8 @@ type RowToResultOptions = {
 const detailMetadataFields = (
   detail: CzNssDetailMetadata,
 ): Record<string, unknown> => ({
+  publisherReviews: detail.publisherReviews,
+  publisherReviewMetadata: detail.publisherReviewMetadata,
   ...detail.publisherMetadata,
   detailFieldEvidence: detail.detailFieldEvidence,
   title: detail.title,
@@ -2830,13 +2848,13 @@ export const buildCzNssDecision = async ({
     };
   }
   const { detail, html: detailHtml } = detailFetch;
-  const contentRead = await fetchDecisionContent(
+  const contentRead = await fetchDecisionContent({
     documentId,
     row,
     detail,
     session,
     signal,
-  );
+  });
   if (contentRead.type === "unavailable") {
     // A document read failed. The row is stored listing-only, exactly as for
     // a detail page that was not read, never built from another endpoint's
@@ -3041,7 +3059,7 @@ const listCzNssSlicePage = async ({
         cursor: slice,
       });
     }
-    return { items: [], totalPages: 0 };
+    return { items: [], totalPages: 0, publisherCount: 0 };
   }
 
   const { continuation } = search;
@@ -3093,6 +3111,7 @@ const listCzNssSlicePage = async ({
       payload: row,
     })),
     totalPages: czNssTotalPages(search.statedCount),
+    publisherCount: search.statedCount,
   };
 };
 

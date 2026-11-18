@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { CHAT_RUN_MODE } from "@stll/api-contract/chat";
 import {
   CHAT_QUEUE_ERROR_CODE,
   CHAT_QUEUE_HOLD_REASON,
@@ -25,7 +26,8 @@ import { createResponseSet } from "@/api/http/context";
 import { status, unwrapStatus } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { announceChatQueueChange } from "@/api/lib/chat/chat-queue-announcement";
-import { resolveQueuedTurnMember } from "@/api/lib/chat/queued-turn-member";
+import { chatRunTargetOf, turnRunTarget } from "@/api/lib/chat/run-target";
+import { resolveServerStartedMember } from "@/api/lib/chat/server-started-member";
 import { lockChatThreadForTurnOnTx } from "@/api/lib/db/aggregate-lock";
 import {
   type ChatQueueHoldWrite,
@@ -123,11 +125,10 @@ const sendNextQueuedChatMessage = async ({
   if (due === null) {
     return { type: "not-due" };
   }
-  const member = await resolveQueuedTurnMember({
+  const member = await resolveServerStartedMember({
     organizationId: due.organizationId,
     userId: due.userId,
-    threadId,
-    queuedMessageId: due.id,
+    work: { type: "queued-send", threadId, queuedMessageId: due.id },
     signal: dependencies.signal,
   });
   if (Result.isError(member)) {
@@ -156,7 +157,21 @@ const sendNextQueuedChatMessage = async ({
     if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
       return { type: "thread-unavailable" } as const;
     }
-    return await readChatQueueGateOnTx({ threadId, tx });
+    const read = await readChatQueueGateOnTx({ threadId, tx });
+    if (read.type !== "due") {
+      return read;
+    }
+    const thread = await tx.query.chatThreads.findFirst({
+      where: { id: { eq: threadId } },
+      columns: { chatLocalRunTarget: true },
+    });
+    if (thread === undefined) {
+      return panic("The thread locked in this transaction has no row");
+    }
+    return {
+      ...read,
+      threadRunTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+    };
   });
   if (gate.isErr()) {
     observeFailure(gate.error, {
@@ -173,8 +188,19 @@ const sendNextQueuedChatMessage = async ({
   if (gate.value.type !== "due") {
     return { type: "not-due" };
   }
-  const { head } = gate.value;
-  const send = parseQueuedChatSend(head.request);
+  const { head, threadRunTarget } = gate.value;
+  const queued = parseQueuedChatSend(head.request);
+  // A message queued without a target (the phone's, one queued before sends
+  // named theirs) runs where the thread runs now: it waits for the thread's
+  // computer below, and the send is told so rather than left to guess.
+  const send = {
+    ...queued,
+    runTarget: turnRunTarget({
+      agentSandboxRequested: queued.runMode === CHAT_RUN_MODE.agent,
+      requested: queued.runTarget,
+      thread: threadRunTarget,
+    }),
+  };
   // Every refusal below was met outside the thread lock: it holds the queue
   // only while this message is still the due head, so a pause, an edit or a
   // turn since then stands.
@@ -205,10 +231,7 @@ const sendNextQueuedChatMessage = async ({
   };
 
   const { runTarget } = send;
-  if (
-    runTarget !== undefined &&
-    runTarget.kind !== CHAT_RUN_TARGET_KIND.cloud
-  ) {
+  if (runTarget.kind !== CHAT_RUN_TARGET_KIND.cloud) {
     // A message for a computer that is away waits for it instead of being
     // sent and failing; the computer's next report releases the hold.
     const route = await dependencies.routeLocalRun({
@@ -259,7 +282,8 @@ const sendNextQueuedChatMessage = async ({
     ...caller,
     session: {
       ...caller.session,
-      startedFromQueue: {
+      serverStartedTurn: {
+        type: "queue",
         queuedMessageId: head.id,
         revision: head.revision,
       },

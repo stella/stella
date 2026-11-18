@@ -399,6 +399,31 @@ export type PendingAnswer =
       readonly answers: ChatLocalRunQuestionReply["answers"] | null;
     };
 
+/**
+ * What a message steered into a turn that waits answers first: every
+ * approval the coding agent on the member's computer asks for, declined, so
+ * the turn goes on with the message (as the member's own Deny would). `null`
+ * for any other wait: a question is never dismissed for a message, and a
+ * cloud turn takes none mid-turn.
+ */
+export const declinedForSteer = (
+  pending: Exclude<PendingInput, { type: "elsewhere" }>,
+): PendingAnswer | null =>
+  pending.type === "steps" &&
+  pending.owner.type === "harness" &&
+  pending.approvals.length > 0 &&
+  pending.asks.length === 0 &&
+  pending.documents.length === 0
+    ? {
+        type: "steps",
+        allowed: Object.fromEntries(
+          pending.approvals.map(({ interruptId }) => [interruptId, false]),
+        ),
+        asked: {},
+        documents: {},
+      }
+    : null;
+
 type ResumeItem =
   | {
       readonly interruptId: string;

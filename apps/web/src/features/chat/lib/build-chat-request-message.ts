@@ -83,9 +83,11 @@ export const buildChatRequestMessage = async (
         if (file.type === "pasted_text") {
           return createChatPastedTextPart(file.text);
         }
+        // A stored file goes by reference; a file picked here, inline.
         const source = {
           type: "url" as const,
-          value: await toDataUrl(file.file),
+          value:
+            file.type === "stored_file" ? file.url : await toDataUrl(file.file),
           mimeType: file.mimeType,
         };
         const metadata = { filename: file.filename };

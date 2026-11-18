@@ -70,6 +70,7 @@ import {
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
+  TRANSACTION_DEADLINE,
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -275,6 +276,7 @@ import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
+import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -339,6 +341,7 @@ import {
   getDefaultClientResourceIdentifiers,
   getOwnNativeClientResources,
   isApiResourceClient,
+  isMobileAppClient,
 } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -2468,6 +2471,7 @@ export const createAuth = (
             }
             return { data: data.value };
           },
+          after: createUserProjectionUpdateHook(),
         },
       },
     },
@@ -3749,9 +3753,10 @@ const hasSyntheticSessionAuthority = async (current: {
 
 /**
  * A member a credential proved. Built only here, by the request resolvers,
- * and by the chat queue's sender (`lib/chat/queued-turn-member.ts`), which
- * proves the member from a fresh membership lookup; the `queued-turn-member`
- * ownership row confines both this type and `resolveValidateAuth`.
+ * and for chat work the server starts (`lib/chat/server-started-member.ts`),
+ * which proves the member from a fresh membership lookup; the
+ * `server-started-member` ownership row confines both this type and
+ * `resolveValidateAuth`.
  */
 export type ResolvedIdentity = {
   userId: SafeId<"user">;
@@ -3871,6 +3876,7 @@ const resolveAccessTokenIdentity = async ({
     return { ok: false, statusCode: 401 };
   }
   const admission = admitApiAccessTokenRoute({
+    client: isMobileAppClient(tokenSession.clientId) ? "mobile" : undefined,
     method: request.method,
     route,
     scopes: tokenSession.scopes,
@@ -4058,6 +4064,7 @@ export const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,
+    deadline: TRANSACTION_DEADLINE.request,
   };
   const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 

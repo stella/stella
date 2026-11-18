@@ -7,6 +7,7 @@ import {
 export default {
   id: "replacements-case-law-decisions-source-case-lang-idx",
   revision: 860,
+  lifecycle: "pending",
   type: "replacements",
   values: [
     {

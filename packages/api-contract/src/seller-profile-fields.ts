@@ -11,6 +11,7 @@ export const SELLER_PROFILE_TEXT_FIELDS = [
   "city",
   "postalCode",
   "country",
+  "email",
   "iban",
   "bic",
   "accountNumber",

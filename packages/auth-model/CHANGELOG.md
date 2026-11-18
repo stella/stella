@@ -1,5 +1,13 @@
 # @stll/auth-model
 
+## 0.8.2
+
+### Patch Changes
+
+- [#7365](https://github.com/stella/stella/pull/7365) [`5613d6a`](https://github.com/stella/stella/commit/5613d6aa3e4c87ff5fcf2fb408db801df5d89909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require billing visibility for monetary operations and preserve hidden rates as null in time records.
+
+- [#8574](https://github.com/stella/stella/pull/8574) [`81de98c`](https://github.com/stella/stella/commit/81de98c398770aea32040c9463006f70b3317c72) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE`, the error code for a sign-in code request that names an account signing in with a password.
+
 ## 0.8.1
 
 ### Patch Changes

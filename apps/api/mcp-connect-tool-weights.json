@@ -16,10 +16,10 @@
     {
       "name": "case_law_coverage",
       "nameChars": 17,
-      "descriptionChars": 269,
+      "descriptionChars": 295,
       "inputSchemaChars": 457,
-      "totalChars": 743,
-      "estimatedTokens": 286
+      "totalChars": 769,
+      "estimatedTokens": 295
     },
     {
       "name": "check_counterparty",
@@ -497,9 +497,9 @@
       "name": "save_contact",
       "nameChars": 12,
       "descriptionChars": 172,
-      "inputSchemaChars": 7920,
-      "totalChars": 8104,
-      "estimatedTokens": 3362
+      "inputSchemaChars": 7926,
+      "totalChars": 8110,
+      "estimatedTokens": 3364
     },
     {
       "name": "save_document",
@@ -576,10 +576,10 @@
     {
       "name": "search_case_law",
       "nameChars": 15,
-      "descriptionChars": 700,
+      "descriptionChars": 703,
       "inputSchemaChars": 6249,
-      "totalChars": 6964,
-      "estimatedTokens": 2843
+      "totalChars": 6967,
+      "estimatedTokens": 2844
     },
     {
       "name": "search_guidance",
@@ -663,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140337,
-    "estimatedTokens": 55755
+    "characters": 140372,
+    "estimatedTokens": 55767
   }
 }

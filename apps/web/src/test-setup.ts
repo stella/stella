@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, mock } from "bun:test";
 
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 import { DEFAULT_WAIT_TIMEOUT_MS } from "@stll/test-kit";
 
 import {
@@ -29,6 +30,9 @@ const configureWaitTimeout = async () => {
   const { configure } = await import("@testing-library/dom");
   configure({ asyncUtilTimeout: DEFAULT_WAIT_TIMEOUT_MS });
 };
+
+// Tests run components with the same memoization as the Vite build.
+Bun.plugin(reactCompilerBunPlugin);
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
@@ -22,6 +23,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
   ({
     status: "read",
     decision: {
+      appealReviews: noDecisionReviewFound(),
       id: decisionId,
       caseNumberType: "case-number",
       courtAbbreviation: "ÚS",

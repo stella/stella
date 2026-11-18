@@ -34,6 +34,7 @@ export type RegistryDelta = {
 
 /** The on-disk cache file shape (spec S5.3). */
 export type RegistryCacheFile = {
+  compatibility?: { checkedAt: number; metadata: unknown } | undefined;
   version: number;
   serverOrigin: string;
   fetchedAt: string;
@@ -252,6 +253,15 @@ export const readCacheFile = async (
   const cliMinimum = value["cliMinimum"];
   const cliLatest = value["cliLatest"];
   return {
+    ...(isRecord(value["compatibility"]) &&
+    typeof value["compatibility"]["checkedAt"] === "number"
+      ? {
+          compatibility: {
+            checkedAt: value["compatibility"]["checkedAt"],
+            metadata: value["compatibility"]["metadata"],
+          },
+        }
+      : {}),
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
     fetchedAt,
@@ -277,6 +287,9 @@ export const writeCacheFile = async (
   // `writeFile` does not, so mkdir the origin cache dir first (spec S5.3).
   await mkdir(path.dirname(filePath), { recursive: true });
   const metadata = {
+    ...(file.compatibility === undefined
+      ? {}
+      : { compatibility: file.compatibility }),
     version: file.version,
     serverOrigin: file.serverOrigin,
     fetchedAt: file.fetchedAt,

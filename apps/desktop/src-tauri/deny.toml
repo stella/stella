@@ -39,6 +39,11 @@ ignore = [
   "RUSTSEC-2026-0367",
   "RUSTSEC-2026-0368",
   "RUSTSEC-2026-0369",
+  # chrono is marked unmaintained with no successor release. It reaches the
+  # graph through tauri-utils (serde_with) as well as the app's own date
+  # handling, so replacing the app's use alone would not remove it.
+  # Review by 2026-11-24.
+  "RUSTSEC-2026-0543",
   # zbus_names, zvariant and zvariant_derive were folded into zbus 6. The graph
   # still reaches zbus 5 through tauri-plugin-opener, single-instance,
   # notify-rust and the keyring store, none of which accept zbus 6 yet.

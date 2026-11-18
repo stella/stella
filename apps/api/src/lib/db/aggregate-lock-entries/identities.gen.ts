@@ -29,6 +29,7 @@ import type { Identity as ExpenseCapacityIdentity } from "./expenseCapacity";
 import type { Identity as FieldIdentity } from "./field";
 import type { Identity as FileComparisonCapacityIdentity } from "./fileComparisonCapacity";
 import type { Identity as FolioCollabRoomIdentity } from "./folioCollabRoom";
+import type { Identity as InvoiceSendCapacityIdentity } from "./invoiceSendCapacity";
 import type { Identity as LegislationAmendmentWorkIdentity } from "./legislationAmendmentWork";
 import type { Identity as McpOAuthStateIdentity } from "./mcpOAuthState";
 import type { Identity as MemberCleanupIdentity } from "./memberCleanup";
@@ -39,6 +40,7 @@ import type { Identity as OrganizationIdentity } from "./organization";
 import type { Identity as OrganizationDataBoxesIdentity } from "./organizationDataBoxes";
 import type { Identity as OrganizationObjectIntentIdentity } from "./organizationObjectIntent";
 import type { Identity as OrganizationSettingsIdentity } from "./organizationSettings";
+import type { Identity as OutboundActionIdentity } from "./outboundAction";
 import type { Identity as PersonalCatalogIdentity } from "./personalCatalog";
 import type { Identity as ProcessingClaimIdentity } from "./processingClaim";
 import type { Identity as ProfessionalUseAcceptanceIdentity } from "./professionalUseAcceptance";
@@ -49,6 +51,7 @@ import type { Identity as ReaderAnswerMessageIdentity } from "./readerAnswerMess
 import type { Identity as RequestReceiptIdentity } from "./requestReceipt";
 import type { Identity as RunIdentity } from "./run";
 import type { Identity as SampleCaseIdentity } from "./sampleCase";
+import type { Identity as SavedSearchIdentity } from "./savedSearch";
 import type { Identity as SchedulerClaimIdentity } from "./schedulerClaim";
 import type { Identity as ScoutCensusIdentity } from "./scoutCensus";
 import type { Identity as SearchHistoryIdentity } from "./searchHistory";
@@ -89,6 +92,7 @@ export type AggregateIdentities = {
   "field": FieldIdentity;
   "fileComparisonCapacity": FileComparisonCapacityIdentity;
   "folioCollabRoom": FolioCollabRoomIdentity;
+  "invoiceSendCapacity": InvoiceSendCapacityIdentity;
   "legislationAmendmentWork": LegislationAmendmentWorkIdentity;
   "mcpOAuthState": McpOAuthStateIdentity;
   "memberCleanup": MemberCleanupIdentity;
@@ -99,6 +103,7 @@ export type AggregateIdentities = {
   "organizationDataBoxes": OrganizationDataBoxesIdentity;
   "organizationObjectIntent": OrganizationObjectIntentIdentity;
   "organizationSettings": OrganizationSettingsIdentity;
+  "outboundAction": OutboundActionIdentity;
   "personalCatalog": PersonalCatalogIdentity;
   "processingClaim": ProcessingClaimIdentity;
   "professionalUseAcceptance": ProfessionalUseAcceptanceIdentity;
@@ -109,6 +114,7 @@ export type AggregateIdentities = {
   "requestReceipt": RequestReceiptIdentity;
   "run": RunIdentity;
   "sampleCase": SampleCaseIdentity;
+  "savedSearch": SavedSearchIdentity;
   "schedulerClaim": SchedulerClaimIdentity;
   "scoutCensus": ScoutCensusIdentity;
   "searchHistory": SearchHistoryIdentity;

@@ -37,6 +37,14 @@ export const LEGISLATION_PARTIAL_WRITERS = {
     "projectionEpoch",
     "updatedAt",
   ],
+  // The corpus storage backfill records where an existing inline body was
+  // stored and its hash, and projects the document in the same transaction.
+  "apps/api/src/lib/legal-search/corpus-projectability-write.ts": [
+    "textS3Key",
+    "normalizedS3Key",
+    "astS3Key",
+    "contentHash",
+  ],
   // Derived from the stored body, never part of it: the summary records the
   // payload revision it was computed from instead of advancing one.
   "apps/api/src/lib/legal-search/legislation-version-changes.ts": [

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * The ChatGPT connection as the native side reports it
  * (`chatgpt_auth::ChatGptStatus`). It never carries a token.
@@ -30,6 +32,9 @@ export type ChatGptStatus = ChatGptState & {
 };
 
 type ChatGptAccount = { id: string; email: string };
+
+/** Which account a sign-in is for: the saved one, a new one, or `account`. */
+export type ChatGptSignIn = { newAccount: boolean; account?: string };
 
 type ChatGptState =
   | { state: "signed_out" }
@@ -86,3 +91,30 @@ export const isChatGptStatus = (value: unknown): value is ChatGptStatus => {
 /** A native command's error code, when it rejected with one. */
 export const chatGptCommandError = (error: unknown) =>
   typeof error === "string" ? error : null;
+
+/**
+ * The sign-in a `stella://settings/agents?harness=codex` link starts: the
+ * card's own "Continue as" when it offers exactly one, otherwise "Continue
+ * with ChatGPT". `null` while ChatGPT is connected or a sign-in already runs,
+ * when the link only brings the card into view.
+ */
+export const chatGptLinkSignIn = (
+  status: ChatGptStatus,
+): ChatGptSignIn | null => {
+  switch (status.state) {
+    case "connected":
+    case "signing_in":
+      return null;
+    case "signed_out":
+    case "needs_reconnect":
+    case "failed": {
+      const [only, ...others] = status.accounts;
+      return only !== undefined && others.length === 0
+        ? { account: only.id, newAccount: false }
+        : { newAccount: false };
+    }
+    default:
+      status satisfies never;
+      return panic("Unknown ChatGPT state");
+  }
+};

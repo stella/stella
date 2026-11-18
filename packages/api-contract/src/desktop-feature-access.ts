@@ -9,6 +9,7 @@ export const DESKTOP_FEATURE_IDS = [
   "activity-timeline",
   "desktop-dictation",
   "desktop-dictation-cloud",
+  "desktop-dictation-retaining-models",
   "local-agents",
 ] as const;
 

@@ -694,10 +694,10 @@ describe("ÚOHS JSON-LD", () => {
     ).toBeUndefined();
   });
 
-  test("emits citation-shaped authority identifiers", async () => {
+  test("emits authority identifiers as the office prints them", async () => {
     expect(czUohsDecisionIdentifiers((await records())[0]!)).toEqual([
-      { type: "authority-decision-number", value: "úohs-r0901/2026/vz" },
-      { type: "authority-decision-number", value: "úohs-90001/2026/163" },
+      { type: "authority-decision-number", value: "ÚOHS-R0901/2026/VZ" },
+      { type: "authority-decision-number", value: "ÚOHS-90001/2026/163" },
     ]);
   });
 
@@ -800,7 +800,7 @@ describe("ÚOHS JSON-LD", () => {
       "document",
       "document-1",
     ]);
-    const provenance = JSON.parse(
+    const provenance: { documents: Record<string, unknown> } = JSON.parse(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["provenance"] ??
         "null",
     );
@@ -912,7 +912,7 @@ describe("ÚOHS JSON-LD", () => {
     if (first.nextCursor === null) {
       return;
     }
-    const cursor = JSON.parse(first.nextCursor);
+    const cursor: { snapshotId: string } = JSON.parse(first.nextCursor);
     cursor.snapshotId = "not-cached";
     const second = (
       await czUohsAdapter.fetchPage(JSON.stringify(cursor), {}, undefined)

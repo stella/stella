@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The replacement CHECK is added NOT VALID in the same ALTER as the drop, so no stored decision row is scanned; ACCESS EXCLUSIVE covers the catalog change only, under 1s lock_timeout and 5s statement_timeout."
+}

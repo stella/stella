@@ -41,7 +41,7 @@ const suggestion: TimeEntrySuggestion = {
   ],
 };
 
-const renderRow = () => {
+const renderRow = (rowSuggestion: TimeEntrySuggestion = suggestion) => {
   const calls: string[] = [];
   const view = render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -58,7 +58,7 @@ const renderRow = () => {
             onEdit={() => {
               calls.push("edit");
             }}
-            suggestion={suggestion}
+            suggestion={rowSuggestion}
           />
         </ul>
       </FormattingProvider>
@@ -67,7 +67,7 @@ const renderRow = () => {
   const body = view.getByRole("button", {
     name: new RegExp(`^${messages.common.accept}`, "u"),
   });
-  return { body, calls };
+  return { body, calls, view };
 };
 
 test("the row answers its plain shortcuts once per press", () => {
@@ -95,4 +95,21 @@ test("command chords, modified deletes and held keys leave the row alone", () =>
   fireEvent.keyDown(body, { key: "Delete", repeat: true });
 
   expect(calls).toEqual([]);
+});
+
+test("a suggestion inside one minute shows two different times", () => {
+  const { view } = renderRow({
+    ...suggestion,
+    startedAt: "2026-11-11T08:19:06.121Z",
+    endedAt: "2026-11-11T08:19:38.253Z",
+  });
+
+  expect(view.container.textContent).toContain("08:19:06 – 08:19:38");
+  expect(view.container.textContent).not.toContain("08:19 – 08:19");
+});
+
+test("a suggestion across minutes keeps the short range", () => {
+  const { view } = renderRow();
+
+  expect(view.container.textContent).toContain("09:00 – 09:07");
 });

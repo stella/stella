@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-decisions-source-arrivals-idx",
   revision: 790,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

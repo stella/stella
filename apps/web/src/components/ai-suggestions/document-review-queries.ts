@@ -93,21 +93,23 @@ const fetchDocumentReviewParties = async (
     mode: DocumentReviewPartiesMode;
   },
   signal: AbortSignal,
-) =>
-  unwrapApiResponse(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].parties.post(
-        {
-          mode,
-          target: {
-            entityId: toSafeId<"entity">(entityId),
-            fileFieldId: toSafeId<"field">(fileFieldId),
-          },
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"].parties.post(
+      {
+        mode,
+        target: {
+          entityId: toSafeId<"entity">(entityId),
+          fileFieldId: toSafeId<"field">(fileFieldId),
         },
-        { fetch: { signal } },
-      ),
+      },
+      { fetch: { signal } },
+    ),
   );
+};
 
 export const documentReviewPartiesOptions = (
   target: DocumentReviewRunTarget,
@@ -154,16 +156,18 @@ export const documentReviewSourcesOptions = ({
   infiniteQueryOptions({
     queryKey: documentReviewSourceKeys.search(workspaceId, q),
     queryFn: async ({ pageParam, signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-reviews"].sources.get({
-          fetch: { signal },
-          query: {
-            q,
-            limit: DOCUMENT_REVIEW_SOURCE_LIMIT,
-            ...(pageParam ? { cursor: pageParam } : {}),
-          },
-        });
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+
+      const response = await workspaceApi["document-reviews"].sources.get({
+        fetch: { signal },
+        query: {
+          q,
+          limit: DOCUMENT_REVIEW_SOURCE_LIMIT,
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+      });
       return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
@@ -187,20 +191,22 @@ type FetchDocumentReviewRunsOptions = {
 export const fetchDocumentReviewRuns = async (
   { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
   { includeLatest = false, signal }: FetchDocumentReviewRunsOptions = {},
-) =>
-  unwrapApiResponse(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].runs.get({
-        query: {
-          entityId: toSafeId<"entity">(entityId),
-          fileFieldId: toSafeId<"field">(fileFieldId),
-          limit: DOCUMENT_REVIEW_RUN_HISTORY_LIMIT,
-          includeLatest,
-        },
-        ...(signal === undefined ? {} : { fetch: { signal } }),
-      }),
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"].runs.get({
+      query: {
+        entityId: toSafeId<"entity">(entityId),
+        fileFieldId: toSafeId<"field">(fileFieldId),
+        limit: DOCUMENT_REVIEW_RUN_HISTORY_LIMIT,
+        includeLatest,
+      },
+      ...(signal === undefined ? {} : { fetch: { signal } }),
+    }),
   );
+};
 
 export type DocumentReviewRunPage = Awaited<
   ReturnType<typeof fetchDocumentReviewRuns>
@@ -353,15 +359,18 @@ const DOCUMENT_REVIEW_RUN_DETAIL_FRESH_MS = 2000;
 const fetchDocumentReviewRun = async (
   { workspaceId, runId }: DocumentReviewRunRef,
   signal?: AbortSignal,
-) =>
-  unwrapApiResponse(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].runs({
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"]
+      .runs({
         runId: toSafeId<"documentReviewRun">(runId),
       })
       .get({ ...(signal === undefined ? {} : { fetch: { signal } }) }),
   );
+};
 
 export type DocumentReviewRunDetail = Awaited<
   ReturnType<typeof fetchDocumentReviewRun>
@@ -435,13 +444,16 @@ export const decideReviewFinding = async ({
   findingId,
   decision,
   flags,
-}: DecideReviewFindingArgs) =>
-  unwrapApiResponse(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].findings({ findingId })
+}: DecideReviewFindingArgs) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"]
+      .findings({ findingId })
       .patch({ decision, ...(flags !== undefined && { flags: [...flags] }) }),
   );
+};
 
 /** One recorded decision as the endpoint answers it. */
 export type DecidedReviewFinding = Awaited<

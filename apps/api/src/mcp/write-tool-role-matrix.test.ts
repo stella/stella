@@ -5,7 +5,6 @@ import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
@@ -47,6 +46,7 @@ import {
   selectableOperations,
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
@@ -214,7 +214,7 @@ const catalogEntrySchema = v.object({
 });
 const rawCatalog = v.parse(
   v.array(catalogEntrySchema),
-  readCapabilityCatalog(),
+  repositoryCapabilityCatalog,
 );
 
 /** Catalog endpoints the catalog attributes to a curated tool, by tool name. */
@@ -644,6 +644,15 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 // --- Surfaces -----------------------------------------------------------------
 
+// An enrolled member holds every self-serve enrolment, prerequisites included.
+const SELF_SERVE_ENROLMENTS = Object.entries(FEATURE_REGISTRY)
+  .filter(([, definition]) => definition.enrolment === "self-serve")
+  .map(([featureId]) => ({
+    featureId,
+    userId: "user_1",
+    organizationId: "org_1",
+  }));
+
 const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
   asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes: [],
@@ -655,7 +664,7 @@ const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
       userId: "user_1",
       organizationId: "org_1",
       decisions: new Map(
-        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
           featureId,
           decideFeatureAccess({
             registry: FEATURE_REGISTRY,
@@ -670,10 +679,7 @@ const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
                 [{ type: "organization" as const, organizationId: "org_1" }],
               ]),
             ),
-            enrolments:
-              definition.enrolment === "self-serve"
-                ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
-                : [],
+            enrolments: SELF_SERVE_ENROLMENTS,
           }),
         ]),
       ),
@@ -778,7 +784,7 @@ const bakedListings: readonly RegistryToolListing[] = registrySnapshot.map(
     inputSchema: entry.inputSchema,
   }),
 );
-const cliCatalogEntries = parseCapabilityCatalog(readCapabilityCatalog());
+const cliCatalogEntries = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (cliCatalogEntries === null) {
   throw new TypeError("Invalid capability catalog");
 }

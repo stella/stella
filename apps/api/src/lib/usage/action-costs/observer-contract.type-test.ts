@@ -21,6 +21,7 @@ const corpusContracts = {
   createIndex: true,
   deleteIndex: true,
   indexExists: true,
+  readIndexIncarnation: true,
   readPublishedSplitCounts: true,
   attestIndexConfig: true,
   ingestBatch: true,

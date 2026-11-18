@@ -421,7 +421,9 @@ const readFirstLineOffsets = async (page: Page) => {
         return walker.nextNode();
       };
       return [...document.querySelectorAll(bodyRowSelector)].map((row) => {
-        const number = row.querySelector('[data-slot="table-row-number"]');
+        const number = row.querySelector(
+          '[data-slot="checkbox-cell-label"], [data-slot="table-row-number"]',
+        );
         const numberText = number?.firstChild;
         if (!numberText) {
           throw new Error("row has no number");

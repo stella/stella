@@ -73,7 +73,6 @@ import { scrollEditorToPos } from "@/components/ai-suggestions/scroll-editor-to-
 import { withBlockTextHashes } from "@/components/ai-suggestions/snapshot-blocks";
 import {
   CHAT_SEND_KEPT,
-  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
 import type {
@@ -681,9 +680,7 @@ const TemplateStudioChatInner = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
-    sendQueuedMessageNow,
+    queue,
     stop,
     leave,
     isGenerating,
@@ -1414,8 +1411,7 @@ const TemplateStudioChatInner = ({
         notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(message.value);
-      return CHAT_SEND_SENT;
+      return await sendMessage(message.value);
     });
     if (Result.isError(sent)) {
       capturePromptSubmitError(sent.error, {
@@ -1471,11 +1467,7 @@ const TemplateStudioChatInner = ({
               onOpenPlaybook={handleOpenPlaybook}
               onContinuePausedTurn={continuePausedTurn}
               onResend={resendLatestMessage}
-              queuedMessageActions={{
-                remove: removeQueuedMessage,
-                sendNow: sendQueuedMessageNow,
-              }}
-              queuedMessages={queuedMessages}
+              queue={queue}
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
             />

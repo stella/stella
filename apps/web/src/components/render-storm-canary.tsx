@@ -1,5 +1,9 @@
 import { createContext, Profiler, use, useCallback, useState } from "react";
-import type { PropsWithChildren, ReactNode } from "react";
+import type {
+  ProfilerOnRenderCallback,
+  PropsWithChildren,
+  ReactNode,
+} from "react";
 
 import { emitDevCanaryError } from "@/lib/dev-canary";
 import type {
@@ -131,13 +135,11 @@ const countCommit = () => {
 const RenderStormProfiler = ({ children }: PropsWithChildren) => {
   const [{ monitor, onRender }] = useState(() => {
     const created = createRenderStormMonitor(emitRenderStormError);
-    return {
-      monitor: created,
-      onRender: (...commit: Parameters<RenderStormMonitor["onRender"]>) => {
-        countCommit();
-        created.onRender(...commit);
-      },
+    const handleRender: ProfilerOnRenderCallback = (...commit) => {
+      countCommit();
+      created.onCommit({ phase: commit[1], commitTime: commit[5] });
     };
+    return { monitor: created, onRender: handleRender };
   });
 
   return (

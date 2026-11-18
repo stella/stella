@@ -324,7 +324,6 @@ describe("network baseline workflows", () => {
     if (!isRecord(parsed) || !isRecord(parsed["on"])) {
       expect.unreachable("workflow triggers");
     }
-    expect(parsed["on"]["pull_request_target"]).toBeUndefined();
     expect(parsed["on"]["pull_request"]).toBeUndefined();
     expect(parsed["on"]["push"]).toBeUndefined();
     const jobs = readWorkflowJobs("network-baseline-record.yml");

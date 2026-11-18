@@ -5,6 +5,7 @@ const INTRODUCED_BY = "20261115220000_corpus_projection_offline_fault";
 export default {
   id: "indexes-corpus-projection-offline-start",
   revision: 1470,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

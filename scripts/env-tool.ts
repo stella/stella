@@ -216,15 +216,12 @@ const BUN_ENV_READER =
   'const names=JSON.parse(process.argv[1]??"[]");process.stdout.write(JSON.stringify(Object.fromEntries(names.map(name=>[name,process.env[name]??""]))));';
 const BUN_ENV_LOAD_TIMEOUT_MS = 10_000;
 
-const definedEnvironment = (environment: NodeJS.ProcessEnv) => {
-  const defined: Record<string, string> = {};
-  for (const [name, value] of Object.entries(environment)) {
-    if (value !== undefined) {
-      defined[name] = value;
-    }
-  }
-  return defined;
-};
+const definedEnvironment = (environment: NodeJS.ProcessEnv) =>
+  Object.fromEntries(
+    Object.entries(environment).flatMap(([name, value]) =>
+      value === undefined ? [] : [[name, value] as const],
+    ),
+  );
 
 export const parseEnvLayers = (
   texts: string[],
@@ -504,17 +501,18 @@ export const renderWebBuildContract = ({
     return panic("Cannot render an incomplete web build contract.");
   }
   const { exported } = parseWebBuildContract(dockerfile);
-  const variables: Record<string, string> = {};
-  for (const name of clientKeys.toSorted()) {
-    const value = exported.get(name);
-    const reference = value?.match(/^\$\{([A-Z][A-Z0-9_]*)\}$/u)?.at(1);
-    if (reference === undefined) {
-      return panic(
-        `${WEB_DOCKERFILE_LABEL}: ${name} must map directly to one build argument before it can be published in the web build contract.`,
-      );
-    }
-    variables[name] = reference;
-  }
+  const variables = Object.fromEntries(
+    clientKeys.toSorted().map((name) => {
+      const value = exported.get(name);
+      const reference = value?.match(/^\$\{([A-Z][A-Z0-9_]*)\}$/u)?.at(1);
+      if (reference === undefined) {
+        return panic(
+          `${WEB_DOCKERFILE_LABEL}: ${name} must map directly to one build argument before it can be published in the web build contract.`,
+        );
+      }
+      return [name, reference] as const;
+    }),
+  );
   return `${JSON.stringify({ version: 1, variables }, null, 2)}\n`;
 };
 
@@ -931,14 +929,16 @@ type DoctorValidationResult =
 const isEnvApp = (value: string): value is EnvApp =>
   Object.values(ENV_APP).some((app) => app === value);
 
-export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput => {
-  const normalized: DoctorInput = {};
-  for (const [name, value] of Object.entries(input)) {
-    normalized[name] =
-      value === "" && !EMPTY_VALUE_VARIABLES.has(name) ? undefined : value;
-  }
-  return normalized;
-};
+export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput =>
+  Object.fromEntries(
+    Object.entries(input).map(
+      ([name, value]) =>
+        [
+          name,
+          value === "" && !EMPTY_VALUE_VARIABLES.has(name) ? undefined : value,
+        ] as const,
+    ),
+  );
 
 const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   // Mirrors apps/api/src/env-base.ts: placeholders go first, so the doctor

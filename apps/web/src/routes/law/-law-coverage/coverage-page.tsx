@@ -2,7 +2,6 @@ import {
   type PropsWithChildren,
   type ReactNode,
   type Ref,
-  useCallback,
   useId,
   useState,
 } from "react";
@@ -170,7 +169,7 @@ export const CaseLawCoveragePage = ({
   const [collapsed, setCollapsed] = useState<ReadonlySet<CaseLawJurisdiction>>(
     new Set(),
   );
-  const expandCountry = useCallback((country: CaseLawJurisdiction) => {
+  const expandCountry = (country: CaseLawJurisdiction) => {
     setCollapsed((previous) => {
       if (!previous.has(country)) {
         return previous;
@@ -179,7 +178,7 @@ export const CaseLawCoveragePage = ({
       next.delete(country);
       return next;
     });
-  }, []);
+  };
 
   // Not a discriminated union: the endpoint answers either the figures or a
   // message saying it cannot state them.
@@ -626,15 +625,12 @@ const CountrySection = ({
   // finds no section yet: the section a link named brings itself into view
   // when it mounts. Stable per target, so a background refetch that
   // re-renders the page does not pull the reader back.
-  const scrollIntoViewOnArrival = useCallback(
-    (node: HTMLElement | null) => {
-      if (isTarget && node !== null) {
-        onExpand(country.country);
-        node.scrollIntoView({ block: "start" });
-      }
-    },
-    [isTarget, onExpand, country.country],
-  );
+  const scrollIntoViewOnArrival = (node: HTMLElement | null) => {
+    if (isTarget && node !== null) {
+      onExpand(country.country);
+      node.scrollIntoView({ block: "start" });
+    }
+  };
 
   return (
     <CountryCard
@@ -882,6 +878,7 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
             <Delta value={source.addedLastWeek} />
           </TableCell>
           <TableCell className={"whitespace-normal"}>
+            <SourcePublisherCensus census={source.publisherCensus} />
             <SourceCompleteness
               completeness={source.completeness}
               knownGaps={source.knownGaps}
@@ -905,6 +902,50 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
         ))}
       </TableBody>
     </>
+  );
+};
+
+const SourcePublisherCensus = ({
+  census: { type, measurement },
+}: {
+  census: CaseLawCoverageSource["publisherCensus"];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const labels = {
+    unknown: "caseLaw.coverage.notMeasuredYet",
+    "none-recorded": "caseLaw.coverage.censusComplete",
+    known: "caseLaw.coverage.censusIncomplete",
+  } as const;
+  const tones = {
+    unknown: "neutral",
+    "none-recorded": "success",
+    known: "warning",
+  } as const;
+  return (
+    <div className="mb-1 flex flex-col gap-0.5 wrap-anywhere">
+      <ReviewStatusBadge
+        tone={tones[type]}
+        className="max-w-full whitespace-normal"
+      >
+        {t(labels[type])}
+      </ReviewStatusBadge>
+      {measurement.publisher !== null && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {t("caseLaw.coverage.censusComparison", {
+            stored: format.number(measurement.stored),
+            publisher: format.number(measurement.publisher),
+            withText: format.number(measurement.withText),
+          })}
+          <span className="block">
+            {t("caseLaw.coverage.censusSliceMemberships")}
+          </span>
+        </span>
+      )}
+      {measurement.observedAt !== null && (
+        <ObservedOn asOf={measurement.observedAt} />
+      )}
+    </div>
   );
 };
 

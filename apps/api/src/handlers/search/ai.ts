@@ -41,7 +41,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
-import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -58,6 +57,7 @@ import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { searchFilterFields } from "@/api/lib/search/filter-schema";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import {
@@ -196,13 +196,10 @@ export const summarizeSearchBodySchema = v.object({
     ),
   ),
   locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
-  workspaceIds: v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(64)),
-  types: v.pipe(
-    v.array(v.picklist(GLOBAL_SEARCH_RESULT_TYPES)),
-    v.maxLength(GLOBAL_SEARCH_RESULT_TYPES.length),
-  ),
-  editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
-  mimeTypes: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  workspaceIds: searchFilterFields.workspaceIds,
+  types: searchFilterFields.types,
+  editedByUserIds: searchFilterFields.editedByUserIds,
+  mimeTypes: searchFilterFields.mimeTypes,
   updatedFrom: v.optional(isoDateTime),
   updatedTo: v.optional(isoDateTime),
   limit: v.optional(

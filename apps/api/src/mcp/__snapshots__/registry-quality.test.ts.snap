@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -412,7 +412,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -4084,7 +4084,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -4096,7 +4096,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Tax identifier"
+          "description": "Business tax number"
         },
         "vat_id": {
           "anyOf": [
@@ -4108,7 +4108,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "VAT identifier"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -7797,7 +7797,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -8019,7 +8019,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -11691,7 +11691,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Registration number"
+          "description": "Business register number"
         },
         "tax_id": {
           "anyOf": [
@@ -11703,7 +11703,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Tax identifier"
+          "description": "Business tax number"
         },
         "vat_id": {
           "anyOf": [
@@ -11715,7 +11715,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "VAT identifier"
+          "description": "VAT number"
         },
         "vat_payer": {
           "anyOf": [
@@ -16140,7 +16140,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16362,7 +16362,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -18511,7 +18511,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings; a phrasing out of time shows time_budget and nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \\"running\\": not a failure. After retryAfterMs, repeat the call with continuation_token; \\"partial\\" is never the full answer. Reader: \`url\`; publisher: \`source_url\`.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -18733,7 +18733,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Case-law availability by jurisdiction/source: held decision-year ranges, last sync, awaiting-text counts, recorded gaps, courts. Check before concluding a decision is missing. Listed countries not yet admitted and without coverage return status unavailable with reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -61,6 +62,56 @@ export const chatQueueReadScalingScenario = {
         transactionRoundTrips: counter.transactions,
         responseBytes: Buffer.byteLength(JSON.stringify(response)),
         rows: response.items.length,
+      };
+    });
+  },
+};
+
+type QueuedChatMessageFixture = ChatQueueFixture & {
+  /** The queued message read whole. */
+  messageId: SafeId<"chatMessage">;
+};
+
+/**
+ * One queued message whole: the chat by key and the message by key, the same
+ * work however many other messages wait in the member's chats.
+ */
+export const chatQueuedMessageReadScalingScenario = {
+  name: "chat queued message read",
+  definition: readQueuedChatMessage,
+  measure: async ({
+    database,
+    messageId,
+    organizationId,
+    userId,
+    threadId,
+  }: QueuedChatMessageFixture) => {
+    const safeDb: SafeDb = async (work) =>
+      await Result.tryPromise(async () => await database.transaction(work));
+    return await runWithMeasuredQueryCounter(async (counter) => {
+      const response = await readQueuedChatMessage.handler(
+        asTestRaw<Parameters<typeof readQueuedChatMessage.handler>[0]>({
+          getWorkspaceAccess: () =>
+            panic("A personal chat's queued message reads no matter"),
+          params: { messageId, threadId },
+          request: new Request(
+            `https://example.test/v1/chat/threads/${threadId}/queue/${messageId}`,
+          ),
+          route: "/v1/chat/threads/:threadId/queue/:messageId",
+          safeDb,
+          session: { activeOrganizationId: organizationId },
+          user: { id: userId },
+          memberRole: sessionMemberRole("member"),
+        }),
+      );
+      if (response instanceof HttpStatusResponse || !("message" in response)) {
+        return panic("Queued message scaling requires a queued message");
+      }
+      return {
+        statements: counter.count,
+        transactionRoundTrips: counter.transactions,
+        responseBytes: Buffer.byteLength(JSON.stringify(response)),
+        rows: 1,
       };
     });
   },

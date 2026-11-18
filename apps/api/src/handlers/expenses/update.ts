@@ -205,15 +205,14 @@ const updateExpense = createSafeHandler(
 const buildExpenseDiff = (
   before: Record<string, unknown>,
   updates: Record<string, unknown>,
-): Record<string, { old: unknown; new: unknown }> => {
-  const diff: Record<string, { old: unknown; new: unknown }> = {};
-  for (const [key, value] of Object.entries(updates)) {
-    if (key === "updatedAt") {
-      continue;
-    }
-    diff[key] = { old: before[key] ?? null, new: value };
-  }
-  return diff;
-};
+): Record<string, { old: unknown; new: unknown }> =>
+  Object.fromEntries(
+    Object.entries(updates)
+      .filter(([key]) => key !== "updatedAt")
+      .map(
+        ([key, value]) =>
+          [key, { old: before[key] ?? null, new: value }] as const,
+      ),
+  );
 
 export default updateExpense;

@@ -85,6 +85,7 @@
     "documentClose": "Sulge",
     "approvalBrowserNote": "Lubamisel töötab see teie arvuti brauseris, stella laienduse kaudu.",
     "grantFailed": "Luba ei õnnestunud salvestada. Proovige uuesti.",
+    "limitReminderFailed": "Muudatust ei õnnestunud salvestada. Proovige uuesti.",
     "elsewhereBrowser": "See samm töötab teie arvuti brauseris, stella laienduse kaudu. Lõpetamiseks avage see vestlus seal stellas.",
     "elsewhereSecret": "See samm vajab võtit. Turvalisuse huvides lisatakse võtmed stellas arvutis, mitte rakenduses.",
     "elsewhereConnector": "See samm ühendab rakenduse. Turvalisuse huvides ühendatakse rakendused stellas arvutis, mitte rakenduses.",
@@ -103,6 +104,8 @@
     "pickFailed": "Failivalijat ei õnnestunud avada. Proovi uuesti.",
     "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
     "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
+    "sendLocalRunNotAnonymizable": "See vestlus on anonüümitud ja sinu arvutis töötav programmeerimisagent loeb sinu dokumente sellisena, nagu need on, seega talle midagi ei saadetud.",
+    "sendWithoutAnonymization": "Saada anonüümimiseta",
     "pickTitle": "Vali vestlus",
     "pickDescription": "Vali loendist lõim või alusta uut nupuga +.",
     "runBanner": {
@@ -247,7 +250,15 @@
         "showMore": "Näita rohkem"
       },
       "sessionNotResumed": "Sinu arvutis töötav programmeerimisagent ei saanud pooleli jäänud kohast edasi minna, seega jätkas ta selle vestluse sõnumite põhjal.",
-      "steered": "Saadetud agendi töö ajal"
+      "steered": "Saadetud agendi töö ajal",
+      "ranOnModel": "Töötas mudelil {model}",
+      "desktopSettingsSteps": "Ava oma arvutis stella desktopis Seaded › Üldine › AI-tellimused.",
+      "errorLimitResetsAt": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Uuesti saad proovida alates {time}.",
+      "limitReminderNotify": "Teavita mind, kui limiit lähtestub",
+      "limitReminderScheduled": "Teavitame sind alates {time}.",
+      "limitResumeContinue": "Jätka automaatselt, kui limiit lähtestub",
+      "limitResumeScheduled": "Jätkub automaatselt alates {time}.",
+      "limitReminderCancel": "Tühista"
     },
     "processSummary": {
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
@@ -293,7 +304,67 @@
       "noRun": "Agent ei tööta praegu sinu arvutis.",
       "cannotSteer": "See agent ei võta töö ajal sõnumeid vastu.",
       "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
-      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta."
+      "notTaken": "Agent ei saanud sinu sõnumit praegu vastu võtta.",
+      "queuedMessageChanged": "Sõnum on vahepeal muutunud või pole enam järjekorras, seega agent seda ei saanud."
+    },
+    "queue": {
+      "notice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
+      "prompt": "Saada, kui agent on lõpetanud",
+      "sendNow": "Saada kohe",
+      "remove": "Tühista järjekorras sõnum",
+      "edit": "Muuda",
+      "moveUp": "Liiguta üles",
+      "moveDown": "Liiguta alla",
+      "cancel": "Tühista",
+      "attachments": "{count, plural, one {# manus} other {# manust}}",
+      "actions": "Järjekorras oleva sõnumi toimingud",
+      "notSent": "Saatmine ebaõnnestus",
+      "pause": "Peata järjekord",
+      "resume": "Jätka järjekorda",
+      "replaceTitle": "Kas saata see sõnum kohe?",
+      "replaceDescription": "See vestlus ootab teie vastust. Kui saadate selle sõnumi kohe, tühistatakse küsimus või kinnitus, mida see ootab.",
+      "noLongerQueued": "Seda sõnumit pole enam järjekorras.",
+      "held": {
+        "turn-failed": "Järjekord on peatatud: viimane vastus ebaõnnestus. Järgmise sõnumi saatmiseks jätkake.",
+        "turn-interrupted": "Järjekord on peatatud: viimane vastus katkes. Järgmise sõnumi saatmiseks jätkake.",
+        "member": "Järjekord on peatatud.",
+        "send-refused": "Järjekord on peatatud: esimest sõnumit ei õnnestunud saata. Muutke või eemaldage see ja seejärel jätkake.",
+        "usage-limit": "Järjekord on peatatud: kasutuslimiit on täis. Jätkake, kui see lähtestub.",
+        "computer-away": "Ootame teie arvutit: järjekorras olevad sõnumid saadetakse, kui see ühendub."
+      }
+    },
+    "edit": {
+      "action": "Muuda",
+      "title": "Muuda sõnumit",
+      "input": "Muudetud sõnum",
+      "notice": "Saatmine asendab selle sõnumi ja kõik sellele järgnenud sõnumid.",
+      "cancel": "Tühista",
+      "refused": "Sõnumit ei õnnestunud muuta. Vestlus näitab nüüd salvestatud seisu; proovige uuesti, kui ükski vastus enam ei käi.",
+      "refusedHistoryChanged": "Vestlus muutus muudatuse saatmise ajal. See näitab nüüd salvestatud seisu; saatke muudatus uuesti.",
+      "refusedTargetMissing": "Seda sõnumit pole vestluses enam, seega ei saa seda muuta.",
+      "localFiles": {
+        "computer": {
+          "failed": "Tagasivõtmine ei jõudnud teie arvutis lõpule. Mõni fail võib olla juba muutunud, seega kontrollige vestluse kausta.",
+          "folderBusy": "Seda kausta kasutab teie arvutis praegu üks käivitus. Proovige uuesti, kui see on lõppenud.",
+          "noCheckpoint": "Teie arvutis pole selle sammu-eelsetest failidest salvestatud koopiat, seega midagi tagasi ei võetud.",
+          "updateForEarlier": "Uuendage stella desktopi, et varasemate sõnumite muudatusi tagasi võtta."
+        },
+        "conversationRestarts": "Agent alustab uuesti selle vestluse tekstist, sest sellele sõnumile eelnenud vastus ei lõppenud.",
+        "expired": "Teie arvuti ei vastanud õigel ajal. Proovige uuesti.",
+        "option": "Võta tagasi ka sellest sõnumist alates tehtud failimuudatused",
+        "optionHint": "See võtab tagasi ka muudatused, mille tegite kaustas ise.",
+        "pending": "Teie arvutis võetakse failimuudatusi tagasi",
+        "refused": {
+          "alreadyUndone": "Need failimuudatused on juba tagasi võetud.",
+          "desktopOffline": "Teie arvuti on võrguühenduseta. Avage stella töölauarakendus ja proovige uuesti.",
+          "desktopUpdateRequired": "Teie arvutis olev stella töölauarakendus on muudatuste tagasivõtmiseks liiga vana. Uuendage seda ja proovige uuesti.",
+          "folderShared": "Pärast seda sõnumit on selles kaustas töötanud teine vestlus.",
+          "noSavedCopy": "Teie arvuti ei hoidnud alles selle sõnumi-eelse kausta koopiat: kaust oli salvestamiseks liiga suur või aeglane või asendasid selle uuemad koopiad.",
+          "severalFolders": "Hilisemad sõnumid töötasid teises arvutis või teises kaustas.",
+          "threadBusy": "See vestlus alles töötab. Proovige uuesti, kui see on lõppenud."
+        },
+        "restored": "Failimuudatused on tagasi võetud"
+      }
     }
   },
   "tasks": {

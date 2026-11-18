@@ -129,6 +129,62 @@ const requestBytes = (plan: SystemOneAnswerPlan): number =>
   ).byteLength;
 
 describe("planSystemOneAnswers", () => {
+  test.each(["__proto__", "constructor", "toString", "ordinary"])(
+    "source criteria serialize their own %s identifier",
+    (id) => {
+      const plan = planSystemOneAnswers({
+        document,
+        sources: [{ id, text: "The contract is a purchase agreement." }],
+        language: "en",
+        questions: [contractType],
+      });
+      const where = plan.questions["col-type:where"];
+      expect(where?.type).toBe("choice");
+      if (where?.type !== "choice") {
+        throw new Error("Expected a source choice question");
+      }
+      expect(Object.getPrototypeOf(where.criteria)).toBe(Object.prototype);
+      expect(Object.keys(where.criteria)).toEqual([id, "__none"]);
+      expect(Object.getOwnPropertyDescriptor(where.criteria, id)).toEqual({
+        value: "The contract is a purchase agreement.",
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+      const serialized = serializeSystemOneRequest({
+        state: plan.state,
+        model: DEFAULT_SYSTEM_ONE_MODEL,
+        questions: plan.questions,
+      });
+      expect(serialized).toContain(JSON.stringify(where.criteria));
+      expect(plan.unplanned).toEqual([]);
+    },
+  );
+
+  test("a repeated question leaves the first accepted plan intact", () => {
+    const first = selectQuestion("same", "single-select", 1, () => "First");
+    const second = selectQuestion("same", "single-select", 1, () => "Second");
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "en",
+      questions: [first, second],
+    });
+    expect(plan.unplanned).toEqual(["same"]);
+    expect([...plan.plans.keys()]).toEqual(["same"]);
+    expect(Object.keys(plan.questions)).toEqual(["same:where", "same:value"]);
+    const value = plan.questions["same:value"];
+    expect(value?.type).toBe("choice");
+    if (value?.type !== "choice") {
+      throw new Error("Expected the first accepted choice question");
+    }
+    expect(value.criteria).toEqual({
+      o1: "First",
+      __not_stated:
+        "The sources do not state this, or none of the listed options applies.",
+    });
+  });
+
   test("text and money columns are not System One questions", () => {
     expect(isSystemOneAnswerable({ version: 1, type: "text" })).toBe(false);
     expect(
@@ -411,6 +467,38 @@ describe("decodeSystemOneAnswers", () => {
       sourceId: "p1",
     });
   });
+
+  test.each(["toString", "ordinary"])(
+    "a selected %s source survives the wire and answer decoding",
+    async (id) => {
+      const plan = planSystemOneAnswers({
+        document,
+        sources: [{ id, text: "The contract is a purchase agreement." }],
+        language: "en",
+        questions: [contractType],
+      });
+      const decisions = await decisionsFor(plan, {
+        "col-type:value": choiceAnswer("o1", {
+          o1: 0.93,
+          o2: 0.04,
+          __not_stated: 0.03,
+        }),
+        "col-type:where": choiceAnswer(id, { [id]: 0.95, __none: 0.05 }),
+      });
+      expect(
+        decodeSystemOneAnswers({
+          plan,
+          questions: [contractType],
+          decisions,
+        }).get("col-type"),
+      ).toMatchObject({
+        state: "answered",
+        answer: "Purchase agreement",
+        sourceId: id,
+        source: "decision-model",
+      });
+    },
+  );
 
   test("a single-select answer maps back to the option value and the chosen source", async () => {
     const plan = planSystemOneAnswers({

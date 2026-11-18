@@ -44,6 +44,10 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CENSUS_VERDICTS,
+  createPublisherCensusSchema,
+} from "@/api/lib/case-law/completeness-census-contract";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import {
   DECISION_READ_ABSENCE_STATUSES,
@@ -75,6 +79,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
   chatEntityRef,
@@ -1267,6 +1272,19 @@ const invoiceEntityReferenceProjection = () =>
  * line item carries its own matter for reference mediation; list mode returns
  * no line items.
  */
+/**
+ * How an invoice stands: only payments make it paid; credit notes covering it
+ * alone make it credited; payments beyond what credit leaves owe a refund.
+ */
+const INVOICE_SETTLEMENT_PROJECTION = v.variant("kind", [
+  projectionBranch(v.strictObject({ kind: v.literal("open") })),
+  projectionBranch(v.strictObject({ kind: v.literal("paid") })),
+  projectionBranch(v.strictObject({ kind: v.literal("credited") })),
+  projectionBranch(
+    v.strictObject({ kind: v.literal("overpaid"), refundAmount: v.number() }),
+  ),
+]);
+
 /** list_invoices, list branch: invoice cards, no line items. */
 export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
   invoices: v.array(
@@ -1285,6 +1303,7 @@ export const LIST_INVOICES_LIST_PROJECTION = v.strictObject({
       totalAmount: moneySchema,
       paidAmount: moneySchema,
       outstandingAmount: moneySchema,
+      settlement: INVOICE_SETTLEMENT_PROJECTION,
     }),
   ),
   // Opaque `[createdAt, id]` cursor, not UUID-formatted.
@@ -1313,6 +1332,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
     totalAmount: moneySchema,
     paidAmount: moneySchema,
     outstandingAmount: moneySchema,
+    settlement: INVOICE_SETTLEMENT_PROJECTION,
     notes: v.nullable(contentText()),
     sellerProfileId: v.nullable(passthroughId()),
     buyerName: v.nullable(v.string()),
@@ -1468,6 +1488,12 @@ const decisionIdentifiersProjection = v.optional(
   ),
 );
 
+const publisherCensusProjection = v.union(
+  createPublisherCensusSchema((maxBytes) =>
+    v.pipe(v.string(), v.maxLength(maxBytes)),
+  ).options.map((option) => projectionBranch(option)),
+);
+
 /** Coverage keeps grouped court rows explicit when the public data has no names. */
 const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
@@ -1481,6 +1507,7 @@ const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
       v.strictObject({
         country: v.string(),
         availability: v.picklist(["searchable", "in-preparation"]),
+        censusVerdict: v.picklist(CENSUS_VERDICTS),
         decisions: v.number(),
         decisionYearFrom: v.nullable(v.number()),
         decisionYearTo: v.nullable(v.number()),
@@ -1503,6 +1530,7 @@ const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
             decisionYearFrom: v.nullable(v.number()),
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
+            publisherCensus: publisherCensusProjection,
             knownGaps: v.variant("type", [
               projectionBranch(
                 v.strictObject({
@@ -1703,6 +1731,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  appealReviews: v.optional(DECISION_REVIEWS_PROJECTION),
   extractionWarnings: extractionWarningsSchema,
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only

@@ -56,8 +56,12 @@ COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.c
 COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
-RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
+# The capability runtime derives its catalog from the handler graph, which
+# embeds the MCP App bundles built above and validates the API environment
+# when it loads. The committed example environment supplies static
+# validation defaults; no runtime configuration enters the derived catalog.
+RUN NODE_ENV=test bun --env-file=apps/api/.env.example apps/api/scripts/generate-capability-runtime.ts
 # The server and collab are bundles run by the image's Bun, not --compile
 # binaries: each compiled binary embeds another full copy of the runtime.
 # Every bundle sets --public-path to the directory it lands in on the runner.
@@ -144,11 +148,12 @@ RUN bun build \
 #     ["bun", "/app/decision-analysis-candidates.js", "--country", "CZE"]
 #     ["bun", "/app/decision-analysis-input.js", "--ids-file", "/tmp/ids.txt"]
 #     ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
-# - repair-publisher-absent-text.js, repair-cz-ns-court.js: one-shot repairs
-#   of rows an earlier write path produced; both report without writing until
-#   `--apply`.
+# - repair-publisher-absent-text.js, repair-cz-ns-court.js,
+#   repair-court-identity.js: one-shot repairs of rows an earlier write path
+#   produced; each reports without writing until `--apply`.
 #     ["bun", "/app/repair-publisher-absent-text.js", "--apply"]
 #     ["bun", "/app/repair-cz-ns-court.js", "--apply"]
+#     ["bun", "/app/repair-court-identity.js", "--apply", "--source", "cz-regional"]
 # - classify-citations.js: citation polarity pass. `--recheck` re-reads a
 #   language's labelled citations against the rule tier and tightens a label
 #   only towards a more severe reading, which is the pass to run after new
@@ -159,10 +164,12 @@ RUN bun build \
 #   `--apply`.
 #     ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
 #      "--results", "/tmp/results.jsonl", "--apply"]
-# - corpus-generation.js: corpus generation registry: status, register, and
-#   the serving flip, which checks the target's indexes on the search endpoint
-#   first; reports without writing until `--apply`.
+# - corpus-generation.js: corpus generation registry: status, register, the
+#   serving flip, which checks the target's indexes on the search endpoint
+#   first, and retire, which deletes a retired generation's engine indexes
+#   and projection history; reports without writing until `--apply`.
 #     ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+#     ["bun", "/app/corpus-generation.js", "retire", "--family", "case_law", "--generation", "<generation>"]
 # - corpus-snippet-compare.js: read-only snippet comparison over the serving
 #   corpus index. It reads its query set from a JSON file, so the committed
 #   sample ships next to the bundle.
@@ -231,10 +238,12 @@ RUN bun build \
     apps/api/src/scripts/decision-analysis-save.ts \
     apps/api/src/scripts/repair-publisher-absent-text.ts \
     apps/api/src/scripts/repair-cz-ns-court.ts \
+    apps/api/src/scripts/repair-court-identity.ts \
     apps/api/scripts/classify-citations.ts \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts \
     apps/api/src/scripts/corpus-generation.ts \
     apps/api/src/scripts/corpus-snippet-compare.ts \
+    apps/api/src/scripts/drain-pending-online-units.ts \
     apps/api/src/scripts/image-smoke-model-ingress.ts \
     apps/api/src/scripts/image-smoke.ts
 # Dedicated durable document-processing worker. Deploy the same image with

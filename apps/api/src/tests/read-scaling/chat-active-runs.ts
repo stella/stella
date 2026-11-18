@@ -68,6 +68,8 @@ const statePayload = (
         interactionToolCallId: "call-1",
         interactionType,
       };
+    case "handed-over":
+      return { assistantMessageId, leaseExpiresAt: lease };
     case "completed":
       return { assistantMessageId, settledAt };
     case "failed":
