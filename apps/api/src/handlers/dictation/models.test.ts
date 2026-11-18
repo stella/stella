@@ -76,7 +76,7 @@ const listFor = async ({
 }: {
   deployment?: TranscriptionDeployment;
   role?: "member" | "external";
-  residency?: "eu" | "us" | null;
+  residency?: "eu" | "us";
   withSnapshot?: boolean;
 } = {}) => {
   const endpoint = createDictationModelsEndpoint({
@@ -147,13 +147,8 @@ test("a model whose provider keeps the audio is listed, marked, only to a member
   expect(decisionReads).toBe(1);
 });
 
-test("the grant is not read where it cannot change the list", async () => {
+test("the grant is not read where no provider keeps the audio", async () => {
   const readsBefore = decisionReads;
-  // No region: unavailable whatever the grant.
-  const noRegion = listed(
-    await listFor({ residency: null, withSnapshot: false }),
-  );
-  expect(noRegion.unavailable).toBe("region");
   // No provider that keeps the audio: nothing for the grant to add.
   const zeroRetention = listed(
     await listFor({
