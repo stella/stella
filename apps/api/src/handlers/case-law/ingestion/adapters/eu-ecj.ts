@@ -115,6 +115,7 @@ import type {
   SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
+  SyncPage,
   UnreadListedItem,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -3407,15 +3408,19 @@ const ecjUnreadVariant = (
   };
 };
 
-type EcjCrawledVariants = {
-  decisions: IngestionResult[];
-  unreadItems: UnreadListedItem[];
-  itemBuildFailures: number;
-  /** The last variant settled, in key order; `undefined` when none was. */
-  settledThrough: string | undefined;
-  /** Whether every variant handed in was settled. */
-  complete: boolean;
-};
+type EcjCrawledVariants =
+  | {
+      type: "settled";
+      decisions: IngestionResult[];
+      unreadItems: UnreadListedItem[];
+      itemBuildFailures: number;
+      /** The last variant settled, in key order; `undefined` when none was. */
+      settledThrough: string | undefined;
+      /** Whether every variant handed in was settled. */
+      complete: boolean;
+    }
+  /** A failure no variant carries, which stops the page where it is seen. */
+  | { type: "failed"; error: unknown };
 
 type CrawlEcjVariantsOptions = {
   variants: readonly EcjPendingVariant[];
@@ -3446,6 +3451,7 @@ const crawlEcjVariants = async ({
     complete: boolean,
     unreadItems: UnreadListedItem[] = [],
   ): EcjCrawledVariants => ({
+    type: "settled",
     decisions,
     unreadItems,
     itemBuildFailures,
@@ -3475,7 +3481,7 @@ const crawlEcjVariants = async ({
       }
       const unread = ecjUnreadVariant(variant, attempted.error);
       if (unread === undefined) {
-        throw attempted.error;
+        return { type: "failed", error: attempted.error };
       }
       settledThrough = variant.key;
       return crawled(false, [unread]);
@@ -3511,6 +3517,90 @@ const ECJ_PAGE_TIMEOUT = 300_000;
  * short keeps the variants it settled.
  */
 const ECJ_PAGE_VARIANTS = 24;
+
+type CrawlEcjPageOptions = {
+  position: EcjCrawlPosition;
+  /** The cursor as stored, which a failure names. */
+  cursor: string | null;
+  signal: AbortSignal;
+};
+
+/**
+ * One crawl page: the date's listing, then up to {@link ECJ_PAGE_VARIANTS}
+ * of its variants not yet settled, and the position after them.
+ */
+const crawlEcjPage = async ({
+  position,
+  cursor,
+  signal,
+}: CrawlEcjPageOptions): Promise<
+  { type: "page"; page: SyncPage } | { type: "failed"; error: unknown }
+> => {
+  const { date } = position;
+  const bindings = await queryDecisions({
+    dateFrom: date,
+    dateTo: date,
+    // A live crawl fails fast and moves on; only the bulk listings buy
+    // headroom, because they have no cursor to come back to.
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    truncation: SPARQL_TRUNCATION.WARN,
+    signal,
+  });
+
+  const pending = pendingEcjVariants(bindings, position.after);
+  const variants = pending.slice(0, ECJ_PAGE_VARIANTS);
+  const crawled = await crawlEcjVariants({ variants, signal });
+  if (crawled.type === "failed") {
+    return crawled;
+  }
+  const page = {
+    decisions: crawled.decisions,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+    itemBuildFailures: {
+      type: "item_build_failed",
+      count: crawled.itemBuildFailures,
+    },
+    ...(crawled.unreadItems.length === 0
+      ? {}
+      : { unreadItems: crawled.unreadItems }),
+  } as const;
+
+  if (!crawled.complete || variants.length < pending.length) {
+    if (crawled.settledThrough === undefined) {
+      // Nothing on this page settled, so there is no progress to keep and the
+      // page fails where it stopped.
+      return {
+        type: "failed",
+        error: new AdapterFetchError({
+          message: `CJEU page budget ran out before a variant of ${date} settled`,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor,
+          cause: signal.reason,
+        }),
+      };
+    }
+    return {
+      type: "page",
+      page: {
+        ...page,
+        nextCursor: encodeEcjCrawlCursor({
+          date,
+          after: crawled.settledThrough,
+        }),
+      },
+    };
+  }
+
+  // The date is settled: move to the next one, and park at today when
+  // exhausted. Never null, which would mean the recent window health checks
+  // use rather than a full historical re-scan.
+  const nextDate = addDays(date, 1);
+  const today = toIsoDate(new Date());
+  return {
+    type: "page",
+    page: { ...page, nextCursor: nextDate <= today ? nextDate : today },
+  };
+};
 
 /**
  * Every payload the repository and the court's own site serve for one language
@@ -3686,95 +3776,47 @@ export const euEcjAdapter = defineSourceAdapter({
   },
 
   async fetchPage(cursor, _config, signal) {
-    return await Result.tryPromise({
-      try: async () => {
-        const abortSignal = signal ?? AbortSignal.timeout(ECJ_PAGE_TIMEOUT);
-
-        // A null cursor starts 7 days back (used by health checks). Historical
-        // backfill is triggered by setting the stored cursor to "1952-01-01".
-        const position =
-          cursor === null
-            ? { date: addDays(toIsoDate(new Date()), -7), after: undefined }
-            : parseEcjCrawlCursor(cursor);
-        if (position === undefined) {
-          throw new AdapterFetchError({
-            message: `Invalid CJEU crawl cursor: ${cursor ?? ""}`,
-            adapterKey: ADAPTER_KEYS.EU_ECJ,
-            cursor,
-          });
-        }
-        const { date } = position;
-
-        const bindings = await queryDecisions({
-          dateFrom: date,
-          dateTo: date,
-          // A live crawl fails fast and moves on; only the bulk listings buy
-          // headroom, because they have no cursor to come back to.
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-          truncation: SPARQL_TRUNCATION.WARN,
-          signal: abortSignal,
+    const pageError = (cause: unknown): AdapterFetchError => {
+      const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
+      if (error instanceof PublisherRateLimitRefusalError) {
+        return new PublisherRateLimitRefusalError({
+          publisherKey: error.publisherKey,
+          status: error.status,
+          cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor,
         });
-
-        const pending = pendingEcjVariants(bindings, position.after);
-        const variants = pending.slice(0, ECJ_PAGE_VARIANTS);
-        const crawled = await crawlEcjVariants({
-          variants,
-          signal: abortSignal,
-        });
-        const page = {
-          decisions: crawled.decisions,
-          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
-          itemBuildFailures: {
-            type: "item_build_failed",
-            count: crawled.itemBuildFailures,
-          },
-          ...(crawled.unreadItems.length === 0
-            ? {}
-            : { unreadItems: crawled.unreadItems }),
-        } as const;
-
-        if (!crawled.complete || variants.length < pending.length) {
-          if (crawled.settledThrough === undefined) {
-            // Nothing on this page settled, so there is no progress to keep
-            // and the page fails where it stopped.
-            throw new AdapterFetchError({
-              message: `CJEU page budget ran out before a variant of ${date} settled`,
-              adapterKey: ADAPTER_KEYS.EU_ECJ,
-              cursor,
-              cause: abortSignal.reason,
-            });
-          }
-          return {
-            ...page,
-            nextCursor: encodeEcjCrawlCursor({
-              date,
-              after: crawled.settledThrough,
-            }),
-          };
-        }
-
-        // The date is settled: move to the next one, and park at today when
-        // exhausted. Never null, which would mean the recent window health
-        // checks use rather than a full historical re-scan.
-        const nextDate = addDays(date, 1);
-        const today = toIsoDate(new Date());
-        const nextCursor = nextDate <= today ? nextDate : today;
-
-        return { ...page, nextCursor };
-      },
-      catch: (cause) => {
-        const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
-        if (error instanceof PublisherRateLimitRefusalError) {
-          return new PublisherRateLimitRefusalError({
-            publisherKey: error.publisherKey,
-            status: error.status,
-            cooldownUntilEpochMs: error.cooldownUntilEpochMs,
-            adapterKey: ADAPTER_KEYS.EU_ECJ,
-            cursor,
-          });
-        }
-        return error;
-      },
+      }
+      return error;
+    };
+    // A null cursor starts 7 days back (used by health checks). Historical
+    // backfill is triggered by setting the stored cursor to "1952-01-01".
+    const position =
+      cursor === null
+        ? { date: addDays(toIsoDate(new Date()), -7), after: undefined }
+        : parseEcjCrawlCursor(cursor);
+    if (position === undefined) {
+      return Result.err(
+        new AdapterFetchError({
+          message: `Invalid CJEU crawl cursor: ${cursor ?? ""}`,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor,
+        }),
+      );
+    }
+    const fetched = await Result.tryPromise({
+      try: async () =>
+        await crawlEcjPage({
+          position,
+          cursor,
+          signal: signal ?? AbortSignal.timeout(ECJ_PAGE_TIMEOUT),
+        }),
+      catch: pageError,
     });
+    return fetched.andThen((page) =>
+      page.type === "page"
+        ? Result.ok(page.page)
+        : Result.err(pageError(page.error)),
+    );
   },
 });
