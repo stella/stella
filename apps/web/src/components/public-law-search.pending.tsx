@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 
+import { useSearch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -50,9 +51,19 @@ export const PublicLawSearchInput = (
 );
 
 /**
+ * The entry the address carries (`?q=`), read without the route's API so a
+ * loading view can show it while the page that owns the box loads.
+ */
+export const useAddressSearchEntry = (): string =>
+  useSearch({
+    strict: false,
+    select: (search) => (typeof search.q === "string" ? search.q : ""),
+  });
+
+/**
  * The box before its page is there: the same field, named and with its
- * placeholder, holding nothing yet. The entry lives in the address, which the
- * page reads; the face stands in until it does.
+ * placeholder, holding the entry the address carries. The page reads and
+ * owns the entry; the face shows it read-only until the page is there.
  */
 export const PublicLawSearchFace = ({
   maxLength,
@@ -65,18 +76,21 @@ export const PublicLawSearchFace = ({
   /** Whether the box offers the AI rewrite, whose wand then waits beside it. */
   refine?: boolean | undefined;
   searchLabel: string;
-}) => (
-  <PublicLawSearchFrame>
-    <PublicLawSearchInput
-      aria-label={searchLabel}
-      maxLength={maxLength}
-      placeholder={placeholder}
-      readOnly
-      value=""
-    />
-    {refine && <PublicLawRefineFace />}
-  </PublicLawSearchFrame>
-);
+}) => {
+  const entry = useAddressSearchEntry();
+  return (
+    <PublicLawSearchFrame>
+      <PublicLawSearchInput
+        aria-label={searchLabel}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        readOnly
+        value={entry}
+      />
+      {refine && <PublicLawRefineFace />}
+    </PublicLawSearchFrame>
+  );
+};
 
 /**
  * The wand beside an empty box: there is nothing to rewrite yet, so it waits

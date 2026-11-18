@@ -1,10 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { roleOptions } from "@/lib/auth-queries";
 import { cachedRoleGrants } from "@/lib/cached-permissions.logic";
 
-const CREATE_CONTACT = { contact: ["create"] } as const;
+const CREATE_CONTACT: PermissionInput = { contact: ["create"] };
 
 describe("a loading view's reading of the cached role", () => {
   test("grants what the cached role grants", () => {
