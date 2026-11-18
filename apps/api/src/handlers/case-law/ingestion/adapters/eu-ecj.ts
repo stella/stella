@@ -19,6 +19,8 @@ import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: [eu-ecj] the crawl pages a date by variant and carries an unserved variant as an unread item; a built variant's parse and stored payload are unchanged.
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -113,6 +115,7 @@ import type {
   SourceSurfaceDisposition,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
+  UnreadListedItem,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   META_URL_DIAGNOSTICS,
@@ -3212,14 +3215,292 @@ const listEuEcjSourceFields = (parts: SourceRawParts): readonly string[] => {
   return [...stated];
 };
 
+// -- Crawl position --
+
+/**
+ * Where the crawl stands: a decision date, and the last of that date's
+ * variants already settled, if any.
+ *
+ * A date is the publisher's listing unit, not a unit of work one page can
+ * finish. A delivery day lists hundreds of language variants, each several
+ * requests at the publisher's pacing, and a page has a fixed budget. A cursor
+ * naming only the date sends every page back to the date's first variant, so
+ * a date that outgrows the budget is never finished and nothing after it is
+ * read again. The variant key lets the next page start where the last one
+ * settled.
+ */
+type EcjCrawlPosition = { date: string; after: string | undefined };
+
+/** `YYYY-MM-DD`, or `YYYY-MM-DD:<variant key>` once part of the date is settled. */
+const ECJ_CRAWL_CURSOR = /^(?<date>\d{4}-\d{2}-\d{2})(?::(?<after>\S+))?$/u;
+
+/** The position a stored cursor names, or `undefined` when it names none. */
+export const parseEcjCrawlCursor = (
+  cursor: string,
+): EcjCrawlPosition | undefined => {
+  const groups = ECJ_CRAWL_CURSOR.exec(cursor)?.groups;
+  const date = groups?.["date"];
+  return date === undefined ? undefined : { date, after: groups?.["after"] };
+};
+
+const encodeEcjCrawlCursor = ({ date, after }: EcjCrawlPosition): string =>
+  after === undefined ? date : `${date}:${after}`;
+
+/**
+ * The key a variant is settled under: its CELEX and the Cellar language code,
+ * the two terms the listing groups a variant by, so no two variants of a date
+ * share one.
+ */
+const ecjVariantKey = (binding: SparqlResult): string => {
+  const language = binding.language.value;
+  const code = language.startsWith(CELLAR_LANGUAGE_PREFIX)
+    ? language.slice(CELLAR_LANGUAGE_PREFIX.length)
+    : language;
+  return `${binding.celex.value}:${code}`;
+};
+
+/** Code-unit order, so the walk cannot depend on the runtime's collation. */
+const compareVariantKeys = (left: string, right: string): number => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
+type EcjPendingVariant = {
+  key: string;
+  /** The variant's bindings, preferred manifestation first. */
+  bindings: SparqlResult[];
+};
+
+/**
+ * A date's variants not yet settled, in key order.
+ *
+ * A variant the publisher lists later under a key the walk already passed is
+ * not revisited by this date's walk; the date is listed again whole while it
+ * is the crawl's current day, and the reconciliation walk re-lists its year.
+ */
+const pendingEcjVariants = (
+  bindings: readonly SparqlResult[],
+  after: string | undefined,
+): EcjPendingVariant[] =>
+  groupEcjVariants(bindings)
+    .flatMap((variant): EcjPendingVariant[] => {
+      // SAFETY: Map.groupBy groups are non-empty.
+      const first = variant[0];
+      if (first === undefined) {
+        return [];
+      }
+      const key = ecjVariantKey(first);
+      return after === undefined || compareVariantKeys(key, after) > 0
+        ? [{ key, bindings: variant }]
+        : [];
+    })
+    .toSorted((left, right) => compareVariantKeys(left.key, right.key));
+
+/**
+ * The row a listed variant stands for when its documents could not be read:
+ * what the listing binding states, and the binding itself as the stored raw.
+ * `undefined` when the binding names no row this adapter can key.
+ */
+const ecjListingOnlyRow = (
+  binding: SparqlResult,
+): UnreadListedItem["listing"] | undefined => {
+  const celex = binding.celex.value;
+  const ecli = binding.ecli.value;
+  const lang = toEcjLanguage(binding.language.value);
+  const court = courtFromEcli(ecli);
+  if (lang === undefined || court === undefined) {
+    return undefined;
+  }
+  const language = ecjRowLanguage(lang);
+  const sourceDocumentId = ecjSourceDocumentId(celex, language);
+  if (sourceDocumentId === undefined) {
+    return undefined;
+  }
+  const decisionDate = binding.date.value;
+  const decisionType =
+    CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
+  const listing = JSON.stringify(binding);
+  const sourceUrl = eurLexSourceUrl(lang, celex);
+  return {
+    ...plainTextIngestionResult(
+      {
+        caseNumber: ecjCaseNumber(celex, []),
+        sourceDocumentId,
+        legacySourceUrls: [sourceUrl],
+        isListingOnly: true,
+        ecli,
+        court,
+        country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
+        language,
+        decisionDate,
+        decisionType,
+        sourceUrl,
+        metadata: checkedDecisionMetadata({
+          celex,
+          ecli,
+          decisionDate,
+          decisionType,
+        }),
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: hashContent(
+          `${celex}|${ecli}|${decisionDate}|${language}|listing:${listing}`,
+        ),
+        parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+        documentAst: EMPTY_AST,
+        sourceRaw: encodeSourceRawEnvelope({ [RAW_PART.LISTING]: listing }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      },
+      EU_ECJ_METADATA_URL_SCHEMA,
+    ),
+    sourceDocumentId,
+    isListingOnly: true,
+  };
+};
+
+/**
+ * A variant whose read the publisher failed to answer, as the pipeline's
+ * bounded hold expects it, or `undefined` when the failure is not one
+ * variant's to carry.
+ *
+ * Only a failure the publisher may answer differently later qualifies: a
+ * throttle refusal stops the whole source, and any other error is a defect
+ * that must stop the page where it is seen.
+ */
+const ecjUnreadVariant = (
+  variant: EcjPendingVariant,
+  error: unknown,
+): UnreadListedItem | undefined => {
+  if (
+    !(error instanceof AdapterFetchError) ||
+    error instanceof PublisherRateLimitRefusalError ||
+    error.stopKind !== INGESTION_STOP_KIND.SOURCE_UNREACHABLE
+  ) {
+    return undefined;
+  }
+  const listing = variant.bindings
+    .map(ecjListingOnlyRow)
+    .find((row) => row !== undefined);
+  if (listing === undefined) {
+    return undefined;
+  }
+  return {
+    listing,
+    outcome:
+      error.httpStatus === undefined
+        ? { type: "unavailable", cause: { kind: "thrown", error } }
+        : {
+            type: "unavailable",
+            cause: { kind: "status", status: error.httpStatus },
+          },
+  };
+};
+
+type EcjCrawledVariants = {
+  decisions: IngestionResult[];
+  unreadItems: UnreadListedItem[];
+  itemBuildFailures: number;
+  /** The last variant settled, in key order; `undefined` when none was. */
+  settledThrough: string | undefined;
+  /** Whether every variant handed in was settled. */
+  complete: boolean;
+};
+
+type CrawlEcjVariantsOptions = {
+  variants: readonly EcjPendingVariant[];
+  signal: AbortSignal;
+};
+
+/**
+ * Build the given variants in key order, stopping at the first one that does
+ * not settle.
+ *
+ * A variant is settled once it has an outcome the page can carry: a decision,
+ * a rejected build, nothing to store, or an unread item. One cut off by the
+ * page's own budget is not settled, so the next page starts on it rather than
+ * the page losing every variant it did finish. A variant the publisher fails
+ * to serve is carried as unread and ends the page: the pipeline holds the
+ * position on it for a bounded number of cycles before it stores the listing
+ * and moves on, so one variant cannot hold the date, and a publisher already
+ * failing is not asked for the rest of the page.
+ */
+const crawlEcjVariants = async ({
+  variants,
+  signal,
+}: CrawlEcjVariantsOptions): Promise<EcjCrawledVariants> => {
+  const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
+  let settledThrough: string | undefined;
+  const crawled = (
+    complete: boolean,
+    unreadItems: UnreadListedItem[] = [],
+  ): EcjCrawledVariants => ({
+    decisions,
+    unreadItems,
+    itemBuildFailures,
+    settledThrough,
+    complete,
+  });
+  for (const variant of variants) {
+    if (signal.aborted) {
+      return crawled(false);
+    }
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await buildPlainTextItem({
+          decisionOf: (value) => value,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          // Stored listings are one SPARQL binding; replay and source-field
+          // readers parse that shape. SAFETY: Map.groupBy groups are non-empty.
+          rawListing: JSON.stringify(variant.bindings[0]),
+          build: async () =>
+            await buildPendingVariant({ bindings: variant.bindings, signal }),
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(attempted)) {
+      if (signal.aborted) {
+        return crawled(false);
+      }
+      const unread = ecjUnreadVariant(variant, attempted.error);
+      if (unread === undefined) {
+        throw attempted.error;
+      }
+      settledThrough = variant.key;
+      return crawled(false, [unread]);
+    }
+    const built = attempted.value;
+    if (built.type === "item_build_failed") {
+      itemBuildFailures++;
+      decisions.push(built.decision);
+    } else if (built.value !== undefined) {
+      decisions.push(built.value);
+    }
+    settledThrough = variant.key;
+  }
+  return crawled(true);
+};
+
 // -- Adapter --
 
 /**
- * Per-page timeout for ECJ. Higher than the default
- * PAGE timeout because we fetch up to 24 language
- * variants per decision (24 × ~15 decisions × 500ms).
+ * Per-page timeout for ECJ, longer than the default because one page fetches
+ * {@link ECJ_PAGE_VARIANTS} variants of several requests each.
  */
 const ECJ_PAGE_TIMEOUT = 300_000;
+
+/**
+ * Variants one crawl page builds.
+ *
+ * Sized against {@link ECJ_PAGE_TIMEOUT} from what a variant costs in
+ * service: the manifestation, its notice and its structured rendition, each
+ * paced at the publisher's minimum interval, come to about three seconds, so
+ * a page of one decision in every language settles in about a quarter of the
+ * budget. A slower publisher still makes progress: a page its budget cuts
+ * short keeps the variants it settled.
+ */
+const ECJ_PAGE_VARIANTS = 24;
 
 /**
  * Every payload the repository and the court's own site serve for one language
@@ -3399,17 +3680,24 @@ export const euEcjAdapter = defineSourceAdapter({
       try: async () => {
         const abortSignal = signal ?? AbortSignal.timeout(ECJ_PAGE_TIMEOUT);
 
-        // Cursor is a date; each page = 1 day.
-        // Null cursor defaults to 7 days ago (used by health
-        // checks). Historical backfill is triggered by setting
-        // the DB cursor to "1952-01-01" after deploy.
-        const dateFrom = cursor ?? addDays(toIsoDate(new Date()), -7);
-        const dateTo = dateFrom;
+        // A null cursor starts 7 days back (used by health checks). Historical
+        // backfill is triggered by setting the stored cursor to "1952-01-01".
+        const position =
+          cursor === null
+            ? { date: addDays(toIsoDate(new Date()), -7), after: undefined }
+            : parseEcjCrawlCursor(cursor);
+        if (position === undefined) {
+          throw new AdapterFetchError({
+            message: `Invalid CJEU crawl cursor: ${cursor ?? ""}`,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor,
+          });
+        }
+        const { date } = position;
 
-        // 1. Query SPARQL for decisions on this date
         const bindings = await queryDecisions({
-          dateFrom,
-          dateTo,
+          dateFrom: date,
+          dateTo: date,
           // A live crawl fails fast and moves on; only the bulk listings buy
           // headroom, because they have no cursor to come back to.
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -3417,66 +3705,52 @@ export const euEcjAdapter = defineSourceAdapter({
           signal: abortSignal,
         });
 
-        const decisions: IngestionResult[] = [];
-        let failed = 0;
-        // 2. Fetch and parse each language variant
-        for (const variantBindings of groupEcjVariants(bindings)) {
-          if (abortSignal.aborted) {
-            break;
+        const pending = pendingEcjVariants(bindings, position.after);
+        const variants = pending.slice(0, ECJ_PAGE_VARIANTS);
+        const crawled = await crawlEcjVariants({
+          variants,
+          signal: abortSignal,
+        });
+        const page = {
+          decisions: crawled.decisions,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          itemBuildFailures: {
+            type: "item_build_failed",
+            count: crawled.itemBuildFailures,
+          },
+          ...(crawled.unreadItems.length === 0
+            ? {}
+            : { unreadItems: crawled.unreadItems }),
+        } as const;
+
+        if (!crawled.complete || variants.length < pending.length) {
+          if (crawled.settledThrough === undefined) {
+            // Nothing on this page settled, so there is no progress to keep
+            // and the page fails where it stopped.
+            throw new AdapterFetchError({
+              message: `CJEU page budget ran out before a variant of ${date} settled`,
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              cursor,
+              cause: abortSignal.reason,
+            });
           }
-
-          const attempted = await buildPlainTextItem({
-            decisionOf: (value) => value,
-            adapterKey: ADAPTER_KEYS.EU_ECJ,
-
-            // Stored listings are one SPARQL binding; replay and source-field
-            // readers parse that shape. SAFETY: Map.groupBy groups are non-empty.
-            rawListing: JSON.stringify(variantBindings[0]),
-            build: async () =>
-              await buildPendingVariant({
-                bindings: variantBindings,
-                signal: abortSignal,
-              }),
-          });
-          if (attempted.type === "item_build_failed") {
-            failed++;
-            decisions.push(attempted.decision);
-            continue;
-          }
-          const decision = attempted.value;
-          if (!decision) {
-            continue;
-          }
-
-          decisions.push(decision);
-        }
-
-        // If the page was aborted mid-iteration, retry
-        // the same day on the next run instead of skipping it.
-        if (abortSignal.aborted) {
           return {
-            decisions,
-            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
-            nextCursor: dateFrom,
-            itemBuildFailures: { type: "item_build_failed", count: failed },
+            ...page,
+            nextCursor: encodeEcjCrawlCursor({
+              date,
+              after: crawled.settledThrough,
+            }),
           };
         }
 
-        // Advance cursor to next day; stop if
-        // we've reached today
-        const nextDate = addDays(dateFrom, 1);
+        // The date is settled: move to the next one, and park at today when
+        // exhausted. Never null, which would mean the recent window health
+        // checks use rather than a full historical re-scan.
+        const nextDate = addDays(date, 1);
         const today = toIsoDate(new Date());
-        // Park at today when exhausted; never null (null
-        // triggers a health-check-friendly recent window, not
-        // a full historical re-scan).
         const nextCursor = nextDate <= today ? nextDate : today;
 
-        return {
-          decisions,
-          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
-          nextCursor,
-          itemBuildFailures: { type: "item_build_failed", count: failed },
-        };
+        return { ...page, nextCursor };
       },
       catch: (cause) => {
         const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
