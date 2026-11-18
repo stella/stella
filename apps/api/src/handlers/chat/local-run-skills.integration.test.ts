@@ -248,7 +248,7 @@ describe("a run on the member's computer reaches every skill over MCP", () => {
     }).fullPrompt;
     expect(
       [...prompt.matchAll(/^- (skill__[a-z0-9_]+)/gmu)]
-        .map((match) => match[1])
+        .map((match) => match[1] ?? "")
         .toSorted(),
     ).toEqual(listed.toSorted());
     expect(prompt).not.toContain("load-skill");

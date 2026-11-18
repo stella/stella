@@ -45,7 +45,9 @@ const teamTool: LocalRunSkillTool = {
 };
 
 const catalogToolNames = (text: string) =>
-  [...text.matchAll(/^- (skill__[a-z0-9_]+)/gmu)].map((match) => match[1]);
+  [...text.matchAll(/^- (skill__[a-z0-9_]+)/gmu)].map(
+    (match) => match[1] ?? "",
+  );
 
 const loadedSkill = (
   overrides: Partial<LoadedChatSkill> & Pick<LoadedChatSkill, "name">,
