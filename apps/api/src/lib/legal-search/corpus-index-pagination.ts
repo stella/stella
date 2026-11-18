@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
   CorpusIndexHit,
+  CorpusIndexQueryDsl,
   CorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -292,6 +293,14 @@ type CorpusIndexSearchPageInput<TContext> = {
   order: CorpusSearchOrder;
   /** Fixed-window BM25 experiment; the default preserves the position scan. */
   rankingMode?: CorpusIndexRankingMode;
+  /**
+   * A ranking over whole decisions: the scored scan sends this DSL query in
+   * place of `query`, which then serves the excerpt read alone. The scan's
+   * hits are the decisions' opening passages, which need not hold any of the
+   * words, so each emitted decision's excerpt is cut from its best-matching
+   * passage within its applied copy rather than from the scanned one.
+   */
+  rankedScan?: { query: CorpusIndexQueryDsl } | undefined;
   /** Main transport to restore when the experiment falls back. */
   fallbackScanTransport?: CorpusIndexScanTransport;
   /**
@@ -685,6 +694,8 @@ type PageRevisionClausesOptions = {
   revisionById: ReadonlyMap<string, CorpusProjectionRevision>;
   field: CorpusProjectionRevisionField;
   passageClauseById: ReadonlyMap<string, string>;
+  /** The scan ranked decisions, not passages: excerpts come from the best passage. */
+  rankedScan: { query: CorpusIndexQueryDsl } | undefined;
 };
 
 /** Revision-filter the scan-selected chunks and their document fallbacks. */
@@ -693,10 +704,12 @@ const pageRevisionClauses = ({
   revisionById,
   field,
   passageClauseById,
+  rankedScan,
 }: PageRevisionClausesOptions): ReadPageSnippetsOptions["clauses"] =>
   pageRanked.flatMap(({ id }) => {
     const revision = revisionById.get(id);
-    const passage = passageClauseById.get(id);
+    const passage =
+      rankedScan === undefined ? passageClauseById.get(id) : undefined;
     // The scan can rank a superseded passage whose chunk no longer matches
     // in the current copy. Choose the passage again within the applied revision.
     return revision === undefined
@@ -775,6 +788,8 @@ type ReadScanRoundOptions = {
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
+  /** The scored transport's query in place of `query` (`rankedScan`). */
+  scanQuery?: CorpusIndexQueryDsl | undefined;
   order: CorpusSearchOrder;
   transport: CorpusIndexScanTransport;
   startOffset: number;
@@ -793,6 +808,7 @@ const readScanRound = async ({
   cluster,
   indexId,
   query,
+  scanQuery,
   order,
   transport,
   startOffset,
@@ -801,6 +817,9 @@ const readScanRound = async ({
 }: ReadScanRoundOptions): Promise<ScanRound> => {
   switch (transport.type) {
     case "native": {
+      if (scanQuery !== undefined) {
+        panic("A decision ranking reads through the scored transport only");
+      }
       const result = await getCorpusIndexClient(cluster).search({
         observer,
         signal,
@@ -828,7 +847,7 @@ const readScanRound = async ({
         signal,
         cluster,
         indexId,
-        query,
+        query: scanQuery ?? query,
         from: startOffset,
         size: maxHits,
         scanFields,
@@ -881,7 +900,7 @@ type ReadScoredScanRoundOptions = {
   signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
-  query: string;
+  query: string | CorpusIndexQueryDsl;
   from: number;
   size: number;
   scanFields?: readonly string[] | undefined;
@@ -1228,6 +1247,7 @@ const readWindowPage = async <TContext>({
   rankCandidates,
   unseenScoreUpperBound,
   scanFields,
+  rankedScan,
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   ScanPage<TContext>
 > => {
@@ -1301,6 +1321,7 @@ const readWindowPage = async <TContext>({
       cluster,
       indexId,
       query,
+      scanQuery: rankedScan?.query,
       order,
       transport: scanTransport,
       startOffset,
@@ -1398,6 +1419,7 @@ const readWindowPage = async <TContext>({
       revisionById: ranking.revisionById,
       field: projectionRevisionField,
       passageClauseById,
+      rankedScan,
     }),
     cluster,
     extractId,
@@ -1533,6 +1555,7 @@ const readOffsetChainPage = async <TContext>(
       revisionById,
       field: options.projectionRevisionField,
       passageClauseById,
+      rankedScan: options.rankedScan,
     }),
     cluster: options.cluster,
     extractId: options.extractId,
@@ -1650,7 +1673,7 @@ const readBm25SearchPage = async <TContext>(
     signal,
     cluster,
     indexId,
-    query,
+    query: options.rankedScan?.query ?? query,
     from: 0,
     size: CORPUS_BM25_PASSAGE_LIMIT + 1,
     scanFields,
@@ -1758,6 +1781,7 @@ const readBm25SearchPage = async <TContext>(
       revisionById: ranking.revisionById,
       field: projectionRevisionField,
       passageClauseById,
+      rankedScan: options.rankedScan,
     }),
     cluster,
     extractId,

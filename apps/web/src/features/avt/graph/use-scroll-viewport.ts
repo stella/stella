@@ -13,7 +13,7 @@ const UNMEASURED: ScrollViewport = { top: 0, width: 0, height: 0 };
  */
 export const useScrollViewport = () => {
   const [viewport, setViewport] = React.useState<ScrollViewport>(UNMEASURED);
-  const ref = React.useCallback((node: HTMLDivElement | null) => {
+  const ref = (node: HTMLDivElement | null) => {
     if (node === null) {
       return undefined;
     }
@@ -43,6 +43,6 @@ export const useScrollViewport = () => {
       node.removeEventListener("scroll", measure);
       observer?.disconnect();
     };
-  }, []);
+  };
   return [ref, viewport] as const;
 };

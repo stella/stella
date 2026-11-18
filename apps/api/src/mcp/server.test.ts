@@ -1966,6 +1966,7 @@ describe("handleMcpHttpRequest", () => {
     expect(getMcpToolRequiredScopesHintMock).toHaveBeenCalledWith(
       "skill__research",
       "default",
+      expect.anything(),
     );
     expect(getMcpToolDefinitionMock).not.toHaveBeenCalled();
     expect(handleMcpToolCallMock).not.toHaveBeenCalled();

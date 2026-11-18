@@ -10,7 +10,6 @@
  * statutes are column definitions and a row host over this.
  */
 
-import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { useTable } from "@tanstack/react-table";
@@ -19,7 +18,11 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
-import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
+import { applyPublicLawSizingChange } from "@/components/public-law-table/public-law-table-layout.logic";
+import type {
+  PublicLawTableLayout,
+  PublicLawTableLayoutUpdate,
+} from "@/components/public-law-table/public-law-table-layout.logic";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
@@ -82,7 +85,7 @@ type PublicLawTableProps<
    */
   isRefreshing?: boolean | undefined;
   layout: TLayout;
-  onLayoutChange: (layout: TLayout) => void;
+  onLayoutChange: (update: PublicLawTableLayoutUpdate<TLayout>) => void;
   rowHost: TableRowHost<TRow>;
   rows: TRow[];
   selection?: PublicLawTableSelection<TRow> | undefined;
@@ -121,7 +124,7 @@ export const PublicLawTable = <
   // say nothing about the search in flight: that table waits instead.
   const isWaiting = isLoading || (isRefreshing && rows.length === 0);
   const selectedIds = selection?.selectedIds;
-  const rowSelection: RowSelectionState = useMemo(() => {
+  const rowSelection: RowSelectionState = (() => {
     if (selectedIds === undefined) {
       return NO_SELECTION;
     }
@@ -130,7 +133,7 @@ export const PublicLawTable = <
       picked[id] = true;
     }
     return picked;
-  }, [selectedIds]);
+  })();
 
   const tableState = useTableState({
     columnLayout: {
@@ -138,17 +141,25 @@ export const PublicLawTable = <
       order: layout.order,
       pinned: layout.pinned,
       onChange: ({ hidden, order, pinned }) => {
-        onLayoutChange({
-          ...layout,
+        onLayoutChange((latest) => ({
+          ...latest,
           ...(hidden === undefined ? {} : { hidden }),
           ...(order === undefined ? {} : { order }),
           ...(pinned === undefined ? {} : { pinned }),
-        });
+        }));
       },
     },
     columnSizing: {
       sizing: layout.sizing,
-      onChange: (sizing) => onLayoutChange({ ...layout, sizing }),
+      onChange: (sizing) =>
+        onLayoutChange((latest) => ({
+          ...latest,
+          sizing: applyPublicLawSizingChange({
+            previous: layout.sizing,
+            next: sizing,
+            latest: latest.sizing,
+          }),
+        })),
     },
     rowSelection: {
       selection: rowSelection,

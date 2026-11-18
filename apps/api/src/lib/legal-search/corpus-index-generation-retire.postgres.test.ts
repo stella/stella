@@ -247,6 +247,35 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("a writer holding only the projection fence makes the retire busy through the fence's own refusal, and the generation stays building", async () => {
+      await withFixture(async ({ writerDb, retireDb }) => {
+        const writerHolds = Promise.withResolvers<undefined>();
+        const releaseWriter = Promise.withResolvers<undefined>();
+        const writer = writerDb.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
+          await tx.execute(
+            sql`SELECT public.lock_corpus_projection_mutations_shared()`,
+          );
+          writerHolds.resolve(undefined);
+          await releaseWriter.promise;
+        });
+        await writerHolds.promise;
+        const whileWriterHolds = await Result.tryPromise({
+          try: async () => await retireOn(retireDb),
+          catch: (cause) => cause,
+        });
+        releaseWriter.resolve(undefined);
+        await writer;
+        expect(whileWriterHolds.unwrap()).toBe("busy:lock_unavailable");
+        expect(
+          await writerDb
+            .select({ status: corpusIndexGenerations.status })
+            .from(corpusIndexGenerations)
+            .where(target),
+        ).toEqual([{ status: "building" }]);
+      });
+    });
+
     test("the registry keeps a retired generation retired with its receipt, and its whole history deletes, an unfinished revision included", async () => {
       await withFixture(async ({ writerDb, retireDb, subject }) => {
         await canonicalWrite(writerDb, subject);

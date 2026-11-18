@@ -4538,6 +4538,7 @@ describe("OpenAI-compatible MCP tools", () => {
     };
     const partialUnread = (query: string) => ({
       ...answered(query, null),
+      hitOrder: "all_words_first",
       relaxedHitCount: 0,
       termDecisionCounts: SHORT_COUNTS,
       paginationOutcome: SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
@@ -4607,6 +4608,7 @@ describe("OpenAI-compatible MCP tools", () => {
         searchDecisionsHandlerMock.mockImplementation(
           async ({ body: { query } }: { body: { query: string } }) => ({
             ...answered(query, null),
+            hitOrder: "all_words_first",
             relaxedHitCount: 0,
           }),
         );
@@ -5858,7 +5860,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 minLength: 1,
                 maxLength: 256,
                 description:
-                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes.",
               },
               as_of: {
                 type: "string",
@@ -6166,6 +6168,103 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         ],
       },
+    });
+  });
+
+  test("read_statute keeps every annex in a bounded outline, and an annex reads by its number", async () => {
+    // A long act: more section headings than the outline holds, then the
+    // annexes, as 134/2016 Sb. stores them.
+    const sections = Array.from(
+      { length: LIMITS.legislationOutlineHeadingsMax + 40 },
+      (_, index) => ({
+        id: `s${String(index)}`,
+        anchorId: `par_${String(index + 1)}`,
+        type: "heading" as const,
+        level: 3 as const,
+        inlines: [{ type: "text" as const, text: `§ ${String(index + 1)}` }],
+        plainText: `§ ${String(index + 1)}`,
+      }),
+    );
+    const annexes = [1, 2, 3].map((number) => ({
+      id: `a${String(number)}`,
+      anchorId: `pril_${String(number)}`,
+      type: "heading" as const,
+      level: 1 as const,
+      inlines: [
+        { type: "text" as const, text: `Příloha č. ${String(number)}` },
+      ],
+      plainText: `Příloha č. ${String(number)}`,
+    }));
+    const annexBody = {
+      id: "a3-body",
+      anchorId: "pril_3-frag_8775881",
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text: "Trestné činy" }],
+      plainText: "Trestné činy",
+    };
+    const documentAst = {
+      ...createStatuteAst(),
+      blocks: [...sections, ...annexes, annexBody],
+    };
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      documentAst,
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_statute",
+      }),
+    );
+    const statute = isRecord(payload) ? payload["statute"] : undefined;
+    const outline =
+      isRecord(statute) && Array.isArray(statute["outline"])
+        ? statute["outline"].flatMap((entry) =>
+            isRecord(entry) && typeof entry["anchorId"] === "string"
+              ? [entry["anchorId"]]
+              : [],
+          )
+        : [];
+    expect(isRecord(statute) && statute["outlineTruncated"]).toBe(true);
+    expect(outline).toHaveLength(LIMITS.legislationOutlineHeadingsMax);
+    expect(outline.slice(-3)).toEqual(["pril_1", "pril_2", "pril_3"]);
+    expect(outline.at(0)).toBe("par_1");
+
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(documentAst.blocks);
+    const provisions = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            { eli: STATUTE_ELI, anchor: "priloha_3" },
+            { eli: STATUTE_ELI, anchor: "příloha č. 9" },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+    expect(provisions).toMatchObject({
+      items: [
+        { status: "found", text: "Příloha č. 3\nTrestné činy" },
+        {
+          status: "provision_not_found",
+          message: expect.stringContaining(
+            "Its annex anchors: pril_1, pril_2, pril_3.",
+          ),
+        },
+      ],
     });
   });
 
@@ -6801,6 +6900,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6812,6 +6912,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6852,6 +6953,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           nextTextCursor: null,
           truncated: false,
           versionValidFrom: "2014-01-01",
@@ -6866,6 +6968,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
           status: "found",
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2012-03-22",
           nextTextCursor: null,
@@ -6891,6 +6994,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
+          governingText: [],
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
@@ -6904,6 +7008,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: false,
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
+          governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -6932,6 +7037,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          governingText: [],
           truncated: false,
           versionValidFrom: "2014-01-01",
           nextTextCursor: null,
@@ -6972,6 +7078,7 @@ describe("OpenAI-compatible MCP tools", () => {
           allowsDerivedAi: true,
           documentId: STATUTE_PRIOR_ID,
           text,
+          governingText: [],
           versionValidFrom: null,
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
@@ -7117,6 +7224,72 @@ describe("OpenAI-compatible MCP tools", () => {
    * search runs unfiltered instead of answering nothing, and the reading is
    * reported beside the result.
    */
+  describe("search_case_law keeps the order the search answered in", () => {
+    const pageIn = (
+      hitOrder: "score" | "all_words_first",
+      hits: readonly { id: string; match: "all_terms" | "some_terms" }[],
+    ) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
+      facets: null,
+      hits: hits.map(({ id, match }) => ({
+        ...createCaseLawHit(id, "Holding"),
+        match,
+      })),
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, hits.length),
+      hitOrder,
+      relaxedHitCount: hits.filter(({ match }) => match === "some_terms")
+        .length,
+      termDecisionCounts: null,
+      queryUsed: "loajalita jednatel",
+      warnings: [],
+    });
+    const resultIds = async (queries: string[]) => {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries, limit: 10 },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      if (!isRecord(payload) || !Array.isArray(payload["results"])) {
+        throw new Error("expected a search payload");
+      }
+      return payload["results"].map((result: unknown) =>
+        isRecord(result) ? result["decisionId"] : null,
+      );
+    };
+
+    test.each([
+      [
+        "a score-ordered page, a partial match above a full one",
+        pageIn("score", [
+          { id: "partial-high", match: "some_terms" },
+          { id: "full", match: "all_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+      [
+        "a page whose full matches come first",
+        pageIn("all_words_first", [
+          { id: "full", match: "all_terms" },
+          { id: "partial-high", match: "some_terms" },
+          { id: "partial-low", match: "some_terms" },
+        ]),
+      ],
+    ] as const)("%s reads the same through the tool", async (_name, page) => {
+      searchDecisionsHandlerMock.mockResolvedValue(page);
+      const http = page.hits.map(({ decisionId }) => decisionId);
+
+      expect(await resultIds(["loajalita jednatel"])).toEqual(http);
+      // Two phrasings answering the same page merge into that page's order.
+      expect(
+        await resultIds(["loajalita jednatel", "jednatel loajalita"]),
+      ).toEqual(http);
+    });
+  });
+
   describe("search_case_law warns about a long phrasing that came back short", () => {
     const SIX_TERMS = "promlčení náhrady škody subjektivní lhůta vědomost";
     const FIVE_TERMS = "promlčení náhrady škody subjektivní lhůta";
@@ -7203,7 +7376,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
       expect(warnings).toHaveLength(1);
-      expect(warnings.at(0)?.["message"]).toContain("required 6 words");
+      expect(warnings.at(0)?.["message"]).toContain("has 6 words");
       expect(warnings.at(0)?.["message"]).toContain(SIX_WORD_PHRASE);
     });
 

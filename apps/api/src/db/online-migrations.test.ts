@@ -63,6 +63,7 @@ import {
 import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS } from "./organization-ai-instructions-constraint-validation";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 import { caseLawPolarityRules } from "./schema/case-law";
+import { USER_LOCALE_CONSTRAINT_VALIDATION } from "./user-locale-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
 const healthyIndexGate = {
@@ -906,6 +907,7 @@ describe("online migrations", () => {
     ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
     ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
     ...ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS,
+    USER_LOCALE_CONSTRAINT_VALIDATION,
   ])(
     "validates registered constraint $name once and reports incomplete startup",
     async (validation) => {

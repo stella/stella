@@ -234,6 +234,11 @@ const RETRY_FAILURE = {
 export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
+  /**
+   * A decision raised a failure that grades transient: the record is not at
+   * fault and a retry clears it, so the batch stops and the cursor holds.
+   */
+  | { type: "transient"; tag: string; message: string }
   | { type: "insert-limit" }
   | {
       type: "failure-streak";
@@ -340,9 +345,11 @@ type RejectDecisionOptions = {
 
 /**
  * A decision that raised: logged, and recorded for the ledger unless the
- * database timed out, which holds the batch instead. A transient database
- * condition is recorded the same way, and settles as transient rather than
- * as a rejection of the record.
+ * database timed out, which holds the batch instead. A failure that grades
+ * transient (a database condition, a writer of an older release refusing a
+ * generation it does not know) is recorded the same way, settles as
+ * transient rather than as a rejection of the record, and stops the batch so
+ * the cursor holds and the record is read again.
  */
 const rejectDecision = ({
   tally,
@@ -399,14 +406,19 @@ const rejectDecision = ({
     ...(recordIdentity === undefined ? {} : { recordIdentity }),
   });
   tally.skipped++;
+  const transient =
+    gradeFailure(readEvidence(error), decisionNotApplied).grade === "transient";
   tally.settlements.push({
     type: "unsettled",
-    reason:
-      gradeFailure(readEvidence(error), decisionNotApplied).grade ===
-      "transient"
-        ? CASE_LAW_BATCH_FAILURE.TRANSIENT
-        : CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+    reason: transient
+      ? CASE_LAW_BATCH_FAILURE.TRANSIENT
+      : CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
+  if (transient) {
+    // Not a rejection of the record: moving past it would leave it behind a
+    // cursor that never returns, so the batch stops here and is read again.
+    return { type: "transient", tag, message };
+  }
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
     ? {
@@ -783,6 +795,7 @@ const stopFailure = (
   switch (stop.type) {
     case "retryable":
     case "timeout":
+    case "transient":
       // The record that stopped the batch carries the reason.
       return null;
     case "failure-streak":

@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -206,7 +206,7 @@ export const useUserMessageEditActions = ({
     openSession,
   }));
   const { threadId } = threadRef;
-  return useMemo(() => ({ ...handlers, threadId }), [handlers, threadId]);
+  return { ...handlers, threadId };
 };
 
 const attachmentTitle = (

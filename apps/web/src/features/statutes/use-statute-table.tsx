@@ -8,34 +8,29 @@ import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+
 import { usePublicLawFind } from "@/components/public-law-table/use-public-law-find";
 import type { PublicLawFind } from "@/components/public-law-table/use-public-law-find";
-import { usePublicLawTableLayout } from "@/components/public-law-table/use-public-law-table-layout";
-import type { PublicLawTableLayoutStore } from "@/components/public-law-table/use-public-law-table-layout";
+import {
+  publicLawTableLayoutStore,
+  usePublicLawTableLayout,
+} from "@/components/public-law-table/use-public-law-table-layout";
 import type { TableFindColumnRow } from "@/components/workspaces/table/table-find-bar";
 import { StatuteColumnIcon } from "@/features/statutes/components/statute-table";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import {
-  DEFAULT_STATUTE_TABLE_LAYOUT,
-  STATUTE_COLUMN_IDS,
-  STATUTE_COLUMN_LABEL_KEYS,
-  statuteTableLayouts,
-  StoredStatuteLayoutSchema,
-} from "@/features/statutes/statute-columns.logic";
-import type { StatuteTableLayout } from "@/features/statutes/statute-columns.logic";
+import { STATUTE_COLUMN_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
 import {
   isFindableStatuteColumn,
   statuteFindRowText,
 } from "@/features/statutes/statute-find.logic";
-import { readStoredJson } from "@/lib/stored-json";
+import { DEFAULT_STATUTE_TABLE_LAYOUT } from "@/features/statutes/statute-table-layout.logic";
+import type { StatuteTableLayout } from "@/features/statutes/statute-table-layout.logic";
 
-const STATUTE_LAYOUT_STORE: PublicLawTableLayoutStore<StatuteTableLayout> = {
-  exceptionScope: { type: "handler", handlerId: "public-law.statute-layout" },
-  storageKey: "statute_table_layout",
-  read: (raw) =>
-    statuteTableLayouts(readStoredJson(raw, StoredStatuteLayoutSchema) ?? {}),
-  defaultLayout: DEFAULT_STATUTE_TABLE_LAYOUT,
-};
+const STATUTE_LAYOUT_STORE = publicLawTableLayoutStore(
+  "statuteLayouts",
+  DEFAULT_STATUTE_TABLE_LAYOUT,
+);
 
 /** How this browser draws the statute table in a jurisdiction, and how to change it. */
 export const useStatuteColumnPreferences = (country: string) =>

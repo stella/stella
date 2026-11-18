@@ -63,7 +63,11 @@ runs:
 
     # ggml's ARM CPU backend builds with clang-cl, which needs Ninja. Visual
     # Studio ships one; it is just not on the PATH.
-    - name: Put Ninja on the PATH for the ARM64 speech engine
+    # clang-cl comes from Visual Studio's own LLVM toolset, not the image's
+    # standalone LLVM: the MSVC STL accepts only the Clang it ships with
+    # (MSVC 14.52 rejects Clang 20 with STL1000), and the standalone LLVM
+    # lags it when the image moves to a newer Visual Studio.
+    - name: Put Ninja and Visual Studio's clang-cl on the PATH for the ARM64 speech engine
       if: inputs.target == 'aarch64-pc-windows-msvc'
       shell: pwsh
       run: |
@@ -72,7 +76,12 @@ runs:
         $vs = & $vswhere -latest -products '*' -property installationPath
         $ninja = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja'
         if (-not (Test-Path (Join-Path $ninja 'ninja.exe'))) { throw "ninja.exe not found under $vs" }
+        $llvm = Join-Path $vs 'VC\Tools\Llvm\x64\bin'
+        $clang = Join-Path $llvm 'clang-cl.exe'
+        if (-not (Test-Path $clang)) { throw "clang-cl.exe not found under $vs (Visual Studio LLVM toolset missing)" }
+        & $clang --version
         Add-Content $env:GITHUB_PATH $ninja
+        Add-Content $env:GITHUB_PATH $llvm
 
     - name: Build Windows desktop artifacts
       shell: bash

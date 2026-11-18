@@ -1,5 +1,7 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -8,7 +10,9 @@ import {
   corpusIndexProjectionRevisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 type CorpusProjectionRevisionTarget = {
   family: CorpusFamily;
@@ -152,19 +156,68 @@ const pruneCorpusIndexProjectionRevisionsTx = async (
   `);
 };
 
+/**
+ * The exclusive side of the fence was not granted within the lock timeout
+ * (the caller's own, or the database's bound when the caller set none):
+ * writers are in flight. Nothing was taken and the caller's transaction is
+ * still usable; retry when the projection is quieter.
+ */
+export class CorpusIndexProjectionFenceBusyError extends TaggedError(
+  "CorpusIndexProjectionFenceBusyError",
+)<{ message: string; reason: "lock_unavailable" }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
+
+/**
+ * Take the exclusive side inside a savepoint, so a lock wait the database
+ * gives up on (55P03) rolls back only the savepoint and becomes `busy`. A
+ * granted transaction lock outlives the savepoint's release.
+ */
+const takeCorpusIndexProjectionExclusiveTx = async (
+  tx: Transaction,
+): Promise<Result<void, CorpusIndexProjectionFenceBusyError>> => {
+  const taken = await Result.tryPromise({
+    try: async () =>
+      await withAggregateSavepoint(tx, async (savepoint: Transaction) => {
+        await savepoint.execute(
+          sql`SELECT public.lock_corpus_projection_mutations_exclusive()`,
+        );
+      }),
+    catch: (cause) => cause,
+  });
+  if (taken.isOk()) {
+    return Result.ok(undefined);
+  }
+  if (!isPgError(taken.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    // Not a refusal of this lock. The database failure stays the cause, so
+    // a caller still classifies it (a statement timeout, a deadlock).
+    return panic("The exclusive projection mutation fence failed", taken.error);
+  }
+  return Result.err(
+    new CorpusIndexProjectionFenceBusyError({
+      message:
+        "The exclusive projection mutation fence was not granted within the lock timeout; projection writers are in flight",
+      reason: "lock_unavailable",
+    }),
+  );
+};
+
 const lockCorpusIndexProjectionExclusiveTx = async (
   tx: Transaction,
   target: CorpusProjectionRevisionTarget,
-): Promise<number> => {
-  await tx.execute(
-    sql`SELECT public.lock_corpus_projection_mutations_exclusive()`,
-  );
+): Promise<Result<number, CorpusIndexProjectionFenceBusyError>> => {
+  const taken = await takeCorpusIndexProjectionExclusiveTx(tx);
+  if (taken.isErr()) {
+    return Result.err(taken.error);
+  }
   const revision = requireProjectionRevision(
     await projectionRevisionQuery(tx, target),
     target,
   );
   await pruneCorpusIndexProjectionRevisionsTx(tx, target, revision);
-  return revision;
+  return Result.ok(revision);
 };
 
 export const lockCorpusIndexProjectionIntentMutationsTx = async (
@@ -191,27 +244,33 @@ export const lockCorpusIndexProjectionIntentMutationsTx = async (
 
 /**
  * Fence desired/applied state at one exact mutation revision. The exclusive
- * transaction fence waits for every writer and prevents a new projection
- * mutation from committing across the proof transaction.
+ * transaction fence waits for every writer, at most one lock timeout (then
+ * `busy`), and prevents a new projection mutation from committing across the
+ * proof transaction.
  */
 export const lockCorpusIndexProjectionRevisionTx = async (
   tx: Transaction,
   target: CorpusProjectionRevisionTarget,
-): Promise<number> => await lockCorpusIndexProjectionExclusiveTx(tx, target);
+): Promise<Result<number, CorpusIndexProjectionFenceBusyError>> =>
+  await lockCorpusIndexProjectionExclusiveTx(tx, target);
 
 /**
  * Hold the exclusive side of the mutation fence for a generation flip: every
  * in-flight projection writer has committed, and none can commit until this
  * transaction ends. Unlike the proof fences it reads and prunes nothing, so a
- * dry run of the flip takes it without writing.
+ * dry run of the flip takes it without writing. Writers that do not finish
+ * within one lock timeout make it `busy`.
  */
 export const lockCorpusIndexProjectionFlipTx = async (
   tx: Transaction,
-): Promise<CorpusIndexProjectionFlipFence> => {
-  await tx.execute(
-    sql`SELECT public.lock_corpus_projection_mutations_exclusive()`,
-  );
-  return { [FLIP_FENCE]: true };
+): Promise<
+  Result<CorpusIndexProjectionFlipFence, CorpusIndexProjectionFenceBusyError>
+> => {
+  const taken = await takeCorpusIndexProjectionExclusiveTx(tx);
+  if (taken.isErr()) {
+    return Result.err(taken.error);
+  }
+  return Result.ok({ [FLIP_FENCE]: true });
 };
 
 const FLIP_FENCE = Symbol("corpus-index-projection-flip-fence");
@@ -225,9 +284,11 @@ const FLIP_FENCE = Symbol("corpus-index-projection-flip-fence");
 export type CorpusIndexProjectionFlipFence = { readonly [FLIP_FENCE]: true };
 
 /**
- * Serialize explicit promotion before its final proof and serving flip.
+ * Serialize explicit promotion before its final proof and serving flip;
+ * `busy` when writers do not finish within one lock timeout.
  */
 export const lockCorpusIndexProjectionPromotionTx = async (
   tx: Transaction,
   target: CorpusProjectionRevisionTarget,
-): Promise<number> => await lockCorpusIndexProjectionExclusiveTx(tx, target);
+): Promise<Result<number, CorpusIndexProjectionFenceBusyError>> =>
+  await lockCorpusIndexProjectionExclusiveTx(tx, target);

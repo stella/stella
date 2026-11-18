@@ -1,13 +1,5 @@
 import { Result } from "better-result";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn } from "bun:test";
 
 import {
   CHAT_TURN_ID_HEADER,
@@ -15,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
 import {

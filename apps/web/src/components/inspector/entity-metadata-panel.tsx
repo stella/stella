@@ -222,6 +222,7 @@ const EntityMetadataContent = ({
       ) ?? null,
   );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const refreshEntityFields = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({

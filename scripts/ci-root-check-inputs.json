@@ -501,7 +501,10 @@
       ".github/**",
       "scripts/**"
     ],
-    "Test cancellation evidence": ["scripts/ci-cancellation-contract*"],
+    "Test cancellation evidence": [
+      "scripts/ci-cancellation-contract*",
+      ".github/workflows/cancel-failed-run.yml"
+    ],
     "Test thin merge queue contracts": [
       "scripts/thin-queue*",
       "scripts/main-heavy-plan.ts",

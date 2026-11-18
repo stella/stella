@@ -114,6 +114,7 @@ const decisionPage = (hits: DecisionSearchResponse["hits"]) =>
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,
     total: { type: "exact", count: hits.length },
+    hitOrder: "all_words_first",
     relaxedHitCount: 0,
     termDecisionCounts: null,
     queryUsed: "fixture query",

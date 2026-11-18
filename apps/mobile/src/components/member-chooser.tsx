@@ -1,9 +1,10 @@
 import { use } from "react";
 
 import { Result } from "better-result";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import type { AccessTokenSource } from "@/connection/session";
@@ -56,36 +57,40 @@ export const MemberChooser = ({
         const isLocked = locked.has(member.userId);
         const isChosen = isLocked || chosen.has(member.userId);
         return (
-          <Pressable
+          <Button
             accessibilityRole="checkbox"
-            accessibilityState={{
-              checked: isChosen,
-              disabled: disabled || isLocked,
-            }}
-            className={`active:bg-accent min-h-11 flex-row items-center gap-3 py-2 ${
-              index === loaded.value.length - 1 ? "" : "border-border border-b"
-            }`}
+            accessibilityState={{ checked: isChosen }}
             disabled={disabled || isLocked}
             key={member.userId}
             onPress={() => {
               onToggle(member, !isChosen);
             }}
+            size="row"
+            variant="ghost"
           >
-            <View className="min-w-0 flex-1 gap-0.5">
-              <Text numberOfLines={1} variant="rowTitle">
-                {member.userId === self ? t("you") : member.name}
-              </Text>
-              <Text numberOfLines={1} variant="caption">
-                {member.email}
-              </Text>
+            <View
+              className={`flex-1 flex-row items-center gap-3 ${
+                index === loaded.value.length - 1
+                  ? ""
+                  : "border-border border-b"
+              }`}
+            >
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text numberOfLines={1} variant="rowTitle">
+                  {member.userId === self ? t("you") : member.name}
+                </Text>
+                <Text numberOfLines={1} variant="caption">
+                  {member.email}
+                </Text>
+              </View>
+              {isChosen ? (
+                <CheckIcon
+                  color={isLocked ? ui.mutedForeground : ui.foreground}
+                  size={18}
+                />
+              ) : null}
             </View>
-            {isChosen ? (
-              <CheckIcon
-                color={isLocked ? ui.mutedForeground : ui.foreground}
-                size={18}
-              />
-            ) : null}
-          </Pressable>
+          </Button>
         );
       })}
     </View>
