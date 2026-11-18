@@ -102,8 +102,15 @@ export const MAX_SLUG_LENGTH = 64;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-/** Names of pages beside the entries, which an entry's page cannot take. */
-const RESERVED_CATALOGUE_SLUGS: readonly string[] = ["contribute"];
+/**
+ * Names of pages beside the entries, which an entry's page cannot take: the
+ * contribute form, the published list, and an organization's own skills.
+ */
+const RESERVED_CATALOGUE_SLUGS: readonly string[] = [
+  "catalogue",
+  "contribute",
+  "skills",
+];
 
 /**
  * A catalogue entry's slug. It shares the `/knowledge/tools/<name>` space with
