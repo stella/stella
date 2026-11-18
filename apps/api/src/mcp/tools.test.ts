@@ -7203,7 +7203,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
       expect(warnings).toHaveLength(1);
-      expect(warnings.at(0)?.["message"]).toContain("required 6 words");
+      expect(warnings.at(0)?.["message"]).toContain("has 6 words");
       expect(warnings.at(0)?.["message"]).toContain(SIX_WORD_PHRASE);
     });
 
