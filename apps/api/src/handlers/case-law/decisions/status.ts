@@ -9,7 +9,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
-import { caseLawSourceJurisdiction } from "@/api/handlers/case-law/decisions/coverage";
+import { caseLawSourcePlacement } from "@/api/handlers/case-law/decisions/coverage";
 import {
   CASE_LAW_COVERAGE_HEALTH,
   caseLawCountryHealth,
@@ -31,10 +31,7 @@ import {
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
-import {
-  type AdapterEdition,
-  adapterEditionOf,
-} from "@/api/lib/legal-search/adapter-manifest";
+import type { AdapterEdition } from "@/api/lib/legal-search/adapter-manifest";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -139,6 +136,7 @@ type CaseLawSourceHealthRow = {
   adapterKey: string;
   enabled: boolean;
   lastSyncAt: Date | null;
+  importSnapshotDate: string | null;
 };
 
 /**
@@ -159,6 +157,7 @@ export const readCaseLawSourceHealthQuery = definePublicLawSharedQuery(
           adapterKey: caseLawSources.adapterKey,
           enabled: caseLawSources.enabled,
           lastSyncAt: caseLawSources.lastSyncAt,
+          importSnapshotDate: caseLawSources.importSnapshotDate,
         })
         .from(caseLawSources)
         .where(redistributableCaseLawSource)
@@ -272,15 +271,18 @@ export const loadCaseLawCorpusSnapshot = async ({
     decisions: bucket?.count ?? 0,
     updatedAt: updatedAt.value,
     sources: sources.value.rows.flatMap(
-      ({ adapterKey, enabled, id, lastSyncAt }) => {
-        // A key no manifest names belongs to no jurisdiction, so the
-        // jurisdiction check already drops it; the edition read states it.
-        const edition = adapterEditionOf(adapterKey);
-        return edition === null ||
+      ({ adapterKey, enabled, id, importSnapshotDate, lastSyncAt }) => {
+        // Placed the way the coverage page places it: a key no registry
+        // knows, and an import with no completed run, belong to no country.
+        const placement = caseLawSourcePlacement({
+          adapterKey,
+          importSnapshotDate,
+        });
+        return placement.type !== "placed" ||
           withheld.has(String(id)) ||
-          caseLawSourceJurisdiction(adapterKey) !== country
+          placement.country !== country
           ? []
-          : [{ edition, enabled, lastSyncAt }];
+          : [{ edition: placement.edition, enabled, lastSyncAt }];
       },
     ),
   });
