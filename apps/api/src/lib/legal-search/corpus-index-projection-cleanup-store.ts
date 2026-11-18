@@ -1114,50 +1114,45 @@ export const claimCorpusProjectionCleanupSettlementTx = async <
       });
   };
   // A locked task that yields no revision (drained, or its revisions busy or
-  // leased by an earlier release) does not spend the turn's task quota: the
-  // next planned tasks are locked in its place until the quota is filled or
-  // the planned window runs out, so an empty result means no task in it was
-  // runnable.
-  const lockedTasks: Awaited<
-    ReturnType<typeof lockFreeCorpusProjectionDeleteTasks>
-  > = [];
-  const candidates: Awaited<ReturnType<typeof committedRevisionsOf>> = [];
-  const claimedOpstamps = new Set<string>();
-  let unlocked = planned.map(({ deleteOpstamp }) => deleteOpstamp);
-  while (claimedOpstamps.size < taskLimit && unlocked.length > 0) {
-    // db-await-in-loop: each pass locks only the tasks the last one could not fill the quota with.
-    const locked = await lockFreeCorpusProjectionDeleteTasks(tx, {
-      ...taskKey,
-      deleteOpstamps: unlocked,
-      limit: taskLimit - claimedOpstamps.size,
-    });
-    if (locked.length === 0) {
-      break;
-    }
-    // A task this turn locked is not skipped by a later SKIP LOCKED read, so
-    // the next pass looks only past it.
-    const lockedKeys = new Set(
-      locked.map(({ deleteOpstamp }) => String(deleteOpstamp)),
-    );
-    unlocked = unlocked.filter((opstamp) => !lockedKeys.has(String(opstamp)));
-    lockedTasks.push(...locked);
-    const opstamps = locked.map(({ deleteOpstamp }) => deleteOpstamp);
-    // db-await-in-loop: the revisions of this pass's tasks only.
-    const found = await committedRevisionsOf(opstamps);
-    for (const { deleteOpstamp } of found) {
-      claimedOpstamps.add(String(deleteOpstamp));
-    }
-    candidates.push(...found);
-    // A planned task with nothing to lease either has no committed revision
-    // left (a settlement or reissue by an earlier release kept its row), and
-    // leaves the queue, or its revisions are busy elsewhere, and it stays.
-    // db-await-in-loop: drops this pass's drained tasks.
-    await deleteDrainedLockedDeleteTasksTx(
-      tx,
-      taskKey,
-      opstamps.filter((opstamp) => !claimedOpstamps.has(String(opstamp))),
-    );
-  }
+  // leased by an earlier release) does not spend the turn's task quota: every
+  // planned task is locked and read at once, and the quota goes to the first
+  // ones in queue order that yield revisions, so an empty result means no task
+  // in the planned window was runnable. The window is a fixed multiple of the
+  // quota, so the turn stays three statements whatever it skips; rows locked
+  // past the quota are released with the transaction and stay unleased.
+  const allLocked = await lockFreeCorpusProjectionDeleteTasks(tx, {
+    ...taskKey,
+    deleteOpstamps: planned.map(({ deleteOpstamp }) => deleteOpstamp),
+    limit: planned.length,
+  });
+  const found =
+    allLocked.length === 0
+      ? []
+      : await committedRevisionsOf(
+          allLocked.map(({ deleteOpstamp }) => deleteOpstamp),
+        );
+  const yielding = new Set(
+    found.map(({ deleteOpstamp }) => String(deleteOpstamp)),
+  );
+  const lockedTasks = allLocked
+    .filter(({ deleteOpstamp }) => yielding.has(String(deleteOpstamp)))
+    .slice(0, taskLimit);
+  const claimedOpstamps = new Set(
+    lockedTasks.map(({ deleteOpstamp }) => String(deleteOpstamp)),
+  );
+  const candidates = found.filter(({ deleteOpstamp }) =>
+    claimedOpstamps.has(String(deleteOpstamp)),
+  );
+  // A planned task with nothing to lease either has no committed revision
+  // left (a settlement or reissue by an earlier release kept its row), and
+  // leaves the queue, or its revisions are busy elsewhere, and it stays.
+  await deleteDrainedLockedDeleteTasksTx(
+    tx,
+    taskKey,
+    allLocked
+      .map(({ deleteOpstamp }) => deleteOpstamp)
+      .filter((opstamp) => !yielding.has(String(opstamp))),
+  );
   const taskInstants = new Map(
     lockedTasks.map(({ deleteOpstamp, taskCreatedAt }) => [
       deleteOpstamp.toString(),
