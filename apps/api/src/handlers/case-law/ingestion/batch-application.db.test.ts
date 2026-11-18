@@ -1632,7 +1632,7 @@ describe("a decision a writer cannot project into every generation", () => {
         (await crawlCaller.apply({ sourceId, decisions, corpus })).type,
       ).toBe("certified");
       const cursor = await sourceCursor(sourceId);
-      const [settled] = await decisionRows(sourceId);
+      const settled = await decisionRows(sourceId);
 
       await db.insert(corpusIndexGenerations).values(unknown);
       const held = await crawlCaller.apply({ sourceId, decisions, corpus });
@@ -1644,7 +1644,7 @@ describe("a decision a writer cannot project into every generation", () => {
         ),
       });
       expect(await sourceCursor(sourceId)).toBe(cursor);
-      expect(await decisionRows(sourceId)).toEqual([settled]);
+      expect(await decisionRows(sourceId)).toEqual(settled);
 
       // Once no writer is asked for a generation it does not know, the same
       // page is read again and the existing row settles as before.
