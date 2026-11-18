@@ -9,6 +9,7 @@ import {
   DECISION_TEXT_WITHHELD_REASON,
 } from "@stll/api-contract/case-law-text-field";
 import {
+  CASE_LAW_HIT_ORDERS,
   CASE_LAW_SEARCH_FACET_NAMES,
   CASE_LAW_SEARCH_WARNING_CODES,
   DECISION_SEARCH_MATCHES,
@@ -326,6 +327,8 @@ export const searchDecisionsSuccessResponseSchema = v.object({
     v.null(),
   ]),
   total: searchTotalSchema,
+  /** The order `hits` are in, which a reader merging pages keeps. */
+  hitOrder: v.picklist([...CASE_LAW_HIT_ORDERS]),
   /** Hits on this page appended by the any-word phase, outside `total`. */
   relaxedHitCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   /**

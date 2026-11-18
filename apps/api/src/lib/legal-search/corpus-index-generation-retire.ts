@@ -384,6 +384,9 @@ export const countCorpusIndexGenerationHistoryTx = async (
   return { states: states?.count ?? 0, intents: intents?.count ?? 0 };
 };
 
+const busyMessage = ({ family, generation }: CorpusIndexRetireTarget) =>
+  `The retire of ${family}/${generation} did not get its locks or its time; nothing changed, retry when the projection is quieter`;
+
 type CorpusIndexRetireOutcome =
   | { type: "retired"; target: CorpusIndexRetireTarget; retiredAt: Date }
   | {
@@ -408,7 +411,13 @@ const retireUnderFencesTx = async (
   // state, intent, flip receipt or registry row changes until this commits,
   // so the decision read below holds for the update.
   await lockCorpusIndexGenerationActivationTx(tx, target.family);
-  await lockCorpusIndexProjectionFlipTx(tx);
+  const fenced = await lockCorpusIndexProjectionFlipTx(tx);
+  if (fenced.isErr()) {
+    return refuse(
+      { class: "busy", reason: fenced.error.reason },
+      busyMessage(target),
+    );
+  }
   const decided = await readCorpusIndexRetireTx(tx, target);
   if (decided.isErr()) {
     return Result.err(decided.error);
@@ -464,10 +473,7 @@ export const retireCorpusIndexGeneration = async (
         "Corpus generation retire transaction failed; if it failed while committing, retire again reports already_retired when it landed",
         ran.error,
       )
-    : refuse(
-        { class: "busy", reason: busy },
-        `The retire of ${target.family}/${target.generation} did not get its locks or its time; nothing changed, retry when the projection is quieter`,
-      );
+    : refuse({ class: "busy", reason: busy }, busyMessage(target));
 };
 
 /** The engine side of the retire: list indexes and delete them. */

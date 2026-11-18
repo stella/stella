@@ -137,6 +137,7 @@ import {
   toMatterActivityDateRange,
   toSingleActivityGroup,
 } from "./activity-panel.logic";
+import { HorizontalTodayMarker } from "./activity-today-marker";
 
 type ActivityPanelProps = { workspaceId: string };
 
@@ -985,22 +986,6 @@ const HorizontalTimeline = ({
     </div>
   </div>
 );
-
-const HorizontalTodayMarker = () => {
-  const t = useTranslations();
-  return (
-    <div className="w-20 shrink-0 snap-end">
-      <div className="h-5" />
-      <div className="text-destructive text-2xs mt-1 h-4 text-end font-medium">
-        {t("common.today")}
-      </div>
-      <div aria-hidden="true" className="relative mt-2 h-3">
-        <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
-        <span className="bg-destructive absolute end-0 top-0 h-3 w-px" />
-      </div>
-    </div>
-  );
-};
 
 const HorizontalActivityMilestone = ({
   dateAt,

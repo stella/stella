@@ -558,6 +558,43 @@ test("a pending decision some generation already holds is seeded, so every gener
   expect(await statesOf(CASE_LAW)).toEqual([decisionId(1)]);
 });
 
+test("a pending decision held only by a generation this release does not know is seeded here too", async () => {
+  // A generation a newer release registered: no manifest in this process. The
+  // walk asks the registry where a state can exist, not the manifests it was
+  // built with, so the decision is not deferred as shown nowhere.
+  await register("case_law_v5", "building");
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: "case_law_v99",
+    cluster: "q09",
+    manifestDigest: "f".repeat(64),
+    status: "building",
+  });
+  await standUpUnseeded(async (tx) => {
+    await insertPendingDecision(tx, 1);
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 1n })
+      .where(eq(caseLawDecisions.id, decisionId(1)));
+    await tx.insert(corpusIndexProjectionStates).values({
+      family: "case_law",
+      generation: "case_law_v99",
+      entityId: decisionId(1),
+      desiredAction: "upsert",
+      desiredEpoch: 1n,
+      desiredFingerprint: "e".repeat(64),
+      desiredIndexId: "case_law_v99_cs_sk",
+    });
+  });
+
+  expect(await advance(CASE_LAW, 10)).toMatchObject({
+    type: "advanced",
+    seeded: 1,
+    pass: { deferred: 0 },
+  });
+  expect(await statesOf(CASE_LAW)).toEqual([decisionId(1)]);
+});
+
 test("a decision that settles behind the cursor is seeded in every generation by its own settle transaction", async () => {
   await inTx(async (tx) => {
     await insertPendingDecision(tx, 1);

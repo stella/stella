@@ -1708,6 +1708,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          hitOrder: "all_words_first",
           relaxedHitCount: 0,
           termDecisionCounts: null,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
@@ -1792,6 +1793,7 @@ const CONTRACT_CORPUS = {
           total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
           queryUsed: "dobré mravy",
           warnings: [],
+          hitOrder: "all_words_first",
           relaxedHitCount: 0,
           termDecisionCounts: null,
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);

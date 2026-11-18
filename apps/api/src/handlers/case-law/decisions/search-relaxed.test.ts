@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import { readFailureBrand } from "@stll/errors";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   corpusIndexBudgetExpiry,
@@ -20,22 +21,32 @@ import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-bu
 
 import {
   allTermsHeld,
+  copiesShownSinceRead,
   distinctRequiredTerms,
   fewDecisionsHoldEveryWord,
   hitTermsFromCoverage,
+  mergeWordsRead,
   rankByTermCoverage,
   readTermCoverage,
   readTermDecisionCounts,
   relaxedFetchLimit,
   relaxedTopUpOutcome,
   shouldRelaxCaseLawSearch,
+  wordsHeldAt,
 } from "./search-relaxed";
+
+/** `count` distinct words, as a query's terms. */
+const wordsOf = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    type: "term",
+    value: `slovo${String(index)}`,
+  }));
 
 const ELIGIBLE = {
   body: {},
   intentType: "text",
   isFirstPage: true,
-  requiredTermCount: 3,
+  requiredTerms: wordsOf(3),
   sort: "relevance",
   strictHitCount: 2,
   limit: 10,
@@ -56,15 +67,39 @@ describe("when a short strict page is topped up", () => {
     ["sort newest", { sort: "newest" }],
     ["a full strict page", { strictHitCount: 10 }],
     ["an identifier lookup", { intentType: "identifier" }],
-    ["a single required term", { requiredTermCount: 1 }],
+    ["a single required term", { requiredTerms: wordsOf(1) }],
+    [
+      "one word repeated",
+      {
+        requiredTerms: [
+          { type: "term", value: "škoda" },
+          { type: "term", value: "škoda" },
+        ],
+      },
+    ],
     [
       "more words than the phase checks one by one",
-      { requiredTermCount: LIMITS.caseLawSearchTermCountsMax + 1 },
+      { requiredTerms: wordsOf(LIMITS.caseLawSearchTermCountsMax + 1) },
     ],
     ["a continuation", { strictEnd: SEARCH_PAGE_END.MORE }],
     ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
   ] as const)("%s is not", (_name, override) => {
     expect(shouldRelaxCaseLawSearch({ ...ELIGIBLE, ...override })).toBe(false);
+  });
+
+  test("the word bound counts a repeated word once", () => {
+    // More occurrences than the bound, two distinct words: the queries built
+    // from them hold two words, so the pass is due.
+    const repeated = [
+      ...Array.from({ length: LIMITS.caseLawSearchTermCountsMax + 1 }, () => ({
+        type: "term",
+        value: "škoda",
+      })),
+      { type: "term", value: "nárok" },
+    ];
+    expect(
+      shouldRelaxCaseLawSearch({ ...ELIGIBLE, requiredTerms: repeated }),
+    ).toBe(true);
   });
 
   test("strict: false still relaxes", () => {
@@ -125,7 +160,7 @@ describe("when the words are counted one by one", () => {
   const SHORT = {
     intentType: "text",
     isFirstPage: true,
-    requiredTermCount: 3,
+    requiredTerms: wordsOf(3),
     strictHitCount: 2,
     limit: 10,
     strictEnd: SEARCH_PAGE_END.COMPLETE,
@@ -140,7 +175,7 @@ describe("when the words are counted one by one", () => {
     ["a continuation page", { isFirstPage: false }],
     ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
     ["an identifier", { intentType: "identifier" }],
-    ["one word", { requiredTermCount: 1 }],
+    ["one word", { requiredTerms: wordsOf(1) }],
   ] as const)("%s is not", (_name, override) => {
     expect(fewDecisionsHoldEveryWord({ ...SHORT, ...override })).toBe(false);
   });
@@ -445,5 +480,38 @@ test.each([
   expect(readFailureBrand(result.error)).toEqual({
     reason: "response_invalid",
     source: "instance",
+  });
+});
+
+describe("the words a hit shows are read off the copy it shows", () => {
+  const older = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-0000000000b1",
+  );
+  const newer = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-0000000000b2",
+  );
+  const read = new Map([
+    ["kept", { revision: older, held: new Set([0, 1]) }],
+    ["refreshed", { revision: older, held: new Set([0, 1]) }],
+  ]);
+
+  test("a decision shown from a newer copy is named for a second read", () => {
+    expect(
+      copiesShownSinceRead(read, (id) => (id === "refreshed" ? newer : older)),
+    ).toEqual([{ id: "refreshed", revision: newer }]);
+  });
+
+  test("words read off another copy never reach a hit", () => {
+    expect(wordsHeldAt(read, "kept", older)).toEqual(new Set([0, 1]));
+    expect(() => wordsHeldAt(read, "refreshed", newer)).toThrow("another copy");
+    expect(() => wordsHeldAt(read, "kept", null)).toThrow("another copy");
+  });
+
+  test("a second read answers for the copy it re-read", () => {
+    const merged = mergeWordsRead(
+      read,
+      new Map([["refreshed", { revision: newer, held: new Set([0]) }]]),
+    );
+    expect(wordsHeldAt(merged, "refreshed", newer)).toEqual(new Set([0]));
   });
 });

@@ -35,7 +35,7 @@ import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bou
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
-  test("an ÚOHS citation normalizes to the adapter's emitted identifier", () => {
+  test("an ÚOHS citation keys as the adapter's emitted identifier", () => {
     const [citation] = extractCitations([
       { index: 0, text: "ÚOHS ÚOHS-R0901/2026/VZ" },
     ]);
@@ -48,7 +48,7 @@ describe("extractCitations", () => {
         citation!.identifierType,
         citation!.citationText,
       ),
-    ).toBe(emitted[0].value);
+    ).toBe(normalizeDecisionIdentifierValue(emitted[0].type, emitted[0].value));
   });
   test.each([
     ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],

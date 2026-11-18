@@ -942,7 +942,11 @@ const commitCorpusIndexGenerationFlipTx = async (
   // then the projection fence. Under both, no projection state, intent or
   // registry row can change until this transaction ends.
   await lockCorpusIndexGenerationActivationTx(tx, family);
-  const fence = await lockCorpusIndexProjectionFlipTx(tx);
+  const fenced = await lockCorpusIndexProjectionFlipTx(tx);
+  if (fenced.isErr()) {
+    return refuseBusy(fenced.error.reason, plan.request);
+  }
+  const fence = fenced.value;
   const pair = await requireSamePairTx(tx, plan);
   if (pair.isErr()) {
     return Result.err(pair.error);
