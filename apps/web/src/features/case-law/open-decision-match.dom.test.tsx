@@ -76,6 +76,7 @@ const installSearch = (pageReach: SearchPageReach) => {
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         pageReach,
         total: { type: "exact", count: 1 },
+        hitOrder: "all_words_first",
         relaxedHitCount: 0,
         termDecisionCounts: null,
         queryUsed: ECLI,

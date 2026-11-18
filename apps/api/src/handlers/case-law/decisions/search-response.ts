@@ -177,6 +177,7 @@ export const projectCaseLawSearchResponse = (
             .map(projectBucket),
         },
   total: response.total,
+  hitOrder: response.hitOrder,
   relaxedHitCount: response.relaxedHitCount,
   termDecisionCounts:
     response.termDecisionCounts === null

@@ -392,6 +392,11 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
         .where(eq(caseLawSources.id, FIXTURE_SOURCE));
     });
 
+  /** The engine loses a decision's documents, as a lost split would. */
+  const loseRevision = (generation: FlipGeneration, n: number, epoch = 1) => {
+    engine.delete(revisionId(generation, n, epoch));
+  };
+
   const reset = () => {
     engine.clear();
     lost.clear();
@@ -412,5 +417,6 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
     seedErased,
     seedPending,
     readyPair,
+    loseRevision,
   };
 };
