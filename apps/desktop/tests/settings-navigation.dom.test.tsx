@@ -296,13 +296,36 @@ test("a focus sent with any other page is ignored", async () => {
 });
 
 test("an unknown page id keeps the open page", async () => {
-  const { nav } = await renderApp({});
+  const { entry, nav } = await renderApp({});
+  await act(async () => {
+    fireEvent.click(entry(pages.about));
+  });
 
   await act(async () => {
     await emit("activate-tab", { tab: "billing" });
   });
 
+  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
+});
+
+test("leaving AI and agents drops a link's focus before its card shows", async () => {
+  const { entry, nav } = await renderApp({});
+  await act(async () => {
+    await emit("activate-tab", { tab: "agents", focus: "codex" });
+  });
+  await act(async () => {
+    fireEvent.click(entry(pages.general));
+  });
+
+  await act(async () => {
+    fireEvent.click(entry(pages.agents));
+  });
+  await act(async () => {
+    await drainReactScheduler();
+  });
+
   expect(currentEntries(nav)).toEqual([
-    { current: "page", name: pages.general },
+    { current: "page", name: pages.agents },
   ]);
+  expect(document.activeElement?.closest("[data-agent-settings]")).toBeNull();
 });

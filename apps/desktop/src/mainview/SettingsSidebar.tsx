@@ -145,10 +145,10 @@ const SidebarIdentity = ({
           {display.name ?? t("stellaDesktop")}
         </TruncatedText>
         {tone === null ? null : (
-          // A long host wraps rather than being cut: it says which server
-          // this computer talks to.
+          // A long host wraps to a second line and is cut there, so the
+          // pages below keep their room; General shows it whole.
           <ListItemStatus className="min-w-0 whitespace-normal" tone={tone}>
-            <span className="min-w-0 wrap-anywhere">
+            <TruncatedText lines={2}>
               {t(display.presentation.statusKey)}
               {display.presentation.host ? (
                 <>
@@ -156,7 +156,7 @@ const SidebarIdentity = ({
                   <bdi dir="ltr">{display.presentation.host}</bdi>
                 </>
               ) : null}
-            </span>
+            </TruncatedText>
           </ListItemStatus>
         )}
       </div>

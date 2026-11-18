@@ -164,11 +164,27 @@ export const useDictationAvailability = () => {
  *  the speech model and what went wrong. Renders nothing for an account
  *  without the feature. */
 export const DictationSetting = () => {
+  // Reading again after a failure starts the page afresh.
+  const [attempt, setAttempt] = useState(0);
+  return (
+    <DictationPage
+      key={attempt}
+      onRetry={() => {
+        setAttempt((current) => current + 1);
+      }}
+    />
+  );
+};
+
+const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations("dictation");
   const tDestination = useTranslations("dictation.destination");
   const locale = useLocale();
   const layout = useKeyboardLayout();
   const [snapshot, setSnapshot] = useState<DictationSnapshot | null>(null);
+  // A failed read says so and offers another, rather than leaving the page
+  // empty until the next change event.
+  const [read, setRead] = useState<"pending" | "failed" | "done">("pending");
   const [removeFailed, setRemoveFailed] = useState(false);
 
   useEffect(() => {
@@ -180,11 +196,12 @@ export const DictationSetting = () => {
       if (disposed) {
         return;
       }
-      setSnapshot(
+      const next =
         Result.isOk(result) && isDictationSnapshot(result.value)
           ? result.value
-          : null,
-      );
+          : null;
+      setSnapshot(next);
+      setRead(next === null ? "failed" : "done");
     };
     const stopListening = subscribeDesktopEvent({
       event: "dictation-changed",
@@ -193,6 +210,7 @@ export const DictationSetting = () => {
       },
       onError: () => {
         setSnapshot(null);
+        setRead("failed");
       },
     });
     void refresh();
@@ -201,6 +219,10 @@ export const DictationSetting = () => {
       stopListening();
     };
   }, []);
+
+  if (read === "failed") {
+    return <DictationReadFailed onRetry={onRetry} />;
+  }
 
   if (snapshot === null || !snapshot.available) {
     return null;
@@ -440,6 +462,25 @@ export const DictationSetting = () => {
           )}
         </>
       )}
+    </div>
+  );
+};
+
+/** The page's title, what failed and the one action that reads again. */
+const DictationReadFailed = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("dictation");
+  const tSettings = useTranslations("settings");
+  return (
+    <div className="flex flex-col gap-6">
+      <SettingsPageHeader title={t("title")} />
+      <div className="flex items-center justify-between gap-4 px-1">
+        <p className="text-destructive-foreground text-sm" role="alert">
+          {tSettings("errorReadState")}
+        </p>
+        <Button onClick={onRetry} variant="outline">
+          {tSettings("tryAgain")}
+        </Button>
+      </div>
     </div>
   );
 };

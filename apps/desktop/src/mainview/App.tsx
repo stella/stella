@@ -936,9 +936,11 @@ const App = () => {
             return;
           }
           setActivePage(nextPage);
-          if (nextPage === "agents" && isAgentSettingsFocus(focus)) {
-            setAgentSettingsFocus(focus);
-          }
+          // A focus belongs to the link that sent it; any other opening
+          // drops one still waiting for its card.
+          setAgentSettingsFocus(
+            nextPage === "agents" && isAgentSettingsFocus(focus) ? focus : null,
+          );
         },
         onError: reportSubscriptionFailure,
       }),
@@ -1301,7 +1303,11 @@ const App = () => {
       <SettingsSidebar
         accountState={accountState}
         current={shownPage}
-        onSelect={setActivePage}
+        onSelect={(nextPage) => {
+          setActivePage(nextPage);
+          // Choosing a page by hand is never the link's visit.
+          setAgentSettingsFocus(null);
+        }}
         pages={pages}
         topInset={isMacDesktop ? "titleBar" : "none"}
       />

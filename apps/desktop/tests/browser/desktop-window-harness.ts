@@ -22,6 +22,7 @@ import {
   SETTINGS_DICTATION,
   SETUP_PERMISSIONS,
   SHORTCUT,
+  SIGNING_DRIVER,
 } from "./fixtures/desktop-window-snapshots";
 import {
   installTauriIpc,
@@ -135,6 +136,8 @@ type WindowFixture = {
   /** What the OS answers when the window asks for a permission. */
   requestOutcome: PermissionStatus;
   shortcut: ClipboardShortcutSnapshot;
+  /** The smart card driver setting, or null where it is not offered. */
+  signingDriver: unknown;
 };
 
 const openWindow = async (
@@ -173,7 +176,7 @@ const openWindow = async (
       // No install status either, read the same as the refusal with local agents off.
       harness_get_status: () => null,
       local_skill_folders_get: () => null,
-      signing_driver_get: () => null,
+      signing_driver_get: () => data.signingDriver,
       local_linked_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
@@ -231,6 +234,7 @@ export const openOnboardingWindow = async (
       permissions: SETUP_PERMISSIONS,
       requestOutcome: options.requestOutcome ?? "granted",
       shortcut: SHORTCUT,
+      signingDriver: null,
     },
     path: "/",
     platform: options.platform,
@@ -254,7 +258,11 @@ export const SETTINGS_PAGES = [
   "about",
 ] as const;
 
-export type SettingsPage = (typeof SETTINGS_PAGES)[number];
+/** Pages only macOS shows. */
+export const MAC_SETTINGS_PAGES = ["signing"] as const;
+
+export type SettingsPage =
+  (typeof SETTINGS_PAGES)[number] | (typeof MAC_SETTINGS_PAGES)[number];
 
 /** Opens the settings window, linked to an account, on one page. */
 export const openSettingsWindow = async (
@@ -276,6 +284,7 @@ export const openSettingsWindow = async (
       permissions: PERMISSIONS,
       requestOutcome: "granted",
       shortcut: SHORTCUT,
+      signingDriver: SIGNING_DRIVER,
     },
     path: `/#${tab}`,
     platform: options.platform,
@@ -300,10 +309,20 @@ export const openSettingsWindow = async (
     await expect(page.getByRole("checkbox").first()).toBeEnabled();
   }
   if (tab === "dictation") {
+    const pane = page.locator("[data-slot=settings-page]");
+    await expect(pane.getByRole("alert")).toBeVisible();
+    // Cleanup and both of its context switches, all switchable.
     await expect(
-      page.locator("[data-slot=settings-row][data-disabled]"),
+      pane.locator("[data-slot=settings-row] [role=switch]"),
+    ).toHaveCount(3);
+    await expect(
+      pane.locator("[data-slot=settings-row][data-disabled]"),
     ).toHaveCount(0);
-    await expect(page.getByRole("alert")).toBeVisible();
+  }
+  if (tab === "signing") {
+    await expect(
+      page.locator("[data-slot=settings-page] [data-slot=list] button").first(),
+    ).toBeVisible();
   }
   if (tab === "permissions") {
     await expect(page.locator("[data-permission]").first()).toBeVisible();

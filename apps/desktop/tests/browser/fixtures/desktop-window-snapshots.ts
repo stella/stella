@@ -1,6 +1,7 @@
 import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
 import type { DictationSnapshot as DictationSettingSnapshot } from "../../../src/mainview/DictationSetting";
 import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
+import type { SigningDriverStatus } from "../../../src/mainview/signing-driver-status";
 import type { PermissionsSnapshot } from "../../../src/shared/permissions";
 import type {
   AppSnapshot,
@@ -101,6 +102,12 @@ export const CLOUD_MODELS = {
   ],
   unavailable: null,
 };
+
+/** A chosen smart card driver, as the macOS signing setting reports it. */
+export const SIGNING_DRIVER = {
+  path: "/Library/Frameworks/eToken.framework/Versions/A/libeToken.dylib",
+  problem: null,
+} as const satisfies SigningDriverStatus;
 
 export const ACCOUNT = {
   account: {

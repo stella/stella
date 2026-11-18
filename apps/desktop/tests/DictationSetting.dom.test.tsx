@@ -49,10 +49,12 @@ const renderSetting = async (
   onCommand: (command: string, payload: unknown) => unknown = () => undefined,
 ) => {
   mockIPC((command, payload) => {
+    const answered = onCommand(command, payload);
+    // A test may answer the snapshot read itself, to change it between reads.
     if (command === "dictation_get_snapshot") {
-      return snapshot;
+      return answered ?? snapshot;
     }
-    return onCommand(command, payload);
+    return answered;
   });
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
@@ -65,15 +67,39 @@ const renderSetting = async (
   return view;
 };
 
-test.each([
-  ["without the feature", { available: false }],
-  ["from a native side that has no answer", undefined],
-  ["from a native side that sends something else", { status: "unknown" }],
-])("shows nothing at all %s", async (_case, snapshot) => {
-  const { container } = await renderSetting(snapshot);
+test("shows nothing at all without the feature", async () => {
+  const { container } = await renderSetting({ available: false });
 
   expect(container.innerHTML).toBe("");
 });
+
+test.each([
+  ["has no answer", undefined],
+  ["sends something else", { status: "unknown" }],
+])(
+  "a native side that %s is reported with a way to read again",
+  async (_case, answer) => {
+    let reply: unknown = answer;
+    const { findByRole, getByRole } = await renderSetting(
+      undefined,
+      (command) => (command === "dictation_get_snapshot" ? reply : undefined),
+    );
+    expect((await findByRole("alert")).textContent).toBe(
+      defaultMessages.settings.errorReadState,
+    );
+
+    reply = ENABLED_SNAPSHOT;
+    await act(async () => {
+      fireEvent.click(
+        getByRole("button", { name: defaultMessages.settings.tryAgain }),
+      );
+    });
+
+    expect(
+      await findByRole("switch", { name: defaultMessages.dictation.title }),
+    ).toBeTruthy();
+  },
+);
 
 test("shows the page to an enrolled account, with the switch in its header", async () => {
   const { getByRole } = await renderSetting(ENABLED_SNAPSHOT);
