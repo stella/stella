@@ -5859,8 +5859,6 @@ describe("OpenAI-compatible MCP tools", () => {
                 maxLength: 256,
                 description:
                   "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
-||||||| parent of 136f575b97da (fix(legislation): annexes read by their number and stay in a bounded outline)
-                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision; the wording of the units around it that governs it comes back in governingText. Other publishers may use different schemes.",
               },
               as_of: {
                 type: "string",
