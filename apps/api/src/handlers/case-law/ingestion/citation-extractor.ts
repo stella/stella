@@ -1463,7 +1463,11 @@ const canonicalizeDedupKey = (text: string): string => {
 
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
-    const canonical = `${requiredGroup(consolidated.groups, "number")}${requiredGroup(consolidated.groups, "registry")}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
+    const registry = requiredGroup(
+      consolidated.groups,
+      "registry",
+    ).toLowerCase();
+    const canonical = `${requiredGroup(consolidated.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 

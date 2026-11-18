@@ -209,6 +209,13 @@ describe("extractCitations", () => {
     },
   );
 
+  test("keys a consolidated NSČR docket as the stored NSCR one", () => {
+    expect(citationKeyOf("29 NSČR 112,113/2013")).toBe("29nscr/112,113/2013");
+    expect(citationKeyOf("29 NSČR 112,113/2013")).toBe(
+      citationKeyOf("29 NSCR 112,113/2013"),
+    );
+  });
+
   test("keeps the diacritic of a register stored with it", () => {
     // The Slovak administrative register "Sžo" is stored as printed, so its
     // key keeps the diacritic and stays equal to the stored rows' keys.
