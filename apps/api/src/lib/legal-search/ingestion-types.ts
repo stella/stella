@@ -1894,6 +1894,29 @@ const replayedPublisherRecord = (
   }
 };
 
+/**
+ * A page fetch that threw, as the failure a cycle stores. It keeps the
+ * cause's own words: they are stored on the cycle event, logged when the
+ * cycle stops and what a park compares, and the wrapper's text alone says
+ * nothing about why the page failed. A thrown adapter failure passes through
+ * as it was raised.
+ */
+const thrownPageFailure = (
+  adapterKey: AdapterKey,
+  cursor: string | null,
+  cause: unknown,
+): AdapterFetchError =>
+  cause instanceof AdapterFetchError
+    ? cause
+    : new AdapterFetchError({
+        message: `Adapter page fetch failed: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+        adapterKey,
+        cursor,
+        cause,
+      });
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1991,13 +2014,7 @@ export const defineSourceAdapter = <
         fetchPage: async () => {
           const fetched = await Result.tryPromise({
             try: async () => await adapter.fetchPage(cursor, config, signal),
-            catch: (cause) =>
-              new AdapterFetchError({
-                message: "Adapter page fetch failed",
-                adapterKey: adapter.key,
-                cursor,
-                cause,
-              }),
+            catch: (cause) => thrownPageFailure(adapter.key, cursor, cause),
           });
           const page = fetched.andThen((outcome) => outcome);
           if (Result.isError(page)) {
