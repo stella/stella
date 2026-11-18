@@ -912,6 +912,7 @@ type BuildChatSystemPromptProps = {
   browserExtension?: TurnBrowserExtension | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
+  legislationDb?: LegislationPublicReadDb;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
@@ -1196,10 +1197,25 @@ const requireActiveSkillInBindingScope = ({
         }),
       );
 
+/** The sections for the decision and the act the user has open. */
+const buildActiveCorpusSections = async (
+  props: ActiveDecisionSectionProps & ActiveStatuteSectionProps,
+) =>
+  await Result.gen(async function* () {
+    const decisionSection = yield* Result.await(
+      buildActiveDecisionSection(props),
+    );
+    const statuteSection = yield* Result.await(
+      buildActiveStatuteSection(props),
+    );
+    return Result.ok({ decisionSection, statuteSection });
+  });
+
 export const buildChatSystemPromptParts = async ({
   browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
+  legislationDb = legislationPublicReadDb,
   activeDecision,
   activeDraft,
   activeExternal,
@@ -1282,19 +1298,12 @@ export const buildChatSystemPromptParts = async ({
             }),
           );
 
-    const decisionSection = yield* Result.await(
-      buildActiveDecisionSection({
+    const { decisionSection, statuteSection } = yield* Result.await(
+      buildActiveCorpusSections({
         activeDecision,
-        caseLawDb,
-        organizationId,
-        safeDb,
-        userId,
-      }),
-    );
-    const statuteSection = yield* Result.await(
-      buildActiveStatuteSection({
         activeStatute,
-        legislationDb: legislationPublicReadDb,
+        caseLawDb,
+        legislationDb,
         organizationId,
         safeDb,
         userId,
