@@ -1935,6 +1935,7 @@ const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
     items: v.array(
       v.strictObject({
         publisherId: v.string(),
+        duplicatePublisherIds: v.array(v.string()),
         amendingEli: v.string(),
         amendingTitle: v.nullable(v.string()),
         affectedAnchor: v.string(),
