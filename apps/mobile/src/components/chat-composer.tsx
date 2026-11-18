@@ -1,4 +1,4 @@
-import { useImperativeHandle, useState } from "react";
+import { use, useImperativeHandle, useState } from "react";
 import type { Ref } from "react";
 
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -14,6 +14,7 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
+import { ThreadMatter } from "@/components/thread-matter";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
 import { useDictation } from "@/components/use-dictation";
@@ -128,9 +129,12 @@ export const ChatComposer = ({
     },
     shareId,
   });
-  const dictation = useDictation((text) => {
-    setDraft((typed) => appendDictation(typed, text));
-  });
+  const dictation = useDictation(
+    (text) => {
+      setDraft((typed) => appendDictation(typed, text));
+    },
+    { matterId: use(ThreadMatter) },
+  );
   const message = draft.trim();
   const notice = useNoticeText({
     notice: files.notice,

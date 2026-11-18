@@ -588,7 +588,17 @@
     "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz.",
     "lockScreenTitle": "Bloķēšanas ekrāns",
     "timerDetails": "Taimera informācija",
-    "timerDetailsHint": "Kad taimeris mainās citā ierīcē, Apple paziņojumu pakalpojums nogādā tā aprakstu un lietu bloķēšanas ekrānā. Izslēgtā stāvoklī redzams tikai laiks, līdz atverat lietotni."
+    "timerDetailsHint": "Kad taimeris mainās citā ierīcē, Apple paziņojumu pakalpojums nogādā tā aprakstu un lietu bloķēšanas ekrānā. Izslēgtā stāvoklī redzams tikai laiks, līdz atverat lietotni.",
+    "dictationTitle": "Diktēšana",
+    "dictationModelDefault": "Noklusējuma",
+    "dictationModelDefaultNamed": "Noklusējuma ({model})",
+    "dictationModelOutsideRegion": "Ārpus jūsu reģiona",
+    "dictationModelRetainsData": "Saglabā jūsu audio",
+    "dictationModelRetainsWarning": "Šis modelis darbojas kontā bez nulles datu glabāšanas. {provider} saskaņā ar saviem noteikumiem, ārpus stella kontroles, glabā visa diktētā audio un transkripciju. Nediktējiet ar to konfidenciālu informāciju vai klientu datus.",
+    "dictationModelHint": "Modelis, kas jūsu diktēto pārvērš tekstā. stella audio neglabā.",
+    "dictationModelsUnavailable": "Modeļus neizdevās ielādēt. Diktēšana izmanto noklusējuma modeli.",
+    "dictationCleanup": "Labot ar MI",
+    "dictationCleanupHint": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”. Tikai teksts, nevis audio, caur stella nonāk pie jūsu organizācijas MI pakalpojumu sniedzēja; stella to neglabā."
   },
   "header": {
     "search": "Meklēt"

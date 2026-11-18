@@ -588,7 +588,17 @@
     "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut.",
     "lockScreenTitle": "Sperrbildschirm",
     "timerDetails": "Timer-Details",
-    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen."
+    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen.",
+    "dictationTitle": "Diktieren",
+    "dictationModelDefault": "Standard",
+    "dictationModelDefaultNamed": "Standard ({model})",
+    "dictationModelOutsideRegion": "Außerhalb deiner Region",
+    "dictationModelRetainsData": "Speichert deine Aufnahmen",
+    "dictationModelRetainsWarning": "Dieses Modell läuft über ein Konto ohne Zero Data Retention. {provider} speichert Audio und Transkript von allem, was du diktierst, nach eigenen Bedingungen und außerhalb der Kontrolle von stella. Diktiere damit keine vertraulichen Informationen oder Mandantendaten.",
+    "dictationModelHint": "Das Modell, das aus deinem Diktat Text macht. stella speichert das Audio nicht.",
+    "dictationModelsUnavailable": "Die Modelle konnten nicht geladen werden. Diktieren nutzt das Standardmodell.",
+    "dictationCleanup": "Mit KI überarbeiten",
+    "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter deiner Organisation; stella speichert ihn nicht."
   },
   "header": {
     "search": "Suchen"
