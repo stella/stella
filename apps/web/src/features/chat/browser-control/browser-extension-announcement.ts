@@ -38,10 +38,9 @@ export const listenForBrowserExtensionAnnouncement = (): (() => void) => {
     return () => undefined;
   }
   listening = true;
-  const target = window;
-  target.addEventListener("message", recordAnnouncement);
+  window.addEventListener("message", recordAnnouncement);
   return () => {
-    target.removeEventListener("message", recordAnnouncement);
+    window.removeEventListener("message", recordAnnouncement);
     listening = false;
     latestAnnouncement = null;
   };
