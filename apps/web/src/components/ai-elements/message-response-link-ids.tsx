@@ -1,4 +1,4 @@
-import { createContext, use, useMemo } from "react";
+import { createContext, use } from "react";
 import type { ComponentType, JSX, ReactNode } from "react";
 
 import { Block } from "streamdown";
@@ -52,10 +52,7 @@ export const AnswerTreeIds = ({
 
 /** Streamdown's block, naming the links of the block it renders. */
 export const AnswerBlock = (props: BlockProps) => {
-  const prefix = useMemo(
-    () => answerTreeIdPrefix(props.index, props.content),
-    [props.index, props.content],
-  );
+  const prefix = answerTreeIdPrefix(props.index, props.content);
   return (
     <AnswerTreeContext value={prefix}>
       <Block {...props} />

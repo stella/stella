@@ -40,6 +40,7 @@ import {
   PRODUCT_FRONTEND_FILES,
 } from "./scripts/product-frontend-files.ts";
 import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
+import reactCompilerBailouts from "./scripts/react-compiler-bailouts.json" with { type: "json" };
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -486,6 +487,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
     "no-first-observer-entry/no-first-observer-entry",
+  ]),
+  fixtureRuleOverride("no-manual-memo.fixture.tsx", [
+    "no-manual-memo/no-manual-memo",
   ]),
   fixtureRuleOverride("no-hookless-use-function.fixture.ts", [
     "no-hookless-use-function/no-hookless-use-function",
@@ -2129,6 +2133,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-manual-memo.ts",
     "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
@@ -4985,6 +4990,22 @@ const config = defineConfig({
         // the compiler cannot analyze them as ordinary component hooks.
         ...reactCompilerRulesOff,
       },
+    },
+    {
+      // The React Compiler memoizes every function it compiles. A file holding
+      // a function it skips keeps its manual memoization until the bailout is
+      // fixed; `scripts/rc-bailouts.ts --check` guards those functions.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/web/src/hooks/use-effect.ts",
+        ...new Set(
+          Object.keys(reactCompilerBailouts).map((key) =>
+            key.slice(0, key.indexOf("::")),
+          ),
+        ),
+      ],
+      rules: { "no-manual-memo/no-manual-memo": "error" },
     },
     {
       files: [...PRODUCT_FRONTEND_FILES],

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
@@ -108,14 +108,11 @@ const InviteMemberForm = ({
   const [isOpen, setIsOpen] = useState(false);
   const isDialogOpen = useLatestCallback(() => isOpen);
   const inviteMember = useInviteMember(isDialogOpen);
-  const schema = useMemo(
-    () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
-    [currentUserRole, t],
+  const schema = inviteMemberSchema(
+    currentUserRole,
+    t("validation.invalidEmail"),
   );
-  const defaultValues = useMemo(
-    () => ({ email: "", role: defaultRole }),
-    [defaultRole],
-  );
+  const defaultValues = { email: "", role: defaultRole };
   const roles = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
     description: t(roleTranslationKeys[value].descriptionKey),
     label: t(roleTranslationKeys[value].labelKey),
