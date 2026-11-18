@@ -142,7 +142,7 @@ type AmendmentRow = Awaited<
  * leads; the others travel as its duplicates, so no link id is dropped. The
  * change kind is part of the key: two kinds on one day are two instructions.
  */
-export const dedupeAmendments = (
+const dedupeAmendments = (
   rows: readonly AmendmentRow[],
 ): { row: AmendmentRow; duplicates: AmendmentRow[] }[] => {
   const groups = new Map<

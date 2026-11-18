@@ -499,7 +499,7 @@ test("an instruction the publisher restates under several links reads once and k
     ],
     limit: 500,
     nextCursor: null,
-  } as const;
+  };
   const snapshot = {
     observedAt: new Date("2026-11-18T06:00:00Z"),
     coverage: { type: "complete" },
