@@ -33,7 +33,7 @@ export const SETTINGS_PAGES_AFTER_DIVIDER = [
  * to: the coding agents' group or one agent's card. Native code sends only
  * these ids (`AgentSettingsFocus` in `src-tauri/src/lib.rs`).
  */
-export const AGENT_SETTINGS_FOCUS = [
+const AGENT_SETTINGS_FOCUS = [
   "agents",
   "codex",
   "claude-code",

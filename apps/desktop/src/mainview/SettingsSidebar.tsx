@@ -102,29 +102,19 @@ const SidebarPages = ({
           <li key={page}>
             <Button
               aria-current={isCurrent ? "page" : undefined}
-              className="block w-full"
+              className="w-full justify-start gap-2.5 px-2 font-normal data-pressed:font-medium"
               data-page={page}
               onClick={() => {
                 onSelect(page);
               }}
-              variant="plain"
+              selected={isCurrent}
+              variant="ghost"
             >
-              <span
-                className={cn(
-                  "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-start text-sm",
-                  isCurrent &&
-                    "bg-sidebar-accent text-sidebar-foreground font-medium",
-                )}
-              >
-                <Icon
-                  aria-hidden="true"
-                  className={cn(
-                    "size-4 shrink-0",
-                    isCurrent ? "opacity-100" : "opacity-70",
-                  )}
-                />
-                <TruncatedText hint={false}>{t(page)}</TruncatedText>
-              </span>
+              <Icon
+                aria-hidden="true"
+                className={isCurrent ? "opacity-100" : "opacity-70"}
+              />
+              <TruncatedText hint={false}>{t(page)}</TruncatedText>
             </Button>
           </li>
         );
