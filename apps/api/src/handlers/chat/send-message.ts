@@ -185,6 +185,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import {
+  adoptEmptyThread,
   loadThread,
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
@@ -2095,7 +2096,9 @@ const prepareValidatedIncomingMessage = async ({
           activeDraftContext === null
             ? []
             : activeDraftContext.originDataWorkspaceIds,
-        initialContextMatterIds: requestedContextMatterIds,
+        // The pins as sent (validated with `requestedContextMatterIds`);
+        // undefined when the send names none.
+        initialContextMatterIds: body.contextMatterIds,
         initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,
@@ -2114,28 +2117,27 @@ const prepareValidatedIncomingMessage = async ({
 
     const activeDraft = body.activeDraft;
     if (activeDraft !== undefined) {
-      const hasPersistedContext =
-        thread.type === "created"
-          ? false
-          : yield* Result.await(
-              safeDb(async (tx) =>
-                hasPersistedGeneratedDocumentActiveDraftContext({
-                  generatedDraft: {
-                    originChatMessageId: activeDraft.originChatMessageId,
-                    originChatThreadId: activeDraft.originChatThreadId,
-                    toolCallId: activeDraft.toolCallId,
-                  },
-                  organizationId,
-                  threadId: thread.data.id,
-                  tx,
-                  userId,
-                }),
-              ),
-            );
+      const hasPersistedContext = thread.data.firstSend
+        ? false
+        : yield* Result.await(
+            safeDb(async (tx) =>
+              hasPersistedGeneratedDocumentActiveDraftContext({
+                generatedDraft: {
+                  originChatMessageId: activeDraft.originChatMessageId,
+                  originChatThreadId: activeDraft.originChatThreadId,
+                  toolCallId: activeDraft.toolCallId,
+                },
+                organizationId,
+                threadId: thread.data.id,
+                tx,
+                userId,
+              }),
+            ),
+          );
       if (
         !canUseChatThreadForGeneratedDocumentDraft({
+          firstSend: thread.data.firstSend,
           hasPersistedContext,
-          threadType: thread.type,
         })
       ) {
         return Result.err(
@@ -2156,10 +2158,11 @@ const prepareValidatedIncomingMessage = async ({
       }),
     };
 
-    // Existing-thread pin changes are durable side effects, so stop before
-    // applying them when any earlier validation or thread read observed a
-    // client disconnect. Created threads still need their rollback token
-    // cleaned up on this exit path.
+    // Existing-thread pin changes and the adoption of a thread stored before
+    // its first message are durable side effects, so stop before applying
+    // them when any earlier validation or thread read observed a client
+    // disconnect. Created threads still need their rollback token cleaned up
+    // on this exit path.
     if (isClientConnectionAborted()) {
       return Result.err(
         new HandlerError({
@@ -2168,6 +2171,16 @@ const prepareValidatedIncomingMessage = async ({
         }),
       );
     }
+    yield* Result.await(
+      adoptEmptyThread({
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        thread,
+        userId,
+        workspaceId,
+      }),
+    );
 
     // The thread's persisted chat-model override wins over the org/instance
     // default, but the dev-only body override still wins over everything
@@ -3590,7 +3603,11 @@ export const createSendMessage = (
           }
 
           if (
-            thread.type === "created" &&
+            // A thread stored before its first message (a setting chosen
+            // first) is titled like one this send created, unless its title
+            // was already set some other way.
+            thread.data.firstSend &&
+            thread.data.title === initialThreadTitle &&
             body.sendMode !== CHAT_SEND_MODE.anonymized
           ) {
             const title = async () =>
