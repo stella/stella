@@ -609,6 +609,7 @@ const deriveNormalScopeFacts = (
     "patches/*",
     "scripts/bundle-baseline.ts",
     "scripts/bundle-baseline.json",
+    "scripts/bundle-startup-*",
     "VERSION",
     "bun.lock",
     "bunfig.toml",
