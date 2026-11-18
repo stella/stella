@@ -85,37 +85,52 @@ const {
 
 const dialect = new PgDialect();
 
+type OnExecute = (text: string, tx: Transaction) => Promise<void>;
+
+/**
+ * `tx` showing `onExecute` every statement run through `execute`, with its
+ * SQL text, before it runs; savepoints it opens are shown the same way.
+ */
+const observeTransaction = (tx: Transaction, onExecute: OnExecute) =>
+  new Proxy(tx, {
+    get(target, property) {
+      if (property === "execute") {
+        return async (query: Parameters<Transaction["execute"]>[0]) => {
+          await onExecute(
+            typeof query === "string"
+              ? query
+              : dialect.sqlToQuery(query.getSQL()).sql,
+            target,
+          );
+          const executed: Awaited<ReturnType<Transaction["execute"]>> =
+            await target.execute(query);
+          return executed;
+        };
+      }
+      if (property === "transaction") {
+        return async <T>(work: (savepoint: Transaction) => Promise<T>) =>
+          await target.transaction(
+            async (savepoint) =>
+              await work(observeTransaction(savepoint, onExecute)),
+          );
+      }
+      const value: unknown = Reflect.get(target, property, target);
+      const bound: unknown =
+        typeof value === "function" ? value.bind(target) : value;
+      return bound;
+    },
+  });
+
 /**
  * A transaction runner that shows `onExecute` every statement the flip runs
  * through `execute`, with its SQL text, before it runs.
  */
 const observedRunner =
-  (onExecute: (text: string, tx: Transaction) => Promise<void>) =>
+  (onExecute: OnExecute) =>
   async <T>(work: (tx: Transaction) => Promise<T>): Promise<T> =>
-    await runInTransaction(async (tx) => {
-      const observed = new Proxy(tx, {
-        get(target, property) {
-          if (property === "execute") {
-            return async (query: Parameters<Transaction["execute"]>[0]) => {
-              await onExecute(
-                typeof query === "string"
-                  ? query
-                  : dialect.sqlToQuery(query.getSQL()).sql,
-                target,
-              );
-              const executed: Awaited<ReturnType<Transaction["execute"]>> =
-                await target.execute(query);
-              return executed;
-            };
-          }
-          const value: unknown = Reflect.get(target, property, target);
-          const bound: unknown =
-            typeof value === "function" ? value.bind(target) : value;
-          return bound;
-        },
-      });
-      return await work(observed);
-    });
+    await runInTransaction(
+      async (tx) => await work(observeTransaction(tx, onExecute)),
+    );
 
 /** Raise a real PostgreSQL error with `code` on `tx`, aborting it. */
 const raiseOn = async (tx: Transaction, code: string) => {
