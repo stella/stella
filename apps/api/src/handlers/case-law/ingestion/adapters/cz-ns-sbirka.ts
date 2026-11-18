@@ -604,7 +604,7 @@ export const buildCzNsSbirkaDecision = ({
       CZ_NS_COLLECTION_METADATA_URL_SCHEMA,
     ),
     rawHash: sourceFingerprint({ sourceRaw }),
-    parserVersion: PARSER_VERSIONS[KEY],
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS_SBIRKA],
     documentAst,
     sections,
     sourceRaw,
