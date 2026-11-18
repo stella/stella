@@ -85,6 +85,9 @@ const ignorePolicies = {
   "react-native-screens": {
     type: "expo_sdk",
   },
+  "react-native-svg": {
+    type: "expo_sdk",
+  },
 } as const satisfies Record<string, IgnorePolicy>;
 
 type IgnorePolicyDependency = keyof typeof ignorePolicies;
