@@ -4,6 +4,7 @@ import {
   DefaultPendingComponent,
   PENDING_STATUS_PROPS,
 } from "@/components/route-components";
+import { I18nProvider } from "@/i18n/provider";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { selectAppFrame } from "@/routes/-app-frame.logic";
@@ -39,7 +40,9 @@ export function RootPendingComponent() {
     // The layout `RootApp` gives the frame host, and the one announced busy
     // region; the frame skeleton inside is decoration.
     <div {...PENDING_STATUS_PROPS} className="flex h-dvh w-full flex-col">
-      <ProtectedPendingSkeleton body={leafPendingView} />
+      <I18nProvider>
+        <ProtectedPendingSkeleton body={leafPendingView} />
+      </I18nProvider>
     </div>
   );
 }

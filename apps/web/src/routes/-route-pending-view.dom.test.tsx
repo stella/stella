@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import messages from "@/i18n/langs/en.json";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -12,6 +13,7 @@ const testing = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
+const { IntlProvider } = await import("use-intl");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
 const { RootPendingComponent } = await import("@/routes/-root-pending");
 const { framePendingView } = await import("@/routes/-pending-view.logic");
@@ -99,7 +101,9 @@ const renderAt = async (
   });
   return testing.render(
     <QueryClientProvider client={queryClient}>
-      <router.RouterProvider router={appRouter} />
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <router.RouterProvider router={appRouter} />
+      </IntlProvider>
     </QueryClientProvider>,
   );
 };

@@ -15,10 +15,11 @@ import type { FileRouteTypes } from "@/routeTree.gen";
  *   what waits on data) and `XPending = framePendingView(...)`, the shell
  *   with the paired pending pieces in those slots; only a view marked so is
  *   drawn by the cold-load frame. It is context-free: the server paints it on a
- *   cold load before any provider mounts, so it reads no query, store, route
- *   API or app context; labels go through `PendingText`, which shows the
- *   text where the app's intl is mounted and a bar on the label's line where
- *   it is not. Static chrome is real (headings, greeting, toolbars, from
+ *   cold load before the app's providers mount (only intl, from the request
+ *   locale), so it reads no query, store, route API or app context; labels go
+ *   through `PendingText`, which shows the text where the app's intl is
+ *   mounted and a bar on the label's line where it is not. Static chrome is
+ *   real (headings, greeting, toolbars, from
  *   light presentational faces); data regions use the pending piece that
  *   lives in the same module as the row, section or box it stands in for
  *   (`LandingRows` beside `LandingRowsPending`), never a bare `Skeleton`.
