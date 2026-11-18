@@ -16,7 +16,7 @@ import {
   createSelectQueryMock,
 } from "@/api/tests/scoped-db-mock";
 
-import { loadThread } from "./send-message-thread";
+import { adoptEmptyThread, loadThread } from "./send-message-thread";
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -342,15 +342,16 @@ describe("the decision a thread is about", () => {
       }),
     });
 
+    const recordAuditEvent = async (_tx: unknown, event: unknown) => {
+      audits.push(event);
+      await Promise.resolve();
+    };
     const result = await loadThread({
       initialActiveSkill: { skillName: "review" },
       initialDataWorkspaceIds: [],
       initialContextMatterIds: undefined,
       organizationId,
-      recordAuditEvent: async (_tx, event) => {
-        audits.push(event);
-        await Promise.resolve();
-      },
+      recordAuditEvent,
       safeDb,
       subjectDecisionId: decisionId,
       threadId,
@@ -359,10 +360,32 @@ describe("the decision a thread is about", () => {
       workspaceId: null,
     });
 
-    expect(Result.isOk(result)).toBe(true);
-    expect(result).toMatchObject({
-      value: { type: "existing", data: { firstSend: true } },
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      type: "existing",
+      data: { firstSend: true },
     });
+    // Loading the thread plans the adoption and writes nothing: the send
+    // stores it only once it knows its client is still connected.
+    expect(existingThread).toMatchObject({
+      activeSkill: null,
+      subjectDecisionId: null,
+      title: CHAT_THREAD_PLACEHOLDER_TITLE,
+    });
+    expect(audits).toEqual([]);
+
+    const adopted = await adoptEmptyThread({
+      organizationId,
+      recordAuditEvent,
+      safeDb,
+      thread: result.value,
+      userId,
+      workspaceId: null,
+    });
+
+    expect(Result.isOk(adopted)).toBe(true);
     expect(existingThread).toMatchObject({
       activeSkill: { skillName: "review" },
       chatModel: "openai::gpt-5.4",

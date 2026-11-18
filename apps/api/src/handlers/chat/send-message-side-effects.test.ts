@@ -139,7 +139,7 @@ describe("send-message side-effect rollback", () => {
       recordAuditEvent,
       safeDb,
       threadId,
-      threadState: { type: "existing", data: threadData },
+      threadState: { type: "existing", adoption: null, data: threadData },
       uploadedFiles: [],
       userId,
     });
@@ -178,7 +178,7 @@ describe("send-message side-effect rollback", () => {
       recordAuditEvent,
       safeDb,
       threadId,
-      threadState: { type: "existing", data: threadData },
+      threadState: { type: "existing", adoption: null, data: threadData },
       uploadedFiles: [uploadedFile],
       userId,
     });

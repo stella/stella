@@ -185,6 +185,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import {
+  adoptEmptyThread,
   loadThread,
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
@@ -2157,10 +2158,11 @@ const prepareValidatedIncomingMessage = async ({
       }),
     };
 
-    // Existing-thread pin changes are durable side effects, so stop before
-    // applying them when any earlier validation or thread read observed a
-    // client disconnect. Created threads still need their rollback token
-    // cleaned up on this exit path.
+    // Existing-thread pin changes and the adoption of a thread stored before
+    // its first message are durable side effects, so stop before applying
+    // them when any earlier validation or thread read observed a client
+    // disconnect. Created threads still need their rollback token cleaned up
+    // on this exit path.
     if (isClientConnectionAborted()) {
       return Result.err(
         new HandlerError({
@@ -2169,6 +2171,16 @@ const prepareValidatedIncomingMessage = async ({
         }),
       );
     }
+    yield* Result.await(
+      adoptEmptyThread({
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        thread,
+        userId,
+        workspaceId,
+      }),
+    );
 
     // The thread's persisted chat-model override wins over the org/instance
     // default, but the dev-only body override still wins over everything

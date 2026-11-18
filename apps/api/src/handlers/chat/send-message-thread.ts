@@ -250,16 +250,92 @@ type LoadThreadProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+/**
+ * What a send stores when it adopts a thread stored before its first message
+ * (`adoptEmptyThread`): the fields its first message decides and, while the
+ * title is still the placeholder, the send's title.
+ */
+type EmptyThreadAdoption = {
+  fields: SendThreadFields;
+  stored: SendThreadFields;
+  title: string | null;
+};
+
 export type ChatThreadState =
   | {
       type: "existing";
       data: ChatThreadRecord;
+      /** Null when the thread holds a message or nothing would change. */
+      adoption: EmptyThreadAdoption | null;
     }
   | {
       type: "created";
       data: ChatThreadRecord;
       rollbackToken: string;
     };
+
+type ExistingChatThreadState = Extract<ChatThreadState, { type: "existing" }>;
+
+/**
+ * Stores what `loadThread` planned for a thread stored before its first
+ * message. The send calls it after its last disconnect check before durable
+ * changes, so a disconnected send changes nothing. The write is guarded on
+ * the thread still holding no message: when a concurrent send's message
+ * landed first, the thread keeps what that send stored.
+ */
+export const adoptEmptyThread = async ({
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  thread,
+  userId,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  thread: ChatThreadState;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}): Promise<Result<void, SafeDbError>> => {
+  if (thread.type === "created" || thread.adoption === null) {
+    return Result.ok(undefined);
+  }
+  const { fields, stored, title } = thread.adoption;
+  const threadId = thread.data.id;
+  return await safeDb(async (tx) => {
+    const adopted = await tx
+      .update(chatThreads)
+      .set({ ...fields, ...(title === null ? {} : { title }) })
+      .where(
+        and(
+          eq(chatThreads.id, threadId),
+          eq(chatThreads.organizationId, organizationId),
+          eq(chatThreads.userId, userId),
+          notExists(
+            tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, threadId)),
+          ),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+    if (adopted.length === 0) {
+      return;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: threadId,
+      workspaceId,
+      changes: {
+        ...(title === null ? {} : { titleChanged: { old: false, new: true } }),
+        ...sendThreadFieldsAuditChanges(stored, fields),
+      },
+    });
+  });
+};
 
 type LoadThreadError = HandlerError<400 | 404 | 409> | SafeDbError;
 
@@ -359,7 +435,7 @@ const loadThreadAttempt = async ({
     // unfindable.
     const buildExisting = (
       existing: ExistingThreadRow,
-    ): Result<ChatThreadState, HandlerError<400>> => {
+    ): Result<ExistingChatThreadState, HandlerError<400>> => {
       const persistedWorkspaceId = existing.workspaceId ?? null;
       if (persistedWorkspaceId !== workspaceId) {
         return Result.err(
@@ -369,8 +445,9 @@ const loadThreadAttempt = async ({
           }),
         );
       }
-      return Result.ok<ChatThreadState>({
+      return Result.ok<ExistingChatThreadState>({
         type: "existing",
+        adoption: null,
         data: {
           id: existing.id,
           firstSend: false,
@@ -430,18 +507,17 @@ const loadThreadAttempt = async ({
     // send (a setting chosen in a new chat's composer, an empty chat a surface
     // opened). This send writes its first message, so it decides the thread's
     // send fields and its placeholder title exactly as if it had created the
-    // row. The write is guarded on the thread still holding no message; when a
-    // concurrent send's message landed first, the caller retries and reads
-    // the thread as one that holds a message.
-    const adoptEmptyThread = async (
+    // row. Nothing is written here: the send stores the adoption with
+    // `adoptEmptyThread` once it knows its client is still connected.
+    const planEmptyThreadAdoption = (
       existing: ExistingThreadRow,
-      state: ChatThreadState,
-    ): Promise<Result<boolean, SafeDbError>> => {
-      if (state.data.messages.length > 0) {
-        return Result.ok(true);
-      }
+      state: ExistingChatThreadState,
+    ): void => {
       // A non-empty thread always includes at least its first-kept message in
       // the window, so window length === 0 iff the thread is empty.
+      if (state.data.messages.length > 0) {
+        return;
+      }
       const storedFields = storedSendThreadFieldsOf(existing);
       const fields = resolveSendThreadFields({
         request: sendRequest,
@@ -457,45 +533,13 @@ const loadThreadAttempt = async ({
       if (refreshTitle) {
         state.data.title = title;
       }
-      if (!refreshTitle && !sendThreadFieldsChanged(storedFields, fields)) {
-        return Result.ok(true);
+      if (refreshTitle || sendThreadFieldsChanged(storedFields, fields)) {
+        state.adoption = {
+          fields,
+          stored: storedFields,
+          title: refreshTitle ? title : null,
+        };
       }
-      return await safeDb(async (tx) => {
-        const adopted = await tx
-          .update(chatThreads)
-          .set({ ...fields, ...(refreshTitle ? { title } : {}) })
-          .where(
-            and(
-              eq(chatThreads.id, threadId),
-              eq(chatThreads.organizationId, organizationId),
-              eq(chatThreads.userId, userId),
-              notExists(
-                tx
-                  .select({ id: chatMessages.id })
-                  .from(chatMessages)
-                  .where(eq(chatMessages.threadId, threadId)),
-              ),
-            ),
-          )
-          .returning({ id: chatThreads.id });
-        if (adopted.length === 0) {
-          return false;
-        }
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-          resourceId: threadId,
-          workspaceId,
-          changes: {
-            ...(refreshTitle
-              ? { titleChanged: { old: false, new: true } }
-              : {}),
-            ...sendThreadFieldsAuditChanges(storedFields, fields),
-          },
-        });
-        return true;
-      });
     };
 
     const retryAfterClaimRace = async (): Promise<
@@ -527,8 +571,8 @@ const loadThreadAttempt = async ({
     };
 
     // Claims a stored row, reads its history window and, while it holds no
-    // message, adopts it for this send. Null means a concurrent writer won a
-    // race and the attempt must be retried.
+    // message, plans its adoption by this send. Null means rollback won the
+    // claim race and the attempt must be retried.
     const openExisting = async (
       existing: ExistingThreadRow,
     ): Promise<Result<ChatThreadState | null, LoadThreadError>> =>
@@ -547,8 +591,8 @@ const loadThreadAttempt = async ({
         const state = existingResult.value;
         state.data.messages = history.messages;
         state.data.historySnapshot = history.snapshot;
-        const adopted = yield* Result.await(adoptEmptyThread(existing, state));
-        return Result.ok(adopted ? state : null);
+        planEmptyThreadAdoption(existing, state);
+        return Result.ok(state);
       });
 
     const thread = yield* Result.await(lookup());
