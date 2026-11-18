@@ -71,7 +71,6 @@ export const cachedViewChrome = (
   const settings = queryClient.getQueryData(settingsKey);
   const avtEnabled =
     settings !== undefined &&
-    settings !== null &&
     hasSettledData(queryClient, settingsKey) &&
     callerFeatureEnabled(settings, CALLER_FEATURE.verification);
 
