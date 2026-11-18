@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
+import type { InvokeArgs } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
@@ -16,11 +17,19 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { Kbd } from "@stll/ui/kbd";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Switch } from "@stll/ui/switch";
 import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
-import { formatShortcut } from "../shared/shortcut-keys";
+import { formatHoldKey, isHoldKey } from "../shared/hold-key";
+import type { HoldKey } from "../shared/hold-key";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
   DESKTOP_PLATFORM,
@@ -86,6 +95,13 @@ export type DictationSnapshot = {
     | null;
   /** Whether the failed dictation's text is in clipboard history. */
   failureKeptInHistory: boolean;
+  /** The key dictation listens for, and what this computer offers. */
+  holdKey: HoldKey;
+  holdKeys: HoldKey[];
+  /** The hold key cannot be heard yet: on a Mac, until stella has
+   *  Accessibility access. */
+  holdKeyWaiting: boolean;
+  /** Control, Option (Alt) and Space: the `combination` choice. */
   keys: ShortcutKeys;
   model: DictationModel;
   modelBytes: number;
@@ -103,6 +119,26 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
+
+/** Orders the snapshots the native side answers with. Each read or change
+ *  takes a ticket as it starts; an answer is shown only when no answer to a
+ *  later one is shown already, so a read that started before a change can
+ *  never bring back what the change replaced. */
+type SnapshotOrder = { shown: number; started: number };
+
+const takeTicket = (order: SnapshotOrder): number => {
+  order.started += 1;
+  return order.started;
+};
+
+/** Whether the answer to `ticket` is the latest; if so, it is now shown. */
+const isLatest = (order: SnapshotOrder, ticket: number): boolean => {
+  if (ticket <= order.shown) {
+    return false;
+  }
+  order.shown = ticket;
+  return true;
+};
 
 const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   typeof value === "object" &&
@@ -186,14 +222,16 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
   // empty until the next change event.
   const [read, setRead] = useState<"pending" | "failed" | "done">("pending");
   const [removeFailed, setRemoveFailed] = useState(false);
+  const order = useRef<SnapshotOrder>({ shown: 0, started: 0 });
 
   useEffect(() => {
     let disposed = false;
     const refresh = async () => {
+      const ticket = takeTicket(order.current);
       const result = await Result.tryPromise(async () =>
         invoke<unknown>("dictation_get_snapshot"),
       );
-      if (disposed) {
+      if (disposed || !isLatest(order.current, ticket)) {
         return;
       }
       const next =
@@ -228,29 +266,44 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
     return null;
   }
 
-  const shortcut = formatShortcut({
-    keys: snapshot.keys,
-    layout,
-    locale,
-    platform: DESKTOP_PLATFORM,
-  });
+  const holdKeyLabel = (holdKey: HoldKey) =>
+    formatHoldKey({
+      holdKey,
+      keys: snapshot.keys,
+      layout,
+      locale,
+      platform: DESKTOP_PLATFORM,
+      right: (key) => t("holdKey.right", { key }),
+    });
+  const shortcut = holdKeyLabel(snapshot.holdKey);
 
-  const setEnabled = async (enabled: boolean) => {
+  /** Asks the native side for a change and shows the snapshot it answers
+   *  with, unless an answer to a later read or change is already shown.
+   *  Resolves to whether the native side made the change. */
+  const change = async (
+    command: string,
+    args?: InvokeArgs,
+  ): Promise<boolean> => {
+    const ticket = takeTicket(order.current);
     const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_enabled", { enabled }),
+      invoke<DictationSnapshot>(command, args),
     );
-    if (Result.isOk(result)) {
+    if (Result.isOk(result) && isLatest(order.current, ticket)) {
       setSnapshot(result.value);
     }
+    return Result.isOk(result);
+  };
+
+  const setHoldKey = async (holdKey: HoldKey) => {
+    await change("dictation_set_hold_key", { holdKey });
+  };
+
+  const setEnabled = async (enabled: boolean) => {
+    await change("dictation_set_enabled", { enabled });
   };
 
   const setCleanup = async (cleanup: boolean) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_cleanup", { enabled: cleanup }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_cleanup", { enabled: cleanup });
   };
 
   const setShare = async (
@@ -259,58 +312,28 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
       | "dictation_set_share_window_title",
     enabled: boolean,
   ) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>(command, { enabled }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change(command, { enabled });
   };
 
   const setLanguage = async (language: string) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_language", { language }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_language", { language });
   };
 
   const setDestination = async (destination: DictationDestinationValue) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_destination", { destination }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_destination", { destination });
   };
 
   const setCloudModel = async (modelId: string) => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_set_cloud_model", { modelId }),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_set_cloud_model", { modelId });
   };
 
   const download = async () => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_download_model"),
-    );
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    await change("dictation_download_model");
   };
 
   const removeModel = async () => {
-    const result = await Result.tryPromise(async () =>
-      invoke<DictationSnapshot>("dictation_remove_model"),
-    );
-    setRemoveFailed(Result.isError(result));
-    if (Result.isOk(result)) {
-      setSnapshot(result.value);
-    }
+    const removed = await change("dictation_remove_model");
+    setRemoveFailed(!removed);
   };
 
   const cleanupIds = settingsRowIds("dictation-cleanup");
@@ -343,6 +366,13 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           {t("shortcutTaken", { shortcut })}
         </p>
       )}
+      {snapshot.enabled && snapshot.holdKeyWaiting && (
+        <p className="text-destructive-foreground text-sm" role="status">
+          {DESKTOP_PLATFORM === "mac"
+            ? t("holdKey.waiting", { shortcut })
+            : t("holdKey.unavailable", { shortcut })}
+        </p>
+      )}
       {snapshot.failure !== null && (
         <p className="text-destructive-foreground text-sm" role="status">
           {t(`failure.${snapshot.failure}`)}
@@ -352,6 +382,18 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
       )}
       {snapshot.enabled && (
         <>
+          {snapshot.holdKeys.length > 1 && (
+            <SettingsGroup title={t("groups.shortcut")}>
+              <DictationHoldKeyRow
+                holdKey={snapshot.holdKey}
+                holdKeys={snapshot.holdKeys}
+                label={holdKeyLabel}
+                onChange={(holdKey) => {
+                  void setHoldKey(holdKey);
+                }}
+              />
+            </SettingsGroup>
+          )}
           <SettingsGroup title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
@@ -482,6 +524,51 @@ const DictationReadFailed = ({ onRetry }: { onRetry: () => void }) => {
         </Button>
       </div>
     </div>
+  );
+};
+
+/** Which key dictation listens for, from what this computer offers. */
+const DictationHoldKeyRow = ({
+  holdKey,
+  holdKeys,
+  label,
+  onChange,
+}: {
+  holdKey: HoldKey;
+  holdKeys: readonly HoldKey[];
+  label: (holdKey: HoldKey) => string;
+  onChange: (holdKey: HoldKey) => void;
+}) => {
+  const t = useTranslations("dictation.holdKey");
+  const ids = settingsRowIds("dictation-hold-key");
+  return (
+    <SettingsRow
+      description={t("description")}
+      id="dictation-hold-key"
+      title={t("title")}
+    >
+      <Select
+        onValueChange={(value) => {
+          if (isHoldKey(value)) {
+            onChange(value);
+          }
+        }}
+        value={holdKey}
+      >
+        <SelectTrigger aria-labelledby={ids.label} className="w-44">
+          <SelectValue>
+            {(value: unknown) => (isHoldKey(value) ? label(value) : null)}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {holdKeys.map((value) => (
+            <SelectItem key={value} value={value}>
+              {label(value)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </SettingsRow>
   );
 };
 

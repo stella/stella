@@ -614,6 +614,7 @@
     "descriptionCloud": "اضغط مع الاستمرار على {shortcut} وتحدّث. يظهر النص في التطبيق الذي تستخدمه. يحوّل stella AI الكلام إلى نص ولا تحتفظ به stella.",
     "lede": "اضغط باستمرار على <key>{shortcut}</key> وتحدث. يظهر النص حيث تكتب.",
     "groups": {
+      "shortcut": "الاختصار",
       "transcription": "التحويل إلى نص",
       "cleanup": "التنقيح",
       "thisComputer": "على هذا الكمبيوتر"
@@ -667,6 +668,13 @@
     "downloadFailed": "تعذّر تنزيل نموذج الكلام.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "يستخدم تطبيق آخر {shortcut}.",
+    "holdKey": {
+      "title": "المفتاح الذي تضغط عليه",
+      "description": "اضغط عليه وحده باستمرار للإملاء. النقرة القصيرة أو اختصار يستخدمه لا يفعل شيئًا.",
+      "right": "{key} الأيمن",
+      "waiting": "يلتقط stella المفتاح {shortcut} بمجرد حصوله على إذن تسهيلات الاستخدام.",
+      "unavailable": "لا يمكن لـ stella مراقبة {shortcut} على هذا الكمبيوتر. اختر مفتاحًا آخر."
+    },
     "failure": {
       "accessibility": "اسمح بالوصول إلى إمكانية الوصول حتى تتمكن stella من الكتابة في التطبيقات الأخرى.",
       "microphone": "تعذّر على stella سماع الميكروفون. تحقق من الوصول إلى الميكروفون في إعدادات النظام.",
@@ -817,6 +825,7 @@
       "screenRecording": "تسجيل الشاشة",
       "camera": "الكاميرا",
       "keystrokes": "ضغطات المفاتيح",
+      "keystrokesWithoutHoldKey": "ضغطات المفاتيح، إلا إذا اخترت مفتاحًا تضغط عليه باستمرار",
       "fullDiskAccess": "الوصول الكامل إلى القرص",
       "administrator": "صلاحيات المسؤول"
     }

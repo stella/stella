@@ -614,6 +614,7 @@
     "descriptionCloud": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras programoje, kurią naudojate. Kalbą paverčia tekstu stella AI, o stella jos nesaugo.",
     "lede": "Laikykite <key>{shortcut}</key> ir kalbėkite. Tekstas atsiras ten, kur rašote.",
     "groups": {
+      "shortcut": "Spartusis klavišas",
       "transcription": "Perrašymas",
       "cleanup": "Taisymas",
       "thisComputer": "Šiame kompiuteryje"
@@ -667,6 +668,13 @@
     "downloadFailed": "Kalbos modelio atsisiųsti nepavyko.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} naudoja kita programa.",
+    "holdKey": {
+      "title": "Laikomas klavišas",
+      "description": "Laikykite tik jį, kad diktuotumėte. Trumpas paspaudimas ar jį naudojantis spartusis klavišas nieko nedaro.",
+      "right": "Dešinysis {key}",
+      "waiting": "stella aptiks {shortcut}, kai gaus pritaikymo neįgaliesiems prieigą.",
+      "unavailable": "stella šiame kompiuteryje negali stebėti {shortcut}. Pasirinkite kitą klavišą."
+    },
     "failure": {
       "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",
       "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
@@ -817,6 +825,7 @@
       "screenRecording": "Ekrano įrašymas",
       "camera": "Kamera",
       "keystrokes": "Klavišų paspaudimai",
+      "keystrokesWithoutHoldKey": "Klavišų paspaudimai, nebent pasirinksite laikomą klavišą",
       "fullDiskAccess": "Visa prieiga prie disko",
       "administrator": "Administratoriaus teisės"
     }

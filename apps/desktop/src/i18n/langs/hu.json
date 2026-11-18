@@ -614,6 +614,7 @@
     "descriptionCloud": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg abban az alkalmazásban jelenik meg, amelyet éppen használ. A beszédet a stella AI írja át, és a stella nem tárolja.",
     "lede": "Tartsa lenyomva a(z) <key>{shortcut}</key> billentyűt, és beszéljen. A szöveg ott jelenik meg, ahol éppen ír.",
     "groups": {
+      "shortcut": "Billentyűparancs",
       "transcription": "Átírás",
       "cleanup": "Javítás",
       "thisComputer": "Ezen a számítógépen"
@@ -667,6 +668,13 @@
     "downloadFailed": "A beszédmodellt nem sikerült letölteni.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Egy másik alkalmazás használja ezt: {shortcut}.",
+    "holdKey": {
+      "title": "Lenyomva tartandó billentyű",
+      "description": "Tartsa lenyomva önmagában a diktáláshoz. Egy rövid koppintás vagy egy ezt használó billentyűparancs nem indít semmit.",
+      "right": "Jobb oldali {key}",
+      "waiting": "A stella akkor érzékeli ezt: {shortcut}, ha hozzáfér a Kisegítő lehetőségekhez.",
+      "unavailable": "A stella ezen a számítógépen nem tudja figyelni ezt: {shortcut}. Válasszon másik billentyűt."
+    },
     "failure": {
       "accessibility": "Engedélyezze a Kisegítő lehetőségek hozzáférést, hogy a stella más alkalmazásokba írhasson.",
       "microphone": "A stella nem hallja a mikrofont. Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban.",
@@ -817,6 +825,7 @@
       "screenRecording": "Képernyőfelvétel",
       "camera": "Kamera",
       "keystrokes": "Billentyűleütések",
+      "keystrokesWithoutHoldKey": "Billentyűleütések, hacsak nem választ lenyomva tartandó billentyűt",
       "fullDiskAccess": "Teljes lemezhozzáférés",
       "administrator": "Rendszergazdai jogok"
     }

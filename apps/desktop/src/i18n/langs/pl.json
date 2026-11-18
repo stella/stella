@@ -614,6 +614,7 @@
     "descriptionCloud": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowę przetwarza stella AI, a stella jej nie przechowuje.",
     "lede": "Przytrzymaj <key>{shortcut}</key> i mów. Tekst pojawi się tam, gdzie piszesz.",
     "groups": {
+      "shortcut": "Skrót",
       "transcription": "Transkrypcja",
       "cleanup": "Poprawianie",
       "thisComputer": "Na tym komputerze"
@@ -667,6 +668,13 @@
     "downloadFailed": "Nie udało się pobrać modelu mowy.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Skrótu {shortcut} używa inna aplikacja.",
+    "holdKey": {
+      "title": "Klawisz do przytrzymania",
+      "description": "Przytrzymaj sam ten klawisz, aby dyktować. Krótkie naciśnięcie ani skrót, który go używa, nic nie robi.",
+      "right": "Prawy {key}",
+      "waiting": "stella wykryje {shortcut}, gdy otrzyma dostęp do Dostępności.",
+      "unavailable": "stella nie może wykrywać {shortcut} na tym komputerze. Wybierz inny klawisz."
+    },
     "failure": {
       "accessibility": "Zezwól na dostęp do funkcji Dostępność, aby stella mogła pisać w innych aplikacjach.",
       "microphone": "stella nie słyszy mikrofonu. Sprawdź dostęp do mikrofonu w Ustawieniach systemowych.",
@@ -817,6 +825,7 @@
       "screenRecording": "Nagrywanie ekranu",
       "camera": "Kamera",
       "keystrokes": "Naciśnięcia klawiszy",
+      "keystrokesWithoutHoldKey": "Naciśnięcia klawiszy, chyba że wybierzesz klawisz do przytrzymania",
       "fullDiskAccess": "Pełny dostęp do dysku",
       "administrator": "Uprawnienia administratora"
     }

@@ -6,6 +6,7 @@ GlobalRegistrator.register({ url: "http://localhost/" });
 const { act, cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
+const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
 
@@ -36,6 +37,9 @@ const ENABLED_SNAPSHOT = {
   textBeforeCursorAvailable: true,
   failure: null,
   failureKeptInHistory: false,
+  holdKey: "combination",
+  holdKeys: ["combination"],
+  holdKeyWaiting: false,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
   modelBytes: 740_363_168,
@@ -888,4 +892,129 @@ test("the retention warning shows only while the chosen model keeps the audio", 
   await waitFor(() => {
     expect(view.queryByRole("alert")).toBeNull();
   });
+});
+
+const HOLD_KEY_SNAPSHOT = {
+  ...ENABLED_SNAPSHOT,
+  holdKey: "fn",
+  holdKeys: ["fn", "rightOption", "combination"],
+};
+
+test("the header names the key to hold", async () => {
+  const { container } = await renderSetting(HOLD_KEY_SNAPSHOT);
+
+  expect(
+    container.querySelector("#dictation-description kbd")?.textContent,
+  ).toBe("fn");
+});
+
+test("the speaker picks another key from what this computer offers", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(HOLD_KEY_SNAPSHOT, (command, payload) => {
+    if (command === "dictation_set_hold_key") {
+      picked.push(payload);
+      return { ...HOLD_KEY_SNAPSHOT, holdKey: "rightOption" };
+    }
+    return undefined;
+  });
+
+  expect(
+    view.getByRole("heading", {
+      name: defaultMessages.dictation.groups.shortcut,
+    }),
+  ).toBeTruthy();
+  const listbox = await openSelect(
+    view,
+    defaultMessages.dictation.holdKey.title,
+  );
+  const options = within(listbox).getAllByRole("option");
+  expect(options).toHaveLength(3);
+  const right = within(listbox).getByRole("option", { name: /^Right /u });
+  await act(async () => {
+    fireEvent.pointerDown(right, { pointerType: "mouse" });
+    fireEvent.click(right);
+  });
+
+  await waitFor(() => {
+    expect(picked).toEqual([{ holdKey: "rightOption" }]);
+  });
+});
+
+test("a read that started before a new key was picked does not bring the old key back", async () => {
+  let reads = 0;
+  let answerLateRead: (() => void) | undefined;
+  mockIPC(
+    async (command) => {
+      if (command === "dictation_get_snapshot") {
+        reads += 1;
+        if (reads === 2) {
+          await new Promise<void>((resolve) => {
+            answerLateRead = resolve;
+          });
+        }
+        return HOLD_KEY_SNAPSHOT;
+      }
+      if (command === "dictation_set_hold_key") {
+        return { ...HOLD_KEY_SNAPSHOT, holdKey: "rightOption" };
+      }
+      return undefined;
+    },
+    { shouldMockEvents: true },
+  );
+  const view = render(
+    <DesktopIntlProvider language="en" messages={defaultMessages}>
+      <DictationSetting />
+    </DesktopIntlProvider>,
+  );
+  const trigger = await view.findByRole("combobox", {
+    name: defaultMessages.dictation.holdKey.title,
+  });
+  expect(trigger.textContent).not.toMatch(/^Right /u);
+
+  // A read starts with fn still chosen and answers only after the change.
+  await act(async () => {
+    await emit("dictation-changed");
+  });
+  await waitFor(() => {
+    expect(answerLateRead).toBeDefined();
+  });
+  const listbox = await openSelect(
+    view,
+    defaultMessages.dictation.holdKey.title,
+  );
+  const right = within(listbox).getByRole("option", { name: /^Right /u });
+  await act(async () => {
+    fireEvent.pointerDown(right, { pointerType: "mouse" });
+    fireEvent.click(right);
+  });
+  await waitFor(() => {
+    expect(trigger.textContent).toMatch(/^Right /u);
+  });
+
+  await act(async () => {
+    answerLateRead?.();
+    await Promise.resolve();
+  });
+
+  expect(trigger.textContent).toMatch(/^Right /u);
+});
+
+test("a computer that offers one key shows no choice", async () => {
+  const { queryByText } = await renderSetting(ENABLED_SNAPSHOT);
+
+  expect(queryByText(defaultMessages.dictation.holdKey.title)).toBeNull();
+  expect(queryByText(defaultMessages.dictation.groups.shortcut)).toBeNull();
+});
+
+test("a key that cannot be heard yet says so", async () => {
+  const { getByText } = await renderSetting({
+    ...HOLD_KEY_SNAPSHOT,
+    holdKeyWaiting: true,
+  });
+
+  const messages = [
+    defaultMessages.dictation.holdKey.waiting,
+    defaultMessages.dictation.holdKey.unavailable,
+  ].map((message) => message.replace("{shortcut}", "fn"));
+  expect(getByText((text) => messages.includes(text))).toBeTruthy();
 });

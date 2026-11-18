@@ -614,6 +614,7 @@
     "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
     "lede": "Hold <key>{shortcut}</key> and speak. The text appears where you are typing.",
     "groups": {
+      "shortcut": "Shortcut",
       "transcription": "Transcription",
       "cleanup": "Clean up",
       "thisComputer": "On this computer"
@@ -667,6 +668,13 @@
     "downloadFailed": "The speech model could not be downloaded.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Another app is using {shortcut}.",
+    "holdKey": {
+      "title": "Key to hold",
+      "description": "Hold it on its own to dictate. A quick tap, or a shortcut that uses it, does nothing.",
+      "right": "Right {key}",
+      "waiting": "stella notices {shortcut} once it has Accessibility access.",
+      "unavailable": "stella cannot watch {shortcut} on this computer. Choose another key."
+    },
     "failure": {
       "accessibility": "Allow Accessibility access so stella can type into other apps.",
       "microphone": "stella could not hear your microphone. Check Microphone access in System Settings.",
@@ -817,6 +825,7 @@
       "screenRecording": "Screen recording",
       "camera": "Camera",
       "keystrokes": "Keystrokes",
+      "keystrokesWithoutHoldKey": "Keystrokes, unless you choose a key to hold",
       "fullDiskAccess": "Full Disk Access",
       "administrator": "Administrator rights"
     }
