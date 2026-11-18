@@ -1503,6 +1503,7 @@
         "message": "Nothing matched under the filters you narrowed with."
       },
       "partialMatch": "Partial match",
+      "partialMatchMissing": "Missing words: {terms}",
       "partialMatches": "Partial matches for: <bdi>{query}</bdi>",
       "resultsFor": "Results for: <bdi>{query}</bdi>",
       "searchEveryWord": "Search every word"

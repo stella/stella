@@ -1503,6 +1503,7 @@
         "message": "Aucun résultat ne correspond aux filtres appliqués."
       },
       "partialMatch": "Correspondance partielle",
+      "partialMatchMissing": "Mots absents : {terms}",
       "partialMatches": "Correspondances partielles pour : <bdi>{query}</bdi>",
       "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
       "searchEveryWord": "Rechercher tous les mots"

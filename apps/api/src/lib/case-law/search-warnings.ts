@@ -327,7 +327,8 @@ export const phrasingTimedOutWarning = ({
 /**
  * A short page whose top-up with partial matches did not finish. What it holds
  * is correct but not everything it would normally hold, which the caller cannot
- * tell from the hits. The phrasing is named for the same reason as above.
+ * tell from the hits, so the page is never `complete` and its cursor runs the
+ * phrasing again. The phrasing is named for the same reason as above.
  */
 export const partialMatchesUnreadWarning = ({
   query,
@@ -336,7 +337,7 @@ export const partialMatchesUnreadWarning = ({
 }): AgentCaseLawSearchWarning => ({
   code: "partial_matches_unread",
   message: `Decisions holding only some of the words of ${JSON.stringify(query)} could not be read in time, so this page may hold fewer "some_terms" hits than usual, or none. Do not read the shorter list as all there is.`,
-  hint: "Repeat this search to read the partial matches, or narrow it with a court or date range. Pass strict: true if only decisions holding every word are wanted.",
+  hint: "Pass the returned nextCursor as cursor, with the same queries in the same order, to run this phrasing again with its partial matches; it may repeat the hits above. Pass strict: true if only decisions holding every word are wanted.",
 });
 
 export const manyRequiredTermsWarning = ({

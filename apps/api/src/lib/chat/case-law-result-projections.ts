@@ -121,9 +121,17 @@ const caseLawSearchIdentityFields = {
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
   textAvailability: v.picklist(Object.values(DECISION_TEXT_AVAILABILITY)),
-  // Whether the decision holds every word of the query, or only some of them
-  // (appended after the others when few decisions held every word).
+  // Whether one passage holds every word of the query, or the decision holds
+  // only some of them (appended after the others when few held every word).
   match: v.picklist(DECISION_SEARCH_MATCHES),
+  // The words of phrasing `query` (a `queries` index) the decision holds
+  // anywhere in its text, and those it lacks. Both empty for a decision an
+  // identifier named rather than the words.
+  terms: v.strictObject({
+    query: v.number(),
+    matched: v.array(v.string()),
+    missing: v.array(v.string()),
+  }),
 } as const;
 
 /** One decision on a search page, whether its text may be shown or is withheld. */
@@ -209,6 +217,17 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // send it back as a `queries` entry to repeat the same search.
           queryUsed: v.string(),
           paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
+          // When few decisions hold every word: decisions holding each word
+          // alone (estimates) and all of them, so the rare word shows.
+          termDecisionCounts: v.optional(
+            v.strictObject({
+              allTerms: v.number(),
+              terms: v.array(
+                v.strictObject({ term: v.string(), count: v.number() }),
+              ),
+              countType: v.literal(FACET_COUNT_TYPE.ESTIMATE),
+            }),
+          ),
           // What the search answered that the call did not ask for. Empty for a
           // phrasing that required every word it carried and found something.
           warnings: v.array(

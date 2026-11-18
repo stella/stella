@@ -1503,6 +1503,7 @@
         "message": "Zvoleným filtrom nič nezodpovedá."
       },
       "partialMatch": "Čiastočná zhoda",
+      "partialMatchMissing": "Chýbajúce slová: {terms}",
       "partialMatches": "Čiastočné zhody pre: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"

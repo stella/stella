@@ -1503,6 +1503,7 @@
         "message": "Niekas neatitiko pasirinktų filtrų."
       },
       "partialMatch": "Dalinė atitiktis",
+      "partialMatchMissing": "Trūkstami žodžiai: {terms}",
       "partialMatches": "Dalinės atitiktys užklausai: <bdi>{query}</bdi>",
       "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
       "searchEveryWord": "Ieškoti visų žodžių"

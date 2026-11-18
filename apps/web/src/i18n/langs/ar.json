@@ -1503,6 +1503,7 @@
         "message": "لا شيء يطابق عوامل التصفية المحددة."
       },
       "partialMatch": "تطابق جزئي",
+      "partialMatchMissing": "كلمات غير موجودة: {terms}",
       "partialMatches": "نتائج تطابق جزئي للبحث: <bdi>{query}</bdi>",
       "resultsFor": "نتائج البحث عن: <bdi>{query}</bdi>",
       "searchEveryWord": "البحث عن كل الكلمات"
