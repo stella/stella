@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { desktopDictationModelsSchema } from "@stll/api-contract/desktop-dictation-transcription";
 
 import { listDictationModels } from "@/api/handlers/dictation/desktop-transcription";
-import { mayUseRetainingModels } from "@/api/handlers/dictation/transcribe";
+import { readRetainingModelsGrant } from "@/api/handlers/dictation/transcribe";
 import { readTranscriptionDeployment } from "@/api/handlers/dictation/transcription-deployment";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
@@ -34,18 +34,18 @@ const config = {
 export const createDictationModelsEndpoint = ({
   readDeployment = readTranscriptionDeployment,
 }: { readDeployment?: typeof readTranscriptionDeployment } = {}) =>
-  // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   createSafeRootHandler(config, async function* (ctx) {
     const configurationError = orgAIConfigStatusError(ctx.orgAIConfigStatus);
     if (configurationError !== null) {
       return yield* Result.err(configurationError);
     }
+    const retainingModels = yield* Result.await(readRetainingModelsGrant(ctx));
     return Result.ok(
       listDictationModels(ctx, {
         deployment: readDeployment(),
         labeled: true,
         retention: true,
-        retainingModels: mayUseRetainingModels(ctx),
+        retainingModels,
       }),
     );
   });

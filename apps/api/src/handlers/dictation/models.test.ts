@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { beforeEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { desktopDictationModelsSchema } from "@stll/api-contract/desktop-dictation-transcription";
 import { createTestState } from "@stll/test-state";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -15,6 +17,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { listDictationModels } from "./desktop-transcription";
 import { createDictationModelsEndpoint } from "./models";
@@ -54,6 +57,17 @@ const grantRetainingModels = () => {
   });
 };
 
+const memberDecisions = () =>
+  buildFeatureAccessSnapshot({
+    organizationId: ORGANIZATION_ID,
+    userId: USER_ID,
+    identity: { email: EMAIL, emailVerified: true },
+    enrolments: [],
+  });
+
+/** Reads of the member's decisions a request without them made. */
+let decisionReads = 0;
+
 const listFor = async ({
   deployment = RETAINING,
   role = "member",
@@ -71,22 +85,20 @@ const listFor = async ({
   return await endpoint.handler(
     createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
       audit: NO_AUDIT,
-      safeDb: NO_DB,
+      // A request with the member's decisions reads nothing; one without
+      // them reads them, as the resolver would from the grants.
+      safeDb: withSnapshot
+        ? NO_DB
+        : asTestRaw<SafeDb>(async () => {
+            decisionReads += 1;
+            return await Promise.resolve(Result.ok(memberDecisions()));
+          }),
       scopedDb: NO_DB,
       memberRole: sessionMemberRole(role),
       session: { activeOrganizationId: ORGANIZATION_ID },
       user: { id: USER_ID, email: EMAIL },
       managedAIResidency: residency,
-      ...(withSnapshot
-        ? {
-            featureAccessSnapshot: buildFeatureAccessSnapshot({
-              organizationId: ORGANIZATION_ID,
-              userId: USER_ID,
-              identity: { email: EMAIL, emailVerified: true },
-              enrolments: [],
-            }),
-          }
-        : {}),
+      ...(withSnapshot ? { featureAccessSnapshot: memberDecisions() } : {}),
       request: new Request("https://stella.test/v1/dictation/models"),
       route: "/v1/dictation/models",
     }),
@@ -128,11 +140,11 @@ test("a model whose provider keeps the audio is listed, marked, only to a member
   });
   // Never the default.
   expect(granted.defaultModelId).not.toBe(SCRIBE);
-  // Without the member's decisions in the request, the grant is not read.
-  const unread = listed(
-    await listFor({ residency: "eu", withSnapshot: false }),
-  );
-  expect(unread.models.map(({ id }) => id)).not.toContain(SCRIBE);
+  // A request without the member's decisions reads them once.
+  expect(decisionReads).toBe(0);
+  const read = listed(await listFor({ residency: "eu", withSnapshot: false }));
+  expect(read.models.map(({ id }) => id)).toContain(SCRIBE);
+  expect(decisionReads).toBe(1);
 });
 
 test("a role that may not use AI reads no models", async () => {

@@ -20,7 +20,7 @@ import {
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
@@ -44,13 +44,17 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { MemberCaller } from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import {
+  isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { emitTranscriptionDurationMismatchMetric } from "@/api/lib/observability/request-metrics";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
@@ -69,22 +73,38 @@ import {
 export const RETAINING_MODELS_FEATURE_ID =
   "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
 
-/** The member may use a model whose provider keeps the audio. A request
- *  without the member's feature decisions never may. */
-export const mayUseRetainingModels = ({
+/**
+ * The member may use a model whose provider keeps the audio. The member's
+ * feature decisions come with the request; a caller that arrives without
+ * them for this member reads them, as handler feature admission does.
+ */
+export const readRetainingModelsGrant = async ({
   featureAccessSnapshot,
+  safeDb,
   session,
   user,
 }: {
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+  safeDb: SafeDb;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
-}): boolean =>
-  featureAccessSnapshot !== undefined &&
-  isFeatureEnabled(featureAccessSnapshot, RETAINING_MODELS_FEATURE_ID, {
+}): Promise<Result<boolean, SafeDbError>> => {
+  const principal = {
     organizationId: session.activeOrganizationId,
     userId: user.id,
-  });
+  };
+  const snapshot =
+    featureAccessSnapshot !== undefined &&
+    isFeatureAccessSnapshotForPrincipal(featureAccessSnapshot, principal)
+      ? Result.ok(featureAccessSnapshot)
+      : await safeDb(
+          async (tx) =>
+            await resolveFeatureAccessSnapshot({ tx, ...principal }),
+        );
+  return snapshot.map((decisions) =>
+    isFeatureEnabled(decisions, RETAINING_MODELS_FEATURE_ID, principal),
+  );
+};
 
 const config = {
   contract: "patch",
@@ -474,7 +494,9 @@ export const createDictationTranscribeEndpoint = ({
             ? {
                 ...ctx,
                 allowOutsideRegion: true,
-                allowRetainingModels: mayUseRetainingModels(ctx),
+                allowRetainingModels: yield* Result.await(
+                  readRetainingModelsGrant(ctx),
+                ),
               }
             : ctx,
           {
