@@ -115,13 +115,16 @@ export const SLOV_LEX_ANCHORS = {
   segmentSeparator: ".",
   unnumberedAnchor: null,
   unnumberedSegment: /^text\d*$/u,
-  // `prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z`,
-  // `prilohy.priloha-1`, and an act's one annex,
-  // `prilohy.priloha-priloha_k_zakonu_c_106_2024_z_z`.
+  // Every annex is a `prilohy.priloha-…` container whose id the publisher
+  // spells from the annex's own title: `…priloha_c_3_k_zakonu_c_108_2024_z_z`,
+  // `…priloha_ii_k_vyhlasce_…`, `…priloha_a`, `…priloha-1`, and for an act's
+  // one annex `…priloha_k_zakonu_c_106_2024_z_z`. The first pattern that
+  // matches decides; the last names an annex whose number the id omits.
   annexAnchors: [
-    /^prilohy\.priloha-priloha_c_(?<designator>[0-9a-z]+)_k_[^.]*$/u,
-    /^prilohy\.priloha-(?<designator>[0-9a-z]+)$/u,
-    /^prilohy\.priloha-priloha_k_[^.]*$/u,
+    /^prilohy\.priloha-priloha_(?:k|ku|vyhlasky|vyhlasce|zakona|zakonu|nariadenia|nariadeniu|opatrenia|opatreniu)_[^.]*$/u,
+    /^prilohy\.priloha-priloha_(?:c_)?(?<designator>[0-9]+[a-z]{0,2}|[a-z]|[ivx]+)(?:_[^.]*)?$/u,
+    /^prilohy\.priloha-(?<designator>[0-9]+[a-z]{0,2})$/u,
+    /^prilohy\.priloha-[^.]+$/u,
   ],
 } as const satisfies StatuteAnchorScheme;
 

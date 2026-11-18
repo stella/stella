@@ -259,10 +259,13 @@ describe("annex anchors", () => {
         "prilohy.priloha-priloha_c_1a_k_zakonu_c_311_2001_z_z",
         "prilohy.priloha-1",
         "prilohy.priloha-priloha_k_zakonu_c_106_2024_z_z",
+        "prilohy.priloha-priloha_ii_k_vyhlasce_ministra_ochrany_prace_c_164_sb",
+        "prilohy.priloha-priloha_a",
+        "prilohy.priloha-priloha_vyhlasky_c_72_1945_sb",
         "prilohy.priloha-priloha_c_3_k_zakonu_c_108_2024_z_z.bod-1",
         "paragraf-3",
       ].map((anchor) => annexDesignator(SLOV_LEX_ANCHORS, anchor)),
-    ).toEqual(["3", "1a", "1", "", null, null]);
+    ).toEqual(["3", "1a", "1", "", "ii", "a", "", null, null]);
     expect(annexDesignator(US_CODE_ANCHORS, "pril_3")).toBeNull();
   });
 
