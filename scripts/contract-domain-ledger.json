@@ -672,7 +672,7 @@
     "reason": "Existing READER_ANNOTATION_EDIT_TOOL_NAMES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/tool-call-card.tsx::CODE_SOURCE_INPUT_KEYS::domain:[\"typescriptCode\",\"code\"]::1",
+    "id": "apps/web/src/components/chat/tool-call-title.logic.ts::CODE_SOURCE_INPUT_KEYS::domain:[\"typescriptCode\",\"code\"]::1",
     "reason": "Existing CODE_SOURCE_INPUT_KEYS domain; contract ownership pending migration."
   },
   {
