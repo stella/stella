@@ -14,6 +14,7 @@ import {
   parseDecisionQuery,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import {
   CASE_LAW_RANKED_HIT_ORDER,
   type CaseLawHitOrder,
@@ -33,7 +34,6 @@ import {
   type SearchPhaseState,
   type SearchTotal,
 } from "@stll/api-contract/search";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
