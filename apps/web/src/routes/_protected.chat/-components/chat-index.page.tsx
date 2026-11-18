@@ -188,7 +188,7 @@ const MatterColleagues = ({
   );
 };
 
-export function ChatIndexPage() {
+function ChatIndex() {
   const t = useTranslations();
   const { focusThread } = useChatEditorManager();
   const { availability, ensureAIAvailable } = useAIKeyGate();
@@ -886,3 +886,6 @@ type PinnedMatter = {
   /** Drives the right-click menu's add-member affordance and header. */
   client: { displayName: string } | null;
 };
+
+// Named for the census baselines, which key its sites by `ChatIndex`.
+export const ChatIndexPage = ChatIndex;

@@ -39,6 +39,7 @@ import {
   filenameForContext,
   getPropertyName,
   isAstNode,
+  isCallTo,
   isIdentifier,
   repoRelativeFilename,
 } from "./utils.ts";
@@ -128,9 +129,6 @@ const routeProperties = (options) => {
   }
   return properties;
 };
-
-const isCallTo = (value, name) =>
-  value?.type === "CallExpression" && isIdentifier(value.callee, name);
 
 // The element a function renders when its whole body is one JSX element.
 const renderedElement = (value) => {

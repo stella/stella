@@ -2651,6 +2651,60 @@ const committedBaseline = (revision: string) => {
   return v.parse(committedBaselineSchema, JSON.parse(content));
 };
 
+/**
+ * The committed entries as they read after this change's file moves: a site
+ * that moved with its code to another file keeps its committed entry under
+ * the new path, so a move is neither growth nor a new site. `movedFrom` maps
+ * a destination file to the file Git found it was renamed or copied from.
+ */
+export const followMovedFiles = (
+  committed: Record<string, string>,
+  movedFrom: ReadonlyMap<string, string>,
+): Record<string, string> =>
+  Object.fromEntries([
+    ...Object.entries(committed),
+    ...[...movedFrom].flatMap(([destination, source]) => {
+      const prefix = `${source}:`;
+      return Object.entries(committed).flatMap(([id, reason]) =>
+        id.startsWith(prefix)
+          ? [[`${destination}:${id.slice(prefix.length)}`, reason] as const]
+          : [],
+      );
+    }),
+  ]);
+
+// Files this change moved, as Git detects them: renames, and copies out of
+// a file that stayed (a route file that kept its options and gave its page
+// component a module of its own).
+const movedFiles = (baseRevision: string): ReadonlyMap<string, string> => {
+  const output = git([
+    "diff",
+    "--find-renames",
+    "--find-copies=40%",
+    "--name-status",
+    "-z",
+    baseRevision,
+    "--",
+    "apps",
+    "packages",
+  ]);
+  const movedFrom = new Map<string, string>();
+  if (output === null) {
+    return movedFrom;
+  }
+  const fields = output.split("\0");
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++] ?? "";
+    const source = fields[index++] ?? "";
+    if (!status.startsWith("R") && !status.startsWith("C")) {
+      continue;
+    }
+    const destination = fields[index++] ?? "";
+    movedFrom.set(destination, source);
+  }
+  return movedFrom;
+};
+
 export const checkBaseline = ({
   observed,
   recorded,
@@ -2781,7 +2835,10 @@ const main = () => {
   const result = checkBaseline({
     observed,
     recorded: baseline.entries,
-    committed: committed?.entries ?? null,
+    committed:
+      committed === null
+        ? null
+        : followMovedFiles(committed.entries, movedFiles(baseRevision)),
     write: process.argv.includes("--write"),
   });
   const errors = [
