@@ -3,7 +3,6 @@ import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
-import { sanitizeErrorForOutput } from "@stll/errors";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
@@ -27,7 +26,6 @@ import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
   type ProcessResult,
-  wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { writeOwnedRawPayload } from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
 import {
@@ -44,7 +42,6 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
-import { errorSystemFields } from "@/api/lib/errors/utils";
 import {
   lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -57,7 +54,9 @@ import {
   type HeldDecisionMatchBasis,
 } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
 
@@ -72,6 +71,12 @@ const HELD_DECISION_AMBIGUOUS = "case_law.ingestion.held_decision_ambiguous";
 
 /** A record's host was erased or redacted, so the record is parked. */
 const HELD_DECISION_WITHDRAWN = "case_law.ingestion.held_decision_withdrawn";
+
+/** The record's raw payload could not be stored under its host's prefix. */
+const heldDecisionRawWriteFailed = failureSink({
+  event: "case_law.ingestion.held_decision_raw_write_failed",
+  expected: [],
+});
 
 /** What became of one record of a declaring source. */
 type HeldDecisionAttachmentDisposition =
@@ -893,11 +898,13 @@ export const attachToHeldDecision = async (
   if (Result.isError(raw)) {
     signal?.throwIfAborted();
     // Retryable: the record is not held yet, so the cursor holds it.
-    logger.warn("case_law.ingestion.held_decision_raw_write_failed", {
-      sourceId,
-      hostDecisionId: host.id,
-      ...errorSystemFields(raw.error),
-      "error.detail": wrappedErrorDetail(sanitizeErrorForOutput(raw.error)),
+    observeFailure(raw.error, {
+      sink: heldDecisionRawWriteFailed,
+      ctx: {
+        source: sourceId,
+        decisionId: host.id,
+        step: "attachToHeldDecision.rawWrite",
+      },
     });
     return Result.ok(
       settled(null, {
