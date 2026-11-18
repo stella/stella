@@ -1793,17 +1793,20 @@ function ToolActivityPlayground() {
       </div>
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         durationMs={8000}
         part={COMPLETED_TOOL_STEP}
       />
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         durationMs={2000}
         part={COMPLETED_CODE_TOOL_STEP}
         showDetails
       />
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         part={RUNNING_TOOL_STEP}
       />
     </div>
