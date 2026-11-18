@@ -38,6 +38,7 @@ import { ecliPublisherSpellings } from "@/api/lib/case-law/ecli-spellings";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
+import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -181,11 +182,16 @@ const matchHostDecisionsTx = async (
   >,
 ): Promise<HostMatch> => {
   const hostSources = hostSourceIdsSql(declaration, sourceId);
-  const limit = HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX;
   const answer = (
     basis: HeldDecisionMatchBasis,
-    hosts: readonly HostDecision[],
+    read: BoundedReadResult<HostDecision>,
   ): HostMatch => {
+    if (read.type === "overflow") {
+      // More matches than an operator is listed: still several, and none is
+      // chosen.
+      return { type: "several", basis, candidateDecisionIds: [] };
+    }
+    const hosts = read.rows;
     const [first, second] = hosts;
     if (first === undefined) {
       return { type: "none" };
@@ -215,23 +221,25 @@ const matchHostDecisionsTx = async (
           ),
         ].filter((key) => key.length > 0);
   if (ecliKeys.length > 0) {
-    const byEcli = await tx
-      .selectDistinct(HOST_COLUMNS)
-      .from(caseLawDecisionIdentifiers)
-      .innerJoin(
-        caseLawDecisions,
-        eq(caseLawDecisions.id, caseLawDecisionIdentifiers.decisionId),
-      )
-      .where(
-        and(
-          eq(caseLawDecisionIdentifiers.type, DECISION_IDENTIFIER_TYPES.ECLI),
-          inArray(caseLawDecisionIdentifiers.normalizedValue, ecliKeys),
-          sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
-        ),
-      )
-      .orderBy(caseLawDecisions.id)
-      .limit(limit);
-    if (byEcli.length > 0) {
+    const byEcli = await readBounded(
+      tx
+        .selectDistinct(HOST_COLUMNS)
+        .from(caseLawDecisionIdentifiers)
+        .innerJoin(
+          caseLawDecisions,
+          eq(caseLawDecisions.id, caseLawDecisionIdentifiers.decisionId),
+        )
+        .where(
+          and(
+            eq(caseLawDecisionIdentifiers.type, DECISION_IDENTIFIER_TYPES.ECLI),
+            inArray(caseLawDecisionIdentifiers.normalizedValue, ecliKeys),
+            sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
+          ),
+        )
+        .orderBy(caseLawDecisions.id),
+      HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
+    );
+    if (byEcli.type === "overflow" || byEcli.rows.length > 0) {
       return answer(HELD_DECISION_MATCH_BASIS.ECLI, byEcli);
     }
   }
@@ -239,30 +247,35 @@ const matchHostDecisionsTx = async (
   if (decisionDate === undefined || observed.caseNumber.length === 0) {
     return { type: "none" };
   }
-  const byDocket = await tx
-    .select(HOST_COLUMNS)
-    .from(caseLawDecisions)
-    .where(
-      and(
-        eq(caseLawDecisions.caseNumber, observed.caseNumber),
-        eq(caseLawDecisions.decisionDate, decisionDate),
-        eq(caseLawDecisions.country, observed.country),
-        sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
-        republishedRulingCourtPredicate(
-          {
-            // Typed, so the comparison's bare `IS NOT NULL` reads a text.
-            court: sql`${observed.court}::text`,
-            courtId:
-              observed.courtId === undefined
-                ? null
-                : sql`${observed.courtId}::text`,
-          },
-          { court: caseLawDecisions.court, courtId: caseLawDecisions.courtId },
+  const byDocket = await readBounded(
+    tx
+      .select(HOST_COLUMNS)
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.caseNumber, observed.caseNumber),
+          eq(caseLawDecisions.decisionDate, decisionDate),
+          eq(caseLawDecisions.country, observed.country),
+          sql`${caseLawDecisions.sourceId} IN ${hostSources}`,
+          republishedRulingCourtPredicate(
+            {
+              // Typed, so the comparison's bare `IS NOT NULL` reads a text.
+              court: sql`${observed.court}::text`,
+              courtId:
+                observed.courtId === undefined
+                  ? null
+                  : sql`${observed.courtId}::text`,
+            },
+            {
+              court: caseLawDecisions.court,
+              courtId: caseLawDecisions.courtId,
+            },
+          ),
         ),
-      ),
-    )
-    .orderBy(caseLawDecisions.id)
-    .limit(limit);
+      )
+      .orderBy(caseLawDecisions.id),
+    HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX,
+  );
   return answer(HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE, byDocket);
 };
 

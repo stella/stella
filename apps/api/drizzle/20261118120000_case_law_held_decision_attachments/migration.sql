@@ -32,8 +32,7 @@ CREATE TABLE "case_law_held_decision_attachments" (
   CONSTRAINT "case_law_held_decision_attachments_basis_values"
     CHECK ("match_basis" IN ('ecli', 'court-docket-date')),
   CONSTRAINT "case_law_held_decision_attachments_host_shape"
-    CHECK (("host_decision_id" IS NULL) = (cardinality("candidate_decision_ids") >= 2)
-      AND ("host_decision_id" IS NULL OR cardinality("candidate_decision_ids") = 0)),
+    CHECK ("host_decision_id" IS NULL OR cardinality("candidate_decision_ids") = 0),
   CONSTRAINT "case_law_held_decision_attachments_withdrawn_shape"
     CHECK ("host_withdrawn_at" IS NULL OR ("host_decision_id" IS NOT NULL AND "metadata" IS NULL AND "source_raw_s3_key" IS NULL))
 );--> statement-breakpoint

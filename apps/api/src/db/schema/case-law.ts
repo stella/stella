@@ -1933,7 +1933,10 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
      * never written as a decision of its own.
      */
     hostWithdrawnAt: timestamptz("host_withdrawn_at"),
-    /** The held decisions an ambiguous record matched, for its operator. */
+    /**
+     * The held decisions an ambiguous record matched, for its operator: up
+     * to `HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX`, none when more matched.
+     */
     candidateDecisionIds: p
       .uuid("candidate_decision_ids")
       .array()
@@ -1988,12 +1991,12 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
         sql`, `,
       )})`,
     ),
-    // An ambiguous record names its candidates and no host; an attached or
-    // withdrawn one names its host and no candidates.
+    // An ambiguous record names no host and lists its candidates (none when
+    // more matched than are listed); an attached or withdrawn one names its
+    // host and no candidates.
     p.check(
       "case_law_held_decision_attachments_host_shape",
-      sql`(${t.hostDecisionId} IS NULL) = (cardinality(${t.candidateDecisionIds}) >= 2)
-        AND (${t.hostDecisionId} IS NULL OR cardinality(${t.candidateDecisionIds}) = 0)`,
+      sql`${t.hostDecisionId} IS NULL OR cardinality(${t.candidateDecisionIds}) = 0`,
     ),
     // A withdrawn host's takedown leaves nothing of the record but its key.
     p.check(

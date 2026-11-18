@@ -12,6 +12,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+import { readCappedByGroup } from "@/api/lib/db/read-bounded";
 import {
   HELD_DECISION_ATTACHMENTS,
   type HeldDecisionAttachment,
@@ -47,6 +48,18 @@ export type HeldDecisionAttachmentCensus = {
 const countRows = async (tx: Transaction, rows: Subquery): Promise<number> =>
   (await tx.select({ count: sql<number>`count(*)::int` }).from(rows)).at(0)
     ?.count ?? 0;
+
+/** A finding's first rows; its exact size is counted apart. */
+const sampleOf = async <TRow>(query: {
+  limit: (limit: number) => PromiseLike<TRow[]>;
+}): Promise<TRow[]> =>
+  (
+    await readCappedByGroup(query, {
+      cap: HELD_DECISION_ATTACHMENT_CENSUS_SAMPLE,
+      readRows: async (limited) => await limited,
+      groupKeyOf: () => "sample",
+    })
+  ).rows;
 
 type Declared = readonly [string, HeldDecisionAttachment<string>];
 
@@ -97,9 +110,9 @@ const censusOf = async (
       )
       .where(vanished);
   const vanishedCount = await countRows(tx, vanishedFrom().as("vanished"));
-  const vanishedSample = await vanishedFrom()
-    .orderBy(caseLawHeldDecisionAttachments.sourceDocumentId)
-    .limit(HELD_DECISION_ATTACHMENT_CENSUS_SAMPLE);
+  const vanishedSample = await sampleOf(
+    vanishedFrom().orderBy(caseLawHeldDecisionAttachments.sourceDocumentId),
+  );
 
   const ownEcli = alias(caseLawDecisionIdentifiers, "census_own_ecli");
   const hostEcli = alias(caseLawDecisionIdentifiers, "census_host_ecli");
@@ -140,9 +153,7 @@ const censusOf = async (
         ),
       );
   const duplicateCount = await countRows(tx, duplicatesFrom().as("duplicates"));
-  const duplicateSample = await duplicatesFrom()
-    .orderBy(sql`1`)
-    .limit(HELD_DECISION_ATTACHMENT_CENSUS_SAMPLE);
+  const duplicateSample = await sampleOf(duplicatesFrom().orderBy(sql`1`));
 
   const ambiguous = await tx.$count(
     caseLawHeldDecisionAttachments,
@@ -172,6 +183,7 @@ export const readHeldDecisionAttachmentCensus = async (
   tx: Transaction,
   declarations: readonly Declared[] = declaredAttachments(),
 ): Promise<HeldDecisionAttachmentCensus[]> =>
+  // db-await-in-loop: one census per declaring source, a handful at most
   await Promise.all(
     declarations.map(async (declared) => await censusOf(tx, declared)),
   );
