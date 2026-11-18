@@ -959,13 +959,14 @@ describe("a member's labels flag", () => {
     return { result, f };
   };
 
-  const refusalCode = (result: unknown) =>
-    result instanceof HttpStatusResponse &&
-    typeof result.response === "object" &&
-    result.response !== null &&
-    "code" in result.response
-      ? result.response.code
-      : undefined;
+  const refusalSchema = v.object({ code: v.string() });
+  const refusalCode = (result: unknown) => {
+    if (!(result instanceof HttpStatusResponse)) {
+      return undefined;
+    }
+    const refusal = v.safeParse(refusalSchema, result.response);
+    return refusal.success ? refusal.output.code : undefined;
+  };
 
   test("lets a granted member name a model whose provider keeps the audio", async () => {
     grantRetainingModels();

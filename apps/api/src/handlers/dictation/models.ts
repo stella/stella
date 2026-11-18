@@ -34,6 +34,7 @@ const config = {
 export const createDictationModelsEndpoint = ({
   readDeployment = readTranscriptionDeployment,
 }: { readDeployment?: typeof readTranscriptionDeployment } = {}) =>
+  // oxlint-disable-next-line typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   createSafeRootHandler(config, async function* (ctx) {
     const configurationError = orgAIConfigStatusError(ctx.orgAIConfigStatus);
     if (configurationError !== null) {
