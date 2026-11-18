@@ -2,6 +2,7 @@ import type { ComponentProps, ComponentType, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { Button } from "@stll/ui/button";
 import {
   AlignJustifyIcon,
@@ -15,7 +16,6 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import type { TableContentMode } from "@stll/api-contract/public-law-table";
 
 // The results toolbar's frame and the faces of its controls. A route's pending
 // view fills the frame with the faces; the page fills the same frame with the

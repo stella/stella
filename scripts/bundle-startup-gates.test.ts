@@ -424,7 +424,9 @@ describe("cold-load hops", () => {
       const graph = graphOf(
         [],
         [
-          componentChunk([{ target: "cases-member-f.js", importer: pageModule }]),
+          componentChunk([
+            { target: "cases-member-f.js", importer: pageModule },
+          ]),
           memberPage,
         ],
         { routes, moduleImports },
@@ -452,7 +454,9 @@ describe("cold-load hops", () => {
       const graph = graphOf(
         [],
         [
-          componentChunk([{ target: "cases-member-f.js", importer: unrelated }]),
+          componentChunk([
+            { target: "cases-member-f.js", importer: unrelated },
+          ]),
           memberPage,
         ],
         { routes, moduleImports },

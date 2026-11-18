@@ -459,7 +459,10 @@ const APP_SOURCE_PREFIX = `${ROUTE_TREE_OPTIONS.srcDirectory}/`;
  * The specifiers a module imports or re-exports statically, type-only ones
  * left out: those are erased and load nothing.
  */
-export const staticSpecifiers = (fileName: string, source: string): string[] => {
+export const staticSpecifiers = (
+  fileName: string,
+  source: string,
+): string[] => {
   const { module } = parseSource(fileName, source);
   return [
     ...module.staticImports
