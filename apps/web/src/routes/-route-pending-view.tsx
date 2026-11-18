@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { Navigate, useRouter, useRouterState } from "@tanstack/react-router";
 import type { AnyRoute, RouteComponent } from "@tanstack/react-router";
@@ -129,7 +129,11 @@ export const useLeafPendingView = (): RouteComponent | undefined => {
  * the pending view of whichever match is pending, so without this a layout
  * that loads its own data would hide its page's shape behind a generic block.
  */
-export function LeafPendingView({ fallback }: { fallback?: ReactNode }) {
+export function LeafPendingView({
+  fallback,
+}: {
+  fallback?: ReactElement | undefined;
+}): ReactElement {
   const view = useLeafPendingView();
   if (view === undefined) {
     return fallback ?? <DefaultPendingComponent />;
