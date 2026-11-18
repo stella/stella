@@ -190,16 +190,18 @@ const takeCorpusIndexProjectionExclusiveTx = async (
   if (taken.isOk()) {
     return Result.ok(undefined);
   }
-  if (isPgError(taken.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
-    return Result.err(
-      new CorpusIndexProjectionFenceBusyError({
-        message:
-          "The exclusive projection mutation fence was not granted within the lock timeout; projection writers are in flight",
-        reason: "lock_unavailable",
-      }),
-    );
+  if (!isPgError(taken.error, PG_ERROR.LOCK_NOT_AVAILABLE)) {
+    // Not a refusal of this lock. The database failure stays the cause, so
+    // a caller still classifies it (a statement timeout, a deadlock).
+    return panic("The exclusive projection mutation fence failed", taken.error);
   }
-  throw taken.error;
+  return Result.err(
+    new CorpusIndexProjectionFenceBusyError({
+      message:
+        "The exclusive projection mutation fence was not granted within the lock timeout; projection writers are in flight",
+      reason: "lock_unavailable",
+    }),
+  );
 };
 
 const lockCorpusIndexProjectionExclusiveTx = async (

@@ -519,6 +519,11 @@ test("the database declining the flip its locks or its time is busy, never undec
       "55P03",
       "busy:lock_unavailable",
     ],
+    [
+      "lock_corpus_projection_mutations_exclusive",
+      "57014",
+      "busy:statement_timeout",
+    ],
     ["AS last_entity_id", "57014", "busy:statement_timeout"],
     ["counted.states", "57014", "busy:statement_timeout"],
     ["pending_walk", "57014", "busy:statement_timeout"],
