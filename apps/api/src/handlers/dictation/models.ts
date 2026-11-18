@@ -1,10 +1,17 @@
 import { Result } from "better-result";
 
+import {
+  isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
+} from "@stll/ai-catalog/transcription";
 import { desktopDictationModelsSchema } from "@stll/api-contract/desktop-dictation-transcription";
 
 import { listDictationModels } from "@/api/handlers/dictation/desktop-transcription";
 import { readRetainingModelsGrant } from "@/api/handlers/dictation/transcribe";
-import { readTranscriptionDeployment } from "@/api/handlers/dictation/transcription-deployment";
+import {
+  readTranscriptionDeployment,
+  transcriptionRetainsData,
+} from "@/api/handlers/dictation/transcription-deployment";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
@@ -39,10 +46,19 @@ export const createDictationModelsEndpoint = ({
     if (configurationError !== null) {
       return yield* Result.err(configurationError);
     }
-    const retainingModels = yield* Result.await(readRetainingModelsGrant(ctx));
+    const deployment = readDeployment();
+    // The member's grant changes the list only where the organization has a
+    // region and the deployment has a model whose provider keeps the audio.
+    const grantMatters =
+      ctx.managedAIResidency !== null &&
+      Object.keys(TRANSCRIPTION_MODELS)
+        .filter(isTranscriptionModelId)
+        .some((modelId) => transcriptionRetainsData(deployment, modelId));
+    const retainingModels =
+      grantMatters && (yield* Result.await(readRetainingModelsGrant(ctx)));
     return Result.ok(
       listDictationModels(ctx, {
-        deployment: readDeployment(),
+        deployment,
         labeled: true,
         retention: true,
         retainingModels,

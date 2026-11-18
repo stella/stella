@@ -1017,6 +1017,55 @@ describe("a member's labels flag", () => {
     expect(f.settlements.at(0)?.caller.transcriptionEndpoint).toBe("global");
   });
 
+  test("reads the grant only for a named model whose provider keeps the audio, after matter access", async () => {
+    let reads = 0;
+    const readGrant = async () => {
+      reads += 1;
+      return await Promise.resolve(Result.ok(true));
+    };
+    const run = async (
+      body: Partial<DictationContext["body"]>,
+      getWorkspaceAccess?: DictationContext["getWorkspaceAccess"],
+    ) => {
+      const f = fixture(1234, 1234, RETAINING);
+      const result = await executeDictation(
+        {
+          ...f.context,
+          ...(getWorkspaceAccess === undefined ? {} : { getWorkspaceAccess }),
+          allowOutsideRegion: true,
+          allowRetainingModels: readGrant,
+          body: { ...f.context.body, ...body },
+        },
+        f.dependencies,
+      );
+      return { result, f };
+    };
+    // The region's default and a model that keeps nothing never read it.
+    expect((await run({ modelId: undefined })).result.isOk()).toBe(true);
+    expect((await run({ modelId: MODEL })).result.isOk()).toBe(true);
+    expect(reads).toBe(0);
+    // A matter the member cannot see is refused before the grant is read.
+    const hidden = await run(
+      {
+        modelId: SCRIBE,
+        matterId: createTestHandlerContext({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+        }).workspaceId,
+      },
+      async () => null,
+    );
+    expect(hidden.result.isErr() && hidden.result.error).toMatchObject({
+      status: 404,
+    });
+    expect(reads).toBe(0);
+    const named = await run({ modelId: SCRIBE });
+    expect(named.result.isOk()).toBe(true);
+    expect(named.f.directRequests).toHaveLength(1);
+    expect(reads).toBe(1);
+  });
+
   test("is a multipart field the member body reads and the desktop body refuses", () => {
     const upload = {
       file: audioChunk(),

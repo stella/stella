@@ -76,7 +76,7 @@ const listFor = async ({
 }: {
   deployment?: TranscriptionDeployment;
   role?: "member" | "external";
-  residency?: "eu" | "us";
+  residency?: "eu" | "us" | null;
   withSnapshot?: boolean;
 } = {}) => {
   const endpoint = createDictationModelsEndpoint({
@@ -145,6 +145,32 @@ test("a model whose provider keeps the audio is listed, marked, only to a member
   const read = listed(await listFor({ residency: "eu", withSnapshot: false }));
   expect(read.models.map(({ id }) => id)).toContain(SCRIBE);
   expect(decisionReads).toBe(1);
+});
+
+test("the grant is not read where it cannot change the list", async () => {
+  const readsBefore = decisionReads;
+  // No region: unavailable whatever the grant.
+  const noRegion = listed(
+    await listFor({ residency: null, withSnapshot: false }),
+  );
+  expect(noRegion.unavailable).toBe("region");
+  // No provider that keeps the audio: nothing for the grant to add.
+  const zeroRetention = listed(
+    await listFor({
+      deployment: {
+        openRouter: true,
+        elevenLabs: {
+          apiKey: "elevenlabs-fixture",
+          environment: "eu",
+          zeroRetention: true,
+        },
+      },
+      residency: "eu",
+      withSnapshot: false,
+    }),
+  );
+  expect(zeroRetention.models.length).toBeGreaterThan(0);
+  expect(decisionReads).toBe(readsBefore);
 });
 
 test("a role that may not use AI reads no models", async () => {

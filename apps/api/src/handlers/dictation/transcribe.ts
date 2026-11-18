@@ -32,6 +32,7 @@ import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { dictationBodySchema } from "@/api/handlers/dictation/schema";
 import {
   readTranscriptionDeployment,
+  transcriptionRetainsData,
   transcriptionServed,
 } from "@/api/handlers/dictation/transcription-deployment";
 import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
@@ -109,7 +110,7 @@ export const readRetainingModelsGrant = async ({
 const config = {
   contract: "patch",
   description:
-    "Transcribe one audio chunk without storing the audio or transcript. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, an optional matterId, and labels=1 only when the client showed the models list's outsideRegion and retainsData labels where the model was chosen. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
+    "Transcribe one audio chunk. stella stores neither the audio nor the transcript; a provider the models list marks retainsData may retain them. Upload file, an optional modelId (absent: the cheapest model offered in the organization's region), optional ISO 639-1 language, a JSON array of vocabulary terms, an optional matterId, and labels=1 only when the client showed the models list's outsideRegion and retainsData labels where the model was chosen. Available through REST multipart upload; generic JSON capability transports cannot upload audio.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
@@ -161,8 +162,10 @@ export type DictationCaller = Readonly<OrgSettingsForAuth> &
      *  model named in the request goes there; a default never does. */
     readonly allowOutsideRegion?: boolean;
     /** A caller that warns members when a provider keeps the audio may use
-     *  such a model when it names it; a default never is one. */
-    readonly allowRetainingModels?: boolean;
+     *  such a model when it names it; a default never is one. A function
+     *  reads the member's grant, and only for a named model that keeps it. */
+    readonly allowRetainingModels?:
+      boolean | (() => Promise<Result<boolean, SafeDbError>>);
   };
 type PreflightOptions = {
   caller: UsageCaller;
@@ -334,8 +337,17 @@ export const executeDictation = async (
       );
     }
     const deployment = dependencies.deployment();
+    // The member's grant decides only a named model whose provider keeps the
+    // audio, so a default or any other model never waits on reading it.
+    const grant = ctx.allowRetainingModels;
+    const retainingData =
+      typeof grant === "function"
+        ? body.modelId !== undefined &&
+          transcriptionRetainsData(deployment, body.modelId) &&
+          (yield* Result.await(grant()))
+        : grant === true;
     const served = transcriptionServed(deployment, ctx.orgAIConfig, {
-      retainingData: ctx.allowRetainingModels === true,
+      retainingData,
     });
     const residency = ctx.managedAIResidency;
     const regionalDefault =
@@ -494,9 +506,8 @@ export const createDictationTranscribeEndpoint = ({
             ? {
                 ...ctx,
                 allowOutsideRegion: true,
-                allowRetainingModels: yield* Result.await(
-                  readRetainingModelsGrant(ctx),
-                ),
+                allowRetainingModels: async () =>
+                  await readRetainingModelsGrant(ctx),
               }
             : ctx,
           {
