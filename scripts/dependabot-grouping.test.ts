@@ -88,6 +88,11 @@ const ignorePolicies = {
   "react-native-svg": {
     type: "expo_sdk",
   },
+  "lucide-static": {
+    reason:
+      "Its glyphs are native mobile assets; a bump waits for the next store build.",
+    type: "documented_policy",
+  },
 } as const satisfies Record<string, IgnorePolicy>;
 
 type IgnorePolicyDependency = keyof typeof ignorePolicies;

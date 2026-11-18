@@ -386,6 +386,12 @@ updates:
       - dependency-name: "react-native-svg"
         versions:
           - ">15.16.0"
+      # lucide-static feeds the mobile bar glyphs, which are native assets: a
+      # bump rewrites them and changes the native fingerprint, so it needs a
+      # TestFlight build. Remove this when the next store build bumps it.
+      - dependency-name: "lucide-static"
+        versions:
+          - ">1.70.0"
     commit-message:
       prefix: "chore"
     reviewers:
