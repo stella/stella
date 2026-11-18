@@ -148,11 +148,12 @@ RUN bun build \
 #     ["bun", "/app/decision-analysis-candidates.js", "--country", "CZE"]
 #     ["bun", "/app/decision-analysis-input.js", "--ids-file", "/tmp/ids.txt"]
 #     ["bun", "/app/decision-analysis-save.js", "--input", "/tmp/analyses.json"]
-# - repair-publisher-absent-text.js, repair-cz-ns-court.js: one-shot repairs
-#   of rows an earlier write path produced; both report without writing until
-#   `--apply`.
+# - repair-publisher-absent-text.js, repair-cz-ns-court.js,
+#   repair-court-identity.js: one-shot repairs of rows an earlier write path
+#   produced; each reports without writing until `--apply`.
 #     ["bun", "/app/repair-publisher-absent-text.js", "--apply"]
 #     ["bun", "/app/repair-cz-ns-court.js", "--apply"]
+#     ["bun", "/app/repair-court-identity.js", "--apply", "--source", "cz-regional"]
 # - classify-citations.js: citation polarity pass. `--recheck` re-reads a
 #   language's labelled citations against the rule tier and tightens a label
 #   only towards a more severe reading, which is the pass to run after new
@@ -237,6 +238,7 @@ RUN bun build \
     apps/api/src/scripts/decision-analysis-save.ts \
     apps/api/src/scripts/repair-publisher-absent-text.ts \
     apps/api/src/scripts/repair-cz-ns-court.ts \
+    apps/api/src/scripts/repair-court-identity.ts \
     apps/api/scripts/classify-citations.ts \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts \
     apps/api/src/scripts/corpus-generation.ts \

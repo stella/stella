@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 
+import { isPrintedCourtJurisdiction } from "@stll/api-contract/court-identity";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
@@ -25,7 +26,10 @@ import {
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
-import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
+import {
+  type DecisionCourtIdentityError,
+  resolveDecisionCourt,
+} from "@/api/lib/case-law/decision-court-identity";
 import {
   decisionContentEvidenceCompatible,
   decisionPublicationCompatible,
@@ -37,6 +41,7 @@ import {
   fallbackEcliComparisonKey,
 } from "@/api/lib/case-law/fallback-decision-identity";
 import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -95,13 +100,45 @@ export const observeDecision = ({
   sourceId,
 }: ObserveDecisionOptions): Result<
   ObservedDecision,
-  StoredCorpusValidationError
+  StoredCorpusValidationError | DecisionCourtIdentityError
 > => {
   const sanitized = sanitizeResult(input, metadataUrlSchema);
   if (sanitized.isErr()) {
     return sanitized;
   }
-  const observed = sanitized.value;
+  // A directory jurisdiction's adapter maps its source's court id and rejects
+  // what the directory does not admit before a result gets here; one that
+  // reaches the write path unresolved is an adapter defect, and writing it
+  // would store a court the index cannot partition, so the run stops on it.
+  // A printed-name jurisdiction's court is read onto its directory court
+  // here, for every adapter at once; a name the directory cannot place is
+  // this decision's rejection, recorded with the batch's other failures, and
+  // never a new court.
+  const court = resolveDecisionCourt(sanitized.value);
+  if (Result.isError(court)) {
+    return isPrintedCourtJurisdiction(sanitized.value.country)
+      ? court
+      : panic(court.error.message, court.error);
+  }
+  // The name the adapter stated stays beside the one the row is stored
+  // under: in the metadata's `court`, where an adapter that prints a court
+  // keeps it, and where this puts it for one that does not.
+  const printed = sanitized.value.court;
+  const keepsPrinted =
+    court.value.court === printed ||
+    typeof sanitized.value.metadata["court"] === "string";
+  const official = toPlainText(court.value.court);
+  const officialCourt = Result.isError(official)
+    ? panic(`A directory court name is not plain text: ${court.value.court}`)
+    : official.value;
+  const observed: IngestionResult = {
+    ...sanitized.value,
+    court: officialCourt,
+    ...(court.value.courtId === null ? {} : { courtId: court.value.courtId }),
+    ...(keepsPrinted
+      ? {}
+      : { metadata: { ...sanitized.value.metadata, court: printed } }),
+  };
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -127,14 +164,6 @@ export const observeDecision = ({
         : [input.legacyCaseNumber.replace(DANGEROUS_CHARS, "")]),
     ]),
   ];
-  // An adapter maps its source's court to a directory id and rejects what the
-  // directory does not admit before a result gets here. One that reaches the
-  // write path unresolved is an adapter defect, and writing it would store a
-  // court the index cannot partition, so the run stops on it.
-  const courtId = resolveDecisionCourtId(observed);
-  if (Result.isError(courtId)) {
-    return panic(courtId.error.message, courtId.error);
-  }
   const rejectedDecisionDate =
     observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {
