@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import {
   hashSkillEntrypoint,
@@ -212,6 +214,19 @@ describe("skill package format", () => {
     expect(
       readSkillResourceReferences("`Docs/Guide.md` and `a b/c.md`"),
     ).toEqual(["Docs/Guide.md"]);
+  });
+
+  test("api-contract holds the same path grammar for browsers", () => {
+    // @stll/api-contract cannot import this package, so it carries a copy.
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "../../api-contract/src/agent-skills.ts"),
+      "utf-8",
+    );
+    const copy =
+      /export const SKILL_RESOURCE_PATH_PATTERN =\s*\/(.+)\/u;/u.exec(
+        source,
+      )?.[1];
+    expect(copy).toBe(SKILL_RESOURCE_PATH_PATTERN.source);
   });
 
   test("knows binary files by extension in any case", () => {

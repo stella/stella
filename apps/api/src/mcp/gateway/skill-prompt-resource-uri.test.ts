@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { skillPromptResourceUri } from "@/api/mcp/gateway/skill-prompts";
+import { skillPromptResourceUri } from "@/api/mcp/gateway/skill-prompt-resource-uri";
 
 describe("skill prompt resource URIs", () => {
   test("percent-encode each path segment and keep the separators", () => {
