@@ -8,6 +8,7 @@
 // parser-output-unchanged: registering conflict-check access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: gating desktop dictation cleanup on its access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering desktop cloud dictation access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: registering access to dictation models that keep the audio leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -157,6 +158,14 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   // refuses both of its routes without it.
   "desktop-dictation-cloud": {
     prerequisites: ["desktop-dictation"],
+    enrolment: "invitation",
+  },
+  // Transcription models whose provider keeps the audio and transcript, such
+  // as ElevenLabs on a key without zero retention: chosen members only.
+  // `handlers/dictation/desktop-transcription.ts` lists them, and transcribes
+  // with them, only while this decision is enabled.
+  "desktop-dictation-retaining-models": {
+    prerequisites: ["desktop-dictation-cloud"],
     enrolment: "invitation",
   },
   // Table columns that carry a legal analysis end to end (money extraction,
