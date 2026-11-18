@@ -205,7 +205,6 @@
   "shadcn/no-arbitrary-values": {
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 3,
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 2,
-    "apps/desktop/src/mainview/App.tsx": 1,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
     "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
     "apps/web/src/components/ai-suggestions/host.tsx": 6,

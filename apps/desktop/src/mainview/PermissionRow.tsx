@@ -4,7 +4,21 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Label } from "@stll/ui/label";
+import {
+  AccessibilityIcon,
+  BellIcon,
+  DictateIcon,
+  PowerIcon,
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
+import {
+  ListItemActions,
+  ListItemContent,
+  ListItemDescription,
+  ListItemMedia,
+  ListItemStatus,
+  ListItemTitle,
+} from "@stll/ui/list";
 import { Switch } from "@stll/ui/switch";
 
 import type { Permission, PermissionRow as Row } from "../shared/permissions";
@@ -28,22 +42,36 @@ const PERMISSION_COPY = {
   },
 } as const satisfies Record<Permission, { description: string; label: string }>;
 
+const PERMISSION_ICONS = {
+  accessibility: AccessibilityIcon,
+  microphone: DictateIcon,
+  notifications: BellIcon,
+  openAtLogin: PowerIcon,
+} as const satisfies Record<Permission, LucideIcon>;
+
+/** Whether a row leads with its permission's icon tile. Rows mixed in with
+ *  other settings that have none go without. */
+export type PermissionRowMedia = "icon" | "none";
+
 type PermissionRowProps = {
   /** Replaces the usual purpose where one feature asks for the permission. */
   description?: string | undefined;
   onOpenSettings: () => void;
   onRequest: () => void;
   onTurnOff: () => void;
+  media: PermissionRowMedia;
   row: Row;
 };
 
 /**
- * One permission: what it is for, its live status, and the action that asks
- * the OS or opens its settings. Open at login is the app's own choice, so it
- * is a switch until macOS says it needs approval in Login Items.
+ * One permission: an icon tile, what it unlocks, its live status as a dot
+ * and a label, and the one action that asks the OS or opens its settings.
+ * Open at login is the app's own choice, so it is a switch until macOS says
+ * it needs approval in Login Items.
  */
 export const PermissionRow = ({
   description,
+  media,
   onOpenSettings,
   onRequest,
   onTurnOff,
@@ -51,33 +79,37 @@ export const PermissionRow = ({
 }: PermissionRowProps) => {
   const t = useTranslations("settings");
   const copy = PERMISSION_COPY[row.permission];
-  const switchId = `permission-${row.permission}`;
+  const Icon = PERMISSION_ICONS[row.permission];
+  const labelId = `permission-${row.permission}-label`;
+  const descriptionId = `permission-${row.permission}-description`;
   const usesSwitch =
     row.permission === "openAtLogin" &&
     (row.status === "granted" || row.status === "notDetermined");
 
   return (
-    <div className="flex items-start justify-between gap-4 px-4 py-3">
-      <div className="min-w-0 flex-1">
-        {usesSwitch ? (
-          <Label htmlFor={switchId}>{t(copy.label)}</Label>
-        ) : (
-          <p className="text-sm font-medium">{t(copy.label)}</p>
-        )}
-        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+    <div
+      className="flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5"
+      data-permission={row.permission}
+    >
+      {media === "icon" ? (
+        <ListItemMedia>
+          <Icon />
+        </ListItemMedia>
+      ) : null}
+      <ListItemContent className="min-w-48 basis-48">
+        <ListItemTitle id={labelId} variant="statement">
+          {t(copy.label)}
+        </ListItemTitle>
+        <ListItemDescription id={descriptionId} variant="paragraph">
           {description ?? t(copy.description)}
-        </p>
-        {row.status === "denied" ? (
-          <p className="text-warning-foreground mt-1 text-sm">
-            {t("permissionDenied")}
-          </p>
-        ) : null}
-      </div>
-      <div className="shrink-0">
+        </ListItemDescription>
+      </ListItemContent>
+      <ListItemActions className="ms-auto">
         {usesSwitch ? (
           <Switch
+            aria-describedby={descriptionId}
+            aria-labelledby={labelId}
             checked={row.status === "granted"}
-            id={switchId}
             onCheckedChange={(checked) => {
               if (checked) {
                 onRequest();
@@ -93,13 +125,14 @@ export const PermissionRow = ({
               allowed: t("permissionAllowed"),
               managed: t("permissionManaged"),
               openSettings: t("permissionOpenSettings"),
+              turnedOff: t("permissionTurnedOff"),
             },
             onOpenSettings,
             onRequest,
             row,
           })
         )}
-      </div>
+      </ListItemActions>
     </div>
   );
 };
@@ -110,6 +143,7 @@ type PermissionControlOptions = {
     allowed: string;
     managed: string;
     openSettings: string;
+    turnedOff: string;
   };
   onOpenSettings: () => void;
   onRequest: () => void;
@@ -124,11 +158,7 @@ function permissionControl({
 }: PermissionControlOptions): ReactNode {
   switch (row.status) {
     case "granted":
-      return (
-        <span className="text-success-foreground text-sm font-medium">
-          {labels.allowed}
-        </span>
-      );
+      return <ListItemStatus tone="success">{labels.allowed}</ListItemStatus>;
     case "notDetermined":
       return (
         <Button onClick={onRequest} variant="outline">
@@ -137,16 +167,15 @@ function permissionControl({
       );
     case "denied":
       return (
-        <Button onClick={onOpenSettings} variant="outline">
-          {labels.openSettings}
-        </Button>
+        <>
+          <ListItemStatus tone="warning">{labels.turnedOff}</ListItemStatus>
+          <Button onClick={onOpenSettings} variant="outline">
+            {labels.openSettings}
+          </Button>
+        </>
       );
     case "managed":
-      return (
-        <span className="text-muted-foreground max-w-40 text-end text-sm">
-          {labels.managed}
-        </span>
-      );
+      return <ListItemStatus>{labels.managed}</ListItemStatus>;
     case "notApplicable":
       return null;
     default:

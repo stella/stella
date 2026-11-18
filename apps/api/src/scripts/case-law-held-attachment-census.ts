@@ -2,8 +2,9 @@
  * Print the held-decision attachment census: per source that declares
  * `HeldDecisionAttachment`, the attached records whose host is gone or
  * redacted and the decisions stored as rows of their own whose ECLI a host
- * decision also carries (both should be 0), and how many records are parked
- * as ambiguous. Read-only.
+ * decision also carries (both should be 0), and the records parked for a
+ * reader per typed review (several held matches; docket held under another
+ * date), each listed with its candidates. Read-only.
  *
  *   bun run src/scripts/case-law-held-attachment-census.ts
  */

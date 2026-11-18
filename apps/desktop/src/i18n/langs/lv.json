@@ -181,15 +181,14 @@
     "handoffExpired": "Dokumenta saites derīgums beidzās, pirms stella desktop tika pievienots. Sāciet no jauna stella."
   },
   "settings": {
-    "about": "Par",
-    "accountLinked": "Konts ir saistīts",
+    "accountLinked": "Saistīts",
+    "disconnect": "Atvienot",
     "connectionExpired": "Savienojuma derīgums ir beidzies",
     "reconnectToStella": "Atkārtoti savienot ar stella web",
     "connectionExpiredDescription": "Savienojuma derīgums ir beidzies. Savienojieties atkārtoti ar stella web.",
     "connectToStella": "Savienot ar stella web",
     "connectToStellaDescription": "Saistiet šo datoru ar pašreizējo stella kontu, neatverot dokumentu.",
     "desktopBenefit": "Office faili un vietējā starpliktuves vēsture",
-    "disconnectAccount": "Atvienot kontu",
     "errorDisconnectAccount": "stella desktop neizdevās atvienot jūsu kontu.",
     "errorReadAccount": "stella desktop neizdevās pārbaudīt jūsu konta savienojumu.",
     "stellaWebAccount": "stella tīmekļa konts",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Tehniskās kļūdas, laika mērījumi un avāriju kopsavilkumi; bez dokumentiem, starpliktuves satura vai darbību datiem.",
     "errorReadTelemetry": "Neizdevās nolasīt ziņojumu sūtīšanas iestatījumu. Mēģiniet vēlreiz.",
     "errorSaveTelemetry": "Neizdevās saglabāt ziņojumu sūtīšanas iestatījumu. Mēģiniet vēlreiz.",
-    "general": "Vispārīgi",
     "lastVerified": "Pēdējo reizi pārbaudīts",
     "language": "Valoda",
-    "languageDescription": "Izvēlieties desktop lietotnes valodu.",
     "setupGuide": "Iestatīšanas ceļvedis",
     "setupGuideDescription": "Iziet iestatīšanu vēlreiz: ko dara lietotne, atļaujas un starpliktuves īsinājumtaustiņš.",
     "setupGuideAction": "Palaist iestatīšanu vēlreiz",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Atbalsts",
     "title": "Iestatījumi",
-    "serverLabel": "Serveris",
+    "pages": {
+      "general": "Vispārīgi",
+      "dictation": "Diktēšana",
+      "clipboard": "Starpliktuve",
+      "agents": "MI un aģenti",
+      "signing": "Parakstīšana",
+      "activity": "Darbība",
+      "notifications": "Paziņojumi",
+      "permissions": "Atļaujas",
+      "about": "Par"
+    },
+    "account": "Konts",
+    "app": "Lietotne",
+    "privacy": "Privātums",
+    "pageEmpty": "Šajā datorā šeit nav ko iestatīt.",
     "connectToHost": "Savienot ar {host}",
     "connectToHostDescription": "Atver {host} pārlūkā, lai jūs varētu apstiprināt šo datoru.",
     "reconnectNeeded": "Jāsavieno atkārtoti",
     "reconnect": "Savienot atkārtoti",
     "reconnectHostDescription": "Savienojums ar {host} ir jāatjauno. Pārlūkā vēlreiz apstipriniet šo datoru.",
-    "permissions": "Atļaujas",
     "permissionNotificationsDescription": "Paziņo, kad dokuments ir gatavs vai sinhronizācijai nepieciešama uzmanība.",
     "permissionAccessibility": "Pieejamība",
     "permissionAccessibilityDescription": "Ļauj aktivitāšu laika joslai ierakstīt logu nosaukumus.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Atļauts",
     "permissionAllow": "Atļaut",
     "permissionOpenSettings": "Atvērt iestatījumus",
-    "permissionDenied": "Izslēgts sistēmas iestatījumos.",
+    "permissionTurnedOff": "Izslēgts",
+    "permissionsDescription": "Katra ir jūsu izvēle un atbloķē vienu lietu.",
+    "neverRequested": "Nekad netiek pieprasīts",
     "permissionManaged": "Pārvalda jūsu organizācija",
     "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
     "errorPermissions": "stella desktop nevarēja nolasīt vai mainīt šo atļauju.",
@@ -600,6 +612,12 @@
     "title": "Diktēšana",
     "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta.",
     "descriptionCloud": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runu tekstā pārvērš stella AI, un stella to nesaglabā.",
+    "lede": "Turiet <key>{shortcut}</key> un runājiet. Teksts parādās tur, kur rakstāt.",
+    "groups": {
+      "transcription": "Transkripcija",
+      "cleanup": "Labošana",
+      "thisComputer": "Šajā datorā"
+    },
     "cleanup": {
       "title": "Labot ar MI",
       "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas MI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",
@@ -607,11 +625,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Kopīgot loga nosaukumu ar MI labošanu",
+        "title": "Kopīgot loga nosaukumu",
         "description": "Palīdz atšķirt līgumu no piezīmes. Logu nosaukumos var būt klientu vai lietu nosaukumi."
       },
       "textBeforeCursor": {
-        "title": "Kopīgot tekstu pirms kursora ar MI labošanu",
+        "title": "Kopīgot tekstu pirms kursora",
         "description": "Līdz {limit, number} rakstzīmēm no dokumenta, kurā strādājat, lai diktētais atbilstu rakstītajam."
       }
     },
@@ -620,6 +638,7 @@
       "title": "Pārvērst ar",
       "local": "Šo datoru",
       "cloud": "stella AI",
+      "localDescription": "Runa tiek pārveidota šajā datorā un netiek saglabāta.",
       "cloudDescription": "Audio pamet šo datoru: pārvēršanai tekstā tas tiek nosūtīts uz stella un caur stella MI pakalpojumu sniedzēju izvēlētā modeļa nodrošinātājam. stella to nesaglabā.",
       "unavailableRegion": "stella AI jūsu organizācijas reģionā vēl nepiedāvā runas pārvēršanu tekstā.",
       "unavailableProvider": "Jūsu organizācijas MI pakalpojumu sniedzējs nepiedāvā runas pārvēršanu tekstā.",
@@ -627,7 +646,6 @@
       "model": "Pārvēršanas modelis",
       "chooseModel": "Izvēlieties modeli",
       "outsideRegion": "Ārpus jūsu reģiona",
-      "outsideRegionNote": "Šis modelis apstrādā audio ārpus jūsu organizācijas reģiona.",
       "retainsData": "Saglabā jūsu audio",
       "retainsDataTitle": "{provider} saglabā to, ko diktējat",
       "retainsDataWarning": "Šis modelis darbojas kontā bez nulles datu glabāšanas. {provider} saskaņā ar saviem noteikumiem, ārpus stella kontroles, glabā visa diktētā audio un transkripciju. Nediktējiet ar to konfidenciālu informāciju vai klientu datus."
@@ -640,6 +658,7 @@
       "noResults": "Valodas netika atrastas"
     },
     "modelNeeded": "Runas modelis darbojas šajā datorā.",
+    "speechModel": "Runas modelis",
     "modelInstalled": "Runas modelis ({size} MB) ir šajā datorā.",
     "removeModel": "Noņemt",
     "removeFailed": "Runas modeli neizdevās noņemt. Mēģiniet vēlreiz.",

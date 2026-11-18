@@ -1490,7 +1490,12 @@ describe("Claude Code adapter over stream-json stdio", () => {
       const ready = await harnessFor(scenario).adapter.probe();
       expect(Result.isOk(ready) && ready.value.usageLimit).toBeNull();
     }
-    for (const scenario of ["probe_signed_out", "api_key"] as const) {
+    for (const scenario of [
+      "probe_signed_out",
+      "api_key",
+      "probe_api_key_with_subscription",
+      "probe_empty_account",
+    ] as const) {
       const harness = harnessFor(scenario);
       const probed = await harness.adapter.probe();
       expect(Result.isOk(probed) && probed.value).toMatchObject({
@@ -1500,6 +1505,15 @@ describe("Claude Code adapter over stream-json stdio", () => {
       });
       expect(harness.controlRequests("get_usage")).toEqual([]);
     }
+  });
+
+  test("a probe counts a subscription sign-in an earlier release names in tokenSource", async () => {
+    const probed = await harnessFor("probe_token_source").adapter.probe();
+    expect(Result.isOk(probed) && probed.value.auth).toEqual({
+      type: "signed_in",
+      method: "claude.ai",
+      plan: "max",
+    });
   });
 
   test("a CLI that never answers initialize is ended by the request deadline", async () => {

@@ -114,6 +114,8 @@ export const EXCLUSIVE_DOCKET_REGISTERS = {
   [ADAPTER_KEYS.HU_BHGY]: [],
   [ADAPTER_KEYS.UK_FCL]: [],
   [ADAPTER_KEYS.BR_TJDFT]: [],
+  // The collection prints every register of the courts it selects from.
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: [],
   [ADAPTER_KEYS.BR_TST]: [],
 } as const satisfies Record<AdapterKey, readonly string[]>;
 
@@ -277,6 +279,27 @@ const candidateSources = ({
   return owned.length > 0 ? owned : sources;
 };
 
+/**
+ * The first year a source's publisher can hold, where its manifest declares
+ * its coverage in decision dates. It bounds the years read for a source that
+ * holds nothing yet: such a source states no held range, and the identifier
+ * may state no year either (a two-digit docket year the grammar does not
+ * read), so without it the range would shrink to the current year and name
+ * none of the publisher's own.
+ */
+const declaredDecisionYearFrom = (adapterKey: string): number | null => {
+  const manifest = Object.values(ADAPTER_MANIFESTS).find(
+    ({ key }) => key === adapterKey,
+  );
+  if (manifest?.dateRange.type !== "decision-date") {
+    return null;
+  }
+  const year = parseIntegerToken(manifest.dateRange.fromInclusive.slice(0, 4), {
+    sign: "unsigned",
+  });
+  return Result.isOk(year) ? year.value : null;
+};
+
 export const decisionAbsenceCoverage = ({
   snapshot,
   country,
@@ -306,7 +329,10 @@ export const decisionAbsenceCoverage = ({
       (source) =>
         sourceAbsenceVerdict(source, {
           from: Math.min(
-            earliest ?? source.decisionYearFrom ?? currentYear,
+            earliest ??
+              source.decisionYearFrom ??
+              declaredDecisionYearFrom(source.adapterKey) ??
+              currentYear,
             currentYear,
           ),
           to: currentYear,

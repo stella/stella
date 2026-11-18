@@ -37,7 +37,10 @@ import { selectAttachmentDocumentIds } from "@/api/lib/case-law/held-attachment-
 import { readHeldDecisionAttachmentCensus } from "@/api/lib/case-law/held-decision-attachment-census";
 import { readStoredListingIdentities } from "@/api/lib/case-law/stored-listing-identities";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
-import { HELD_DECISION_MATCH_BASIS } from "@/api/lib/legal-search/held-decision-attachment-values";
+import {
+  HELD_DECISION_MATCH_BASIS,
+  HELD_DECISION_REVIEW,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -72,7 +75,11 @@ const REDACTED = {
   sourceRaw: null,
 };
 
-const declarationFor = (hostKey: string): HeldDecisionAttachment<string> => ({
+const declarationFor = (
+  hostKey: string,
+  docketHeldUnderOtherDate: HeldDecisionAttachment["docketHeldUnderOtherDate"] = "park-for-review",
+): HeldDecisionAttachment<string> => ({
+  docketHeldUnderOtherDate,
   hostAdapterKeys: [hostKey],
   metadataKey: COLLECTION_METADATA_KEY,
   metadataSchema: v.object({
@@ -430,6 +437,116 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
 
+    test("a docket held only under another date parks the record for review, typed and listed", async () => {
+      const {
+        host,
+        collection,
+        collectionKey,
+        declaration,
+        collectionContract,
+      } = await sources();
+      // The held decision of the same court and docket, dated otherwise and
+      // stating no ECLI the record's could reach.
+      await store(
+        host,
+        observation({
+          sourceDocumentId: "ns-other-date",
+          decisionDate: "1999-06-30",
+        }),
+        hostContract,
+      );
+      const held = await onlyRow(host);
+      const before = await onlyRow(host);
+
+      const outcome = await store(
+        collection,
+        collectionEntry({ ecli: null }),
+        collectionContract,
+      );
+      expect(outcome).toMatchObject({ status: "complete", inserted: false });
+      expect(await rowsOf(collection)).toEqual([]);
+      expect(await attachmentsOf(collection)).toMatchObject([
+        {
+          hostDecisionId: null,
+          hostWithdrawnAt: null,
+          matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
+          candidateDecisionIds: [held.id],
+        },
+      ]);
+      // Nothing of the held decision moved, and it declares no citation.
+      expect(await onlyRow(host)).toEqual(before);
+      expect(
+        (await identifiersOf(held.id)).some(
+          ({ type }) => type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        ),
+      ).toBe(false);
+
+      const census = await db.transaction(
+        async (tx) =>
+          await readHeldDecisionAttachmentCensus(tx, [
+            [collectionKey, declaration],
+          ]),
+      );
+      expect(census.at(0)?.review).toEqual({
+        [HELD_DECISION_REVIEW.SEVERAL_HELD]: { count: 0, sample: [] },
+        [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: {
+          count: 1,
+          sample: [
+            {
+              sourceDocumentId: "9586",
+              matchBasis: HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
+              candidateDecisionIds: [held.id],
+            },
+          ],
+        },
+      });
+    });
+
+    test("a source that writes such a record as its own does so", async () => {
+      const { host, collection, declaration } = await sources();
+      const [hostKey] = declaration.hostAdapterKeys;
+      await store(
+        host,
+        observation({
+          sourceDocumentId: "ns-other-date",
+          decisionDate: "1999-06-30",
+        }),
+        hostContract,
+      );
+      const outcome = await store(collection, collectionEntry({ ecli: null }), {
+        ...baseContract,
+        heldDecisionAttachment: declarationFor(hostKey, "own-row"),
+      });
+      expect(outcome.inserted).toBe(true);
+      expect((await onlyRow(collection)).sourceDocumentId).toBe("9586");
+      expect(await attachmentsOf(collection)).toEqual([]);
+    });
+
+    test("the census types a several-held park apart from a docket under another date", async () => {
+      const {
+        host,
+        collection,
+        collectionKey,
+        declaration,
+        collectionContract,
+      } = await sources();
+      await store(host, heldDecision("ns-1"), hostContract);
+      await store(host, heldDecision("ns-2"), hostContract);
+      await store(collection, collectionEntry(), collectionContract);
+      const census = await db.transaction(
+        async (tx) =>
+          await readHeldDecisionAttachmentCensus(tx, [
+            [collectionKey, declaration],
+          ]),
+      );
+      expect(
+        census.at(0)?.review[HELD_DECISION_REVIEW.SEVERAL_HELD].count,
+      ).toBe(1);
+      expect(
+        census.at(0)?.review[HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE].count,
+      ).toBe(0);
+    });
+
     test("replay is a fixed point and a stale observation cannot overwrite", async () => {
       const { host, collection, collectionContract } = await sources();
       await store(host, heldDecision(), hostContract);
@@ -621,7 +738,13 @@ if (!databaseUrl || !runPostgresTests) {
               },
             ],
           },
-          ambiguous: 0,
+          review: {
+            [HELD_DECISION_REVIEW.SEVERAL_HELD]: { count: 0, sample: [] },
+            [HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE]: {
+              count: 0,
+              sample: [],
+            },
+          },
         },
       ]);
     });
