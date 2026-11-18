@@ -4,9 +4,12 @@ import {
   type DecisionQueryIntent,
   isWholeEntryIdentifier,
 } from "@stll/api-contract/decision-query-intent";
-import type { CaseLawSearchWarning } from "@stll/api-contract/search";
+import type {
+  CaseLawSearchWarning,
+  SearchPhaseState,
+} from "@stll/api-contract/search";
 
-import type { RelaxedTopUpState } from "@/api/handlers/case-law/decisions/search-relaxed";
+import type { TermDecisionCounts } from "@/api/handlers/case-law/decisions/search-relaxed";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
 import { caseLawQueryLanguage } from "@/api/lib/legal-search/corpus-index-read-contract";
@@ -208,16 +211,17 @@ type SearchAnswerOptions = {
    * hits, so "nothing matched" would be false there.
    */
   countsResultSet: boolean;
-  /** How the partial-match phase ended; `not_run` when it had no place here. */
-  relaxedTopUp?: RelaxedTopUpState;
+  /** How the partial-match phase ended; `not_due` when it had no place here. */
+  partialMatches?: SearchPhaseState;
+  /** Per-word decision counts, when few decisions hold every word. */
+  termDecisionCounts?: TermDecisionCounts | null;
 };
 
 export type SearchAnswer = {
   queryUsed: string;
   relaxedHitCount: number;
+  termDecisionCounts: TermDecisionCounts | null;
   warnings: CaseLawSearchWarning[];
-  /** Present only when partial matches were due and could not be read. */
-  relaxedTopUp?: "skipped";
 };
 
 /**
@@ -230,10 +234,12 @@ export const searchAnswer = ({
   hitCount,
   partialHitCount = 0,
   countsResultSet,
-  relaxedTopUp = "not_run",
+  partialMatches = "not_due",
+  termDecisionCounts = null,
 }: SearchAnswerOptions): SearchAnswer => ({
   queryUsed: interpretation.queryUsed,
   relaxedHitCount: partialHitCount,
+  termDecisionCounts,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     partialHitCount,
@@ -241,7 +247,6 @@ export const searchAnswer = ({
     // With the partial matches unread, an empty page has not shown that
     // nothing matched.
     emptyResultSet:
-      countsResultSet && hitCount === 0 && relaxedTopUp !== "skipped",
+      countsResultSet && hitCount === 0 && partialMatches !== "skipped",
   }),
-  ...(relaxedTopUp === "skipped" ? { relaxedTopUp } : {}),
 });

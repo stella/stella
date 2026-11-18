@@ -235,6 +235,7 @@ const REQUEST_STEP_TIMEOUT_LABEL = {
   "case-law-admitted-courts": "case-law-admitted-courts",
   "case-law-court-filter-vocabulary": "case-law-court-filter-vocabulary",
   "case-law-relaxed-top-up": "case-law-relaxed-top-up",
+  "case-law-term-decision-counts": "case-law-term-decision-counts",
 } as const;
 export type RequestStepLabel = keyof typeof REQUEST_STEP_TIMEOUT_LABEL;
 

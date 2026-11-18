@@ -847,13 +847,22 @@ const runBuild = async (
   const deadline = new Date(
     (await now(model)).getTime() + (command.deadlineInMs ?? RUN_MS),
   );
+  const indexId = await routeOf(model);
   const outcome = await Result.tryPromise({
     try: async () =>
       await buildCorpusProjectionRouteOffline({
         runInTransaction: transactionRunner(model),
-        client: engineClientOf(model),
+        client: {
+          ...engineClientOf(model),
+          readPublishedSplitCounts: async ({ includes }) =>
+            Result.ok(
+              includes(indexId)
+                ? [{ indexId, publishedSplits: FAKE_PUBLISHED_SPLITS }]
+                : [],
+            ),
+        },
         ...TARGET,
-        indexId: await routeOf(model),
+        indexId,
         runId: "model",
         shardDirectory,
         deadline,
@@ -899,6 +908,9 @@ const runBuild = async (
   }
   return outcome.value;
 };
+
+/** What the fake metastore reports the route publishes when a run ends. */
+const FAKE_PUBLISHED_SPLITS = 3;
 
 /** The engine's census of what the fake indexer published. */
 const engineClientOf = (model: Model) => ({
@@ -1798,6 +1810,8 @@ describe("offline route build", () => {
     model.lockHeld = true;
     const outcome = await runBuild(model, QUIET_RUN);
     expect(outcome?.status).toBe("lock_held");
+    // A run that never held the route has nothing to count.
+    expect(outcome?.publishedSplits).toEqual({ read: "not_read" });
     expect(await readIntents(model.entityIds)).toEqual([]);
   });
 
@@ -1806,6 +1820,11 @@ describe("offline route build", () => {
     const first = await runBuild(model, QUIET_RUN);
     expect(first?.status).toBe("drained");
     expect(first?.progress.proved).toBe(ENTITIES);
+    // The receipt names the route's published splits as the run left them.
+    expect(first?.publishedSplits).toEqual({
+      read: "counted",
+      count: FAKE_PUBLISHED_SPLITS,
+    });
     // One entity sorts after the cursor the run resumes from, one before it.
     const seeded = await seedEntities(2);
     const ahead = seeded.at(0) ?? panic("Expected two entities");

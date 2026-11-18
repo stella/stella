@@ -7,9 +7,13 @@ import {
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 
 export const AGGREGATE_LOCK_OWNER = "apps/api/src/lib/db/aggregate-lock.ts";
+const AGGREGATE_LOCK_OWNER_FILES = new Set([
+  AGGREGATE_LOCK_OWNER,
+  "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts",
+]);
 export const aggregateLockSourceIncluded = (file: string) =>
   /\.(?:[cm]?ts|tsx|[cm]?js|jsx|sql)$/u.test(file) &&
-  file !== AGGREGATE_LOCK_OWNER &&
+  !AGGREGATE_LOCK_OWNER_FILES.has(file) &&
   // Host-local database cluster provisioning has no tenant aggregate transaction.
   file !== "packages/scripts/src/dev-postgres-lock.ts" &&
   !file.startsWith("apps/api/drizzle/") &&

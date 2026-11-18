@@ -210,7 +210,7 @@ if (!databaseUrl || !enabled) {
           id,
           sourceId: source.id,
           caseNumber: `engine-${index}`,
-          court: "fixture court",
+          court: "Nejvyšší soud",
           country: "CZE",
           language: "cs",
           parserVersion: 1,

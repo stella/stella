@@ -3,6 +3,24 @@ import { readFileSync } from "node:fs";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
+test("permits the pure invoice-lock owner and rejects its neighboring modules", async () => {
+  const source =
+    "export const snapshot = sql`SELECT id FROM invoices ORDER BY id FOR UPDATE`;";
+  expect(
+    await lintSingleRule("confine-aggregate-lock", source, {
+      cwd: "scratch",
+      sourcePath:
+        "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts",
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule("confine-aggregate-lock", source, {
+      cwd: "scratch",
+      sourcePath: "apps/api/src/lib/db/aggregate-lock/neighbor.ts",
+    }),
+  ).toEqual([1]);
+});
+
 test("rejects the planted acquisition outside the aggregate owner", async () => {
   const source = readFileSync(
     new URL(

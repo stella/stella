@@ -16,6 +16,8 @@ type EmailMessage = {
    * (screen readers, text-only clients) needs the text part.
    */
   text: string;
+  /** Where replies go when the sender address is the platform's own. */
+  replyTo?: string;
 };
 
 export type EmailTransport = {

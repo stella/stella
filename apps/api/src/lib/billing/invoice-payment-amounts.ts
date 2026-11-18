@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { InvoiceDocumentType } from "@stll/invoicing";
 import { cents, type CentsAmount } from "@stll/money";
 
@@ -9,65 +11,139 @@ import { INVOICE_STATUS, type InvoiceStatus } from "@/api/db/schema";
  */
 const payableAmount = (totalAmount: number) => Math.abs(totalAmount);
 
-type PaymentAmounts = { paidAmount: number; outstandingAmount: number };
+declare const amountDueBrand: unique symbol;
 
-/** The paid and outstanding amounts an invoice read exposes. */
-export const invoicePaymentAmounts = ({
-  totalAmount,
-  paidAmount,
-}: {
+/**
+ * What a client may still pay on a document: its payable total less the
+ * credit notes issued against it and the payments recorded on it. Only
+ * `invoiceAmountDue` makes one, so every client-facing payment request (the
+ * PDF payment block, the link page with its QR code, the email) states the
+ * amount `invoicePaymentAmounts` reports as outstanding, never the total.
+ */
+export type AmountDue = CentsAmount & { readonly [amountDueBrand]: true };
+
+const isAmountDue = (_amount: CentsAmount): _amount is AmountDue => true;
+
+type InvoiceBalanceInput = {
   totalAmount: number;
   paidAmount: number;
-}): PaymentAmounts => ({
+  /**
+   * What issued credit notes take off the original
+   * (`invoiceCreditedAmountSql`); a credit note is never credited itself.
+   */
+  creditedAmount: number;
+};
+
+const outstandingOf = ({
+  totalAmount,
   paidAmount,
-  outstandingAmount: Math.max(0, payableAmount(totalAmount) - paidAmount),
+  creditedAmount,
+}: InvoiceBalanceInput) =>
+  cents(Math.max(0, payableAmount(totalAmount) - creditedAmount - paidAmount));
+
+/** The amount a client may still pay, for documents and messages sent to them. */
+export const invoiceAmountDue = (balance: InvoiceBalanceInput): AmountDue => {
+  const outstanding = outstandingOf(balance);
+  return isAmountDue(outstanding)
+    ? outstanding
+    : panic("Outstanding amounts are amounts due");
+};
+
+/** The plain minor-unit amount of an amount due, for API responses. */
+export const amountDueCents = (amount: AmountDue): CentsAmount => amount;
+
+/**
+ * How an issued document stands, from its payments and the credit notes
+ * issued against it. Only payments make it `paid`: a document its credit
+ * notes cover alone is `credited`, with no payment and no payment date, so a
+ * credit can never be counted, exported or shown as money received.
+ * `overpaid` is a document whose payments exceed what the credit notes leave
+ * of it; the client is owed `refundAmount`.
+ */
+export type InvoiceSettlement =
+  | { kind: "open" }
+  | { kind: "paid" }
+  | { kind: "credited" }
+  | { kind: "overpaid"; refundAmount: CentsAmount };
+
+type InvoiceSettlementInput = InvoiceBalanceInput & { status: InvoiceStatus };
+
+/** The settlement of one document; see `InvoiceSettlement`. */
+export const invoiceSettlement = ({
+  totalAmount,
+  paidAmount,
+  creditedAmount,
+  status,
+}: InvoiceSettlementInput): InvoiceSettlement => {
+  const payable = payableAmount(totalAmount);
+  const remaining = Math.max(0, payable - creditedAmount);
+  if (paidAmount > remaining) {
+    return { kind: "overpaid", refundAmount: cents(paidAmount - remaining) };
+  }
+  if (
+    status === INVOICE_STATUS.PAID &&
+    paidAmount === 0 &&
+    creditedAmount === 0
+  ) {
+    // Settled without a payment row: a zero document once sent, or one
+    // marked paid before payments were recorded (until its backfill).
+    return { kind: "paid" };
+  }
+  if (payable === 0) {
+    return { kind: "open" };
+  }
+  if (remaining === 0) {
+    return { kind: "credited" };
+  }
+  return paidAmount === remaining ? { kind: "paid" } : { kind: "open" };
+};
+
+/** The paid and outstanding amounts and the settlement an invoice read exposes. */
+export const invoicePaymentAmounts = (balance: InvoiceSettlementInput) => ({
+  paidAmount: cents(balance.paidAmount),
+  outstandingAmount: outstandingOf(balance),
+  settlement: invoiceSettlement(balance),
 });
 
 /**
- * Whether the paid sum settles an invoice in this status. Payments cover a
- * nonzero total; a zero total owes nothing, yet it counts as settled only
- * once the invoice was sent (or is already paid), never merely by being
- * issued.
+ * Whether payments settle a document in this status: they cover what its
+ * issued credit notes leave of a nonzero total (a credit alone never settles
+ * it), while a zero total owes nothing yet counts as settled only once the
+ * invoice was sent (or is already paid), never merely by being issued.
  */
 export const isInvoiceSettled = ({
   totalAmount,
   paidAmount,
+  creditedAmount,
   status,
-}: {
-  totalAmount: number;
-  paidAmount: number;
-  status: InvoiceStatus;
-}) =>
-  paidAmount >= payableAmount(totalAmount) &&
-  (totalAmount !== 0 ||
-    status === INVOICE_STATUS.SENT ||
-    status === INVOICE_STATUS.PAID);
+}: InvoiceSettlementInput) =>
+  totalAmount === 0
+    ? status === INVOICE_STATUS.SENT || status === INVOICE_STATUS.PAID
+    : paidAmount > 0 &&
+      paidAmount >= Math.max(0, payableAmount(totalAmount) - creditedAmount);
 
 export type InvoicePaymentState =
   | { status: "not_payable" }
   | { status: "settled" }
-  | { status: "due"; amountMinor: CentsAmount };
+  | { status: "due"; amountMinor: AmountDue };
 
 /**
- * What a document states about payment: the ledger balance against the
- * total the document itself prints, settled by the same rule as the
- * invoice's status. Nothing outstanding on an unsettled invoice (a zero
- * total not yet sent) states nothing.
+ * What a document states about payment: the amount still due after its
+ * payments and issued credit notes, settled by the same rule as the
+ * invoice's status. Nothing outstanding on an unsettled document (a zero
+ * total not yet sent, an invoice its credit notes cover) states nothing.
  */
 export const invoicePaymentState = (
-  amounts: Parameters<typeof invoicePaymentAmounts>[0] & {
-    documentType: InvoiceDocumentType;
-    status: InvoiceStatus;
-  },
+  balance: InvoiceSettlementInput & { documentType: InvoiceDocumentType },
 ): InvoicePaymentState => {
-  if (amounts.documentType === "credit_note") {
+  if (balance.documentType === "credit_note") {
     return { status: "not_payable" };
   }
-  const { outstandingAmount } = invoicePaymentAmounts(amounts);
-  if (outstandingAmount > 0) {
-    return { status: "due", amountMinor: cents(outstandingAmount) };
+  const amountDue = invoiceAmountDue(balance);
+  if (amountDue > 0) {
+    return { status: "due", amountMinor: amountDue };
   }
-  return isInvoiceSettled(amounts)
+  return isInvoiceSettled(balance)
     ? { status: "settled" }
     : { status: "not_payable" };
 };
