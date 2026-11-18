@@ -10,12 +10,14 @@ import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
+import { DictateButton } from "@/components/dictate-button";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { appendDictation } from "@/state/dictation";
 import { listMatters } from "@/state/matters";
 import { startTimer } from "@/state/timers";
 
@@ -109,6 +111,12 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
           onChangeText={setDescription}
           placeholder={t("description")}
           value={description}
+        />
+        <DictateButton
+          matterId={matterId ?? undefined}
+          onText={(dictated) => {
+            setDescription((typed) => appendDictation(typed, dictated));
+          }}
         />
         <WriteFailureNotice failure={failure} message={t("startFailed")} />
         <View className="gap-2">

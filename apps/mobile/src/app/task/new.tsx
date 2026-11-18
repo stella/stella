@@ -11,6 +11,7 @@ import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
 import { ChoiceChip } from "@/components/choice-chip";
+import { DictateButton } from "@/components/dictate-button";
 import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
@@ -20,6 +21,7 @@ import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { appendDictation } from "@/state/dictation";
 import { listMatters } from "@/state/matters";
 import { pickerDate } from "@/state/picked-day";
 import {
@@ -160,6 +162,12 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           placeholder={t("name")}
           returnKeyType="done"
           value={name}
+        />
+        <DictateButton
+          matterId={matterId ?? undefined}
+          onText={(dictated) => {
+            setName((typed) => appendDictation(typed, dictated));
+          }}
         />
         <WriteFailureNotice failure={failure} message={t("addFailed")} />
         <View className="gap-2">

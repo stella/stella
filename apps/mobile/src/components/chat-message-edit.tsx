@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { use, useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { panic, Result } from "better-result";
 import { ActionSheetIOS, Alert, Platform, View } from "react-native";
@@ -12,6 +12,8 @@ import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
+import { DictateButton } from "@/components/dictate-button";
+import { ThreadMatter } from "@/components/thread-matter";
 import type { useChatTurn } from "@/components/use-chat-turn";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -41,6 +43,7 @@ import {
 } from "@/state/chat-edit";
 import type { ChatEntry } from "@/state/chat-messages";
 import type { LocalRunTarget } from "@/state/chat-pending-input";
+import { appendDictation } from "@/state/dictation";
 
 /** How the thread answered an edit the form sent. */
 export type EditOutcome =
@@ -81,6 +84,7 @@ const ChatMessageEdit = ({
   const { end } = useSession();
   const [opened] = useState(() => editDraftOf(entry.parts ?? []));
   const [text, setText] = useState(opened.text);
+  const matterId = use(ThreadMatter);
   const [kept, setKept] = useState(opened.kept);
   const [read, setRead] = useState<ChatLocalFilesUndoRead>();
   const [undoFiles, setUndoFiles] = useState(false);
@@ -245,6 +249,13 @@ const ChatMessageEdit = ({
         editable={!sending}
         onChangeText={setText}
         value={text}
+      />
+      <DictateButton
+        disabled={sending}
+        matterId={matterId}
+        onText={(dictated) => {
+          setText((typed) => appendDictation(typed, dictated));
+        }}
       />
       <Text variant="caption">{t("edit.notice")}</Text>
       {editRestartsConversation(read) ? (

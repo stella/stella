@@ -14,6 +14,7 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
+import { dictationClock } from "@/components/dictate-button";
 import { ThreadMatter } from "@/components/thread-matter";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
@@ -326,8 +327,8 @@ export const ChatComposer = ({
               >
                 {dictation.phase === "recording"
                   ? t("dictationListening", {
-                      elapsed: clock(dictation.elapsedMs),
-                      limit: clock(DICTATION_MAX_SECONDS * 1000),
+                      elapsed: dictationClock(dictation.elapsedMs),
+                      limit: dictationClock(DICTATION_MAX_SECONDS * 1000),
                     })
                   : t("dictationTranscribing")}
               </Text>
@@ -516,12 +517,6 @@ const DraftChip = ({
       status={CHIP_STATUS[status]}
     />
   );
-};
-
-/** Minutes and seconds, as a recorder counts: 0:07, 1:00. */
-const clock = (milliseconds: number): string => {
-  const seconds = Math.floor(milliseconds / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
 const CHIP_STATUS = {
