@@ -39,25 +39,31 @@ test("every recorded entry is measured against its stored page", async () => {
   for (const postId of CZ_NS_SBIRKA_RECORDINGS) {
     const { decision, sourceRaw } = built(postId);
     const projection = await project(sourceRaw);
-    if (projection.type !== "source" || !hasUsableAst(decision.documentAst)) {
-      return panic(`${postId}: a parsed entry must have publisher text`);
-    }
-    expect({
+    const source =
+      projection.type === "source"
+        ? projection.source
+        : panic(`${postId}: a parsed entry must have publisher text`);
+    const blocks = hasUsableAst(decision.documentAst)
+      ? decision.documentAst.blocks
+      : panic(`${postId}: a parsed entry must have a document`);
+    expect({ postId, ok: validateAst(source, blocks).ok }).toEqual({
       postId,
-      ok: validateAst(projection.source, decision.documentAst.blocks).ok,
-    }).toEqual({ postId, ok: true });
+      ok: true,
+    });
   }
 });
 
 test("an entry that loses its reasons fails the check", async () => {
   const { decision, sourceRaw } = built("9586");
   const projection = await project(sourceRaw);
-  if (projection.type !== "source" || !hasUsableAst(decision.documentAst)) {
-    return panic("the Slovak entry must have publisher text");
-  }
-  expect(
-    validateAst(projection.source, decision.documentAst.blocks.slice(0, 2)).ok,
-  ).toBe(false);
+  const source =
+    projection.type === "source"
+      ? projection.source
+      : panic("the Slovak entry must have publisher text");
+  const blocks = hasUsableAst(decision.documentAst)
+    ? decision.documentAst.blocks
+    : panic("the Slovak entry must have a document");
+  expect(validateAst(source, blocks.slice(0, 2)).ok).toBe(false);
 });
 
 test("the text is the cell, its heading included, and nothing else", async () => {

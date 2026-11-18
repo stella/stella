@@ -246,11 +246,12 @@ describe("an entry's detail page as a decision", () => {
       documentUrl: decision.documentUrl ?? null,
       metadata: decision.metadata,
     });
-    if (replayed?.type !== "parsed") {
-      return panic("the stored entry did not replay");
-    }
-    expect(replayed.result.rawHash).toBe(decision.rawHash);
-    expect(replayed.result.caseNumber).toBe(decision.caseNumber);
+    const parsed =
+      replayed?.type === "parsed"
+        ? replayed.result
+        : panic("the stored entry did not replay");
+    expect(parsed.rawHash).toBe(decision.rawHash);
+    expect(parsed.caseNumber).toBe(decision.caseNumber);
   });
 
   test("an entry with no docket anywhere is labelled by its post id", () => {
@@ -554,7 +555,10 @@ describe("reconciliation by collection year", () => {
     expect(previousSlice("1956")).toBe(CZ_NS_SBIRKA_VAZNY_SLICE);
     expect(previousSlice(CZ_NS_SBIRKA_VAZNY_SLICE)).toBeNull();
     expect(sliceOf(new Date("2026-11-18T09:00:00Z"))).toBe("2026");
-    expect(CZ_NS_SBIRKA_VAZNY_SLICE < "1956").toBe(true);
+    expect([CZ_NS_SBIRKA_VAZNY_SLICE, "1956"].toSorted()).toEqual([
+      CZ_NS_SBIRKA_VAZNY_SLICE,
+      "1956",
+    ]);
   });
 
   test("a slice is the archive's own year term, page by page", () => {
@@ -615,10 +619,10 @@ describe("reconciliation by collection year", () => {
 describe("the stored collection entry", () => {
   test("reads back from the row's metadata as the adapter wrote it", () => {
     const decision = built("9586");
-    const stored: unknown = structuredClone(decision.metadata);
-    if (!isRecord(stored)) {
-      return panic("metadata is not an object");
-    }
+    const cloned: unknown = structuredClone(decision.metadata);
+    const stored = isRecord(cloned)
+      ? cloned
+      : panic("metadata is not an object");
     expect(Object.keys(stored)).toContain(CZ_NS_COLLECTION_METADATA_KEY);
     expect(readStoredCzNsCollectionEntry(stored)?.number).toBe("9");
     expect(readStoredCzNsCollectionEntry({})).toBeNull();
