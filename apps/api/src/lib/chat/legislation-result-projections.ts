@@ -5,7 +5,7 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
-import { GOVERNING_WORDING_POSITIONS } from "@stll/legal-ast/provision-preview";
+import type { GoverningWordingPosition } from "@stll/legal-ast/provision-preview";
 
 import {
   PROVISION_ABSENCE_STATUSES,
@@ -47,11 +47,18 @@ const provisionCitation = { citation: v.optional(v.string()) } as const;
  * continuation window of the same text. Source of truth: `governingWording`
  * (`@stll/legal-ast/provision-preview`).
  */
+// Spelled here rather than imported: this module is loaded where only type
+// imports of the AST package resolve. The `satisfies` keeps the two in step.
+const GOVERNING_POSITIONS = [
+  "lead-in",
+  "closing",
+] as const satisfies readonly GoverningWordingPosition[];
+
 const governingText = {
   governingText: v.array(
     v.strictObject({
       anchor: passthroughId(),
-      position: v.picklist(GOVERNING_WORDING_POSITIONS),
+      position: v.picklist(GOVERNING_POSITIONS),
       text: v.string(),
     }),
   ),
