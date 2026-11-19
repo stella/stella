@@ -189,12 +189,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 688,
+    line: 705,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 959,
+    line: 976,
     kind: "pending",
   },
   {

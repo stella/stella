@@ -31,6 +31,7 @@ import {
   CASE_LAW_CORPUS_DEPENDENCIES,
   CASE_LAW_JUDGE_DEPENDENCIES,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import { parkIngestionFailureTx } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import { attachToHeldDecision } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -61,6 +62,7 @@ import {
 import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DecisionCourtUnrecognizedError } from "@/api/lib/case-law/decision-court-identity";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -500,6 +502,32 @@ const processDecisionAttempt = async (
   options.signal?.throwIfAborted();
   const observed = observeDecision(options);
   if (observed.isErr()) {
+    if (
+      options.inputProvenance.type === "observation" &&
+      observed.error instanceof DecisionCourtUnrecognizedError
+    ) {
+      const parked = await options.scopedDb(
+        async (tx) =>
+          await parkIngestionFailureTx(tx, {
+            sourceId: options.sourceId,
+            input: options.input,
+            observation: {
+              order: options.observationOrder,
+              observedAt: options.observedAt,
+            },
+            errorType: observed.error._tag,
+            errorMessage: observed.error.message,
+            ...(options.recordIdentity === undefined
+              ? {}
+              : { recordIdentity: options.recordIdentity }),
+          }),
+      );
+      return parked.map(() => ({
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: false,
+        searchVectorFailed: false,
+      }));
+    }
     return observed;
   }
   const observation = observed.value;

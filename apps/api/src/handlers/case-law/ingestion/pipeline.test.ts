@@ -29,10 +29,10 @@ import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
@@ -932,7 +932,7 @@ describe("runIngestionPipeline — failure records", () => {
   /**
    * Reject the third database call to simulate a decision failure after its
    * observation and source read. With rejection disabled, planning reads reach
-   * storage validation; both paths record the refusal and advance the cursor.
+   * storage validation; both paths must durably record the refusal before advancing.
    */
   const failingDecisionDb = (
     insertError: Error | null,
@@ -971,7 +971,7 @@ describe("runIngestionPipeline — failure records", () => {
           }),
         }),
         insert: (table: unknown) => ({
-          values: async (rows: FailureRow[]) => {
+          values: (rows: FailureRow[]) => {
             if (table === caseLawDecisions) {
               state.decisionWrites++;
               throw new Error("unexpected decision write");
@@ -979,8 +979,12 @@ describe("runIngestionPipeline — failure records", () => {
             if (insertError !== null) {
               throw insertError;
             }
-            state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
+            if (table === caseLawIngestionFailures) {
+              state.insertedRows.push(...rows);
+            }
+            return Object.assign(Promise.resolve([]), {
+              onConflictDoNothing: async () => [],
+            });
           },
         }),
         execute: async () => await Promise.resolve([]),
@@ -1215,7 +1219,7 @@ describe("runIngestionPipeline — failure records", () => {
     ).toBe(2);
   });
 
-  test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
+  test("holds the cursor when the database rejects the failure record", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
       Result.ok({
@@ -1234,8 +1238,10 @@ describe("runIngestionPipeline — failure records", () => {
       maxPages: 1,
     });
 
-    expect(state.persistedCursor).toBe("cursor-2");
-    expect(result.haltReason).toBeNull();
+    expect(state.persistedCursor).toBe("cursor-1");
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toContain("cursor held for retry");
     expect(
       logs
         .at("ERROR")

@@ -57,6 +57,7 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import { CITATION_SHEET_NUMBER_MAX_LENGTH } from "@/api/handlers/case-law/citation-sheet-number";
+import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence";
 import { PORTRAIT_SOURCES } from "@/api/handlers/case-law/judges/consts";
 import type { JudgeExternalRefs } from "@/api/handlers/case-law/judges/consts";
 import {
@@ -4616,6 +4617,55 @@ export const caseLawIngestionEvents = p.pgTable(
       .index("case_law_ingestion_events_source_finished_idx")
       .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Replay inputs for rejected records; never exposed through public failure summaries. */
+export const caseLawIngestionFailureEvidence = p.pgTable(
+  "case_law_ingestion_failure_evidence",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    recordIdentity: p.varchar("record_identity", { length: 256 }).notNull(),
+    identityKind: p
+      .varchar("identity_kind", {
+        length: 32,
+        enum: INGESTION_FAILURE_IDENTITY_KINDS,
+      })
+      .notNull(),
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** Versioned JSON text with explicit base64 binary fields; retained verbatim. */
+    payload: p.text().notNull(),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_ingestion_failure_evidence_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      columns: [t.sourceId, t.recordIdentity, t.payloadHash, t.errorType],
+      name: "case_law_ingestion_failure_evidence_pk",
+    }),
+    p.check(
+      "case_law_ingestion_failure_evidence_identity_kind",
+      sql`${t.identityKind} IN (${sql.join(
+        INGESTION_FAILURE_IDENTITY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_ingestion_failure_evidence_document_idx")
+      .on(t.sourceId, t.sourceDocumentId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

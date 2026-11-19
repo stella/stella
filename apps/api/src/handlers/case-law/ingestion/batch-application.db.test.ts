@@ -7,10 +7,13 @@ import {
   expect,
   test,
 } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
@@ -19,6 +22,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
+  caseLawIngestionFailureEvidence,
   caseLawIngestionFailures,
   caseLawSources,
   corpusIndexGenerations,
@@ -31,6 +36,7 @@ import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import {
   applyCaseLawIngestionBatch,
+  applyDecisionBatch,
   recordIngestionFailures,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
@@ -46,10 +52,15 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
+  clearIngestionFailureEvidenceTx,
+  parkIngestionFailureTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
+import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
   processResultForCorpusOutcome,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { sourceContractForAdapter } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -58,6 +69,7 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { parkAttachmentsOfErasedDecisionTx } from "@/api/lib/case-law/held-attachment-erasure";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
@@ -168,6 +180,246 @@ const record = (n: number): IngestionResult =>
 const records = (count: number): IngestionResult[] =>
   Array.from({ length: count }, (_, n) => record(n + 1));
 
+test("a known identity's takedown removes parked bytes and prevents their reintroduction", async () => {
+  const sourceId = await recordSource();
+  const decisionId = createSafeId<"caseLawDecision">();
+  const input = plainTextIngestionResult({
+    caseNumber: "No. 24-110",
+    sourceDocumentId: "opinion-110",
+    country: "USA",
+    language: "en",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    sourceRaw: "publisher bytes to remove",
+    rawHash: "synthetic-opinion-110",
+    documentAst: {},
+  });
+  await db.insert(caseLawDecisions).values({
+    id: decisionId,
+    sourceId,
+    caseNumber: input.caseNumber,
+    sourceDocumentId: input.sourceDocumentId,
+    country: input.country,
+    language: input.language,
+    court: input.court,
+    courtId: input.courtId,
+  });
+  const park = async () =>
+    await scopedDb(
+      async (tx) =>
+        await parkIngestionFailureTx(tx, {
+          sourceId,
+          input,
+          observation: {
+            order: 1n,
+            observedAt: new Date("2026-01-01T00:00:00Z"),
+          },
+          errorType: "held-ambiguous",
+          errorMessage: "Publisher identity needs review",
+        }),
+    );
+  expect(Result.isOk(await park())).toBe(true);
+  const evidence = async () =>
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+    );
+  expect((await evidence()).at(0)?.payload).toContain(
+    "publisher bytes to remove",
+  );
+  await scopedDb(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        redactedAt: new Date("2026-01-02T00:00:00Z"),
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+    await parkAttachmentsOfErasedDecisionTx(tx, decisionId);
+  });
+  expect(await evidence()).toEqual([]);
+  expect(Result.isOk(await park())).toBe(true);
+  const marker = (await evidence()).at(0)?.payload;
+  expect(marker).toContain('"type":"withdrawn"');
+  expect(marker).not.toContain("publisher bytes to remove");
+});
+
+test("an unrecognized attaching court parks the source post and exact replay input without a host", async () => {
+  const sourceId = await recordSource();
+  const decision = plainTextIngestionResult({
+    caseNumber: "No. 24-100",
+    sourceDocumentId: "collection-post-42",
+    country: "USA",
+    language: "en",
+    court: "Unrecognized Court",
+    courtId: "not-in-directory",
+    metadata: { publisherEntry: { number: 42 } },
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    sourceRaw: "publisher\u0000detail",
+    sourceRawBytes: Uint8Array.from([0, 255, 42]),
+    sourceRawObjects: {
+      opinion: {
+        bytes: Uint8Array.from([1, 2, 255]),
+        contentType: "application/pdf",
+      },
+    },
+    rawHash: "synthetic-collection-42",
+    documentAst: {},
+  });
+  const decisions = [
+    decision,
+    ...Array.from({ length: 11 }, (_, index) => ({
+      ...decision,
+      sourceDocumentId: `collection-post-${index}`,
+    })),
+  ];
+  const batch = prepareCaseLawIngestionBatch({ decisions }).unwrap();
+  const apply = async () =>
+    await applyDecisionBatch(
+      {
+        batch,
+        sourceId,
+        scopedDb,
+        observation: {
+          order: 1n,
+          observedAt: new Date("2026-01-01T00:00:00Z"),
+        },
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus: landingTransfer().corpus,
+        polarityRules: new Map(),
+        context: { adapterKey: "synthetic-collection", cursor: "page-1" },
+        failureStreak: 0,
+      },
+      async () => ({
+        ...sourceContractForAdapter("synthetic-collection"),
+        heldDecisionAttachment: {
+          hostAdapterKeys: ["synthetic-host"],
+          metadataKey: "publisherEntry",
+          metadataSchema: v.record(v.string(), v.unknown()),
+          declaredIdentifierTypes: [
+            DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          ],
+          docketHeldUnderOtherDate: "park-for-review",
+        },
+      }),
+    );
+  const failed = await withSerializationFault("evidence", apply);
+  expect(failed.failureLedger).toEqual({ type: "transient", count: 1 });
+  expect(failed.settlements).toEqual([
+    { type: "unsettled", reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE },
+  ]);
+  expect(await ledgerRows(sourceId)).toEqual([]);
+  const applied = await apply();
+  expect(applied.failureLedger).toEqual({ type: "written" });
+  expect(applied.halt).toBeNull();
+  expect(applied.failureStreak).toBe(0);
+  expect(applied.settlements).toHaveLength(decisions.length);
+  expect((await apply()).failureLedger).toEqual({ type: "written" });
+  expect(
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId)),
+  ).toEqual([]);
+  expect(
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawDecisionSourceIdentities)
+          .where(eq(caseLawDecisionSourceIdentities.sourceId, sourceId)),
+    ),
+  ).toEqual([]);
+  expect(
+    await db
+      .select({
+        identity: caseLawIngestionFailures.recordIdentity,
+        kind: caseLawIngestionFailures.errorType,
+      })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId))
+      .orderBy(asc(caseLawIngestionFailures.recordIdentity)),
+  ).toEqual(
+    decisions
+      .map(({ sourceDocumentId }) => ({
+        identity: sourceDocumentId,
+        kind: "court_unrecognized",
+      }))
+      .toSorted((a, b) => compareCodeUnit(a.identity, b.identity)),
+  );
+  const evidence = await scopedDb(
+    async (tx) =>
+      await tx
+        .select()
+        .from(caseLawIngestionFailureEvidence)
+        .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+  );
+  expect(evidence).toHaveLength(decisions.length);
+  const selected = evidence.find(
+    ({ sourceDocumentId }) => sourceDocumentId === "collection-post-42",
+  );
+  expect(selected?.payload).toContain('"sourceRaw":"publisher\\u0000detail"');
+  expect(selected?.payload).toContain('"sourceRawBytes":"AP8q"');
+  expect(selected?.payload).toContain('"bytes":"AQL/"');
+  expect(selected?.identityKind).toBe("source-document");
+  expect(selected?.observationOrder).toBe(1n);
+  const parked = await scopedDb(
+    async (tx) =>
+      await parkIngestionFailureTx(tx, {
+        sourceId,
+        input: decision,
+        observation: {
+          order: 2n,
+          observedAt: new Date("2026-01-02T00:00:00Z"),
+        },
+        errorType: "held-ambiguous",
+        errorMessage: "Several held decisions match the publisher record",
+      }),
+  );
+  expect(Result.isOk(parked)).toBe(true);
+  const kinds = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ kind: caseLawIngestionFailureEvidence.errorType })
+        .from(caseLawIngestionFailureEvidence)
+        .where(
+          and(
+            eq(caseLawIngestionFailureEvidence.sourceId, sourceId),
+            eq(
+              caseLawIngestionFailureEvidence.sourceDocumentId,
+              "collection-post-42",
+            ),
+          ),
+        )
+        .orderBy(asc(caseLawIngestionFailureEvidence.errorType)),
+  );
+  expect(kinds).toEqual([
+    { kind: "court_unrecognized" },
+    { kind: "held-ambiguous" },
+  ]);
+  await scopedDb(
+    async (tx) =>
+      await clearIngestionFailureEvidenceTx(tx, {
+        sourceId,
+        sourceDocumentId: "collection-post-42",
+      }),
+  );
+  expect(
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+    ),
+  ).toHaveLength(decisions.length - 1);
+});
+
 /** A record the ingestion boundary refuses: its identity cannot be stored. */
 const rejectedRecord = (n = 99): IngestionResult =>
   plainTextIngestionResult({
@@ -256,6 +508,7 @@ const loseLease = async (sourceId: SafeId<"caseLawSource">): Promise<void> => {
 /** The tables a test makes unwritable. */
 const SERIALIZATION_FAULT_TABLES = {
   ledger: "case_law_ingestion_failures",
+  evidence: "case_law_ingestion_failure_evidence",
   decisions: "case_law_decisions",
 } as const;
 
@@ -987,11 +1240,6 @@ describe("source-rejected batch records", () => {
         errorMessage: rejection.message,
         cursor: `${rejection.recordKey}:${rejection.recordHash}`,
       },
-      {
-        errorType: rejection.reason,
-        errorMessage: rejection.message,
-        cursor: `${rejection.recordKey}:${rejection.recordHash}`,
-      },
     ]);
   });
 
@@ -1029,7 +1277,7 @@ describe("source-rejected batch records", () => {
 
     const anonymous = failure(undefined);
     expect(await write([anonymous, failure("import:m:1")])).toEqual({
-      type: "written",
+      type: "unreplayable",
     });
 
     // An identity-less row keeps the plain insert: its own conflict is not
@@ -1048,7 +1296,7 @@ describe("source-rejected batch records", () => {
         failure("import:m:1"),
         failure("import:m:2"),
       ]),
-    ).toEqual({ type: "written" });
+    ).toEqual({ type: "unreplayable" });
     expect((await rows()).toSorted()).toEqual([
       "anonymous",
       "anonymous",
