@@ -22,7 +22,10 @@ import {
 } from "@/routes/-app-frame.logic";
 import type { AppFrameAudience } from "@/routes/-app-frame.logic";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
-import { useLeafPendingView } from "@/routes/-route-pending-view";
+import {
+  useLeafPendingView,
+  useLeafRedirectFrameScope,
+} from "@/routes/-route-pending-view";
 
 // The signed-in frame (sidebar, inspector, chat and their registrations) loads
 // only once a member is known, so sign-in and pages for visitors never
@@ -98,6 +101,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     select: (state) => matchedAppFrameScope(state.matches),
   });
   const leafPendingView = useLeafPendingView();
+  const redirectScope = useLeafRedirectFrameScope();
   const routeUser = useRouterState({
     select: (state) => routeUserOf(state.matches),
   });
@@ -109,6 +113,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       routeIds,
       hasRouteUser: routeUser !== undefined,
       publicKnowledge,
+      redirectScope,
     }) === "unresolved";
   // Asked for only where the frame depends on it: other pages keep exactly
   // the requests they make today.
@@ -120,6 +125,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     hasRouteUser: routeUser !== undefined,
     publicKnowledge,
     audience,
+    redirectScope,
   });
   const memberUser =
     routeUser ??

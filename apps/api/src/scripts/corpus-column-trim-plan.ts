@@ -1,10 +1,8 @@
 import * as v from "valibot";
 
-import {
-  namesEmptyCorpusPayload,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { namesEmptyCorpusPayload } from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 
 /**

@@ -552,7 +552,7 @@ fn image_allocations_use_the_bounded_constructor() {
 #[test]
 fn transparent_rgba_is_composited_over_white() {
     let mut pixels = vec![0; 64 * 64 * 4];
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel.copy_from_slice(&[0, 0, 0, 0]);
     }
     pixels[0..4].copy_from_slice(&[0, 0, 0, 255]);

@@ -9,7 +9,8 @@
 //! then, and the rest goes when recording stops.
 //!
 //! The texts are joined only once recording stops, so nothing is typed
-//! before then. A stretch stella AI cannot transcribe sends the whole
+//! before then; meanwhile the text so far goes to the preview, which shows
+//! it and types nothing. A stretch stella AI cannot transcribe sends the whole
 //! dictation to this computer, as a failed recording always did: the
 //! stretches stella AI already answered are transcribed again here, and none
 //! of its texts are used. Audio is held only until its stretch has its text,
@@ -30,6 +31,7 @@ use std::{
     mpsc::{self, Sender},
   },
   thread::{self, JoinHandle},
+  time::Duration,
 };
 
 use crate::{
@@ -50,6 +52,10 @@ const UPLOAD_MILLIS: usize = 5_000;
 pub trait Transcribe {
   fn cloud(&mut self, samples: &[f32]) -> Option<String>;
   fn local(&mut self, samples: &[f32]) -> Option<String>;
+  /// The text so far, in recording order, each time it changes: this
+  /// computer's after each stretch, stella AI's after each request. Empty
+  /// once a fallback, a failure or a cancel discarded what came before.
+  fn preview(&mut self, _text: &str) {}
 }
 
 /// The texts of a dictation's stretches by their place in it, joined in that
@@ -75,6 +81,20 @@ impl Transcripts {
   }
 }
 
+/// What one dictation's transcription did, for the local log: counts and
+/// lengths, never audio or text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Tally {
+  /// Stretches that held speech and were transcribed.
+  pub stretches: usize,
+  /// Requests to stella AI.
+  pub requests: usize,
+  /// stella AI failed and this computer transcribed the dictation instead.
+  pub fell_back: bool,
+  /// How much speech was transcribed.
+  pub speech: Duration,
+}
+
 /// One dictation's transcription, stretch by stretch.
 pub struct Transcription<T> {
   transcriber: T,
@@ -89,6 +109,11 @@ pub struct Transcription<T> {
   /// transcribe the whole dictation.
   kept: Vec<(usize, Vec<f32>)>,
   failure: Option<Failure>,
+  tally: Tally,
+  /// 16 kHz samples of speech taken, for the tally.
+  speech_samples: usize,
+  /// The text the preview shows.
+  previewed: String,
 }
 
 impl<T: Transcribe> Transcription<T> {
@@ -106,6 +131,9 @@ impl<T: Transcribe> Transcription<T> {
       waiting: None,
       kept: Vec::new(),
       failure: None,
+      tally: Tally::default(),
+      speech_samples: 0,
+      previewed: String::new(),
     }
   }
 
@@ -121,6 +149,8 @@ impl<T: Transcribe> Transcription<T> {
     if !self.wants_audio() || !holds_speech(&samples) {
       return;
     }
+    self.tally.stretches += 1;
+    self.speech_samples += samples.len();
     match self.attempt {
       Attempt::Cloud => match self.waiting.as_mut() {
         Some((_, waiting)) => waiting.extend_from_slice(&samples),
@@ -148,12 +178,14 @@ impl<T: Transcribe> Transcription<T> {
     let Some((index, samples)) = self.waiting.take() else {
       return;
     };
+    self.tally.requests += 1;
     match self.transcriber.cloud(&samples) {
       Some(text) => {
         self.texts.insert(index, &text);
         if self.local_installed {
           self.kept.push((index, samples));
         }
+        self.refresh_preview();
       }
       None => self.fall_back(index, samples),
     }
@@ -167,6 +199,7 @@ impl<T: Transcribe> Transcription<T> {
       return;
     }
     self.attempt = Attempt::Local;
+    self.tally.fell_back = true;
     self.texts = Transcripts::default();
     let kept = std::mem::take(&mut self.kept);
     for (kept_index, kept_samples) in kept.into_iter().chain([(index, samples)]) {
@@ -179,8 +212,22 @@ impl<T: Transcribe> Transcription<T> {
 
   fn local(&mut self, index: usize, samples: &[f32]) {
     match self.transcriber.local(samples) {
-      Some(text) => self.texts.insert(index, &text),
+      Some(text) => {
+        self.texts.insert(index, &text);
+        self.refresh_preview();
+      }
       None => self.fail(),
+    }
+  }
+
+  /// Hands the preview the text so far when it changed. A fallback starts
+  /// over without stella AI's texts, so the first text this computer
+  /// returns replaces them.
+  fn refresh_preview(&mut self) {
+    let joined = self.texts.joined();
+    if joined != self.previewed {
+      self.transcriber.preview(&joined);
+      self.previewed = joined;
     }
   }
 
@@ -192,6 +239,7 @@ impl<T: Transcribe> Transcription<T> {
     self.texts = Transcripts::default();
     self.waiting = None;
     self.kept = Vec::new();
+    self.refresh_preview();
   }
 
   /// Audio still held for a possible fallback.
@@ -200,19 +248,41 @@ impl<T: Transcribe> Transcription<T> {
     self.kept.iter().map(|(_, samples)| samples.len()).sum()
   }
 
+  /// [`Self::finish_tallied`] without the tally.
+  #[cfg(test)]
+  pub fn finish(self) -> (Result<String, Failure>, T) {
+    let (result, transcriber, _tally) = self.finish_tallied();
+    (result, transcriber)
+  }
+
   /// Recording stopped: sends stella AI what still waits, then the joined
-  /// text, or the failure the dictation reports, and the transcriber back.
-  pub fn finish(mut self) -> (Result<String, Failure>, T) {
+  /// text, or the failure the dictation reports, the transcriber back, and
+  /// what the transcription did.
+  pub fn finish_tallied(mut self) -> (Result<String, Failure>, T, Tally) {
     self.upload();
     let result = match self.failure {
       Some(failure) => Err(failure),
       None => Ok(self.texts.joined()),
     };
-    (result, self.transcriber)
+    let tally = self.tally();
+    (result, self.transcriber, tally)
   }
 
-  /// The transcriber back without another request: what waits is dropped.
-  pub fn discard(self) -> T {
+  fn tally(&self) -> Tally {
+    let speech = Duration::from_secs_f64(
+      self.speech_samples as f64 / f64::from(MODEL_SAMPLE_RATE),
+    );
+    Tally {
+      speech,
+      ..self.tally
+    }
+  }
+
+  /// The transcriber back without another request: what waits is dropped,
+  /// and so is what the preview shows.
+  pub fn discard(mut self) -> T {
+    self.texts = Transcripts::default();
+    self.refresh_preview();
     self.transcriber
   }
 }
@@ -231,7 +301,7 @@ pub struct Live<T> {
   stretches: Sender<(usize, Vec<f32>)>,
   next: usize,
   cancelled: Arc<AtomicBool>,
-  thread: JoinHandle<(Ended, T)>,
+  thread: JoinHandle<(Ended, T, Tally)>,
 }
 
 impl<T: Transcribe + Send + 'static> Live<T> {
@@ -267,9 +337,10 @@ impl<T: Transcribe + Send + 'static> Live<T> {
           transcription.upload_due();
         }
         if discarded() {
-          return (Ended::Cancelled, transcription.discard());
+          let tally = transcription.tally();
+          return (Ended::Cancelled, transcription.discard(), tally);
         }
-        let (result, transcriber) = transcription.finish();
+        let (result, transcriber, tally) = transcription.finish_tallied();
         let ended = if discarded() {
           Ended::Cancelled
         } else {
@@ -278,7 +349,7 @@ impl<T: Transcribe + Send + 'static> Live<T> {
             Err(failure) => Ended::Failed(failure),
           }
         };
-        (ended, transcriber)
+        (ended, transcriber, tally)
       })?;
     Ok(Self {
       stretches,
@@ -299,8 +370,20 @@ impl<T: Transcribe + Send + 'static> Live<T> {
   /// Waits for every queued stretch, then how the transcription ended and
   /// the transcriber back; `None` if the thread did not survive.
   pub fn finish(self) -> Option<(Ended, T)> {
+    self
+      .finish_tallied()
+      .map(|(ended, transcriber, _tally)| (ended, transcriber))
+  }
+
+  /// [`Self::finish`], with what the transcription did.
+  pub fn finish_tallied(self) -> Option<(Ended, T, Tally)> {
     drop(self.stretches);
     self.thread.join().ok()
+  }
+
+  /// Stretches queued so far, silent ones included.
+  pub const fn sent(&self) -> usize {
+    self.next
   }
 
   /// Discards the dictation: queued stretches are dropped, the one in
@@ -352,6 +435,8 @@ mod tests {
     /// How much audio each call to stella AI carried.
     cloud_lengths: Vec<usize>,
     local_calls: Vec<usize>,
+    /// Every text handed to the preview, in order.
+    previews: Vec<String>,
     /// Signals each call, then waits for leave to answer.
     gate: Option<(Sender<usize>, Receiver<()>)>,
   }
@@ -380,6 +465,10 @@ mod tests {
       self.pass(name);
       (!self.local_fails.contains(&name)).then(|| format!("local{name}"))
     }
+
+    fn preview(&mut self, text: &str) {
+      self.previews.push(text.to_string());
+    }
   }
 
   /// Transcribes `count` stretches made by `stretch` and named from one, the
@@ -397,6 +486,20 @@ mod tests {
       transcription.upload_due();
     }
     transcription.finish()
+  }
+
+  /// Long stretches to stella AI, with the tally.
+  fn run_tallied(
+    fake: Fake,
+    installed: bool,
+    count: usize,
+  ) -> (Result<String, Failure>, Fake, Tally) {
+    let mut transcription = Transcription::new(fake, Destination::Cloud, installed);
+    for index in 0..count {
+      transcription.add(index, long(index + 1));
+      transcription.upload_due();
+    }
+    transcription.finish_tallied()
   }
 
   /// One-second stretches.
@@ -579,6 +682,36 @@ mod tests {
   }
 
   #[test]
+  fn the_tally_counts_speech_requests_and_a_fallback() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Cloud, true);
+    transcription.add(0, vec![0.0; SECOND]);
+    for index in 1..=6 {
+      transcription.add(index, stretch(index));
+      transcription.upload_due();
+    }
+    let (_, _, tally) = transcription.finish_tallied();
+    // The silent stretch is not counted; five seconds made one request
+    // while recording went on, the sixth went with the last one.
+    assert_eq!(
+      tally,
+      Tally {
+        stretches: 6,
+        requests: 2,
+        fell_back: false,
+        speech: Duration::from_secs(6),
+      }
+    );
+    let fake = Fake {
+      cloud_fails: vec![1],
+      ..Fake::default()
+    };
+    let (result, _, tally) = run_tallied(fake, true, 2);
+    assert_eq!(result, Ok("local1 local2".to_string()));
+    assert_eq!((tally.requests, tally.fell_back), (1, true));
+  }
+
+  #[test]
   fn silent_stretches_are_not_transcribed() {
     let mut transcription =
       Transcription::new(Fake::default(), Destination::Local, true);
@@ -615,6 +748,115 @@ mod tests {
     backed.add(3, long(4));
     backed.upload_due();
     assert_eq!(backed.kept_samples(), 0);
+  }
+
+  fn previews(texts: &[&str]) -> Vec<String> {
+    texts.iter().map(ToString::to_string).collect()
+  }
+
+  #[test]
+  fn the_preview_grows_with_each_stretch_this_computer_answers() {
+    let (_, fake) = run(Fake::default(), Destination::Local, true, 3);
+    assert_eq!(
+      fake.previews,
+      previews(&["local1", "local1 local2", "local1 local2 local3"])
+    );
+  }
+
+  #[test]
+  fn the_preview_keeps_recording_order_when_stretches_answer_out_of_order() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Local, true);
+    transcription.add(2, stretch(3));
+    transcription.add(0, stretch(1));
+    transcription.add(1, stretch(2));
+    let (_, fake) = transcription.finish();
+    assert_eq!(
+      fake.previews,
+      previews(&["local3", "local1 local3", "local1 local2 local3"])
+    );
+  }
+
+  #[test]
+  fn the_preview_grows_with_each_request_stella_ai_answers() {
+    let (_, fake) = run(Fake::default(), Destination::Cloud, true, 12);
+    // Five seconds ride in each request; the last two go on release.
+    assert_eq!(
+      fake.previews,
+      previews(&["cloud1", "cloud1 cloud6", "cloud1 cloud6 cloud11"])
+    );
+  }
+
+  #[test]
+  fn a_fallback_replaces_every_stella_ai_text_in_the_preview() {
+    let fake = Fake {
+      cloud_fails: vec![3],
+      ..Fake::default()
+    };
+    let (_, fake) = run_long(fake, true, 4);
+    assert_eq!(
+      fake.previews,
+      previews(&[
+        "cloud1",
+        "cloud1 cloud2",
+        "local1",
+        "local1 local2",
+        "local1 local2 local3",
+        "local1 local2 local3 local4",
+      ])
+    );
+  }
+
+  #[test]
+  fn a_failure_clears_the_preview() {
+    let fake = Fake {
+      local_fails: vec![2],
+      ..Fake::default()
+    };
+    let (_, fake) = run(fake, Destination::Local, true, 3);
+    assert_eq!(fake.previews, previews(&["local1", ""]));
+    let fake = Fake {
+      cloud_fails: vec![2],
+      ..Fake::default()
+    };
+    let (_, fake) = run_long(fake, false, 3);
+    assert_eq!(fake.previews, previews(&["cloud1", ""]));
+  }
+
+  #[test]
+  fn a_discarded_transcription_clears_the_preview_once() {
+    let mut shown = Transcription::new(Fake::default(), Destination::Local, true);
+    shown.add(0, stretch(1));
+    assert_eq!(shown.discard().previews, previews(&["local1", ""]));
+    let unshown = Transcription::new(Fake::default(), Destination::Local, true);
+    assert!(unshown.discard().previews.is_empty());
+  }
+
+  #[test]
+  fn cancelling_clears_the_preview_after_the_stretch_in_progress() {
+    let (started, started_rx) = mpsc::channel();
+    let (leave, leave_rx) = mpsc::channel();
+    let fake = Fake {
+      gate: Some((started, leave_rx)),
+      ..Fake::default()
+    };
+    let transcription = Transcription::new(fake, Destination::Local, true);
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let mut live =
+      Live::start(transcription, MODEL_SAMPLE_RATE, Arc::clone(&cancelled)).unwrap();
+    live.send(stretch(1));
+    live.send(stretch(2));
+    assert_eq!(started_rx.recv().unwrap(), 1);
+    leave.send(()).unwrap();
+    // The second stretch is being transcribed when the dictation is
+    // cancelled; whatever it returns, the preview ends empty.
+    assert_eq!(started_rx.recv().unwrap(), 2);
+    cancelled.store(true, Ordering::SeqCst);
+    leave.send(()).unwrap();
+    let (ended, fake) = live.finish().unwrap();
+    assert_eq!(ended, Ended::Cancelled);
+    assert_eq!(fake.previews.last().map(String::as_str), Some(""));
+    assert_eq!(fake.previews.first().map(String::as_str), Some("local1"));
   }
 
   #[test]

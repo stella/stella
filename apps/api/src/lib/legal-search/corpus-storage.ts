@@ -35,6 +35,7 @@ import {
 import {
   corpusContentHash,
   EMPTY_CORPUS_CONTENT_HASHES,
+  payloadCarriesDocument,
 } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import {
@@ -461,10 +462,10 @@ type PlannedCorpusWrite =
  * from the S3 I/O so it stays a pure unit and a test double can fake only
  * the PUTs while keeping the real decision.
  *
- * A payload whose hash is one of the empty shapes stores nothing: a
- * metadata-first ingest would otherwise PUT the same constant
- * zero-information objects under a fresh key per row. A payload whose
- * derived keys and hash equal the write the row already records stores
+ * A payload with no text, sections or AST blocks stores nothing, including
+ * an empty AST envelope carrying decision metadata. Hashes cannot classify
+ * that envelope: its metadata makes the hash specific to the decision.
+ * A payload whose derived keys and hash equal the write the row already records stores
  * nothing either — a settled record proves those exact objects were
  * confirmed. The comparison is over the keys, not the hash alone, because
  * the keys also carry the jurisdiction partition: an equal payload under a
@@ -479,7 +480,7 @@ export const planCorpusDocumentWrite = ({
   stored,
 }: WriteCorpusInput): PlannedCorpusWrite => {
   const contentHash = corpusContentHash({ text, sections, ast });
-  if (EMPTY_CORPUS_CONTENT_HASHES.includes(contentHash)) {
+  if (!payloadCarriesDocument({ text, sections, ast })) {
     return { type: "skipped-empty", written: null, contentHash };
   }
   const written = {

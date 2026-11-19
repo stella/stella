@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import exceptionList from "../route-pending-component-exceptions.json" with { type: "json" };
+import unmarkedList from "../route-pending-component-unmarked.json" with { type: "json" };
 import { lintRuleAcrossFiles, lintSingleRule } from "./lint-single-rule.ts";
 
 const PLUGIN = "route-pending-component";
@@ -109,18 +110,74 @@ const pendingRule = async (source: string) =>
     { plugin: PLUGIN, sourcePath: "x.pending.tsx" },
   );
 
-test("a pending view the frame never draws renders inside the providers", async () => {
+// A module on the unmarked list, and one that is not.
+const LISTED_PENDING = unmarkedList[0] ?? "";
+const CONTEXT_PENDING_SOURCE = [
+  'import { useTranslations } from "use-intl";',
+  'import { Menu } from "@stll/ui/menu";',
+  "export const XPending = () => <Menu>{useTranslations()('x')}</Menu>;",
+].join("\n");
+
+test("a listed pending module renders inside the providers, unchecked", async () => {
+  expect(LISTED_PENDING).toEndWith(".pending.tsx");
+  expect(
+    await lintSingleRule("pending-module-imports", CONTEXT_PENDING_SOURCE, {
+      plugin: PLUGIN,
+      sourcePath: LISTED_PENDING,
+    }),
+  ).toEqual([]);
+});
+
+test("an unlisted pending module is context-free, marked or not", async () => {
+  // A piece a frame view imports marks nothing itself, and is checked too.
+  expect(
+    await lintSingleRule("pending-module-imports", CONTEXT_PENDING_SOURCE, {
+      plugin: PLUGIN,
+      sourcePath: "apps/web/src/components/new-piece.pending.tsx",
+    }),
+  ).toEqual([1, 2, 3]);
+});
+
+test("a listed module that marks a frame view is told to leave the list", async () => {
   expect(
     await lintSingleRule(
       "pending-module-imports",
-      [
-        'import { useTranslations } from "use-intl";',
-        'import { Skeleton } from "@stll/ui/skeleton";',
-        "export const XPending = () => <Skeleton>{useTranslations()('x')}</Skeleton>;",
-      ].join("\n"),
-      { plugin: PLUGIN, sourcePath: "x.pending.tsx" },
+      "const XPendingView = () => null;\nexport const XPending = framePendingView(XPendingView);",
+      { plugin: PLUGIN, sourcePath: LISTED_PENDING },
     ),
-  ).toEqual([]);
+  ).toEqual([1]);
+});
+
+test("a route's pending view is marked for the frame unless its module is listed", async () => {
+  const listedStem = LISTED_PENDING.replace(/\.pending\.tsx$/u, "");
+  const results = await lintRuleAcrossFiles(
+    "route-pending-component",
+    {
+      "marked/route.tsx": [
+        'import { XPage } from "./x.page";',
+        'import { XPending } from "./x.pending";',
+        'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
+      ].join("\n"),
+      "marked/x.pending.tsx":
+        "export const XPending = framePendingView(() => null);",
+      "unmarked/route.tsx": [
+        'import { XPage } from "./x.page";',
+        'import { XPending } from "./x.pending";',
+        'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
+      ].join("\n"),
+      "unmarked/x.pending.tsx": "export const XPending = () => null;",
+      [`${path.dirname(LISTED_PENDING)}/route.tsx`]: [
+        `import { XPage } from "./${path.basename(listedStem)}.page";`,
+        `import { XPending } from "./${path.basename(listedStem)}.pending";`,
+        'createFileRoute("/x")({ component: XPage, pendingComponent: XPending });',
+      ].join("\n"),
+      [LISTED_PENDING]: "export const XPending = () => null;",
+    },
+    { plugin: PLUGIN },
+  );
+  expect(results["marked/route.tsx"]).toEqual([]);
+  expect(results["unmarked/route.tsx"]).toEqual([3]);
+  expect(results[`${path.dirname(LISTED_PENDING)}/route.tsx`]).toEqual([]);
 });
 
 test("a pending half imports only pending-safe modules", async () => {
@@ -280,6 +337,15 @@ test("the exception list names existing route files once each, sorted", () => {
   const files: readonly string[] = exceptionList;
   expect(files).toEqual([...new Set(files)].toSorted());
   for (const file of files) {
+    expect(existsSync(path.join(REPOSITORY_ROOT, file))).toBe(true);
+  }
+});
+
+test("the unmarked list names existing pending modules once each, sorted", () => {
+  const files: readonly string[] = unmarkedList;
+  expect(files).toEqual([...new Set(files)].toSorted());
+  for (const file of files) {
+    expect(file).toEndWith(".pending.tsx");
     expect(existsSync(path.join(REPOSITORY_ROOT, file))).toBe(true);
   }
 });

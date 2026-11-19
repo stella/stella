@@ -8,7 +8,6 @@
   "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "apps/api/src/lib/ai-generation/model-operation-registry.ts",
   "packages/api-contract/src/internal-ui-transport.ts",
-  "packages/api-contract/src/mcp.ts",
   "packages/scripts/src/child-exit-status.ts",
   "packages/scripts/src/generated-artifact-format.ts",
   "packages/scripts/src/syntax-tree.ts",

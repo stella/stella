@@ -6065,6 +6065,7 @@ const config = defineConfig({
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
               "apps/api/src/env-ingestion.ts",
+              "apps/api/src/env-soft-law.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/env-file-derivative-worker.ts",

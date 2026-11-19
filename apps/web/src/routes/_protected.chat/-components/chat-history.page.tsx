@@ -50,7 +50,6 @@ import {
 } from "@stll/ui/list";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
-import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -110,11 +109,15 @@ import type {
   ChatHistoryPeriod,
   ChatHistorySearch,
 } from "./chat-history.logic";
+import {
+  CHAT_HISTORY_MATTER_FIELD_CLASS,
+  ChatHistoryRowsPending,
+  ChatHistoryShell,
+} from "./chat-history.pending";
 import { ThreadContextLine, ThreadContextTooltip } from "./thread-context-line";
 import { layoutThreadContext } from "./thread-context-line.logic";
 
 const SEARCH_DEBOUNCE_MS = 250;
-const SKELETON_ROW_COUNT = 6;
 
 const PERIOD_LABEL = {
   [CHAT_HISTORY_PERIOD.today]: "common.today",
@@ -123,6 +126,26 @@ const PERIOD_LABEL = {
 } as const satisfies Record<ChatHistoryPeriod, TranslationKey>;
 
 const protectedRouteApi = getRouteApi("/_protected");
+const historyRouteApi = getRouteApi("/_protected/chat/history");
+
+/** The page at `/chat/history`, its search and matter filter in the URL. */
+export const ChatHistoryRoutePage = () => {
+  const q = historyRouteApi.useSearch({ select: (search) => search.q });
+  const matter = historyRouteApi.useSearch({
+    select: (search) => search.matter,
+  });
+  const navigate = historyRouteApi.useNavigate();
+
+  const onSearchChange = (search: ChatHistorySearch) => {
+    // Refining a filter replaces the entry, so Back leaves the page instead
+    // of replaying every keystroke.
+    detached(navigate({ search, replace: true }), "chat-history.search");
+  };
+
+  return (
+    <ChatHistoryPage onSearchChange={onSearchChange} search={{ matter, q }} />
+  );
+};
 
 type ChatHistoryPageProps = {
   search: ChatHistorySearch;
@@ -241,46 +264,46 @@ export const ChatHistoryPage = ({
 
   return (
     <ScrollArea axis="vertical" className="min-h-0 w-full flex-1">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
-        <h1 className="text-foreground text-lg font-semibold text-balance">
-          {t("common.history")}
-        </h1>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-          <SearchField
-            aria-label={t("common.search")}
-            clearLabel={t("common.clearSearch")}
-            maxLength={SEARCH_QUERY_MAX_LENGTH}
-            groupClassName="sm:flex-1"
-            onValueChange={(value) => {
-              setSearchField((field) => ({ ...field, value }));
-              commitQuery(value, syncedSearchField.externalChanges);
-            }}
-            placeholder={t("common.search")}
-            value={syncedSearchField.value}
-          />
-          <div className="flex min-w-0 flex-col gap-1 sm:w-64">
-            <Label className="sr-only" htmlFor={matterFieldId}>
-              {t("common.matter")}
-            </Label>
-            <MatterCombobox
-              activeOrganizationId={activeOrganizationId}
-              id={matterFieldId}
-              // Remounts once the matter named in the URL resolves, so the
-              // field opens showing it.
-              key={matters === undefined ? "pending" : "ready"}
-              onChange={(matter) => {
-                onSearchChange({ ...search, matter: matter?.id });
+      <ChatHistoryShell
+        toolbar={
+          <>
+            <SearchField
+              aria-label={t("common.search")}
+              clearLabel={t("common.clearSearch")}
+              maxLength={SEARCH_QUERY_MAX_LENGTH}
+              groupClassName="sm:flex-1"
+              onValueChange={(value) => {
+                setSearchField((field) => ({ ...field, value }));
+                commitQuery(value, syncedSearchField.externalChanges);
               }}
-              userId={userId}
-              value={selectedMatter}
+              placeholder={t("common.search")}
+              value={syncedSearchField.value}
             />
-          </div>
-          {hasChatHistoryFilter(search) ? (
-            <Button onClick={clearFilters} variant="ghost">
-              {t("common.clearFilters")}
-            </Button>
-          ) : null}
-        </div>
+            <div className={CHAT_HISTORY_MATTER_FIELD_CLASS}>
+              <Label className="sr-only" htmlFor={matterFieldId}>
+                {t("common.matter")}
+              </Label>
+              <MatterCombobox
+                activeOrganizationId={activeOrganizationId}
+                id={matterFieldId}
+                // Remounts once the matter named in the URL resolves, so the
+                // field opens showing it.
+                key={matters === undefined ? "pending" : "ready"}
+                onChange={(matter) => {
+                  onSearchChange({ ...search, matter: matter?.id });
+                }}
+                userId={userId}
+                value={selectedMatter}
+              />
+            </div>
+            {hasChatHistoryFilter(search) ? (
+              <Button onClick={clearFilters} variant="ghost">
+                {t("common.clearFilters")}
+              </Button>
+            ) : null}
+          </>
+        }
+      >
         {threadsView.type === "pending" ? <ChatHistorySkeleton /> : null}
         {matterUnavailable ? (
           <div
@@ -356,7 +379,7 @@ export const ChatHistoryPage = ({
               : t("common.loadMore")}
           </Button>
         ) : null}
-      </div>
+      </ChatHistoryShell>
       <DeleteChatDialog
         dialog={deleteDialog}
         onOpenChange={(open) => {
@@ -789,26 +812,11 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
 function ChatHistorySkeleton() {
   const t = useTranslations();
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <span className="sr-only" role="status">
         {t("common.loading")}
       </span>
-      <ListGroup aria-hidden="true">
-        <ListGroupHeader>
-          <Skeleton className="h-4 w-24" />
-        </ListGroupHeader>
-        <List>
-          {Array.from({ length: SKELETON_ROW_COUNT }, (_, row) => (
-            <li className="flex min-h-14 items-center gap-3 px-4" key={row}>
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Skeleton className="h-3.5 w-56 max-w-full" />
-                <Skeleton className="h-3 w-40 max-w-full" />
-              </div>
-              <Skeleton className="h-3 w-12" />
-            </li>
-          ))}
-        </List>
-      </ListGroup>
-    </div>
+      <ChatHistoryRowsPending />
+    </>
   );
 }

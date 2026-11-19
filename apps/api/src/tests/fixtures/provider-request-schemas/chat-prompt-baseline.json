@@ -72,6 +72,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 36247
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 37419
       }
     ],
     "anthropic/extended": [
@@ -146,6 +150,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 36738
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 37909
       }
     ],
     "bedrock/default": [
@@ -216,6 +224,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 36507
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 37690
       }
     ],
     "bedrock/extended": [
@@ -286,6 +298,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37179
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 38178
       }
     ],
     "google/default": [
@@ -352,6 +368,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 35237
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 36406
       }
     ],
     "google/extended": [
@@ -414,6 +434,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 35714
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 36884
       }
     ],
     "mistral/default": [
@@ -484,6 +508,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37940
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 39043
       }
     ],
     "mistral/extended": [
@@ -554,6 +582,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38467
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 39569
       }
     ],
     "openai/default": [
@@ -624,6 +656,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37516
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 38609
       }
     ],
     "openai/extended": [
@@ -694,6 +730,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38031
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 39124
       }
     ],
     "openrouter-anthropic/default": [
@@ -764,6 +804,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37925
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 38996
       }
     ],
     "openrouter-anthropic/extended": [
@@ -834,6 +878,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38436
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 39507
       }
     ],
     "openrouter/default": [
@@ -904,6 +952,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37925
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 38996
       }
     ],
     "openrouter/extended": [
@@ -974,6 +1026,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38436
+      },
+      {
+        "reason": "validate_skill_package and save_skill_package let chat check and save multi-file skill packages",
+        "tokens": 39507
       }
     ]
   },

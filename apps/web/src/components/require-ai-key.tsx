@@ -328,16 +328,18 @@ export const AIUnavailableDialogTrigger = () => {
   }
 };
 
-/** Keep the route's composer and draft mounted in every availability state. */
+/**
+ * Keep the route's composer and draft mounted in every availability state.
+ * While availability is read, nothing is added above the page: the
+ * composer's send control stays unavailable until it is known (each chat
+ * surface passes `sendDisabled` while it is not "available"), so the wait
+ * shows in the composer row and the page does not move when it ends.
+ */
 export const RequireAIKey = ({ children }: PropsWithChildren) => {
   const { availability } = useAIKeyGate();
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
-      {availability === "pending" ? (
-        <QueryViewFeedback view={{ type: "pending" }} />
-      ) : (
-        <AIUnavailableDialogTrigger />
-      )}
+      {availability === "pending" ? null : <AIUnavailableDialogTrigger />}
       <AIAvailabilityFeedbackContext value={true}>
         {children}
       </AIAvailabilityFeedbackContext>

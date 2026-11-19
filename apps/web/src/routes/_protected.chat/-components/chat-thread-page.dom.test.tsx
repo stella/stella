@@ -61,7 +61,7 @@ const { setThreadActiveSkill, useThreadActiveSkillStore } =
 const { toSafeId } = await import("@/lib/safe-id");
 const { skillsOptions } = await import("@/lib/knowledge/queries");
 const { ChromeHeaderActionsSlot } = await import("@/lib/chrome-header-actions");
-const { ChatThreadPage } = await import("./chat-thread-page");
+const { ChatThreadPage } = await import("./chat-thread.page");
 
 const user = {
   activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
