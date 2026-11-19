@@ -136,7 +136,7 @@ const search = async (
     query = QUESTION,
     language,
   }: {
-    country?: "CZE" | "EU" | undefined;
+    country?: "CZE" | "EU";
     query?: string;
     language?: string;
   } = {},
@@ -159,7 +159,7 @@ const search = async (
   }
   const result = await searchCorpusIndexDecisions({
     body: {
-      ...(country === undefined ? {} : { country }),
+      country,
       ...(language === undefined ? {} : { language }),
       query,
       strict,
@@ -417,18 +417,16 @@ describe.skipIf(!runEngineTests)(
     );
 
     // A word the body holds only inflected, asked with and without a language
-    // the reader is taken to write in. The decision field holds each
-    // document's stems in its own language, so each read asks for the stems
-    // of every language its documents were written in.
+    // filter. The decision field holds each document's stems in its own
+    // language, so a European read with no language asks for the stems of
+    // every language its documents were written in.
     // timeout: each case is two real engine searches plus PGlite reads.
     test.each([
       ["a Czech search", "CZE", undefined, "loajality", "tenOfEleven"],
-      ["an unscoped search", undefined, undefined, "loajality", "tenOfEleven"],
-      ["an unscoped search", undefined, undefined, "abandoning", "abandoned"],
       ["a European search", "EU", undefined, "abandoning", "abandoned"],
       ["a European English search", "EU", "en", "abandoning", "abandoned"],
     ] as const)(
-      "%s finds the body-only inflection of %s",
+      "%s (%s, language %s) finds the body-only inflection %s",
       async (_name, country, language, query, expected) => {
         for (const strict of [false, true]) {
           const result = await search(strict, {

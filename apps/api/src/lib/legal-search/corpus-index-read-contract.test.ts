@@ -198,14 +198,15 @@ test("the documents' stemmers answer for every read, with or without a language"
   });
   // The European index holds a document per language, each stemmed under its
   // own: every EU language a stemmer covers, and none it does not.
-  const eu = stemsOf("EU", undefined)?.languages ?? [];
+  const eu: readonly string[] = stemsOf("EU", undefined)?.languages ?? [];
   expect(eu).toContain("en");
   expect(eu).toContain("cs");
   expect(eu).toContain("fr");
   expect(eu).not.toContain("bg");
   // Unscoped: every jurisdiction the generation holds, hence the European
   // languages and every single-language corpus.
-  const unscoped = stemsOf(undefined, undefined)?.languages ?? [];
+  const unscoped: readonly string[] =
+    stemsOf(undefined, undefined)?.languages ?? [];
   for (const language of ["cs", "sk", "pl", "hu", "en", "de", "pt"]) {
     expect(unscoped).toContain(language);
   }

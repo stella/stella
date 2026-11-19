@@ -266,7 +266,7 @@ type CaseLawCorpusQueryFieldsOptions = {
   language: string | undefined;
 };
 
-export type CaseLawDocumentStems = {
+type CaseLawDocumentStems = {
   /** Sorted, at least one. */
   languages: readonly [MorphologyLanguage, ...MorphologyLanguage[]];
   /** The headnote's stem field. */
@@ -351,7 +351,7 @@ export const caseLawQueryLanguage = ({
  * projection refuses an undeclared language against, so the two sides cannot
  * drift.
  */
-export const caseLawReadDocumentStemLanguages = ({
+const caseLawReadDocumentStemLanguages = ({
   generation,
   jurisdiction,
   language,
