@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -36,6 +37,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 /** How long typing settles before the switcher asks the server again. */
@@ -65,21 +67,49 @@ export const ChatSwitcher = ({ threadId }: ChatSwitcherProps) => {
   const [search, setSearch] = useState("");
   const commitSearch = useDebouncedCallback(setSearch, SEARCH_DEBOUNCE_MS);
   const threadsView = queryView(
-    useInfiniteQuery({
-      ...groupedChatThreadsOptions({ activeOrganizationId, search, userId }),
-      enabled: open,
-    }),
+    useInfiniteQuery(
+      resourceQueryOptions(
+        {
+          ...groupedChatThreadsOptions({
+            activeOrganizationId,
+            search,
+            userId,
+          }),
+          enabled: open,
+        },
+        {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: {
+            type: "organization",
+            organizationId: activeOrganizationId,
+            userId,
+          },
+        },
+      ),
+    ),
   );
   useQueryViewError(threadsView, "ChatSwitcher:query");
   // The sidebar's matter list, for each matter chat's colour.
   const mattersView = queryView(
-    useQuery({
-      ...workspacesNavigationOptions({
-        organizationId: activeOrganizationId,
-        userId,
-      }),
-      enabled: open,
-    }),
+    useQuery(
+      resourceQueryOptions(
+        {
+          ...workspacesNavigationOptions({
+            organizationId: activeOrganizationId,
+            userId,
+          }),
+          enabled: open,
+        },
+        {
+          resources: [RESOURCE_TYPE.WORKSPACE],
+          scope: {
+            type: "organization",
+            organizationId: activeOrganizationId,
+            userId,
+          },
+        },
+      ),
+    ),
   );
   const matterColor = (workspaceId: string) =>
     mattersView.type === "items"
