@@ -224,13 +224,14 @@ export const readDataBoxFile = async ({
     const needsEmbeddedText =
       purpose === "standalone" ||
       (
-        await scopedDb((tx) =>
-          readFiledAttachments({
-            tx,
-            sourceEntityId: row.entityId,
-            workspaceId,
-            message: doc,
-          }),
+        await scopedDb(
+          async (tx) =>
+            await readFiledAttachments({
+              tx,
+              sourceEntityId: row.entityId,
+              workspaceId,
+              message: doc,
+            }),
         )
       ).size !== doc.files.length;
     if (needsEmbeddedText) {

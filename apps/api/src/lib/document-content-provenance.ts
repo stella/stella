@@ -301,7 +301,7 @@ const resolveCurrentExtractedRowsFromDatabase = async (
         currentVersionId: version.id,
         sourceFieldId: sourceField.id,
         legalFormat:
-          sourceField.content?.type === "file"
+          sourceField.content.type === "file"
             ? legalFileFormat(
                 sourceField.content.mimeType,
                 sourceField.content.fileName,
@@ -409,7 +409,7 @@ export const loadAgentDocumentSources = async (
       extracted,
       fields: currentVersion.fields,
     });
-    if (file?.content?.type !== "file") {
+    if (file?.content.type !== "file") {
       continue;
     }
     const format = legalFileFormat(

@@ -841,8 +841,8 @@ const seedDataBox = async () =>
     await zfoFile(),
   );
 
-const readDataBox = (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
-  readDataBoxFile({
+const readDataBox = async (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
+  await readDataBoxFile({
     fieldId,
     scopedDb,
     workspaceId: ids.wsA1,

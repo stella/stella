@@ -442,8 +442,8 @@ describe("loadInputDocuments", () => {
             workspaceIds: [workspaceId],
           })
         ).unwrap();
-        const read = () =>
-          loadInputDocuments({
+        const read = async () =>
+          await loadInputDocuments({
             scopedDb: scoped,
             organizationId,
             workspaceIds,

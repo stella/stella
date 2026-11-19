@@ -676,13 +676,19 @@ export const loadInputDocuments = async ({
 
   // Verify the entire input set before decrypting or opening any files.
   const options = { entityIds, organizationId, workspaceIds };
-  const sources = await scopedDb((tx) => loadAgentDocumentSources(tx, options));
+  const sources = await scopedDb(
+    async (tx) => await loadAgentDocumentSources(tx, options),
+  );
   await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
   const extractedIds = sources
     .filter((source) => !source.legalFormat)
     .map((source) => source.entityId);
-  const extracted = await scopedDb((tx) =>
-    loadCurrentExtractedContents(tx, { ...options, entityIds: extractedIds }),
+  const extracted = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedContents(tx, {
+        ...options,
+        entityIds: extractedIds,
+      }),
   );
   const byId = new Map(extracted.map((row) => [row.entityId, row]));
   const available = sources.filter((source) => {
