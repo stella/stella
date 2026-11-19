@@ -6,6 +6,7 @@
 import "../src/tests/setup-env";
 import { panic } from "better-result";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import type { FeatureGrant } from "@/api/lib/feature-access/grants-schema";
 import {
   createFeatureAccessSnapshot,
@@ -29,9 +30,9 @@ import {
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
 const principal = {
-  organizationId: "mcp-surface-export-org",
-  userId: "mcp-surface-export-user",
-} as const;
+  organizationId: toSafeId<"organization">("mcp-surface-export-org"),
+  userId: toSafeId<"user">("mcp-surface-export-user"),
+};
 
 function* featureSets(
   features: readonly string[],
@@ -121,14 +122,16 @@ const exportMcpSurface = () => {
   const modeDefinitions = MCP_MODES.map(
     (mode) => [mode, listStaticMcpToolDefinitions(mode)] as const,
   );
-  const allDefinitions = modeDefinitions.flatMap(([, tools]) => tools);
+  const allDefinitions: readonly McpToolDefinition[] = [
+    ...modeDefinitions.flatMap(([, tools]) => tools),
+    ...DEFAULT_MCP_TOOL_DEFINITIONS,
+  ];
   // The wire serializer scopes prose and schema enums against hidden tools
   // from the default registry and capabilities even in restricted modes.
   const descriptorFeatures = [
     ...CAPABILITY_FEATURE_BINDINGS.values(),
-    ...[...allDefinitions, ...DEFAULT_MCP_TOOL_DEFINITIONS].flatMap(
-      ({ featureId, featureInput }) =>
-        [featureId, featureInput?.featureId].filter((id) => id !== undefined),
+    ...allDefinitions.flatMap(({ featureId, featureInput }) =>
+      [featureId, featureInput?.featureId].filter((id) => id !== undefined),
     ),
   ];
   const featureIds = [

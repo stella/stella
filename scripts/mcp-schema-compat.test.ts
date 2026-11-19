@@ -76,6 +76,82 @@ describe("output compatibility", () => {
     ).toEqual([]);
   });
 
+  test("rejects closing a previously open output object", () => {
+    const previous = objectSchema({ title: stringSchema });
+    const closed = { ...previous, additionalProperties: false };
+
+    expect(schemaBreaks("output", previous, closed)).toEqual([
+      { path: "/additionalProperties", rule: "output-object-closed" },
+    ]);
+    expect(
+      schemaBreaks(
+        "output",
+        { ...previous, additionalProperties: true },
+        closed,
+      ),
+    ).toEqual([
+      { path: "/additionalProperties", rule: "output-object-closed" },
+    ]);
+    expect(schemaBreaks("output", closed, previous)).toEqual([]);
+  });
+
+  test("rejects introducing an output enum on a field with examples", () => {
+    const previous = { ...stringSchema, examples: ["draft", "final"] };
+    const current = { ...stringSchema, enum: ["draft", "final"] };
+
+    expect(schemaBreaks("output", previous, current)).toEqual([
+      { path: "/enum", rule: "output-enum-introduced" },
+    ]);
+  });
+
+  test("allows migrating an output enum to examples drawn from the same values", () => {
+    const previous = { ...stringSchema, enum: ["draft", "final"] };
+    const same = { ...stringSchema, examples: ["final", "draft"] };
+    const expanded = {
+      ...stringSchema,
+      examples: ["final", "draft", "archived"],
+    };
+
+    expect(schemaBreaks("output", previous, same)).toEqual([]);
+    expect(schemaBreaks("output", previous, expanded)).toEqual([
+      { path: "/examples/2", rule: "output-enum-expanded" },
+    ]);
+    expect(schemaBreaks("output", previous, stringSchema)).toEqual([
+      { path: "/enum", rule: "output-enum-removed" },
+    ]);
+  });
+
+  test("allows new examples for an output field without an enum", () => {
+    const previous = { ...stringSchema, examples: ["draft", "final"] };
+    const current = {
+      ...stringSchema,
+      examples: ["draft", "final", "archived"],
+    };
+
+    expect(schemaBreaks("output", previous, current)).toEqual([]);
+    expect(schemaBreaks("output", stringSchema, current)).toEqual([]);
+  });
+
+  test("preserves output constants when their schemas change", () => {
+    const draft = { ...stringSchema, const: "draft" };
+    const final = { ...stringSchema, const: "final" };
+    const examples = { ...stringSchema, examples: ["draft"] };
+
+    expect(schemaBreaks("output", draft, final)).toEqual([
+      { path: "/const", rule: "output-const-expanded" },
+    ]);
+    expect(schemaBreaks("output", draft, examples)).toEqual([
+      { path: "/const", rule: "output-const-expanded" },
+    ]);
+    expect(
+      schemaBreaks("output", draft, { ...stringSchema, enum: ["draft"] }),
+    ).toEqual([{ path: "/enum", rule: "output-enum-introduced" }]);
+    expect(
+      schemaBreaks("output", draft, { ...draft, examples: ["draft"] }),
+    ).toEqual([]);
+    expect(schemaBreaks("output", stringSchema, draft)).toEqual([]);
+  });
+
   test("keeps required output fields required", () => {
     const properties = { title: stringSchema, label: stringSchema };
     const previous = objectSchema(properties, ["title"]);

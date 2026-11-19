@@ -1,3 +1,8 @@
+export const LEGACY_OUTPUT_ADDITIONS = {
+  closedObjectProperty: "output-closed-object-property-added",
+  enumValue: "output-enum-expanded",
+} as const;
+
 type Direction = "input" | "output";
 type Schema = Record<string, unknown>;
 type SchemaBreak = { path: string; rule: string };
@@ -140,6 +145,82 @@ const withSiblings = (siblings: Schema, branch: Branch): unknown =>
 
 const sameValue = (left: unknown, right: unknown): boolean =>
   Bun.deepEquals(left, right);
+
+const includesValue = (allowed: readonly unknown[], value: unknown): boolean =>
+  allowed.some((candidate) => sameValue(candidate, value));
+
+const outputValueBreaks = (
+  old: Schema,
+  next: Schema,
+  path: string,
+): SchemaBreak[] => {
+  const breaks: SchemaBreak[] = [];
+  const oldEnum = old["enum"];
+  const newEnum = next["enum"];
+  const oldHasConst = Object.hasOwn(old, "const");
+  const newHasConst = Object.hasOwn(next, "const");
+  const newValues = values(next);
+  if (oldHasConst) {
+    const preservesConst = newHasConst
+      ? sameValue(old["const"], next["const"])
+      : newValues?.every((value) => sameValue(old["const"], value));
+    if (!preservesConst) {
+      breaks.push({
+        path: pointer(path, "const"),
+        rule: "output-const-expanded",
+      });
+    }
+  }
+  if (!Array.isArray(oldEnum)) {
+    if (Array.isArray(newEnum)) {
+      breaks.push({
+        path: pointer(path, "enum"),
+        rule: "output-enum-introduced",
+      });
+    }
+    return breaks;
+  }
+
+  const examples = list(next["examples"]);
+  if (!newValues && examples.length === 0) {
+    breaks.push({ path: pointer(path, "enum"), rule: "output-enum-removed" });
+  } else if (newValues?.some((value) => !includesValue(oldEnum, value))) {
+    breaks.push({
+      path: pointer(path, "enum"),
+      rule: LEGACY_OUTPUT_ADDITIONS.enumValue,
+    });
+  }
+  const oldExamples = list(old["examples"]);
+  for (const [index, value] of examples.entries()) {
+    if (
+      !includesValue(oldEnum, value) &&
+      (!newValues || !includesValue(oldExamples, value))
+    ) {
+      breaks.push({
+        path: pointer(pointer(path, "examples"), index),
+        rule: LEGACY_OUTPUT_ADDITIONS.enumValue,
+      });
+    }
+  }
+  return breaks;
+};
+
+const inputValueBreaks = (
+  old: Schema,
+  next: Schema,
+  path: string,
+): SchemaBreak[] => {
+  const accepted = values(next);
+  const produced = values(old);
+  if (
+    accepted &&
+    (!produced || produced.some((value) => !includesValue(accepted, value)))
+  ) {
+    const keyword = Object.hasOwn(next, "enum") ? "enum" : "const";
+    return [{ path: pointer(path, keyword), rule: "input-enum-narrowed" }];
+  }
+  return [];
+};
 
 const overlaps = (left: Schema, right: Schema): boolean => {
   const leftTypes = types(left);
@@ -397,21 +478,11 @@ class SchemaComparison {
       });
     }
 
-    const acceptedValues = values(accepted);
-    const producedValues = values(produced);
-    if (
-      acceptedValues &&
-      (!producedValues ||
-        producedValues.some(
-          (value) => !acceptedValues.some((other) => sameValue(value, other)),
-        ))
-    ) {
-      const keyword = Object.hasOwn(accepted, "enum") ? "enum" : "const";
-      breaks.push({
-        path: pointer(path, keyword),
-        rule: this.output ? "output-enum-expanded" : "input-enum-narrowed",
-      });
-    }
+    breaks.push(
+      ...(this.output
+        ? outputValueBreaks(old, next, path)
+        : inputValueBreaks(old, next, path)),
+    );
 
     breaks.push(
       ...tightenedConstraints(produced, accepted).map((key) => ({
@@ -480,6 +551,9 @@ class SchemaComparison {
     const oldExtra = old["additionalProperties"];
     const newExtra = next["additionalProperties"];
     const extraPath = pointer(path, "additionalProperties");
+    if (this.output && oldExtra !== false && newExtra === false) {
+      return [{ path: extraPath, rule: "output-object-closed" }];
+    }
     if (this.output && oldExtra === false && isRecord(newExtra)) {
       return [{ path: extraPath, rule: "output-constraint-relaxed" }];
     }
@@ -602,7 +676,7 @@ class SchemaComparison {
       if (this.output && old["additionalProperties"] === false) {
         breaks.push({
           path: fieldPath,
-          rule: "output-closed-object-property-added",
+          rule: LEGACY_OUTPUT_ADDITIONS.closedObjectProperty,
         });
       } else if (isRecord(old["additionalProperties"])) {
         breaks.push(
@@ -690,3 +764,71 @@ export const schemaBreaks = (
   previous: unknown,
   current: unknown,
 ): SchemaBreak[] => new SchemaComparison(direction, previous, current).breaks();
+
+const SCHEMA_MAPS = [
+  "properties",
+  "patternProperties",
+  "$defs",
+  "definitions",
+  "dependentSchemas",
+  "dependencies",
+] as const;
+const SCHEMA_LISTS = ["anyOf", "oneOf", "allOf", "prefixItems"] as const;
+const NESTED_SCHEMAS = [
+  "additionalProperties",
+  "additionalItems",
+  "contains",
+  "propertyNames",
+  "unevaluatedProperties",
+  "unevaluatedItems",
+  "if",
+  "then",
+  "else",
+  "not",
+  "contentSchema",
+] as const;
+
+export const outputRestrictions = (schema: unknown): SchemaBreak[] => {
+  const restrictions: SchemaBreak[] = [];
+  const visitList = (listValue: unknown, path: string) => {
+    for (const [index, value] of list(listValue).entries()) {
+      visit(value, pointer(path, index));
+    }
+  };
+  const visit = (value: unknown, path: string) => {
+    if (!isRecord(value)) {
+      return;
+    }
+    if (value["additionalProperties"] === false) {
+      restrictions.push({
+        path: pointer(path, "additionalProperties"),
+        rule: "output-object-closed",
+      });
+    }
+    if (Array.isArray(value["enum"])) {
+      restrictions.push({
+        path: pointer(path, "enum"),
+        rule: "output-enum-introduced",
+      });
+    }
+    for (const keyword of SCHEMA_MAPS) {
+      const mapPath = pointer(path, keyword);
+      for (const [name, entry] of Object.entries(record(value[keyword]))) {
+        visit(entry, pointer(mapPath, name));
+      }
+    }
+    for (const keyword of SCHEMA_LISTS) {
+      visitList(value[keyword], pointer(path, keyword));
+    }
+    for (const keyword of NESTED_SCHEMAS) {
+      visit(value[keyword], pointer(path, keyword));
+    }
+    if (Array.isArray(value["items"])) {
+      visitList(value["items"], pointer(path, "items"));
+    } else {
+      visit(value["items"], pointer(path, "items"));
+    }
+  };
+  visit(schema, "");
+  return restrictions;
+};

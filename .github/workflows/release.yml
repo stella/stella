@@ -200,7 +200,11 @@ jobs:
           sparse-checkout: |
             scripts/export-release-mcp-surface.sh
             scripts/retry.sh
+            apps/api/package.json
             apps/api/scripts/export-mcp-surface.ts
+            apps/api/src/env-schema.ts
+            apps/api/src/tests/setup-env.ts
+            apps/api/src/tests/test-database-environment.ts
           sparse-checkout-cone-mode: false
       - name: Set up Bun for the released MCP surface
         if: steps.release.outputs.channel == 'final'
@@ -1315,6 +1319,7 @@ jobs:
     needs: resolve
     if: ${{ success() && needs.resolve.outputs.channel == 'final' }}
     permissions:
+      actions: read
       contents: write
       packages: write
       id-token: write # attest the aliased web image's publication
@@ -1342,10 +1347,10 @@ jobs:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
       - name: Download released MCP surface
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: released-mcp-surface
-          path: ${{ runner.temp }}/released-surface
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/download-run-artifact.sh --name released-mcp-surface --path "$RUNNER_TEMP/released-surface"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:

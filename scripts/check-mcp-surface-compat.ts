@@ -1,7 +1,11 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { schemaBreaks } from "./mcp-schema-compat";
+import {
+  LEGACY_OUTPUT_ADDITIONS,
+  outputRestrictions,
+  schemaBreaks,
+} from "./mcp-schema-compat";
 
 const schema = v.record(v.string(), v.unknown());
 const toolSchema = v.object({
@@ -56,39 +60,98 @@ const parseSurface = (value: unknown) => {
   return { tools, profiles };
 };
 
+type CompatibilityIssue = { kind: "failure" | "transition"; detail: string };
+
 const compareTool = (old: Tool, next: Tool) => {
-  const failures: string[] = [];
+  const issues: CompatibilityIssue[] = [];
   if (next.feature !== undefined && old.feature !== next.feature) {
-    failures.push("/feature deployment-feature-required");
+    issues.push({
+      kind: "failure",
+      detail: "/feature deployment-feature-required",
+    });
   }
-  for (const issue of schemaBreaks(
+  for (const { path, rule } of schemaBreaks(
     "input",
     old.inputSchema,
     next.inputSchema,
   )) {
-    failures.push(`/inputSchema${issue.path} ${issue.rule}`);
+    issues.push({ kind: "failure", detail: `/inputSchema${path} ${rule}` });
   }
   if (old.outputSchema !== undefined) {
     if (next.outputSchema === undefined) {
-      failures.push("/outputSchema output-schema-removed");
+      issues.push({
+        kind: "failure",
+        detail: "/outputSchema output-schema-removed",
+      });
     } else {
-      for (const issue of schemaBreaks(
+      for (const { path, rule } of schemaBreaks(
         "output",
         old.outputSchema,
         next.outputSchema,
       )) {
-        failures.push(`/outputSchema${issue.path} ${issue.rule}`);
+        // Both rules require a restriction on this node in the released schema.
+        const transition =
+          rule === LEGACY_OUTPUT_ADDITIONS.closedObjectProperty ||
+          rule === LEGACY_OUTPUT_ADDITIONS.enumValue;
+        issues.push({
+          kind: transition ? "transition" : "failure",
+          detail: `/outputSchema${path} ${rule}`,
+        });
       }
     }
   }
-  return failures;
+  return issues;
 };
 
-export const releasedSurfaceBreaks = (previous: unknown, current: unknown) => {
+export const compareReleasedSurface = (previous: unknown, current: unknown) => {
   const old = parseSurface(previous);
   const next = parseSurface(current);
-  const compared = new Map<string, string[]>();
-  const diagnostics = new Map<string, string>();
+  const compared = new Map<string, CompatibilityIssue[]>();
+  const diagnostics = {
+    failure: new Map<string, string>(),
+    transition: new Map<string, string>(),
+  };
+  const report = (
+    issue: CompatibilityIssue,
+    location: string,
+    enabled: string[],
+  ) => {
+    const key = `${location} ${issue.detail}`;
+    const group = diagnostics[issue.kind];
+    if (!group.has(key)) {
+      group.set(
+        key,
+        `${key} (enabled features: ${enabled.join(",") || "none"})`,
+      );
+    }
+  };
+
+  // After the first open release, also guard new tools, modes and properties.
+  // They have no previously listed schema node for the pairwise diff to visit.
+  if (
+    old.tools.every(
+      (tool) => outputRestrictions(tool.outputSchema).length === 0,
+    )
+  ) {
+    const restrictions = next.tools.map((tool) =>
+      outputRestrictions(tool.outputSchema),
+    );
+    for (const [mode, { lists }] of next.profiles) {
+      for (const { enabled, byName } of lists) {
+        for (const [name, index] of byName) {
+          for (const { path, rule } of restrictions[index] ??
+            panic("Missing tool variant")) {
+            report(
+              { kind: "failure", detail: `/outputSchema${path} ${rule}` },
+              `${mode} ${name}`,
+              enabled,
+            );
+          }
+        }
+      }
+    }
+  }
+
   for (const [mode, profiles] of old.profiles) {
     const targets = next.profiles.get(mode);
     // Releases can introduce or retire a feature flag. Compare every pair
@@ -104,45 +167,49 @@ export const releasedSurfaceBreaks = (previous: unknown, current: unknown) => {
         for (const [name, index] of source.byName) {
           const nextIndex = target?.byName.get(name);
           const pair = `${index}/${nextIndex ?? "removed"}`;
-          let failures = compared.get(pair);
-          if (!failures) {
-            failures =
+          let issues = compared.get(pair);
+          if (!issues) {
+            issues =
               nextIndex === undefined
-                ? ["/ tool-removed"]
+                ? [{ kind: "failure", detail: "/ tool-removed" }]
                 : compareTool(
                     old.tools[index] ?? panic("Missing released tool"),
                     next.tools[nextIndex] ?? panic("Missing current tool"),
                   );
-            compared.set(pair, failures);
+            compared.set(pair, issues);
           }
-          for (const failure of failures) {
-            const key = `${mode} ${name} ${failure}`;
-            if (!diagnostics.has(key)) {
-              const enabled = [
-                ...new Set([...source.enabled, ...(target?.enabled ?? [])]),
-              ].toSorted();
-              diagnostics.set(
-                key,
-                `${key} (enabled features: ${enabled.join(",") || "none"})`,
-              );
-            }
+          for (const issue of issues) {
+            const enabled = [
+              ...new Set([...source.enabled, ...(target?.enabled ?? [])]),
+            ].toSorted();
+            report(issue, `${mode} ${name}`, enabled);
           }
         }
       }
     }
   }
-  return [...diagnostics.values()].toSorted();
+  return {
+    failures: [...diagnostics.failure.values()].toSorted(),
+    transitions: [...diagnostics.transition.values()].toSorted(),
+  };
 };
 
 if (import.meta.main) {
-  const [previous, current] = Bun.argv.slice(2);
-  if (!previous || !current) {
-    panic("Expected released and current MCP surface paths");
+  const [previous, current, baseline] = Bun.argv.slice(2);
+  if (!previous || !current || !baseline) {
+    panic(
+      "Expected released and current MCP surface paths and the baseline release tag",
+    );
   }
-  const failures = releasedSurfaceBreaks(
+  const { failures, transitions } = compareReleasedSurface(
     await Bun.file(previous).json(),
     await Bun.file(current).json(),
   );
+  for (const issue of transitions) {
+    process.stderr.write(
+      `${issue} — transition: breaks sessions listed from ${baseline}; clears when a release with open output schemas ships\n`,
+    );
+  }
   for (const failure of failures) {
     process.stderr.write(`${failure}\n`);
   }

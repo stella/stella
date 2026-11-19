@@ -42,4 +42,4 @@ unset GH_TOKEN GITHUB_TOKEN
 bun --cwd=apps/api run generate:capability-runtime
 bun --cwd=apps/api --env-file=.env.example scripts/export-mcp-surface.ts "$scratch/current.json"
 echo "Comparing the current MCP surface with $tag."
-bun scripts/check-mcp-surface-compat.ts "$scratch/$asset" "$scratch/current.json"
+bun scripts/check-mcp-surface-compat.ts "$scratch/$asset" "$scratch/current.json" "$tag"
