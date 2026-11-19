@@ -2,6 +2,7 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { CADES_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+import { compareCodeUnit } from "@stll/collation";
 
 import { readCadesPdf, readCadesPreview } from "@/api/lib/files/cades-preview";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -43,7 +44,9 @@ describe("CAdES file reading", () => {
     });
     expect(
       preview.layers.map(({ signers }) =>
-        signers.map((signer) => signer.name).toSorted(),
+        signers
+          .map((signer) => signer.name)
+          .toSorted((left, right) => compareCodeUnit(left ?? "", right ?? "")),
       ),
     ).toEqual([
       ["Example first signer", "Example second signer"],

@@ -62,29 +62,28 @@ const runCadesWorker = async (
     return Result.ok(result.value);
   }
 
-  switch (result.error.exitCode) {
-    case CADES_WORKER_EXIT.unreadable:
-      return Result.err(
-        unavailable(
-          mode === CADES_WORKER_MODE.pdf
-            ? "The CAdES file does not contain a readable PDF"
-            : "The CAdES file could not be read",
-        ),
-      );
-    case CADES_WORKER_EXIT.rejected:
-      return Result.err(
-        unavailable("The embedded file did not pass the security scan"),
-      );
-    default:
-      return Result.err(
-        new HandlerError({
-          status: 503,
-          code: "upstream_unavailable",
-          message: "The CAdES reader is unavailable",
-          cause: result.error,
-        }),
-      );
+  if (result.error.exitCode === CADES_WORKER_EXIT.unreadable) {
+    return Result.err(
+      unavailable(
+        mode === CADES_WORKER_MODE.pdf
+          ? "The CAdES file does not contain a readable PDF"
+          : "The CAdES file could not be read",
+      ),
+    );
   }
+  if (result.error.exitCode === CADES_WORKER_EXIT.rejected) {
+    return Result.err(
+      unavailable("The embedded file did not pass the security scan"),
+    );
+  }
+  return Result.err(
+    new HandlerError({
+      status: 503,
+      code: "upstream_unavailable",
+      message: "The CAdES reader is unavailable",
+      cause: result.error,
+    }),
+  );
 };
 
 export const readCadesPreview = async (

@@ -74,16 +74,19 @@ export const wrapP7m = async (
   if (bytes.byteLength === 0) {
     signedData.encapContentInfo.eContent = new asn1js.OctetString();
   }
-  await Promise.all(selected.map(({ privateKey }, index) =>
-    signedData.sign(privateKey, index, "SHA-256", bytes.slice().buffer),
+  await Promise.all(selected.map(async ({ privateKey }, index) =>
+    await signedData.sign(privateKey, index, "SHA-256", bytes.slice().buffer),
   ));
   if (omitSignerCertificates) {
     // The second certificate has the same serial number and a different issuer.
     signedData.certificates = materials.slice(1).map(({ certificate }) => certificate);
   }
-  const schema = signedData.toSchema(true);
+  const schema: unknown = signedData.toSchema(true);
+  if (!(schema instanceof asn1js.Sequence)) {
+    return panic("Expected a CMS SignedData sequence");
+  }
   if (!detached) {
-    const encapsulatedContent = schema.valueBlock.value.at(2);
+    const encapsulatedContent: unknown = schema.valueBlock.value.at(2);
     if (!(encapsulatedContent instanceof asn1js.Sequence)) {
       return panic("Expected a CMS EncapsulatedContentInfo sequence");
     }

@@ -28,17 +28,18 @@ export const cadesPreviewEndpoint = createSafeHandler(
     recordAuditEvent,
   }) {
     const result = yield* Result.await(
-      Result.tryPromise(() =>
-        readCadesFile(
-          {
-            fieldId,
-            scopedDb,
-            workspaceId,
-            organizationId: session.activeOrganizationId,
-            recordAuditEvent,
-          },
-          readCadesPreview,
-        ),
+      Result.tryPromise(
+        async () =>
+          await readCadesFile(
+            {
+              fieldId,
+              scopedDb,
+              workspaceId,
+              organizationId: session.activeOrganizationId,
+              recordAuditEvent,
+            },
+            readCadesPreview,
+          ),
       ),
     );
     return Result.ok(yield* result);
@@ -55,17 +56,18 @@ export const cadesContentEndpoint = createSafeHandler(
     recordAuditEvent,
   }) {
     const result = yield* Result.await(
-      Result.tryPromise(() =>
-        readCadesFile(
-          {
-            fieldId,
-            scopedDb,
-            workspaceId,
-            organizationId: session.activeOrganizationId,
-            recordAuditEvent,
-          },
-          readCadesPdf,
-        ),
+      Result.tryPromise(
+        async () =>
+          await readCadesFile(
+            {
+              fieldId,
+              scopedDb,
+              workspaceId,
+              organizationId: session.activeOrganizationId,
+              recordAuditEvent,
+            },
+            readCadesPdf,
+          ),
       ),
     );
     const bytes = yield* result;

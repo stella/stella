@@ -522,12 +522,13 @@ const readMaxCharsArgument = (value: string | undefined): number => {
 };
 
 const extractCadesPayloadText = async (file: ScannedFile, maxChars: number) => {
-  const content = await Result.tryPromise(() =>
-    extract({
-      fileBytes: new Uint8Array(file.bytes),
-      mimeType: file.mimeType,
-      maxChars,
-    }),
+  const content = await Result.tryPromise(
+    async () =>
+      await extract({
+        fileBytes: new Uint8Array(file.bytes),
+        mimeType: file.mimeType,
+        maxChars,
+      }),
   );
   if (content.isOk()) {
     return content.value;
@@ -545,6 +546,8 @@ const extractCadesPayloadText = async (file: ScannedFile, maxChars: number) => {
         // Signer metadata remains readable when the embedded document has no
         // extractable text. Only converter-declared outcomes can take this path.
         return Result.ok(null);
+      default:
+        break;
     }
   }
   return Result.err(content.error);

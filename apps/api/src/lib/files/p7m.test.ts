@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
 
 import { P7M_LIMITS, parseP7m } from "./p7m";
@@ -33,7 +35,9 @@ test("reports co-signers and nested signers from outermost to innermost", async 
   expect(Array.from(parsed.value.bytes)).toEqual(Array.from(binary));
   expect(
     parsed.value.layers.map(({ signers }) =>
-      signers.map(({ name }) => name).toSorted(),
+      signers
+        .map(({ name }) => name)
+        .toSorted((left, right) => compareCodeUnit(left ?? "", right ?? "")),
     ),
   ).toEqual([
     ["Example first signer", "Example second signer"],
