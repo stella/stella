@@ -217,11 +217,18 @@ const unique = (leaves: readonly string[]): string[] => [
 
 /**
  * One word's leaves on the decision field: the form typed (which is what a
- * decision in a language with no stemmer holds) and its stem (what one with a
- * stemmer holds), and the same two for each single-word legal alternative. A
- * multi-word alternative is a phrase, which the field cannot answer; its words
- * stay with the passages. Publisher leaves name the word in the keywords as
- * typed and in the headnote's stems.
+ * decision in a language with no stemmer holds) and its stem under every
+ * stemmer the searched documents were written with (what each of those
+ * holds), and the same for each single-word legal alternative. A multi-word
+ * alternative is a phrase, which the field cannot answer; its words stay
+ * with the passages. Publisher leaves name the word in the keywords as typed
+ * and in the headnote's stems.
+ *
+ * The stemmers are the searched documents' (`documentStems`), never the one
+ * language the reader is taken to write in: a search with no language (no
+ * country, or the European index without a language filter) has none, yet
+ * each of its documents holds only its own language's stems, so a typed form
+ * alone would miss every inflection.
  */
 const wordLeaves = (
   token: CorpusQueryToken,
@@ -235,7 +242,11 @@ const wordLeaves = (
     legalAlternatives: CorpusTermExpander | null;
   },
 ): RankedDecisionWord => {
-  const language = fields.stemming?.language ?? null;
+  const stems = fields.documentStems;
+  const stemmed = (form: string): string[] =>
+    stems === null
+      ? []
+      : stems.languages.map((language) => stemLegalTerm(form, language));
   const forms = [
     token.value,
     ...(legalAlternatives === null
@@ -244,25 +255,21 @@ const wordLeaves = (
     ).filter((alternative) => corpusTokens(alternative).length === 1),
   ];
   const decisionLeaves = unique(
-    forms.flatMap((form) => [
-      `${decisionField}:${quoteCorpusValue(form)}`,
-      ...(language === null
-        ? []
-        : [
-            `${decisionField}:${quoteCorpusValue(stemLegalTerm(form, language))}`,
-          ]),
-    ]),
+    forms.flatMap((form) =>
+      [form, ...stemmed(form)].map(
+        (term) => `${decisionField}:${quoteCorpusValue(term)}`,
+      ),
+    ),
   );
-  const headnoteStemField = fields.stemming?.fields.at(1);
   const boostedLeaves = unique([
     ...fields.keywordFields.map(
       (field) => `${field}:${quoteCorpusValue(token.value)}`,
     ),
-    ...(language === null || headnoteStemField === undefined
+    ...(stems === null
       ? []
-      : [
-          `${headnoteStemField}:${quoteCorpusValue(stemLegalTerm(token.value, language))}`,
-        ]),
+      : stemmed(token.value).map(
+          (stem) => `${stems.headnoteField}:${quoteCorpusValue(stem)}`,
+        )),
   ]);
   return { decisionLeaves, boostedLeaves };
 };
