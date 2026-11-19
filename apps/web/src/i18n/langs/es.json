@@ -1494,6 +1494,10 @@
       "title": "La búsqueda no está disponible temporalmente"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Busque por el número de expediente o el ECLI de la resolución, si lo conoce.",
+        "message": "No se ha encontrado ninguna resolución que corresponda exactamente a esta referencia de repertorio."
+      },
       "noHits": {
         "hint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
         "message": "Nada coincide con las palabras que exigió esta búsqueda."
@@ -2120,6 +2124,7 @@
     },
     "newChat": "Nuevo chat",
     "newChatInSidePanel": "El chat nuevo está disponible en el panel lateral",
+    "nextSteps": "Próximos pasos",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
@@ -2226,7 +2231,6 @@
       "chipLabel": "Se ejecuta en: {place}",
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
-      "harnessModels": "Modelos de {harness}",
       "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",
@@ -2236,7 +2240,6 @@
       "localFolderSelection": "Tu ordenador · {harness} · {folder}",
       "localPlace": "Tu ordenador, {harness}",
       "localSelection": "Tu ordenador · {harness}",
-      "modelDefault": "Predeterminado (recomendado)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
       "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
@@ -2310,7 +2313,6 @@
     "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
-    "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
     "suggestingTitle": "Sugiriendo un título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2326,7 +2328,6 @@
       "searchPlaceholder": "Buscar un chat…",
       "trigger": "Cambiar de chat"
     },
-    "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -2417,6 +2418,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -2445,6 +2447,7 @@
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
       "user_message": "Enviado mientras el agente trabajaba",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -2748,6 +2751,7 @@
     "done": "Hecho",
     "doubleClickToRename": "Haz doble clic para renombrar",
     "download": "Descargar",
+    "downloadOriginal": "Descargar el original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimiento cancelado. {itemName} no se movió.} other {Movimiento cancelado. {itemName} no se movieron.} many {Movimiento cancelado. {itemName} no se movieron.}}",
       "droppedOn": "{count, plural, one {Se soltó {itemName} sobre {destinationName}.} other {Se soltaron {itemName} sobre {destinationName}.} many {Se soltaron {itemName} sobre {destinationName}.}}",
@@ -3335,6 +3339,8 @@
       "contact": "Contacto: {name}",
       "deliveredAt": "Entregado en el buzón",
       "delivery": "Entrega",
+      "deliveryEvents": "Historial de entrega",
+      "deliveryReceipt": "Acuse de recibo",
       "directionUnknown": "Dirección desconocida",
       "messageId": "ID del mensaje",
       "moreContacts": "Hay más contactos asociados a este buzón de datos.",
@@ -3347,6 +3353,8 @@
       "sent": "Enviado",
       "statedInFile": "Mensaje de buzón de datos (según el archivo)",
       "toHands": "A la atención de {name}",
+      "unlinkedFiles": "Para abrir los archivos adjuntos que aparecen sin enlace, descargue el archivo ZFO original.",
+      "unreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "uploaded": "Mensaje de buzón de datos subido"
     },
     "deliveredBy": "Entregado por <address>{sender}</address>",
@@ -4049,6 +4057,12 @@
     "versionCreatedDescription": "Se creó la versión {versionNumber}. Todos pueden seguir editando.",
     "versionCreatedTitle": "Versión creada",
     "viewOnly": "Solo lectura"
+  },
+  "guidance": {
+    "notCaseLaw": "Orientación emitida por un organismo regulador. No es una resolución judicial.",
+    "openAtPublisher": "Abrir en el sitio del editor",
+    "source": "Fuente: {attribution}",
+    "textUnavailable": "El texto de este documento no está disponible aquí. Consúltelo en el sitio del editor."
   },
   "guides": {
     "action": {

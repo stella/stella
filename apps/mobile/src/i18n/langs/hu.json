@@ -186,6 +186,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -208,6 +209,7 @@
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
     "localRun": {
@@ -524,6 +526,7 @@
     "title": "Dokumentum",
     "failedTitle": "A dokumentumot nem sikerült megnyitni",
     "failure": {
+      "dataBoxUnreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "offline": "Nincs internetkapcsolat. Csatlakozzon az internethez, és próbálja újra.",
       "noFile": "Ehhez a dokumentumhoz még nincs fájl.",
       "failed": "Hiba történt a megnyitáskor. Próbálja újra egy kis idő múlva.",
@@ -531,6 +534,7 @@
       "android": "Az Android-alkalmazásban még nem lehet dokumentumokat megnyitni."
     },
     "retry": "Újra",
+    "openOriginal": "Eredeti megnyitása",
     "preview": "Előnézet megnyitása",
     "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",

@@ -148,6 +148,7 @@ export const docketFamilyScenario = (number: number) => {
     // split off the court's reference, alone or with the reference itself.
     decision(ids.sheet120, dockets.sheets, administrative, "2010-05-03", null, {
       sheetNumber: "120",
+      senate: "rozšířený senát",
     }),
     decision(ids.sheet131, dockets.sheets, administrative, "2010-06-14", null, {
       publishedCaseNumber: `${dockets.sheets} - 131`,
@@ -470,6 +471,10 @@ export const describeDocketFamilyIdentity = (
           basis: "selector",
         });
       }
+      expect(await lookedUp(`${dockets.sheets}-120`)).toMatchObject({
+        status: "unique",
+        decision: { senate: "rozšířený senát" },
+      });
     });
 
     test("a sheet names its decision in a file larger than a read keeps", async () => {

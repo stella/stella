@@ -17,6 +17,9 @@ const ruleFiles = [...new Bun.Glob("*.yar").scanSync(YARA_DIR)];
 // missing rules deployment would pass silently. Exported for the image smoke
 // probe (scripts/image-smoke.ts), which asserts the count is non-zero.
 export const yaraRuleFileCount = ruleFiles.length;
+if (yaraRuleFileCount === 0) {
+  panic("File scanner has no YARA rules");
+}
 
 const ruleSource = ruleFiles
   .map((f) => readFileSync(path.join(YARA_DIR, f), "utf-8"))

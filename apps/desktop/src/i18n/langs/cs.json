@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Jazyk diktování",
-      "description": "Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "description": "Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače. Je-li jich víc, každé slovo se rozpozná v jazyce, ve kterém ho vyslovíte.",
       "automatic": "Automaticky",
       "automaticWith": "Automaticky ({languages})",
       "noResults": "Žádné jazyky nenalezeny"
+    },
+    "customWords": {
+      "group": "Vlastní slova",
+      "title": "Slova a jména, která má stella psát správně",
+      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Model řeči v tomto počítači je nepoužívá.",
+      "count": "{count, number} z {limit, number}",
+      "input": "Přidat slovo nebo jméno",
+      "add": "Přidat",
+      "remove": "Odebrat {word}",
+      "duplicate": "Toto slovo už v seznamu je.",
+      "full": "Seznam pojme nejvýše {limit, number} slov. Chcete-li přidat další, nějaké odeberte.",
+      "failed": "Seznam se nepodařilo uložit. Zkuste to znovu."
     },
     "modelNeeded": "Řečový model běží na tomto počítači.",
     "speechModel": "Model řeči",
@@ -693,6 +705,11 @@
       "description": "Soubor z diktafonu, hlasovou poznámku nebo záznam jednání až do 4 hodin převede na text.",
       "open": "Otevřít",
       "failed": "Okno se nepodařilo otevřít. Zkuste to znovu."
+    },
+    "preview": {
+      "label": "Co jste zatím nadiktovali",
+      "listening": "Poslouchám…",
+      "finishing": "Dokončuji…"
     }
   },
   "shortcut": {
@@ -971,6 +988,14 @@
       "protected": "Tato složka obsahuje vlastní data stelly nebo složku s dovednostmi, takže v ní agent pracovat nemůže.",
       "unreadable": "Tuto složku se nepodařilo přečíst."
     }
+  },
+  "keepAwake": {
+    "title": "Udržet v provozu",
+    "enabled": "Nechat počítač vzhůru, dokud pracují agenti",
+    "description": "Dokud v tomto počítači pracuje agent, počítač při nečinnosti neusne, takže dlouhé úlohy doběhnou. Displej se může dál vypínat. Notebook Mac po zavření víka usne i tak.",
+    "onBattery": "I na baterii",
+    "onBatteryDescription": "Když je tato volba vypnutá, počítač na baterii usíná jako obvykle, i když agent pracuje.",
+    "errorSave": "Toto nastavení se nepodařilo uložit. Zkuste to znovu."
   },
   "transcribe": {
     "title": "Přepsat nahrávku",

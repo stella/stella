@@ -1494,6 +1494,10 @@
       "title": "Search is temporarily unavailable"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Search by the decision’s case number or ECLI, if known.",
+        "message": "No exact decision was found for this collection citation."
+      },
       "noHits": {
         "hint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
         "message": "Nothing matched the words this search required."
@@ -2120,6 +2124,7 @@
     },
     "newChat": "New chat",
     "newChatInSidePanel": "The new chat is available in the side panel",
+    "nextSteps": "Next steps",
     "noPromptPresetOnly": "No message, preset only",
     "noThreads": "No conversations yet",
     "officeCitationUnavailable": "This citation is no longer available.",
@@ -2226,7 +2231,6 @@
       "chipLabel": "Runs on: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Runs in the cloud. Works anywhere.",
-      "harnessModels": "{harness} models",
       "hintCheck": "Check it in stella desktop",
       "hintInstall": "Install it from stella desktop",
       "hintOffline": "Open stella desktop on your computer",
@@ -2236,7 +2240,6 @@
       "localFolderSelection": "Your computer · {harness} · {folder}",
       "localPlace": "Your computer, {harness}",
       "localSelection": "Your computer · {harness}",
-      "modelDefault": "Default (recommended)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Opening stella desktop. If it does not open, open it on your computer and check {harness} under Settings › General › AI subscriptions.",
       "stepsInstall": "Opening stella desktop. If it does not open, open it on your computer and, under Settings › General, choose Install for {harness}.",
@@ -2310,7 +2313,6 @@
     "stopping": "Stopping…",
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
-    "suggestedFollowupsLabel": "Suggested follow-up prompts",
     "suggestingTitle": "Suggesting a title…",
     "suggestionSeverity": {
       "style": "Style",
@@ -2326,7 +2328,6 @@
       "searchPlaceholder": "Find a chat…",
       "trigger": "Switch chat"
     },
-    "tabToAsk": "→ to ask: \"{prompt}\"",
     "tableChart": {
       "bar": "Bar",
       "kind": "Chart type",
@@ -2417,6 +2418,7 @@
       "save_document": "Save document",
       "save_matter": "Save matter",
       "save_playbook": "Save playbook",
+      "save_skill_package": "Save skill",
       "save_task": "Save task",
       "save_template": "Save template",
       "save_time_entry": "Save time entry",
@@ -2445,6 +2447,7 @@
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
       "user_message": "Sent while the agent was working",
+      "validate_skill_package": "Check skill",
       "web_search": "Searching the web"
     },
     "toolCall": {
@@ -2748,6 +2751,7 @@
     "done": "Done",
     "doubleClickToRename": "Double-click to rename",
     "download": "Download",
+    "downloadOriginal": "Download original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Move cancelled. {itemName} was not moved.} other {Move cancelled. {itemName} were not moved.}}",
       "droppedOn": "{count, plural, one {Dropped {itemName} on {destinationName}.} other {Dropped {itemName} on {destinationName}.}}",
@@ -3335,6 +3339,8 @@
       "contact": "Contact: {name}",
       "deliveredAt": "Delivered to the box",
       "delivery": "Delivery terms",
+      "deliveryEvents": "Delivery events",
+      "deliveryReceipt": "Delivery receipt",
       "directionUnknown": "Direction unknown",
       "messageId": "Message ID",
       "moreContacts": "More contacts match this data box.",
@@ -3347,6 +3353,8 @@
       "sent": "Outgoing",
       "statedInFile": "Data-box message (as stated in the file)",
       "toHands": "To the attention of {name}",
+      "unlinkedFiles": "To open attachments shown without a link, download the original ZFO file.",
+      "unreadable": "This file could not be read as a data-box message or delivery receipt.",
       "uploaded": "Uploaded data-box message"
     },
     "deliveredBy": "Delivered by <address>{sender}</address>",
@@ -4049,6 +4057,12 @@
     "versionCreatedDescription": "Version {versionNumber} was created. Everyone can keep editing.",
     "versionCreatedTitle": "Version created",
     "viewOnly": "View only"
+  },
+  "guidance": {
+    "notCaseLaw": "Guidance issued by a regulator. This is not a court decision.",
+    "openAtPublisher": "Open at the publisher",
+    "source": "Source: {attribution}",
+    "textUnavailable": "The text of this document is not available here. Read it at the publisher."
   },
   "guides": {
     "action": {

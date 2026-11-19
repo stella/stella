@@ -96,6 +96,7 @@ import {
   readUnavailable,
 } from "@/api/lib/errors/read-outcome";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import type {
@@ -258,6 +259,8 @@ export type McpRequestContext = {
     readLegislationProvisionVersions?: typeof readLegislationProvisionVersions;
     readVersionBlocks?: typeof readVersionBlocks;
     resolveAnnotationTarget?: typeof resolveAnnotationTarget;
+    /** Replaces the registered legal file readers, which open stored bytes in a worker. */
+    legalFileReaders?: typeof LEGAL_FILE_READERS;
     readWorkspaceHandler?: typeof readWorkspaceHandler;
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;

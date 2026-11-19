@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_ID_HEADER,
@@ -36,6 +37,7 @@ import {
   type ActiveFileModelBinding,
   type ActiveFileSourceForModel,
   getActiveFileModelBinding,
+  getActiveFileSourceForModel,
 } from "@/api/handlers/chat/active-file-model-source";
 import {
   type ActiveChatSkillContext,
@@ -283,6 +285,7 @@ import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-m
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
 import type { ResponseHeaders } from "@/api/http/context";
+import { HTTP_FAILURE } from "@/api/http/errors";
 import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
@@ -341,7 +344,9 @@ import type { UserDispatchSource } from "@/api/lib/db/audit-recording";
 import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
@@ -361,7 +366,10 @@ import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
-import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import {
+  extractFileTextResult,
+  resolveExtractionMimeType,
+} from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { memberSessionStreamBinding } from "@/api/lib/sse";
 import {
@@ -4163,6 +4171,7 @@ const prepareChatContext = async ({
         activeFile,
         hydratedMessages,
         organizationId,
+        recordAuditEvent,
         safeDb,
         sendMode,
         workspaceId,
@@ -4200,6 +4209,7 @@ type AttachActiveFileFallbackWhenExtractionIsEmptyProps = {
   activeFile: IncomingActiveFile | undefined;
   hydratedMessages: ChatMessage[];
   organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   workspaceId: SafeId<"workspace"> | null;
@@ -4209,11 +4219,12 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
   activeFile,
   hydratedMessages,
   organizationId,
+  recordAuditEvent,
   safeDb,
   sendMode,
   workspaceId,
 }: AttachActiveFileFallbackWhenExtractionIsEmptyProps): Promise<
-  Result<ChatMessage[], HandlerError<422 | 500> | SafeDbError>
+  Result<ChatMessage[], HandlerError<404 | 422 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
     if (activeFile === undefined) {
@@ -4235,10 +4246,11 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
       return Result.ok(hydratedMessages);
     }
 
+    const fieldId = activeFile.fileFieldId;
     const activeFileBinding = yield* Result.await(
       resolveActiveFileModelBinding({
         activeFile,
-        fileFieldId: activeFile.fileFieldId,
+        fileFieldId: fieldId,
         safeDb,
         workspaceId,
       }),
@@ -4258,6 +4270,39 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
         workspaceId,
       }),
     );
+    // A withdrawal during storage access or parsing must fence the model delivery too.
+    const delivered = yield* Result.await(
+      safeDb(async (tx) => {
+        const live = await lockLiveVersionField(tx, fieldId, workspaceId);
+        if (
+          live?.content.type !== "file" ||
+          live.entityId !== activeFile.entityId ||
+          getActiveFileSourceForModel(live.content)?.fileId !==
+            activeFileBinding.source.fileId ||
+          (activeFileBinding.version === "current" &&
+            live.currentVersionId !== live.versionId)
+        ) {
+          return false;
+        }
+        await recordAuditEvent(tx, {
+          action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: live.entityId,
+          workspaceId,
+          metadata: { fieldId, destination: "chat", disposition: "inline" },
+        });
+        return true;
+      }),
+    );
+    if (!delivered) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          code: HTTP_FAILURE.notFound,
+          message: "The selected file version is no longer available",
+        }),
+      );
+    }
     const nextMessages = [...hydratedMessages];
     const latestUserMessage = hydratedMessages.at(latestUserIndex);
     if (!latestUserMessage) {
@@ -4455,14 +4500,28 @@ const readActiveFileFallbackForModel = async ({
     }
 
     if (source.type === "extracted-text") {
-      const extracted = await extractFileTextResult(storedSource);
+      const mimeType = resolveExtractionMimeType(source);
+      const extracted = await extractFileTextResult(
+        storedSource.withMimeType(mimeType),
+        {
+          includeContainerAttachments: true,
+        },
+      );
       if (Result.isError(extracted)) {
         return Result.err(
-          new HandlerError({
-            status: 500,
-            message: "Failed to extract active file for AI context",
-            cause: extracted.error,
-          }),
+          new HandlerError(
+            extracted.error.workerErrorClass === FileScanRejectedError.name
+              ? {
+                  status: 422,
+                  code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+                  message: "An embedded file was rejected by the security scan",
+                }
+              : {
+                  status: 500,
+                  message: "Failed to extract active file for AI context",
+                  cause: extracted.error,
+                },
+          ),
         );
       }
       if (extracted.value === null) {

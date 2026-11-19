@@ -248,6 +248,33 @@ const openDocumentMark = ({
 };
 
 export const DOCUMENT_MARKS = {
+  dataBox: {
+    viewBox: "0 0 24 24",
+    gradients: [],
+    shapes: [
+      {
+        tag: "rect",
+        attrs: {
+          x: "1",
+          y: "3",
+          width: "22",
+          height: "18",
+          rx: "2",
+          fill: "#245c89",
+        },
+      },
+      {
+        tag: "path",
+        attrs: {
+          d: "m2 5 9 6a2 2 0 0 0 2 0l9-6M5 14h3l-3 4h3m2 0v-4h3m-3 2h2m3-2h3v4h-3z",
+          fill: "none",
+          stroke: "#fff",
+          strokeWidth: "1.3",
+          strokeLinejoin: "round",
+        },
+      },
+    ],
+  },
   pdf: {
     viewBox: "0 0 75.320129 92.604164",
     gradients: [],

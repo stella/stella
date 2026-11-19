@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import * as v from "valibot";
 
 import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -21,7 +20,12 @@ import {
   type SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
-import { listingOnlyCoverage, selectorSourceFields } from "./listing-only";
+import {
+  listingOnlyCoverage,
+  parseListingOffsetCursor,
+  resumeListingOffset,
+  selectorSourceFields,
+} from "./listing-only";
 import { publisherUrl as sharedPublisherUrl } from "./publisher-url";
 
 const ORIGIN = "https://dataprotection.gov.sk";
@@ -33,16 +37,6 @@ const HTML_TYPES = ["text/html", "application/xhtml+xml"] as const;
 const PDF_TYPES = ["application/pdf", "application/octet-stream"] as const;
 /** Reports run to a few megabytes; five keep a page far below its raw byte limit. */
 const DISCOVERY_BATCH_LIMIT = 5;
-/** `<offset>:<listing digest>`; the digest ties the offset to the index order it counts. */
-const cursorSchema = v.strictTuple([
-  v.pipe(
-    v.string(),
-    v.regex(/^(?:0|[1-9]\d*)$/u),
-    v.toNumber(),
-    v.safeInteger(),
-  ),
-  v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
-]);
 
 const invalid = (message: string) =>
   Result.err(new SoftLawIngestionError({ message }));
@@ -223,10 +217,7 @@ export const uoouSkAdapter = {
   },
   discover: async ({ cursor, fetch: read }) =>
     await Result.gen(async function* () {
-      const position = v.safeParse(
-        v.nullable(cursorSchema),
-        cursor?.split(":") ?? null,
-      );
+      const position = parseListingOffsetCursor(cursor);
       if (!position.success) {
         return yield* invalid("Invalid ÚOOÚ SR discovery cursor");
       }
@@ -250,13 +241,7 @@ export const uoouSkAdapter = {
       const digest = sha256Hex(
         JSON.stringify(listing.reports.map((report) => report.url)),
       );
-      // A changed index shifts the rows an offset counts; restart the walk so
-      // no report moves past the checkpoint unseen.
-      const [checkpointOffset, checkpointDigest] = position.output ?? [
-        0,
-        digest,
-      ];
-      const offset = checkpointDigest === digest ? checkpointOffset : 0;
+      const offset = resumeListingOffset(position.output, digest);
       const batch = listing.reports.slice(
         offset,
         offset + DISCOVERY_BATCH_LIMIT,

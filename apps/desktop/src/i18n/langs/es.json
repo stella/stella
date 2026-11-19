@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Idioma del dictado",
-      "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador.",
+      "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador. Si hay varios, cada palabra se reconoce en el idioma en que la pronuncia.",
       "automatic": "Automático",
       "automaticWith": "Automático ({languages})",
       "noResults": "No se encontraron idiomas"
+    },
+    "customWords": {
+      "group": "Palabras propias",
+      "title": "Palabras y nombres que stella debe escribir correctamente",
+      "description": "Por ejemplo, nombres de clientes o términos en inglés que usa al hablar otro idioma. Se guardan en este ordenador para esta cuenta y solo se envían con su dictado, a la transcripción con stella AI y a la corrección con IA. El modelo de voz de este ordenador no los usa.",
+      "count": "{count, number} de {limit, number}",
+      "input": "Añadir una palabra o un nombre",
+      "add": "Añadir",
+      "remove": "Quitar {word}",
+      "duplicate": "Esta palabra ya está en la lista.",
+      "full": "La lista admite como máximo {limit, number} palabras. Quite una para añadir otra.",
+      "failed": "No se ha podido guardar la lista. Inténtelo de nuevo."
     },
     "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
     "speechModel": "Modelo de voz",
@@ -693,6 +705,11 @@
       "description": "Convierte en texto un archivo de dictáfono, una nota de voz o la grabación de una reunión de hasta 4 horas.",
       "open": "Abrir",
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo."
+    },
+    "preview": {
+      "label": "Lo que ha dictado hasta ahora",
+      "listening": "Escuchando…",
+      "finishing": "Terminando…"
     }
   },
   "shortcut": {
@@ -971,6 +988,14 @@
       "protected": "Esta carpeta contiene datos propios de stella o una carpeta de habilidades, así que el agente no puede trabajar en ella.",
       "unreadable": "No se ha podido leer esta carpeta."
     }
+  },
+  "keepAwake": {
+    "title": "Mantener activo",
+    "enabled": "Mantener este ordenador activo mientras trabajan los agentes",
+    "description": "Mientras un agente trabaja en este ordenador, no entra en reposo por inactividad, así que las tareas largas siguen en marcha. La pantalla puede seguir apagándose. Un portátil Mac entra en reposo de todos modos al cerrar la tapa.",
+    "onBattery": "También con batería",
+    "onBatteryDescription": "Si está desactivado, el ordenador entra en reposo como siempre cuando funciona con batería, aunque un agente esté trabajando.",
+    "errorSave": "No se ha podido guardar este ajuste. Inténtelo de nuevo."
   },
   "transcribe": {
     "title": "Transcribir una grabación",

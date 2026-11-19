@@ -664,6 +664,11 @@ impl DesktopTelemetry {
         report.window = DesktopTelemetryWindow::Activity;
         report.detail = None;
       }
+      // The panel shows the transcript, so its reports carry codes only.
+      crate::dictation_preview::PREVIEW_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Main;
+        report.detail = None;
+      }
       crate::onboarding::ONBOARDING_WINDOW_LABEL => {
         report.window = DesktopTelemetryWindow::Onboarding;
       }
@@ -1515,6 +1520,7 @@ mod tests {
       ("clipboard", DesktopTelemetryWindow::Clipboard),
       ("clipboard-editor", DesktopTelemetryWindow::ClipboardEditor),
       ("activity", DesktopTelemetryWindow::Activity),
+      ("dictation-preview", DesktopTelemetryWindow::Main),
     ] {
       for error_name in ["TypeError", "Error", "secret_identifier"] {
         let (sender, mut receiver) = mpsc::channel(1);
