@@ -588,7 +588,17 @@
     "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti.",
     "lockScreenTitle": "Lukustuskuva",
     "timerDetails": "Taimeri üksikasjad",
-    "timerDetailsHint": "Kui taimer muutub teises seadmes, toob Apple'i teavitusteenus selle kirjelduse ja asja lukustuskuvale. Väljalülitatuna näidatakse ainult aega, kuni rakenduse avate."
+    "timerDetailsHint": "Kui taimer muutub teises seadmes, toob Apple'i teavitusteenus selle kirjelduse ja asja lukustuskuvale. Väljalülitatuna näidatakse ainult aega, kuni rakenduse avate.",
+    "dictationTitle": "Dikteerimine",
+    "dictationModelDefault": "Vaikimisi",
+    "dictationModelDefaultNamed": "Vaikimisi ({model})",
+    "dictationModelOutsideRegion": "Väljaspool teie piirkonda",
+    "dictationModelRetainsData": "Säilitab teie heli",
+    "dictationModelRetainsWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid.",
+    "dictationModelHint": "Mudel, mis muudab dikteeritu tekstiks. stella heli ei talleta.",
+    "dictationModelsUnavailable": "Mudeleid ei õnnestunud laadida. Dikteerimine kasutab valitud mudelit või vaikimisi mudelit, kui server seda enam ei paku.",
+    "dictationCleanup": "Paranda tehisintellektiga",
+    "dictationCleanupHint": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“. Ainult tekst, mitte heli, läheb stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale; stella seda ei talleta."
   },
   "header": {
     "search": "Otsing"

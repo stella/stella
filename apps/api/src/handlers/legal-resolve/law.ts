@@ -8,6 +8,7 @@ import {
   PUBLIC_COUNTRY_CAPABILITIES,
   type PublicCountry,
 } from "@stll/api-contract/public-country-capability";
+import { legalDayTimeZone } from "@stll/api-contract/public-country-legal-day";
 import {
   statuteGazetteAbbreviation,
   statuteGazetteEliCollection,
@@ -53,7 +54,6 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 type LawProfile = {
   citation: JurisdictionProfile;
   queryCountry: StatuteQueryCountry;
-  timeZone: string;
   gazette: (typeof PROVISION_CITATION_GRAMMARS)[JurisdictionProfile["jurisdiction"]]["gazette"];
 };
 
@@ -61,13 +61,11 @@ const LAW_PROFILES = {
   CZE: {
     citation: CZ_PROFILE,
     queryCountry: "cze",
-    timeZone: "Europe/Prague",
     gazette: PROVISION_CITATION_GRAMMARS.CZE.gazette,
   },
   SVK: {
     citation: SK_PROFILE,
     queryCountry: "svk",
-    timeZone: "Europe/Bratislava",
     gazette: PROVISION_CITATION_GRAMMARS.SVK.gazette,
   },
 } as const satisfies Record<JurisdictionProfile["jurisdiction"], LawProfile>;
@@ -387,7 +385,8 @@ const createLawResolver =
         ),
       reportUnresolvedAct = () =>
         reportUnresolvedActCitation(profile.citation.jurisdiction),
-      today = () => todayFor(profile.timeZone).toString(),
+      today = () =>
+        todayFor(legalDayTimeZone(profile.citation.jurisdiction)).toString(),
     }: LawDependencies = {},
   ): Promise<LegalResolveResponse> => {
     const act =

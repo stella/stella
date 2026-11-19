@@ -588,7 +588,17 @@
     "signOutFailed": "Odhlášení se nepodařilo dokončit. Zkuste to znovu.",
     "lockScreenTitle": "Zamčená obrazovka",
     "timerDetails": "Podrobnosti časovače",
-    "timerDetailsHint": "Když se časovač změní na jiném zařízení, doručí jeho popis a spis na zamčenou obrazovku služba oznámení Apple. Po vypnutí se zobrazí jen čas, dokud aplikaci neotevřete."
+    "timerDetailsHint": "Když se časovač změní na jiném zařízení, doručí jeho popis a spis na zamčenou obrazovku služba oznámení Apple. Po vypnutí se zobrazí jen čas, dokud aplikaci neotevřete.",
+    "dictationTitle": "Diktování",
+    "dictationModelDefault": "Výchozí",
+    "dictationModelDefaultNamed": "Výchozí ({model})",
+    "dictationModelOutsideRegion": "Mimo váš region",
+    "dictationModelRetainsData": "Uchovává váš zvuk",
+    "dictationModelRetainsWarning": "Tento model běží na účtu bez nulového uchovávání dat. {provider} ukládá zvuk i přepis všeho, co nadiktujete, podle vlastních podmínek a mimo kontrolu stella. Nediktujte s ním důvěrné ani klientské informace.",
+    "dictationModelHint": "Model, který z diktátu udělá text. stella zvuk neukládá.",
+    "dictationModelsUnavailable": "Modely se nepodařilo načíst. Diktování použije model, který jste vybrali, nebo výchozí, pokud ho server už nenabízí.",
+    "dictationCleanup": "Upravit pomocí AI",
+    "dictationCleanupHint": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“. Jen text, ne zvuk, jde přes stella k poskytovateli AI vaší organizace; stella ho neukládá."
   },
   "header": {
     "search": "Hledat"

@@ -1,11 +1,6 @@
-import {
-  type PropsWithChildren,
-  type ReactNode,
-  type Ref,
-  useId,
-  useState,
-} from "react";
+import { type PropsWithChildren, useId, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -16,7 +11,6 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
   SelectItem,
@@ -24,15 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { Skeleton } from "@stll/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
+import { TableBody, TableCell, TableHead, TableRow } from "@stll/ui/table";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
@@ -42,6 +28,7 @@ import {
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawHealthSignal } from "@/features/case-law/components/case-law-health-signal";
 import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
+import { caseLawCoverageOptions } from "@/features/case-law/queries/decisions";
 import {
   useFormatter,
   useFormattingLocale,
@@ -65,6 +52,21 @@ import {
   type CaseLawSourceCompleteness,
   orderCoverageCountriesByName,
 } from "@/routes/law/-law-coverage/coverage.logic";
+import {
+  CaseLawCoveragePending,
+  CompletenessLabel,
+  COUNTRY_NAVIGATION_HEIGHT,
+  CountryCard,
+  CoverageHeading,
+  CoverageLayout,
+  CoverageTable,
+  Headline,
+  Hero,
+  SOURCE_COLUMN_COUNT,
+  SOURCE_COLUMNS,
+  SourcesTableHeadFace,
+  TableColumns,
+} from "@/routes/law/-law-coverage/coverage.pending";
 
 /** Where a figure stands that the corpus states no number for. */
 const NO_VALUE = "—";
@@ -85,44 +87,6 @@ const YEAR_FORMAT = {
 const DELTA_FORMAT = {
   signDisplay: "exceptZero",
 } as const satisfies Intl.NumberFormatOptions;
-
-/** Column headers on a tight row, one line each. */
-const HEAD_CLASS = "h-8 text-xs whitespace-normal leading-snug wrap-break-word";
-
-/**
- * Source, decisions, new in seven days, completeness.
- * Fixed widths, shared by every country's table: sized to their own content,
- * the same column would sit at a different place under each country and the
- * eye would have to find it again.
- */
-const SOURCE_COLUMNS = [
-  { key: "source", width: "40%" },
-  { key: "decisions", width: "28%" },
-  { key: "newLastWeek", width: "16%" },
-  { key: "completeness", width: "16%" },
-] as const satisfies readonly TableColumn[];
-
-const SOURCE_COLUMN_COUNT = SOURCE_COLUMNS.length;
-
-/** The fixed column layout every table on the page shares. */
-const TABLE_CLASS = "table-fixed";
-
-type TableColumn = { key: string; width: string };
-
-/** The columns' widths, declared once for the real table and its pending twin. */
-const TableColumns = ({ columns }: { columns: readonly TableColumn[] }) => (
-  <colgroup>
-    {columns.map(({ key, width }) => (
-      <col key={key} style={{ width }} />
-    ))}
-  </colgroup>
-);
-
-/** Stable keys so the rows held open while the figures load never key by index. */
-const PENDING_ROW_KEYS = ["a", "b", "c", "d"] as const;
-const PENDING_SECTION_KEYS = ["first", "second"] as const;
-
-const COUNTRY_NAVIGATION_HEIGHT = "--coverage-country-navigation-height";
 
 // A callback ref publishes geometry before country refs perform their hash scroll.
 const measureCountryNavigation = (node: HTMLElement | null) => {
@@ -146,6 +110,30 @@ const measureCountryNavigation = (node: HTMLElement | null) => {
     observer.disconnect();
     container.style.removeProperty(COUNTRY_NAVIGATION_HEIGHT);
   };
+};
+
+/**
+ * The /law/coverage page: the figures once they arrive, the pending shell
+ * until then, and "unavailable" when the read failed with nothing on hand.
+ */
+export const CaseLawCoverage = () => {
+  const t = useTranslations();
+  const { data, isError } = useQuery(caseLawCoverageOptions());
+
+  // Figures already on hand outrank a failed refetch: the query keeps its
+  // data when a background read fails, and a page that had the numbers must
+  // not swap them for "unavailable" because a later read did not answer.
+  if (data !== undefined) {
+    return <CaseLawCoveragePage coverage={data} />;
+  }
+  if (isError) {
+    return (
+      <CaseLawCoveragePage
+        coverage={{ message: t("caseLaw.coverage.unavailable") }}
+      />
+    );
+  }
+  return <CaseLawCoveragePending />;
 };
 
 /**
@@ -333,91 +321,6 @@ export const CaseLawCoveragePage = ({
   );
 };
 
-/**
- * The page's own chrome while the figures are in flight. The title and the
- * lead read immediately; only the numbers and the rows shimmer, so the layout
- * the reader lands on is the one that stays.
- */
-export const CaseLawCoveragePending = () => (
-  <CoverageLayout>
-    <CoverageHeading>
-      <Skeleton className="h-3 w-48" />
-    </CoverageHeading>
-
-    <Hero>
-      <div className="flex flex-col gap-4">
-        <Headline>
-          <Skeleton className="h-16 w-64" />
-        </Headline>
-        <Skeleton className="h-4 w-56" />
-        <Skeleton className="h-4 w-72" />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {PENDING_ROW_KEYS.map((row) => (
-          <Skeleton className="h-4 w-44" key={row} />
-        ))}
-      </div>
-    </Hero>
-
-    <div className="flex gap-3 border-b py-2">
-      {PENDING_ROW_KEYS.map((row) => (
-        <Skeleton className="h-11 w-24" key={row} />
-      ))}
-    </div>
-    {PENDING_SECTION_KEYS.map((section) => (
-      <CountryCard
-        header={
-          <>
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-5 w-20 rounded-full" />
-          </>
-        }
-        key={section}
-      >
-        <Table className={TABLE_CLASS}>
-          <TableColumns columns={SOURCE_COLUMNS} />
-          <SourcesTableHead />
-          <TableBody>
-            {PENDING_ROW_KEYS.map((row) => (
-              <TableRow key={row}>
-                <TableCell colSpan={SOURCE_COLUMN_COUNT}>
-                  <Skeleton className="h-4 w-full" />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CountryCard>
-    ))}
-  </CoverageLayout>
-);
-
-// The shell bounds the page's height, so the content scrolls inside it rather
-// than moving the document. `ScrollArea` owns that scrollbar: a raw overflow
-// utility would hand it to the platform and put a macOS overlay bar beside a
-// Windows gutter in the same shell.
-const CoverageLayout = ({ children }: PropsWithChildren) => (
-  <main className="flex min-h-0 flex-1 flex-col">
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 p-3 sm:p-6">
-        {children}
-      </div>
-    </ScrollArea>
-  </main>
-);
-
-const CoverageHeading = ({ children }: PropsWithChildren) => {
-  const t = useTranslations();
-
-  return (
-    <header className="flex flex-wrap items-baseline justify-between gap-2">
-      <h1 className="text-lg font-semibold">{t("caseLaw.coverage.title")}</h1>
-      {children}
-    </header>
-  );
-};
-
 const COLOR_BY_JURISDICTION = {
   AUT: "var(--chart-1)",
   BRA: "var(--chart-2)",
@@ -455,10 +358,6 @@ const CountryLink = ({
     </Link>
   );
 };
-
-const Hero = ({ children }: PropsWithChildren) => (
-  <div className="grid items-center gap-6 py-2 md:grid-cols-2">{children}</div>
-);
 
 const CoverageLegend = ({
   countries,
@@ -505,12 +404,6 @@ const CoverageLegend = ({
     </ul>
   );
 };
-
-const Headline = ({ children }: PropsWithChildren) => (
-  <div className="text-5xl font-semibold tracking-tight tabular-nums sm:text-6xl">
-    {children}
-  </div>
-);
 
 /**
  * A week's arrivals. A quiet week is a fact and stays on the row, receding
@@ -564,44 +457,6 @@ const SourceHealth = ({ source }: { source: CaseLawCoverageSource }) => {
       return panic("Unhandled case-law source edition");
   }
 };
-
-type CountryCardProps = PropsWithChildren<{
-  /** The section's fragment, so a link from elsewhere can land on one country. */
-  anchor?: string;
-  header: ReactNode;
-  headingId?: string;
-  expanded?: boolean;
-  contentId?: string;
-  ref?: Ref<HTMLElement>;
-}>;
-
-/**
- * One country, with its name and state above the source and court rows.
- */
-const CountryCard = ({
-  anchor,
-  children,
-  header,
-  headingId,
-  expanded = true,
-  contentId,
-  ref,
-}: CountryCardProps) => (
-  <section
-    aria-labelledby={headingId}
-    className="bg-background flex flex-col rounded-xl border shadow-xs/5"
-    id={anchor}
-    style={{ scrollMarginTop: `var(${COUNTRY_NAVIGATION_HEIGHT})` }}
-    ref={ref}
-  >
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
-      {header}
-    </header>
-    <div hidden={!expanded} id={contentId} className="px-1 py-2 sm:px-3">
-      {children}
-    </div>
-  </section>
-);
 
 type CountrySectionProps = {
   country: CaseLawCoverageCountry;
@@ -763,44 +618,29 @@ const DecisionYearsFigure = ({
   );
 };
 
-/** Shared by the real table and its pending twin, so a column cannot drift. */
+/** The sources table's header with the completeness column's explanation. */
 const SourcesTableHead = () => {
   const t = useTranslations();
 
   return (
-    <TableHeader>
-      <TableRow>
-        <TableHead className={HEAD_CLASS} scope="col">
-          {t("common.source")}
-        </TableHead>
-        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
-          {t("common.decisions")}
-        </TableHead>
-        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
-          {t("caseLaw.corpusStatus.newLast7Days")}
-        </TableHead>
-        <TableHead className={HEAD_CLASS} scope="col">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  className="min-h-11 max-w-full"
-                  size="inline"
-                  variant="muted"
-                />
-              }
-            >
-              <span className="font-medium underline decoration-dotted underline-offset-4">
-                {t("caseLaw.coverage.completeness")}
-              </span>
-            </TooltipTrigger>
-            <TooltipPopup>
-              {t("caseLaw.coverage.completenessHelp")}
-            </TooltipPopup>
-          </Tooltip>
-        </TableHead>
-      </TableRow>
-    </TableHeader>
+    <SourcesTableHeadFace
+      completeness={
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                className="min-h-11 max-w-full"
+                size="inline"
+                variant="muted"
+              />
+            }
+          >
+            <CompletenessLabel />
+          </TooltipTrigger>
+          <TooltipPopup>{t("caseLaw.coverage.completenessHelp")}</TooltipPopup>
+        </Tooltip>
+      }
+    />
   );
 };
 
@@ -813,13 +653,13 @@ const SourcesTable = ({
 
   return (
     // No heading above it, so the table names itself for a screen reader.
-    <Table aria-label={t("common.source")} className={TABLE_CLASS}>
+    <CoverageTable aria-label={t("common.source")}>
       <TableColumns columns={SOURCE_COLUMNS} />
       <SourcesTableHead />
       {sources.map((source) => (
         <SourceRows key={source.adapterKey} source={source} />
       ))}
-    </Table>
+    </CoverageTable>
   );
 };
 

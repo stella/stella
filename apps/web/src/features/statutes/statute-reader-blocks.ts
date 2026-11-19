@@ -210,7 +210,9 @@ const extractStatuteMasthead = (
   };
 };
 
-const FOOTNOTE_ANCHOR_RE = /^ppc_(\d+)$/u;
+/** e-Sbírka note anchors: `ppc_80`, and `ppc_80a` for a note an amendment
+ * inserted after it. */
+const FOOTNOTE_ANCHOR_RE = /^ppc_(\d+[a-z]*)$/u;
 
 type FootnoteReference = {
   label: string;
@@ -220,6 +222,9 @@ type FootnoteReference = {
 
 const isAsciiDigit = (character: string | undefined): boolean =>
   character !== undefined && character >= "0" && character <= "9";
+
+const isAsciiLowercase = (character: string | undefined): boolean =>
+  character !== undefined && character >= "a" && character <= "z";
 
 const footnoteReferencesIn = (text: string): FootnoteReference[] => {
   const references: FootnoteReference[] = [];
@@ -231,6 +236,10 @@ const footnoteReferencesIn = (text: string): FootnoteReference[] => {
     }
     let end = start + 1;
     while (isAsciiDigit(text.at(end))) {
+      end += 1;
+    }
+    // A lettered label (`80a)`) names a note inserted between `80)` and `81)`.
+    while (isAsciiLowercase(text.at(end))) {
       end += 1;
     }
     if (text.at(end) === ")") {
@@ -268,8 +277,8 @@ const textInline = (text: string, anonymized: true | undefined): Inline => ({
   type: "text",
 });
 
-/** A printed `2)` glued to the preceding word is a note reference only when
- * this document actually carries note `ppc_2`. Parenthesized list numbers and
+/** A printed `2)` or `2a)` glued to the preceding word is a note reference
+ * only when this document actually carries note `ppc_2` or `ppc_2a`. Parenthesized list numbers and
  * unmatched markers remain untouched. */
 const linkFootnoteMarkersInText = (
   inline: Extract<Inline, { type: "text" }>,

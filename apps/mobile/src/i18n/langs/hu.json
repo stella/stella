@@ -588,7 +588,17 @@
     "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra.",
     "lockScreenTitle": "Zárolási képernyő",
     "timerDetails": "Időzítő részletei",
-    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot."
+    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot.",
+    "dictationTitle": "Diktálás",
+    "dictationModelDefault": "Alapértelmezett",
+    "dictationModelDefaultNamed": "Alapértelmezett ({model})",
+    "dictationModelOutsideRegion": "A régiódon kívül",
+    "dictationModelRetainsData": "Megőrzi a hangfelvételt",
+    "dictationModelRetainsWarning": "Ez a modell nulla adatmegőrzés nélküli fiókon fut. A(z) {provider} saját feltételei szerint, a stella ellenőrzésén kívül tárolja mindannak a hangját és átiratát, amit diktálsz. Ne diktálj vele bizalmas vagy ügyféladatokat.",
+    "dictationModelHint": "A modell, amely a diktálásodból szöveget készít. A stella nem tárolja a hangot.",
+    "dictationModelsUnavailable": "A modelleket nem sikerült betölteni. A diktálás a választott modellt használja, vagy az alapértelmezettet, ha a szerver már nem kínálja.",
+    "dictationCleanup": "Javítás AI-jal",
+    "dictationCleanupHint": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor”. Csak a szöveg, nem a hang megy a stellán keresztül a szervezeted AI-szolgáltatójához; a stella nem tárolja."
   },
   "header": {
     "search": "Keresés"

@@ -22,6 +22,7 @@ import {
   CorpusIndexGroupNotReadyError,
   CorpusIndexGroupWithdrawalRefusedError,
   readCorpusIndexGroupReadinessTx,
+  readGenerationCorpusIndexTargetTx,
   readServingCorpusIndexTargetTx,
   unattestedCorpusIndexIdsTx,
   withdrawCorpusIndexGroupEnrollmentTx,
@@ -691,4 +692,56 @@ test("a generation's enrollments leave with its registration", async () => {
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
   await db.delete(corpusIndexGenerations).where(sql`true`);
   expect(await db.select().from(corpusIndexGroupEnrollments)).toEqual([]);
+});
+
+test("a named building generation is readable for measurement while readers stay on the serving one", async () => {
+  const candidate = CORPUS_INDEX_MANIFESTS.case_law_v11;
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: candidate.generation,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(candidate),
+    status: "building",
+  });
+  const named = await inTx(
+    async (tx) =>
+      await readGenerationCorpusIndexTargetTx(tx, {
+        family: "case_law",
+        generation: candidate.generation,
+        jurisdiction: "HUN",
+      }),
+  );
+  expect(Result.isOk(named) && named.value.serving.generation).toBe(
+    candidate.generation,
+  );
+  expect(Result.isOk(named) && named.value.route.indexId).toBe(
+    "case_law_v11_hun",
+  );
+  const served = await inTx(
+    async (tx) =>
+      await readServingCorpusIndexTargetTx(tx, {
+        family: "case_law",
+        jurisdiction: "HUN",
+      }),
+  );
+  expect(Result.isOk(served) && served.value.serving.generation).toBe(
+    MANIFEST.generation,
+  );
+
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "retiring" })
+    .where(eq(corpusIndexGenerations.generation, candidate.generation));
+  expect(
+    await rejectionOf(
+      inTx(
+        async (tx) =>
+          await readGenerationCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            generation: candidate.generation,
+            jurisdiction: "HUN",
+          }),
+      ),
+    ),
+  ).toBeInstanceOf(Error);
 });
