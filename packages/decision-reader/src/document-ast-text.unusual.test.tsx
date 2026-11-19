@@ -33,6 +33,11 @@ const messages = {
   "statutes.showCitedPartOnly": "Show cited part only",
   "statutes.showFullProvision": "Show full provision",
   "aiDisclosure.caseLaw": "Generated disclosure",
+  collectionSourceAttribution: (source, date, link) => (
+    <>
+      {link(source)} {date}
+    </>
+  ),
   sourceAttribution: (
     source: string,
     link: (children: ReactNode) => ReactNode,
