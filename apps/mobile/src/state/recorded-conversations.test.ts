@@ -135,6 +135,8 @@ const drawn = (blocks: readonly AnswerBlock[]) =>
     switch (block.type) {
       case "text":
         return { text: block.markdown };
+      case "intent":
+        return { intent: block.text };
       case "steps":
         return {
           steps: block.steps,

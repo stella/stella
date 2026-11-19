@@ -11,7 +11,11 @@ import { MOBILE_REDIRECT_SCHEMES } from "@stll/api-contract/mobile-client";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
-import { AnswerSteps, AnswerSubagent } from "@/components/answer-steps";
+import {
+  AnswerIntent,
+  AnswerSteps,
+  AnswerSubagent,
+} from "@/components/answer-steps";
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import {
   LimitResetChoice,
@@ -83,6 +87,10 @@ export const ChatMessage = ({
                 key={`text:${block.key}`}
                 markdown={block.markdown}
               />
+            );
+          case "intent":
+            return (
+              <AnswerIntent key={`intent:${block.key}`} text={block.text} />
             );
           case "steps":
             return (
