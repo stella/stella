@@ -864,13 +864,18 @@ const skillDeclaredToolNames = ({
 }: {
   activeSkillContext: ActiveChatSkillContext | null | undefined;
   skills: ModelOfferedSkills<SkillMetadata> | undefined;
-}): ReadonlySet<string> =>
-  new Set([
-    ...(activeSkillContext?.requiredTools ?? []),
-    ...(skills ?? []).flatMap((skill) =>
-      readSkillRequiredTools(skill.metadata),
-    ),
-  ]);
+}): ReadonlySet<string> => {
+  const names = new Set(activeSkillContext?.requiredTools);
+  // Absent when the caller loaded no catalog.
+  if (skills !== undefined) {
+    for (const skill of skills) {
+      for (const name of readSkillRequiredTools(skill.metadata)) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+};
 
 /**
  * The active skill's chat declarations as a turn's tool set honours them. The

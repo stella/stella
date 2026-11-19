@@ -249,7 +249,7 @@ const nextStep = (check: SkillPackageCheck): string => {
  * persisted-call validation and skill availability, where declaring them is
  * what makes them available.
  */
-export type SkillPackageToolOffer =
+type SkillPackageToolOffer =
   { type: "declared"; names: ReadonlySet<string> } | { type: "every" };
 
 type CreateSkillPackageToolsProps = {
