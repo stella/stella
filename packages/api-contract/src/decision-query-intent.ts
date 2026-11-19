@@ -496,7 +496,7 @@ type TypedReferenceKind = Extract<
 
 type TypedReferenceComparison = {
   identifierType: string;
-  key: (value: string) => string;
+  key: (value: string) => string | null;
 };
 
 /**
@@ -516,7 +516,9 @@ const typedReferenceComparison = (
       return {
         identifierType: "reporter-citation",
         key: (value) =>
-          structuredCitationKey(reporters?.canonicalCitation(value) ?? value),
+          reporters
+            ? reporters.canonicalCitation(value)
+            : structuredCitationKey(value),
       };
     default: {
       kind satisfies never;
@@ -595,7 +597,9 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
         (hit) =>
           hit.identifiers?.some(
             ({ type, value }) =>
-              type === identifierType && key(value) === wanted,
+              wanted !== null &&
+              type === identifierType &&
+              key(value) === wanted,
           ) === true,
       );
     }

@@ -1494,6 +1494,10 @@
       "title": "Vyhledávání je dočasně nedostupné"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Pokud znáte spisovou značku nebo ECLI rozhodnutí, vyhledejte je podle nich.",
+        "message": "Pro tuto citaci sbírky nebylo nalezeno přesně odpovídající rozhodnutí."
+      },
       "noHits": {
         "hint": "Zkuste méně slov nebo jiná: výrazy, které by použilo rozhodnutí, ne větu, kterou se otázka pokládá.",
         "message": "Slovům, která hledání vyžadovalo, nic neodpovídá."

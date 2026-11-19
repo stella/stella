@@ -1494,6 +1494,10 @@
       "title": "Otsing pole ajutiselt saadaval"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Kui teate kohtuasja numbrit või lahendi ECLI-t, otsige selle järgi.",
+        "message": "Sellele kogumikuviitele täpselt vastavat kohtulahendit ei leitud."
+      },
       "noHits": {
         "hint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
         "message": "Miski ei vasta sõnadele, mida see otsing nõudis."

@@ -1494,6 +1494,10 @@
       "title": "La recherche est temporairement indisponible"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Recherchez le numéro de dossier ou l’ECLI de la décision, si vous le connaissez.",
+        "message": "Aucune décision correspondant exactement à cette référence de recueil n’a été trouvée."
+      },
       "noHits": {
         "hint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
         "message": "Aucun résultat ne correspond aux mots exigés par cette recherche."

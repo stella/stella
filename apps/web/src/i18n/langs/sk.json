@@ -1494,6 +1494,10 @@
       "title": "Vyhľadávanie je dočasne nedostupné"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ak poznáte spisovú značku alebo ECLI rozhodnutia, vyhľadajte ho podľa nich.",
+        "message": "Pre túto citáciu zbierky sa nenašlo presne zodpovedajúce rozhodnutie."
+      },
       "noHits": {
         "hint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
         "message": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá."

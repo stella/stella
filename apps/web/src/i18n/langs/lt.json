@@ -1494,6 +1494,10 @@
       "title": "Paieška laikinai nepasiekiama"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ieškokite pagal bylos numerį arba sprendimo ECLI, jei jį žinote.",
+        "message": "Nerasta sprendimo, tiksliai atitinkančio šią rinkinio nuorodą."
+      },
       "noHits": {
         "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
         "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."

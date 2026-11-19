@@ -736,7 +736,6 @@
     "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts": 7,
     "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts": 7,
     "apps/api/src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 2,
     "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts": 1,
     "apps/api/src/handlers/case-law/withdraw-document.ts": 1,
