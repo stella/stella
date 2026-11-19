@@ -22,6 +22,7 @@ use crate::{
   account::{self, AccountRequest, AccountState},
   dictation_context::CleanupContext,
   dictation_format::{self, AppClass, Segment, Stroke},
+  dictation_trace::Cleanup,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
   logging::request_cause_logged,
@@ -512,24 +513,26 @@ pub(crate) fn bounded<T>(
 /// typed instead. Blocks the dictation thread for at most [`TIMEOUT`]. The
 /// plausibility check measures the answer against the transcript alone, so
 /// nothing from `context` can be typed.
+///
+/// Returns how it went, for the local log, with the segments.
 pub fn clean_up(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
   context: &CleanupContext,
-) -> Option<Vec<Segment>> {
+) -> (Option<Vec<Segment>>, Cleanup) {
   if transcript.chars().count() > contract().max_transcript_length {
-    return None;
+    return (None, Cleanup::TooLong);
   }
   match bounded(TIMEOUT, request(app, transcript, languages, context)) {
-    Some(Ok(segments)) => Some(segments),
+    Some(Ok(segments)) => (Some(segments), Cleanup::Applied),
     Some(Err(error)) => {
       tracing::info!(%error, "dictation cleanup skipped; typing the transcript");
-      None
+      (None, Cleanup::Skipped)
     }
     None => {
       tracing::info!("dictation cleanup timed out; typing the transcript");
-      None
+      (None, Cleanup::TimedOut)
     }
   }
 }

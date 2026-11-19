@@ -76,6 +76,14 @@ const MODEL_URL: &str = "https://huggingface.co/handy-computer/parakeet-ultra-gg
 const MODEL_BYTES: u64 = 740_363_168;
 const MODEL_SHA256: &str =
   "007a59761e9258779f189df396b50d12b83bb5b79e66df4b955c230d2f2a0a59";
+/// The speech model's name in the local log: its file name without the
+/// extension.
+pub fn local_model_id() -> &'static str {
+  MODEL_FILE_NAME
+    .strip_suffix(".gguf")
+    .unwrap_or(MODEL_FILE_NAME)
+}
+
 /// Enough progress events to look alive, few enough to stay cheap.
 const PROGRESS_STEP_BYTES: u64 = MODEL_BYTES / 100;
 
@@ -468,6 +476,11 @@ pub fn adopt_cloud_model(app: &AppHandle, model_id: &str) -> Result<(), String> 
 /// The server's stella AI decision changed: windows read the new snapshot.
 pub fn apply_cloud_gate(app: &AppHandle) {
   change(app, |_inner| ());
+}
+
+/// The key dictation listens for.
+pub fn hold_key(app: &AppHandle) -> HoldChoice {
+  app.state::<DictationState>().update(|inner| inner.hold_key)
 }
 
 /// Whether a finished dictation goes through AI cleanup before it is typed.

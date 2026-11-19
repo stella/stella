@@ -516,6 +516,11 @@ impl CloudSession {
     })
   }
 
+  /// The model this dictation uses, once a request chose it.
+  pub fn model_id(&self) -> Option<&str> {
+    self.model_id.as_deref()
+  }
+
   /// The stored model while the region still offers it, otherwise the
   /// region's default, which then replaces the stored one.
   async fn model(&mut self) -> Result<String, String> {

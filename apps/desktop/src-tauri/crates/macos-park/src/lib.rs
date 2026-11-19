@@ -31,7 +31,9 @@ pub use hold_key_edges::{HoldEdge, HoldKey};
 #[cfg(target_os = "macos")]
 mod hold_key;
 #[cfg(target_os = "macos")]
-pub use hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
+pub use hold_key::{
+  HoldKeyListener, HoldKeyUnsupported, globe_key_usage, listen_for_hold_key,
+};
 
 #[cfg(target_os = "windows")]
 mod windows_hold_key;
