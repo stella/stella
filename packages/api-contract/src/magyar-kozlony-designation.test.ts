@@ -256,7 +256,7 @@ describe("Magyar Közlöny Work patterns", () => {
 
   test("an act's number, year and series match its Work and no neighbour's", () => {
     assertProperty(
-      "magyar-kozlony-designation.work-pattern-matches-only-its-work",
+      "an act's number, year and series match its Work and no neighbour's",
       fc.property(designation, fc.integer({ min: 1, max: 9 }), (act, shift) => {
         const eli = hungarianDesignationWorkEli(act) ?? "";
         const collection = hungarianDesignationCollection(act);
