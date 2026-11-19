@@ -34,6 +34,8 @@ import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
+import { NativeToolsRowsPending } from "./native-tools-list.pending";
+
 type NativeTool = McpConnectorsResponse["nativeTools"][number];
 
 /** A tool's name and description in the reader's language. */
@@ -79,7 +81,11 @@ export const NativeToolsList = () => {
         onValueChange={setSearch}
         value={search}
       />
-      <QueryViewFeedback view={view} />
+      {view.type === "pending" ? (
+        <NativeToolsRowsPending />
+      ) : (
+        <QueryViewFeedback view={view} />
+      )}
       {view.type === "items" && (
         <List>
           {visible.map((tool) => (

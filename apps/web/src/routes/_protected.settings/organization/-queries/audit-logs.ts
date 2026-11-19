@@ -107,4 +107,11 @@ export const auditLogOptions = ({ viewer, key }: AuditLogOptionsInput) =>
   queryOptions({
     queryKey: auditLogKeys.filtered(viewer, key),
     queryFn: async () => await fetchAuditLogs(key),
+    placeholderData: (previous, query) => {
+      const [, userId, organizationId] = query?.queryKey ?? [];
+      return userId === viewer.userId &&
+        organizationId === viewer.organizationId
+        ? previous
+        : undefined;
+    },
   });
