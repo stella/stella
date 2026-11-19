@@ -693,7 +693,6 @@
     "apps/web/src/features/statutes/components/provision-citing-decisions.tsx:ProvisionCitingDecisions/leadingQuery:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/statutes/components/provision-citing-decisions.tsx:ProvisionCitingDecisions:useInfiniteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/statutes/components/provision-history.tsx:ProvisionHistory:useInfiniteQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
-    "apps/web/src/features/statutes/components/provision-history.tsx:ProvisionHistory:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/statutes/components/provision-inspector-view.tsx:ProvisionInspectorView/countsView:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/statutes/components/provision-inspector-view.tsx:ProvisionInspectorView/leadingView:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "apps/web/src/features/statutes/components/provision-inspector-view.tsx:ProvisionInspectorView/versionsQuery:useQuery:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",

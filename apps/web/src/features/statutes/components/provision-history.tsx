@@ -30,6 +30,7 @@ import {
   formatValidityRange,
 } from "@/lib/statutes/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const HISTORY_ROW_CLASS =
   "flex min-h-8 items-center gap-2 rounded-md px-2 text-xs tabular-nums pointer-coarse:min-h-11";
@@ -235,7 +236,12 @@ export const useProvisionHistoryAnchor = ({
   anchorId,
   documentId,
 }: ProvisionHistoryProps) => {
-  const statuteView = queryView(useQuery(statuteOptions(documentId)));
+  // Published legislation: no workspace write changes what it reads.
+  const statuteView = queryView(
+    useQuery(
+      resourceQueryOptions(statuteOptions(documentId), { type: "independent" }),
+    ),
+  );
   const statute = statuteView.type === "items" ? statuteView.items : undefined;
   const ast =
     statute === undefined ? null : parseDocumentAst(statute.documentAst);

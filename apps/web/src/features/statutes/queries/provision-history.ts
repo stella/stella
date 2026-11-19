@@ -7,6 +7,7 @@ import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 /**
  * A consolidated code carries thousands of provisions, so one provision's
@@ -154,15 +155,19 @@ const walkProvisionHistory = async ({
  * pane: each version costs the server one document read.
  */
 export const provisionHistoryWalkOptions = (key: ProvisionHistoryKey) =>
-  queryOptions({
-    queryKey: provisionHistoryKeys.walk(key),
-    queryFn: async ({ signal }) =>
-      await walkProvisionHistory({
-        collected: [],
-        cursor: null,
-        key,
-        pagesLeft: WALK_MAX_PAGES,
-        signal,
-      }),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  // Published legislation: no workspace write changes what it reads.
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: provisionHistoryKeys.walk(key),
+      queryFn: async ({ signal }) =>
+        await walkProvisionHistory({
+          collected: [],
+          cursor: null,
+          key,
+          pagesLeft: WALK_MAX_PAGES,
+          signal,
+        }),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    { type: "independent" },
+  );
