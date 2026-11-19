@@ -4,17 +4,23 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
-import { guidanceDocumentOptions } from "@/lib/guidance/queries";
+import { guidanceDocumentOptions } from "@/lib/legal/guidance-queries";
 
 import { GuidanceReaderShell } from "./-guidance-reader.pending";
 
 const routeApi = getRouteApi("/_protected/guidance/$guidanceId");
 
-const paragraphsOf = (text: string) =>
-  text
-    .split(/\n{2,}/u)
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph !== "");
+/** The text's blank-line separated paragraphs, each with where it starts. */
+const paragraphsOf = (text: string) => {
+  const paragraphs: { offset: number; text: string }[] = [];
+  for (const match of text.matchAll(/(?:[^\n]|\n(?!\n))+/gu)) {
+    const paragraph = match[0].trim();
+    if (paragraph !== "") {
+      paragraphs.push({ offset: match.index, text: paragraph });
+    }
+  }
+  return paragraphs;
+};
 
 export function GuidanceReaderPage() {
   const t = useTranslations();
@@ -56,11 +62,9 @@ export function GuidanceReaderPage() {
           </p>
         ) : (
           <div className="flex flex-col gap-3 text-sm leading-relaxed">
-            {paragraphsOf(guidance.text).map((paragraph, index) => (
-              // Paragraphs of one immutable version never reorder.
-              // oxlint-disable-next-line react/no-array-index-key -- the list is static for this document version
-              <p key={index} className="whitespace-pre-line">
-                {paragraph}
+            {paragraphsOf(guidance.text).map((paragraph) => (
+              <p key={paragraph.offset} className="whitespace-pre-line">
+                {paragraph.text}
               </p>
             ))}
           </div>
