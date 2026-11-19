@@ -1163,6 +1163,50 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test("a steer the CLI holds past its result is answered in the same turn, once", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_held_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    // Both answers belong to the turn, and it ends once, on the last result.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ? [event.text] : [],
+      ),
+    ).toEqual(["Only the notes are here.", "The annex is not here."]);
+    expect(events.filter(({ type }) => type === "turn.completed")).toHaveLength(
+      1,
+    );
+    const completed = terminal(events);
+    expect(
+      completed?.type === "turn.completed" && completed.usage,
+    ).toMatchObject({ outputTokens: 60 });
+    // The command's step is not taken for an unsupported one.
+    expect(toolCompletions(events)).toHaveLength(1);
+  });
+
+  test("a steer the CLI drops after its result is settled rejected, and the turn ends", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_dropped_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.slice(-2)).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+      expect.objectContaining({ type: "turn.completed" }),
+    ]);
+  });
+
   test("a steer the turn's result arrives before is settled rejected ahead of the turn's end", async () => {
     const inputId = crypto.randomUUID();
     const { events } = await run("steer_too_late", {

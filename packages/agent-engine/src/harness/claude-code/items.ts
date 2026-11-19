@@ -44,6 +44,7 @@ type ClaudeMessageHandling =
   | "system"
   | "stream"
   | "rate_limit"
+  | "command"
   | "ignore";
 
 /** What stella does with each pinned message type. */
@@ -63,6 +64,9 @@ export const claudeMessageHandling = (
       return "stream";
     case "rate_limit_event":
       return "rate_limit";
+    case "command_lifecycle":
+      // What became of a message written to stdin: a steer read or dropped.
+      return "command";
     // Each type below is dropped on purpose.
     case "auth_status":
       // Progress of a sign-in flow; stella never starts one in a turn.
@@ -488,6 +492,43 @@ export const resultText = (block: ClaudeToolResult) => {
   return block.content
     .flatMap((part) => (part.type === "text" ? [part.text ?? ""] : []))
     .join("");
+};
+
+/**
+ * The notes the CLI appends to a subagent's result for the parent model:
+ * the agent id it can be continued by (with any worktree it ran in), then
+ * what it used. At the very end, after the report.
+ */
+const SUBAGENT_TRAILER =
+  /\n?agentId: \S+(?: \([^\n]*\))?(?:\n(?:worktreePath|worktreeBranch): [^\n]*)*(?:\n<usage>[^<]*<\/usage>)?\s*$/u;
+
+/** The line that opens a report the CLI frames for the parent model. */
+const HAND_BACK_FRAME = "[Subagent hand-back]";
+
+/** The indent the CLI gives every line of a framed report. */
+const HAND_BACK_INDENT = "  ";
+
+/**
+ * A subagent's report as it wrote it, from the result the CLI returned for
+ * the parent model: without the trailer, and out of the hand-back frame
+ * (the notes above it, the frame line and the indent of every line) that
+ * newer releases put around it. The model still gets the whole result.
+ */
+export const subagentReport = (result: string) => {
+  const report = result.replace(SUBAGENT_TRAILER, "");
+  const lines = report.split("\n");
+  const frame = lines.findIndex((line) => line.startsWith(HAND_BACK_FRAME));
+  if (frame === -1) {
+    return report;
+  }
+  return lines
+    .slice(frame + 1)
+    .map((line) =>
+      line.startsWith(HAND_BACK_INDENT)
+        ? line.slice(HAND_BACK_INDENT.length)
+        : line,
+    )
+    .join("\n");
 };
 
 const status = (failed: boolean): HarnessToolResult["status"] =>
