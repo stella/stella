@@ -13,9 +13,48 @@ export const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
  */
 export const SKILL_SOURCE_UNREACHABLE_CODE = "skill_source_unreachable";
 
-/** Browser-safe path grammar shared by skill-resource producers and editors. */
+/**
+ * A skill resource refusal by size: the file's text is past what one stored
+ * resource may hold, or past what a model may read in one piece (an AI
+ * rewrite reads the whole file).
+ */
+export const SKILL_RESOURCE_REFUSAL_CODE = {
+  tooLarge: "skill_resource_too_large",
+  tooLargeForAi: "skill_resource_too_large_for_ai",
+} as const;
+
+/** Why a skill cannot be drafted from a chat. */
+export const SKILL_FROM_CHAT_REFUSAL_CODE = {
+  /** No chat of the caller's has this id in this scope. */
+  threadNotFound: "skill_from_chat_thread_not_found",
+  /** The chat runs on the member's computer; no cloud model reads it. */
+  localRunThread: "skill_from_chat_local_run_thread",
+  /** The chat was held anonymized; its stored text cannot be drafted from. */
+  anonymizedThread: "skill_from_chat_anonymized_thread",
+  /** The chat's content was withdrawn. */
+  withdrawn: "skill_from_chat_withdrawn",
+  /** The chat holds no text to learn a skill from yet. */
+  emptyThread: "skill_from_chat_empty_thread",
+} as const;
+
+/**
+ * The kinds of name a skill draft is checked for before it is stored. A name
+ * in a skill reaches everyone the skill is shared with, so the author approves
+ * each one.
+ */
+export const SKILL_DRAFT_NAME_KINDS = ["person", "organization"] as const;
+
+export type SkillDraftNameKind = (typeof SKILL_DRAFT_NAME_KINDS)[number];
+
+/**
+ * Path grammar for a skill resource, shared by producers and editors: any
+ * folder and case (the Agent Skills spec allows any files beside SKILL.md),
+ * relative, no empty, `.` or `..` segment, no control or format characters,
+ * no backslash or any of `< > : " | ? *`, no segment that starts or ends with whitespace
+ * or ends with a dot. `@stll/skills/format` holds the same pattern.
+ */
 export const SKILL_RESOURCE_PATH_PATTERN =
-  /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
+  /^(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
 
 /**
  * The document a chat composer has open, as far as the chat's tools care:

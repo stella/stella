@@ -4,6 +4,7 @@ import { ONLINE_UNIQUE_INDEX_NAMES } from "../online-unique-indexes";
 export default {
   id: "replacements-legal-reader-answer-messages-answer-idx",
   revision: 840,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

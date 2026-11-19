@@ -1,3 +1,6 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 // parser-output-unchanged: the SÚIP gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -69,6 +72,25 @@ export const PUBLISHER_GATES = {
     hosts: ["www.bfdi.bund.de"],
   },
   "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
+  /**
+   * jurisdf.tjdft.jus.br. The search answers `x-ratelimit-limit: 60` per
+   * 60-second window; a gap of a little over a second keeps a window that
+   * does not start on a request below that count.
+   */
+  "tjdft-jus-br": {
+    publisher: "TJDFT",
+    intervalMs: 1100,
+    hosts: ["jurisdf.tjdft.jus.br"],
+  },
+  /**
+   * The TST jurisprudence backend. It states no limit; one request a second
+   * is politeness, and each answer can run to megabytes of full text.
+   */
+  "tst-jus-br": {
+    publisher: "TST",
+    intervalMs: 1000,
+    hosts: ["jurisprudencia-backend2.tst.jus.br"],
+  },
   "edpb-eu": {
     publisher: "European Data Protection Board",
     intervalMs: 1000,
@@ -137,6 +159,17 @@ export const PUBLISHER_GATES = {
     publisher: "Nejvyšší soud",
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["rozhodnuti.nsoud.cz"],
+  },
+  /**
+   * The court's collection site, a separate server from its database. It
+   * states no limit; one request a second is the pace a reader browsing the
+   * archive keeps, and a full walk of about ten thousand entries is under
+   * three hours.
+   */
+  "nsoud-sbirka-cz": {
+    publisher: "Nejvyšší soud",
+    intervalMs: 1000,
+    hosts: ["sbirka.nsoud.cz"],
   },
   /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {

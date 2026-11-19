@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { MCP_MODES } from "@/api/mcp/constants";
@@ -21,6 +22,8 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // The server `instructions` ride on every initialize response, so they are a
 // per-session token cost. These budgets are hard ceilings: growth past them
@@ -177,14 +180,14 @@ describe("MCP server instructions", () => {
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
     });
     try {
       await run();
     } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeaturePublicLaw);
       restoreRuntimeMode();
     }
   };

@@ -48,7 +48,7 @@ export const countSqlPerfHits = (source: string, filename: string): number => {
 };
 
 export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
-  const counts: SqlPerfCounts = {};
+  const counts = new Map<string, number>();
   for (const glob of SOURCE_GLOBS) {
     for (const file of new Bun.Glob(glob).scanSync(root)) {
       if (!isSqlPerfSource(file)) {
@@ -57,14 +57,12 @@ export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
       const source = readFileSync(path.join(root, file), "utf-8");
       const count = countSqlPerfHits(source, file);
       if (count > 0) {
-        counts[file] = count;
+        counts.set(file, count);
       }
     }
   }
   return Object.fromEntries(
-    Object.entries(counts).toSorted(([left], [right]) =>
-      compareCodeUnit(left, right),
-    ),
+    [...counts].toSorted(([left], [right]) => compareCodeUnit(left, right)),
   );
 };
 
@@ -123,7 +121,7 @@ export const parseSqlPerfCounts = (value: unknown): SqlPerfCounts => {
   if (!isRecord(value)) {
     return panic("SQL performance baseline must be an object");
   }
-  const counts: SqlPerfCounts = {};
+  const counts = new Map<string, number>();
   for (const [file, count] of Object.entries(value)) {
     if (!isSqlPerfSource(file)) {
       return panic(
@@ -139,12 +137,10 @@ export const parseSqlPerfCounts = (value: unknown): SqlPerfCounts => {
         `SQL performance baseline count for ${file} must be a positive integer`,
       );
     }
-    counts[file] = count;
+    counts.set(file, count);
   }
   return Object.fromEntries(
-    Object.entries(counts).toSorted(([left], [right]) =>
-      compareCodeUnit(left, right),
-    ),
+    [...counts].toSorted(([left], [right]) => compareCodeUnit(left, right)),
   );
 };
 

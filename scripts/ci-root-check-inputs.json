@@ -1,5 +1,12 @@
 {
   "ci-checks-rest": {
+    "Action commit pins": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-checks/**",
+      "scripts/check-action-commit-pins.ts",
+      "scripts/check-action-commit-pins.test.ts"
+    ],
     "Resolve static check receipts": ["**"],
     "Run repository checks": ["**"],
     "Record static check receipts": ["**"],
@@ -48,6 +55,11 @@
     "Prepare environment": ["**"],
     "Content delivery declarations": ["@stll/api", "@stll/cli"],
     "Test capability shard merge and package parity": [
+      "@stll/api",
+      "@stll/cli",
+      "scripts/**"
+    ],
+    "Test CLI contract changeset guard over derived catalogs": [
       "@stll/api",
       "@stll/cli",
       "scripts/**"
@@ -119,6 +131,7 @@
     "Marketing content check": [
       "@stll/landing",
       "@stll/cli",
+      "@stll/docx-utils",
       "apps/landing/**",
       "packages/cli/**",
       "apps/api/src/handlers/chat/send-message.ts",
@@ -386,6 +399,7 @@
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
+    "Capability file-transport ledger": ["@stll/api", "@stll/cli"],
     "MCP coverage guard": ["@stll/api", "@stll/cli"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],
@@ -418,6 +432,14 @@
       ".github/actions/**",
       "scripts/check-workflow-shells*.ts",
       "scripts/workflow-steps.ts"
+    ],
+    "Patched dependencies apply": [
+      "package.json",
+      "bun.lock",
+      "patches/**",
+      "scripts/bun-lock-text.ts",
+      "scripts/check-patched-dependencies*.ts",
+      "scripts/unpatched-dependency-copies.json"
     ],
     "Test release-channel script": ["VERSION"],
     "Test web container platform boundary": [
@@ -454,7 +476,10 @@
       ".github/workflows/journey-canary.yml",
       ".github/workflows/case-law-search-probe.yml",
       ".github/workflows/scheduled-run-alerts.yml",
-      ".github/workflows/publish-npm.yml"
+      ".github/workflows/publish-npm.yml",
+      "packages/db-load-gate/src/default-busy-windows.json",
+      "apps/api/src/lib/case-law/coverage-freshness.ts",
+      "apps/api/src/lib/case-law/coverage-refresh-interval.ts"
     ],
     "Test release policy scripts": [
       "scripts/**",
@@ -484,7 +509,10 @@
       ".github/**",
       "scripts/**"
     ],
-    "Test cancellation evidence": ["scripts/ci-cancellation-contract*"],
+    "Test cancellation evidence": [
+      "scripts/ci-cancellation-contract*",
+      ".github/workflows/cancel-failed-run.yml"
+    ],
     "Test thin merge queue contracts": [
       "scripts/thin-queue*",
       "scripts/main-heavy-plan.ts",
@@ -668,7 +696,8 @@
       ".changeset/**",
       ".github/workflows/**",
       "scripts/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "apps/web/e2e/marketing/captures.ts"
     ],
     "Test CLI contract changeset guard": [".changeset/**", "scripts/**"],
     "Test package scaffolder": ["scripts/**"],
@@ -704,6 +733,11 @@
       "@stll/api",
       "@stll/sha256",
       "scripts/**"
+    ],
+    "Check grant release order against the production release": [
+      "@stll/api",
+      "scripts/check-grant-release-order.ts",
+      "scripts/check-grant-release-order.test.ts"
     ],
     "Test dead-columns reference matching": [
       "@stll/api",
@@ -771,6 +805,14 @@
     ],
     "Test write contract inventories": ["**"],
     "Office fixture metadata": ["**"],
+    "Tailwind sources cover class-shipping dependencies": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "bun.lock",
+      "scripts/check-tailwind-sources.ts",
+      "scripts/check-tailwind-sources.test.ts"
+    ],
     "Bridge-version guard": [
       "apps/desktop/src-tauri/src/**",
       "apps/desktop/src/shared/rpc.ts",
@@ -807,12 +849,14 @@
       "scripts/check-ci-job-names.ts"
     ],
     "CI network step retries and timeouts": ["**"],
+    "Workspace test gating ledger": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
       ".github/actions/**",
       "scripts/**"
     ],
     "SHA-256 migration ledger": ["**"],
+    "Startup bundle ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
     "Guard rollout scope tests": ["**"],

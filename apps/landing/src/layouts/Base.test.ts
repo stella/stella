@@ -1,15 +1,23 @@
 import { check } from "@astrojs/check";
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // timeout: cold real Astro compiler spin-up may exceed the Bun 5 s default; the test awaits compiler completion, no sleeps
 test("base layout keeps compiler syntax valid", async () => {
   const root = fileURLToPath(new URL("../../", import.meta.url));
-  const directory = await mkdtemp(path.join(root, ".base-check-"));
+  const cache = path.join(root, ".cache");
+  await mkdir(cache, { recursive: true });
+  const directory = await mkdtemp(path.join(cache, "base-check-"));
   const layout = path.join(directory, "src/layouts/Base.astro");
   try {
+    // Compiler scratch sources must stay outside repository source inventories.
+    expect(
+      Bun.spawnSync(["git", "check-ignore", "--quiet", directory], {
+        cwd: root,
+      }).exitCode,
+    ).toBe(0);
     // Relative imports resolve against a complete, isolated source tree.
     await cp(new URL("../", import.meta.url), path.join(directory, "src"), {
       recursive: true,

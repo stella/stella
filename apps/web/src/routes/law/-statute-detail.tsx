@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
+import { lazy, Suspense, useId, useRef, useState } from "react";
 import type { ReactElement, RefObject } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -242,7 +242,7 @@ export const PublicStatuteViewer = ({
     statuteTitle: header.title,
   });
   const blocks = preparedReader.blocks;
-  const textScale = useReaderTextScale("statute");
+  const textScale = useReaderTextScale();
   const outline = statuteOutlineFromHeadings(blocks);
   const outlineMatches = rankOutlineMatches(outline, jump.query);
   // Clamped where it is read, not where it is set: the list changes under the
@@ -477,39 +477,36 @@ function useStatuteNavigation({
 }: StatuteNavigationOptions) {
   const navigate = useNavigate();
 
-  const goTo = useCallback(
-    (
-      params: StatuteRouteParams,
-      nextAsOf: string | undefined,
-      compareSearch: StatuteCompareSearch = NO_STATUTE_COMPARE,
-    ) => {
-      const search = {
-        asOf: nextAsOf,
-        q: findQuery || undefined,
-        ...compareSearch,
-      };
+  const goTo = (
+    params: StatuteRouteParams,
+    nextAsOf: string | undefined,
+    compareSearch: StatuteCompareSearch = NO_STATUTE_COMPARE,
+  ) => {
+    const search = {
+      asOf: nextAsOf,
+      q: findQuery || undefined,
+      ...compareSearch,
+    };
 
-      detached(
-        params.version === undefined
-          ? navigate({
-              params: { country: params.country, slug: params.slug },
-              search,
-              to: "/law/$country/statutes/$slug",
-            })
-          : navigate({
-              params: {
-                country: params.country,
-                slug: params.slug,
-                version: params.version,
-              },
-              search,
-              to: "/law/$country/statutes/$slug/v/$version",
-            }),
-        "statutes.reader-navigate",
-      );
-    },
-    [findQuery, navigate],
-  );
+    detached(
+      params.version === undefined
+        ? navigate({
+            params: { country: params.country, slug: params.slug },
+            search,
+            to: "/law/$country/statutes/$slug",
+          })
+        : navigate({
+            params: {
+              country: params.country,
+              slug: params.slug,
+              version: params.version,
+            },
+            search,
+            to: "/law/$country/statutes/$slug/v/$version",
+          }),
+      "statutes.reader-navigate",
+    );
+  };
 
   // A version that cannot apply opens at its id: no day names it. The
   // comparison, when one is passed, comes along.

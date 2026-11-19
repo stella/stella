@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   afterAll,
   afterEach,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -11,6 +12,10 @@ import {
 
 import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import type {
+  ChatLocalFilesUndoAnswer,
+  ChatLocalFilesUndoRead,
+} from "@stll/api-contract/chat-local-files-undo";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -26,6 +31,10 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { stellaToast } = await import("@stll/ui/toast");
 const { EditableUserMessage } = await import("./user-message-edit");
@@ -35,9 +44,91 @@ const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
 const en = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(() => {
-  cleanup();
+const THREAD_ID = "018f0000-0000-7000-8000-0000000000a1";
+const MESSAGE_ID = "018f0000-0000-7000-8000-0000000000a2";
+const UNDO_PATH = `/v1/chat/threads/${THREAD_ID}/messages/${MESSAGE_ID}/local-files/undo`;
+
+/** The undo endpoint as a test sets it, and what reached it, in order. */
+const server: {
+  read: ChatLocalFilesUndoRead;
+  answer: { status: number; body: ChatLocalFilesUndoAnswer };
+  /** Every call the page made: `undo` for a request, `send` for an edit. */
+  calls: ("undo" | "send")[];
+  reads: number;
+  /** When set, the undo request answers only once it settles. */
+  undoHeld: Promise<undefined> | null;
+} = {
+  read: {
+    files: { type: "none" },
+    conversation: { type: "continues" },
+    undo: null,
+  },
+  answer: {
+    status: 202,
+    body: {
+      status: "accepted",
+      undo: {
+        restoreId: "018f0000-0000-7000-8000-0000000000c1",
+        state: "restored",
+        reason: null,
+      },
+      reason: null,
+    },
+  },
+  calls: [],
+  reads: 0,
+  undoHeld: null,
+};
+
+/** The undo request's answer when a test sets none: done at once. */
+const RESTORED_ANSWER = server.answer;
+
+const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  server.read = {
+    files: { type: "none" },
+    conversation: { type: "continues" },
+    undo: null,
+  };
+  server.answer = RESTORED_ANSWER;
+  server.calls = [];
+  server.reads = 0;
+  server.undoHeld = null;
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : input.toString(),
+        );
+        const method = (
+          init?.method ?? (input instanceof Request ? input.method : "GET")
+        ).toUpperCase();
+        if (url.pathname !== UNDO_PATH) {
+          return Response.json({});
+        }
+        if (method === "POST") {
+          server.calls.push("undo");
+          await server.undoHeld;
+          return Response.json(server.answer.body, {
+            status: server.answer.status,
+          });
+        }
+        server.reads += 1;
+        return Response.json(server.read);
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+});
+afterEach(async () => {
   mock.restore();
+  await act(async () => {
+    cleanup();
+    for (const client of clients) {
+      client.clear();
+    }
+    clients.length = 0;
+  });
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -46,7 +137,6 @@ afterAll(async () => {
 type EditableUserMessageProps = Parameters<typeof EditableUserMessage>[0];
 type UserMessageEditActions = NonNullable<EditableUserMessageProps["actions"]>;
 
-const MESSAGE_ID = "018f0000-0000-7000-8000-0000000000a2";
 /** The message body the transcript renders when no edit is open. */
 const SENT_BODY = "Sent message body";
 
@@ -76,6 +166,7 @@ const createActions = () => {
   const holding: string[] = [];
   const sessions = createUserMessageEditSessions(createUuid);
   const actions: UserMessageEditActions = {
+    threadId: THREAD_ID,
     openSession: (messageId) => sessions.open(messageId),
     holdQueue: (sessionId) => {
       holding.push(sessionId);
@@ -88,6 +179,7 @@ const createActions = () => {
     },
     onSubmit: async (messageId, edit) => {
       submitted.push([messageId, edit]);
+      server.calls.push("send");
       await Promise.resolve();
       return { type: "accepted" };
     },
@@ -103,22 +195,42 @@ const renderMessage = ({
   actions: UserMessageEditActions | undefined;
   isGenerating?: boolean;
   target?: EditableUserMessageProps["message"];
-}) =>
-  render(
-    <ChatThreadTestRouter>
-      <IntlProvider locale="en" messages={en} timeZone="UTC">
-        <TooltipProvider>
-          <EditableUserMessage
-            actions={actions}
-            isGenerating={isGenerating}
-            message={target}
+}) => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  return render(
+    <QueryClientProvider client={client}>
+      <ChatThreadTestRouter>
+        <IntlProvider locale="en" messages={en} timeZone="UTC">
+          <AuthenticatedUserProvider
+            user={{
+              activeOrganizationId: "018f0000-0000-7000-8000-0000000000b1",
+              email: "member@example.test",
+              id: "018f0000-0000-7000-8000-0000000000b2",
+              image: null,
+              name: "Member",
+              preferredName: null,
+              timezoneId: "UTC",
+              wordEditShortcut: null,
+            }}
           >
-            <p>{SENT_BODY}</p>
-          </EditableUserMessage>
-        </TooltipProvider>
-      </IntlProvider>
-    </ChatThreadTestRouter>,
+            <TooltipProvider>
+              <EditableUserMessage
+                actions={actions}
+                isGenerating={isGenerating}
+                message={target}
+              >
+                <p>{SENT_BODY}</p>
+              </EditableUserMessage>
+            </TooltipProvider>
+          </AuthenticatedUserProvider>
+        </IntlProvider>
+      </ChatThreadTestRouter>
+    </QueryClientProvider>,
   );
+};
 
 const REMOVE_NDA = en.chat.editMessageRemoveAttachment.replace(
   "{name}",
@@ -496,5 +608,206 @@ describe("pasting into the edit form", () => {
       attachments: [ndaDocument, createChatPastedTextPart(long)],
       html: "",
     });
+  });
+});
+
+const UNDO_FILES = en.chat.localFilesUndo.option;
+
+/** The read of a chat whose turns since the message worked in a folder. */
+const localRead = (
+  files: ChatLocalFilesUndoRead["files"],
+): ChatLocalFilesUndoRead => ({
+  files,
+  conversation: { type: "continues" },
+  undo: null,
+});
+
+/** Click the box's label, as a member does; it answers once React flushed. */
+const toggle = async (box: HTMLElement) => {
+  await act(async () => {
+    fireEvent.click(box.closest("label") ?? box);
+    await Promise.resolve();
+  });
+};
+
+const isDisabled = (control: HTMLElement) =>
+  control.hasAttribute("disabled") ||
+  Object.hasOwn(control.dataset, "disabled") ||
+  control.getAttribute("aria-disabled") === "true";
+
+describe("undoing the file changes made since the message", () => {
+  test("a chat whose turns touched no folder offers no file choice", async () => {
+    const { actions } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    await waitFor(() => {
+      expect(server.reads).toBe(1);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(view.queryByRole("checkbox")).toBeNull();
+    expect(
+      view.queryByText(en.chat.localFilesUndo.conversationRestarts),
+    ).toBeNull();
+  });
+
+  test("a local chat offers the box unchecked with its hint, and a send without it sends the edit alone", async () => {
+    server.read = localRead({ type: "available" });
+    const { actions } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    const box = await view.findByRole("checkbox", { name: UNDO_FILES });
+
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    expect(isDisabled(box)).toBe(false);
+    expect(view.getByText(en.chat.localFilesUndo.optionHint)).toBeDefined();
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    await waitFor(() => {
+      expect(server.calls).toEqual(["send"]);
+    });
+  });
+
+  test("changes that cannot be undone show the box disabled with why, and the edit alone is sent", async () => {
+    server.read = localRead({ type: "unavailable", reason: "several_folders" });
+    const { actions } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    const box = await view.findByRole("checkbox", { name: UNDO_FILES });
+
+    expect(isDisabled(box)).toBe(true);
+    expect(
+      view.getByText(en.chat.localFilesUndo.refused.severalFolders),
+    ).toBeDefined();
+    await toggle(box);
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    await waitFor(() => {
+      expect(server.calls).toEqual(["send"]);
+    });
+  });
+
+  test("with the box checked the folder is restored first, then the edit is sent", async () => {
+    server.read = localRead({ type: "available" });
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    const box = await view.findByRole("checkbox", { name: UNDO_FILES });
+    await toggle(box);
+    expect(box.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+
+    await waitFor(() => {
+      expect(server.calls).toEqual(["undo", "send"]);
+    });
+    expect(submitted.map(([messageId]) => messageId)).toEqual([MESSAGE_ID]);
+  });
+
+  test("an edit cancelled while its undo is answered sends nothing once the folder is restored", async () => {
+    server.read = localRead({ type: "available" });
+    const held = Promise.withResolvers<undefined>();
+    server.undoHeld = held.promise;
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    await toggle(await view.findByRole("checkbox", { name: UNDO_FILES }));
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    await waitFor(() => {
+      expect(server.calls).toEqual(["undo"]);
+    });
+    fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
+    expect(view.getByText(SENT_BODY)).toBeDefined();
+
+    await act(async () => {
+      held.resolve(undefined);
+      await held.promise;
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(server.calls).toEqual(["undo"]);
+    expect(submitted).toEqual([]);
+  });
+
+  test("a refused undo sends nothing, keeps the draft and says why, the box unchecked", async () => {
+    server.read = localRead({ type: "available" });
+    server.answer = {
+      status: 409,
+      body: { status: "refused", undo: null, reason: "desktop_offline" },
+    };
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions });
+
+    const field = openEditor(view);
+    fireEvent.paste(field, { clipboardData: plainTextClipboard(" today") });
+    await toggle(await view.findByRole("checkbox", { name: UNDO_FILES }));
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+
+    expect((await view.findByRole("alert")).textContent).toBe(
+      en.chat.localFilesUndo.refused.desktopOffline,
+    );
+    expect(server.calls).toEqual(["undo"]);
+    expect(submitted).toEqual([]);
+    await waitFor(() => {
+      expect(field.getAttribute("contenteditable")).toBe("true");
+    });
+    expect(field.textContent).toBe("Review the draft NDA today");
+    expect(
+      view
+        .getByRole("checkbox", { name: UNDO_FILES })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+    // Sending again sends the edit alone.
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    await waitFor(() => {
+      expect(server.calls).toEqual(["undo", "send"]);
+    });
+  });
+
+  test("changes an earlier undo restored are shown as undone, and a send sends only the edit", async () => {
+    server.read = {
+      ...localRead({ type: "available" }),
+      undo: {
+        restoreId: "018f0000-0000-7000-8000-0000000000c1",
+        state: "restored",
+        reason: null,
+      },
+    };
+    const { actions } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    expect(
+      await view.findByText(en.chat.localFilesUndo.restored),
+    ).toBeDefined();
+    expect(view.queryByRole("checkbox")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    await waitFor(() => {
+      expect(server.calls).toEqual(["send"]);
+    });
+  });
+
+  test("says the agent starts over when the reply before the message did not finish", async () => {
+    server.read = {
+      files: { type: "none" },
+      conversation: { type: "restarts", reason: "previous_not_finished" },
+      undo: null,
+    };
+    const { actions } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+
+    expect(
+      await view.findByText(en.chat.localFilesUndo.conversationRestarts),
+    ).toBeDefined();
   });
 });

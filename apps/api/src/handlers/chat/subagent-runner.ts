@@ -309,6 +309,7 @@ export const runSubagent = async (
   });
 
   const stream = streamTanStackChatRun({
+    threadId: Bun.randomUUIDv7(),
     userId: options.admission.userId,
     admission: options.admission,
     model,

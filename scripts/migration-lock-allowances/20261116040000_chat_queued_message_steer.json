@@ -1,0 +1,3 @@
+{
+  "add-column": "One nullable integer column without a default on chat_queued_messages: a catalog-only change that rewrites no rows, under 1s lock_timeout and 10s statement_timeout."
+}

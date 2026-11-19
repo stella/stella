@@ -55,6 +55,7 @@ const CONSUMERS = {
   // Decision and statute pages, and the API reads that serve them.
   "apps/api/src/handlers/case-law/public-routes.ts": "pages",
   "apps/api/src/lib/case-law/decision-badges.ts": "pages",
+  "apps/api/src/lib/case-law/decision-reviews.ts": "pages",
   "apps/api/src/lib/case-law/language-alternates.ts": "pages",
   "apps/api/src/handlers/legislation/by-slug.ts": "pages",
   "apps/web/src/routes/law/-case-detail.logic.ts": "pages",
@@ -103,11 +104,13 @@ const CONSUMERS = {
   "apps/api/src/lib/legal-search/legislation-matter-link-provisions.ts":
     "search",
   "apps/api/src/lib/legal-search/legislation-work-names.ts": "search",
+  "apps/api/src/lib/legal-search/case-law-multi-country.ts": "search",
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
   "apps/web/src/components/legal-citation-search.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
+  "apps/web/src/routes/law/-law-home/law-home.page.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",

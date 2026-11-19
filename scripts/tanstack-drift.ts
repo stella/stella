@@ -33,12 +33,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@stll/fetch";
+import {
+  readBodyJsonWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
+
 import { RECORDED_CONVERSATION_SUITES } from "../apps/api/src/tests/helpers/recorded-conversation-suites";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const PACKAGE_JSON = path.join(ROOT, "package.json");
 const STATE_FILE = path.join(ROOT, ".cache", "tanstack-drift.json");
 const REGISTRY = "https://registry.npmjs.org";
+const REQUEST_HEADER_TIMEOUT_MS = 30_000;
+const RESPONSE_IDLE_TIMEOUT_MS = 30_000;
 
 type Suite = { command: readonly string[]; directory: string; file: string };
 
@@ -129,22 +137,25 @@ const publishedOf = async (
   name: string,
   tag = "latest",
 ): Promise<Published> => {
-  const response = await fetch(`${REGISTRY}/${name}/${tag}`);
-  const body: unknown = await response.json();
+  const response = await fetchWithTimeout(`${REGISTRY}/${name}/${tag}`, {
+    timeout: { type: "headers", ms: REQUEST_HEADER_TIMEOUT_MS },
+  });
+  const body = await readBodyJsonWithIdleDeadline(response, {
+    idleMs: RESPONSE_IDLE_TIMEOUT_MS,
+  });
   if (!isRecord(body) || typeof body["version"] !== "string") {
     return panic(`No ${tag} version for ${name}`);
   }
   const dist = body["dist"];
   const tarball = isRecord(dist) ? dist["tarball"] : undefined;
-  const dependencies: Record<string, string> = {};
   const declared = body["dependencies"];
-  if (isRecord(declared)) {
-    for (const [dependency, spec] of Object.entries(declared)) {
-      if (typeof spec === "string") {
-        dependencies[dependency] = spec;
-      }
-    }
-  }
+  const dependencies = Object.fromEntries(
+    isRecord(declared)
+      ? Object.entries(declared).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        )
+      : [],
+  );
   return typeof tarball === "string"
     ? { dependencies, tarball, version: body["version"] }
     : panic(`No tarball for ${name}`);
@@ -155,8 +166,12 @@ const highestSatisfying = async (
   name: string,
   range: string,
 ): Promise<string> => {
-  const response = await fetch(`${REGISTRY}/${name}`);
-  const body: unknown = await response.json();
+  const response = await fetchWithTimeout(`${REGISTRY}/${name}`, {
+    timeout: { type: "headers", ms: REQUEST_HEADER_TIMEOUT_MS },
+  });
+  const body = await readBodyJsonWithIdleDeadline(response, {
+    idleMs: RESPONSE_IDLE_TIMEOUT_MS,
+  });
   const versions = isRecord(body) ? body["versions"] : undefined;
   if (!isRecord(versions)) {
     return panic(`No published versions for ${name}`);
@@ -187,9 +202,14 @@ const verdictFor = async (
   const directory = mkdtempSync(path.join(tmpdir(), "tanstack-drift-"));
   try {
     const archive = path.join(directory, "package.tgz");
+    const response = await fetchWithTimeout(tarball, {
+      timeout: { type: "headers", ms: REQUEST_HEADER_TIMEOUT_MS },
+    });
     writeFileSync(
       archive,
-      new Uint8Array(await (await fetch(tarball)).arrayBuffer()),
+      await readBodyWithIdleDeadline(response, {
+        idleMs: RESPONSE_IDLE_TIMEOUT_MS,
+      }),
     );
     if (!run(["tar", "-xzf", archive], directory).ok) {
       return "unknown";
@@ -228,15 +248,15 @@ const splitPatchKey = (key: string): { name: string; version: string } => {
 
 const writePackage = async (): Promise<void> => {
   const manifest = readPackageJson();
-  const catalog = manifest.catalog ?? {};
+  const catalog = new Map(Object.entries(manifest.catalog ?? {}));
   const packages: DriftState["packages"] = [];
   const published = new Map<string, Published>();
-  for (const [name, pinned] of Object.entries(catalog)) {
+  for (const [name, pinned] of catalog) {
     if (isTanStackAi(name)) {
       const latest = await publishedOf(name);
       published.set(name, latest);
       packages.push({ latest: latest.version, name, pinned });
-      catalog[name] = latest.version;
+      catalog.set(name, latest.version);
     }
   }
   // A patched package outside the catalog (a transitive one) is installed at
@@ -253,14 +273,14 @@ const writePackage = async (): Promise<void> => {
     }
     return published.get(name)?.version;
   };
-  const patched: Record<string, string> = {};
+  const patched = new Map<string, string>();
   const patches: DriftState["patches"] = [];
   for (const [key, file] of Object.entries(
     manifest.patchedDependencies ?? {},
   )) {
     const { name, version } = splitPatchKey(key);
     if (!isTanStackAi(name)) {
-      patched[key] = file;
+      patched.set(key, file);
       continue;
     }
     const target = await installedVersionOf(name);
@@ -274,7 +294,7 @@ const writePackage = async (): Promise<void> => {
       verdict,
     });
     if (verdict === "applies") {
-      patched[`${name}@${latest.version}`] = file;
+      patched.set(`${name}@${latest.version}`, file);
     }
   }
   const state: DriftState = { packages, patches };
@@ -282,8 +302,8 @@ const writePackage = async (): Promise<void> => {
     console.log(JSON.stringify(state, null, 2));
     return;
   }
-  manifest.catalog = catalog;
-  manifest.patchedDependencies = patched;
+  manifest.catalog = Object.fromEntries(catalog);
+  manifest.patchedDependencies = Object.fromEntries(patched);
   writeFileSync(PACKAGE_JSON, `${JSON.stringify(manifest, null, 2)}\n`);
   mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   writeFileSync(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);

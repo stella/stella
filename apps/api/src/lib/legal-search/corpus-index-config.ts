@@ -163,8 +163,12 @@ export const CORPUS_FINAL_INDEX_INDEXING_DEFAULT = {
  * siblings join it is never merged again, so a longer commit window stages
  * fewer splits and a longer maturation keeps merging them. Deletes apply to
  * mature splits only; repeated merges can restart maturity, so physical
- * deletion and settlement can exceed the period. Passage reads filter on the
- * revision Postgres records as applied.
+ * deletion and settlement can exceed the period. Only a generation that
+ * stores the projection revision filters candidate passages on the revision
+ * Postgres records as applied; on a `query_only` one (case_law_v8 and
+ * legislation_v3 among them) every copy still in the index is a candidate and
+ * ranks with the applied one, and only the snippet read is narrowed to the
+ * applied revision.
  */
 export const CORPUS_FINAL_INDEX_INDEXING_V8 = {
   commitTimeoutSecs: 600,
@@ -492,6 +496,33 @@ export const STEM_FIELD_OF = {
   text: "text_stem",
   [PUBLISHER_SUMMARY_FIELD]: "headnote_stem",
 } as const;
+
+/**
+ * The index field carrying a whole decision's terms on its opening passage, so
+ * one engine query can rank decisions rather than passages: BM25 over the
+ * decision, with its length as the field norm.
+ *
+ * Total over languages. A decision whose language has a stemmer carries the
+ * stems of its passages' tokens, in order; one without (or with no recorded
+ * language) carries its surface tokens, which the field's folding tokenizer
+ * lowercases and folds like `text`. Named for what it holds in both cases:
+ * terms, not stems. Which of the two a decision holds follows from its
+ * `language`, the same key its projection fingerprint already folds in.
+ *
+ * Written to the opening passage only and never a default search field, for
+ * the reason `title` and the headnote are: a field repeated across passages
+ * would let one decision answer once per passage.
+ */
+export const DECISION_TERMS_FIELD = "decision_terms";
+
+/**
+ * Set on the opening passage of a decision whose terms did not fit the engine's
+ * document ceiling and were written as a prefix cut at a term boundary. Its
+ * passages still carry every word in `text` and `text_stem`, so only the
+ * decision-level ranking reads less than the whole decision, and an exact
+ * term query on this field counts every such decision.
+ */
+export const DECISION_TERMS_PARTIAL_FIELD = "decision_terms_partial";
 
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [

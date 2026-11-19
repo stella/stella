@@ -199,11 +199,12 @@ export const linkClauseHandler = async ({
   // Verify variant if specified; snapshot its label so a later
   // variant deletion leaves a detectable tombstone on the link.
   let variantLabel: string | null = null;
-  if (body.variantId) {
+  const variantId = body.variantId;
+  if (variantId) {
     const variant = await scopedDb((tx) =>
       tx.query.clauseVariants.findFirst({
         where: {
-          id: { eq: body.variantId },
+          id: { eq: variantId },
           clauseId: { eq: body.clauseId },
           organizationId: { eq: organizationId },
         },

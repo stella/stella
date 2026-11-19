@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { emailAddressSchema } from "@/api/lib/email/normalized-email";
@@ -59,6 +59,27 @@ export const createFeatureAccessGrantsEnvSchema = (registry: FeatureRegistry) =>
         const knownEntries = entries.filter(([featureId]) =>
           Object.hasOwn(registry, featureId),
         );
+        if (
+          knownEntries.some(([featureId, grants]) => {
+            const definition = registry[featureId];
+            if (definition === undefined) {
+              return panic(
+                "Known feature grants require a registered definition",
+              );
+            }
+            return (
+              definition.grantScope === "organization" &&
+              grants.some((grant) => grant.type !== "organization")
+            );
+          })
+        ) {
+          addIssue({
+            input: "[redacted]",
+            message:
+              "API_FEATURE_ACCESS_GRANTS contains a grant scope unsupported by its feature",
+          });
+          return NEVER;
+        }
         return {
           grants: Object.fromEntries(knownEntries),
           unknownGrantCount: entries.length - knownEntries.length,

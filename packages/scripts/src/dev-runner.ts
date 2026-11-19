@@ -1539,7 +1539,7 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
   if (!existsSync(envFilePath)) {
     return {};
   }
-  const env: Record<string, string> = {};
+  const env = new Map<string, string>();
   const envFile = readFileSync(envFilePath, "utf-8");
   for (const line of envFile.split(/\r?\n/u)) {
     const trimmed = line.trim();
@@ -1581,10 +1581,10 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
     ) {
       value = value.slice(1, -1);
     }
-    env[key] = value;
+    env.set(key, value);
   }
 
-  return env;
+  return Object.fromEntries(env);
 };
 
 // `.env` is written once, so a variable `.env.example` gains later would stop
@@ -1606,15 +1606,16 @@ export const loadEnvFileWithExampleDefaults = (
 export const expandEnvMap = (
   env: Record<string, string>,
 ): Record<string, string> => {
-  const expanded = { ...env };
-  const cache: Record<string, string> = {};
+  const expanded = new Map(Object.entries(env));
+  const cache = new Map<string, string>();
   const visiting = new Set<string>();
 
   const resolveKey = (key: string): string => {
-    if (cache[key] !== undefined) {
-      return cache[key];
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return cached;
     }
-    const rawVal = expanded[key] ?? process.env[key];
+    const rawVal = expanded.get(key) ?? process.env[key];
     if (rawVal === undefined) {
       return "";
     }
@@ -1632,14 +1633,14 @@ export const expandEnvMap = (
       )
       .replace(/\\(?<dollar>\$)/gu, "$<dollar>");
     visiting.delete(key);
-    cache[key] = resolved;
+    cache.set(key, resolved);
     return resolved;
   };
 
-  for (const key of Object.keys(expanded)) {
-    expanded[key] = resolveKey(key);
+  for (const key of expanded.keys()) {
+    expanded.set(key, resolveKey(key));
   }
-  return expanded;
+  return Object.fromEntries(expanded);
 };
 
 const runCommandText = ({

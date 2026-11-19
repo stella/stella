@@ -2,6 +2,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { normalizeOutlookTaskPaneOrigin } from "@stll/api-contract/outlook-client";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -34,7 +35,6 @@ import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
-import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
 import {
   caseLawCanariesEnvSchema,
   caseLawDailyBandsEnvSchema,
@@ -46,6 +46,7 @@ import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
+import { modelRunCapEnvSchema } from "@/api/lib/usage/model-run-caps/config";
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -108,7 +109,7 @@ const originVerifyValue = v.pipe(
 export const envApiServerSchema = {
   DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
-  ...verificationRunCapEnvSchema,
+  ...modelRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
   // case-law queries the corpus must answer. Unset skips that invariant.
   DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
@@ -206,6 +207,29 @@ export const envApiServerSchema = {
   MISTRAL_API_KEY: v.optional(v.string()),
   GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
   GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
+  /**
+   * ElevenLabs key for stella AI transcription straight to ElevenLabs
+   * (Scribe). Requests ask for zero retention unless
+   * ELEVENLABS_ZERO_RETENTION is "0".
+   */
+  ELEVENLABS_API_KEY: v.optional(v.string()),
+  /**
+   * The ElevenLabs environment the key belongs to: "default" and "us" serve
+   * organizations in the US region, "eu" (the EU data residency
+   * environment) those in the EU region. Organizations elsewhere see the
+   * model as outside their region.
+   */
+  ELEVENLABS_ENVIRONMENT: v.optional(
+    v.picklist(["default", "us", "eu"]),
+    "default",
+  ),
+  /**
+   * "1" when the key's account has ElevenLabs zero retention, so every
+   * request asks for it. "0" offers Scribe v3 only to desktops that warn
+   * the member that ElevenLabs keeps the audio and transcript, never as a
+   * default and never on the web.
+   */
+  ELEVENLABS_ZERO_RETENTION: v.optional(v.picklist(["0", "1"]), "1"),
   /**
    * Force orgs to supply their own AI key (BYOK) even if the
    * instance has provisioned provider keys. Useful for shared
@@ -393,6 +417,21 @@ export const envApiServerSchema = {
   ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
+   * The https origin serving the Outlook add-in's task pane, e.g.
+   * `https://outlook.example.com`. Set, the API publishes the add-in's OAuth
+   * client document, accepts its one redirect on this origin and answers its
+   * browser requests. Unset, the add-in cannot sign in to this deployment.
+   */
+  OUTLOOK_ADDIN_ORIGIN: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) => normalizeOutlookTaskPaneOrigin(value) === value,
+        "OUTLOOK_ADDIN_ORIGIN must be an https origin without a path, e.g. https://outlook.example.com",
+      ),
+    ),
+  ),
+  /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
    * separated by commas or whitespace. Signing falls back to the next one
    * when an authority fails. Unset (with `PDF_SIGNING_TSA_URL` unset too)
@@ -410,9 +449,10 @@ export const envApiServerSchema = {
   /** Single-authority form of `PDF_SIGNING_TSA_URLS`, appended to it. */
   PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
   /**
-   * Trust anchors for timestamp authorities: PEM text, or a path to a PEM
-   * file. CA certificates, or an authority's own certificate to pin it.
-   * Unset: timestamps are embedded but not counted as trusted time.
+   * Extra trust anchors for timestamp authorities, added to the shipped
+   * ones (EU qualified services, DigiCert and Sectigo public timestamping
+   * roots): PEM text, or a path to a PEM file. CA certificates, or an
+   * authority's own certificate to pin it.
    */
   PDF_SIGNING_TSA_TRUST_PEM: v.optional(v.string()),
 
@@ -537,6 +577,12 @@ export const envApiServerSchema = {
   FEATURE_PUBLIC_LAW: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  /**
+   * A stopping API task releases each local chat turn it reads to another
+   * task instead of ending it. Turn on only once every task adopts released
+   * turns.
+   */
+  FEATURE_CHAT_TURN_HANDOVER: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(
     v.pipe(
       v.string(),
@@ -752,6 +798,7 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_INVOICE_LINKS: featureFlagSchema,
   FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
@@ -770,6 +817,8 @@ export const envApiServerSchema = {
   // opts in only after its Microsoft app registration is granted the
   // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
+  /** Dark-launch internal conflict-of-interest checks until intake review. */
+  FEATURE_CONFLICT_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)
@@ -1111,13 +1160,13 @@ const managedProviderCheckInvariantViolation = ({
   }
   // The free floor runs on the fast tier's own credential and never on the
   // standard one, so a managed free tier without it would refuse every
-  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
-  // deployment may still resolve to OpenRouter from its standard credential.
-  const openRouterMayServe =
-    AI_PROVIDER === "openrouter" ||
-    (AI_PROVIDER === undefined && standardCredential);
+  // request; refuse the configuration at boot instead. A standard credential
+  // serves OpenRouter whatever AI_PROVIDER says: without AI_PROVIDER the
+  // deployment resolves to it, and transcription offers its models under any
+  // provider.
+  const openRouterMayServe = AI_PROVIDER === "openrouter" || standardCredential;
   if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
-    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
+    return "FEATURE_FREE_TIER with a managed OpenRouter credential requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {

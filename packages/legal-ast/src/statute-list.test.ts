@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { ParagraphBlock } from "./document-ast.js";
 import { section72aSubsection1Blocks } from "./fixtures/cz-141-1961-section-72a.js";
+import { section9Blocks } from "./fixtures/hu-mk-2026-493-section-9.js";
 import { section128Subsection2Blocks } from "./fixtures/sk-300-2005-section-128.js";
 import { section15LetterBPoint1Blocks } from "./fixtures/sk-595-2003-section-15.js";
 import {
   E_SBIRKA_ANCHORS,
+  MAGYAR_KOZLONY_ANCHORS,
   SLOV_LEX_ANCHORS,
   US_CODE_ANCHORS,
   wholeStatuteAnchors,
@@ -220,6 +222,47 @@ describe("Slov-Lex anchors", () => {
     expect(drawnSk(slovak).depth).toBe(1);
     expect(drawnSk(czech)).toEqual({ depth: null, marker: null });
     expect(drawn(slovak)).toEqual({ depth: null, marker: null });
+  });
+});
+
+describe("Magyar Közlöny anchors", () => {
+  test("a section's points hang their letters, and the word that closes them sits with the section", () => {
+    expect(
+      section9Blocks.flatMap((block) =>
+        block.type === "paragraph"
+          ? [[block.anchorId, drawnParagraph(MAGYAR_KOZLONY_ANCHORS, block)]]
+          : [],
+      ),
+    ).toEqual([
+      ["sz_9-pont_a", { depth: 1, marker: "a) " }],
+      ["sz_9-pont_b", { depth: 1, marker: "b) " }],
+      ["sz_9-szoveg_1", { depth: null, marker: null }],
+      ["sz_10-bek_1", { depth: null, marker: null }],
+      ["sz_10-bek_2", { depth: null, marker: null }],
+      ["sz_10-bek_3", { depth: null, marker: null }],
+      ["sz_10-bek_4", { depth: null, marker: null }],
+      ["mell_1-szoveg_1", { depth: null, marker: null }],
+    ]);
+  });
+
+  test("a point in a point sits two levels in, and a numbered point hangs its number", () => {
+    // Placeholder wording: only the anchors and designators are under test.
+    const drawnHu = drawnIn(MAGYAR_KOZLONY_ANCHORS);
+    expect(
+      [
+        { anchorId: "sz_6:519-bek_1-pont_b", id: "1", text: "b) pont" },
+        {
+          anchorId: "sz_6:519-bek_1-pont_b-alpont_ba",
+          id: "2",
+          text: "ba) alpont",
+        },
+        { anchorId: "sz_3-pont_12", id: "3", text: "12. pont" },
+      ].map(drawnHu),
+    ).toEqual([
+      { depth: 1, marker: "b) " },
+      { depth: 2, marker: "ba) " },
+      { depth: 1, marker: "12. " },
+    ]);
   });
 });
 

@@ -317,6 +317,18 @@ const RESTRICTED_IMPORT_RULES = {
   // Route code has one approved helper; other exports stay at the boundary.
   "confine-server-reads": [
     {
+      messageId: "confineRequestScenarios",
+      message:
+        "Run server-request scenarios through @/testing/request-test so framework HTTP error handling cannot swallow failures.",
+      modules: [TANSTACK_START_SERVER],
+      restriction: {
+        type: "exports",
+        names: new Set(["requestHandler"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/web/src/testing/request-test.ts"],
+    },
+    {
       messageId: "confineServerReads",
       message: "Use the approved server request helper for this access.",
       modules: [TANSTACK_START_SERVER],
@@ -331,8 +343,10 @@ const RESTRICTED_IMPORT_RULES = {
         ]),
         hit: EXPORT_HIT.binding,
       },
-      // Reads only the sidebar's own open-state cookie, a layout choice.
-      owners: ["apps/web/src/components/sidebar/sidebar-state.ts"],
+      owners: [
+        "apps/web/src/lib/account/ssr-api-headers.ts",
+        "apps/web/src/lib/account/presentation-prefs/server.ts",
+      ],
     },
   ],
   // `<MatterIcon>` always resolves a matter colour (or paints the deliberate
@@ -420,6 +434,26 @@ const RESTRICTED_IMPORT_RULES = {
   ],
   // Most effects are unnecessary; external-system sync goes through the
   // named wrappers so intent is explicit. See /conventions-use-effect.
+  // On iOS the native stack's bars, modals and sheets are UIKit views no app
+  // view rises above; one owner draws over every screen in the window layer
+  // above them. The scope (apps/mobile/src) is set by the rule's override in
+  // oxlint.config.ts.
+  "mobile-window-overlay-owner": [
+    {
+      messageId: "requireWindowOverlay",
+      message:
+        "Draw over every screen through WindowOverlay from " +
+        "'@/components/window-overlay', the one owner of the window layer " +
+        "above the native stack.",
+      modules: [packageWithSubpaths("react-native-screens")],
+      restriction: {
+        type: "exports",
+        names: new Set(["FullWindowOverlay"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/mobile/src/components/window-overlay.tsx"],
+    },
+  ],
   "no-raw-use-effect": [
     {
       messageId: "noRawUseEffect",
@@ -501,6 +535,55 @@ const RESTRICTED_IMPORT_RULES = {
         "packages/mcp-apps/src/case-law-results/app.tsx",
         "packages/mcp-apps/src/decision-reader/app.tsx",
       ],
+    },
+  ],
+  // Every Copy goes through one owner, which writes the clipboard, confirms
+  // the Copy when the clipboard holds what it copies, and renders the Copy
+  // and Copied swap. See ./copy-feedback-owner.ts.
+  "copy-feedback-owner": [
+    {
+      messageId: "copyFeedbackOwner",
+      message:
+        "Render a Copy through @/components/copy-control, not with " +
+        "`{{name}}`: CopyControl for a value, useCopyControl with " +
+        "CopyControlButton or CopyControlFeedback for a custom trigger, " +
+        "useSelectionCopyControl for a selection bar. The owner confirms " +
+        "the press and the reader's own copy of the same text.",
+      modules: [
+        "@stll/ui/copy-button",
+        "packages/ui/src/components/copy-button",
+        "@stll/ui",
+        "packages/ui/src/index",
+      ],
+      restriction: {
+        type: "exports",
+        names: new Set([
+          "CopyButton",
+          "CopyFeedback",
+          "useCopiedFeedback",
+          "useCopyConfirmation",
+        ]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/components/copy-control.tsx",
+        // The package's public barrel re-exports every component.
+        "packages/ui/src/index.ts",
+      ],
+    },
+    {
+      messageId: "clipboardHelperOwner",
+      message:
+        "Write the clipboard through @/components/copy-control (CopyControl, " +
+        "useCopyControl, useSelectionCopyControl), not @stll/clipboard: the " +
+        "owner reports a failed copy and confirms the Copy in place.",
+      modules: ["@stll/clipboard", "packages/clipboard/src/index"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/web/src/components/copy-control.tsx"],
     },
   ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;

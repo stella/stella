@@ -70,7 +70,7 @@ import {
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createMemoryPressureGate,
   createPressurePause,
@@ -440,7 +440,6 @@ export const initFileDerivativeWorker = () => {
     createFileDerivativeProcessor({
       memory,
       pausing,
-      processPdf: processPdfDerivativeJob,
       processThumbnail: processImageThumbnailJob,
     }),
     {
@@ -577,13 +576,13 @@ export const createFileDerivativeProcessor =
     memory,
     now = () => Temporal.Now.instant().epochMilliseconds,
     pausing,
-    processPdf,
+    processPdf = processPdfDerivativeJob,
     processThumbnail,
   }: {
     memory: Pick<MemoryPressureGate, "read">;
     now?: () => number;
     pausing: Pick<PressurePause, "closed">;
-    processPdf: (data: FileDerivativeJobData) => Promise<void>;
+    processPdf?: (data: FileDerivativeJobData) => Promise<void>;
     processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
   }) =>
   async (job: FileDerivativeProcessorJob): Promise<void> => {
@@ -799,6 +798,9 @@ const buildPdfDerivative = async (
       };
     }
     throw conversion.error;
+  }
+  if (conversion.value.buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+    return { type: "refused", reason: DERIVATIVE_FAILURE_REASON.TOO_LARGE };
   }
   return { type: "built", value: conversion.value.buffer };
 };

@@ -45,19 +45,16 @@ import {
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { retainOutlinePageNumbers } from "@/components/docx/folio-outline-items.logic";
 
-const LocalizedColorPicker = ({
-  children,
-  ...props
-}: ComponentProps<FolioUIComponents["ColorPicker"]>) => {
+const LocalizedColorPicker = (
+  props: ComponentProps<FolioUIComponents["ColorPicker"]>,
+) => {
   const t = useTranslations();
 
-  // Folio's contract types the trigger as any node and its toolbar button
-  // does not forward trigger props, so the trigger stays a wrapper here.
+  // Folio passes its toolbar button as the native-button trigger, so the
+  // picker renders it directly as the popover trigger.
   return createElement(ColorPicker, {
     ...props,
     moreLabel: t("common.showMore"),
-    nativeButton: false,
-    trigger: createElement("span", { className: "inline-flex" }, children),
   });
 };
 

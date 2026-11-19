@@ -10,7 +10,9 @@ import type { StellaSandboxMcpBinding } from "../sandbox";
  * with the run's current token. The harness never holds that token: its MCP
  * configuration names this proxy and a per-run secret, so a refreshed token
  * takes effect on the next request without touching the harness, and the
- * secret is worthless once the run ends.
+ * secret is worthless once the run ends. A harness process kept for the
+ * chat's next turn keeps its endpoint parked: it forwards nothing until that
+ * turn's run adopts it, with the run's own token.
  *
  * What it refuses:
  * - an upstream whose origin is not the configured stella API origin, or
@@ -46,7 +48,7 @@ const FORWARDED_RESPONSE_HEADERS = [
 class McpProxyRegistrationError extends TaggedError(
   "McpProxyRegistrationError",
 )<{
-  reason: "foreign_upstream" | "duplicate_run";
+  reason: "foreign_upstream" | "duplicate_run" | "not_parked";
   message: string;
 }> {}
 
@@ -73,7 +75,27 @@ export type McpProxy = {
   refresh: (runId: string, token: string, expiresAt: string) => boolean;
   /** The run's current token, for the sidecar's own calls; `null` once unheld. */
   tokenOf: (runId: string) => string | null;
+  /** The run ended: its endpoint goes, unless `park` kept it. */
   unregister: (runId: string) => void;
+  /**
+   * The run ended but its harness process stays for the chat's next turn:
+   * the endpoint, which that process is configured with, stays and refuses
+   * every request until a run adopts it. The endpoint's key, or `null` when
+   * the run held none.
+   */
+  park: (runId: string) => string | null;
+  /**
+   * A run continuing in the process a parked endpoint belongs to: the
+   * endpoint forwards with this run's token, and keeps its address and
+   * secret. Refused like `register` for a foreign upstream, and when the
+   * endpoint is not parked.
+   */
+  adopt: (
+    endpoint: string,
+    run: McpProxyRun,
+  ) => Result<StellaSandboxMcpBinding, McpProxyRegistrationError>;
+  /** The parked endpoint's process is gone: the endpoint goes too. */
+  drop: (endpoint: string) => void;
   stop: () => Promise<void>;
 };
 
@@ -81,7 +103,8 @@ type HeldRun = {
   upstream: URL;
   /** Fixed length: a presented value of another length is refused early. */
   secret: Buffer;
-  token: string;
+  /** `null` while parked: no run forwards through it. */
+  token: string | null;
   expiresAtMs: number;
 };
 
@@ -138,13 +161,20 @@ export const startMcpProxy = ({
   /** The stella API origin, from the desktop's own configuration. */
   apiOrigin: string;
 }): McpProxy => {
-  const runs = new Map<string, HeldRun>();
+  /** Endpoints by key, the id of the run that registered each. */
+  const endpoints = new Map<string, HeldRun>();
+  /** Each run's endpoint key: its own, or the one it adopted. */
+  const runs = new Map<string, string>();
+  const endpointOf = (runId: string) => {
+    const key = runs.get(runId);
+    return key === undefined ? undefined : endpoints.get(key);
+  };
   /** `127.0.0.1:<port>`, the only `Host` a request may name. */
   const listener = { host: "" };
 
-  const forward = async (request: Request, held: HeldRun) => {
+  const forward = async (request: Request, held: HeldRun, token: string) => {
     const headers = copyHeaders(request.headers, FORWARDED_REQUEST_HEADERS);
-    headers.set("authorization", `Bearer ${held.token}`);
+    headers.set("authorization", `Bearer ${token}`);
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
     const upstream = await Result.tryPromise(async () =>
       fetch(held.upstream, {
@@ -183,59 +213,78 @@ export const startMcpProxy = ({
         return refusal(403);
       }
       const { pathname } = new URL(request.url);
-      const runId = pathname.startsWith(ROUTE_PREFIX)
+      const key = pathname.startsWith(ROUTE_PREFIX)
         ? pathname.slice(ROUTE_PREFIX.length)
         : null;
-      const held = runId === null ? undefined : runs.get(runId);
-      if (held === undefined) {
+      const held = key === null ? undefined : endpoints.get(key);
+      // A parked endpoint serves no run: nobody's token is forwarded.
+      const token = held?.token ?? null;
+      if (held === undefined || token === null) {
         return refusal(404);
       }
       if (!presentsSecret(request, held)) {
         return refusal(401);
       }
-      return forward(request, held);
+      return forward(request, held, token);
     },
   });
   const port = server.port ?? panic("The MCP proxy listener has no TCP port.");
   listener.host = `127.0.0.1:${port}`;
   const origin = `http://${listener.host}`;
 
-  return {
-    origin,
-    register: (run) => {
-      const upstream = URL.parse(run.upstreamUrl);
-      if (upstream === null || !isAllowedUpstream(upstream, apiOrigin)) {
-        return Result.err(
+  const upstreamOf = (
+    run: McpProxyRun,
+  ): Result<URL, McpProxyRegistrationError> => {
+    const upstream = URL.parse(run.upstreamUrl);
+    return upstream === null || !isAllowedUpstream(upstream, apiOrigin)
+      ? Result.err(
           new McpProxyRegistrationError({
             reason: "foreign_upstream",
             message: "The MCP endpoint is not on the stella API origin.",
           }),
-        );
+        )
+      : Result.ok(upstream);
+  };
+  const duplicate = () =>
+    Result.err(
+      new McpProxyRegistrationError({
+        reason: "duplicate_run",
+        message: "The run already has an MCP endpoint.",
+      }),
+    );
+  const binding = (
+    run: McpProxyRun,
+    key: string,
+    secret: string,
+  ): StellaSandboxMcpBinding => ({
+    serverName: run.serverName,
+    url: `${origin}${ROUTE_PREFIX}${encodeURIComponent(key)}`,
+    token: secret,
+  });
+
+  return {
+    origin,
+    register: (run) => {
+      const upstream = upstreamOf(run);
+      if (Result.isError(upstream)) {
+        return upstream;
       }
-      if (runs.has(run.runId)) {
-        return Result.err(
-          new McpProxyRegistrationError({
-            reason: "duplicate_run",
-            message: "The run already has an MCP endpoint.",
-          }),
-        );
+      if (runs.has(run.runId) || endpoints.has(run.runId)) {
+        return duplicate();
       }
       const secret = randomSecret();
-      runs.set(run.runId, {
-        upstream,
+      endpoints.set(run.runId, {
+        upstream: upstream.value,
         secret: Buffer.from(secret),
         token: run.token,
         // An unreadable expiry is held as the earliest, so any refresh wins.
         expiresAtMs: instantMs(run.expiresAt) ?? 0,
       });
-      return Result.ok({
-        serverName: run.serverName,
-        url: `${origin}${ROUTE_PREFIX}${encodeURIComponent(run.runId)}`,
-        token: secret,
-      });
+      runs.set(run.runId, run.runId);
+      return Result.ok(binding(run, run.runId, secret));
     },
     refresh: (runId, token, expiresAt) => {
-      const held = runs.get(runId);
+      const held = endpointOf(runId);
       const expiresAtMs = instantMs(expiresAt);
       if (
         held === undefined ||
@@ -248,11 +297,57 @@ export const startMcpProxy = ({
       held.expiresAtMs = expiresAtMs;
       return true;
     },
-    tokenOf: (runId) => runs.get(runId)?.token ?? null,
+    tokenOf: (runId) => endpointOf(runId)?.token ?? null,
     unregister: (runId) => {
+      const key = runs.get(runId);
       runs.delete(runId);
+      if (key !== undefined) {
+        endpoints.delete(key);
+      }
+    },
+    park: (runId) => {
+      const key = runs.get(runId);
+      const held = endpointOf(runId);
+      runs.delete(runId);
+      if (key === undefined || held === undefined) {
+        return null;
+      }
+      held.token = null;
+      held.expiresAtMs = 0;
+      return key;
+    },
+    adopt: (key, run) => {
+      const upstream = upstreamOf(run);
+      if (Result.isError(upstream)) {
+        return upstream;
+      }
+      if (runs.has(run.runId)) {
+        return duplicate();
+      }
+      const held = endpoints.get(key);
+      if (held === undefined || held.token !== null) {
+        return Result.err(
+          new McpProxyRegistrationError({
+            reason: "not_parked",
+            message: "The kept harness process has no MCP endpoint to reuse.",
+          }),
+        );
+      }
+      held.upstream = upstream.value;
+      held.token = run.token;
+      held.expiresAtMs = instantMs(run.expiresAt) ?? 0;
+      runs.set(run.runId, key);
+      return Result.ok(binding(run, key, held.secret.toString()));
+    },
+    drop: (key) => {
+      const held = endpoints.get(key);
+      // Only a parked endpoint: one a run adopted goes with that run.
+      if (held?.token === null) {
+        endpoints.delete(key);
+      }
     },
     stop: async () => {
+      endpoints.clear();
       runs.clear();
       await server.stop(true);
     },

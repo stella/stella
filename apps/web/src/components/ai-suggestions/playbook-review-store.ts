@@ -24,6 +24,7 @@ import type {
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   mergeStreamedPosition,
+  proposalRefusalMessage,
   REVIEW_PROPOSAL_EVENT,
   streamReviewProposal,
 } from "@/components/ai-suggestions/document-review-proposal-stream";
@@ -147,6 +148,7 @@ type StartReviewArgs = {
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
+  documentsTooLargeMessage: string;
   /** What the proposal is followed by: the run, or the confirm step. */
   startMode: ReviewStartMode;
   /** The picked playbook's enabled positions, when there is one. */
@@ -271,32 +273,32 @@ const requestRun = async ({
   skipped,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
   // Both channels are read here rather than handed on as one response: the
   // caller decides between attaching to an already active run and surfacing
   // the failure, and neither decision may depend on an unexamined `.data`.
-  const { data, error } = await api
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["document-reviews"].runs.post(
-      {
-        target: {
-          entityId: toSafeId<"entity">(entityId),
-          fileFieldId: toSafeId<"field">(fileFieldId),
-        },
-        playbookId:
-          playbookId === null
-            ? null
-            : toSafeId<"playbookDefinition">(playbookId),
-        // The whole confirmed list, disabled entries included: the run pins it
-        // as its snapshot, and "Save as playbook" keeps exactly what was
-        // confirmed. Grading skips the disabled ones server-side.
-        positions: [...positions],
-        references: referenceRefs(references),
-        perspective,
-        skipped: [...skipped],
-        ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+  const { data, error } = await workspaceApi["document-reviews"].runs.post(
+    {
+      target: {
+        entityId: toSafeId<"entity">(entityId),
+        fileFieldId: toSafeId<"field">(fileFieldId),
       },
-      { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
-    );
+      playbookId:
+        playbookId === null ? null : toSafeId<"playbookDefinition">(playbookId),
+      // The whole confirmed list, disabled entries included: the run pins it
+      // as its snapshot, and "Save as playbook" keeps exactly what was
+      // confirmed. Grading skips the disabled ones server-side.
+      positions: [...positions],
+      references: referenceRefs(references),
+      perspective,
+      skipped: [...skipped],
+      ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+    },
+    { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
+  );
   return { data, error };
 };
 
@@ -328,6 +330,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
       entityId,
       fileFieldId,
       unexpectedErrorMessage,
+      documentsTooLargeMessage,
       startMode,
       seededPositions,
     }) => {
@@ -502,10 +505,11 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
         refusal !== null ||
         proposalStatus === "failed"
       ) {
-        const message =
-          refusal === null
-            ? unexpectedErrorMessage
-            : userErrorMessage(refusal, unexpectedErrorMessage);
+        const message = proposalRefusalMessage({
+          refusal,
+          unexpectedErrorMessage,
+          documentsTooLargeMessage,
+        });
         set((state) => {
           const current = state.sessions[key];
           if (current?.requestId !== requestId) {

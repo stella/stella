@@ -152,7 +152,7 @@ const asString = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
 const arrayAt = (payload: unknown, key: string): readonly unknown[] | null => {
-  if (!isRecord(payload)) {
+  if (!isRecord(payload) || !Object.hasOwn(payload, key)) {
     return null;
   }
   const value = payload[key];
@@ -160,7 +160,7 @@ const arrayAt = (payload: unknown, key: string): readonly unknown[] | null => {
 };
 
 const fieldOf = (payload: unknown, key: string): unknown =>
-  isRecord(payload) ? payload[key] : undefined;
+  isRecord(payload) && Object.hasOwn(payload, key) ? payload[key] : undefined;
 
 /**
  * The path `--all` merges concatenated windows back to. A merged payload is
@@ -177,7 +177,7 @@ export const MERGED_TEXT_PATH = "text";
 export const valueAtPath = (payload: unknown, path: string): unknown => {
   let current: unknown = payload;
   for (const key of path.split(".")) {
-    if (!isRecord(current)) {
+    if (!isRecord(current) || !Object.hasOwn(current, key)) {
       return undefined;
     }
     current = current[key];
@@ -436,7 +436,7 @@ const renderTable = ({
   const allCols = columns ?? (isRecord(first) ? Object.keys(first) : ["value"]);
   const allRows = items.map((item) =>
     allCols.map((col) =>
-      isRecord(item) ? formatCell(item[col]) : formatCell(item),
+      isRecord(item) ? formatCell(fieldOf(item, col)) : formatCell(item),
     ),
   );
   // An inferred column that is empty on every row carries nothing; a caller's
@@ -534,14 +534,14 @@ const renderComposite = (
   view: CompositeView,
   width: number | undefined,
 ): string => {
-  const summary: Record<string, unknown> = {};
+  const summary = new Map<string, unknown>();
   for (const path of view.summary) {
     const value = valueAtPath(payload, path);
     if (value !== undefined && value !== null) {
-      summary[path] = value;
+      summary.set(path, value);
     }
   }
-  const blocks = [renderKeyValue(summary, width)];
+  const blocks = [renderKeyValue(Object.fromEntries(summary), width)];
   for (const section of view.sections) {
     const headers = section.columns.map((column) => columnHeader(column));
     const rows = gatherRows(payload, section.rows).map((gathered) =>

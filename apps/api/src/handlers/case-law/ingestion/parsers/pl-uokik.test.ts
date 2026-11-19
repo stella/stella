@@ -560,6 +560,46 @@ describe("a UOKiK decision whose recital runs on into its ruling", () => {
   });
 });
 
+/** A 2011 decision whose reasons open on sentences naming the office. */
+const RLU_5_2011 = new URL(
+  "__fixtures__/decision-roles/pl-uokik-rlu-5-2011.pdf",
+  import.meta.url,
+);
+
+/** A 2026 decision whose reasons go on after `… zważył, co następuje.`. */
+const RLO_1_2026 = new URL(
+  "__fixtures__/decision-roles/pl-uokik-rlo-1-2026.pdf",
+  import.meta.url,
+);
+
+describe("a UOKiK decision's reasons led in by the office", () => {
+  const roleOf = (blocks: readonly Block[], text: string) => {
+    const block = blocks.find((candidate) => candidate.plainText === text);
+    return block?.type === "paragraph" ? block.role : block?.type;
+  };
+
+  test.each([
+    [
+      "RLU-5/2011",
+      RLU_5_2011,
+      "Prezes Urzędu zakwestionował następujące postanowienia wzorca umowy zamówienie:",
+    ],
+    [
+      "RLU-5/2011",
+      RLU_5_2011,
+      "Prezes Urzędu ustalił następujący stan faktyczny w tej sprawie:",
+    ],
+    [
+      "RŁO-1/2026",
+      RLO_1_2026,
+      "Prezes Urzędu Ochrony Konkurencji i Konsumentów zważył, co następuje.",
+    ],
+  ])("%s: %p is the reasons, not a signature", async (_, fixture, line) => {
+    const { blocks } = await parsedOf(fixture);
+    expect(roleOf(blocks, line)).toBe("argumentation");
+  });
+});
+
 // ── Each rule that drops a line, on a PDF built for it ───
 
 describe("a UOKiK decision whose first page carries the office's letterhead footer", () => {

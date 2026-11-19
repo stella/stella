@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-case-law-provision-citations-eli-anchor-idx",
   revision: 880,
+  lifecycle: "finalized",
   type: "replacements",
   values: [
     {

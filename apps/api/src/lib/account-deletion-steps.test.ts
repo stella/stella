@@ -120,6 +120,7 @@ describe("pendingUploadS3KeysForDeletion", () => {
 
     await deletePendingUploads({
       tx,
+      retainedWorkspaceIds: [],
       currentUserId: "user-1",
       s3KeysToDelete,
     });
@@ -204,6 +205,7 @@ describe("desktop edit session deletion", () => {
 
     await deleteDesktopEditSessionsAndHandoffs({
       tx,
+      retainedWorkspaceIds: [],
       currentUserId: "user-1",
       s3KeysToDelete,
     });
@@ -228,6 +230,7 @@ test("storage cleanup keeps its publication deadline on the parent request", asy
   const notBefore = new Date("2026-10-10T12:15:30.000Z");
   await recordAccountDeletionRequest({
     tx,
+    retainedWorkspaceIds: [],
     deletionRequestId: toSafeId<"accountDeletionRequest">(
       "0198fa3d-fc8d-7000-8000-000000000020",
     ),

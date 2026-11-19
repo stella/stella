@@ -20,7 +20,11 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import {
+  documentReviewFindingDecisions,
+  documentReviewFindings,
+  documentReviewRuns,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
@@ -252,7 +256,9 @@ const seedRun = async ({
     status,
     total,
     requestedBy: ids.userA1,
-    ...(status === "running" ? { startedAt: new Date() } : {}),
+    ...(status === "running"
+      ? { startedAt: new Date("2026-04-30T09:00:00.000Z") }
+      : {}),
   });
 };
 
@@ -294,6 +300,21 @@ const decisionsOf = async (runId: SafeId<"documentReviewRun">) =>
     .from(documentReviewFindings)
     .where(eq(documentReviewFindings.runId, runId));
 
+/** The decision history of one run's findings, as stored. */
+const historyOf = async (runId: SafeId<"documentReviewRun">) =>
+  await testDb
+    .select({
+      decision: documentReviewFindingDecisions.decision,
+      actorId: documentReviewFindingDecisions.actorId,
+      createdAt: documentReviewFindingDecisions.createdAt,
+    })
+    .from(documentReviewFindingDecisions)
+    .innerJoin(
+      documentReviewFindings,
+      eq(documentReviewFindings.id, documentReviewFindingDecisions.findingId),
+    )
+    .where(eq(documentReviewFindings.runId, runId));
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -329,7 +350,10 @@ describe("document review run persistence", () => {
     // active window, not just the queued moment.
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "running", startedAt: new Date() })
+      .set({
+        status: "running",
+        startedAt: new Date("2026-04-30T09:00:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, first));
     const third = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     expect(
@@ -345,7 +369,10 @@ describe("document review run persistence", () => {
     await seedRun({ runId: previous, status: "queued", target });
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "completed", finishedAt: new Date() })
+      .set({
+        status: "completed",
+        finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, previous));
 
     const next = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
@@ -533,12 +560,18 @@ describe("document review run persistence", () => {
     expect(
       violationText(
         await rejectionOf(
-          insertDecision({ decision: "open", decidedAt: new Date() }),
+          insertDecision({
+            decision: "open",
+            decidedAt: new Date("2026-04-30T09:05:00.000Z"),
+          }),
         ),
       ),
     ).toContain(DECISION_TIMING_CHECK);
 
-    await insertDecision({ decision: "dismissed", decidedAt: new Date() });
+    await insertDecision({
+      decision: "dismissed",
+      decidedAt: new Date("2026-04-30T09:05:00.000Z"),
+    });
   });
 
   test("keeps an applied edit and its moment inseparable", async () => {
@@ -589,7 +622,7 @@ describe("document review run persistence", () => {
         await rejectionOf(
           insertApplication({
             applicationStatus: "pending",
-            appliedAt: new Date(),
+            appliedAt: new Date("2026-04-30T09:06:00.000Z"),
           }),
         ),
       ),
@@ -597,7 +630,7 @@ describe("document review run persistence", () => {
 
     await insertApplication({
       applicationStatus: "applied",
-      appliedAt: new Date(),
+      appliedAt: new Date("2026-04-30T09:06:00.000Z"),
     });
   });
 
@@ -608,7 +641,7 @@ describe("document review run persistence", () => {
    */
   test("carries a decision onto a re-run that repeats the finding", async () => {
     const target = reviewTarget();
-    const decidedAt = new Date();
+    const decidedAt = new Date("2026-04-30T09:05:00.000Z");
 
     const firstRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: firstRun, status: "running", target });
@@ -619,7 +652,10 @@ describe("document review run persistence", () => {
       .where(eq(documentReviewFindings.runId, firstRun));
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "completed", finishedAt: new Date() })
+      .set({
+        status: "completed",
+        finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, firstRun));
 
     const repeatRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
@@ -635,16 +671,30 @@ describe("document review run persistence", () => {
           fileFieldId: target.fileFieldId,
         }),
     );
-    expect(carried).toBe(1);
+    expect(carried.carried).toBe(1);
     expect(await decisionsOf(repeatRun)).toEqual([
       { decision: "accepted", decidedBy: ids.userA1, decidedAt },
+    ]);
+    // The inherited decision arrives with its history: one event, with the
+    // original decider and moment, written by the database whichever path
+    // decides. A decided finding without one is what the online repair reads
+    // as pending.
+    expect(await historyOf(repeatRun)).toEqual([
+      {
+        decision: "accepted",
+        actorId: ids.userA1,
+        createdAt: decidedAt,
+      },
     ]);
 
     // A run whose finding quotes different text inherits nothing: that is the
     // one a reviewer has to read again.
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "completed", finishedAt: new Date() })
+      .set({
+        status: "completed",
+        finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, repeatRun));
     const changedRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: changedRun, status: "running", target });
@@ -659,10 +709,14 @@ describe("document review run persistence", () => {
           fileFieldId: target.fileFieldId,
         }),
     );
-    expect(carriedAfterChange).toBe(0);
+    expect(carriedAfterChange.carried).toBe(0);
+    // Same conclusion over other words: the reading stays behind as
+    // text-changed.
+    expect([...carriedAfterChange.outcomes.values()]).toEqual(["text-changed"]);
     expect(await decisionsOf(changedRun)).toEqual([
       { decision: "open", decidedBy: null, decidedAt: null },
     ]);
+    expect(await historyOf(changedRun)).toEqual([]);
   });
 
   test("defaults a committed finding to undecided", async () => {

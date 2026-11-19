@@ -58,6 +58,7 @@ import {
   documentReferenceCounters,
   documentTypes,
   entities,
+  entityDeletionCleanupRequests,
   entityVersions,
   expenses,
   extractedContent,
@@ -92,17 +93,19 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { captureError } from "@/api/lib/analytics/capture";
 import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
+import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
+import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
-import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -118,6 +121,7 @@ import type {
   Position,
   PositionSeverity,
 } from "@/api/lib/workflow/playbook-positions";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
@@ -2724,11 +2728,27 @@ export async function seed(organizationId?: string, userId?: string) {
     return [USER_ID, ...colleagueUserIds];
   };
 
+  // Seed replacement runs in the owner's organization scope, behind the
+  // organization's legal-hold fence.
+  const clearSeedDataTransaction = async <T>(
+    run: (tx: Transaction) => Promise<T>,
+  ) =>
+    await organizationTransaction(async (tx) => {
+      const hold = await requireNoHold({
+        tx,
+        organizationId: ORG_ID,
+        target: { type: "organization" },
+      });
+      if (hold.isErr()) {
+        throw hold.error;
+      }
+      return await run(tx);
+    });
+
   /**
    * Delete every chat file stored in threads of these workspaces: generated
-   * views and anything a developer uploaded since the last seed. Objects (and
-   * image thumbnails) go first, as the thread delete handler does, so no row
-   * removal leaves an unreachable object behind.
+   * views and anything uploaded since the last seed. Row withdrawal and durable
+   * object-cleanup instructions commit together under the legal-hold fence.
    */
   const deleteThreadUserFiles = async (
     workspaceIds: readonly WorkspaceId[],
@@ -2746,23 +2766,34 @@ export async function seed(organizationId?: string, userId?: string) {
           })
           .from(userFiles)
           .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
-          .where(inArray(chatThreads.workspaceId, [...workspaceIds])),
-    );
-    for (const page of chunkItems(files, SEED_INSERT_CHUNK_SIZE)) {
-      const deleted = await deleteS3Keys(page.flatMap(userFileCleanupKeys));
-      if (deleted.isErr()) {
-        panic("Could not delete seeded chat files from storage", deleted.error);
-      }
-      await withAggregateTransaction(
-        db,
-        async (tx) =>
-          await tx.delete(userFiles).where(
-            inArray(
-              userFiles.id,
-              page.map(({ id }) => id),
+          .where(
+            and(
+              eq(chatThreads.organizationId, ORG_ID),
+              inArray(chatThreads.workspaceId, [...workspaceIds]),
             ),
           ),
-      );
+    );
+    for (const page of chunkItems(files, SEED_INSERT_CHUNK_SIZE)) {
+      const requestId = createSafeId<"entityDeletionCleanupRequest">();
+      await clearSeedDataTransaction(async (tx) => {
+        await tx.insert(entityDeletionCleanupRequests).values({
+          id: requestId,
+          organizationId: ORG_ID,
+          workspaceId: null,
+          s3Keys: page.flatMap(userFileCleanupKeys),
+        });
+        await tx.delete(userFiles).where(
+          inArray(
+            userFiles.id,
+            page.map(({ id }) => id),
+          ),
+        );
+      });
+      await handoffCommittedEntityDeletionCleanupBatch({
+        captureDeliveryError: captureError,
+        enqueueCleanup: enqueueEntityDeletionCleanup,
+        requestIds: [requestId],
+      });
     }
   };
 
@@ -2794,17 +2825,31 @@ export async function seed(organizationId?: string, userId?: string) {
       ...personContacts,
       ...moreOrgContacts,
     ].map((contact) => contact.id);
-    const allSeedWorkspaceIds = [
+    const candidateSeedWorkspaceIds = [
       ...seedWorkspaces.map((workspace) => workspace.id),
       ...MORE_WORKSPACES.map((workspace) =>
         seedId(`extra-ws-${workspace.reference}`),
       ),
     ];
+    const allSeedWorkspaceIds = (
+      await clearSeedDataTransaction(
+        async (tx) =>
+          await tx
+            .select({ id: workspaces.id })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.organizationId, ORG_ID),
+                inArray(workspaces.id, candidateSeedWorkspaceIds),
+              ),
+            ),
+      )
+    ).map(({ id }) => id);
     const seedReferences = [...seedWorkspaces, ...MORE_WORKSPACES].map(
       (workspace) => workspace.reference,
     );
     if (allSeedWorkspaceIds.length > 0) {
-      await db.transaction(
+      await clearSeedDataTransaction(
         async (tx) =>
           await tx
             .delete(chatMessages)
@@ -2813,7 +2858,7 @@ export async function seed(organizationId?: string, userId?: string) {
       // user_files.thread_id uses ON DELETE RESTRICT: a thread's files
       // must go before the thread, stored objects first.
       await deleteThreadUserFiles(allSeedWorkspaceIds);
-      await db.transaction(
+      await clearSeedDataTransaction(
         async (tx) =>
           await tx
             .delete(chatThreads)
@@ -2821,7 +2866,7 @@ export async function seed(organizationId?: string, userId?: string) {
       );
       // property_dependencies.depends_on_property_id uses ON DELETE RESTRICT,
       // so dependencies must be removed before the workspace cascade.
-      await db.transaction(
+      await clearSeedDataTransaction(
         async (tx) =>
           await tx
             .delete(propertyDependencies)
@@ -2830,10 +2875,15 @@ export async function seed(organizationId?: string, userId?: string) {
             ),
       );
       await deleteRetainedBilling(allSeedWorkspaceIds);
-      await db.transaction(async (tx) => {
+      await clearSeedDataTransaction(async (tx) => {
         await tx
           .delete(workspaces)
-          .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
+          .where(
+            and(
+              eq(workspaces.organizationId, ORG_ID),
+              inArray(workspaces.id, allSeedWorkspaceIds),
+            ),
+          );
         await tx
           .delete(documentReferenceCounters)
           .where(
@@ -2849,10 +2899,13 @@ export async function seed(organizationId?: string, userId?: string) {
     }
     // Include manually created workspaces that reference seed contacts, not
     // only workspaces whose IDs came from this script.
-    const clientWorkspaces = await db.transaction(
+    const clientWorkspaces = await clearSeedDataTransaction(
       async (tx) =>
         await tx.query.workspaces.findMany({
-          where: { clientId: { in: allSeedContactIds } },
+          where: {
+            organizationId: { eq: ORG_ID },
+            clientId: { in: allSeedContactIds },
+          },
           columns: { id: true },
         }),
     );
@@ -2862,7 +2915,7 @@ export async function seed(organizationId?: string, userId?: string) {
     if (clientWorkspaceIds.length > 0) {
       // These relations use ON DELETE RESTRICT and can belong to manually
       // created workspaces that reference deterministic seed contacts.
-      await db.transaction(
+      await clearSeedDataTransaction(
         async (tx) =>
           await tx
             .delete(chatMessages)
@@ -2871,13 +2924,13 @@ export async function seed(organizationId?: string, userId?: string) {
       // user_files.thread_id uses ON DELETE RESTRICT: a thread's files
       // must go before the thread, stored objects first.
       await deleteThreadUserFiles(clientWorkspaceIds);
-      await db.transaction(
+      await clearSeedDataTransaction(
         async (tx) =>
           await tx
             .delete(chatThreads)
             .where(sql`${chatThreads.workspaceId} IN ${clientWorkspaceIds}`),
       );
-      await db.transaction(
+      await clearSeedDataTransaction(
         async (tx) =>
           await tx
             .delete(propertyDependencies)
@@ -2887,17 +2940,27 @@ export async function seed(organizationId?: string, userId?: string) {
       );
       await deleteRetainedBilling(clientWorkspaceIds);
     }
-    await organizationTransaction(
+    await clearSeedDataTransaction(
       async (tx) =>
         await tx
           .delete(workspaces)
-          .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`),
+          .where(
+            and(
+              eq(workspaces.organizationId, ORG_ID),
+              inArray(workspaces.clientId, allSeedContactIds),
+            ),
+          ),
     );
-    await organizationTransaction(
+    await clearSeedDataTransaction(
       async (tx) =>
         await tx
           .delete(contacts)
-          .where(sql`${contacts.id} IN ${allSeedContactIds}`),
+          .where(
+            and(
+              eq(contacts.organizationId, ORG_ID),
+              inArray(contacts.id, allSeedContactIds),
+            ),
+          ),
     );
   };
 

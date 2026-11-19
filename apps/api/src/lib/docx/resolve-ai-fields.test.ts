@@ -340,6 +340,36 @@ describe("resolveAiFields — array-scoped (per-item) fields", () => {
     ]);
   });
 
+  test("drafts create owned intermediate records instead of changing shared inherited data", async () => {
+    const sharedReview = { retained: "shared value" };
+    const prototype = { review: sharedReview };
+    const first: Record<string, unknown> = { name: "Alpha" };
+    const second: Record<string, unknown> = { name: "Beta" };
+    Object.setPrototypeOf(first, prototype);
+    Object.setPrototypeOf(second, prototype);
+    const rows = [first, second];
+
+    const result = await resolveAiFields({
+      values: { contracts: rows },
+      fields: [{ path: "contracts.review.note", aiPrompt: "Draft a note" }],
+      generate: async ({ values }) => drafted(`NOTE ${String(values["name"])}`),
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.values["contracts"]).toBe(rows);
+    expect(sharedReview).toEqual({ retained: "shared value" });
+    expect(Object.entries(first)).toEqual([
+      ["name", "Alpha"],
+      ["review", { note: "NOTE Alpha" }],
+    ]);
+    expect(Object.entries(second)).toEqual([
+      ["name", "Beta"],
+      ["review", { note: "NOTE Beta" }],
+    ]);
+    expect(Object.getPrototypeOf(first)).toBe(prototype);
+    expect(Object.getPrototypeOf(second)).toBe(prototype);
+  });
+
   test("a double-array path is skipped (one array level in v1)", async () => {
     let calls = 0;
     const result = await resolveAiFields({

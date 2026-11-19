@@ -38,10 +38,7 @@ const missing = (owner: string, scope: unknown, steps: unknown): string[] => {
 };
 
 /** Dangling `steps.<id>` references in one parsed workflow or action file. */
-export const danglingStepReferences = (
-  file: string,
-  document: unknown,
-): string[] => {
+const danglingStepReferences = (file: string, document: unknown): string[] => {
   if (!isRecord(document)) {
     return [];
   }

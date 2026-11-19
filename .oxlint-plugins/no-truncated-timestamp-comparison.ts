@@ -1,7 +1,14 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged } from "@oxlint/plugins";
 
-import { isAstNode, resolveVariable } from "./utils.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import {
+  filenameForContext,
+  isAstNode,
+  isIdentifierReference,
+  resolveVariable,
+  unwrapExpression,
+} from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
 // Require an exact-precision form when comparing against a timestamp column.
@@ -71,7 +78,8 @@ import type { AstNode } from "./utils.ts";
 //   lte(caseLawDecisions.createdAt, checkpoint.snapshotAt)
 //
 // Allowed — raw SQL templates:
-//   sql`${t.createdAt} > ${token}::timestamptz`        // explicit cast
+//   sql`${t.createdAt} > ${token}::timestamptz`        // explicit cast of a
+//        text token; a Date under the cast is no-date-under-timestamp-cast's
 //   sql`${t.createdAt} <= (${v}::timestamp AT TIME ZONE 'UTC')` // re-anchor
 //   sql`(${t.createdAt}, ${t.id}) < (${pgTimestampCursorBoundary(c)}, ${id})`
 //   sql`(${t.createdAt}, ${t.id}) < (select b.created_at, b.id from t b
@@ -711,6 +719,128 @@ const configuredAllowedOperandCalls = (options: unknown): unknown[] => {
   return Array.isArray(calls) ? calls : [];
 };
 
+const isPgTableCall = (node: unknown): boolean =>
+  isAstNode(node) &&
+  node.type === "CallExpression" &&
+  calleeName(node) === "pgTable";
+
+// ── Raw SQL comparison slots ─────────────────────────────────────────────
+//
+// True when the operand interpolated at `index` sits on the right of
+// a comparison whose left operand is a timestamp column.
+const isTimestampComparisonSlot = (
+  quasis: unknown[],
+  expressions: unknown[],
+  index: number,
+  precedingSql: string,
+): boolean => {
+  const before = stripSqlComments(rawTextOf(quasis[index]));
+
+  // `(${t.createdAt}, ${t.id}) > (${boundary}, ${id})`: this
+  // interpolation is the right tuple's first slot.
+  if (TUPLE_COMPARISON.test(before)) {
+    const first = leftTupleFirstIndex(quasis, index);
+    return (
+      first !== undefined && isTimestampColumnExpression(expressions[first])
+    );
+  }
+
+  const match = findComparisonOperator(before);
+  if (match === undefined) {
+    return false;
+  }
+  // `SET indexed_at = ${value}` writes the column; it does not read it
+  // back, so nothing is truncated.
+  if (match.operator === "=" && isAssignmentClause(precedingSql)) {
+    return false;
+  }
+  const head = before.slice(0, match.index);
+  // Nothing before the operator: the left operand is the previous
+  // interpolation (`${t.updatedAt} IS NOT DISTINCT FROM ${token}`).
+  if (head.trim() === "") {
+    return isTimestampColumnExpression(expressions[index - 1]);
+  }
+  // Otherwise the column is written in the SQL text itself
+  // (`created_at > ${cursor}`).
+  return trailingNameIsTimestampColumn(head);
+};
+
+// ── Dates under an explicit cast ─────────────────────────────────────────
+//
+// `no-date-under-timestamp-cast` covers the operand the comparison rule above
+// lets through: one followed by `::timestamptz`. The cast makes the operand a
+// timestamp in SQL; it restores nothing. A `Date` read from a row lost its
+// microseconds in the driver, so `${row.createdAt}::timestamptz` still
+// compares a truncated value, and a row can sort after its own start.
+//
+// Types are out of reach here, so the rule names the shapes that are a `Date`
+// by construction:
+//
+//   - a stored timestamp read, `<row>.<column>At`, whose owner is neither an
+//     imported table nor a `pgTable` binding or callback parameter, also
+//     through `.toISOString()`, `.toJSON()`, `.getTime()`, `.valueOf()`,
+//     `new Date(...)`, `??`/`?:`, and one `const` hop;
+//   - in a keyset tuple, any `.toISOString()` or `new Date(...)`: the slot
+//     beside an id is a row's boundary, never a moving cutoff.
+//
+// Flagged:
+//   sql`(${t.createdAt}, ${t.id}) > (${turn.createdAt}::timestamptz, ${turn.id}::uuid)`
+//   sql`(${t.createdAt}, ${t.id}) > (${after.toISOString()}::timestamptz, ${id}::uuid)`
+//   sql`${t.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}::timestamptz`
+//   gt(t.createdAt, sql`${cursor.createdAt}::timestamptz`)
+//
+// Allowed:
+//   sql`(${t.createdAt}, ${t.id}) > (select b.created_at, b.id from t b
+//        where b.id = ${boundaryId})`                  // boundary stays in-DB
+//   sql`(${t.createdAt}, ${t.id}) > (${pgTimestampCursorBoundary(c)}, ${id})`
+//   sql`${t.createdAt} > ${token}::timestamptz`        // a text token
+//   sql`${t.createdAt} <= ${cutoff.toISOString()}::timestamptz` // a cutoff
+//   sql`${t.settledAt} >= ${t.createdAt}::timestamptz` // column to column:
+//        one parameter on both sides, or an imported or pgTable owner
+//
+// A full-precision text token held in a field named like its column
+// (`cursor.createdAt`) reads the same as a `Date` and is flagged with it: pass
+// it through pgTimestampCursorBoundary, or name it for what it is.
+
+// Also the id of its rollout in scripts/guard-rollouts.
+const DATE_UNDER_CAST_GUARD = "no-date-under-timestamp-cast";
+
+const DATE_RENDERING_METHODS = new Set([
+  "getTime",
+  "toISOString",
+  "toJSON",
+  "valueOf",
+]);
+
+// The value a `Date` rendering starts from: the receiver of
+// `x.toISOString()` or the argument of `new Date(x)`.
+const dateRenderingSource = (wrapped: unknown): unknown => {
+  const node = unwrapExpression(wrapped);
+  if (node === null) {
+    return undefined;
+  }
+  if (node.type === "NewExpression") {
+    return isIdentifierNamed(node.callee, "Date") &&
+      Array.isArray(node.arguments) &&
+      node.arguments.length === 1
+      ? node.arguments[0]
+      : undefined;
+  }
+  if (node.type !== "CallExpression") {
+    return undefined;
+  }
+  const { callee } = node;
+  const method = calleeName(node);
+  return isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    method !== undefined &&
+    DATE_RENDERING_METHODS.has(method)
+    ? callee.object
+    : undefined;
+};
+
+const MAX_DATE_SOURCE_STEPS = 6;
+
 export default eslintCompatPlugin({
   meta: { name: "no-truncated-timestamp-comparison" },
   rules: {
@@ -725,7 +855,9 @@ export default eslintCompatPlugin({
             "and makes an IS NOT DISTINCT FROM guard a no-op. Use " +
             "createTimestampIdCursorCodec / pgTimestampCursorBoundary, " +
             "timestampCasToken / timestampMatchesCasToken, resolve the " +
-            "boundary in-database by id, or cast the operand `::timestamptz`. " +
+            "boundary in-database by id, or cast a full-precision text token " +
+            "`::timestamptz` (a Date under that cast is still truncated; see " +
+            "no-date-under-timestamp-cast). " +
             "A cutoff read straight from the clock (new Date(), Date.now(), " +
             "a createTestClock instance's now(), or imported " +
             "Temporal.Now.instant().epochMilliseconds) " +
@@ -1061,11 +1193,6 @@ export default eslintCompatPlugin({
         const isFreshClockOperand = (node: unknown): boolean =>
           isFreshClockRead(node, clockPredicates);
 
-        const isPgTableCall = (node: unknown): boolean =>
-          isAstNode(node) &&
-          node.type === "CallExpression" &&
-          calleeName(node) === "pgTable";
-
         // The same spelling on both operands is not enough: a helper object
         // can group a real column and a round-tripped Date under one owner.
         // Accept the exemption only when that owner resolves to a pgTable
@@ -1356,48 +1483,6 @@ export default eslintCompatPlugin({
           return true;
         };
 
-        // ── Family A: raw SQL templates ──────────────────────────────────
-        //
-        // True when the operand interpolated at `index` sits on the right of
-        // a comparison whose left operand is a timestamp column.
-        const isTimestampComparisonSlot = (
-          quasis: unknown[],
-          expressions: unknown[],
-          index: number,
-          precedingSql: string,
-        ): boolean => {
-          const before = stripSqlComments(rawTextOf(quasis[index]));
-
-          // `(${t.createdAt}, ${t.id}) > (${boundary}, ${id})`: this
-          // interpolation is the right tuple's first slot.
-          if (TUPLE_COMPARISON.test(before)) {
-            const first = leftTupleFirstIndex(quasis, index);
-            return (
-              first !== undefined &&
-              isTimestampColumnExpression(expressions[first])
-            );
-          }
-
-          const match = findComparisonOperator(before);
-          if (match === undefined) {
-            return false;
-          }
-          // `SET indexed_at = ${value}` writes the column; it does not read it
-          // back, so nothing is truncated.
-          if (match.operator === "=" && isAssignmentClause(precedingSql)) {
-            return false;
-          }
-          const head = before.slice(0, match.index);
-          // Nothing before the operator: the left operand is the previous
-          // interpolation (`${t.updatedAt} IS NOT DISTINCT FROM ${token}`).
-          if (head.trim() === "") {
-            return isTimestampColumnExpression(expressions[index - 1]);
-          }
-          // Otherwise the column is written in the SQL text itself
-          // (`created_at > ${cursor}`).
-          return trailingNameIsTimestampColumn(head);
-        };
-
         return {
           before() {
             allowedOperandCalls.clear();
@@ -1578,6 +1663,224 @@ export default eslintCompatPlugin({
               return;
             }
             report(operand);
+          },
+        };
+      },
+    },
+    "no-date-under-timestamp-cast": {
+      meta: {
+        type: "problem",
+        messages: {
+          dateUnderTimestampCast:
+            "`::timestamptz` does not restore what a JS Date dropped. The " +
+            "column holds microseconds and a Date read from a row holds " +
+            "milliseconds, so this still compares a truncated value: a row " +
+            "can sort after its own timestamp. Resolve the boundary " +
+            "in-database by id (`(select b.created_at, b.id from t b where " +
+            "b.id = $1)`), or carry a full-precision token through " +
+            "createTimestampIdCursorCodec / pgTimestampCursorBoundary or " +
+            "timestampCasToken / timestampMatchesCasToken.",
+        },
+        schema: [],
+      },
+      createOnce(context) {
+        const variableOf = (node: unknown) =>
+          isIdentifierReference(node) ? resolveVariable(context, node) : null;
+
+        const isTableOwner = (owner: AstNode): boolean => {
+          const variable = variableOf(owner);
+          return (
+            variable?.defs.some((def) => {
+              if (def.type === "ImportBinding") {
+                return true;
+              }
+              if (def.type === "Variable" && isAstNode(def.node)) {
+                return (
+                  def.node.type === "VariableDeclarator" &&
+                  isPgTableCall(def.node.init)
+                );
+              }
+              return (
+                def.type === "Parameter" &&
+                isAstNode(def.node) &&
+                isPgTableCall(def.node.parent)
+              );
+            }) === true
+          );
+        };
+
+        const isParameter = (owner: AstNode): boolean =>
+          variableOf(owner)?.defs.some((def) => def.type === "Parameter") ===
+          true;
+
+        const constInitializer = (node: AstNode): unknown => {
+          const variable = variableOf(node);
+          const [def] = variable?.defs ?? [];
+          return variable?.defs.length === 1 &&
+            def?.type === "Variable" &&
+            isAstNode(def.node) &&
+            def.node.type === "VariableDeclarator" &&
+            isAstNode(def.parent) &&
+            def.parent.type === "VariableDeclaration" &&
+            def.parent.kind === "const"
+            ? def.node.init
+            : undefined;
+        };
+
+        // A `Date` read from a stored row, however it is rendered.
+        const isStoredTimestampRead = (
+          wrapped: unknown,
+          steps = MAX_DATE_SOURCE_STEPS,
+        ): boolean => {
+          const node = unwrapExpression(wrapped);
+          if (node === null || steps === 0) {
+            return false;
+          }
+          const next = (inner: unknown) =>
+            isStoredTimestampRead(inner, steps - 1);
+          if (node.type === "ConditionalExpression") {
+            return next(node.consequent) || next(node.alternate);
+          }
+          if (node.type === "LogicalExpression") {
+            // `a && b` yields `a` only when it is falsy, never as a Date.
+            return (
+              (node.operator !== "&&" && next(node.left)) || next(node.right)
+            );
+          }
+          if (node.type === "Identifier") {
+            return next(constInitializer(node));
+          }
+          const source = dateRenderingSource(node);
+          if (source !== undefined) {
+            return next(source);
+          }
+          if (!isTimestampColumnExpression(node)) {
+            return false;
+          }
+          const owner = timestampColumnOwner(node);
+          return owner === undefined || !isTableOwner(owner);
+        };
+
+        // A `Date` rendered to text or rebuilt, directly or one `const` away.
+        const isDateRendering = (node: unknown): boolean => {
+          const unwrapped = unwrapExpression(node);
+          return (
+            dateRenderingSource(
+              unwrapped?.type === "Identifier"
+                ? constInitializer(unwrapped)
+                : unwrapped,
+            ) !== undefined
+          );
+        };
+
+        // One parameter on both sides is a table handed to this function and
+        // compared with itself. A local object does not count: it can group
+        // a column with a row's Date.
+        const sharesParameterOwner = (left: unknown, right: unknown) => {
+          const leftOwner = timestampColumnOwner(left);
+          return (
+            leftOwner !== undefined &&
+            leftOwner.name === timestampColumnOwner(right)?.name &&
+            isParameter(leftOwner)
+          );
+        };
+
+        const report = (node: AstNode) => {
+          const { line } = context.sourceCode.getLocFromIndex(node.range[0]);
+          if (
+            guardEnforcesLine({
+              guard: DATE_UNDER_CAST_GUARD,
+              file: filenameForContext(context),
+              line,
+            })
+          ) {
+            context.report({ node, messageId: "dateUnderTimestampCast" });
+          }
+        };
+
+        const isCast = (quasi: unknown): boolean =>
+          EXPLICIT_TIMESTAMP_CAST.test(stripSqlComments(rawTextOf(quasi)));
+
+        return {
+          TemplateLiteral(node) {
+            const expressions = Array.isArray(node.expressions)
+              ? node.expressions
+              : [];
+            const quasis = Array.isArray(node.quasis) ? node.quasis : [];
+            let precedingSql = "";
+            for (const [index, expression] of expressions.entries()) {
+              const before = stripSqlComments(rawTextOf(quasis[index]));
+              precedingSql += before;
+              if (
+                !isAstNode(expression) ||
+                !isCast(quasis[index + 1]) ||
+                !isTimestampComparisonSlot(
+                  quasis,
+                  expressions,
+                  index,
+                  precedingSql,
+                )
+              ) {
+                continue;
+              }
+              const tuple = TUPLE_COMPARISON.test(before);
+              const leftIndex = tuple
+                ? leftTupleFirstIndex(quasis, index)
+                : index - 1;
+              if (
+                leftIndex !== undefined &&
+                sharesParameterOwner(expressions[leftIndex], expression)
+              ) {
+                continue;
+              }
+              if (
+                isStoredTimestampRead(expression) ||
+                (tuple && isDateRendering(expression))
+              ) {
+                report(expression);
+              }
+            }
+          },
+
+          // A Drizzle comparison whose operand is a `sql` fragment: the
+          // comparison is the call, and the cast sits in the fragment.
+          CallExpression(node) {
+            const callee = calleeName(node);
+            const args = Array.isArray(node.arguments) ? node.arguments : [];
+            if (
+              callee === undefined ||
+              !DRIZZLE_COMPARISONS.has(callee) ||
+              args.length !== 2
+            ) {
+              return;
+            }
+            const [left, right] = args;
+            const [column, operand] = isTimestampColumnExpression(left)
+              ? [left, right]
+              : isTimestampColumnExpression(right)
+                ? [right, left]
+                : [undefined, undefined];
+            if (!isSqlTaggedTemplate(operand) || !isAstNode(operand)) {
+              return;
+            }
+            const { quasi } = operand;
+            if (!isAstNode(quasi) || quasi.type !== "TemplateLiteral") {
+              return;
+            }
+            const expressions = Array.isArray(quasi.expressions)
+              ? quasi.expressions
+              : [];
+            const quasis = Array.isArray(quasi.quasis) ? quasi.quasis : [];
+            for (const [index, expression] of expressions.entries()) {
+              if (
+                isAstNode(expression) &&
+                isCast(quasis[index + 1]) &&
+                !sharesParameterOwner(column, expression) &&
+                isStoredTimestampRead(expression)
+              ) {
+                report(expression);
+              }
+            }
           },
         };
       },

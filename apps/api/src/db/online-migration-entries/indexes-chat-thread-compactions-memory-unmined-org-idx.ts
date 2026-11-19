@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-chat-thread-compactions-memory-unmined-org-idx",
   revision: 530,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

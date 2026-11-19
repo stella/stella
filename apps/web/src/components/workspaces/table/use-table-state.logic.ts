@@ -18,17 +18,10 @@ const isPersistableColumnId = (id: string) => !utilityColumnIds.includes(id);
 
 export const omitUtilityColumnSizing = (
   sizing: ColumnSizingState,
-): ColumnSizingState => {
-  const result: ColumnSizingState = {};
-
-  for (const [id, size] of Object.entries(sizing)) {
-    if (isPersistableColumnId(id)) {
-      result[id] = size;
-    }
-  }
-
-  return result;
-};
+): ColumnSizingState =>
+  Object.fromEntries(
+    Object.entries(sizing).filter(([id]) => isPersistableColumnId(id)),
+  );
 
 export const createColumnPinningState = (
   pinnedColumnIds: readonly string[],
@@ -53,17 +46,10 @@ export const getPersistedColumnOrder = (order: ColumnOrderState): string[] =>
 
 export const createColumnVisibilityState = (
   hiddenColumnIds: readonly string[],
-): ColumnVisibilityState => {
-  const visibility: ColumnVisibilityState = {};
-
-  for (const id of hiddenColumnIds) {
-    if (isPersistableColumnId(id)) {
-      visibility[id] = false;
-    }
-  }
-
-  return visibility;
-};
+): ColumnVisibilityState =>
+  Object.fromEntries(
+    hiddenColumnIds.filter(isPersistableColumnId).map((id) => [id, false]),
+  );
 
 export const getPersistedHiddenColumnIds = (
   visibility: ColumnVisibilityState,

@@ -79,6 +79,11 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     "/consent": {
       reason: "Standalone consent shell; it does not render app breadcrumbs.",
     },
+    "/invoice-link": {
+      reason:
+        "Standalone invoice document; it does not render app breadcrumbs.",
+      fields: ["breadcrumb"],
+    },
     "/dev": { reason: "Development-only component catalogue." },
     "/law/$country/cases/$court/$slug": {
       reason: "The public law reader owns its document breadcrumb.",
@@ -110,6 +115,9 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     },
     "/mcp/oauth-callback": {
       reason: "OAuth callback that closes or redirects.",
+    },
+    "/sharepoint/oauth-callback": {
+      reason: "OAuth callback that redirects to the connections settings.",
     },
     "/onboarding": {
       reason:
@@ -275,7 +283,7 @@ type CensusInput = {
   sources: readonly RouteSource[];
 };
 
-export function findMissingRoutePresentation({
+function findMissingRoutePresentation({
   routeTree,
   sources,
 }: CensusInput): string[] {

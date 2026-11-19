@@ -275,12 +275,15 @@ const commandModules = (command: readonly string[], base = "."): string[] => {
       continue;
     }
     const name = match[1] ?? panic("Missing root script name");
+    // `bun run` resolves against the directory it runs in: a package script
+    // naming a sibling script runs that package's script, not the root's.
+    const directory = cwdAt(match.index);
     if (/\.[cm]?[jt]sx?$/u.test(name)) {
-      modules.push(
-        path.posix.normalize(path.posix.join(cwdAt(match.index), name)),
-      );
+      modules.push(path.posix.normalize(path.posix.join(directory, name)));
     } else {
-      modules.push(...commandModules([packageScript(".", name)]));
+      modules.push(
+        ...commandModules([packageScript(directory, name)], directory),
+      );
     }
   }
   for (const match of joined.matchAll(fileMatch)) {
@@ -584,7 +587,6 @@ const LIGHT_CHECK_COMMANDS = [
     "apps/web/src/i18n",
     "--check",
   ],
-  ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
   ["bun", "run", "selfhost:check"],
   [
     "bun",

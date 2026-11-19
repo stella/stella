@@ -106,7 +106,7 @@ describe.skipIf(!runPostgresTests)(
       await withFixture(async ({ db, primary }) => {
         const database = markRlsDatabase(db);
         for (const invalid of [undefined, null, "", {}, 1, "\ud800"]) {
-          expect(() =>
+          expect((): unknown =>
             Reflect.apply(createRootOrganizationBackgroundDb, undefined, [
               invalid,
               database,

@@ -1,8 +1,7 @@
 import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
-import { foreignKey, PgTable, uuid } from "drizzle-orm/pg-core";
+import { foreignKey, uuid } from "drizzle-orm/pg-core";
 
 import {
   SETTING_ORGANIZATION_ID,
@@ -37,6 +36,7 @@ import {
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { entityFeaturePolicies } from "./entity-feature-policies";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { schemaTables } from "./schema-tables";
 import { p, stella, workspaceCheck } from "./schema/common";
 import { legalListItemSources } from "./schema/lists";
 
@@ -126,10 +126,7 @@ describe.skipIf(!runPostgresTests)(
       }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const client = openClient().sql;
-        const tables = [
-          ...Object.values(schema).filter((table) => is(table, PgTable)),
-          fixtureTable,
-        ];
+        const tables = [...schemaTables(schema), fixtureTable];
         const originalDescriptors = entityFeatureGateMetadata(
           tables.slice(0, -1),
         );
@@ -208,7 +205,7 @@ describe.skipIf(!runPostgresTests)(
           );
           expect(
             (
-              await client.unsafe(
+              await client.unsafe<{ gate: string }[]>(
                 `SELECT entity_feature_gate AS gate FROM public.${FIXTURE_TABLE} WHERE id = $1`,
                 [fixtureId],
               )
@@ -218,7 +215,7 @@ describe.skipIf(!runPostgresTests)(
           await client`UPDATE entities SET list_item_type = 'task' WHERE id = ${itemEntityId}`;
           expect(
             (
-              await client.unsafe(
+              await client.unsafe<{ gate: string }[]>(
                 `SELECT entity_feature_gate AS gate FROM public.${FIXTURE_TABLE} WHERE id = $1`,
                 [fixtureId],
               )
@@ -237,7 +234,7 @@ describe.skipIf(!runPostgresTests)(
                 set_config(${SETTING_WORKSPACE_IDS}, ${`{${workspaceId}}`}, true),
                 set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${WORKSPACE_ACCESS_MODE.explicit}, true),
                 set_config('app.enabled_features', ${JSON.stringify(features)}, true)`;
-              return await tx.unsafe(
+              return await tx.unsafe<{ id: string }[]>(
                 `SELECT id FROM public.${FIXTURE_TABLE} WHERE id = $1`,
                 [fixtureId],
               );
@@ -262,7 +259,7 @@ describe.skipIf(!runPostgresTests)(
             `ALTER TABLE public."${FIXTURE_TABLE}" ENABLE TRIGGER entity_feature_gate_write;`,
           ]);
           await applyStatements(client, repair);
-          const [state] = await client.unsafe(
+          const [state] = await client.unsafe<{ enabled: string }[]>(
             `SELECT tgenabled AS enabled FROM pg_trigger
               WHERE tgrelid = 'public.${FIXTURE_TABLE}'::regclass
                 AND tgname = 'entity_feature_gate_write'`,

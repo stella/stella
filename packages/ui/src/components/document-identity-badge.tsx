@@ -14,6 +14,7 @@ import type {
   IdentityLabels,
 } from "./document-identity-badge.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 export const DocumentIdentityBadge = ({
   identity,
@@ -102,6 +103,10 @@ function documentIdentityMark(
  * in the same monospace units, so no observer or per-row state is needed; a
  * label longer than its slot even in the short form truncates rather than
  * spilling over its neighbour.
+ *
+ * The visible form depends on the slot, but the accessible name is always the
+ * full label: a narrow slot shows `262/06`, and a row whose title lacks the
+ * citation still exposes `262/2006`.
  */
 function referenceLabelMark(
   labels: IdentityLabels,
@@ -115,14 +120,20 @@ function referenceLabelMark(
         labels.short.length > 7 ? "text-[9px]" : "text-[10px]",
       )}
       style={{ width: `${labels.long.length + 0.25}ch` }}
+      aria-label={labels.long}
       data-slot="document-identity-badge"
       data-kind={kind}
       dir="ltr"
+      role="img"
     >
-      <bdi className={cn("min-w-0 truncate", classes.short)}>
+      {/* The badge's title tooltip, or the tab around it, names the document
+          in full, so a cut label adds no hint of its own. */}
+      <TruncatedText className={classes.short} hint={false} render={<bdi />}>
         {labels.short}
-      </bdi>
-      <bdi className={cn("min-w-0 truncate", classes.long)}>{labels.long}</bdi>
+      </TruncatedText>
+      <TruncatedText className={classes.long} hint={false} render={<bdi />}>
+        {labels.long}
+      </TruncatedText>
     </span>
   );
 }

@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+} from "@stll/api-contract/search";
 import { sleep } from "@stll/concurrency/sleep";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -151,15 +155,16 @@ const judgeToolResponse = <TData>(
     : { type: "complete" };
 };
 
+/** Reasons a page stopped on a budget of the moment, not on its results. */
+const LOAD_SHAPED_REASONS: ReadonlySet<unknown> = new Set([
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.reason,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.reason,
+]);
+
 const isShapedByLoad = (data: unknown): boolean =>
   isRecord(data) &&
-  ((isRecord(data["paginationOutcome"]) &&
-    data["paginationOutcome"]["reason"] === "time_budget") ||
-    (Array.isArray(data["warnings"]) &&
-      data["warnings"].some(
-        (warning) =>
-          isRecord(warning) && warning["code"] === "partial_matches_unread",
-      )));
+  isRecord(data["paginationOutcome"]) &&
+  LOAD_SHAPED_REASONS.has(data["paginationOutcome"]["reason"]);
 
 /** Every continuable tool answers an object; anything else is a stale store. */
 const isToolResponse = <TData>(
@@ -197,10 +202,22 @@ const withCollectingRequestId = <TData>(
     : response;
 };
 
+type ContinuationClock = {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const SYSTEM_CLOCK: ContinuationClock = {
+  now: () => performance.now(),
+  sleep,
+};
+
 type CreateToolContinuationOptions<P> = {
   store?: ContinuationStore;
   ownerId?: string;
   limits?: PublicReadContinuationLimits;
+  /** The clock the response deadline and follow polls run on. */
+  clock?: ContinuationClock;
   progress: (value: unknown) => P | null;
 };
 
@@ -214,6 +231,7 @@ export const createToolContinuation = <
     store = createContinuationStore(),
     ownerId = Bun.randomUUIDv7(),
     limits = PUBLIC_READ_CONTINUATION_LIMITS,
+    clock = SYSTEM_CLOCK,
     progress,
   }: CreateToolContinuationOptions<P>,
 ) => {
@@ -235,8 +253,8 @@ export const createToolContinuation = <
     store,
     ownerId,
     limits,
-    now: () => performance.now(),
-    sleep,
+    now: clock.now,
+    sleep: clock.sleep,
     estimateQueueWaitMs: estimatedCorpusSearchWaitMs,
   });
 };

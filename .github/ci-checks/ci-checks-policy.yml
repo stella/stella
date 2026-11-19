@@ -155,6 +155,15 @@ checks:
       bun test scripts/check-ci-network-steps.test.ts
       bun scripts/check-ci-network-steps.ts --base "$RATCHET_BASE_REF"
 
+  # Workspace test files no gating job collects; the list may only shrink
+  # against the measured base.
+  - name: Workspace test gating ledger
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    run: bun scripts/check-workspace-test-gating.ts --base "$RATCHET_BASE_REF"
+
   - name: Sparse checkout script dependencies
     env:
       CI_CHECK_KIND: STATIC
@@ -170,6 +179,18 @@ checks:
       STELLA_VERIFY: check
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
+
+  # The startup bundle gates (web-build) read the ledger of the tree they
+  # check; this keeps that ledger from gaining an exception the base did not
+  # grant, so a new offender is fixed rather than listed.
+  - name: Startup bundle ledger
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    run: |
+      bun scripts/check-bundle-startup-ledger.ts --self-test
+      bun scripts/check-bundle-startup-ledger.ts --base "$RATCHET_BASE_REF"
 
   - name: Custom lint rule coverage
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

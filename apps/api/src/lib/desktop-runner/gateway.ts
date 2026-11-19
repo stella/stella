@@ -21,6 +21,7 @@ import type {
   DesktopRunnerRunBell,
 } from "@/api/lib/desktop-runner/doorbell";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
+import { readSessionsWithQueuedFolderRestores } from "@/api/lib/desktop-runner/folder-restores";
 import {
   createRunnerSession,
   type MintRunToken,
@@ -36,6 +37,7 @@ import {
   expireRunLeases,
   pruneEndedRuns,
   readNewestQueuedCommands,
+  type RunnerBinding,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -113,6 +115,11 @@ export type DesktopRunnerGatewayOptions = {
   doorbell: DesktopRunnerDoorbell;
   /** Wakes readers of a run once its messages are stored; none by default. */
   runBell?: DesktopRunnerRunBell;
+  /**
+   * Tells an account its chats' background work on a computer changed, so
+   * an open chat reads it again; nobody by default.
+   */
+  announceBackgroundTasks?: (owner: RunnerBinding) => void;
   /** This API task, the address other tasks ring. */
   instanceId: string;
   authorize: AuthorizeDesktopRunner;
@@ -188,8 +195,8 @@ const cancelEndedChatTurnRuns = async ({
 };
 
 /**
- * The runs the API ends on a sweep: those nobody accepted or whose computer
- * stayed away, those whose leases lapsed, those past retention, and those
+ * The runs the API ends on a sweep: those no computer picked up in time or
+ * whose computer stayed away, those whose leases lapsed, those past retention, and those
  * whose chat turn ended without them.
  */
 const endRuns = async ({
@@ -210,6 +217,7 @@ const endRuns = async ({
       await expireAbandonedRuns(db, {
         now,
         abandonedMs: limits.abandonedRunMs,
+        unacceptedMs: limits.unacceptedRunMs,
         limit: EXPIRY_BATCH,
       }),
   );
@@ -303,6 +311,9 @@ export const createDesktopRunnerGateway = (
     ringRun: (runId: string) => {
       options.runBell?.ring(runId);
     },
+    announceBackgroundTasks: (owner: RunnerBinding) => {
+      options.announceBackgroundTasks?.(owner);
+    },
   };
 
   const deliverTo = async (sessionId: string) => {
@@ -340,6 +351,23 @@ export const createDesktopRunnerGateway = (
       ) {
         await session.deliver();
       }
+    }
+    // A queued restore waits only a short while, so its sockets are read
+    // every sweep; few computers hold one at a time.
+    const restoring = await Result.tryPromise(
+      async () =>
+        await readSessionsWithQueuedFolderRestores(options.db, {
+          instanceId: options.instanceId,
+          now: now(),
+          limit: SWEEP_DELIVERY_BATCH,
+        }),
+    );
+    if (restoring.isErr()) {
+      observeFailure(restoring.error, { sink: LEASE_SWEEP_SINK });
+      return;
+    }
+    for (const sessionId of restoring.value) {
+      await deliverTo(sessionId);
     }
   };
 

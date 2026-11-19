@@ -31,6 +31,7 @@ import {
   TextQuoteIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -252,14 +253,15 @@ export const useTemplateStudioSlashMenu = ({
   const slashViewRef = useRef<SlashView>("root");
   const slashHighlightRef = useRef(0);
   const slashFromRef = useRef<number | null>(null);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const setSlashView = useCallback((view: SlashView) => {
     slashViewRef.current = view;
     setSlashViewState(view);
   }, []);
-  const setSlashHighlight = useCallback((index: number) => {
+  const setSlashHighlight = (index: number) => {
     slashHighlightRef.current = index;
     setSlashHighlightState(index);
-  }, []);
+  };
   const studioFields = useTemplateStudioStore((state) => state.fields);
 
   const slashClausesEnabled = slash !== null && slashView === "clauses";
@@ -280,6 +282,7 @@ export const useTemplateStudioSlashMenu = ({
     slashClauseDataView.type === "items"
       ? slashClauseDataView.items
       : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const slashClauses: SlashClause[] = useMemo(
     () =>
       slashClauseData && "items" in slashClauseData
@@ -294,7 +297,7 @@ export const useTemplateStudioSlashMenu = ({
     debouncedClauseSearchRef.current = debouncedClauseSearch;
   }, [slashClauses, debouncedClauseSearch]);
 
-  const slashRows = useMemo((): SlashRows => {
+  const slashRows = ((): SlashRows => {
     if (slash === null) {
       return { view: "root", items: [] };
     }
@@ -311,63 +314,60 @@ export const useTemplateStudioSlashMenu = ({
       view: "root",
       items: buildSlashRootItems(slash.query, studioFields),
     };
-  }, [slash, slashView, studioFields, slashClauses]);
+  })();
 
-  const positionSlashMenu = useCallback(
-    (from: number) => {
-      const host = overlayHostRef.current;
-      if (!host) {
-        return;
-      }
-      detached(
-        (async () => {
-          const rect = await pollForCaretRect(() => {
-            const liveView = editorViewRef.current;
-            const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
-            if (
-              !liveView ||
-              live === null ||
-              !live.active ||
-              live.from !== from
-            ) {
-              return null;
-            }
-            return getFolioCaretViewportRect(liveView);
-          });
-          if (rect === null) {
-            return;
+  const positionSlashMenu = (from: number) => {
+    const host = overlayHostRef.current;
+    if (!host) {
+      return;
+    }
+    detached(
+      (async () => {
+        const rect = await pollForCaretRect(() => {
+          const liveView = editorViewRef.current;
+          const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
+          if (
+            !liveView ||
+            live === null ||
+            !live.active ||
+            live.from !== from
+          ) {
+            return null;
           }
-          const hostRect = host.getBoundingClientRect();
-          const caretLeft = rect.left - hostRect.left;
-          const caretTop = rect.top - hostRect.top;
-          const caretBottom = rect.bottom - hostRect.top;
-          const fitsAbove =
-            caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
-          const placement = fitsAbove ? "above" : "below";
-          const renderedWidth =
-            window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
-              ? SLASH_MENU_WIDTH_PX
-              : SLASH_MENU_LIST_WIDTH_PX;
-          const left = Math.max(
-            0,
-            Math.min(caretLeft, host.clientWidth - renderedWidth),
-          );
-          setSlashState((previous) =>
-            previous === null
-              ? previous
-              : {
-                  ...previous,
-                  left,
-                  top: placement === "below" ? caretBottom : caretTop,
-                  placement,
-                },
-          );
-        })(),
-        "template-studio-slash-menu.position",
-      );
-    },
-    [editorViewRef, overlayHostRef],
-  );
+          return getFolioCaretViewportRect(liveView);
+        });
+        if (rect === null) {
+          return;
+        }
+        const hostRect = host.getBoundingClientRect();
+        const caretLeft = rect.left - hostRect.left;
+        const caretTop = rect.top - hostRect.top;
+        const caretBottom = rect.bottom - hostRect.top;
+        const fitsAbove =
+          caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
+        const placement = fitsAbove ? "above" : "below";
+        const renderedWidth =
+          window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
+            ? SLASH_MENU_WIDTH_PX
+            : SLASH_MENU_LIST_WIDTH_PX;
+        const left = Math.max(
+          0,
+          Math.min(caretLeft, host.clientWidth - renderedWidth),
+        );
+        setSlashState((previous) =>
+          previous === null
+            ? previous
+            : {
+                ...previous,
+                left,
+                top: placement === "below" ? caretBottom : caretTop,
+                placement,
+              },
+        );
+      })(),
+      "template-studio-slash-menu.position",
+    );
+  };
 
   const onSlashMenuChange = (state: TemplateSlashMenuState) => {
     if (!state.active) {
@@ -391,6 +391,7 @@ export const useTemplateStudioSlashMenu = ({
     }
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const dismissSlash = useCallback(() => {
     const view = editorViewRef.current;
     if (view && getTemplateSlashMenu(view.state).active) {
@@ -704,9 +705,12 @@ const SlashMenuHeader = ({
   const t = useTranslations();
   if (view === "root") {
     return (
-      <p className="text-muted-foreground text-2xs truncate border-b px-3 py-1.5 leading-snug">
+      <TruncatedText
+        className="text-muted-foreground text-2xs border-b px-3 py-1.5 leading-snug"
+        render={<p />}
+      >
         {query === "" ? t("templates.studio.slashHint") : `/${query}`}
-      </p>
+      </TruncatedText>
     );
   }
   const label =
@@ -722,10 +726,10 @@ const SlashMenuHeader = ({
     >
       <span className="text-muted-foreground hover:text-foreground text-2xs flex w-full items-center gap-1 border-b px-3 py-1.5 leading-snug">
         <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
-        <span className="truncate">
+        <TruncatedText>
           {label}
           {query === "" ? "" : ` · ${query}`}
-        </span>
+        </TruncatedText>
       </span>
     </Button>
   );
@@ -889,13 +893,13 @@ const SlashMenuRow = ({
       variant="ghost"
     >
       <Icon className="text-muted-foreground size-3.5 shrink-0" />
-      <span className="flex-1 truncate" dir="auto">
+      <TruncatedText className="flex-1" dir="auto">
         {label}
-      </span>
+      </TruncatedText>
       {hint !== undefined && (
-        <span className="text-muted-foreground text-3xs shrink-0 truncate font-mono">
+        <TruncatedText className="text-muted-foreground text-3xs shrink-0 font-mono">
           {hint}
-        </span>
+        </TruncatedText>
       )}
       {chevron && (
         <DirectionalIcon

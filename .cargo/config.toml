@@ -1,0 +1,8 @@
+# Cargo 1.100+ skips crates.io versions younger than this while resolving any
+# Cargo.lock in this repository (`cargo update`, `cargo generate-lockfile`),
+# unless the lock already pins them. Keep it equal to `minimumReleaseAge` in
+# the root bunfig.toml; scripts/check-lockfile-release-ages.ts still screens
+# every newly locked version. To take one crate early, see "Apply Deliberate
+# Updates" in .ai/local-skills/update-deps/SKILL.md.
+[registry]
+global-min-publish-age = "5 days"

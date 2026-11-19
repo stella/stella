@@ -142,5 +142,10 @@ characters. It is pure and independent of file, seed, and later stack lines.
 | `PROPERTY_TEST_TIMEOUT_BASE_MS` | Owning runner's baseline for the factor-scaled Bun timeout.                                                                                 |
 | `CI`                            | Enables verbose fast-check reports and failure markers.                                                                                     |
 
+A property whose runs are slow (a real database per run) can bound its whole
+run, shrinking included, with `plugins: [failAfterTimeLimit(propertyTestTimeout(ms))]`:
+reaching the budget fails the property with the smallest counterexample found
+so far instead of a test timeout.
+
 Time boxing interrupts between evaluations; it cannot preempt a synchronous
 predicate that never returns. Keep hostile-input parsers bounded independently.

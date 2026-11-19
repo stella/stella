@@ -36,6 +36,7 @@ import {
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import { corpusProjectionRevisionsQuery } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import { corpusProjectionMigrationDdl } from "@/api/tests/helpers/corpus-projection-migration-ddl";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -77,7 +78,6 @@ const SETTLEMENT_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000307";
 const SUCCESSOR_LEASE_TOKEN = "0198e331-e578-7000-8000-000000000308";
 const INDEX_ID = "case_law_v5_cs_sk";
 const SEEDED_AT = new Date("2026-08-25T00:00:00.000Z");
-const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 const SCOPE = {
   family: "case_law",
   generation: "case_law_v5",
@@ -89,24 +89,9 @@ let db: ReturnType<typeof drizzle>;
 let seededSnapshot: Blob;
 
 const installProjectionMigrationDdl = async (): Promise<void> => {
-  const projectionMigrations = [
-    ...new Bun.Glob("*corpus*projection*/migration.sql").scanSync(
-      Bun.fileURLToPath(DRIZZLE_DIR),
-    ),
-  ]
-    .filter((migration) => !migration.includes("projection_revision"))
-    .toSorted();
-  for (const migration of projectionMigrations) {
-    const text = await Bun.file(new URL(migration, DRIZZLE_DIR)).text();
-    for (const statement of text.split("--> statement-breakpoint")) {
-      const ddl = statement.trim();
-      if (
-        /(?:^|\n)\s*CREATE (?:OR REPLACE )?FUNCTION\b/u.test(ddl) ||
-        /(?:^|\n)\s*CREATE TRIGGER\b/u.test(ddl)
-      ) {
-        await db.execute(sql.raw(ddl));
-      }
-    }
+  for (const ddl of await corpusProjectionMigrationDdl()) {
+    // db-await-in-loop: DDL applies in migration order
+    await db.execute(sql.raw(ddl));
   }
 };
 
@@ -202,12 +187,14 @@ const inTx = async <T>(operation: (tx: Transaction) => Promise<T>) =>
 const commitDelete = async (deleteOpstamp: number): Promise<void> => {
   const leases = await inTx(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        ...SCOPE,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...SCOPE,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(leases.map(({ intentId }) => intentId).toSorted()).toEqual([
     ...INTENT_IDS,
@@ -556,12 +543,14 @@ test("revisions at the reissue limit stall instead of re-issuing", async () => {
   expect(await claimSettlement(SUCCESSOR_LEASE_TOKEN)).toEqual([]);
   const cleanup = await inTx(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        ...SCOPE,
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...SCOPE,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        })
+      ).leases,
   );
   expect(cleanup.map(({ intentId }) => intentId)).toEqual([SECOND_INTENT_ID]);
 });
@@ -611,12 +600,14 @@ test("a fourth survivor stalls after exactly three reissues, including replay", 
   expect(
     await inTx(
       async (tx) =>
-        await claimCorpusProjectionCleanupTx(tx, {
-          ...SCOPE,
-          limit: 10,
-          leaseMs: 60_000,
-          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
-        }),
+        (
+          await claimCorpusProjectionCleanupTx(tx, {
+            ...SCOPE,
+            limit: 10,
+            leaseMs: 60_000,
+            newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+          })
+        ).leases,
     ),
   ).toEqual([]);
 });

@@ -15,6 +15,21 @@ import type { McpMode } from "@/api/mcp/constants";
  */
 const STATEMENT_ACTIONS: Record<string, readonly string[]> = statements;
 
+/** Shape ceilings for new requests; stored grants retain their existing parser. */
+export const MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS = {
+  resources: Object.keys(STATEMENT_ACTIONS).length,
+  actionsPerResource: Math.max(
+    0,
+    ...Object.values(STATEMENT_ACTIONS).map((actions) => actions.length),
+  ),
+  actionNameChars: Math.max(
+    0,
+    ...Object.values(STATEMENT_ACTIONS).flatMap((actions) =>
+      actions.map((action) => action.length),
+    ),
+  ),
+};
+
 /**
  * Shared, dependency-light configuration for machine (CI/agent/CLI) API keys.
  *

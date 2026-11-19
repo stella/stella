@@ -79,7 +79,7 @@ const HEADER_FOOTER_RE = /^word\/(?:header|footer)\d+\.xml$/u;
 export const MAIN_DOCUMENT_PART_PATH = "word/document.xml";
 
 /** Every WordprocessingML part whose authored template content is visible. */
-export const isTemplateContentPartPath = (path: string): boolean =>
+const isTemplateContentPartPath = (path: string): boolean =>
   path === MAIN_DOCUMENT_PART_PATH || HEADER_FOOTER_RE.test(path);
 
 /**

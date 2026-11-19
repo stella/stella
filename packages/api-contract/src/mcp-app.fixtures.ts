@@ -53,6 +53,7 @@ export const APP_SEARCH_FIXTURE = {
       matchingPassages: 1,
       textAvailability: "available" as const,
       match: "all_terms" as const,
+      terms: { query: 0, matched: ["náhrada", "škody"], missing: [] },
       snippet: "Náhrada škody: <b>právní jistota</b>.",
       keywords: {
         type: "keywords" as const,
@@ -87,6 +88,15 @@ export const APP_RESOLVE_FIXTURE = {
     text: {
       status: "readable",
       charCount: 1200,
+    },
+    appealReviews: {
+      status: "none_found" as const,
+      reason: "no_link_in_corpus" as const,
+      basis: "available_corpus" as const,
+      reviewedBy: [],
+      reviews: [],
+      reviewedByTruncated: false,
+      reviewsTruncated: false,
     },
   },
 } satisfies LegalResolveResponse;

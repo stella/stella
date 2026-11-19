@@ -178,7 +178,7 @@ export const refusedCredentialIssuerProbes = {
       subscribeUser({
         userId,
         organizationId,
-        sessionId: "synthetic-session-probe",
+        holder: { id: "synthetic-session-probe", kind: "session" },
         signal: new AbortController().signal,
       }),
     );

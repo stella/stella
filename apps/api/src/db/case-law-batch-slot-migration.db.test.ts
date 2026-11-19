@@ -62,12 +62,19 @@ const PARSED_GENERATION_COLUMNS = {
   documentAst: "parse-input-or-output",
   analysis: "bookkeeping",
   parserVersion: "parse-input-or-output",
+  reviewExtractionVersion: "bookkeeping",
   sourceRaw: "parse-input-or-output",
   sourceRawS3Key: "parse-input-or-output",
   sourceRawContentType: "parse-input-or-output",
   sourceUrl: "parse-input-or-output",
   documentUrl: "parse-input-or-output",
   sourceDocumentId: "parse-input-or-output",
+  // Derived identity fingerprints do not change the parsed document generation.
+  fallbackIdentityKey: "bookkeeping",
+  fallbackCohortKey: "bookkeeping",
+  fallbackContentHash: "bookkeeping",
+  fallbackPublicationHash: "bookkeeping",
+  fallbackDocumentHash: "bookkeeping",
   sheetNumber: "parse-input-or-output",
   documentFetchRequestedAt: "bookkeeping",
   documentFetchAttemptedAt: "bookkeeping",
@@ -108,6 +115,7 @@ const PARSED_GENERATION_COLUMNS = {
   projectionEpoch: "bookkeeping",
   createdAt: "bookkeeping",
   updatedAt: "bookkeeping",
+  contentChangedAt: "bookkeeping",
 } as const satisfies Record<
   keyof typeof caseLawDecisions.$inferSelect,
   ParsedGenerationColumnDisposition

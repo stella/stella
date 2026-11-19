@@ -33,6 +33,7 @@ import {
   SITEMAP_UNDATED_YEAR,
   sitemapDocumentRepresentativeFor,
   sitemapHasLanguageAlternatesFor,
+  sitemapLastModifiedSqlFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
   lockCaseLawSitemapRefreshCursor,
@@ -216,7 +217,7 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       count(*)::int AS total,
       sum(CASE WHEN ${sitemapHasLanguageAlternatesFor(caseLawDecisions)}
         THEN ${SITEMAP_MULTILINGUAL_URL_WEIGHT} ELSE 1 END)::int AS weighted_total,
-      (extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
+      (extract(epoch FROM ${sitemapLastModifiedSqlFor(caseLawDecisions)}) * 1000)::float8 AS last_modified_ms
     FROM ${caseLawDecisions}
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
     WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -58,15 +58,16 @@ const prepareCollaborationPublication = async ({
     });
     return null;
   }
-  const checkpointResult = await Result.tryPromise(async () =>
-    api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["folio-collab-rooms"].checkpoint.post({
-        expectedGeneration: room.generation,
-        expectedSnapshotRevision: flushResult.value.snapshotRevision,
-        roomId: toSafeId<"folioCollabRoom">(room.roomId),
-      }),
-  );
+  const checkpointResult = await Result.tryPromise(async () => {
+    const entitiesApi = api.entities({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+    return entitiesApi["folio-collab-rooms"].checkpoint.post({
+      expectedGeneration: room.generation,
+      expectedSnapshotRevision: flushResult.value.snapshotRevision,
+      roomId: toSafeId<"folioCollabRoom">(room.roomId),
+    });
+  });
   if (Result.isError(checkpointResult)) {
     getAnalytics().captureError(checkpointResult.error, {
       fingerprintKey: "prepareCollaborationPublication:failure-2",
@@ -128,7 +129,7 @@ export const useCollaborationVersionPublisher = ({
     setIsPublishingCollaborationVersion,
   ] = useState(false);
 
-  const publishCollaborationVersion = useCallback(async () => {
+  const publishCollaborationVersion = async () => {
     if (
       collaborationSession === null ||
       collaborationStatus !== "synced" ||
@@ -174,16 +175,17 @@ export const useCollaborationVersionPublisher = ({
       }
       pendingCollaborationPublicationRef.current = pendingPublication;
     }
-    const publishResult = await Result.tryPromise(async () =>
-      api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["folio-collab-rooms"]["publish-version"].post({
-          expectedGeneration: pendingPublication.generation,
-          expectedSha256Hex: pendingPublication.sha256Hex,
-          idempotencyKey: pendingPublication.idempotencyKey,
-          roomId: toSafeId<"folioCollabRoom">(pendingPublication.roomId),
-        }),
-    );
+    const publishResult = await Result.tryPromise(async () => {
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+      return entitiesApi["folio-collab-rooms"]["publish-version"].post({
+        expectedGeneration: pendingPublication.generation,
+        expectedSha256Hex: pendingPublication.sha256Hex,
+        idempotencyKey: pendingPublication.idempotencyKey,
+        roomId: toSafeId<"folioCollabRoom">(pendingPublication.roomId),
+      });
+    });
     finishPublishing();
     if (Result.isError(publishResult)) {
       getAnalytics().captureError(publishResult.error, {
@@ -251,20 +253,11 @@ export const useCollaborationVersionPublisher = ({
       type: "success",
     });
     return true;
-  }, [
-    collaborationSession,
-    collaborationStatus,
-    format,
-    hasSessionChangesRef,
-    isPublishingCollaborationVersion,
-    queryClient,
-    t,
-    workspaceId,
-  ]);
+  };
 
-  const discardPendingPublication = useCallback(() => {
+  const discardPendingPublication = () => {
     pendingCollaborationPublicationRef.current = null;
-  }, []);
+  };
 
   return {
     canPublishCollaborationVersion:

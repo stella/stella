@@ -157,8 +157,9 @@ describe("EntityActions", () => {
     fireEvent.keyDown(button, { key: "ContextMenu" });
     await waitFor(() => {
       expect(
-        document.querySelector('[data-slot="entity-actions-context-popup"]'),
-      ).not.toBeNull();
+        document.querySelector('[data-slot="entity-actions-context-popup"]') ===
+          null,
+      ).toBe(false);
     });
   });
 

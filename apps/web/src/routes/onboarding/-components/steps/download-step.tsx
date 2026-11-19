@@ -257,7 +257,7 @@ const AssistantPanel = () => {
 const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
-  const { connect, state } = useDesktopAccountConnection();
+  const { connect, state, switchAccount } = useDesktopAccountConnection();
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
   const copyShortcut = platform === "mac" ? "⌘ C" : "Ctrl + C";
 
@@ -298,6 +298,7 @@ const DesktopSetupPanel = () => {
             "onboarding-download-step.connect-desktop",
           );
         }}
+        onSwitchAccount={switchAccount}
         state={state}
       />
     </SetupPanel>

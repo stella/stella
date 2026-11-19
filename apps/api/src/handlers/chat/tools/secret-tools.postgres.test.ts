@@ -337,7 +337,10 @@ if (!databaseUrl || !runPostgres) {
                 ),
               );
             const auditByPhase = Object.fromEntries(
-              audit.map(({ metadata }) => [metadata?.["phase"], metadata]),
+              audit.map(
+                ({ metadata }) =>
+                  [String(metadata?.["phase"]), metadata] as const,
+              ),
             );
             expect(auditByPhase["intent"]).toEqual(
               expect.objectContaining({

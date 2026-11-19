@@ -1,3 +1,4 @@
+// parser-output-unchanged: declares how the new opening-formula role wraps (never reflowed); no paragraph carried that role before, so every reader that does not emit it keeps its output.
 // parser-output-unchanged: the wrapped-date rule and the point openings moved unchanged into the printed-label grammar, which this planner reads them from.
 /**
  * Hard-wrapped source text: the one classifier, and a display fallback.
@@ -341,6 +342,7 @@ type WrapRoleDisposition = "reflow" | "fixed";
  */
 const WRAP_ROLE_DISPOSITION = {
   "case-number": "fixed",
+  "opening-formula": "fixed",
   intro: "reflow",
   history: "reflow",
   argumentation: "reflow",

@@ -1,5 +1,9 @@
 import type { ReactElement } from "react";
 
+import type { RouteComponent } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   HelpCircleIcon,
   NewChatIcon,
@@ -14,6 +18,7 @@ import {
 } from "@stll/ui/inspector";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
 
@@ -22,18 +27,15 @@ import {
   isPersistedInspectorPaneOpen,
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
-import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { useIntlMounted } from "@/components/pending-text";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
 } from "@/components/sidebar-sizing";
-import {
-  DEFAULT_SIDEBAR_OPEN,
-  readPersistedSidebarOpen,
-} from "@/components/sidebar/sidebar-state";
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 
 // The primary entries every signed-in person sees, from the same list the
@@ -46,27 +48,32 @@ const STATIC_NAV_ITEMS = getWorkspacePrimaryNavItems({
   includeTimesheets: false,
   publicKnowledge: false,
 });
-const NAV_LABEL_WIDTHS = ["w-14", "w-10", "w-16", "w-20", "w-16"] as const;
 const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 
 // Static, SSR-safe placeholder for the client-only `_protected` subtree.
 // Chrome that needs no data renders for real (the logo, the primary nav
 // icons, the rail toggles), so the frame is already the app; only what
-// depends on data or on the active locale shimmers: nav labels, pinned
-// matters, the account card, the breadcrumb and the page body. Intentionally
-// free of data and Suspense; it tracks only the viewport and saved layout, so
-// it resizes with the frame it stands in for. A page that is the same for
-// every visitor can take the content column's place.
+// depends on data shimmers: pinned matters, the account card, the breadcrumb
+// and the page body. Cookie preferences and the request locale already exist
+// during SSR, so the pending frame uses the same geometry and nav labels. It
+// also tracks the viewport and the saved inspector tabs, so it resizes with
+// the frame it stands in for. `body` is the leaf route's own pending view
+// (`useLeafPendingView`), so the page that loads replaces placeholders
+// already sitting where its content will; a route without one gets the
+// generic column.
 export function ProtectedPendingSkeleton({
+  body,
   content,
   inspectorScope,
 }: {
+  body?: RouteComponent | undefined;
   content?: ReactElement | undefined;
   inspectorScope?: InspectorStorageScope;
 }) {
   if (inspectorScope !== undefined) {
     return (
       <ProtectedPendingSkeletonContent
+        body={body}
         content={content}
         inspectorScope={inspectorScope}
       />
@@ -76,6 +83,7 @@ export function ProtectedPendingSkeleton({
     <ProtectedPendingInspectorScopeContext.Consumer>
       {(contextScope) => (
         <ProtectedPendingSkeletonContent
+          body={body}
           content={content}
           inspectorScope={contextScope}
         />
@@ -84,13 +92,75 @@ export function ProtectedPendingSkeleton({
   );
 }
 
+function PendingPageBody({ body: Body }: { body: RouteComponent | undefined }) {
+  if (Body === undefined) {
+    return (
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
+        <Skeleton className="h-7 w-1/3" />
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
+    );
+  }
+  // Inert: the page's own pending tree may hold its real links and headings,
+  // and nothing in a placeholder frame takes focus or a click.
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" inert>
+      <Body />
+    </div>
+  );
+}
+
+const NavItemLabel = ({
+  labelKey,
+}: {
+  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+}) => {
+  const t = useTranslations();
+  return t(labelKey);
+};
+
+function NavItemText({
+  intlMounted,
+  labelKey,
+  sidebarOpen,
+}: {
+  intlMounted: boolean;
+  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+  sidebarOpen: boolean;
+}) {
+  if (!intlMounted) {
+    // Painted before the app's intl (the server's cold-load frame): the
+    // label's line, its text arriving with intl.
+    return sidebarOpen ? <Skeleton className="h-3 w-20" /> : null;
+  }
+  if (sidebarOpen) {
+    return (
+      <TruncatedText className="text-sm" hint={false}>
+        <NavItemLabel labelKey={labelKey} />
+      </TruncatedText>
+    );
+  }
+  return (
+    <span className="sr-only">
+      <NavItemLabel labelKey={labelKey} />
+    </span>
+  );
+}
+
 function ProtectedPendingSkeletonContent({
+  body,
   content,
   inspectorScope,
 }: {
+  body: RouteComponent | undefined;
   content: ReactElement | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
+  const intlMounted = useIntlMounted();
+  const { prefs } = usePresentationPrefs();
   const viewportWidth = useViewportWidth();
   // The restore policy the authenticated frame applies, on the stored tabs:
   // the member's tab registry loads with that frame, and the store writes
@@ -99,7 +169,7 @@ function ProtectedPendingSkeletonContent({
     inspectorScope !== undefined &&
     isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs);
   const sidebarOpen =
-    (readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) &&
+    prefs.sidebarOpen &&
     !shouldForceSidebarCollapsed({
       expandedSidebarWidth: SIDEBAR_WIDTH_PX,
       inspectorPaneOpen: paneRequested,
@@ -107,7 +177,7 @@ function ProtectedPendingSkeletonContent({
     });
   const paneWidth = paneRequested
     ? resolveInspectorPaneWidth({
-        desiredWidth: readPersistedInspectorPaneWidth(),
+        desiredWidth: prefs.inspectorWidth,
         sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
         viewportWidth,
       })
@@ -117,9 +187,80 @@ function ProtectedPendingSkeletonContent({
       aria-hidden={content === undefined ? "true" : undefined}
       className="bg-background flex h-full min-h-dvh"
     >
-      {/* The sidebar as the user left it: its cookie reads the same on the
-          server and in the browser. */}
-      {sidebarOpen ? <ExpandedSidebarSkeleton /> : <CollapsedSidebarSkeleton />}
+      {/* Sidebar column: AppSidebar's 16rem width, logo header, primary nav,
+          pinned matters, help, account. */}
+      <div
+        className="bg-sidebar hidden shrink-0 flex-col overflow-hidden border-e md:flex"
+        data-slot="pending-sidebar"
+        data-state={sidebarOpen ? "expanded" : "collapsed"}
+        style={{
+          width: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
+        }}
+      >
+        <div
+          className={cn(
+            "flex shrink-0 items-center border-b",
+            sidebarOpen ? "justify-between ps-3 pe-2" : "justify-center",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          {sidebarOpen ? (
+            <>
+              <StellaWordmarkLatin className="h-5 w-auto rtl:hidden" />
+              <StellaWordmarkArabic className="hidden h-5 w-auto rtl:block" />
+            </>
+          ) : null}
+          <span
+            className={cn(
+              "text-muted-foreground grid place-items-center",
+              SIDE_RAIL_ICON_BUTTON_SIZE,
+            )}
+          >
+            <PanelLeftIcon className="size-4" />
+          </span>
+        </div>
+        <div className="flex flex-col gap-1 p-2">
+          {STATIC_NAV_ITEMS.map((item) => (
+            <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
+              <item.icon className="text-muted-foreground size-4 shrink-0" />
+              <NavItemText
+                intlMounted={intlMounted}
+                labelKey={item.labelKey}
+                sidebarOpen={sidebarOpen}
+              />
+            </div>
+          ))}
+        </div>
+        {sidebarOpen && (
+          <div className="flex flex-col gap-1 border-t p-2">
+            {PINNED_ROW_KEYS.map((key) => (
+              <div className="flex h-9 items-center gap-2 px-2" key={key}>
+                <Skeleton className="size-4 rounded-sm" />
+                <div className="flex flex-1 flex-col gap-1">
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-2 w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex-1" />
+        <div className="flex flex-col gap-1 p-2">
+          <div className="flex h-8 items-center gap-2 px-2">
+            <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
+            {sidebarOpen && <Skeleton className="h-3 w-24" />}
+          </div>
+          <div className="flex h-12 items-center gap-2 px-2">
+            <Skeleton className="size-8 rounded-full" />
+            {sidebarOpen && (
+              <div className="flex flex-1 flex-col gap-1">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-2 w-28" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Main content column: header bar (breadcrumb) + page body. */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -132,13 +273,7 @@ function ProtectedPendingSkeletonContent({
           <Skeleton className="h-4 w-40" />
         </div>
         {content === undefined ? (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
-            <Skeleton className="h-7 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-          </div>
+          <PendingPageBody body={body} />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{content}</div>
         )}
@@ -159,7 +294,7 @@ function ProtectedPendingSkeletonContent({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </div>
         <div className="flex-1" />
         <div
@@ -170,100 +305,6 @@ function ProtectedPendingSkeletonContent({
         >
           <NewChatIcon className="size-4" />
         </div>
-      </div>
-    </div>
-  );
-}
-
-// AppSidebar's 16rem width: logo header, primary nav, pinned matters, help,
-// account.
-function ExpandedSidebarSkeleton() {
-  return (
-    <div className="bg-sidebar hidden w-64 shrink-0 flex-col border-e md:flex">
-      <div
-        className={cn(
-          "flex shrink-0 items-center justify-between border-b ps-3 pe-2",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        {/* The prepaint script sets `dir` before first paint, so the
-            right lockup shows without a locale hook. */}
-        <StellaWordmarkLatin className="h-5 w-auto rtl:hidden" />
-        <StellaWordmarkArabic className="hidden h-5 w-auto rtl:block" />
-        <span
-          className={cn(
-            "text-muted-foreground grid place-items-center",
-            SIDE_RAIL_ICON_BUTTON_SIZE,
-          )}
-        >
-          <PanelLeftIcon className="size-4" />
-        </span>
-      </div>
-      <div className="flex flex-col gap-1 p-2">
-        {STATIC_NAV_ITEMS.map((item, index) => (
-          <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
-            <item.icon className="text-muted-foreground size-4 shrink-0" />
-            <Skeleton
-              className={cn("h-3", NAV_LABEL_WIDTHS[index] ?? "w-16")}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-col gap-1 border-t p-2">
-        {PINNED_ROW_KEYS.map((key) => (
-          <div className="flex h-9 items-center gap-2 px-2" key={key}>
-            <Skeleton className="size-4 rounded-sm" />
-            <div className="flex flex-1 flex-col gap-1">
-              <Skeleton className="h-3 w-28" />
-              <Skeleton className="h-2 w-20" />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="flex-1" />
-      <div className="flex flex-col gap-1 p-2">
-        <div className="flex h-8 items-center gap-2 px-2">
-          <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
-          <Skeleton className="h-3 w-24" />
-        </div>
-        <div className="flex h-12 items-center gap-2 px-2">
-          <Skeleton className="size-8 rounded-full" />
-          <div className="flex flex-1 flex-col gap-1">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-2 w-28" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// AppSidebar's 3rem icon rail (`SIDEBAR_WIDTH_ICON_PX`): the toggle, the
-// primary nav icons, help and the account avatar, no labels.
-function CollapsedSidebarSkeleton() {
-  return (
-    <div className="bg-sidebar hidden w-12 shrink-0 flex-col items-center border-e md:flex">
-      <div
-        className={cn(
-          "text-muted-foreground flex w-full shrink-0 items-center justify-center border-b",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <PanelLeftIcon className="size-4" />
-      </div>
-      <div className="flex flex-col items-center gap-1 p-2">
-        {STATIC_NAV_ITEMS.map((item) => (
-          <div className="grid size-8 place-items-center" key={item.id}>
-            <item.icon className="text-muted-foreground size-4" />
-          </div>
-        ))}
-      </div>
-      <div className="flex-1" />
-      <div className="flex flex-col items-center gap-1 p-2">
-        <div className="grid size-8 place-items-center">
-          <HelpCircleIcon className="text-muted-foreground size-4" />
-        </div>
-        <Skeleton className="size-8 rounded-full" />
       </div>
     </div>
   );

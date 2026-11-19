@@ -11,6 +11,8 @@ import {
   WorkspaceStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
 import { executeAuthorizedWorkspaceDeletionWithRoot } from "@/api/lib/workspace-deletion";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const config = {
   contract: "patch",
@@ -39,6 +41,9 @@ export const deleteWorkspaceHandler = async function* (
 ) {
   const outcome = await executeAuthorizedWorkspaceDeletionWithRoot(props);
   if (Result.isError(outcome)) {
+    if (LegalHoldActiveError.is(outcome.error)) {
+      return Result.err(legalHoldRefusal(outcome.error));
+    }
     if (outcome.error instanceof WorkspaceBillingHistoryError) {
       return Result.err(
         new HandlerError({ status: 409, message: outcome.error.message }),

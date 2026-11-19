@@ -15,9 +15,11 @@ import {
   folioCollabRooms,
   hostedCustomerErasures,
   invoices,
+  invoiceSends,
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  outboundActions,
   pdfSigningSessions,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
@@ -25,6 +27,7 @@ import {
   timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
   FLOW_RUN_STEP_TRANSITIONS_V1,
   FLOW_RUN_TRANSITIONS_V1,
@@ -48,7 +51,10 @@ import type {
   ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
-import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
+import {
+  DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+  DESKTOP_RUNNER_RUN_TRANSITIONS,
+} from "@/api/lib/desktop-runner/run-transitions";
 import { PROVIDER_WEBHOOK_RESULT_TRANSITIONS } from "@/api/lib/hosted-usage-provider/webhook-result-transitions";
 import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
@@ -112,8 +118,8 @@ const TIME_ENTRY_TRANSITIONS = defineTransitions(
 
 // An invoice's lifecycle. Recorded payments move a finalized or sent invoice
 // to paid and back (`lib/billing/invoice-payments`) through this spec;
-// finalize, send, revert and void are still direct writes of the transition
-// handler in the shrinking ledger.
+// finalize, send, revert and void use the same engine. Every move that leaves
+// issued states revokes link authority in its transaction.
 const INVOICE_TRANSITIONS = defineTransitions(
   invoices,
   {
@@ -123,8 +129,25 @@ const INVOICE_TRANSITIONS = defineTransitions(
     paid: ["finalized", "sent", "void"],
     void: [],
   },
-  { terminal: ["void"] },
+  { terminal: ["void"], invoiceLinkAuthority: "revoke-on-leaving-issued" },
 );
+
+// Each email attempt completes once; a resend creates a separate pending row.
+const INVOICE_SEND_DELIVERY_TRANSITIONS = defineLifecycle({
+  table: invoiceSends,
+  key: "id",
+  graphs: {
+    deliveryStatus: {
+      edges: {
+        pending: ["delivered", "partial", "failed"],
+        delivered: [],
+        partial: [],
+        failed: [],
+      },
+      terminal: ["delivered", "partial", "failed"],
+    },
+  },
+});
 
 // A failed attempt retries until its budget is spent; a ready archive expires.
 const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
@@ -138,6 +161,22 @@ const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
   },
   { terminal: ["failed", "expired"] },
 );
+
+const OUTBOUND_ACTION_TRANSITIONS = defineScopedTransitions({
+  table: outboundActions,
+  key: "id",
+  scope: [],
+  stateColumn: "status",
+  edges: {
+    pending: ["sending", "discarded"],
+    sending: ["sending", "sent", "failed"],
+    sent: [],
+    failed: [],
+    discarded: [],
+    expired: [],
+  },
+  initial: ["pending"],
+});
 
 export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
   ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
@@ -436,6 +475,7 @@ type TransitionDecision<TTable extends StatusTable> =
 
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
+  outboundActions: OUTBOUND_ACTION_TRANSITIONS,
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
   accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
   accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
@@ -479,6 +519,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopRunnerFolderRestores: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
   desktopRunnerRuns: DESKTOP_RUNNER_RUN_TRANSITIONS,
   desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -503,6 +544,7 @@ export const TRANSITIONS = {
   hostedUsageWebhookEvents: PROVIDER_WEBHOOK_RESULT_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: INVOICE_TRANSITIONS,
+  invoiceSends: INVOICE_SEND_DELIVERY_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -521,6 +563,7 @@ export const TRANSITIONS = {
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
   organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationDataExports: DATA_EXPORT_TRANSITIONS,
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,

@@ -229,7 +229,7 @@ describe("document review run inputs", () => {
     );
     await testDb
       .update(entityVersions)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
       .where(eq(entityVersions.id, ids.entityVersionA1));
     expect(
       await resolveDocumentReviewRunInputs(scopedDb, {

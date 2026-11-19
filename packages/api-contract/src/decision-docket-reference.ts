@@ -1,6 +1,7 @@
 import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 
 import {
+  CZE_SHEET_NUMBER_SOURCE,
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,
@@ -39,6 +40,7 @@ type ParseDecisionDocketOptions = {
  */
 export const DECISION_DOCKETS_STORED_WITH_SHEETS = {
   AUT: false,
+  BRA: false,
   CZE: true,
   EU: false,
   GBR: false,
@@ -174,7 +176,10 @@ const DOCKET_REFERENCE_MAX_LENGTH = 200;
 const DOCKET_REFERENCE_TAIL_MAX_LENGTH = 16;
 
 /** A trailing number after a dash, once spacing around the dash is gone. */
-const SHEET_TAIL_RE = /^(?<docket>.*\d)-(?<sheet>\d{1,4})$/u;
+const SHEET_TAIL_RE = new RegExp(
+  String.raw`^(?<docket>.*\d)-(?<sheet>${CZE_SHEET_NUMBER_SOURCE})$`,
+  "u",
+);
 
 /** Roman part numerals one to thirty-nine, the range the tail grammar reads. */
 const ROMAN_PART_NUMERALS: readonly string[] = Array.from(

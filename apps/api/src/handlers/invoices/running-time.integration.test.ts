@@ -150,7 +150,7 @@ const context = <TContext extends SafeHandlerLogContext>(
   return asTestRaw<TContext>({
     ...request,
     workspaceId,
-    memberRole: sessionMemberRole(actor),
+    memberRole: sessionMemberRole(actor, true),
     session: { activeOrganizationId: ids.orgA },
     user: { id: actorId },
     safeDb: createSafeDb(db, [workspaceId], ids.orgA, actorId),

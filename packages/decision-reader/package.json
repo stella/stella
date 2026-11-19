@@ -36,6 +36,7 @@
     "./reader-outline": "./src/reader-outline.ts",
     "./reader-search": "./src/reader-search.ts",
     "./reader-text-pieces.logic": "./src/reader-text-pieces.logic.ts",
+    "./reader-text-scale": "./src/reader-text-scale.ts",
     "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",
     "./reader-types": "./src/reader-types.ts",
     "./reader.css": "./src/reader.css",
@@ -43,16 +44,15 @@
     "./reference-peek-layering": "./src/reference-peek-layering.ts",
     "./reference-peek.logic": "./src/reference-peek.logic.ts",
     "./sanitize-href": "./src/sanitize-href.ts",
-    "./source-link-policy": "./src/source-link-policy.tsx",
-    "./use-reader-text-scale": "./src/use-reader-text-scale.ts"
+    "./source-link-policy": "./src/source-link-policy.tsx"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test --isolate src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/decision-reader",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/decision-reader"
+    "lint": "cd ../.. && bun scripts/lint.ts packages/decision-reader",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/decision-reader"
   },
   "dependencies": {
     "@fontsource-variable/source-serif-4": "^5.3.1",
@@ -61,8 +61,7 @@
     "@stll/legal-atlas": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/ui": "workspace:*",
-    "better-result": "catalog:",
-    "valibot": "catalog:"
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",

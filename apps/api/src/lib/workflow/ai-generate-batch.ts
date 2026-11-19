@@ -25,6 +25,7 @@ import {
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
 import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
+import { answerSchemaForShape } from "@/api/lib/workflow/ai-answer-schema";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
@@ -107,6 +108,36 @@ export type WorkflowDataGeneration = {
   /** The batch as it was asked, each property in its resolved answer shape. */
   properties: AIBatchProperty[];
   fit: RequestFit<PreparedInputFile>;
+};
+
+/**
+ * What a finished batch holds for one property it was asked. A property the
+ * request owed an answer for but whose entry is absent is `omitted`: the
+ * request failed for it, which says nothing about the document, so a caller
+ * must fail rather than read it as "not stated".
+ */
+export type PropertyOutput =
+  | { type: "returned"; result: WorkflowDataOutput[string] }
+  | { type: "refused" }
+  /** A select with no options is left out of the request: nothing could be
+   *  chosen, so there is no answer to owe. */
+  | { type: "not-asked" }
+  | { type: "omitted" };
+
+export const propertyOutput = (
+  generation: Pick<WorkflowDataGeneration, "output" | "refusedPropertyIds">,
+  property: AIBatchProperty,
+): PropertyOutput => {
+  if (generation.refusedPropertyIds.has(property.id)) {
+    return { type: "refused" };
+  }
+  const result = generation.output[property.id];
+  if (result !== undefined) {
+    return { type: "returned", result };
+  }
+  return answerSchemaForShape(property.content, property.answerShape) === null
+    ? { type: "not-asked" }
+    : { type: "omitted" };
 };
 
 /** Everything but the tier, which only the chunk's admission can state. */
@@ -649,28 +680,30 @@ export const generateWorkflowData = async ({
   // order, and only one at a time: the first chunk writes the shared prompt
   // prefix into the provider's cache and the rest read it, so overlapping
   // them would pay for that prefix once per chunk. Answers from earlier
-  // chunks accumulate into `merged`; the first failure ends the batch.
+  // chunks accumulate once by key; the first failure ends the batch.
   const chunkBatches = chunks.value;
+  const accumulated = new Map(Object.entries(systemOneOutput));
   const runFromChunk = async (
     index: number,
-    merged: WorkflowDataOutput,
   ): Promise<Result<WorkflowDataOutput, WorkflowIntegrationError>> => {
     const chunkProperties = chunkBatches.at(index);
     if (chunkProperties === undefined) {
-      return Result.ok(merged);
+      return Result.ok(Object.fromEntries(accumulated));
     }
 
     const chunkOutput = await runChunk(chunkProperties);
     if (Result.isError(chunkOutput)) {
       return chunkOutput;
     }
-    Object.assign(merged, chunkOutput.value);
-    return await runFromChunk(index + 1, merged);
+    for (const [key, value] of Object.entries(chunkOutput.value)) {
+      accumulated.set(key, value);
+    }
+    return await runFromChunk(index + 1);
   };
 
   // Chunk answers accumulate onto the System One answers; the two sets of
   // property ids are disjoint, so neither overwrites the other.
-  const generated = await runFromChunk(0, systemOneOutput);
+  const generated = await runFromChunk(0);
   return generated.map((output) => ({
     output,
     refusedPropertyIds: new Set(refusedPropertyIds),

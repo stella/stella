@@ -14,11 +14,12 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
-type CredentialDb = Pick<SchedulerDb, "select" | "update">;
+type CredentialDb = Pick<SchedulerDb, "select" | "transaction">;
 type RegistrationCredential = {
   id: string;
   clientId: string;
@@ -36,23 +37,28 @@ const compareAndSetCredential = async ({
   envelope,
 }: CompareAndSetOptions): Promise<Result<boolean, HandlerError>> =>
   await Result.tryPromise({
+    // A deferred update must finish rolling back before the caller continues.
     try: async () =>
-      (
-        await db
-          .update(agentRegistration)
-          .set({ clientSecretSink: envelope })
-          .where(
-            and(
-              eq(agentRegistration.id, registration.id),
-              eq(agentRegistration.clientId, registration.clientId),
-              eq(
-                agentRegistration.clientSecretSink,
-                sql`${registration.clientSecretSink}`,
-              ),
-            ),
-          )
-          .returning({ id: agentRegistration.id })
-      ).length > 0,
+      await withAggregateSavepoint(
+        db,
+        async (tx) =>
+          (
+            await tx
+              .update(agentRegistration)
+              .set({ clientSecretSink: envelope })
+              .where(
+                and(
+                  eq(agentRegistration.id, registration.id),
+                  eq(agentRegistration.clientId, registration.clientId),
+                  eq(
+                    agentRegistration.clientSecretSink,
+                    sql`${registration.clientSecretSink}`,
+                  ),
+                ),
+              )
+              .returning({ id: agentRegistration.id })
+          ).length > 0,
+      ),
     catch: () =>
       new HandlerError({
         status: 503,

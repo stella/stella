@@ -84,6 +84,26 @@ describe("resolveFormulaFields", () => {
     expect(values["totals"]).toEqual({});
   });
 
+  test.each(["totals", "__proto__", "constructor"])(
+    "removing a submitted %s field never deletes inherited data",
+    (field) => {
+      const shared = { annual: "retained value" };
+      const prototype = { [field]: shared };
+      const values: Record<string, unknown> = { rent: "1000" };
+      Object.setPrototypeOf(values, prototype);
+
+      resolveFormulaFields({
+        values,
+        fields: [{ path: `${field}.annual`, formula: "rent * 12" }],
+      });
+
+      expect(shared).toEqual({ annual: "retained value" });
+      expect(values[`${field}.annual`]).toBe("12000");
+      expect(Object.hasOwn(values, field)).toBe(false);
+      expect(Object.getPrototypeOf(values)).toBe(prototype);
+    },
+  );
+
   test("skips fields without a formula", () => {
     const values: Record<string, unknown> = { rent: "1000" };
     resolveFormulaFields({ values, fields: [{ path: "rent" }] });

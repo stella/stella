@@ -1,5 +1,7 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock } from "bun:test";
+
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import {
   createMemory,

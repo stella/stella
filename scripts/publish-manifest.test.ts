@@ -240,6 +240,54 @@ describe("toPublishedManifest", () => {
     });
   });
 
+  test.each(Object.getOwnPropertyNames(Object.prototype))(
+    "publishes own %s exports without inventing a native target",
+    (subpath) => {
+      const source = manifest(
+        Object.fromEntries([
+          [".", "./src/index.ts"],
+          [subpath, "./src/components/button.tsx"],
+        ]),
+      );
+      expect(Object.hasOwn(sourceExportTargets(source), subpath)).toBe(true);
+      expect(Object.hasOwn(sourceNativeExportTargets(source), subpath)).toBe(
+        false,
+      );
+      const result = toPublishedManifest(source);
+      expect(Object.hasOwn(result.exports, subpath)).toBe(true);
+      expect(result.exports[subpath]).toEqual({
+        types: "./dist/components/button.d.ts",
+        import: "./dist/components/button.js",
+      });
+    },
+  );
+
+  test.each(Object.getOwnPropertyNames(Object.prototype))(
+    "preserves an explicitly configured native target for %s",
+    (subpath) => {
+      const source = manifest({
+        ".": "./src/index.ts",
+        [subpath]: {
+          "react-native": "./src/components/button.native.tsx",
+          default: "./src/components/button.tsx",
+        },
+      });
+      expect(Object.hasOwn(sourceNativeExportTargets(source), subpath)).toBe(
+        true,
+      );
+      const result = toPublishedManifest(source);
+      expect(Object.hasOwn(result.exports, subpath)).toBe(true);
+      expect(result.exports[subpath]).toEqual({
+        "react-native": {
+          types: "./dist/components/button.native.d.ts",
+          import: "./dist/components/button.native.js",
+        },
+        types: "./dist/components/button.d.ts",
+        import: "./dist/components/button.js",
+      });
+    },
+  );
+
   test("publishes a native renderer under the react-native condition, first", () => {
     const publishedNative = toPublishedManifest(
       manifest({

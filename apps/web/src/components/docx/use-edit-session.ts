@@ -78,12 +78,14 @@ const releaseEditSession = async ({
   propertyId,
 }: EditSessionReleaseContext) => {
   const result = await Result.tryPromise(async () => {
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["desktop-edit-sessions"].release.post({
-        entityId: toSafeId<"entity">(entityId),
-        propertyId: toSafeId<"property">(propertyId),
-      });
+    const entitiesApi = api.entities({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+
+    const response = await entitiesApi["desktop-edit-sessions"].release.post({
+      entityId: toSafeId<"entity">(entityId),
+      propertyId: toSafeId<"property">(propertyId),
+    });
     if (response.error) {
       return { status: "error" as const, error: toAPIError(response.error) };
     }
@@ -139,14 +141,15 @@ export const useEditSession = ({
       propertyId,
     };
     setState({ status: "opening" });
+    const entitiesApi = api.entities({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
 
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["desktop-edit-sessions"].open.post({
-        entityId: toSafeId<"entity">(entityId),
-        propertyId: toSafeId<"property">(propertyId),
-        ...(force && { force }),
-      });
+    const response = await entitiesApi["desktop-edit-sessions"].open.post({
+      entityId: toSafeId<"entity">(entityId),
+      propertyId: toSafeId<"property">(propertyId),
+      ...(force && { force }),
+    });
 
     if (response.error) {
       if (!isMounted()) {

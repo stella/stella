@@ -24,10 +24,9 @@ The package performs no fetching and mounts no React effects. Supply hydration
 state through `isHydrated`; its default is false for server rendering. Hosts
 attach any scrolling or landing lifecycle through the reader's `articleRef`.
 
-`useReaderTextScale` accepts optional structural storage and analytics adapters.
-Supply storage after hydration to preserve initial markup parity. Without
-storage, the reader uses its default scale. Rejected writes keep the selected
-size on screen and report to the optional analytics adapter.
+`createReaderTextScale` accepts a host supplied initial scale and change callback.
+Hosts can render the preference on the server and persist changes through their
+own presentation settings.
 
 ## Imports and styles
 
@@ -37,7 +36,7 @@ Import explicit subpaths; there is no package-root barrel. Main entry points:
 - `reader-adapters` for providers and typed host contracts.
 - `document-ast-text` for AST blocks and inline rendering.
 - `reader-outline`, `reader-search`, and `query-marks` for reader utilities.
-- `use-reader-text-scale` and `reader-text-scale.logic` for text size.
+- `reader-text-scale` and `reader-text-scale.logic` for text size.
 - `annotation-anchors`, `citation-link`, `citation-treatment`,
   `provision-anchors`, and `fallback-legal-anchors` for marks and links.
 - `source-link-policy`, `reader-inset-box`, and `reader-landing` for shared

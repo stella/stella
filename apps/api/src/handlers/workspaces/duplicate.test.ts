@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { createTestState } from "@stll/test-state";
+
 import { member } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -46,14 +48,7 @@ import {
 
 import { createDuplicateWorkspace } from "./duplicate";
 
-beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockClear();
-  enqueueEntitySearchRepairsMock.mockClear();
-  enqueueWorkspaceSearchRepairsMock.mockClear();
-  flushEntitySearchRepairsMock.mockClear();
-  flushWorkspaceSearchRepairsMock.mockClear();
-  requestNativeExtractionRunsMock.mockClear();
-});
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -157,15 +152,18 @@ const readDuplicatedWorkspaceId = (result: unknown): SafeId<"workspace"> => {
   throw new Error("Expected the duplicate to return a workspace id");
 };
 
-let previousLegalListsFlag = env.FEATURE_LEGAL_LISTS;
 beforeEach(() => {
-  previousLegalListsFlag = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = true;
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
   fake = startFakeS3();
 });
 
 afterEach(() => {
-  env.FEATURE_LEGAL_LISTS = previousLegalListsFlag;
   fake.stop();
 });
 

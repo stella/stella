@@ -1,8 +1,11 @@
+import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
 import { status } from "@/api/http/status";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ReadWorkspaceHandlerProps = {
@@ -71,3 +74,36 @@ export const readWorkspaceHandler = async ({
   // a spread of a table.
   return result;
 };
+
+/** `GET /v1/workspaces/:workspaceId`: one matter, archived ones included. */
+const readWorkspace = createSafeHandler(
+  {
+    contract: "patch",
+    description:
+      "Read one matter, active or archived: its name, reference, status, " +
+      "colour, lead and client, and stampedVersionCount, how many live " +
+      "document versions carry its reference in a stamp, which a new " +
+      "reference cannot rewrite.",
+    access: "read",
+    permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    workspaceStatus: "active-or-archived",
+    mcp: { type: "covered", by: "list_matters" },
+  } satisfies WorkspaceHandlerConfig,
+  async function* ({ scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readWorkspaceHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default readWorkspace;

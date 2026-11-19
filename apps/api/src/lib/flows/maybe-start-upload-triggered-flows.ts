@@ -42,7 +42,7 @@ import { logger } from "@/api/lib/observability/logger";
  * through the structured logger; per-definition skips / errors are handled by
  * `startAutomatedFlowRun`.
  */
-export const FLOW_UPLOAD_TRIGGER_DELAY_MS = 30_000;
+const FLOW_UPLOAD_TRIGGER_DELAY_MS = 30_000;
 
 export type MaybeStartUploadTriggeredFlowsArgs = {
   entityId: SafeId<"entity">;

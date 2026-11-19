@@ -9,6 +9,7 @@ import {
   resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import {
   SAVED_SEARCH_CRITERIA_VERSION,
   SAVED_SEARCH_SORTS,
@@ -60,6 +61,7 @@ export const createSavedSearchBodySchema = v.strictObject({
 });
 
 export const updateSavedSearchBodySchema = v.strictObject({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   name: v.optional(displayNameSchema()),
   criteria: v.optional(savedSearchCriteriaBodySchema),
 });

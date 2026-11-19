@@ -109,8 +109,7 @@ export const AiRewriteControl = ({
             <div className="flex flex-col gap-1">
               {AI_REWRITE_PRESETS.map((preset) => (
                 <Button
-                  className="w-full justify-start font-normal"
-                  size="sm"
+                  size="row"
                   variant="ghost"
                   key={preset.id}
                   onClick={() => runRewrite(preset.instruction)}
@@ -121,8 +120,9 @@ export const AiRewriteControl = ({
               <div className="bg-border my-1 h-px" />
               <div className="flex flex-col gap-1">
                 <Label
-                  className="text-muted-foreground px-1 text-xs font-medium"
+                  className="mx-1"
                   htmlFor={customInstructionId}
+                  variant="muted"
                 >
                   {t("refinePlaceholder")}
                 </Label>
@@ -161,7 +161,7 @@ export const AiRewriteControl = ({
         }
       >
         {isPending ? (
-          <Loader className="size-3.5" label={tCommon("loading")} size="sm" />
+          <Loader label={tCommon("loading")} size="sm" />
         ) : (
           <AiActionIcon aria-hidden className="size-3.5" />
         )}

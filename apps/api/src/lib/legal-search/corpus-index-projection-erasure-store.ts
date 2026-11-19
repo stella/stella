@@ -11,8 +11,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { lockRegisteredCorpusProjectionManifestForMutation } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { corpusProjectionAcceptedAppendCleanupFence } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionAppendPublishBarrier,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   type CorpusProjectionScopedWorkOptions,
@@ -230,7 +232,10 @@ export const advanceCorpusProjectionErasuresTx = async <
       }
       return {
         id,
-        barrier: corpusIndexUnknownAppendBarrierAt(appendStartedAt, manifest),
+        barrier: corpusProjectionAppendPublishBarrier(
+          { type: "unknown", appendStartedAt },
+          manifest,
+        ),
       };
     });
     const barrierSql = sqlCaseFragment({
@@ -289,6 +294,41 @@ export const advanceCorpusProjectionErasuresTx = async <
         ),
       );
   }
+
+  // Stop naming the copy now that it has left `applied`, whatever is still
+  // outstanding: an erasure undone before its delete lands must append anew,
+  // never be served the pre-erasure copy again. This also un-names states an
+  // earlier release left naming a revision under a desired erasure, since
+  // every such state is still erase-pending and so reaches this claim. A
+  // revision past the fencing cap stays `applied` and named until a later
+  // turn fences it; readers do not show it, its state desiring an erasure.
+  // audit: skip - applied-state bookkeeping on the derived public corpus projection
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      appliedAction: null,
+      appliedEpoch: null,
+      appliedRevision: null,
+      appliedFingerprint: null,
+      appliedIndexId: null,
+      appliedAt: null,
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        inArray(corpusIndexProjectionStates.entityId, entityIds),
+        eq(corpusIndexProjectionStates.desiredAction, "erase"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${corpusIndexProjectionIntents} named
+          WHERE named.id = ${corpusIndexProjectionStates.appliedRevision}
+            AND named.status <> 'applied'
+        )`,
+      ),
+    );
 
   const applied = await tx
     .update(corpusIndexProjectionStates)

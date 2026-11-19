@@ -12,7 +12,7 @@ import {
   registryExtras,
   registryString,
   registryValue,
-} from "./property-test-helpers.test.js";
+} from "./tests/test-helpers.js";
 
 const recordShape = fc.oneof(
   registryExtras.map((value) => ({ value, accepted: true })),

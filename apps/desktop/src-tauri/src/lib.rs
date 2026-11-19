@@ -1,5 +1,6 @@
 mod accessibility_guide;
 mod account;
+mod account_switch;
 mod activity;
 mod activity_calls;
 mod activity_commands;
@@ -39,12 +40,20 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
-#[cfg(dictation)]
 mod dictation_audio;
+mod dictation_cleanup;
+mod dictation_cloud;
+mod dictation_context;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_focus;
+mod dictation_format;
+mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
+mod dictation_language;
+mod dictation_live;
+mod dictation_pauses;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -65,6 +74,8 @@ mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_linked_folder_commands;
+mod local_linked_folders;
 mod local_skill_folder_commands;
 mod local_skill_folders;
 mod local_store;
@@ -73,8 +84,11 @@ mod logging;
 mod managed_policy;
 mod marker_file;
 mod onboarding;
+mod outcome_page;
 mod pdf_signing;
 mod permissions;
+mod pkcs11_module_setting;
+mod pkcs11_signing;
 mod presence;
 mod registry;
 mod relaunch;
@@ -115,6 +129,21 @@ use tokio::sync::Mutex;
 pub fn run_codex_token_helper() -> Option<i32> {
   let args = std::env::args_os().collect::<Vec<_>>();
   codex_managed_token_broker::run_token_helper(&args)
+}
+
+/// Runs the development stand-in computer (`examples/runner_stand_in.rs`)
+/// until it is stopped, and returns its exit code; 2 off Unix, where it
+/// does not run.
+#[cfg(feature = "dev-runner-stand-in")]
+pub fn run_runner_stand_in() -> i32 {
+  #[cfg(unix)]
+  {
+    desktop_runner::stand_in::main()
+  }
+  #[cfg(not(unix))]
+  {
+    2
+  }
 }
 
 /// Runs the speech worker when the process was started as one, and returns
@@ -301,6 +330,14 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::Dictation => {
               dictation::apply_feature_gate(app, enabled);
+              if enabled {
+                onboarding::feature_enabled(app, feature);
+              }
+            }
+            // Either decision changes which models the server lists.
+            feature_gate::DesktopFeature::DictationCloud
+            | feature_gate::DesktopFeature::DictationRetainingModels => {
+              dictation::apply_cloud_gate(app);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
@@ -591,47 +628,98 @@ pub fn run() {
 
 /// The settings window's size. The browser harness reads these lines and
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
-const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
-const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+const SETTINGS_WINDOW_WIDTH: f64 = 760.0;
+const SETTINGS_WINDOW_HEIGHT: f64 = 620.0;
+/// The smallest the settings window can be resized to.
+const SETTINGS_WINDOW_MIN_WIDTH: f64 = 640.0;
+const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 460.0;
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
-/// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
-/// in `src/mainview/App.tsx`.
+/// A Settings window page native code opens; the ids are `SETTINGS_PAGES`
+/// in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PreferencesTab {
   General,
+  Agents,
   Activity,
   About,
 }
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 3] = [Self::General, Self::Activity, Self::About];
+  const ALL: [Self; 4] = [Self::General, Self::Agents, Self::Activity, Self::About];
 
   const fn id(self) -> &'static str {
     match self {
       Self::General => "general",
+      Self::Agents => "agents",
       Self::Activity => "activity",
       Self::About => "about",
     }
   }
 }
 
+/// Where on the AI and agents page the Settings window scrolls to for the
+/// coding agents: their whole group, or one agent's card. The ids are
+/// `AGENT_SETTINGS_FOCUS` in `src/mainview/settings-pages.ts`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentSettingsFocus {
+  All,
+  Harness(harness_release::ManagedHarness),
+}
+
+impl AgentSettingsFocus {
+  #[cfg(test)]
+  const ALL: [Self; 3] = [
+    Self::All,
+    Self::Harness(harness_release::ManagedHarness::Codex),
+    Self::Harness(harness_release::ManagedHarness::ClaudeCode),
+  ];
+
+  const fn id(self) -> &'static str {
+    match self {
+      Self::All => "agents",
+      Self::Harness(harness) => harness.id(),
+    }
+  }
+}
+
+/// What the Settings window shows when native code opens it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SettingsView {
+  Tab(PreferencesTab),
+  /// AI and agents, scrolled to the coding agents' sign-ins and installs.
+  Agents(AgentSettingsFocus),
+}
+
+impl SettingsView {
+  /// The `activate-tab` event the window reads.
+  fn event_payload(self) -> serde_json::Value {
+    match self {
+      Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
+      Self::Agents(focus) => serde_json::json!({
+        "tab": PreferencesTab::Agents.id(),
+        "focus": focus.id(),
+      }),
+    }
+  }
+}
+
 pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab) {
+  show_settings(handle, SettingsView::Tab(tab));
+}
+
+pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   best_effort(handle.show(), "app could not be shown");
 
-  let tab = tab.id();
+  let payload = view.event_payload();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
     best_effort(window.show(), "settings window could not be shown");
     best_effort(window.set_focus(), "settings window could not be focused");
     best_effort(
-      handle.emit_to(
-        SETTINGS_WINDOW_LABEL,
-        "activate-tab",
-        serde_json::json!({ "tab": tab }),
-      ),
+      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
       "settings tab change was not announced",
     );
     return;
@@ -640,7 +728,8 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
   let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
-    .resizable(false);
+    .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
+    .resizable(true);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,
@@ -670,11 +759,7 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         best_effort(
-          handle.emit_to(
-            SETTINGS_WINDOW_LABEL,
-            "activate-tab",
-            serde_json::json!({ "tab": tab }),
-          ),
+          handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
           "tab activation was not announced",
         );
       });
@@ -687,21 +772,39 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
 
 #[cfg(test)]
 mod preferences_tab_tests {
-  use super::PreferencesTab;
+  use super::{AgentSettingsFocus, PreferencesTab};
+
+  /// The ids in one `const NAME = [...]` array literal of `settings-pages.ts`.
+  fn declared(name: &str) -> &'static str {
+    let source = include_str!("../../src/mainview/settings-pages.ts");
+    let (_, declaration) = source
+      .split_once(&format!("const {name} = ["))
+      .expect("settings-pages.ts declares the array");
+    declaration
+      .split_once(']')
+      .expect("the array is one array literal")
+      .0
+  }
 
   #[test]
-  fn native_tabs_are_tabs_the_settings_window_declares() {
-    let source = include_str!("../../src/mainview/App.tsx");
-    let (_, declaration) = source
-      .split_once("const PREFERENCES_TABS = [")
-      .expect("App.tsx declares PREFERENCES_TABS");
-    let (declaration, _) = declaration
-      .split_once(']')
-      .expect("PREFERENCES_TABS is one array literal");
+  fn agent_focuses_are_ones_the_settings_window_scrolls_to() {
+    let declaration = declared("AGENT_SETTINGS_FOCUS");
+    for focus in AgentSettingsFocus::ALL {
+      assert!(
+        declaration.contains(&format!("\"{}\"", focus.id())),
+        "{} is not a Settings window agent focus",
+        focus.id()
+      );
+    }
+  }
+
+  #[test]
+  fn native_pages_are_pages_the_settings_window_declares() {
+    let declaration = declared("SETTINGS_PAGES");
     for tab in PreferencesTab::ALL {
       assert!(
         declaration.contains(&format!("\"{}\"", tab.id())),
-        "{} is not a Settings window tab",
+        "{} is not a Settings window page",
         tab.id()
       );
     }

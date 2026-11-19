@@ -1,10 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.beforeAll(() => {
+  state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 const WORKSPACE_ID = "workspace-with-cached-views";

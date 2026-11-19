@@ -29,6 +29,9 @@
  * CSS as having side effects, so a bundler keeps just the glyphs a page uses.
  */
 
+import { createLucideIcon } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
+
 // --- Semantic entries ------------------------------------------------------
 
 // A skill or saved prompt is saved instructions, so it reads as a book; the
@@ -68,10 +71,55 @@ export { CopyIcon as DuplicateIcon } from "lucide-react-native";
 // mobile composer's round button shows it while there is nothing to send.
 export { MicIcon as DictateIcon } from "lucide-react-native";
 
+// Opening a document's pages to reorder, rotate, crop or delete them: a stack
+// of pages with no pen, so it never reads as signing the document.
+export { FileStackIcon as EditPagesIcon } from "lucide-react-native";
+
+// Sending a view into the side panel (move the main view to the side, open a
+// reference or fork a chat there): the panel with a chevron pointing into it,
+// so it never reads as the plain panel that shows or hides the side panel.
+// Draw it through DirectionalIcon so it mirrors with the panel under RTL.
+// Lucide has no glyph with the side panel shaded as the target, so this one is
+// drawn here: lucide's panel-right frame, the panel tinted, and the chevron of
+// panel-right-close pointing into it.
+export const MoveToSideIcon: LucideIcon = /* @__PURE__ */ createLucideIcon(
+  "move-to-side",
+  [
+    [
+      "path",
+      {
+        d: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4z",
+        fill: "currentColor",
+        fillOpacity: "0.25",
+        stroke: "none",
+        key: "move-to-side-panel",
+      },
+    ],
+    [
+      "rect",
+      {
+        width: "18",
+        height: "18",
+        x: "3",
+        y: "3",
+        rx: "2",
+        key: "move-to-side-frame",
+      },
+    ],
+    ["path", { d: "M15 3v18", key: "move-to-side-divider" }],
+    ["path", { d: "m8 9 3 3-3 3", key: "move-to-side-chevron" }],
+  ],
+);
+
+// Published glyphs remain available to package consumers even when no
+// repository component imports them.
+export { CircleOffIcon, DollarSignIcon, ScissorsIcon } from "lucide-react-native";
+
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react-native";
 export {
+  AccessibilityIcon,
   ActivityIcon,
   AlarmClockIcon,
   AlertCircleIcon,
@@ -116,7 +164,6 @@ export {
   CircleDotIcon,
   CircleHelpIcon,
   CircleIcon,
-  CircleOffIcon,
   CircleUserRoundIcon,
   ClipboardCheckIcon,
   ClipboardCopyIcon,
@@ -124,10 +171,10 @@ export {
   ClipboardListIcon,
   Clock3Icon,
   ClockIcon,
+  CloudIcon,
   CogIcon,
   Columns2Icon,
   Columns3Icon,
-  ColumnsIcon,
   CommandIcon,
   CompassIcon,
   CopyPlusIcon,
@@ -135,7 +182,6 @@ export {
   CpuIcon,
   CropIcon,
   DatabaseIcon,
-  DollarSignIcon,
   DownloadIcon,
   EditIcon,
   EllipsisIcon,
@@ -153,7 +199,6 @@ export {
   FileIcon,
   FileImageIcon,
   FileOutputIcon,
-  FilePenLineIcon,
   FilePlus2Icon,
   FilePlusIcon,
   FileQuestionIcon,
@@ -264,7 +309,6 @@ export {
   SaveIcon,
   ScanSearchIcon,
   ScanTextIcon,
-  ScissorsIcon,
   ScrollTextIcon,
   SearchIcon,
   SearchXIcon,

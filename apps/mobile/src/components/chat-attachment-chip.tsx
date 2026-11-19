@@ -1,6 +1,8 @@
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { FileTextIcon, ImageIcon, XIcon } from "@/icons.gen";
@@ -35,7 +37,7 @@ export const ChatAttachmentChip = ({
     <View className="border-border bg-background max-w-60 flex-row items-center gap-2 rounded-xl border py-1.5 pr-1 pl-2">
       <View className="bg-secondary size-8 items-center justify-center rounded-lg">
         {status === "busy" ? (
-          <ActivityIndicator color={ui.mutedForeground} size="small" />
+          <Loader size="sm" />
         ) : (
           <Icon color={ui.secondaryForeground} size={16} />
         )}
@@ -54,15 +56,16 @@ export const ChatAttachmentChip = ({
         )}
       </View>
       {onRemove === undefined ? null : (
-        <Pressable
+        <Button
           accessibilityLabel={t("removeAttachment", { name: shownName })}
-          accessibilityRole="button"
-          className="size-7 items-center justify-center rounded-full"
+          className="rounded-full"
           hitSlop={6}
           onPress={onRemove}
+          size="icon-xs"
+          variant="ghost"
         >
           <XIcon color={ui.mutedForeground} size={14} />
-        </Pressable>
+        </Button>
       )}
     </View>
   );

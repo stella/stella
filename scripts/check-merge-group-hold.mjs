@@ -55,7 +55,6 @@ export const checkMergeGroupHold = ({
   holdVariables,
   readApi,
 }) => {
-  if (eventName === "pull_request") return;
   /** @param {string} code @returns {never} */
   const fail = (code) => {
     throw new MergeGroupHoldError({
@@ -299,7 +298,7 @@ if (
           stdio: ["ignore", "pipe", "pipe"],
         }),
       );
-    if (process.env["GITHUB_EVENT_NAME"] === "pull_request_target") {
+    if (process.env["GITHUB_EVENT_NAME"] === "pull_request") {
       dequeueHeldPullRequest({
         event,
         repository: process.env["GITHUB_REPOSITORY"],

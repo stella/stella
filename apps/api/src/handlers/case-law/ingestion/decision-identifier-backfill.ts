@@ -59,7 +59,7 @@ export const MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = Math.floor(
     (DECISION_IDENTIFIER_MAX_COUNT * DECISION_IDENTIFIER_BIND_PARAMETERS +
       DECISION_PAGE_BIND_PARAMETERS),
 );
-export const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
+const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE;
 const MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS = 3;
 export const DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS = 6 * 60 * 60_000;
@@ -95,7 +95,7 @@ type CompleteBackfillCheckpoint = BackfillCheckpointBase & {
 type BackfillCheckpoint =
   RunningBackfillCheckpoint | CompleteBackfillCheckpoint;
 
-export type DecisionIdentifierBackfillGaps = {
+type DecisionIdentifierBackfillGaps = {
   decisionIdentifierMismatches: number;
   citationIdentifierMismatches: number;
   pendingTypedCitations: number;

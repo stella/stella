@@ -63,9 +63,6 @@ describe("bundled consumer census", () => {
   });
 
   test("references boot checks that still exist", async () => {
-    const ci = await Bun.file(
-      `${import.meta.dir}/../.github/workflows/ci.yml`,
-    ).text();
     const dockerfiles = new Map<string, string>();
     const missing: string[] = [];
 
@@ -75,8 +72,11 @@ describe("bundled consumer census", () => {
         continue;
       }
       if (check.type === "ci-job") {
+        const workflow = await Bun.file(
+          `${import.meta.dir}/../${check.workflow}`,
+        ).text();
         const job = check.jobId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-        if (!new RegExp(`^  ${job}:\\s*$`, "mu").test(ci)) {
+        if (!new RegExp(`^  ${job}:\\s*$`, "mu").test(workflow)) {
           missing.push(`${siteName(consumer)} -> CI job ${check.jobId}`);
         }
         continue;

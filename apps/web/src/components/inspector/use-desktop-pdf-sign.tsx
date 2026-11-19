@@ -90,6 +90,15 @@ const CLOSE_REASON_KEYS = {
   TranslationKey
 >;
 
+/**
+ * The copy for a start refusal the browser explains in its own words, or null
+ * for a failure it cannot explain.
+ */
+const startRefusalKey = (cause: unknown) => {
+  const code = APIError.is(cause) ? pdfSigningStartErrorCode(cause.code) : null;
+  return code === null ? null : START_ERROR_KEYS[code];
+};
+
 /** Replaces the waiting toast's Cancel action once the exchange settles. */
 const NO_ACTION = { actionProps: undefined } as const;
 
@@ -141,16 +150,6 @@ export const useDesktopPdfSign = ({
   const [isSigning, setIsSigning] = useState(false);
   // State lags a render behind; the ref refuses a second press at once.
   const busy = useRef(false);
-
-  const describeStartFailure = (cause: unknown) => {
-    const code = APIError.is(cause)
-      ? pdfSigningStartErrorCode(cause.code)
-      : null;
-    if (code === null) {
-      return userErrorFromThrown(cause, t("errors.actionFailed"));
-    }
-    return t(START_ERROR_KEYS[code]);
-  };
 
   const notifyAlreadySigning = () => {
     stellaToast.add({
@@ -234,7 +233,16 @@ export const useDesktopPdfSign = ({
       if (isRevoked()) {
         return;
       }
-      getAnalytics().captureError(started.error.cause, {
+      const { cause } = started.error;
+      const refusal = startRefusalKey(cause);
+      if (refusal !== null) {
+        notifyUserProblem(t("workspaces.files.pdfSigning.startFailedTitle"), {
+          toastId,
+          description: t(refusal),
+        });
+        return;
+      }
+      getAnalytics().captureError(cause, {
         fingerprintKey: "useDesktopPdfSign.signWithToast:cause",
         scope: {
           type: "handler",
@@ -244,7 +252,10 @@ export const useDesktopPdfSign = ({
       notifyUserError(
         started.error,
         t("workspaces.files.pdfSigning.startFailedTitle"),
-        { toastId, description: describeStartFailure(started.error.cause) },
+        {
+          toastId,
+          description: userErrorFromThrown(cause, t("errors.actionFailed")),
+        },
       );
       return;
     }

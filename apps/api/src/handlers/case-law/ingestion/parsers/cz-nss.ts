@@ -1167,7 +1167,7 @@ const decisionTitleBlock = (
         id,
         anchorId: makeAnchorId("p", index),
         type: "paragraph",
-        role: "intro",
+        role: "opening-formula",
         inlines: [{ type: "text", text: title }],
         plainText: title,
       }

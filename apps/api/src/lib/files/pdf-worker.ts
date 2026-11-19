@@ -19,6 +19,8 @@ import * as v from "valibot";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
 
+import { writeWorkerStdout } from "@/api/lib/subprocess";
+
 import {
   PDF_WORKER_OPERATION,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
@@ -37,10 +39,10 @@ try {
   const pdf = await PDF.load(fileBytes);
   switch (operationName) {
     case PDF_WORKER_OPERATION.encryption:
-      process.stdout.write(String(pdf.isEncrypted));
+      await writeWorkerStdout(String(pdf.isEncrypted));
       break;
     case PDF_WORKER_OPERATION.textLines:
-      process.stdout.write(
+      await writeWorkerStdout(
         JSON.stringify(
           pdf
             .getPages()

@@ -22,6 +22,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   ManualTimeEntryForm,
@@ -303,9 +304,12 @@ export const PersonalTimesheetDay = ({
               key={entry.id}
             >
               <div className="min-w-0 flex-1">
-                <BidiText as="p" className="truncate text-sm font-medium">
+                <TruncatedText
+                  className="text-sm font-medium"
+                  render={<BidiText as="p" />}
+                >
                   {entry.narrative}
-                </BidiText>
+                </TruncatedText>
                 {(!entry.billable ||
                   entry.source === "suggested" ||
                   entry.source === "activity") && (

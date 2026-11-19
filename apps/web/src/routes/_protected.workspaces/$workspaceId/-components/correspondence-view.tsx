@@ -8,8 +8,9 @@ import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -27,6 +28,7 @@ import {
   CorrespondenceProvenance,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
+import { CorrespondenceListSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.pending";
 import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
@@ -71,20 +73,6 @@ export const CorrespondenceView = ({
 };
 
 /** Route-pending body: the address card and the list rows, shimmering. */
-export const CorrespondenceViewSkeleton = () => (
-  <div className="space-y-5 p-4 sm:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-      <Skeleton className="h-9 w-24 rounded-md" />
-    </div>
-    <Skeleton className="h-11 w-full rounded-md" />
-    <CorrespondenceListSkeleton />
-  </div>
-);
-
 const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
   const canUpdate = usePermissions({ workspace: ["update"] });
@@ -140,7 +128,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         {address && (
-          <CopyActionButton
+          <CopyControl
             className="min-h-11"
             iconClassName="size-4"
             size="sm"
@@ -219,11 +207,11 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                   <AssertedHeadersLabel record={item} />
                 )}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="truncate text-sm font-medium">
+                  <TruncatedText className="text-sm font-medium">
                     <bdi dir="auto">
                       {item.subject || t("emailViewer.noSubject")}
                     </bdi>
-                  </span>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
                   </span>
@@ -239,7 +227,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                   )}
                 </span>
                 {item.channel === "data_box" ? (
-                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
                     {t("emailViewer.from")}:{" "}
                     {item.from.name && (
                       <bdi className="me-1" dir="auto">
@@ -249,17 +237,17 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                     <bdi className="font-mono" dir="ltr">
                       {item.from.address}
                     </bdi>
-                  </span>
+                  </TruncatedText>
                 ) : (
-                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                  <TruncatedText className="text-muted-foreground mt-1 text-xs">
                     {t(
                       correspondenceProvenancePresentation(item)
                         .originalSenderLabel,
                     )}
                     : <bdi dir="ltr">{item.from.address}</bdi>
-                  </span>
+                  </TruncatedText>
                 )}
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
+                <TruncatedText className="text-muted-foreground mt-1 text-xs">
                   {t("emailViewer.to")}:{" "}
                   {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
                     <bdi
@@ -270,7 +258,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                       {recipient.name ?? recipient.address}
                     </bdi>
                   ))}
-                </span>
+                </TruncatedText>
               </span>
             </span>
             <time className="text-muted-foreground shrink-0 text-xs tabular-nums">
@@ -299,22 +287,3 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
     </div>
   );
 };
-
-const CORRESPONDENCE_SKELETON_ROW_KEYS = ["s1", "s2", "s3", "s4", "s5"];
-
-const CorrespondenceListSkeleton = () => (
-  <div className="space-y-2">
-    {CORRESPONDENCE_SKELETON_ROW_KEYS.map((rowKey) => (
-      <div
-        className="flex h-16 items-center gap-4 rounded-lg border px-4"
-        key={rowKey}
-      >
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-3 w-36" />
-        </div>
-        <Skeleton className="h-3 w-20" />
-      </div>
-    ))}
-  </div>
-);

@@ -45,6 +45,9 @@ jobs:
         with:
           bun-version-file: package.json
           no-cache: true
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Validate image inventory
         run: |
           set -euo pipefail

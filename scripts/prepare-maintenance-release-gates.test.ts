@@ -15,8 +15,14 @@ import * as v from "valibot";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
+  DESKTOP_SUPPORT_FLOOR_PATH,
+  moveDesktopSupportFloor,
+  resolveDesktopSupportFloor,
+} from "./check-desktop-support-floor";
+import {
   type CutGateRunner,
   cutMaintenanceRelease,
+  IncompleteReleaseListingError,
   type MaintenanceCutEffects,
   MaintenanceReleaseError,
   type PreviousRelease,
@@ -35,6 +41,10 @@ const RELEASE_TAG_WORKFLOW = nodePath.resolve(
   "../.github/workflows/release-tag.yml",
 );
 const BASE_SHA = "c".repeat(40);
+// More than 30 days after the previous release's publication, so a cut that
+// records it moves the desktop support floor to it.
+const CUT_CLOCK = new Date("2026-03-10T00:00:00Z");
+const everyReleaseBuildsTheDesktop = () => true;
 const HIGH_ADVISORY =
   "dependency-audit: new high advisory GHSA-0000-0000-0000 in fixture-package";
 
@@ -121,6 +131,11 @@ const releaseTree = (mainVersion = "1.2.3", refusedRef?: string): string => {
   );
   write(
     root,
+    DESKTOP_SUPPORT_FLOOR_PATH,
+    '{\n  "minimumVersion": "1.2.2",\n  "supportDays": 30\n}\n',
+  );
+  write(
+    root,
     "scripts/changeset-policy.json",
     JSON.stringify({
       generatedPaths: [
@@ -178,6 +193,7 @@ const runCut = async (
   root: string,
   script: GateScript,
   args: readonly string[] = [],
+  pulls: unknown = [],
   previousRelease: PreviousRelease = PUBLISHED_PREVIOUS,
 ): Promise<CutRun> => {
   const before = snapshot(root);
@@ -211,7 +227,7 @@ const runCut = async (
     assertCleanWorktree: () => undefined,
     resolveHeadSha: () => BASE_SHA,
     latestFinalVersion: () => "1.2.3",
-    assertNoOpenRelease: () => undefined,
+    listOpenPullRequests: () => pulls,
     openReleasePullRequest: () => undefined,
     runGate,
     queueHistoryWarning: () => null,
@@ -232,6 +248,14 @@ const runCut = async (
       );
       rmSync(nodePath.join(rootDir, ".changeset/fix-demo.md"));
     },
+    moveDesktopSupportFloor: (releases) =>
+      moveDesktopSupportFloor({
+        rootDir: root,
+        releases,
+        isDesktopBuild: everyReleaseBuildsTheDesktop,
+        now: CUT_CLOCK,
+        writeFile: writeFileSync,
+      }),
     checkPreparedRelease: () => undefined,
     write: (text) => {
       output.push(text);
@@ -321,6 +345,55 @@ describe("the maintenance cut checks the tag gates first", () => {
     expect(run.output).toContain("maintenance-release: prepared 1.2.4");
   });
 
+  test("the cut writes the desktop support floor its clock gives, in the release change", async () => {
+    const root = releaseTree();
+    const readJson = (file: string): unknown =>
+      JSON.parse(readFileSync(nodePath.join(root, file), "utf-8"));
+
+    const run = await runCut(root, {});
+
+    expect(run.error).toBeNull();
+    // Recomputed from the manifest the release change carries: the previous
+    // release, published 2026-02-03, is 30 days old at the cut's clock.
+    const releases = v.parse(
+      v.record(v.string(), v.nullable(v.string())),
+      readJson("apps/landing/src/data/changelog-release-dates.json"),
+    );
+    const expected = resolveDesktopSupportFloor({
+      floor: { minimumVersion: "1.2.2", supportDays: 30 },
+      releases,
+      isDesktopBuild: everyReleaseBuildsTheDesktop,
+      now: CUT_CLOCK,
+    });
+    expect(expected).toMatchObject({
+      status: "resolved",
+      minimumVersion: "1.2.3",
+    });
+    expect(readJson(DESKTOP_SUPPORT_FLOOR_PATH)).toEqual({
+      minimumVersion: "1.2.3",
+      supportDays: 30,
+    });
+    expect(run.output).toContain(
+      `  ${DESKTOP_SUPPORT_FLOOR_PATH} (desktop support floor 1.2.2 to 1.2.3)`,
+    );
+  });
+
+  test("a cut whose previous release never reached production leaves the floor", async () => {
+    const root = releaseTree();
+    const before = readFileSync(
+      nodePath.join(root, DESKTOP_SUPPORT_FLOOR_PATH),
+      "utf-8",
+    );
+
+    const run = await runCut(root, {}, [], [], { kind: "unpromoted" });
+
+    expect(run.error).toBeNull();
+    expect(
+      readFileSync(nodePath.join(root, DESKTOP_SUPPORT_FLOOR_PATH), "utf-8"),
+    ).toBe(before);
+    expect(run.output).toContain("(desktop support floor stays 1.2.2)");
+  });
+
   for (const mainVersion of ["1.2.3", "1.2.2"]) {
     test(`checks npm for the newest final when main VERSION is ${mainVersion}`, async () => {
       const root = releaseTree(mainVersion);
@@ -342,10 +415,10 @@ describe("the maintenance cut checks the tag gates first", () => {
     write(
       root,
       "apps/landing/src/data/changelog-release-dates.json",
-      '{\n  "v1.2.3": "2026-02-01T00:00:00Z"\n}\n',
+      '{\n  "v1.2.2": "2026-01-01T00:00:00Z",\n  "v1.2.3": "2026-02-01T00:00:00Z"\n}\n',
     );
 
-    const run = await runCut(root, {}, [], { kind: "superseded" });
+    const run = await runCut(root, {}, [], [], { kind: "superseded" });
 
     expect(run.error).toBeNull();
     expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
@@ -370,7 +443,7 @@ describe("the maintenance cut checks the tag gates first", () => {
       write(root, "docs/changelog/v1.2.4.md", "# Maintenance release\n");
       const before = snapshot(root);
 
-      const run = await runCut(root, {}, [], previousRelease);
+      const run = await runCut(root, {}, [], [], previousRelease);
 
       expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
       expect(String(run.error)).toContain("v1.2.4 gained a final tag");
@@ -383,7 +456,7 @@ describe("the maintenance cut checks the tag gates first", () => {
     const root = releaseTree("1.2.3", "v1.2.3");
     const before = snapshot(root);
 
-    const run = await runCut(root, {}, [], PUBLISHED_PREVIOUS);
+    const run = await runCut(root, {}, [], [], PUBLISHED_PREVIOUS);
 
     expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
     expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
@@ -397,7 +470,7 @@ describe("the maintenance cut checks the tag gates first", () => {
   test("an unpromoted previous final is skipped for the older promoted release", async () => {
     const root = releaseTree("1.2.3", "v1.2.3");
 
-    const run = await runCut(root, {}, [], { kind: "unpromoted" });
+    const run = await runCut(root, {}, [], [], { kind: "unpromoted" });
 
     expect(run.error).toBeNull();
     expect(run.npmArguments).toEqual(["--ref", "v1.2.2"]);
@@ -421,7 +494,7 @@ describe("the maintenance cut checks the tag gates first", () => {
       '{\n  "v1.2.2": null\n}\n',
     );
 
-    const run = await runCut(root, {}, [], { kind: "unpromoted" });
+    const run = await runCut(root, {}, [], [], { kind: "unpromoted" });
 
     expect(run.error instanceof Error ? run.error.message : "").toContain(
       "records no promoted release below 1.2.4",
@@ -599,3 +672,47 @@ describe("a command gate", () => {
     ).toBe("exit 3");
   });
 });
+
+test("the cut names every blocking release PR and its head before running gates", async () => {
+  const proof = await runCut(
+    releaseTree(),
+    {},
+    [],
+    [
+      { number: 123, title: "chore: release v1.2.4", headRefOid: BASE_SHA },
+      {
+        number: 456,
+        title: "chore: release v1.2.5",
+        headRefOid: "d".repeat(40),
+      },
+    ],
+  );
+  expect(proof.error).toBeInstanceOf(MaintenanceReleaseError);
+  expect(String(proof.error)).toContain(
+    "#123 chore: release v1.2.4 (head ccccccc); land it first (merge-bar 123)",
+  );
+  expect(String(proof.error)).toContain(
+    "#456 chore: release v1.2.5 (head ddddddd); land it first (merge-bar 456)",
+  );
+  expect(proof.gatesRun).toEqual([]);
+  expect(proof.versioned).toBe(0);
+});
+
+for (const pulls of [
+  null,
+  {},
+  [{ title: "chore: release v1.2.4" }],
+  Array.from({ length: 500 }, () => ({
+    number: 123,
+    title: "fix: example",
+    headRefOid: BASE_SHA,
+  })),
+]) {
+  test(`an incomplete listing has a distinct typed refusal (${JSON.stringify(pulls).slice(0, 60)})`, async () => {
+    const proof = await runCut(releaseTree(), {}, [], pulls);
+    expect(proof.error).toBeInstanceOf(IncompleteReleaseListingError);
+    expect(String(proof.error)).toContain("listing is incomplete");
+    expect(String(proof.error)).not.toContain("land it first");
+    expect(proof.gatesRun).toEqual([]);
+  });
+}

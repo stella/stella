@@ -14,6 +14,10 @@ import {
   isEmailAttachmentPreviewable,
   resolveEmailAttachmentMimeType,
 } from "@/api/lib/files/email-to-html";
+import {
+  LIVE_VERSION_DELIVERY,
+  recordLiveVersionDelivery,
+} from "@/api/lib/files/live-version-field";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
@@ -128,11 +132,16 @@ export default createSafeHandler(
     const fileName = sanitizeFilename(attachment.fileName);
     const recordedDisposition =
       disposition === "download" ? "attachment" : "inline";
-    yield* Result.await(
+    // The source email was read and scanned outside any lock; the delivery is
+    // recorded only while its version is still live.
+    const delivery = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await scopedDb(
-            async (tx) =>
+          await recordLiveVersionDelivery({
+            scopedDb,
+            fieldId,
+            workspaceId,
+            record: async (tx) =>
               await recordAuditEvent(tx, {
                 action: CONTENT_DELIVERY_AUDIT_ACTION[recordedDisposition],
                 resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
@@ -145,9 +154,12 @@ export default createSafeHandler(
                   sizeBytes: responseBytes.byteLength,
                 },
               }),
-          ),
+          }),
       ),
     );
+    if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
+      return Result.ok(attachmentNotFound());
+    }
     return Result.ok(
       secureDocumentResponse({
         body: new Uint8Array(responseBytes),

@@ -10,6 +10,7 @@ import { isRecord } from "./oxlint-config-scopes.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const RULES = {
+  "no-direct-test-state": BASELINE_PATHS.testState,
   "no-wallclock-assertions-in-tests": BASELINE_PATHS.testWallclockAssertion,
   "no-real-timers-in-tests": BASELINE_PATHS.testRealTimers,
   "no-ambient-time-in-tests": BASELINE_PATHS.testAmbientTime,
@@ -115,7 +116,7 @@ if (import.meta.main) {
     .filter(
       (file) =>
         /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) &&
-        !file.startsWith("packages/test-kit/") &&
+        // Each detector owns its package exemptions.
         // Negative specimens must retain firing suppressions, never a budget.
         !file.startsWith(".oxlint-plugins/__fixtures__/"),
     );

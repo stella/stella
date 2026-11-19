@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { api } from "@/lib/api";
@@ -11,6 +12,7 @@ import {
   WORKSPACE_NAVIGATION_STATUS_SCOPE,
 } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import type { MatterListStatus } from "@/lib/workspaces/archived-matters.logic";
 import {
   type MatterActivityFilters,
@@ -162,8 +164,7 @@ export type WorkspacesData = Awaited<ReturnType<typeof readWorkspaces>>;
 
 export const workspacesOptions = (activeOrganizationId: string) =>
   queryOptions({
-    queryKey: workspacesKeys.list(activeOrganizationId),
-    queryFn: async ({ signal }) => await readWorkspaces(signal),
+    ...workspacesRouteOptions(activeOrganizationId),
     staleTime: 0,
     refetchOnMount: "always",
   });
@@ -172,14 +173,27 @@ export const workspacesRouteOptions = (
   activeOrganizationId: string,
   status: MatterListStatus = WORKSPACE_STATUS.active,
 ) =>
-  queryOptions({
-    queryKey:
-      status === WORKSPACE_STATUS.active
-        ? workspacesKeys.list(activeOrganizationId)
-        : [...workspacesKeys.list(activeOrganizationId), status],
-    queryFn: async ({ signal }) => await readWorkspaces(signal, status),
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey:
+        status === WORKSPACE_STATUS.active
+          ? workspacesKeys.list(activeOrganizationId)
+          : [...workspacesKeys.list(activeOrganizationId), status],
+      queryFn: async ({ signal }) => await readWorkspaces(signal, status),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.WORKSPACE,
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.ENTITY_VERSION,
+        RESOURCE_TYPE.CONTACT,
+        RESOURCE_TYPE.USER,
+      ],
+      scope: { type: "organization", organizationId: activeOrganizationId },
+    },
+  );
 
 export const workspacesNavigationOptions = (
   caller: WorkspaceNavigationCaller,
@@ -252,18 +266,34 @@ export const invalidateWorkspaceActivity = async (
     }),
   ]);
 
-export const overviewOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: workspacesKeys.overview(workspaceId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId })
-        .overview.get({ query: {}, fetch: { signal } });
+export const overviewOptions = ({
+  workspaceId,
+  organizationId,
+}: {
+  workspaceId: string;
+  organizationId: string;
+}) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: workspacesKeys.overview(workspaceId),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .workspaces({ workspaceId })
+          .overview.get({ query: {}, fetch: { signal } });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ENTITY],
+      scope: { type: "workspace", workspaceId },
+      organizationReads: {
+        organizationId,
+        resources: [RESOURCE_TYPE.USER],
+      },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
 
 export const overviewActivityOptions = ({
   viewer,

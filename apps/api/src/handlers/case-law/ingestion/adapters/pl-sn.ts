@@ -1,6 +1,12 @@
+// parser-output-unchanged: Bounded publisher envelope reads preserve valid response text, parsed decisions and cursor values.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: a bot-management challenge fails the request as a publisher refusal; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
+
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -48,11 +54,8 @@ import { panic, Result } from "better-result";
  * spaces; both store the ruling keys from `pl-sn-ruling-keys.ts`, which is
  * what relates a row here to its SAOS copy.
  */
-
-// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -65,15 +68,23 @@ import {
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+import { readBotChallenge } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  readBodyText,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlSnDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -410,7 +421,37 @@ const requestProxy = async ({
     );
   }
 
-  const raw = await response.text();
+  const body = await readBodyText(readPresent(response), signal);
+  if (body.type !== "present") {
+    const error = unreadPublisherError({
+      outcome: body,
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      cursor,
+      message: "sn.pl proxy body unread",
+    });
+    // Transport failures retain their rejection path and Error identity.
+    if (body.type === "unavailable" && body.cause.kind === "thrown") {
+      return await Promise.reject(
+        body.cause.error instanceof Error ? body.cause.error : error,
+      );
+    }
+    return Result.err(error);
+  }
+  const raw = body.value;
+  // The proxy answers 200 for whatever stands in front of it, so a challenge
+  // would otherwise read as an envelope the parser cannot find: a defect in
+  // this adapter, when it is the publisher refusing automated clients.
+  const challenge = readBotChallenge(raw, response.headers);
+  if (challenge !== null) {
+    return Result.err(
+      new AdapterFetchError({
+        message: `sn.pl: ${task} answered a bot challenge (${challenge})`,
+        adapterKey: ADAPTER_KEYS.PL_SN,
+        cursor,
+        stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+      }),
+    );
+  }
   const parsed = Result.try({
     try: (): unknown => JSON.parse(raw),
     catch: () => null,
@@ -1213,9 +1254,13 @@ const listPlSnSlicePage = async ({
 
   const items = rows.map((row) => {
     const item = normalizePlSnListingItem(row);
+    const identity = plSnListingIdentity(item);
     return {
-      identity: plSnListingIdentity(item),
+      identity,
       payload: row,
+      ...(identity.type === "case-number"
+        ? { censusCourtEvidence: observedCensusCourt(undefined) }
+        : {}),
     };
   });
 

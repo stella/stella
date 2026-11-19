@@ -15,6 +15,7 @@ import type { Middleware } from "@/api/http/route";
 import { apiWebSocketHandler } from "@/api/http/websocket";
 import {
   currentQueryCount,
+  currentQueryCounter,
   currentRepeatedQueryFingerprints,
   currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
@@ -111,6 +112,33 @@ describe("db query counter logger", () => {
     expect(count).toBe(2);
     // Store is torn down once the callback returns.
     expect(currentQueryCount()).toBeUndefined();
+  });
+
+  test("hands every counted statement to the stores it counts toward", () => {
+    const outer: string[] = [];
+    const inner: string[] = [];
+    runWithQueryCounter(() => {
+      const outerCounter =
+        currentQueryCounter() ?? panic("Expected the outer counter");
+      outerCounter.onStatement = (statement) => {
+        outer.push(statement);
+      };
+      queryCountLogger.logQuery("SELECT 1", []);
+      runWithQueryCounter(() => {
+        const innerCounter =
+          currentQueryCounter() ?? panic("Expected the inner counter");
+        innerCounter.onStatement = (statement) => {
+          inner.push(statement);
+        };
+        queryCountLogger.logQuery("SELECT 2", []);
+        // A control statement is not counted, so it is not handed on.
+        queryCountLogger.logQuery("BEGIN", []);
+      });
+    });
+    expect({ outer, inner }).toEqual({
+      outer: ["SELECT 1", "SELECT 2"],
+      inner: ["SELECT 2"],
+    });
   });
 
   test("counts transaction round trips separately and fingerprints repeated normalized SQL", async () => {

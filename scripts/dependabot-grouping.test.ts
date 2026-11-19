@@ -54,11 +54,6 @@ type IgnorePolicy =
     };
 
 const ignorePolicies = {
-  "@anthropic-ai/sdk": {
-    blocker: "@tanstack/ai-anthropic",
-    repositoryBlocker: undefined,
-    type: "upstream_blocker",
-  },
   "@expo/*": {
     reason:
       "Expo packages ship as one SDK-coordinated major and are upgraded together.",
@@ -66,11 +61,6 @@ const ignorePolicies = {
   },
   "@formatjs/icu-messageformat-parser": {
     blocker: "intl-messageformat",
-    repositoryBlocker: undefined,
-    type: "upstream_blocker",
-  },
-  "@openrouter/sdk": {
-    blocker: "@tanstack/ai-openrouter",
     repositoryBlocker: undefined,
     type: "upstream_blocker",
   },
@@ -89,16 +79,33 @@ const ignorePolicies = {
     repositoryBlocker: "apps/web/package.json",
     type: "upstream_blocker",
   },
-  openai: {
-    blocker: "@tanstack/ai-openai",
-    repositoryBlocker: undefined,
-    type: "upstream_blocker",
-  },
   "react-native": {
     type: "expo_sdk",
   },
   "react-native-screens": {
     type: "expo_sdk",
+  },
+  "react-native-svg": {
+    type: "expo_sdk",
+  },
+  "oxlint-tsgolint": {
+    reason:
+      "Stays on the release that pairs with oxlint 1.90 while oxlint is held.",
+    type: "documented_policy",
+  },
+  oxlint: {
+    reason:
+      "1.93 makes the root-script type-aware lint about 3x slower; held at 1.90.",
+    type: "documented_policy",
+  },
+  "@oxlint/plugins": {
+    reason: "Moves with oxlint, which is held at 1.90.",
+    type: "documented_policy",
+  },
+  "lucide-static": {
+    reason:
+      "Its glyphs are native mobile assets; a bump waits for the next store build.",
+    type: "documented_policy",
   },
 } as const satisfies Record<string, IgnorePolicy>;
 

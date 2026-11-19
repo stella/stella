@@ -7,10 +7,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
-import type {
-  AuditPerformerFilter,
-  AuditResource,
-} from "@stll/api-contract/audit-log";
+import type { AuditResource } from "@stll/api-contract/audit-log";
 import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -55,6 +52,12 @@ import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { routePresentation } from "@/routes/-route-presentation";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import {
+  ALL_PERFORMERS,
+  DEFAULT_PERFORMER_FILTER,
+  toPerformerChoice,
+} from "@/routes/_protected.settings/-organization.audit-logs.logic";
+import type { PerformerChoice } from "@/routes/_protected.settings/-organization.audit-logs.logic";
 import {
   AuditChangeDetails,
   AuditChangeSummary,
@@ -116,23 +119,6 @@ export const Route = createFileRoute(
 
 const AUDIT_LOG_PAGE_LIMIT = 20;
 const AUDIT_LOG_COLUMN_COUNT = 6;
-
-// Background services write far more rows than people do; the log opens on
-// what members did and shows automations on request.
-const DEFAULT_PERFORMER_FILTER = AUDIT_PERFORMER_FILTER.people;
-const ALL_PERFORMERS = "all";
-
-type PerformerChoice = AuditPerformerFilter | typeof ALL_PERFORMERS;
-
-const toPerformerChoice = (value: string | null): PerformerChoice => {
-  if (value === AUDIT_PERFORMER_FILTER.automations) {
-    return AUDIT_PERFORMER_FILTER.automations;
-  }
-  if (value === ALL_PERFORMERS) {
-    return ALL_PERFORMERS;
-  }
-  return DEFAULT_PERFORMER_FILTER;
-};
 
 function AuditPersonFilter({
   value,
@@ -459,9 +445,7 @@ function AuditLogsPage() {
                     <SelectItem value="execute">
                       {t("settings.organization.auditLogsActionExecute")}
                     </SelectItem>
-                    <SelectItem value="access">
-                      {t("settings.organization.auditLogsActionAccess")}
-                    </SelectItem>
+                    <SelectItem value="access">{t("common.access")}</SelectItem>
                   </SelectPopup>
                 </Select>
               </div>
@@ -679,9 +663,9 @@ function AuditLogRow({
           })}
         </TableCell>
         <TableCell className="max-w-48 text-xs">
-          <span className="line-clamp-2 wrap-anywhere">
+          <TruncatedText className="wrap-anywhere" lines={2}>
             <bdi>{log.actor}</bdi>
-          </span>
+          </TruncatedText>
           {isAutomation ? (
             <span className="text-muted-foreground block">
               {t("workspaces.overview.activity.filters.automation")}
@@ -779,7 +763,9 @@ export function AuditResourceLabel({
 
   return (
     <div className="min-w-0">
-      <div className="truncate font-medium">{content}</div>
+      <TruncatedText className="font-medium" render={<div />}>
+        {content}
+      </TruncatedText>
       <div className="text-muted-foreground font-mono">
         {resource.kind === "unknown" ? <bdi>{resource.rawKind} · </bdi> : null}
         <span className="sr-only">

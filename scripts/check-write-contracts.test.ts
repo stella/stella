@@ -339,6 +339,366 @@ describe("a replacement reaches the owner's enforcement", () => {
     "Replacement must reach owner enforcement",
   );
 
+  const resultHandler = `import {Result} from 'better-result';
+    import {createSafeRootHandler} from '@/api/lib/api-handlers';
+    import {enforceWritePrecondition} from '@/api/lib/write-contract/write-contract';
+    import {withAggregateRowQuery} from '@/api/lib/db/aggregate-lock';
+    import {HandlerError} from '@/api/lib/errors/tagged-errors';
+    import {savedSearches} from '@/api/db/schema';
+    export default createSafeRootHandler({contract:'replace'}, async function* ({body, safeDb}) {
+      const outcome = yield* Result.await(safeDb(async (tx) => {
+        const acquired = await withAggregateRowQuery({aggregate:'savedSearch',id:{id:body.id,organizationId:body.organizationId,userId:body.userId},tx,mode:'update',select:readTx=>readTx.select().from(savedSearches)});
+        const stored = acquired.rows.at(0);
+        if (!stored) return Result.err(new HandlerError({status:404,message:'missing'}));
+        const conflict = enforceWritePrecondition({type:'updatedAt',field:'expectedUpdatedAt',storedUpdatedAt:stored.updatedAt,expectedUpdatedAt:body.expectedUpdatedAt});
+        if (conflict) return Result.err(conflict);
+        return Result.ok(await tx.replace(body));
+      }));
+      const row = yield* outcome;
+      return Result.ok(row);
+    });`;
+
+  test("real root-context safeDb propagates both canonical Result layers", () => {
+    expect(enforcementOf(resultHandler)).toEqual([]);
+    const aliased = resultHandler
+      .replace("{Result}", "{Result as Outcome}")
+      .replaceAll("Result.", "Outcome.")
+      .replace(
+        "{createSafeRootHandler}",
+        "{createSafeRootHandler as createRoot}",
+      )
+      .replace("default createSafeRootHandler(", "default createRoot(")
+      .replace(
+        "{enforceWritePrecondition}",
+        "{enforceWritePrecondition as enforce}",
+      )
+      .replace(
+        "const conflict = enforceWritePrecondition(",
+        "const conflict = enforce(",
+      )
+      .replace("body, safeDb}", "body, safeDb: database}")
+      .replace("await(safeDb(", "await(database(");
+    expect(enforcementOf(aliased)).toEqual([]);
+    expect(
+      enforcementOf(
+        resultHandler.replace(
+          "const outcome =",
+          "if (!body) return Result.err(new Error('missing body')); const outcome =",
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test("Result transaction proof requires actual immutable context and import bindings", () => {
+    for (const source of [
+      resultHandler.replace("'@/api/lib/api-handlers'", "'./fake-factory'"),
+      resultHandler.replace("'better-result'", "'./fake-result'"),
+      resultHandler.replace(
+        "'@/api/lib/write-contract/write-contract'",
+        "'./fake-enforcer'",
+      ),
+      resultHandler.replace("body, safeDb}", "body, safeDb = fake}"),
+      resultHandler.replace("body, safeDb}", "body, ['safeDb']: safeDb}"),
+      resultHandler.replace("body, safeDb}", "body, ...safeDb}"),
+      resultHandler
+        .replace("body, safeDb}", "body, database}")
+        .replace("await(safeDb(", "await(database.safeDb("),
+      resultHandler.replace(
+        "const outcome =",
+        "safeDb = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "({safeDb} = fake); const outcome =",
+      ),
+      resultHandler.replace("const outcome =", "var safeDb; const outcome ="),
+      resultHandler
+        .replace("const outcome =", "{ const safeDb = fake; const outcome =")
+        .replace("return Result.ok(row);", "return Result.ok(row); }"),
+      resultHandler.replace(
+        "const outcome =",
+        "Result.await = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "Result.err = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "Object.assign(Result, {err: fake}); const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "mutate(Result); const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "const alias = Result; alias.err = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "class Result {} const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "const Result = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const outcome =",
+        "createSafeRootHandler = fake; const outcome =",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "enforceWritePrecondition = fake; const conflict =",
+      ),
+      resultHandler.replace(
+        "async (tx) =>",
+        "async (enforceWritePrecondition) =>",
+      ),
+      resultHandler.replace("async (tx) =>", "async (Result) =>"),
+      resultHandler.replace("field:'expectedUpdatedAt'", "field:'other'"),
+    ]) {
+      expect(enforcementOf(source)).toContainEqual(missing);
+    }
+  });
+
+  test("neither a swallowed Result nor an uninvoked nested callback proves refusal", () => {
+    for (const source of [
+      resultHandler.replace("yield* Result.await", "yield Result.await"),
+      resultHandler.replace("yield* Result.await", "Result.await"),
+      resultHandler.replace("yield* outcome", "yield outcome"),
+      resultHandler.replace("yield* outcome", "Result.ok(outcome)"),
+      resultHandler.replace("const row = yield* outcome;", "const row = {};"),
+      resultHandler.replace(
+        "const row = yield* outcome;",
+        "const alias = Result.ok({}); const row = yield* alias;",
+      ),
+      resultHandler.replace(
+        "const row = yield* outcome;",
+        "try { const row = yield* outcome; } catch { return Result.ok({}); }",
+      ),
+      resultHandler.replace(
+        "const row = yield* outcome;",
+        "try { const row = yield* outcome; } finally { return Result.ok({}); }",
+      ),
+      resultHandler.replace(
+        "Result.err(conflict)",
+        "Result.err(new Error('different'))",
+      ),
+      resultHandler.replace("Result.err(conflict)", "Result.ok(conflict)"),
+      resultHandler.replace(
+        "if (!stored) return Result.err(new HandlerError({status:404,message:'missing'}));",
+        "if (!stored) return Result.ok({});",
+      ),
+      resultHandler
+        .replace(
+          "const conflict = enforceWritePrecondition",
+          "const conflict = ignore(() => enforceWritePrecondition",
+        )
+        .replace("body.expectedUpdatedAt});", "body.expectedUpdatedAt}));"),
+      resultHandler.replace(
+        "const acquired = await",
+        "return Result.ok({}); const acquired = await",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "return Result.ok({}); const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "return Result.err(new Error('early')); const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "throw new Error('early'); const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "return Result.err(new Error('early')); const conflict =",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "throw new Error('early'); const conflict =",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "{ return Result.err(new Error('early')); } const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const outcome = yield*",
+        "{ throw new Error('early'); } const outcome = yield*",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "{ return Result.err(new Error('early')); } const conflict =",
+      ),
+      resultHandler.replace(
+        "const conflict =",
+        "{ throw new Error('early'); } const conflict =",
+      ),
+      resultHandler.replace("safeDb(async (tx) =>", "ignore(async (tx) =>"),
+      resultHandler.replace(
+        "if (conflict) return Result.err(conflict);",
+        "if (conflict) { const conflict = other; return Result.err(conflict); }",
+      ),
+    ]) {
+      expect(enforcementOf(source)).toContainEqual(missing);
+    }
+  });
+
+  test("loop assignment heads replace the actual protected binding", () => {
+    for (const statement of [
+      "for (safeDb of [fake]) {}",
+      "for (safeDb in fake) {}",
+      "for ({safeDb} of [fake]) {}",
+      "for ({safeDb} in fake) {}",
+      "for ([safeDb] of [fake]) {}",
+      "for ([safeDb] in fake) {}",
+      "for ({[key]: safeDb} of [fake]) {}",
+      "({[key]: [safeDb]} = fake);",
+      "const counters={}; ({[safeDb=fake]:counters.value}=fake);",
+    ]) {
+      expect(
+        enforcementOf(
+          resultHandler.replace(
+            "const outcome =",
+            () => `${statement} const outcome =`,
+          ),
+        ),
+      ).toContainEqual(missing);
+    }
+  });
+
+  test("property names and loop-local bindings stay independent", () => {
+    for (const statement of [
+      "const counters={safeDb:0}; counters.safeDb += 1;",
+      "const counters={safeDb:0}; for (counters.safeDb of [1]) {}",
+      "const counters={}; ({safeDb:counters.other} = fake);",
+      "const counters={}; counters[safeDb] = 1;",
+      "for (let safeDb of [fake]) {safeDb=fake;}",
+      "for (let safeDb in fake) {safeDb='other';}",
+      "for (const {safeDb} of [fake]) {use(safeDb);}",
+    ]) {
+      expect(
+        enforcementOf(
+          resultHandler.replace(
+            "const outcome =",
+            () => `${statement} const outcome =`,
+          ),
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  test("the canonical locked read supports genuine owner, table and error import aliases", () => {
+    const aliases = resultHandler
+      .replace(
+        "{withAggregateRowQuery}",
+        "{withAggregateRowQuery as readLocked}",
+      )
+      .replace("await withAggregateRowQuery(", "await readLocked(")
+      .replace("{HandlerError}", "{HandlerError as MissingError}")
+      .replace("new HandlerError(", "new MissingError(")
+      .replace("{savedSearches}", "{savedSearches as records}")
+      .replaceAll("from(savedSearches)", "from(records)");
+    expect(enforcementOf(aliases)).toEqual([]);
+    expect(
+      enforcementOf(
+        `import {eq} from 'drizzle-orm';${resultHandler.replace(
+          ".from(savedSearches)",
+          ".from(savedSearches).where(eq(savedSearches.id, body.id))",
+        )}`,
+      ),
+    ).toContainEqual(missing);
+  });
+
+  test("a returned Result refusal cannot credit writes or opaque effects before the comparison", () => {
+    for (const statement of [
+      "await tx.insert(savedSearches).values(body);",
+      "await tx.update(savedSearches).set(body);",
+      "await tx.delete(savedSearches);",
+      "await tx.execute(body);",
+      "await writeBeforeCheck(tx,body);",
+      "const write=()=>tx.update(savedSearches).set(body); await write();",
+      "if (body.enabled) await tx.update(savedSearches).set(body);",
+      "for (const item of body.items) await tx.insert(savedSearches).values(item);",
+    ]) {
+      expect(
+        enforcementOf(
+          resultHandler.replace(
+            "const acquired =",
+            () => `${statement} const acquired =`,
+          ),
+        ),
+      ).toContainEqual(missing);
+      expect(
+        enforcementOf(
+          resultHandler.replace(
+            "const conflict =",
+            () => `${statement} const conflict =`,
+          ),
+        ),
+      ).toContainEqual(missing);
+    }
+    for (const changed of [
+      resultHandler.replace("'@/api/lib/db/aggregate-lock'", "'./fake-lock'"),
+      resultHandler.replace(
+        "'@/api/lib/errors/tagged-errors'",
+        "'./fake-error'",
+      ),
+      resultHandler.replace("'@/api/db/schema'", "'./fake-table'"),
+      resultHandler.replace("mode:'update'", "mode:'read'"),
+      resultHandler.replace("id:body.id", "id:writeBeforeCheck(tx)"),
+      resultHandler.replace(
+        "readTx.select()",
+        "readTx.select({value:tx.execute(body)})",
+      ),
+      resultHandler.replace(
+        "readTx.select().from(savedSearches)",
+        "readTx.update(savedSearches).set(body)",
+      ),
+      resultHandler.replace(
+        "readTx.select().from(savedSearches)",
+        "readTx.execute(body)",
+      ),
+      resultHandler.replace(
+        ".from(savedSearches)",
+        ".from(savedSearches).where(eq(savedSearches.id,tx.execute(body)))",
+      ),
+      resultHandler.replace(
+        ".from(savedSearches)",
+        ".from(savedSearches).where((tx.execute(body),eq(savedSearches.id,body.id)))",
+      ),
+      resultHandler.replace(
+        ".from(savedSearches)",
+        ".from(savedSearches).where(row=>eq(row.id,body.id))",
+      ),
+      resultHandler
+        .replace("export default", "const predicate=eq; export default")
+        .replace(
+          ".from(savedSearches)",
+          ".from(savedSearches).where(predicate(savedSearches.id,body.id))",
+        ),
+      resultHandler.replace("select:readTx=>", "select:async readTx=>"),
+      resultHandler.replace(
+        "readTx.select().from(savedSearches)",
+        "(readTx=tx,readTx.select().from(savedSearches))",
+      ),
+      resultHandler.replace(
+        "storedUpdatedAt:stored.updatedAt",
+        "storedUpdatedAt:writeBeforeCheck(tx)",
+      ),
+      resultHandler.replace("if (!stored)", "if (body.missing)"),
+      resultHandler.replace("status:404", "status:500"),
+      resultHandler.replace(
+        "new HandlerError({status:404,message:'missing'})",
+        "new HandlerError({status:404,message:writeBeforeCheck(tx)})",
+      ),
+    ]) {
+      expect(enforcementOf(changed)).toContainEqual(missing);
+    }
+  });
+
   test("a route no handler export backs cannot be traced", () => {
     expect(
       check({ routes: [route(UPDATED_AT, { endpoint: undefined })] }),

@@ -4,7 +4,6 @@ import { sql } from "drizzle-orm";
 import { softLawSources } from "@/api/db/schema";
 import { runSoftLawIngestion } from "@/api/handlers/soft-law/ingestion";
 import { createSafeId } from "@/api/lib/branded-types";
-import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type {
   SoftLawDocumentInput,
@@ -16,11 +15,9 @@ import {
   createSoftLawSyncTask,
   SYNC_SOFT_LAW_TASK,
 } from "@/api/lib/scheduler/tasks/soft-law-sync";
-import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { GatedTestClientScope } from "@/api/tests/gated-test-database";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { measureCapturedRun } from "./hosted-erasure-run";
+import { measureScheduledTaskReplay } from "./scheduled-task-replay";
 import { QUERY_PERF_CONNECTION_SETTINGS } from "./settings";
 
 const BATCH_DOCUMENTS = 25;
@@ -129,36 +126,32 @@ export const measureSoftLawSyncHistory = async (
     // db-await-in-loop: current statistics before the task is captured.
     await db.execute(sql`ANALYZE soft_law_documents`);
     const adapter = fixtureAdapter(key);
+    const registered =
+      createSchedulerTaskRegistry({
+        reapOwnerlessChatTurns: noopTask,
+        refreshCaseLawCoverage: noopTask,
+        syncSoftLaw: async (context) =>
+          await createSoftLawSyncTask({
+            authorities: () => [FIXTURE_AUTHORITY],
+            sync: async ({ signal }) =>
+              await runSoftLawIngestion({
+                sourceId,
+                adapter,
+                // The replay's context runs each unit of work in a savepoint
+                // of its rolled-back measurement transaction.
+                scopedDb: async (work) => await context.db.transaction(work),
+                signal,
+                writeRaw: (options) =>
+                  Promise.resolve(rawSourcePayloadKey(options)),
+              }),
+          })(context),
+      }).get(SYNC_SOFT_LAW_TASK) ?? panic("Soft-law sync is unregistered");
     // db-await-in-loop: one measured run per independently seeded history size.
-    const measured = await measureCapturedRun({
+    const measured = await measureScheduledTaskReplay({
       openClient,
       label: "soft-law sync",
-      execute: async (tx) => {
-        const task =
-          createSchedulerTaskRegistry({
-            reapOwnerlessChatTurns: noopTask,
-            refreshCaseLawCoverage: noopTask,
-            syncSoftLaw: createSoftLawSyncTask({
-              authorities: () => [FIXTURE_AUTHORITY],
-              sync: async ({ signal }) =>
-                await runSoftLawIngestion({
-                  sourceId,
-                  adapter,
-                  scopedDb: async (work) =>
-                    await withAggregateSavepoint(tx, work),
-                  signal,
-                  writeRaw: (options) =>
-                    Promise.resolve(rawSourcePayloadKey(options)),
-                }),
-            }),
-          }).get(SYNC_SOFT_LAW_TASK) ?? panic("Soft-law sync is unregistered");
-        await task(
-          asTestRaw<SchedulerTaskContext>({
-            logger: { info: noopTask },
-            signal: new AbortController().signal,
-          }),
-        );
-      },
+      task: registered,
+      now: new Date("2026-10-29T00:00:00Z"),
     });
     measurements.push({ history, ...measured });
     // db-await-in-loop: each scenario removes its own rows before the next seeds.

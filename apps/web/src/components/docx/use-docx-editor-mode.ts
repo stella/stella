@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import type { EditorMode } from "@stll/folio-react";
 
@@ -12,14 +12,11 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 export const useDocxEditorMode = (isUnlocked: boolean) => {
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
 
-  const handleEditorModeChange = useCallback(
-    (mode: EditorMode) => {
-      if (mode !== "viewing") {
-        setEditorMode(mode);
-      }
-    },
-    [setEditorMode],
-  );
+  const handleEditorModeChange = (mode: EditorMode) => {
+    if (mode !== "viewing") {
+      setEditorMode(mode);
+    }
+  };
 
   useExternalSyncEffect(() => {
     if (!isUnlocked) {

@@ -91,6 +91,7 @@ test("a jurisdiction never declares itself as its own supranational reach", () =
 test("the declared cross-jurisdiction reach is exact", () => {
   expect(CITATION_RESOLUTION_JURISDICTION_POLICY).toEqual({
     AUT: { alsoResolvesTo: ["EU"] },
+    BRA: { alsoResolvesTo: [] },
     CZE: { alsoResolvesTo: ["EU"] },
     EU: { alsoResolvesTo: [] },
     GBR: { alsoResolvesTo: ["EU"] },

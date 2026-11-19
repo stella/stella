@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -15,9 +15,10 @@ import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { CitationChip } from "@/components/references/citation-chip";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 
@@ -134,7 +135,7 @@ export const ReaderAnswerCard = ({
     }
   }
   const expanded = busy || display === "expanded";
-  const observe = useCallback((node: HTMLElement | null) => {
+  const observe = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
     }
@@ -155,7 +156,7 @@ export const ReaderAnswerCard = ({
       observerRef.current = null;
       cardRef.current = null;
     };
-  }, []);
+  };
   useLayoutEffect(() => {
     if (!active) {
       visibility.current = "tracking";
@@ -212,9 +213,9 @@ export const ReaderAnswerCard = ({
       ref={observe}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="text-foreground-muted line-clamp-1">
+        <TruncatedText className="text-foreground-muted">
           {answer.anchor.spans.map(({ quote }) => quote).join(" ")}
-        </span>
+        </TruncatedText>
         <Button
           className="min-h-11 shrink-0"
           size="sm"
@@ -288,7 +289,7 @@ export const ReaderAnswerCard = ({
           )}
           {languagePicker}
           <div className="flex flex-wrap items-center gap-1">
-            <CopyActionButton
+            <CopyControl
               variant="ghost"
               size="sm"
               text={answer.messages

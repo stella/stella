@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterEach, expect, jest, mock, spyOn, test } from "bun:test";
 
+import type { ReaderTextScale } from "@stll/decision-reader/reader-text-scale.logic";
 import type {
   Block,
   HeadingBlock,
@@ -11,21 +12,19 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 GlobalRegistrator.register();
+const { useState } = await import("react");
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
-const { useReaderTextScale } =
-  await import("@stll/decision-reader/use-reader-text-scale");
+const { createReaderTextScale } =
+  await import("@stll/decision-reader/reader-text-scale");
+const { READER_TEXT_SCALE_DEFAULT } =
+  await import("@stll/decision-reader/reader-text-scale.logic");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { useAnalysisReaderOutline } =
+const { analysisReaderOutline } =
   await import("@/features/case-law/components/case-viewer/analysis/reader-breadcrumb");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { WebReaderPresentationProvider } =
@@ -43,6 +42,8 @@ const AnalysisProviders = ({ children }: { children: ReactNode }) => (
 );
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   // React work left on a fake clock runs inside act and before cleanup, so
   // later renders in the file never wait behind it.
   act(() => {
@@ -129,7 +130,13 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
   document.body.append(viewport);
   const reset = mock();
   const Controls = () => {
-    const textScale = useReaderTextScale();
+    const [scale, setScale] = useState<ReaderTextScale>(
+      READER_TEXT_SCALE_DEFAULT,
+    );
+    const textScale = createReaderTextScale({
+      initialScale: scale,
+      onScaleChange: setScale,
+    });
     return (
       <LegalReaderControls
         blocks={[
@@ -326,7 +333,7 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
     },
   ];
   const ReaderSurface = () => {
-    const analysis = useAnalysisReaderOutline(completedAnalysisTree);
+    const analysis = analysisReaderOutline(completedAnalysisTree);
     return (
       <LegalReaderBreadcrumb
         blocks={[
@@ -440,7 +447,7 @@ test("a headings-less decision marks its analysis trail as AI-generated", async 
     },
   ];
   const Reader = () => {
-    const analysis = useAnalysisReaderOutline(tree);
+    const analysis = analysisReaderOutline(tree);
     return (
       <AnalysisProviders>
         <LegalReaderBreadcrumb
@@ -1237,7 +1244,7 @@ test("Contents places streamed analysis sections among the headings without movi
     section("a-2", "Reasons for dismissal", "b3"),
   ];
   const Reader = ({ tree }: { tree: typeof bothSections | null }) => {
-    const analysis = useAnalysisReaderOutline(tree);
+    const analysis = analysisReaderOutline(tree);
     return (
       <AnalysisProviders>
         <LegalReaderBreadcrumb

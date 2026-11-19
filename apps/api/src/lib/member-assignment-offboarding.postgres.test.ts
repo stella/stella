@@ -28,6 +28,7 @@ import {
   properties,
   requestIdempotencyReceipts,
   searchHistoryEntries,
+  searchHistoryOwners,
   sharepointConnections,
   sharepointOAuthState,
   taskAssignees,
@@ -418,6 +419,14 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         );
         const historyLookupKey = Bun.randomUUIDv7();
+        await db
+          .insert(searchHistoryOwners)
+          .values([
+            { organizationId, userId },
+            { organizationId, userId: actorUserId },
+            { organizationId: otherOrganizationId, userId },
+          ])
+          .onConflictDoNothing();
         await db.insert(searchHistoryEntries).values(
           [
             { organizationId, userId },
@@ -1375,7 +1384,7 @@ if (!databaseUrl || !runPostgresTests) {
             expect.objectContaining({
               changes: { status: { old: "awaiting_review", new: "cancelled" } },
             }),
-            ...persistedSteps.map((step) =>
+            ...persistedSteps.map((step): unknown =>
               expect.objectContaining({
                 changes: {
                   stepStatus: {

@@ -20,6 +20,11 @@ export default {
           "Builds one chat request's toolsets offline to project their schemas for each provider; the registry never leaves that build.",
       },
       {
+        path: "apps/api/src/handlers/chat/turns/adopt.ts",
+        reason:
+          "Rebuilds the registry of a turn another task released from the bindings its thread stored, as the send that started the turn built it, so the adopted turn resolves and stores refs the same way.",
+      },
+      {
         path: "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
         reason:
           "Rebuilds persisted bindings when expanding saved messages so refs from another turn are rebound or neutralized.",

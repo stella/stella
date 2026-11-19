@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -41,7 +42,7 @@ type AttachmentChipProps = {
 // A Button's className is read where it is written, so the chip scale's
 // touch target is spelled out here; chip-scale.dom.test.tsx holds every
 // control in a chip to CHIP_TOUCH_TARGET_CLASS, so the two cannot drift.
-const TITLE_LABEL_CLASS = "block max-w-40 min-w-0 truncate";
+const TITLE_LABEL_CLASS = "block max-w-40 min-w-0";
 
 const OPEN_NONE: AttachmentChipOpen = { type: "none" };
 const NO_ACTIONS: readonly AttachmentChipAction[] = [];
@@ -50,7 +51,11 @@ const NO_ACTIONS: readonly AttachmentChipAction[] = [];
 // children, so the label sits inside the button or link it names. A plain
 // Button draws no box, so the title keeps the chip scale's height.
 const titleElement = (open: AttachmentChipOpen, title: string) => {
-  const label = <bdi>{title}</bdi>;
+  const label = (
+    <TruncatedText hint={false} render={<bdi />}>
+      {title}
+    </TruncatedText>
+  );
   switch (open.type) {
     case "none":
       return (
@@ -66,7 +71,7 @@ const titleElement = (open: AttachmentChipOpen, title: string) => {
       return (
         <a
           className={cn(
-            "focus-visible:outline-ring max-w-40 min-w-0 truncate rounded-sm text-start hover:underline focus-visible:outline-2",
+            "focus-visible:outline-ring max-w-40 min-w-0 rounded-sm text-start hover:underline focus-visible:outline-2",
             CHIP_TOUCH_TARGET_CLASS,
           )}
           dir="auto"
