@@ -341,7 +341,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `BidiText`, `UserText` `as`: `bdi`, `div`, `p`, `span`
 - `BidiText`, `UserText` `direction`: `auto`, `ltr`, `rtl`
 - `Button` `focusRing`: `inside`, `outside`
-- `Button`, `ButtonTextRun` `layout`: `wrap`
+- `Button`, `ButtonFace`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`
 - `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-round`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `inspector-row`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
 - `Button` `variant`: `composer`, `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
@@ -365,7 +365,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `csv`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
+- `DocumentMark` `kind`: `csv`, `dataBox`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`

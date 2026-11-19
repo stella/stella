@@ -97,6 +97,26 @@ export const SOFT_LAW_AUTHORITY_POLICIES = {
       other: eligible,
     },
   },
+  /** Pokyny řady D: every row of the series is an issued instruction or its attachment. */
+  "cz-gfr": {
+    expression: "required",
+    referenceStyle: "literal",
+    identitySeries: { type: "none" },
+    kinds: { ...pendingPolicy.kinds, guideline: eligible },
+  },
+  "cz-mf": {
+    expression: "required",
+    referenceStyle: "literal",
+    identitySeries: { type: "none" },
+    kinds: { ...pendingPolicy.kinds, guideline: eligible },
+  },
+  /** One collection: the board's numbered závěry and their dodatky. */
+  "cz-mv-psmv": {
+    expression: "required",
+    referenceStyle: "literal",
+    identitySeries: { type: "none" },
+    kinds: { ...pendingPolicy.kinds, opinion: eligible },
+  },
   "eu-edpb": {
     expression: "required",
     referenceStyle: "literal",

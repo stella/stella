@@ -2230,7 +2230,6 @@
       "chipLabel": "Darbojas: {place}",
       "cloud": "Mākonis",
       "cloudDescription": "Darbojas mākonī. Pieejams no jebkuras vietas.",
-      "harnessModels": "{harness} modeļi",
       "hintCheck": "Pārbaudiet to lietotnē stella desktop",
       "hintInstall": "Instalējiet to no stella desktop",
       "hintOffline": "Atveriet stella desktop savā datorā",
@@ -2240,7 +2239,6 @@
       "localFolderSelection": "Jūsu dators · {harness} · {folder}",
       "localPlace": "Jūsu dators, {harness}",
       "localSelection": "Jūsu dators · {harness}",
-      "modelDefault": "Noklusējuma (ieteicams)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un pārbaudiet aģentu {harness} sadaļā Iestatījumi › Vispārīgi › AI abonementi.",
       "stepsInstall": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un sadaļā Iestatījumi › Vispārīgi pie aģenta {harness} izvēlieties Instalēt.",
@@ -2416,6 +2414,7 @@
       "save_document": "Saglabāt dokumentu",
       "save_matter": "Saglabāt lietu",
       "save_playbook": "Saglabāt pārbaudes ceļvedi",
+      "save_skill_package": "Saglabāt prasmi",
       "save_task": "Saglabāt uzdevumu",
       "save_template": "Saglabāt veidni",
       "save_time_entry": "Saglabāt laika ierakstu",
@@ -2444,6 +2443,7 @@
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",
       "user_message": "Nosūtīts aģenta darba laikā",
+      "validate_skill_package": "Pārbaudīt prasmi",
       "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
@@ -2747,6 +2747,7 @@
     "done": "Gatavs",
     "doubleClickToRename": "Veiciet dubultklikšķi, lai pārdēvētu",
     "download": "Lejupielādēt",
+    "downloadOriginal": "Lejupielādēt oriģinālu",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {Pārvietošana atcelta: {itemName}.} one {Pārvietošana atcelta: {itemName}.} other {Pārvietošana atcelta: {itemName}.}}",
       "droppedOn": "{count, plural, zero {Nomešana uz {destinationName} pabeigta: {itemName}.} one {Nomešana uz {destinationName} pabeigta: {itemName}.} other {Nomešana uz {destinationName} pabeigta: {itemName}.}}",
@@ -3334,6 +3335,8 @@
       "contact": "Kontakts: {name}",
       "deliveredAt": "Piegādāts pastkastē",
       "delivery": "Piegāde",
+      "deliveryEvents": "Piegādes gaita",
+      "deliveryReceipt": "Piegādes apliecinājums",
       "directionUnknown": "Virziens nezināms",
       "messageId": "Ziņas ID",
       "moreContacts": "Ar šo datu pastkasti ir saistītas vēl citas kontaktpersonas.",
@@ -3346,6 +3349,8 @@
       "sent": "Nosūtīta",
       "statedInFile": "Datu pastkastes ziņa (saskaņā ar failu)",
       "toHands": "Personīgi: {name}",
+      "unlinkedFiles": "Lai atvērtu pielikumus, kuriem nav saites, lejupielādējiet sākotnējo ZFO failu.",
+      "unreadable": "Failu neizdevās nolasīt ne kā datu pastkastes ziņojumu, ne kā piegādes apliecinājumu.",
       "uploaded": "Augšupielādēta datu pastkastes ziņa"
     },
     "deliveredBy": "Piegādāja <address>{sender}</address>",
@@ -4048,6 +4053,12 @@
     "versionCreatedDescription": "Versija {versionNumber} ir izveidota. Visi var turpināt rediģēšanu.",
     "versionCreatedTitle": "Versija izveidota",
     "viewOnly": "Tikai skatīšana"
+  },
+  "guidance": {
+    "notCaseLaw": "Regulatora izdotas vadlīnijas. Tas nav tiesas nolēmums.",
+    "openAtPublisher": "Atvērt izdevēja vietnē",
+    "source": "Avots: {attribution}",
+    "textUnavailable": "Šī dokumenta teksts šeit nav pieejams. Izlasiet to izdevēja vietnē."
   },
   "guides": {
     "action": {

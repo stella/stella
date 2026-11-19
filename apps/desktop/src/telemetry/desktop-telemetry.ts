@@ -466,6 +466,7 @@ export const desktopTelemetryWindowFromLabel = (
     case "clipboard-editor":
       return DESKTOP_TELEMETRY_WINDOWS.clipboardEditor;
     case "main":
+    case "dictation-preview":
       return DESKTOP_TELEMETRY_WINDOWS.main;
     case "selfhost-connect-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.selfHostConnectDialog;

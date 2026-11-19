@@ -27,7 +27,7 @@ import { useTranslations } from "use-intl";
 
 import {
   CHAT_FILE_INPUT_ACCEPT,
-  isChatFileMimeType,
+  chatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import {
   CHAT_MEMBER_SEND_ACTION,
@@ -1572,7 +1572,8 @@ export const useChatEditor = ({
           break;
         }
 
-        if (!isChatFileMimeType(file.type) || file.size > CHAT_MAX_FILE_BYTES) {
+        const mimeType = chatFileMimeType(file.name, file.type);
+        if (!mimeType || file.size > CHAT_MAX_FILE_BYTES) {
           continue;
         }
 
@@ -1582,7 +1583,7 @@ export const useChatEditor = ({
           file,
           filename: file.name,
           id: `chat-file-${fileIdCounterRef.current}`,
-          mimeType: file.type,
+          mimeType,
         });
       }
 

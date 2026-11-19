@@ -2230,7 +2230,6 @@
       "chipLabel": "Exécution : {place}",
       "cloud": "Cloud",
       "cloudDescription": "S’exécute dans le cloud. Fonctionne partout.",
-      "harnessModels": "Modèles {harness}",
       "hintCheck": "Vérifiez-le dans stella desktop",
       "hintInstall": "Installez-le depuis stella desktop",
       "hintOffline": "Ouvrez stella desktop sur votre ordinateur",
@@ -2240,7 +2239,6 @@
       "localFolderSelection": "Votre ordinateur · {harness} · {folder}",
       "localPlace": "Votre ordinateur, {harness}",
       "localSelection": "Votre ordinateur · {harness}",
-      "modelDefault": "Par défaut (recommandé)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et vérifiez {harness} dans Paramètres › Général › Abonnements IA.",
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
@@ -2416,6 +2414,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
@@ -2444,6 +2443,7 @@
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "user_message": "Envoyé pendant que l’agent travaillait",
+      "validate_skill_package": "Vérifier la compétence",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -2747,6 +2747,7 @@
     "done": "Terminé",
     "doubleClickToRename": "Double-cliquez pour renommer",
     "download": "Télécharger",
+    "downloadOriginal": "Télécharger l’original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Déplacement annulé. {itemName} n’a pas été déplacé.} other {Déplacement annulé. {itemName} n’ont pas été déplacés.} many {Déplacement annulé. {itemName} n’ont pas été déplacés.}}",
       "droppedOn": "{count, plural, one {{itemName} a été déposé sur {destinationName}.} other {{itemName} ont été déposés sur {destinationName}.} many {{itemName} ont été déposés sur {destinationName}.}}",
@@ -3334,6 +3335,8 @@
       "contact": "Contact : {name}",
       "deliveredAt": "Remis dans la boîte",
       "delivery": "Remise",
+      "deliveryEvents": "Historique de remise",
+      "deliveryReceipt": "Accusé de réception",
       "directionUnknown": "Sens inconnu",
       "messageId": "Identifiant du message",
       "moreContacts": "D’autres contacts correspondent à cette boîte de données.",
@@ -3346,6 +3349,8 @@
       "sent": "Envoyé",
       "statedInFile": "Message de boîte de données (selon le fichier)",
       "toHands": "À l’attention de {name}",
+      "unlinkedFiles": "Pour ouvrir les pièces jointes sans lien, téléchargez le fichier ZFO d’origine.",
+      "unreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "uploaded": "Message de boîte de données importé"
     },
     "deliveredBy": "Distribué par <address>{sender}</address>",
@@ -4048,6 +4053,12 @@
     "versionCreatedDescription": "La version {versionNumber} a été créée. Tout le monde peut continuer à modifier le document.",
     "versionCreatedTitle": "Version créée",
     "viewOnly": "Lecture seule"
+  },
+  "guidance": {
+    "notCaseLaw": "Lignes directrices émises par un régulateur. Il ne s’agit pas d’une décision de justice.",
+    "openAtPublisher": "Ouvrir chez l’éditeur",
+    "source": "Source : {attribution}",
+    "textUnavailable": "Le texte de ce document n’est pas disponible ici. Consultez-le chez l’éditeur."
   },
   "guides": {
     "action": {

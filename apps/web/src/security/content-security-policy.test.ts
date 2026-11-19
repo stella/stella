@@ -15,7 +15,10 @@ const environment = {
   documentsBucket: "documents",
   documentsEndpoint: "https://s3.eu-west-1.amazonaws.com",
   posthogHost: "https://events.example.test/capture",
-  sandboxUrl: "https://app.example.test/api/v1/visual-sandbox/browser",
+  sandboxUrls: [
+    "https://app.example.test/api/visual-sandbox",
+    "https://internal-api.example.test/mcp-app-sandbox",
+  ],
 } satisfies ContentSecurityPolicyEnvironment;
 
 describe("document content security policy", () => {
@@ -61,6 +64,15 @@ describe("document content security policy", () => {
     ]) {
       expect(connectDirective?.split(expected)).toHaveLength(2);
     }
+  });
+
+  test("frames every sandbox the app embeds, each origin once", () => {
+    const frameDirective = buildContentSecurityPolicy("nonce", environment)
+      .split("; ")
+      .find((directive) => directive.startsWith("frame-src "));
+    expect(frameDirective).toBe(
+      "frame-src 'self' blob: https://app.example.test https://internal-api.example.test",
+    );
   });
 
   test("admits thumbnail requests and their configured storage redirects", () => {

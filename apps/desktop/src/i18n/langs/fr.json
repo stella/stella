@@ -705,6 +705,11 @@
       "description": "Convertit en texte un fichier de dictaphone, un mémo vocal ou l’enregistrement d’une réunion jusqu’à 4 heures.",
       "open": "Ouvrir",
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez."
+    },
+    "preview": {
+      "label": "Ce que vous avez dicté jusqu’ici",
+      "listening": "Écoute…",
+      "finishing": "Finalisation…"
     }
   },
   "shortcut": {
@@ -983,6 +988,14 @@
       "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
       "unreadable": "Ce dossier n'a pas pu être lu."
     }
+  },
+  "keepAwake": {
+    "title": "Maintenir éveillé",
+    "enabled": "Maintenir cet ordinateur éveillé pendant que les agents travaillent",
+    "description": "Tant qu'un agent travaille sur cet ordinateur, celui-ci ne se met pas en veille par inactivité, pour que les longues tâches continuent. L'écran peut toujours s'éteindre. Un Mac portable se met tout de même en veille quand vous fermez son écran.",
+    "onBattery": "Aussi sur batterie",
+    "onBatteryDescription": "Si cette option est désactivée, l'ordinateur se met en veille comme d'habitude sur batterie, même pendant qu'un agent travaille.",
+    "errorSave": "Impossible d'enregistrer ce réglage. Réessayez."
   },
   "transcribe": {
     "title": "Transcrire un enregistrement",

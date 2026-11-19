@@ -20,6 +20,7 @@ import {
   isNativeAnonymizeBinding,
   loadNativeAnonymizeBinding,
 } from "@stll/anonymize";
+import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { validateIco } from "@stll/business-registries/ares";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 import { TextSearch } from "@stll/text-search";
@@ -40,6 +41,8 @@ import {
   runtimeOcrPdfFontPath,
   runtimeWorkerDir,
 } from "@/api/lib/runtime-worker-path";
+import { STANDALONE_ATTACHMENT_MODE } from "@/api/lib/search/extraction-worker-attachments";
+import { spawnWorker } from "@/api/lib/subprocess";
 import { RTF_MIME_TYPE } from "@/api/mime-types";
 import { checkBundledSanctionsMatcher } from "@/api/scripts/image-smoke-sanctions";
 import { checkBundledPublicTemplates } from "@/api/scripts/image-smoke-template-packs";
@@ -244,33 +247,36 @@ for (const [bundle, ...args] of LONG_RUNNING_BUNDLES) {
   });
 }
 
-// Office formats convert through anydoc's native binding inside the extraction
-// worker bundle; RTF is the smallest document that takes that path.
-await probe("extraction worker anydoc native", async () => {
+// Test the deployed worker with the same stripped environment as a request.
+// RTF needs the native converter; reading an enclosed ZFO member needs YARA.
+await probe("extraction worker native readers", async () => {
   const workerDir =
     runtimeWorkerDir() ??
     panic("STELLA_WORKER_DIR must be set for the image smoke");
-  const subprocess = Bun.spawn(
-    [
-      "bun",
-      "--no-env-file",
-      path.join(workerDir, RUNTIME_WORKER_FILES.extraction),
-      RTF_MIME_TYPE,
-    ],
+  for (const { args, stdin, expected } of [
     {
+      args: [RTF_MIME_TYPE],
       stdin: new Blob(["{\\rtf1\\ansi image smoke anydoc\\par}"]),
-      stdout: "pipe",
-      stderr: "pipe",
-      timeout: 30_000,
+      expected: "image smoke anydoc",
     },
-  );
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(subprocess.stdout).text(),
-    new Response(subprocess.stderr).text(),
-    subprocess.exited,
-  ]);
-  if (exitCode !== 0 || !stdout.includes("image smoke anydoc")) {
-    panic(`extraction worker did not convert RTF (${exitCode}): ${stderr}`);
+    {
+      args: [DATA_BOX_FILE_FORMAT.mimeType, "8192", STANDALONE_ATTACHMENT_MODE],
+      stdin: Bun.file("/tmp/image-smoke.zfo"),
+      expected: "Synthetic instructions.",
+    },
+  ]) {
+    const result = await spawnWorker({
+      workerPath: path.join(workerDir, RUNTIME_WORKER_FILES.extraction),
+      args,
+      stdin,
+      timeoutMs: 30_000,
+    });
+    if (result.isErr()) {
+      panic(result.error.message);
+    }
+    if (!result.value.includes(expected)) {
+      panic("The bundled extraction worker did not read the sample");
+    }
   }
 });
 

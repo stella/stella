@@ -200,6 +200,33 @@ export const replaceCachedFileName = (
   );
 };
 
+export const dataBoxPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: [
+        ...filesKeys.all(),
+        "data-box",
+        props.workspaceId,
+        props.fieldId,
+      ],
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes["data-box"]({
+          fieldId: props.fieldId,
+        }).get({ fetch: { signal } });
+        return unwrapApiResponse(response);
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
 export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
   queryOptions({
     queryKey: filesKeys.emailHtmlByFieldId(props),
