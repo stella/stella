@@ -482,11 +482,13 @@ const skipsEveryBunTest = (outcome: FlakeProcessOutcome) => {
   if (outcome.type === "timeout" || outcome.status !== 0) {
     return false;
   }
-  const output = `${outcome.stdout}\n${outcome.stderr}`;
+  const lines = `${outcome.stdout}\n${outcome.stderr}`
+    .split("\n")
+    .map((line) => line.trim());
   return (
-    /^\s*0 pass$/mu.test(output) &&
-    /^\s*0 fail$/mu.test(output) &&
-    /^\s*[1-9]\d* skip$/mu.test(output)
+    lines.includes("0 pass") &&
+    lines.includes("0 fail") &&
+    lines.some((line) => /^[1-9]\d* skip$/u.test(line))
   );
 };
 
