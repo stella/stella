@@ -1,35 +1,47 @@
+import {
+  hungarianDesignationWorkEli,
+  readHungarianActCitations,
+} from "@stll/api-contract/magyar-kozlony-designation";
+import {
+  STATUTE_ELI_PUBLISHER_ORIGINS,
+  STATUTE_WORK_URN_PREFIXES,
+} from "@stll/api-contract/statute-work-identifier";
+
 import { locateGazetteCitations } from "./provision-citation-grammars";
 
-/**
- * The publisher that serves each ELI jurisdiction the legislation corpus
- * holds, keyed by the ELI's own jurisdiction segment. A stored ELI is this
- * origin plus `/eli/<jurisdiction>/<collection>/<year>/<number>`, so a short
- * or prefix-less spelling a model writes is read back into it.
- */
-const ELI_PUBLISHER_ORIGINS = {
-  cz: "https://www.e-sbirka.cz",
-} as const satisfies Readonly<Record<string, string>>;
+// A code abbreviation passed as an identifier names the code in force now,
+// the latest reading the alias table holds.
+const LATEST_READING = "9999-12-31";
 
 /**
- * A gazette citation ("89/2012 Sb.", "zákon č. 89/2012 Sb.") names one work,
- * and the citation grammars already know which ELI it is. A text naming
- * several works, or none, is not one ELI.
+ * A citation names one work, and the grammars already know which identifier
+ * it is: a gazette number ("89/2012 Sb.", "zákon č. 89/2012 Sb.") its ELI, a
+ * Hungarian designation ("2013. évi V. törvény") its Magyar Közlöny URN. A
+ * text naming several works, or none, is not one identifier.
  */
-const eliOfGazetteCitation = (text: string): string | undefined => {
+const workOfCitation = (text: string): string | undefined => {
   const located = locateGazetteCitations(text);
-  return located.length === 1 ? located[0]?.eli : undefined;
+  if (located.length > 0) {
+    return located.length === 1 ? located[0]?.eli : undefined;
+  }
+  const hungarian = readHungarianActCitations(text, LATEST_READING);
+  const [act, ...others] = hungarian;
+  return act === undefined || others.length > 0
+    ? undefined
+    : (hungarianDesignationWorkEli(act) ?? undefined);
 };
 
 /**
  * The readers the shared agent-input kinds need from this server: which
- * publisher serves an ELI, and how a gazette citation names one. Every
- * dispatch surface passes the same object, so an ELI reads the same on MCP,
- * the CLI and chat.
+ * publisher serves an ELI, which URNs name works of publishers without one,
+ * and how a citation names a work. Every dispatch surface passes the same
+ * object, so an identifier reads the same on MCP, the CLI and chat.
  */
 export const MCP_AGENT_INPUT_READERS = {
   eli: {
-    hosts: ELI_PUBLISHER_ORIGINS,
-    readCitation: eliOfGazetteCitation,
+    hosts: STATUTE_ELI_PUBLISHER_ORIGINS,
+    urnPrefixes: STATUTE_WORK_URN_PREFIXES,
+    readCitation: workOfCitation,
     hint: "Pass the eli a search_legislation result returned.",
   },
 };
