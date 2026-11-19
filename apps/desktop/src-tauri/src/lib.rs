@@ -53,6 +53,7 @@ mod dictation_hold_key;
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_microphone;
 mod dictation_notice;
 mod dictation_pauses;
 #[cfg(dictation)]
@@ -235,6 +236,7 @@ pub fn run() {
     .manage(dictation::DictationState::load())
     .manage(transcribe_recording::TranscribeState::default())
     .manage(dictation_notice::DictationNotice::default())
+    .manage(dictation_microphone::MicrophoneTest::default())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -707,6 +709,8 @@ pub(crate) enum SettingsView {
   Tab(PreferencesTab),
   /// AI and agents, scrolled to the coding agents' sign-ins and installs.
   Agents(AgentSettingsFocus),
+  /// Dictation, focused on the microphone it records from.
+  Microphone,
 }
 
 impl SettingsView {
@@ -717,6 +721,10 @@ impl SettingsView {
       Self::Agents(focus) => serde_json::json!({
         "tab": PreferencesTab::Agents.id(),
         "focus": focus.id(),
+      }),
+      Self::Microphone => serde_json::json!({
+        "tab": PreferencesTab::Dictation.id(),
+        "focus": "microphone",
       }),
     }
   }

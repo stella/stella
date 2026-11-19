@@ -373,6 +373,66 @@ const fn stored_switch(enabled: bool) -> &'static str {
   }
 }
 
+/// The microphone the speaker chose; `None` for the system default.
+pub fn microphone_choice() -> Option<crate::dictation_microphone::Choice> {
+  crate::dictation_microphone::Choice::parse(
+    DevicePreference::in_app_data(crate::dictation_microphone::PREFERENCE_FILE_NAME)
+      .read()
+      .as_deref(),
+  )
+}
+
+/// The chosen microphone was not connected at the press; `using` records.
+pub fn report_missing_microphone(
+  app: &AppHandle,
+  missing: &str,
+  using: Option<String>,
+) {
+  tracing::info!(
+    "dictation chose the system default: the chosen microphone is not connected"
+  );
+  crate::dictation_notice::on_missing_microphone(app, missing, using);
+}
+
+#[tauri::command]
+pub async fn dictation_get_microphones(
+  app: AppHandle,
+) -> Result<crate::dictation_microphone::MicrophonesSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(crate::dictation_microphone::list)
+    .await
+    .map_err(crate::logging::with_cause_logged(
+      "microphones could not be listed",
+    ))
+}
+
+/// Records from `id` from the next press; `None` for the system default.
+#[tauri::command]
+pub async fn dictation_set_microphone(
+  app: AppHandle,
+  id: Option<String>,
+) -> Result<crate::dictation_microphone::MicrophonesSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::dictation_microphone::choose(id.as_deref())
+  })
+  .await
+  .map_err(crate::logging::with_cause_logged(
+    "the microphone could not be chosen",
+  ))?
+}
+
+/// Whether a dictation is recording now: the microphone test waits.
+pub fn recording(app: &AppHandle) -> bool {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.phase == Phase::Recording)
+}
+
 /// What the tray offers for dictation: `None` wherever the Settings window
 /// shows no Dictation page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

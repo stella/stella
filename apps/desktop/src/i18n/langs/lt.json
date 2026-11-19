@@ -712,7 +712,24 @@
       "nothingBody": "Kalbėkite laikydami klavišą arba garso nustatymuose pasirinkite kitą įvestį.",
       "inputDevice": "Įvestis: {device}",
       "openSoundMac": "Atidaryti garso nustatymus",
-      "openSoundPc": "Atidaryti garso nustatymus"
+      "openSoundPc": "Atidaryti garso nustatymus",
+      "missingTitle": "{missing} neprijungta",
+      "missingBody": "Diktuojant vietoje jo naudojama {device}.",
+      "chooseMicrophone": "Pasirinkti mikrofoną…"
+    },
+    "microphone": {
+      "title": "Mikrofonas",
+      "hint": "„Bluetooth“ ausinėms reikia akimirkos persijungti į mikrofoną, be to, jos įrašo prastesne kokybe. Įtaisytasis mikrofonas paprastai girdisi aiškiau.",
+      "systemDefault": "Numatytasis sistemos",
+      "systemDefaultNamed": "Numatytasis sistemos ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (neprijungta)",
+      "test": "Išbandyti mikrofoną",
+      "stopTest": "Sustabdyti",
+      "level": "Įvesties lygis",
+      "hearing": "Jus girdime.",
+      "noSound": "Iš {device} negaunama garso.",
+      "checkAccess": "Patikrinti prieigą prie mikrofono"
     }
   },
   "shortcut": {

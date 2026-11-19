@@ -712,7 +712,24 @@
       "nothingBody": "Habla mientras mantienes la tecla, o elige otra entrada en los ajustes de Sonido.",
       "inputDevice": "Entrada: {device}",
       "openSoundMac": "Abrir ajustes de Sonido",
-      "openSoundPc": "Abrir configuración de sonido"
+      "openSoundPc": "Abrir configuración de sonido",
+      "missingTitle": "{missing} no está conectado",
+      "missingBody": "El dictado usa {device} en su lugar.",
+      "chooseMicrophone": "Elegir micrófono…"
+    },
+    "microphone": {
+      "title": "Micrófono",
+      "hint": "Los auriculares Bluetooth tardan un momento en cambiar a su micrófono y graban con menos calidad. El micrófono integrado suele oírse mejor.",
+      "systemDefault": "Predeterminado del sistema",
+      "systemDefaultNamed": "Predeterminado del sistema ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (no conectado)",
+      "test": "Probar el micrófono",
+      "stopTest": "Detener",
+      "level": "Nivel de entrada",
+      "hearing": "Te oímos.",
+      "noSound": "No llega sonido de {device}.",
+      "checkAccess": "Comprobar el acceso al micrófono"
     }
   },
   "shortcut": {

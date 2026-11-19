@@ -712,7 +712,24 @@
       "nothingBody": "Beszéljen, amíg lenyomva tartja a billentyűt, vagy válasszon másik bemenetet a Hang beállításaiban.",
       "inputDevice": "Bemenet: {device}",
       "openSoundMac": "Hangbeállítások megnyitása",
-      "openSoundPc": "Hangbeállítások megnyitása"
+      "openSoundPc": "Hangbeállítások megnyitása",
+      "missingTitle": "{missing} nincs csatlakoztatva",
+      "missingBody": "A diktálás helyette ezt használja: {device}.",
+      "chooseMicrophone": "Mikrofon kiválasztása…"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "A Bluetooth-headsetek egy pillanat alatt váltanak a mikrofonjukra, és gyengébb minőségben rögzítenek. A beépített mikrofon általában tisztább.",
+      "systemDefault": "Rendszer alapértelmezése",
+      "systemDefaultNamed": "Rendszer alapértelmezése ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nincs csatlakoztatva)",
+      "test": "Mikrofon tesztelése",
+      "stopTest": "Leállítás",
+      "level": "Bemeneti szint",
+      "hearing": "Halljuk Önt.",
+      "noSound": "Nem jön hang innen: {device}.",
+      "checkAccess": "Mikrofon-hozzáférés ellenőrzése"
     }
   },
   "shortcut": {

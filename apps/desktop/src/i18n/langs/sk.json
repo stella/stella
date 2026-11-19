@@ -712,7 +712,24 @@
       "nothingBody": "Hovorte, kým držíte kláves, alebo v nastaveniach Zvuku vyberte iný vstup.",
       "inputDevice": "Vstup: {device}",
       "openSoundMac": "Otvoriť nastavenia Zvuku",
-      "openSoundPc": "Otvoriť nastavenia zvuku"
+      "openSoundPc": "Otvoriť nastavenia zvuku",
+      "missingTitle": "{missing} nie je pripojené",
+      "missingBody": "Diktovanie namiesto toho používa {device}.",
+      "chooseMicrophone": "Vybrať mikrofón…"
+    },
+    "microphone": {
+      "title": "Mikrofón",
+      "hint": "Bluetooth slúchadlá chvíľu prepínajú na mikrofón a nahrávajú v nižšej kvalite. Vstavaný mikrofón býva zreteľnejší.",
+      "systemDefault": "Predvolený systémový",
+      "systemDefaultNamed": "Predvolený systémový ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nepripojené)",
+      "test": "Vyskúšať mikrofón",
+      "stopTest": "Zastaviť",
+      "level": "Úroveň vstupu",
+      "hearing": "Počujeme vás.",
+      "noSound": "Zo zariadenia {device} nejde žiadny zvuk.",
+      "checkAccess": "Skontrolovať prístup k mikrofónu"
     }
   },
   "shortcut": {

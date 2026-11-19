@@ -712,7 +712,24 @@
       "nothingBody": "Speak while you hold the key, or choose another input in Sound settings.",
       "inputDevice": "Input: {device}",
       "openSoundMac": "Open Sound settings",
-      "openSoundPc": "Open sound settings"
+      "openSoundPc": "Open sound settings",
+      "missingTitle": "{missing} is not connected",
+      "missingBody": "Dictation is using {device} instead.",
+      "chooseMicrophone": "Choose microphone…"
+    },
+    "microphone": {
+      "title": "Microphone",
+      "hint": "Bluetooth headsets can take a moment to switch to their microphone and record at lower quality. The built-in microphone is usually clearer.",
+      "systemDefault": "System default",
+      "systemDefaultNamed": "System default ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (not connected)",
+      "test": "Test microphone",
+      "stopTest": "Stop",
+      "level": "Input level",
+      "hearing": "We hear you.",
+      "noSound": "No sound from {device}.",
+      "checkAccess": "Check Microphone access"
     }
   },
   "shortcut": {

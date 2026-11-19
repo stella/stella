@@ -878,6 +878,9 @@ const App = () => {
   const [activePage, setActivePage] = useState<SettingsPage>(getInitialPage);
   const [agentSettingsFocus, setAgentSettingsFocus] =
     useState<AgentSettingsFocus | null>(null);
+  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
+    null,
+  );
   const activityAvailability = useActivityAvailability();
   const dictationAvailability = useDictationAvailability();
   // A requested page that depends on the account stays shown while its
@@ -940,6 +943,9 @@ const App = () => {
           // drops one still waiting for its card.
           setAgentSettingsFocus(
             nextPage === "agents" && isAgentSettingsFocus(focus) ? focus : null,
+          );
+          setDictationFocus(
+            nextPage === "dictation" && focus === "microphone" ? focus : null,
           );
         },
         onError: reportSubscriptionFailure,
@@ -1237,7 +1243,14 @@ const App = () => {
           </>
         );
       case "dictation":
-        return <DictationSetting />;
+        return (
+          <DictationSetting
+            focus={dictationFocus}
+            onFocusShown={() => {
+              setDictationFocus(null);
+            }}
+          />
+        );
       case "clipboard":
         return <ClipboardPane />;
       case "agents":
