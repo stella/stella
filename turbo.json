@@ -1329,7 +1329,6 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
-        "$TURBO_ROOT$/apps/web/**",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
@@ -1501,6 +1500,7 @@
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/cli/**",
+        "$TURBO_ROOT$/packages/collation/**",
         "$TURBO_ROOT$/packages/concurrency/**",
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
@@ -1521,7 +1521,6 @@
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/sha256/**",
-        "$TURBO_ROOT$/packages/skills/**",
         "$TURBO_ROOT$/packages/stable-stringify/**",
         "$TURBO_ROOT$/packages/template-conditions/**",
         "$TURBO_ROOT$/packages/template-packs/**",
