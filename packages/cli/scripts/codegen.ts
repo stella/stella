@@ -10,6 +10,7 @@
 
 import { panic, Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { childExitStatus } from "../../scripts/src/child-exit-status";
@@ -329,7 +330,7 @@ if (runtimeOnly) {
 const toolReference = Bun.spawnSync(
   [
     process.execPath,
-    new URL("generate-tool-reference.ts", import.meta.url).pathname,
+    fileURLToPath(new URL("generate-tool-reference.ts", import.meta.url)),
   ],
   { stdout: "inherit", stderr: "inherit" },
 );
