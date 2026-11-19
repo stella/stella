@@ -70,6 +70,8 @@ const CONSUMERS = {
   "apps/api/src/handlers/case-law/decisions/browse-hubs.ts": "pages",
   "apps/web/src/features/case-law/browse-path.ts": "pages",
   "apps/web/src/routes/law/$country/index.tsx": "pages",
+  // The jurisdiction hub's page links the statutes of a public jurisdiction.
+  "apps/web/src/routes/law/$country/-index.page.tsx": "pages",
   "apps/web/src/routes/law/$country/courts/$.tsx": "pages",
   "apps/landing/src/data/public-law-hubs.ts": "pages",
   // Sitemaps.
