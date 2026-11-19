@@ -386,6 +386,7 @@ export const TAGGED_FAILURE_REASON = {
   OrganizationStorageTeardownStateError: "tagged_failure",
   OutputUploadFailed: "tagged_failure",
   OwnerAccessLostError: "tagged_failure",
+  P7mParseError: "request_invalid",
   ParameterStoreError: "tagged_failure",
   ParseXmlError: "tagged_failure",
   PartnerClientOperatorError: "tagged_failure",
