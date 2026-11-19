@@ -28,32 +28,109 @@ type CitedCourt = {
   courtShortCode: string;
 };
 
-const WORD_EDGE_PUNCTUATION = /^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu;
+const EDGE_PUNCTUATION = /^[\p{P}\p{S}]$/u;
+
+/**
+ * The word without the punctuation around it ("(NS)," reads "NS"), walked
+ * one character at a time from each end: a pattern anchored at the end would
+ * rescan a long run of punctuation from every start.
+ */
+const trimEdgePunctuation = (word: string) => {
+  const characters = [...word];
+  let start = 0;
+  let end = characters.length;
+  while (start < end && EDGE_PUNCTUATION.test(characters[start] ?? "")) {
+    start += 1;
+  }
+  while (end > start && EDGE_PUNCTUATION.test(characters[end - 1] ?? "")) {
+    end -= 1;
+  }
+  return characters.slice(start, end).join("");
+};
 
 const fold = (value: string) => value.toLocaleLowerCase("und");
 
 const wordsOf = (text: string): string[] =>
   text
     .split(/\s+/u)
-    .map((word) => fold(word.replaceAll(WORD_EDGE_PUNCTUATION, "")))
+    .map((word) => fold(trimEdgePunctuation(word)))
     .filter((word) => word.length > 0);
 
 const escapeRegExp = (value: string) =>
   value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 // Court names are declined in the languages Stella reads ("Nejvyššího soudu",
-// "Ústavného súdu"), so a word of the name matches a prose word that starts
-// with its stem. Short words ("v", "SR", "súd") match as a prefix whole.
-const stemOf = (word: string) =>
-  word.length <= 4 ? word : word.slice(0, Math.max(4, word.length - 3));
+// "Ústavného súdu", "Sądu Najwyższego"), so a word of the name and a prose word
+// are the same word when they differ only by a case ending: "soud", "soudu"
+// and "soudem" are one word, "soudní" (an adjective, as in "soudní rada") is
+// another. Longest first, so "ího" goes before "í".
+const CASE_ENDINGS: readonly string[] = [
+  "ieho",
+  "iemu",
+  "ách",
+  "ami",
+  "ech",
+  "ego",
+  "ého",
+  "emu",
+  "ému",
+  "ích",
+  "ího",
+  "ími",
+  "ímu",
+  "och",
+  "ovi",
+  "ých",
+  "ými",
+  "ám",
+  "em",
+  "es",
+  "ia",
+  "ie",
+  "iu",
+  "ím",
+  "mi",
+  "om",
+  "ou",
+  "ov",
+  "ům",
+  "ym",
+  "ým",
+  "a",
+  "e",
+  "é",
+  "ě",
+  "i",
+  "í",
+  "o",
+  "s",
+  "u",
+  "ů",
+  "y",
+  "ý",
+];
+
+/** Shortest stem a case ending may leave, so "na" or "ve" stay whole. */
+const MIN_STEM_LENGTH = 3;
+
+const stemOf = (word: string) => {
+  const ending = CASE_ENDINGS.find(
+    (candidate) =>
+      word.endsWith(candidate) &&
+      word.length - candidate.length >= MIN_STEM_LENGTH,
+  );
+  return ending === undefined ? word : word.slice(0, -ending.length);
+};
 
 const namesWordRun = (prose: readonly string[], name: readonly string[]) => {
   if (name.length === 0 || name.length > prose.length) {
     return false;
   }
+  const nameStems = name.map(stemOf);
+  const proseStems = prose.map(stemOf);
   for (let start = 0; start + name.length <= prose.length; start += 1) {
-    const matches = name.every((word, offset) =>
-      (prose[start + offset] ?? "").startsWith(stemOf(word)),
+    const matches = nameStems.every(
+      (stem, offset) => proseStems[start + offset] === stem,
     );
     if (matches) {
       return true;
@@ -62,13 +139,36 @@ const namesWordRun = (prose: readonly string[], name: readonly string[]) => {
   return false;
 };
 
-/** The court name patterns of every jurisdiction that abbreviates a court so. */
-const namePatternsFor = (shortCode: string): readonly RegExp[] =>
+/**
+ * The registry's name patterns for the cited court: those that abbreviate a
+ * court so and name the cited court itself. A short code is shared across
+ * jurisdictions (`ÚS` is the Czech and the Slovak constitutional court), so
+ * the Slovak name must not stand for a Czech decision.
+ */
+const namePatternsFor = ({
+  court,
+  courtShortCode,
+}: CitedCourt): readonly RegExp[] =>
   Object.values(COURT_NAME_REGISTRY).flatMap((patterns) =>
     patterns
-      .filter((entry) => entry.shortCode === shortCode)
+      .filter(
+        (entry) =>
+          entry.shortCode === courtShortCode && entry.pattern.test(court),
+      )
       .map((entry) => entry.pattern),
   );
+
+const LETTER = /\p{L}/u;
+
+/** Whether `pattern` matches `text` ending at a word's end, not inside one. */
+const matchesWholeWords = (pattern: RegExp, text: string) => {
+  const match = pattern.exec(text);
+  if (match === null) {
+    return false;
+  }
+  const next = text[match.index + match[0].length];
+  return next === undefined || !LETTER.test(next);
+};
 
 export const leadInNamesCourt = (
   leadIn: string,
@@ -98,5 +198,7 @@ export const leadInNamesCourt = (
     return true;
   }
   const nameText = nameWindow.join(" ");
-  return namePatternsFor(shortCode).some((pattern) => pattern.test(nameText));
+  return namePatternsFor({ court, courtShortCode: shortCode }).some((pattern) =>
+    matchesWholeWords(pattern, nameText),
+  );
 };
