@@ -25,7 +25,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
@@ -204,6 +204,8 @@ export type DecisionIdentityRow = {
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
+  /** Completeness of the exact typed identifier-key scan, before family expansion. */
+  exactIdentityRead?: "complete" | "truncated";
   /** The reference as the court published it, sheet included, if recorded. */
   publishedCaseNumber?: string | null;
   /** The sheet the court published the decision on, if recorded. */
@@ -582,9 +584,25 @@ export const lookupDecisionsByIdentity = async ({
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
     const familyKey = docketFamilyKeyToRead({ country, locator });
-    const decisions = await tx
+    const exactDocketIds =
+      locator.kind === "docket" && locator.selector.kind === "none"
+        ? identifierRowDecisionIds({
+            tx,
+            rows: identifierRowKeysOf({
+              jurisdiction: country,
+              types: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+              values: [locator.value],
+            }),
+          })
+        : null;
+    const exactDocketIdentity =
+      exactDocketIds === null
+        ? sql<boolean>`false`
+        : sql<boolean>`${inArray(publishedCaseLawDecisions.id, exactDocketIds)}`;
+    const scannedDecisions = await tx
       .select({
         caseNumber: publishedCaseLawDecisions.caseNumber,
+        exactDocketIdentity,
         caseNumberType: publishedCaseLawDecisions.caseNumberType,
         country: publishedCaseLawDecisions.country,
         court: publishedCaseLawDecisions.court,
@@ -630,11 +648,20 @@ export const lookupDecisionsByIdentity = async ({
       // between come back in the same order twice, and in the order the choice
       // is actually made in.
       .orderBy(
+        ...(exactDocketIds === null ? [] : [desc(exactDocketIdentity)]),
         publishedCaseLawDecisions.court,
         publishedCaseLawDecisions.decisionDate,
         publishedCaseLawDecisions.id,
       )
-      .limit(IDENTITY_CANDIDATE_SCAN_MAX);
+      .limit(IDENTITY_CANDIDATE_SCAN_MAX + 1);
+    // Exact holders sort first. A family-only row proves their scan is complete.
+    const exactIdentityRead =
+      scannedDecisions.length <= IDENTITY_CANDIDATE_SCAN_MAX ||
+      (exactDocketIds !== null &&
+        scannedDecisions.some((decision) => !decision.exactDocketIdentity))
+        ? "complete"
+        : "truncated";
+    const decisions = scannedDecisions.slice(0, IDENTITY_CANDIDATE_SCAN_MAX);
 
     if (decisions.length === 0) {
       return [];
@@ -683,9 +710,11 @@ export const lookupDecisionsByIdentity = async ({
         languageGroupKey,
         courtId,
         authenticLanguage: _authenticLanguage,
+        exactDocketIdentity: _exactDocketIdentity,
         ...decision
       }): DecisionIdentityRow =>
         Object.assign(decision, {
+          exactIdentityRead,
           courtAbbreviation: courtPresentation(registry, {
             ...decision,
             courtId,

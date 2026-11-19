@@ -3,6 +3,8 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
+import { resolveDecisionIdentity } from "@stll/api-contract/decision-query-intent";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -30,6 +32,7 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -717,3 +720,268 @@ test("identity response work stays fixed as unrelated corpus rows grow from 10 t
   expect(small.rows).toBe(1);
   expect(large).toEqual(small);
 });
+
+const storedKindExamples = {
+  [DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER]: {
+    country: "CZE",
+    value: "ÚOHS-S0236/2016/KD-17418/2016/851/LŠt",
+  },
+  [DECISION_IDENTIFIER_TYPES.CASE_NUMBER]: {
+    country: "CZE",
+    value: "29 Cdo 4084/2009",
+  },
+  [DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER]: {
+    country: "EU",
+    value: "SA.12345",
+  },
+  [DECISION_IDENTIFIER_TYPES.ECLI]: {
+    country: "CZE",
+    value: "ECLI:CZ:NS:2020:29.CDO.4084.2009.1",
+  },
+  [DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION]: {
+    country: "EU",
+    value: "EU-neutral-2024-7",
+  },
+  [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION]: {
+    country: "CZE",
+    value: "Rc 60/2015",
+  },
+} as const satisfies Record<
+  DecisionIdentifierType,
+  { country: string; value: string }
+>;
+
+const resolveStoredReference = async (country: string, identifier: string) => {
+  const admitted = admitLawRead({
+    organizationId: mintAuthProviderId<"organization">(),
+    publicLawEnabled: () => true,
+  });
+  if (Result.isError(admitted)) {
+    return panic("Fixture law read was not admitted");
+  }
+  return await resolveDecision({
+    admission: admitted.value,
+    country,
+    identifier,
+    dependencies: {
+      lookup: async (options) =>
+        await lookupDecisionsByIdentity({ ...options, caseLawDb }),
+      read: async (options) =>
+        await readDecisionReaderSource({ ...options, caseLawDb }),
+    },
+  });
+};
+
+// timeout: embedded Postgres fixture writes and role-gated reads share the bounded database-test budget.
+test.each(Object.values(DECISION_IDENTIFIER_TYPES))(
+  "stored %s reaches its owner through the database resolver",
+  async (type) => {
+    const { country, value } = storedKindExamples[type];
+    const id = createSafeId<"caseLawDecision">();
+    const db = drizzle({ client });
+    await db.insert(caseLawDecisions).values({
+      id,
+      sourceId: openSourceId,
+      country,
+      court: country === "CZE" ? "Nejvyšší soud" : "Fixture court",
+      language: "en",
+      caseNumber: `Stored owner ${id}`,
+      fulltext: "Published decision text.",
+    });
+    await db
+      .insert(caseLawDecisionIdentifiers)
+      .values(
+        identifierRow({ decisionId: id, jurisdiction: country, type, value }),
+      );
+    const result = await resolveStoredReference(country, value);
+    switch (result.status) {
+      case "resolved":
+        expect(result.document.kind).toBe("decision");
+        if (result.document.kind !== "decision") {
+          return panic("Expected a decision");
+        }
+        expect(result.document.decisionId).toBe(id);
+        break;
+      case "ambiguous":
+        expect(
+          result.candidates.map((candidate) => candidate.decisionId),
+        ).toContain(id);
+        break;
+      default:
+        expect(result.status).toBe("resolved");
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+// timeout: embedded Postgres fixture writes and role-gated reads share the bounded database-test budget.
+test(
+  "a sheetless family stays qualified without an exact stored docket",
+  async () => {
+    const id = createSafeId<"caseLawDecision">();
+    const value = "7 Afs 17/2025";
+    await drizzle({ client })
+      .insert(caseLawDecisions)
+      .values({
+        id,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Fixture court",
+        language: "cs",
+        caseNumber: `${value} - 46`,
+        docketFamilyKey: docketFamilyKeyOf(value, "CZE"),
+      });
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator(value),
+    });
+    expect(rows.map((row) => row.id)).toEqual([id]);
+    const resolution = resolveDecisionIdentity(
+      {
+        type: "identifier",
+        kind: "docket",
+        value,
+        family: value,
+        selector: { kind: "none" },
+        jurisdiction: "CZE",
+      },
+      rows,
+      { exactIdentityRead: rows.at(0)?.exactIdentityRead },
+    );
+    expect(resolution.status).toBe("incomplete_identifier");
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// timeout: the bounded embedded Postgres fixture inserts the candidate-limit boundary before reading it.
+test(
+  "exact docket scans distinguish the candidate limit from one additional owner",
+  async () => {
+    const value = "28 Cdo 100/2026";
+    const db = drizzle({ client });
+    const owners = Array.from(
+      { length: LIMITS.caseLawSearchPageSizeMax },
+      () => ({ id: createSafeId<"caseLawDecision">() }),
+    );
+    await db.insert(caseLawDecisions).values(
+      owners.map(({ id }) => ({
+        id,
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Fixture court",
+        language: "cs",
+        caseNumber: `Stored ${id}`,
+      })),
+    );
+    await db.insert(caseLawDecisionIdentifiers).values(
+      owners.map(({ id }) =>
+        identifierRow({
+          decisionId: id,
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value,
+        }),
+      ),
+    );
+    const complete = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator(value),
+    });
+    expect(complete).toHaveLength(LIMITS.caseLawSearchPageSizeMax);
+    expect(new Set(complete.map((row) => row.exactIdentityRead))).toEqual(
+      new Set(["complete"]),
+    );
+    expect(new Set(complete.map((row) => row.id))).toEqual(
+      new Set(owners.map(({ id }) => id)),
+    );
+
+    const additionalId = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      id: additionalId,
+      sourceId: openSourceId,
+      country: "CZE",
+      court: "ZZ last court",
+      language: "cs",
+      caseNumber: `Stored ${additionalId}`,
+    });
+    await db.insert(caseLawDecisionIdentifiers).values(
+      identifierRow({
+        decisionId: additionalId,
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value,
+      }),
+    );
+    const truncated = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator(value),
+    });
+    expect(truncated).toHaveLength(LIMITS.caseLawSearchPageSizeMax);
+    expect(new Set(truncated.map((row) => row.exactIdentityRead))).toEqual(
+      new Set(["truncated"]),
+    );
+    expect(truncated.map((row) => row.id)).not.toContain(additionalId);
+    const result = await resolveStoredReference("CZE", value);
+    expect(result).toMatchObject({
+      status: "ambiguous",
+      candidateSet: "truncated",
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// timeout: the bounded embedded Postgres fixture inserts a full family before role-gated reads.
+test(
+  "family expansion cannot displace an exact stored owner past the read limit",
+  async () => {
+    const value = "8 Afs 9/2026";
+    const db = drizzle({ client });
+    const family = Array.from(
+      { length: LIMITS.caseLawSearchPageSizeMax + 1 },
+      (_, index) => ({
+        id: createSafeId<"caseLawDecision">(),
+        sourceId: openSourceId,
+        country: "CZE",
+        court: "Nejvyšší správní soud",
+        decisionDate: "2000-01-01",
+        language: "cs",
+        caseNumber: `${value} - ${index + 1}`,
+        docketFamilyKey: docketFamilyKeyOf(value, "CZE"),
+      }),
+    );
+    await db.insert(caseLawDecisions).values(family);
+    const id = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      id,
+      sourceId: openSourceId,
+      country: "CZE",
+      court: "Nejvyšší správní soud",
+      decisionDate: "2026-01-01",
+      language: "cs",
+      caseNumber: `Stored ${id}`,
+    });
+    await db.insert(caseLawDecisionIdentifiers).values(
+      identifierRow({
+        decisionId: id,
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value,
+      }),
+    );
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator(value),
+    });
+    expect(rows.at(0)?.id).toBe(id);
+    expect(rows.at(0)?.exactIdentityRead).toBe("complete");
+    const result = await resolveStoredReference("CZE", value);
+    expect(result.status).toBe("ambiguous");
+    if (result.status !== "ambiguous") {
+      return panic("Expected explicit candidate ambiguity");
+    }
+    expect(
+      result.candidates.map((candidate) => candidate.decisionId),
+    ).toContain(id);
+  },
+  DB_TEST_TIMEOUT_MS,
+);

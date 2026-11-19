@@ -245,14 +245,29 @@ describe("every stored identifier kind remains reachable", () => {
         intent,
         [
           {
+            id: "stored-owner",
             caseNumber: "unrelated primary reference",
             ecli: null,
             identifiers: [{ type, value }],
           },
         ],
-        { reporters: decisionReporterGrammarForJurisdiction(country) },
+        {
+          reporters: decisionReporterGrammarForJurisdiction(country),
+          exactIdentityRead: "complete",
+        },
       );
-      expect(["unique", "incomplete_identifier"]).toContain(resolution.status);
+      switch (resolution.status) {
+        case "unique":
+          expect(resolution.decision.id).toBe("stored-owner");
+          break;
+        case "ambiguous":
+          expect(resolution.candidates.map(({ id }) => id)).toContain(
+            "stored-owner",
+          );
+          break;
+        default:
+          expect(resolution.status).toBe("unique");
+      }
       const reference = decisionIdentityReadKeys({
         country,
         locator: { kind: "reference", value },
