@@ -685,19 +685,18 @@ export const createCzIsirAnonymizer = (
     load: async () => {
       prepared ??= prepare();
       const attempt = prepared;
-      try {
-        const pipeline = await attempt;
-        return {
-          anonymize: (paragraphs) =>
-            anonymizeCzIsirParagraphs(pipeline, paragraphs),
-        };
-      } catch (error) {
+      const pipeline = await Result.tryPromise(async () => await attempt);
+      if (Result.isError(pipeline)) {
         // A failed preparation is not kept: the next load prepares again.
         if (prepared === attempt) {
           prepared = null;
         }
-        throw error;
+        return await Promise.reject(pipeline.error);
       }
+      return {
+        anonymize: (paragraphs) =>
+          anonymizeCzIsirParagraphs(pipeline.value, paragraphs),
+      };
     },
   };
 };
