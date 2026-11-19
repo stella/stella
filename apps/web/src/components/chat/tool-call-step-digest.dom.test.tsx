@@ -309,11 +309,12 @@ describe("an opened code step reads as research, not code", () => {
       async (input: string | URL | Request, init?: RequestInit) => {
         const request = new Request(input, init);
         const pathname = new URL(request.url).pathname;
-        if (!pathname.endsWith(`/case/decisions/${DECISION_ID}`)) {
-          throw new TypeError(`Unexpected decision transport: ${pathname}`);
-        }
         requests.push(pathname);
-        return Response.json(DECISION);
+        // Any other read is unexpected; it is recorded and fails the
+        // assertion on `requests` below.
+        return pathname.endsWith(`/case/decisions/${DECISION_ID}`)
+          ? Response.json(DECISION)
+          : Response.json(null, { status: 404 });
       },
       { preconnect: () => undefined },
     );
@@ -340,7 +341,11 @@ describe("an opened code step reads as research, not code", () => {
           ),
       ).toEqual([DECISION_ID]);
     });
-    expect(requests).toHaveLength(1);
+    expect(
+      requests.map((pathname) =>
+        pathname.endsWith(`/case/decisions/${DECISION_ID}`),
+      ),
+    ).toEqual([true]);
   });
 
   test("Czech counts say how many decisions came back and how many the answer used", async () => {

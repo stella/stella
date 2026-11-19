@@ -419,18 +419,24 @@ export const runRecordedStepCall = async <T>({
       answer = value;
     },
   };
-  // The read's own settlement decides its entry; the rejection is handed on
-  // to the script untouched.
-  return await currentStepCall.run(sink, run).then(
-    (value) => {
-      recorder.record({ tool, callArgs, answer, outcome: "ok" });
+  // The read's own settlement decides its entry; whatever it resolves or
+  // rejects with reaches the script untouched. A read that rejected never
+  // got here, so its entry keeps no answer.
+  const settled: { outcome: ChatStepCallOutcome } = { outcome: "error" };
+  return await currentStepCall
+    .run(sink, run)
+    .then((value) => {
+      settled.outcome = "ok";
       return value;
-    },
-    (error: unknown) => {
-      recorder.record({ tool, callArgs, answer: undefined, outcome: "error" });
-      throw error;
-    },
-  );
+    })
+    .finally(() => {
+      recorder.record({
+        tool,
+        callArgs,
+        answer: settled.outcome === "ok" ? answer : undefined,
+        outcome: settled.outcome,
+      });
+    });
 };
 
 /** The sink of the read on this async path, or one that keeps nothing. */
