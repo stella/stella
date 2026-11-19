@@ -23,10 +23,10 @@ test("the API lint script lints the API through the shards", () => {
       ? String(manifest.scripts.lint)
       : "";
   expect(lint).toContain(
-    "bun apps/api/scripts/lint-shards.ts bun --bun oxlint",
+    "bun apps/api/scripts/lint-shards.ts bun scripts/lint.ts",
   );
-  // A whole-tree oxlint pass beside the shards would bring the peak back.
-  expect(lint).not.toMatch(/oxlint[^&]*\sapps\/api(?:\s|$)/u);
+  // A whole-tree lint pass beside the shards would bring the peak back.
+  expect(lint).not.toMatch(/(?:oxlint|lint\.ts)[^&]*\sapps\/api(?:\s|$)/u);
 });
 
 test("the shards are disjoint API directories and the last pass leaves them out", () => {

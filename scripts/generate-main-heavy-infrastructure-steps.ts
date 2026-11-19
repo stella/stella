@@ -13,6 +13,8 @@ const LOCAL_INFRASTRUCTURE_ACTIONS = new Set([
 ]);
 const EXTERNAL_INFRASTRUCTURE_ACTIONS = new Set([
   "actions/checkout",
+  // The shared checkout retries a transient clone before it fails.
+  "stella/.github/actions/partial-clone-checkout",
   "oven-sh/setup-bun",
   "actions/setup-node",
   "actions/cache",

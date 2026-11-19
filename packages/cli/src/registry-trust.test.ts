@@ -519,29 +519,11 @@ describe("validateFetchedToolsList: the committed registry clears every cap", ()
   });
 });
 
-// timeout: runtime preparation and registry export each have a 25-second deadline.
+// timeout: registry export has a 25-second deadline.
 test("every curated command binding matches the current server registry and protocol", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-live-registry-"));
   const projectionPath = path.join(directory, "registry.json");
   try {
-    const prepared = Bun.spawn(
-      [process.execPath, "run", "generate:capability-runtime"],
-      {
-        cwd: fileURLToPath(new URL("../../../apps/api/", import.meta.url)),
-        stdout: "pipe",
-        stderr: "pipe",
-        timeout: 25_000,
-      },
-    );
-    const [preparedExitCode, preparedStderr] = await Promise.all([
-      prepared.exited,
-      new Response(prepared.stderr).text(),
-      new Response(prepared.stdout).text(),
-    ]);
-    expect({
-      exitCode: preparedExitCode,
-      stderr: preparedExitCode === 0 ? "" : preparedStderr,
-    }).toEqual({ exitCode: 0, stderr: "" });
     const exporter = Bun.spawn(
       [
         process.execPath,

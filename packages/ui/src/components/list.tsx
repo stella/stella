@@ -9,6 +9,8 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
 import { AnimatedCount } from "./animated-count";
+import { TruncatedText } from "./truncated-text";
+import type { TruncatedTextLines } from "./truncated-text";
 
 /**
  * Grouped list: a titled section holding one surface of hairline-divided
@@ -111,11 +113,19 @@ const ListGroupAction = ({
   />
 );
 
-/** The surface. Depth comes from a ring plus a soft shadow, not a frame. */
+/**
+ * The surface. Depth comes from a ring plus a soft shadow, not a frame.
+ *
+ * A row wrapped in `EntityActions` sits inside its `display: contents`
+ * listener, which draws no border, and its menu anchor follows it as a
+ * sibling, so `divide-y` cannot reach it: such a row draws its own hairline
+ * on top, from the second wrapped row on.
+ */
 const List = ({ className, ...props }: React.ComponentProps<"ul">) => (
   <ul
     className={cn(
       "bg-background ring-border divide-border flex flex-col divide-y overflow-hidden rounded-xl shadow-xs/5 ring-1",
+      "[&>[data-slot=entity-actions]~[data-slot=entity-actions]>*]:border-border [&>[data-slot=entity-actions]~[data-slot=entity-actions]>*]:border-t",
       className,
     )}
     data-slot="list"
@@ -194,14 +204,39 @@ const ListItemContent = ({
   />
 );
 
+const listItemTitleVariants = cva("text-foreground text-sm font-medium", {
+  defaultVariants: { variant: "name" },
+  variants: {
+    variant: {
+      /** A name: one line, cut at the end. */
+      name: "",
+      /** A statement a reader must see whole to judge (a proposed fact): up
+       *  to two lines, then cut. */
+      statement: "text-pretty wrap-break-word",
+    },
+  },
+});
+
+type ListItemTitleVariant = NonNullable<
+  VariantProps<typeof listItemTitleVariants>["variant"]
+>;
+
+const LIST_ITEM_TITLE_LINES = {
+  name: 1,
+  statement: 2,
+} as const satisfies Record<ListItemTitleVariant, TruncatedTextLines>;
+
 const ListItemTitle = ({
   className,
+  variant,
   ...props
-}: React.ComponentProps<"span">) => (
-  <span
-    className={cn("text-foreground truncate text-sm font-medium", className)}
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof listItemTitleVariants>) => (
+  <TruncatedText
+    className={cn(listItemTitleVariants({ variant }), className)}
     data-slot="list-item-title"
     dir="auto"
+    lines={LIST_ITEM_TITLE_LINES[variant ?? "name"]}
     {...props}
   />
 );
@@ -210,28 +245,34 @@ const listItemDescriptionVariants = cva("text-muted-foreground text-xs", {
   defaultVariants: { variant: "text" },
   variants: {
     variant: {
-      /** Prose, clamped to one line so long provider copy cannot widen the row. */
-      text: "line-clamp-1 wrap-break-word",
-      /** A URL or command: monospace, left-to-right, truncated at the end. */
-      code: "truncate font-mono",
+      /** Prose, cut to one line so long provider copy cannot widen the row. */
+      text: "wrap-break-word",
+      /** Prose that genuinely needs a second line (a reason, an error). */
+      paragraph: "wrap-break-word",
+      /** A URL or command: monospace, left-to-right, cut at the end. */
+      code: "font-mono",
     },
   },
 });
 
 /**
- * Secondary line. Pass `line-clamp-2` when two lines are genuinely needed;
- * never `whitespace-nowrap`.
+ * Secondary line, one line by default. Use the `paragraph` variant (two
+ * lines) or `lines` when more is genuinely needed; never `whitespace-nowrap`.
  */
 const ListItemDescription = ({
   className,
   variant,
+  lines,
   ...props
 }: React.ComponentProps<"span"> &
-  VariantProps<typeof listItemDescriptionVariants>) => (
-  <span
+  VariantProps<typeof listItemDescriptionVariants> & {
+    lines?: TruncatedTextLines;
+  }) => (
+  <TruncatedText
     className={cn(listItemDescriptionVariants({ variant }), className)}
     data-slot="list-item-description"
     dir={variant === "code" ? "ltr" : "auto"}
+    lines={lines ?? (variant === "paragraph" ? 2 : 1)}
     {...props}
   />
 );

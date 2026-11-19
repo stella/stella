@@ -4,7 +4,7 @@ import fc from "fast-check";
 
 import type { Block, HeadingLevel } from "@stll/legal-ast/document-ast";
 import { withDesignatorHeadingLevels } from "@stll/legal-ast/heading-designator-levels";
-import { comparableHeadingTitle } from "@stll/legal-ast/source-contents";
+import { headingTitlesNameSamePart } from "@stll/legal-ast/source-contents";
 import { assertProperty } from "@stll/property-testing";
 
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
@@ -84,6 +84,8 @@ const titleArbitrary = fc.constantFrom(
   "Odůvodnění:",
   "I.",
   "Outcome",
+  "I. Outcome",
+  "II. Outcome",
   "Reasoning",
   "",
   "ﺍﻟﺤﻜﻢ",
@@ -133,7 +135,7 @@ const sectionRowAnchor = (
 ): string => {
   const same = (block: Block | undefined) =>
     block?.type === "heading" &&
-    comparableHeadingTitle(block.plainText) === comparableHeadingTitle(title);
+    headingTitlesNameSamePart(block.plainText, title);
   const at = blocks.findIndex((block) => block.anchorId === anchorId);
   if (at === -1) {
     return blocks.find((block) => same(block))?.anchorId ?? anchorId;
@@ -189,7 +191,21 @@ describe("reader contents", () => {
             .map(({ anchorId, title }) => ({ anchorId, title })),
         ).toEqual(headingsOf(blocks));
 
-        const placed = placedSections({ blocks, sections });
+        const headingTitles = new Map(
+          headingsOf(blocks).map(({ anchorId, title }) => [anchorId, title]),
+        );
+        // A section titled as its heading leaves the row the heading alone.
+        const placed = new Map(
+          [...placedSections({ blocks, sections })].filter(
+            ([anchorId, title]) => {
+              const heading = headingTitles.get(anchorId);
+              return (
+                heading === undefined ||
+                !headingTitlesNameSamePart(heading, title)
+              );
+            },
+          ),
+        );
         const shown = new Map(
           rows.flatMap((row) => {
             switch (row.type) {
@@ -353,7 +369,7 @@ describe("reader contents", () => {
     ]);
   });
 
-  test("a section titled as the heading it starts under shares that heading's row", () => {
+  test("a section titled as the heading it starts under leaves that heading's row alone", () => {
     const blocks = documentBlocks([
       { type: "paragraph" },
       { type: "heading", level: 2, title: "Účastníci řízení" },
@@ -381,21 +397,87 @@ describe("reader contents", () => {
         title: "Výrok",
         disclosure: "caseLaw",
       },
-      {
-        type: "headingWithAnalysis",
-        anchorId: "b1",
-        title: "Účastníci řízení",
-        analysisTitle: "ÚČASTNÍCI ŘÍZENÍ",
-        disclosure: "caseLaw",
-      },
-      {
-        type: "headingWithAnalysis",
-        anchorId: "b3",
-        title: "Odůvodnění rozsudku",
-        analysisTitle: "Odůvodnění rozsudku",
-        disclosure: "caseLaw",
-      },
+      { type: "heading", anchorId: "b1", title: "Účastníci řízení" },
+      { type: "heading", anchorId: "b3", title: "Odůvodnění rozsudku" },
       { type: "heading", anchorId: "b5", title: "Výrok" },
+    ]);
+  });
+
+  test("a section without the publisher's number merges into the numbered heading", () => {
+    const blocks = documentBlocks([
+      { type: "heading", level: 2, title: "I. Skutkové okolnosti případu" },
+      { type: "paragraph" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "II. Argumentace stěžovatele" },
+      { type: "paragraph" },
+    ]);
+    const { rows } = contentsOf({
+      blocks,
+      sections: [
+        // Starts at the first passage under its heading.
+        { anchorId: "b1", title: "Skutkové okolnosti případu" },
+        // Starts at the last passage before its heading.
+        { anchorId: "b2", title: "Argumentace stěžovatele" },
+      ],
+    });
+    expect(rows).toEqual([
+      {
+        type: "heading",
+        anchorId: "b0",
+        title: "I. Skutkové okolnosti případu",
+      },
+      { type: "heading", anchorId: "b3", title: "II. Argumentace stěžovatele" },
+    ]);
+  });
+
+  test("a section numbered as the next heading goes to it, not to the same words before it", () => {
+    const blocks = documentBlocks([
+      { type: "heading", level: 2, title: "I. Návrh" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "II. Návrh" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "III. Závěr" },
+      { type: "paragraph" },
+    ]);
+    const { rows } = contentsOf({
+      blocks,
+      sections: [
+        { anchorId: "b1", title: "II. Návrh" },
+        // The numbers disagree: this one keeps a row of its own.
+        { anchorId: "b3", title: "IV. Závěr" },
+      ],
+    });
+    expect(rows).toEqual([
+      { type: "heading", anchorId: "b0", title: "I. Návrh" },
+      { type: "heading", anchorId: "b2", title: "II. Návrh" },
+      {
+        type: "analysis",
+        anchorId: "b3",
+        title: "IV. Závěr",
+        disclosure: "caseLaw",
+      },
+      { type: "heading", anchorId: "b4", title: "III. Závěr" },
+    ]);
+  });
+
+  test("a section starting at a heading it does not repeat keeps its second line", () => {
+    const blocks = documentBlocks([
+      { type: "heading", level: 2, title: "II. Argumentace stěžovatele" },
+      { type: "paragraph" },
+    ]);
+    expect(
+      contentsOf({
+        blocks,
+        sections: [{ anchorId: "b0", title: "Námitky proti rozsudku" }],
+      }).rows,
+    ).toEqual([
+      {
+        type: "headingWithAnalysis",
+        anchorId: "b0",
+        title: "II. Argumentace stěžovatele",
+        analysisTitle: "Námitky proti rozsudku",
+        disclosure: "caseLaw",
+      },
     ]);
   });
 
@@ -446,14 +528,6 @@ describe("reader contents", () => {
       blocks: appeal(),
       sections: [{ anchorId: "b9", title: "Arguments of the parties" }],
     });
-    expect(rows.filter(({ type }) => type !== "heading")).toEqual([
-      {
-        type: "headingWithAnalysis",
-        anchorId: "b8",
-        title: "– Arguments of the parties",
-        analysisTitle: "Arguments of the parties",
-        disclosure: "caseLaw",
-      },
-    ]);
+    expect(rows.every(({ type }) => type === "heading")).toBe(true);
   });
 });

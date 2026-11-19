@@ -6,20 +6,54 @@
 }
 
 body {
+  background: var(--background);
+  color: var(--foreground);
   margin: 0;
-  min-width: 320px;
+  width: 360px;
 }
 
 main {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 14px;
+  padding: 16px 18px 18px;
 }
 
-.status-line {
-  align-items: baseline;
+.title-row {
+  align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The extension's own icon, the same in both colour schemes. */
+.mark {
+  display: block;
+  flex: 0 0 auto;
+  height: 32px;
+  width: 32px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+/* A status is a dot and a label, never framed like a button. */
+.status {
+  align-items: center;
+  color: var(--muted-foreground);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 1.3;
+  margin: 0;
+}
+.status[hidden] {
+  display: none;
+}
+.title-row .status {
+  margin-inline-start: auto;
+  max-width: 60%;
 }
 .status-marker {
   background: var(--status-idle);
@@ -28,32 +62,27 @@ main {
   height: 8px;
   width: 8px;
 }
-.status-line[data-state="connected"] .status-marker,
-.status-line[data-state="tab-handed-to-stella"] .status-marker {
+.status[data-state="connected"] .status-marker,
+.status[data-state="tab-handed-to-stella"] .status-marker {
   background: var(--status-connected);
 }
-.status-line[data-state="website-access-needed"] .status-marker {
+.status[data-state="website-access-needed"] .status-marker {
   background: var(--status-access-needed);
 }
-
-.mark {
-  align-items: center;
-  background: var(--primary);
-  border-radius: 9px;
-  color: var(--primary-foreground);
+.desktop {
   display: flex;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
+}
+.desktop .status[data-state="connected"] .status-marker {
+  background: var(--status-connected);
 }
 
-.mark img {
-  filter: invert(1);
-}
-
-h1 {
-  font-size: 16px;
-  margin: 0 0 6px;
+.visually-hidden {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 p {
@@ -61,6 +90,41 @@ p {
   font-size: 13px;
   line-height: 1.45;
   margin: 0;
+}
+
+.contained-tabs {
+  align-items: baseline;
+  column-gap: 6px;
+  display: grid;
+  font-size: 13px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.contained-tabs[hidden] {
+  display: none;
+}
+.contained-tabs ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.contained-tabs li {
+  display: grid;
+  min-width: 0;
+}
+.tab-name,
+.tab-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-name {
+  font-weight: 600;
+}
+.tab-host {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 button {
@@ -76,26 +140,31 @@ button {
 
 .actions {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .secondary-actions {
-  display: grid;
-  gap: 10px;
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
-.secondary-action {
-  display: grid;
-  gap: 3px;
-}
-.secondary-action p {
-  font-size: 12px;
+.secondary-actions:empty {
+  display: none;
 }
 
 button.secondary {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  padding: 8px 14px;
+}
+
+button.link {
   background: transparent;
   color: var(--muted-foreground);
-  justify-self: start;
-  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 0;
   text-decoration: underline;
   text-underline-offset: 2px;
 }

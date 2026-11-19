@@ -91,33 +91,192 @@ const FIXTURE_KEYS = [
   "unknown",
 ] as const;
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
-  "soft-law read path under the reader role",
-  () => {
-    const openFixtures = async (
-      fn: (context: {
-        ids: Readonly<
-          Record<(typeof FIXTURE_KEYS)[number], ReturnType<typeof documentId>>
-        >;
-        asReader: <T>(
-          work: (tx: ReaderTransaction) => Promise<T>,
-        ) => Promise<T>;
-      }) => Promise<void>,
-    ) =>
-      await withGatedTestClients(databaseUrl ?? "", async ({ openClient }) => {
-        const { db } = openClient({ max: 2 });
-        const sourceId = createSafeId<"softLawSource">();
-        const runId = createSafeId<"systemScriptRun">();
-        const ids = {
-          edpb: documentId(),
-          uoouMethodology: documentId(),
-          uoouInspection: documentId(),
-          wp29: documentId(),
-          unknown: documentId(),
-        };
-        await db.insert(softLawSources).values({
-          id: sourceId,
-          adapterKey: `soft-law-read-${sourceId}`,
+describe.skipIf(!enabled)("soft-law read path under the reader role", () => {
+  const openFixtures = async (
+    fn: (context: {
+      ids: Readonly<
+        Record<(typeof FIXTURE_KEYS)[number], ReturnType<typeof documentId>>
+      >;
+      asReader: <T>(work: (tx: ReaderTransaction) => Promise<T>) => Promise<T>;
+    }) => Promise<void>,
+  ) =>
+    await withGatedTestClients(databaseUrl ?? "", async ({ openClient }) => {
+      const { db } = openClient({ max: 2 });
+      const sourceId = createSafeId<"softLawSource">();
+      const runId = createSafeId<"systemScriptRun">();
+      const ids = {
+        edpb: documentId(),
+        uoouMethodology: documentId(),
+        uoouInspection: documentId(),
+        wp29: documentId(),
+        unknown: documentId(),
+      };
+      await db.insert(softLawSources).values({
+        id: sourceId,
+        adapterKey: `soft-law-read-${sourceId}`,
+        descriptor: {
+          license: "public-domain",
+          attribution: null,
+          allowsRedistribution: false,
+          allowsDerivedAi: false,
+        },
+      });
+      for (const key of FIXTURE_KEYS) {
+        const fixture = FIXTURES[key];
+        const id = ids[key];
+        await db.insert(softLawDocuments).values({
+          id,
+          sourceId,
+          identityKey: key,
+          jurisdiction: "EU",
+          authority: fixture.authority,
+          kind: fixture.kind,
+          title: fixture.title,
+          statedReferenceState: "not_stated",
+          issuedOn: "2025-03-01",
+          issuedOnState: "stated",
+          listingState: "listed",
+          validityState: "not_stated",
+          validityBasis: "source_stated",
+          firstSeenAt: NOW,
+          lastSeenAt: NOW,
+          lastSeenRun: runId,
+        });
+        await db.insert(softLawDocumentVersions).values({
+          id: createSafeId<"softLawDocumentVersion">(),
+          documentId: id,
+          sequence: 1,
+          contentHash: `hash-${key}`,
+          rawObjects: [],
+          metadata: metadataOf(fixture.title),
+          extractedText: fixture.text,
+          extractionQuality: "html",
+          sourceDates: {},
+          observedFrom: NOW,
+        });
+        await db.insert(softLawDocumentLocators).values({
+          id: createSafeId<"softLawDocumentLocator">(),
+          sourceId,
+          documentId: id,
+          url: `https://publisher.example/${sourceId}/${key}`,
+          firstSeenAt: NOW,
+          lastSeenAt: NOW,
+          lastSeenRun: runId,
+          state: "current",
+        });
+      }
+      try {
+        await fn({
+          ids,
+          asReader: async (work) =>
+            await db.transaction(async (tx) => {
+              await tx.execute(
+                sql.raw(`SET LOCAL ROLE "${stellaPublicLawReader.name}"`),
+              );
+              return await work(tx);
+            }),
+        });
+      } finally {
+        const documentIds = Object.values(ids);
+        await db
+          .delete(softLawDocumentLocators)
+          .where(inArray(softLawDocumentLocators.documentId, documentIds));
+        await db
+          .delete(softLawDocumentVersions)
+          .where(inArray(softLawDocumentVersions.documentId, documentIds));
+        await db
+          .delete(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        await db.delete(softLawSources).where(eq(softLawSources.id, sourceId));
+      }
+    });
+
+  test("the reader role neither bypasses row security nor is superuser", async () => {
+    await openFixtures(async ({ asReader }) => {
+      const flags = await asReader(
+        async (tx) =>
+          await tx.execute(
+            sql`SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user`,
+          ),
+      );
+      expect([...flags]).toEqual([{ rolbypassrls: false, rolsuper: false }]);
+    });
+  });
+
+  test("search returns served rows only, labelled as guidance", async () => {
+    await openFixtures(async ({ asReader, ids }) => {
+      const page = await asReader(
+        async (tx) =>
+          await searchSoftLawDocuments(tx, {
+            query: "zqxconsent",
+            surface: SOFT_LAW_READ_SURFACE.mcp,
+            limit: 20,
+            offset: 0,
+          }),
+      );
+      expect(page.items.map(({ documentId: id }) => id).toSorted()).toEqual(
+        [ids.edpb, ids.uoouMethodology].toSorted(),
+      );
+      for (const item of page.items) {
+        expect(item.documentClass).toBe(SOFT_LAW_DOCUMENT_CLASS);
+        expect(item.publisherUrl).toStartWith("https://publisher.example/");
+        expect(item.attribution.text).not.toBe("");
+      }
+    });
+  });
+
+  test("body text matches for a served source, folded for diacritics", async () => {
+    await openFixtures(async ({ asReader, ids }) => {
+      const page = await asReader(
+        async (tx) =>
+          await searchSoftLawDocuments(tx, {
+            query: "zpracovani zqxbody",
+            surface: SOFT_LAW_READ_SURFACE.people,
+            authority: "cz-uoou",
+            limit: 20,
+            offset: 0,
+          }),
+      );
+      expect(page.items.map(({ documentId: id }) => id)).toEqual([
+        ids.uoouMethodology,
+      ]);
+    });
+  });
+
+  test("a read returns text, and hides a withheld kind and an unserved source", async () => {
+    await openFixtures(async ({ asReader, ids }) => {
+      const read = async (id: (typeof ids)["edpb"]) =>
+        await asReader(
+          async (tx) =>
+            await readSoftLawDocument(tx, {
+              documentId: id,
+              surface: SOFT_LAW_READ_SURFACE.mcp,
+            }),
+        );
+      expect(await read(ids.edpb)).toMatchObject({
+        access: "text",
+        textState: SOFT_LAW_TEXT_STATE.available,
+        text: FIXTURES.edpb.text,
+        attribution: {
+          termsUrl: "https://www.edpb.europa.eu/copyright_en",
+        },
+      });
+      expect(await read(ids.uoouInspection)).toBeNull();
+      expect(await read(ids.wp29)).toBeNull();
+      expect(await read(ids.unknown)).toBeNull();
+    });
+  });
+
+  test("the ingestion role can register a source and audit it", async () => {
+    await withGatedTestClients(databaseUrl ?? "", async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const id = createSafeId<"softLawSource">();
+      const subject = createSafeId<"systemScriptRun">();
+      await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(`SET LOCAL ROLE "${stellaIngestion.name}"`));
+        await tx.insert(softLawSources).values({
+          id,
+          adapterKey: `soft-law-register-${id}`,
           descriptor: {
             license: "public-domain",
             attribution: null,
@@ -125,181 +284,15 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             allowsDerivedAi: false,
           },
         });
-        for (const key of FIXTURE_KEYS) {
-          const fixture = FIXTURES[key];
-          const id = ids[key];
-          await db.insert(softLawDocuments).values({
-            id,
-            sourceId,
-            identityKey: key,
-            jurisdiction: "EU",
-            authority: fixture.authority,
-            kind: fixture.kind,
-            title: fixture.title,
-            statedReferenceState: "not_stated",
-            issuedOn: "2025-03-01",
-            issuedOnState: "stated",
-            listingState: "listed",
-            validityState: "not_stated",
-            validityBasis: "source_stated",
-            firstSeenAt: NOW,
-            lastSeenAt: NOW,
-            lastSeenRun: runId,
-          });
-          await db.insert(softLawDocumentVersions).values({
-            id: createSafeId<"softLawDocumentVersion">(),
-            documentId: id,
-            sequence: 1,
-            contentHash: `hash-${key}`,
-            rawObjects: [],
-            metadata: metadataOf(fixture.title),
-            extractedText: fixture.text,
-            extractionQuality: "html",
-            sourceDates: {},
-            observedFrom: NOW,
-          });
-          await db.insert(softLawDocumentLocators).values({
-            id: createSafeId<"softLawDocumentLocator">(),
-            sourceId,
-            documentId: id,
-            url: `https://publisher.example/${sourceId}/${key}`,
-            firstSeenAt: NOW,
-            lastSeenAt: NOW,
-            lastSeenRun: runId,
-            state: "current",
-          });
-        }
-        try {
-          await fn({
-            ids,
-            asReader: async (work) =>
-              await db.transaction(async (tx) => {
-                await tx.execute(
-                  sql.raw(`SET LOCAL ROLE "${stellaPublicLawReader.name}"`),
-                );
-                return await work(tx);
-              }),
-          });
-        } finally {
-          const documentIds = Object.values(ids);
-          await db
-            .delete(softLawDocumentLocators)
-            .where(inArray(softLawDocumentLocators.documentId, documentIds));
-          await db
-            .delete(softLawDocumentVersions)
-            .where(inArray(softLawDocumentVersions.documentId, documentIds));
-          await db
-            .delete(softLawDocuments)
-            .where(eq(softLawDocuments.sourceId, sourceId));
-          await db
-            .delete(softLawSources)
-            .where(eq(softLawSources.id, sourceId));
-        }
-      });
-
-    test("the reader role neither bypasses row security nor is superuser", async () => {
-      await openFixtures(async ({ asReader }) => {
-        const flags = await asReader(
-          async (tx) =>
-            await tx.execute(
-              sql`SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user`,
-            ),
-        );
-        expect([...flags]).toEqual([{ rolbypassrls: false, rolsuper: false }]);
-      });
-    });
-
-    test("search returns served rows only, labelled as guidance", async () => {
-      await openFixtures(async ({ asReader, ids }) => {
-        const page = await asReader(
-          async (tx) =>
-            await searchSoftLawDocuments(tx, {
-              query: "zqxconsent",
-              surface: SOFT_LAW_READ_SURFACE.mcp,
-              limit: 20,
-              offset: 0,
-            }),
-        );
-        expect(page.items.map(({ documentId: id }) => id).toSorted()).toEqual(
-          [ids.edpb, ids.uoouMethodology].toSorted(),
-        );
-        for (const item of page.items) {
-          expect(item.documentClass).toBe(SOFT_LAW_DOCUMENT_CLASS);
-          expect(item.publisherUrl).toStartWith("https://publisher.example/");
-          expect(item.attribution.text).not.toBe("");
-        }
-      });
-    });
-
-    test("body text matches for a served source, folded for diacritics", async () => {
-      await openFixtures(async ({ asReader, ids }) => {
-        const page = await asReader(
-          async (tx) =>
-            await searchSoftLawDocuments(tx, {
-              query: "zpracovani zqxbody",
-              surface: SOFT_LAW_READ_SURFACE.people,
-              authority: "cz-uoou",
-              limit: 20,
-              offset: 0,
-            }),
-        );
-        expect(page.items.map(({ documentId: id }) => id)).toEqual([
-          ids.uoouMethodology,
-        ]);
-      });
-    });
-
-    test("a read returns text, and hides a withheld kind and an unserved source", async () => {
-      await openFixtures(async ({ asReader, ids }) => {
-        const read = async (id: (typeof ids)["edpb"]) =>
-          await asReader(
-            async (tx) =>
-              await readSoftLawDocument(tx, {
-                documentId: id,
-                surface: SOFT_LAW_READ_SURFACE.mcp,
-              }),
-          );
-        expect(await read(ids.edpb)).toMatchObject({
-          access: "text",
-          textState: SOFT_LAW_TEXT_STATE.available,
-          text: FIXTURES.edpb.text,
-          attribution: {
-            termsUrl: "https://www.edpb.europa.eu/copyright_en",
-          },
+        await recordSystemAudit(tx, "system:eu-soft-law-ingestion", {
+          subject,
+          counts: { sourcesRegistered: 1 },
         });
-        expect(await read(ids.uoouInspection)).toBeNull();
-        expect(await read(ids.wp29)).toBeNull();
-        expect(await read(ids.unknown)).toBeNull();
       });
+      await db.delete(softLawSources).where(eq(softLawSources.id, id));
+      await db
+        .delete(systemAuditRuns)
+        .where(eq(systemAuditRuns.subject, subject));
     });
-
-    test("the ingestion role can register a source and audit it", async () => {
-      await withGatedTestClients(databaseUrl ?? "", async ({ openClient }) => {
-        const { db } = openClient({ max: 1 });
-        const id = createSafeId<"softLawSource">();
-        const subject = createSafeId<"systemScriptRun">();
-        await db.transaction(async (tx) => {
-          await tx.execute(sql.raw(`SET LOCAL ROLE "${stellaIngestion.name}"`));
-          await tx.insert(softLawSources).values({
-            id,
-            adapterKey: `soft-law-register-${id}`,
-            descriptor: {
-              license: "public-domain",
-              attribution: null,
-              allowsRedistribution: false,
-              allowsDerivedAi: false,
-            },
-          });
-          await recordSystemAudit(tx, "system:eu-soft-law-ingestion", {
-            subject,
-            counts: { sourcesRegistered: 1 },
-          });
-        });
-        await db.delete(softLawSources).where(eq(softLawSources.id, id));
-        await db
-          .delete(systemAuditRuns)
-          .where(eq(systemAuditRuns.subject, subject));
-      });
-    });
-  },
-);
+  });
+});

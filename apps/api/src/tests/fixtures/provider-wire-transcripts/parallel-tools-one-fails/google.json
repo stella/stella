@@ -23,7 +23,6 @@
               "role": "user"
             }
           ],
-          "serviceTier": "standard",
           "systemInstruction": {
             "parts": [
               {
@@ -102,11 +101,12 @@
               ]
             }
           ],
+          "serviceTier": "standard",
           "generationConfig": {
             "maxOutputTokens": 65536,
             "thinkingConfig": {
-              "includeThoughts": false,
-              "thinkingLevel": "LOW"
+              "thinkingLevel": "LOW",
+              "includeThoughts": false
             }
           }
         }
@@ -138,20 +138,20 @@
               "parts": [
                 {
                   "functionCall": {
+                    "id": "[id-1]",
                     "args": {
                       "name": "draft"
                     },
-                    "id": "[id-1]",
                     "name": "mcp__external__delete"
                   },
                   "thoughtSignature": "[signature-1]"
                 },
                 {
                   "functionCall": {
+                    "id": "[id-2]",
                     "args": {
                       "name": "memo"
                     },
-                    "id": "[id-2]",
                     "name": "mcp__external__delete"
                   }
                 }
@@ -182,7 +182,6 @@
               "role": "user"
             }
           ],
-          "serviceTier": "standard",
           "systemInstruction": {
             "parts": [
               {
@@ -261,6 +260,7 @@
               ]
             }
           ],
+          "serviceTier": "standard",
           "generationConfig": {
             "maxOutputTokens": 65536
           }

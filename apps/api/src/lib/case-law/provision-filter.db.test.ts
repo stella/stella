@@ -27,6 +27,7 @@ import {
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -338,6 +339,29 @@ test("the provision scope includes only published redistributable decisions in i
   expect((await read(subsection, { linkScanMax: linkCount - 1 })).type).toBe(
     "broad",
   );
+  // One walk decides it: no count before it, and past its budget no read
+  // after it.
+  const statementsFor = async (linkScanMax: number) => {
+    let statements = 0;
+    await withPublicLawReaderRole(db, async (roleTx) => {
+      // SAFETY: the role transaction supplies the select surface the read uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+      const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+      await readCaseLawProvisionScope(
+        asTestRaw<CaseLawPublicReadTransaction>({
+          execute: tx.execute.bind(tx),
+          select: (...args: Parameters<typeof tx.select>) => {
+            statements += 1;
+            return tx.select(...args);
+          },
+        }),
+        { jurisdiction: "CZE", provision: subsection, linkScanMax },
+      );
+    });
+    return statements;
+  };
+  expect(await statementsFor(linkCount - 1)).toBe(1);
+  expect(await statementsFor(linkCount)).toBe(2);
   expect(await read({ work: "262/2006 Sb.", anchor: "par_317" })).toEqual({
     type: "decisions",
     decisionIds: [],

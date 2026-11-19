@@ -9,16 +9,23 @@ import { compareCodeUnit } from "@stll/collation";
  * They run after every ordinary suite, each in its own test process, so no CRUD
  * transaction can retain a conflicting table lock while their DDL runs. Each
  * starts on a fresh clone of the template, so rows the earlier suites left in
- * shared tables cannot change what it observes.
+ * shared tables cannot change what it observes. The suites that install the
+ * corpus projection seeding guard on the canonical tables
+ * (`guardPostgresSuiteSeeding`) are among them.
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/case-law-polarity-kind.postgres.test.ts",
     "src/db/contacts-rls-maintenance.postgres.test.ts",
+    "src/db/data-export-owner-policy.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
+    "src/db/online-repairs-beside-writer.postgres.test.ts",
     "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
+    "src/handlers/case-law/ingestion/background-replay.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
+    "src/handlers/case-law/withdraw-document.postgres.test.ts",
     "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
@@ -26,11 +33,43 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/lib/email/correspondence/concurrent-filing.postgres.test.ts",
     "src/lib/email/correspondence/source-race.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-generation-retire.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-route-proof-runner.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
     "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
+    "src/scripts/corpus-generation.postgres.test.ts",
+    "src/scripts/eu-completion-tick.postgres.test.ts",
+    "src/tests/query-perf/scheduled-run.postgres.test.ts",
   ]);
+
+/** Suites that clone the worker runner’s idle, fully migrated source database. */
+export const TEMPLATE_DATABASE_TEST_PATHS: ReadonlySet<string> = new Set([
+  "src/db/online-repairs-beside-writer.postgres.test.ts",
+]);
+
+export const assertTemplateDatabaseTestsAreExclusive = (
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+  exclusivePaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+): void => {
+  const sharedPaths = [...templatePaths].filter(
+    (testPath) => !exclusivePaths.has(testPath),
+  );
+  if (sharedPaths.length === 0) {
+    return;
+  }
+  panic(
+    `PostgreSQL tests that clone the migrated template require an exclusive test process:\n${sharedPaths
+      .map((testPath) => `  ${testPath}`)
+      .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
+  );
+};
+
+export const needsTemplateDatabase = (
+  testPaths: readonly string[],
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+): boolean => testPaths.some((testPath) => templatePaths.has(testPath));
 
 export const isolateSharedTableDdlTests = (
   testPaths: readonly string[],
@@ -171,7 +210,20 @@ const CLUSTER_VISIBILITY_TESTS = new Set([
   "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
 ]);
 
-/** Migration roles and visibility proofs require every other cluster worker to finish. */
+// EXPLAIN (ANALYZE, BUFFERS) charges a relation-cache rebuild to the first
+// statement that touches the relation afterwards (an audit insert pays about
+// 240 pages instead of 12). Other workers' DDL overflows the cluster-wide
+// invalidation queue and resets a measuring backend's caches at arbitrary
+// points, so a suite comparing single-sample block counts across corpus sizes
+// needs a cluster no other worker writes to.
+const CLUSTER_CATALOG_CACHE_TESTS = new Set([
+  "src/tests/query-perf/scheduled-run.postgres.test.ts",
+]);
+
+/**
+ * Migration roles, visibility proofs and single-sample block measurements
+ * require every other cluster worker to finish.
+ */
 export const clusterExclusivePostgresTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
@@ -179,6 +231,7 @@ export const clusterExclusivePostgresTests = (
   for (const [testPath, source] of sources) {
     if (
       CLUSTER_VISIBILITY_TESTS.has(testPath) ||
+      CLUSTER_CATALOG_CACHE_TESTS.has(testPath) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>

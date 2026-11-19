@@ -5,7 +5,10 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { createMembershipScopedDb } from "@/api/db/scoped";
+import {
+  createMembershipScopedDb,
+  TRANSACTION_DEADLINE,
+} from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import {
@@ -284,6 +287,7 @@ export const createDesktopCredentialAuthorizers = ({
       scopedDb: createMembershipScopedDb(membershipDb, {
         ...identity,
         serverValidatedWorkspaceIds: [],
+        deadline: TRANSACTION_DEADLINE.request,
       }),
     });
   };

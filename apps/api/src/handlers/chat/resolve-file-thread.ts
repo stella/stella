@@ -112,14 +112,14 @@ const resolveFileThread = createSafeHandler(
         });
       }
 
-      return await createFileChatThread(
+      return await createFileChatThread({
         tx,
         input,
         recordAuditEvent,
         orgAIConfig,
         webSearchAvailable,
-        body.threadId,
-      );
+        requestedThreadId: body.threadId,
+      });
     });
 
     if (Result.isError(txResult)) {

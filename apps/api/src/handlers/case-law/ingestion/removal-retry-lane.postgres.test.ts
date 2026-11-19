@@ -828,7 +828,7 @@ if (!databaseUrl || !runPostgresTests) {
           const intercepted = new Proxy(tx, {
             get(target, property, receiver) {
               if (property !== "update") {
-                return Reflect.get(target, property, receiver);
+                return Reflect.get(target, property, receiver) as unknown;
               }
               return <T extends Parameters<typeof tx.update>[0]>(table: T) => {
                 if (getTableName(table) === getTableName(caseLawSources)) {

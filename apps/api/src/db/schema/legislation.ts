@@ -9,6 +9,7 @@ import {
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
+import type { StoredStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 
 import {
   LEGISLATION_AMENDMENT_CHANGE_KINDS,
@@ -295,7 +296,7 @@ export const legislationDocuments = p.pgTable(
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
-    /** Monotonic fence advanced by each desired-state transaction. */
+    /** Monotonic order of the document's projection desired-state changes. */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })
       .default(0n)
@@ -309,6 +310,14 @@ export const legislationDocuments = p.pgTable(
       .bigint("payload_revision", { mode: "bigint" })
       .default(1n)
       .notNull(),
+    /**
+     * What this consolidation changed against the eligible one before it, and
+     * the payload revisions of both it was computed from; null until computed.
+     * Derived state, owned by `legislation-version-changes.ts`: written after
+     * ingestion stores a version and by its backfill, never by the payload
+     * write itself, so it advances no payload revision.
+     */
+    changeSummary: jsonb("change_summary").$type<StoredStatuteVersionChanges>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()

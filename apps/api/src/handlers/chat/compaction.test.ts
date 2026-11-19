@@ -20,6 +20,7 @@ import {
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { ModelDeadlineExceededError } from "@/api/lib/errors/provider-call-error";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -37,6 +38,8 @@ import {
   compactModelMessages,
   compactModelMessagesForModel,
   computeThreadContextUsage,
+  isModelCompactionSummaryMessage,
+  MODEL_COMPACTION_CHECKPOINT_NOTE,
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
@@ -96,12 +99,9 @@ describe("chat history compaction", () => {
     expect(captured).not.toContain(SKILL_SUMMARY_SECRET);
     expect(captured).toContain("ORDINARY CONVERSATION");
     expect(captured).toContain("ORDINARY OUTCOME");
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-    expect(result.value.messages.slice(1)).toEqual(tail);
-    expect(result.value.messages.at(-1)).toBe(tail.at(-1));
-    expect(JSON.stringify(result.value.messages.at(-1))).toContain(
+    expect(result.messages.slice(1)).toEqual(tail);
+    expect(result.messages.at(-1)).toBe(tail.at(-1));
+    expect(JSON.stringify(result.messages.at(-1))).toContain(
       SKILL_SUMMARY_SECRET,
     );
     expect(JSON.stringify(messages)).toBe(before);
@@ -246,20 +246,15 @@ describe("chat history compaction", () => {
       triggerTokens: 50,
     });
 
-    expect(Result.isOk(compacted)).toBe(true);
-    if (Result.isError(compacted)) {
-      return;
-    }
-
-    expect(compacted.value.notice).toBeNull();
-    expect(compacted.value.messages).toHaveLength(2);
-    expect(compacted.value.messages.at(0)?.role).toBe("user");
-    expect(compacted.value.messages.at(0)?.parts.at(0)).toEqual({
+    expect(compacted.notice).toBeNull();
+    expect(compacted.messages).toHaveLength(2);
+    expect(compacted.messages.at(0)?.role).toBe("user");
+    expect(compacted.messages.at(0)?.parts.at(0)).toEqual({
       type: "text",
       content:
         "Earlier conversation compacted from 2 message(s).\n\nold work summary",
     });
-    expect(compacted.value.messages.at(1)?.id).toBe("msg_3");
+    expect(compacted.messages.at(1)?.id).toBe("msg_3");
   });
 
   test("preserves chat history from the latest user turn boundary", () => {
@@ -326,9 +321,47 @@ describe("chat history compaction", () => {
       triggerTokens: 20,
     });
 
-    expect(Result.isOk(compacted)).toBe(true);
+    expect(compacted.notice).toBeNull();
     expect(transcriptSeenBySummarizer).toContain("[ORG_1]");
     expect(transcriptSeenBySummarizer).not.toContain("Acme s.r.o.");
+  });
+
+  test("keeps the newest history that fits and says so when the transcript cannot be prepared", async () => {
+    const messages = [
+      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
+      textMessage({
+        id: "msg_2",
+        role: "assistant",
+        text: "old answer ".repeat(80),
+      }),
+      textMessage({ id: "msg_3", role: "user", text: "latest question" }),
+    ];
+    const refusal = new HandlerError({
+      status: 422,
+      message: "The transcript could not be anonymized",
+    });
+    const reported: unknown[] = [];
+    let summarized = false;
+
+    const compacted = await compactChatMessages({
+      messages,
+      onSummaryError: (error) => {
+        reported.push(error);
+      },
+      prepareTranscript: async () => await Promise.resolve(Result.err(refusal)),
+      preserveTokens: 20,
+      summarizeTranscript: async () => {
+        summarized = true;
+        return "summary";
+      },
+      triggerTokens: 50,
+    });
+
+    // The turn goes on without its oldest history, and is told so.
+    expect(compacted.messages.map(({ id }) => id)).toEqual(["msg_3"]);
+    expect(compacted.notice).toEqual({ type: "history-trimmed" });
+    expect(reported).toEqual([refusal]);
+    expect(summarized).toBe(false);
   });
 
   test("masks bulky file attachments in the transcript", () => {
@@ -512,10 +545,6 @@ describe("chat history compaction", () => {
           summarizeTranscript,
         });
 
-        expect(compacted.status).toBe("ok");
-        if (compacted.status === "error") {
-          return;
-        }
         const preservedTail = planChatCompaction({
           messages: longThread,
           ...budget,
@@ -524,7 +553,7 @@ describe("chat history compaction", () => {
         if (preservedTail.type !== "compact") {
           return;
         }
-        const kept = compacted.value.messages.map(({ id }) => id);
+        const kept = compacted.messages.map(({ id }) => id);
         // More than the preserved tail: the history the request can carry.
         expect(kept.length).toBeGreaterThan(
           preservedTail.recentMessages.length,
@@ -535,7 +564,7 @@ describe("chat history compaction", () => {
         );
         expect(kept.at(0)?.startsWith("user_")).toBe(true);
         // And the answer is told that earlier history was left out.
-        expect(compacted.value.notice).toEqual({ type: "history-trimmed" });
+        expect(compacted.notice).toEqual({ type: "history-trimmed" });
       });
     }
 
@@ -700,8 +729,12 @@ Continue drafting the termination analysis.
       messages: [
         {
           role: "user",
-          content:
-            "Earlier model-step history compacted from 2 message(s).\n\nstep summary",
+          content: [
+            "Earlier model-step history compacted from 2 message(s).",
+            MODEL_COMPACTION_CHECKPOINT_NOTE,
+            "step summary",
+          ].join("\n\n"),
+          metadata: { stellaCompactionSummary: true },
         },
         { role: "user", content: "latest request" },
       ],
@@ -740,8 +773,12 @@ Continue drafting the termination analysis.
     expect(transcriptSeenBySummarizer).toContain("old request");
     expect(compacted.value.messages.at(0)).toEqual({
       role: "user",
-      content:
-        "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
+      content: [
+        "Earlier model-step history compacted from 2 message(s).",
+        MODEL_COMPACTION_CHECKPOINT_NOTE,
+        "tanstack summary",
+      ].join("\n\n"),
+      metadata: { stellaCompactionSummary: true },
     });
   });
 
@@ -800,18 +837,20 @@ Continue drafting the termination analysis.
         const oldText = "old request ".repeat(80);
         const compacted =
           history === "chat"
-            ? await compactChatMessagesForModel({
-                ...options,
-                boundary: { type: "raw" },
-                messages: [
-                  textMessage({ id: "old", role: "user", text: oldText }),
-                  textMessage({
-                    id: "latest",
-                    role: "user",
-                    text: "latest request",
-                  }),
-                ],
-              })
+            ? Result.ok(
+                await compactChatMessagesForModel({
+                  ...options,
+                  boundary: { type: "raw" },
+                  messages: [
+                    textMessage({ id: "old", role: "user", text: oldText }),
+                    textMessage({
+                      id: "latest",
+                      role: "user",
+                      text: "latest request",
+                    }),
+                  ],
+                }),
+              )
             : await compactModelMessagesForModel({
                 ...options,
                 task: "chat",
@@ -954,6 +993,211 @@ Continue drafting the termination analysis.
       "assistant",
       "tool",
     ]);
+  });
+
+  const agenticTurn = (steps: number): ModelMessage[] => [
+    { role: "user", content: "earlier question" },
+    { role: "assistant", content: "earlier answer" },
+    { role: "user", content: "najdi komentář k § 88" },
+    ...Array.from({ length: steps }, (_, step): ModelMessage[] => [
+      {
+        role: "assistant",
+        content: null,
+        toolCalls: [
+          {
+            id: `call_${step}`,
+            type: "function",
+            function: { name: "use-browser", arguments: "{}" },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: `page ${step} ${"text ".repeat(400)}`,
+        toolCallId: `call_${step}`,
+      },
+    ]).flat(),
+  ];
+
+  const toolResultsFollowTheirCalls = (messages: readonly ModelMessage[]) => {
+    const called = new Set<string>();
+    return messages.every((message) => {
+      for (const call of message.toolCalls ?? []) {
+        called.add(call.id);
+      }
+      return (
+        message.role !== "tool" ||
+        (message.toolCallId !== undefined && called.has(message.toolCallId))
+      );
+    });
+  };
+
+  test("cuts between the steps of one turn that outgrows the budget, keeping its request", async () => {
+    const messages = agenticTurn(6);
+    const request = messages[2];
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+    expect(plan.requestPinned).toBe(true);
+    expect(plan.recentMessages.at(0)).toBe(request);
+    expect(plan.recentMessages.at(1)?.role).toBe("assistant");
+    expect(plan.messagesToSummarize).not.toContain(request);
+    expect(plan.messagesToSummarize.at(-1)?.role).toBe("tool");
+
+    const result = await compactModelMessages({
+      messages,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async () => "pages 0..3 read",
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const compactedMessages = result.value.messages;
+    expect(compactedMessages.at(0)).toBe(request);
+    expect(compactedMessages.at(1)?.content).toContain("pages 0..3 read");
+    expect(compactedMessages.at(-1)).toBe(messages.at(-1));
+  });
+
+  test("every in-turn cut keeps tool results with their calls and fits the budget", async () => {
+    for (const steps of [1, 2, 5, 12, 40]) {
+      for (const preserveTokens of [1, 500, 1500, 5000]) {
+        const messages = agenticTurn(steps);
+        const result = await compactModelMessages({
+          messages,
+          preserveTokens,
+          triggerTokens: preserveTokens,
+          summarizeTranscript: async () => "summary",
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        const kept = result.value.messages;
+        expect(toolResultsFollowTheirCalls(kept)).toBe(true);
+        expect(kept.at(-1)).toBe(messages.at(-1));
+        expect(kept.some((message) => message === messages[2])).toBe(true);
+        expect(kept.at(0)?.role).toBe("user");
+        const plan = planModelCompaction({
+          messages,
+          preserveTokens,
+          triggerTokens: preserveTokens,
+        });
+        if (plan.type === "compact") {
+          // Over budget only when the newest step alone (with its request)
+          // is bigger than the budget: that step is never cut.
+          // The pinned request rides on top of the step budget.
+          const newestStepOnly = plan.recentMessages.length === 3;
+          const requestTokens = plan.requestPinned
+            ? planModelCompaction({
+                messages: plan.recentMessages.slice(0, 1),
+                triggerTokens: Number.MAX_SAFE_INTEGER,
+              }).totalTokens
+            : 0;
+          expect(
+            newestStepOnly ||
+              plan.preservedTokens - requestTokens <= preserveTokens,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  test("repeated compaction of one turn keeps the member's request, not the checkpoint", async () => {
+    const first = await compactModelMessages({
+      messages: agenticTurn(6),
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async () => "first checkpoint",
+    });
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    const request = agenticTurn(0).at(2);
+    if (request === undefined) {
+      throw new Error("The turn fixture opens with a request");
+    }
+    const continued = [
+      ...first.value.messages,
+      ...agenticTurn(10).slice(3 + 12),
+    ];
+    let transcript = "";
+    const second = await compactModelMessages({
+      messages: continued,
+      preserveTokens: 1000,
+      triggerTokens: 2000,
+      summarizeTranscript: async (text) => {
+        transcript = text;
+        return "second checkpoint";
+      },
+    });
+    if (Result.isError(second)) {
+      throw second.error;
+    }
+
+    expect(second.value.messages.at(0)).toEqual(request);
+    expect(second.value.messages.at(1)?.content).toContain("second checkpoint");
+    expect(
+      isModelCompactionSummaryMessage(second.value.messages.at(1) ?? request),
+    ).toBe(true);
+    expect(transcript).toContain("first checkpoint");
+    expect(
+      second.value.messages.filter(isModelCompactionSummaryMessage),
+    ).toHaveLength(1);
+  });
+
+  test("a large request counts against the step budget it is pinned on top of", () => {
+    const request: ModelMessage = {
+      role: "user",
+      content: `najdi ${"pasted contract text ".repeat(300)}`,
+    };
+    const messages = [request, ...agenticTurn(6).slice(3)];
+    const requestTokens = planModelCompaction({
+      messages: [request],
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    const preserveTokens = requestTokens + 1200;
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens,
+      triggerTokens: preserveTokens,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+    expect(plan.requestPinned).toBe(true);
+    expect(plan.recentMessages.at(0)).toBe(request);
+    expect(plan.preservedTokens).toBeLessThanOrEqual(preserveTokens);
+  });
+
+  test("the summarizer sees each step's tool calls next to its text", () => {
+    const transcript = renderModelMessagesForCompaction([
+      {
+        role: "assistant",
+        content: "Opening the commentary",
+        toolCalls: [
+          {
+            id: "call_1",
+            type: "function",
+            function: { name: "use-browser", arguments: '{"action":"open"}' },
+          },
+        ],
+      },
+    ]);
+
+    expect(transcript).toContain("Opening the commentary");
+    expect(transcript).toContain("use-browser");
+    expect(transcript).toContain("open");
   });
 
   test("skips model-message compaction below the token trigger", () => {

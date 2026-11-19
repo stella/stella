@@ -82,6 +82,7 @@ const SAVE_PAUSE_MS = 1500;
  */
 export const DocxPages = ({
   bytes,
+  fileName,
   locale,
   zoom,
   editable,
@@ -92,6 +93,8 @@ export const DocxPages = ({
   onFailed,
 }: {
   bytes: Uint8Array;
+  /** The document's name, which folio gives its editor as accessible name. */
+  fileName: string;
   locale: string;
   /** The page's width as a factor of folio's fit (see ./zoom.ts). */
   zoom: number;
@@ -264,6 +267,7 @@ export const DocxPages = ({
         onClickCapture={onEditRequest}
       >
         <DocxEditor
+          accessibleName={fileName}
           autoOpenReviewSidebar={false}
           className="h-full"
           documentBuffer={bytes}

@@ -145,10 +145,6 @@ export const envBaseServerSchema = {
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
   PUBLIC_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
-  // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
-  // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
-  CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  CASE_LAW_DATABASE_POOL_MAX: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_RESERVED_CONNECTIONS: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_ASSUMED_REPLICAS: v.optional(positiveIntegerValueSchema, "2"),
   PUBLIC_CORPUS_SEARCH_P95_SECONDS: v.optional(positiveIntegerValueSchema, "1"),
@@ -330,7 +326,6 @@ export const resolveApiEnvironmentPlaceholders = ({
 };
 
 type EnvBaseInvariantInput = {
-  CASE_LAW_DATABASE_URL?: string | undefined;
   PUBLIC_LAW_DATABASE_URL?: string | undefined;
   CORPUS_INDEX_Q09_ENDPOINT?: string | undefined;
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT?: string | undefined;
@@ -348,29 +343,13 @@ type EnvBaseInvariantInput = {
   runtimeMode: RuntimeMode;
 };
 
-const rollbackInputInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
-  PUBLIC_LAW_DATABASE_URL,
-}: EnvBaseInvariantInput): string | null => {
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    PUBLIC_LAW_DATABASE_URL === undefined
-  ) {
-    return "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.";
-  }
-  return null;
-};
-
 const databaseTransportInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
   DATABASE_URL,
   PUBLIC_LAW_DATABASE_URL,
   runtimeMode,
 }: EnvBaseInvariantInput): string | null => {
   const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
-  const hasPublicLawDatabaseUrl =
-    PUBLIC_LAW_DATABASE_URL !== undefined ||
-    CASE_LAW_DATABASE_URL !== undefined;
+  const hasPublicLawDatabaseUrl = PUBLIC_LAW_DATABASE_URL !== undefined;
   if (!localDevOpen && !hasSecureDatabaseTransport(DATABASE_URL)) {
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
@@ -379,12 +358,6 @@ const databaseTransportInvariantViolation = ({
     !hasSecureDatabaseTransport(PUBLIC_LAW_DATABASE_URL)
   ) {
     return "PUBLIC_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
-  }
-  if (
-    CASE_LAW_DATABASE_URL !== undefined &&
-    !hasSecureDatabaseTransport(CASE_LAW_DATABASE_URL)
-  ) {
-    return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }
   if (!localDevOpen && hasPublicLawDatabaseUrl) {
     return "Public-law database URLs are only supported in local development.";
@@ -454,15 +427,12 @@ const corpusEndpointInvariantViolation = ({
 };
 
 const publicLawTopologyInvariantViolation = ({
-  CASE_LAW_DATABASE_URL,
   CORPUS_INDEX_Q09_ENDPOINT,
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT,
   LEGAL_SEARCH_PROVIDER,
   PUBLIC_LAW_DATABASE_URL,
 }: EnvBaseInvariantInput): string | null => {
-  const hasPublicLawDatabaseUrl =
-    PUBLIC_LAW_DATABASE_URL !== undefined ||
-    CASE_LAW_DATABASE_URL !== undefined;
+  const hasPublicLawDatabaseUrl = PUBLIC_LAW_DATABASE_URL !== undefined;
   if (hasPublicLawDatabaseUrl && LEGAL_SEARCH_PROVIDER !== "corpus-index") {
     return 'Public-law database URLs require LEGAL_SEARCH_PROVIDER="corpus-index".';
   }
@@ -532,7 +502,6 @@ const storageAndIndexInvariantViolation = ({
 export const envBaseInvariantViolation = (
   input: EnvBaseInvariantInput,
 ): string | null =>
-  rollbackInputInvariantViolation(input) ??
   databaseTransportInvariantViolation(input) ??
   redisTransportInvariantViolation(input) ??
   corpusEndpointInvariantViolation(input) ??

@@ -23,7 +23,7 @@ const {
 } = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { ReportLayout } = await import("./report-page");
+const { ReportLayout } = await import("./report.page");
 const metrics = {
   recordedMinutes: 180,
   billableMinutes: 120,

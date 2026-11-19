@@ -25,12 +25,14 @@ import { TableChart } from "@stll/ui/table-chart";
 import {
   chartTableFromNode,
   tableChartPoints,
+  tableChartValueLabel,
 } from "@/components/chat/table-chart.logic";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export type ChatTableChartProps = ComponentProps<"table"> & {
   node?: Element | undefined;
@@ -99,13 +101,18 @@ const ChartableTable = ({
       const hash = await sha256Hex(JSON.stringify(table));
       // The loader is bound to the complete source whose digest owns the cache entry.
       const loadPlan = async () => await requestPlan(table);
-      return await queryClient.query({
-        queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
-        queryFn: loadPlan,
-        staleTime: Infinity,
-        gcTime: Infinity,
-        retry: false,
-      });
+      return await queryClient.query(
+        resourceQueryOptions(
+          {
+            queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
+            queryFn: loadPlan,
+            staleTime: Infinity,
+            gcTime: Infinity,
+            retry: false,
+          },
+          { type: "independent" },
+        ),
+      );
     });
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
@@ -237,10 +244,7 @@ const ChartableTable = ({
             chart.columns.find(({ role }) => role === "x" || role === "label")
               ?.index ?? 0,
           )}
-          yLabel={chart.columns
-            .filter(({ role }) => role === "y")
-            .map(({ index }) => table.headers.at(index))
-            .join(" / ")}
+          yLabel={tableChartValueLabel({ table, plan: chart })}
           formatNumber={(value) => formatter.number(value)}
         />
       )}

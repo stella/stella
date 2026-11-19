@@ -381,6 +381,7 @@ const cachedRun = (
         definitionSnapshot: {
           name: "Positions confirmed for this review",
           positions: { version: 3, items: [referencePosition()] },
+          scope: null,
         },
       },
       perspective: { type: "party", role: "Buyer", name: null },
@@ -403,6 +404,7 @@ const cachedRun = (
     ],
     total: findings.length,
     completed: findings.length,
+    fixesWithheld: 0,
     pipelineVersion: 2,
     createdAt: "2026-08-12T08:00:00.000Z",
     startedAt: "2026-08-12T08:00:01.000Z",
@@ -430,6 +432,12 @@ const decided = (
   applicationStatus: "pending",
   appliedBy: null,
   appliedAt: null,
+  // The mappers here read the row, not its history.
+  decisions: {
+    events: [],
+    truncated: false,
+    current: { decision: null, reason: null, decidedBy: null, decidedAt: null },
+  },
 });
 
 describe("restoring a run as the join every surface reads", () => {

@@ -203,13 +203,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
-    "function": "module/search",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
     "function": "module/createPagePaginatedFetch/readPage",
     "kind": "numeric-timeout",
@@ -232,13 +225,6 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
-    "function": "module/fetchDetail",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/getTotalCount",
     "kind": "numeric-timeout",
     "count": 1,
@@ -246,22 +232,8 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
-    "function": "module/getTotalCount",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/listPlCourtsDayPage",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
-    "function": "module/listPlCourtsDayPage",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
@@ -339,13 +311,6 @@
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
     "function": "module/requestProxy",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
-    "function": "module/requestProxy",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
@@ -518,13 +483,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/chat/threads/delete.ts",
-    "function": "module/deleteThread/createSafeRootHandler[1]",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/clauses/export.ts",
     "function": "module/exportHandler",
     "kind": "constant-limit",
@@ -567,13 +525,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/entities/delete.ts",
-    "function": "module/deleteEntitiesHandler",
-    "kind": "constant-limit",
-    "count": 2,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/entities/read-property-facets.ts",
     "function": "module/readPropertyFacets/createSafeHandler[1]",
     "kind": "constant-limit",
@@ -586,20 +537,6 @@
     "kind": "constant-limit",
     "count": 2,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/zip/download.ts",
-    "function": "module/downloadZipHandler/fetchFile",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/zip/download.ts",
-    "function": "module/downloadZipHandler/fetchFile",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/entity-views/create.ts",
@@ -647,13 +584,6 @@
     "file": "apps/api/src/handlers/files/get.ts",
     "function": "module/stampedDownloadHandler",
     "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
-  },
-  {
-    "file": "apps/api/src/handlers/files/get.ts",
-    "function": "module/stampedDownloadHandler",
-    "kind": "total-timeout-body",
     "count": 1,
     "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
   },
@@ -765,20 +695,6 @@
   {
     "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
     "function": "module/fetchAccountLabel",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
-    "function": "module/listDriveRootChildren",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
-    "function": "module/listDriveRootChildren",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
@@ -1323,13 +1239,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/api/src/lib/lists/verification/evidence.ts",
-    "function": "module/readVerificationEvidence",
-    "kind": "constant-limit",
-    "count": 2,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/lib/lists/verification/read-run.ts",
     "function": "module/readVerificationRun",
     "kind": "constant-limit",
@@ -1583,35 +1492,7 @@
   },
   {
     "file": "apps/api/src/lib/web-search/jina.ts",
-    "function": "module/createJinaFetcher",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/jina.ts",
     "function": "module/validateJinaKey",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/tavily.ts",
-    "function": "module/createTavilyProvider",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/tavily.ts",
-    "function": "module/createTavilyProvider",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/web-search/tavily.ts",
-    "function": "module/validateTavilyKey",
     "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
@@ -1967,13 +1848,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/web/src/features/chat/chat-fetch.ts",
-    "function": "module/chatFetchClient/assign[0]",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "numeric-timeout",
@@ -1984,13 +1858,6 @@
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/auth-client.ts",
-    "function": "module/customFetchImpl",
-    "kind": "numeric-timeout",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
@@ -2172,13 +2039,6 @@
   {
     "file": "packages/cli/src/auth/token-exchange.ts",
     "function": "module/refreshAccessToken",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "packages/cli/src/cli-release-channel.ts",
-    "function": "module/fetchLatestCliVersion",
     "kind": "total-timeout-body",
     "count": 1,
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."

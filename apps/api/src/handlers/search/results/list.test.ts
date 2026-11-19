@@ -194,9 +194,11 @@ describe("the type facet follows the caller's granted scopes", () => {
         ),
       );
 
+      // Case law is never a bucket: the palette asks the corpus search
+      // engine for it through its own route.
       const visibleTypes: GlobalSearchResultType[] = seesChat
-        ? ["case-law", "chat", "contact", "matter"]
-        : ["case-law", "contact", "matter"];
+        ? ["chat", "contact", "matter"]
+        : ["contact", "matter"];
       expect(result).toMatchObject({
         facets: { type: visibleTypes.map((value) => ({ value, count: 2 })) },
       });

@@ -88,7 +88,7 @@ if (!databaseUrl || !runPostgresTests) {
         input: plainTextIngestionResult({
           caseNumber: `Warning fixture ${suffix}`,
           sourceDocumentId: "warning-fixture",
-          court: "Synthetic court",
+          court: "Nejvyšší soud",
           country: "CZE",
           language: "cs",
           fulltext,
@@ -195,7 +195,7 @@ if (!databaseUrl || !runPostgresTests) {
         .values({
           sourceId,
           caseNumber: `Empty fixture ${suffix}`,
-          court: "Synthetic court",
+          court: "Nejvyšší soud",
           country: "CZE",
           language: "cs",
         })

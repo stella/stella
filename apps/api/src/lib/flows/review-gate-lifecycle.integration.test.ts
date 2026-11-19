@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -7,12 +7,18 @@ import { createTestClock } from "@stll/test-kit";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  auditLogs,
   flowRuns,
   flowRunSteps,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   cancelFlowRun,
@@ -129,6 +135,82 @@ const seedRun = async (
 };
 
 describe("flow review lifecycle", () => {
+  test("cancellation rolls back the run and steps when its audit fails", async () => {
+    const runId = await seedRun();
+    const read = async () => ({
+      run: await db.query.flowRuns.findFirst({ where: { id: { eq: runId } } }),
+      steps: await db.query.flowRunSteps.findMany({
+        where: { runId: { eq: runId } },
+        orderBy: { index: "asc" },
+      }),
+    });
+    const before = await read();
+    expect(before.run?.status).toBe("pending");
+    expect(before.steps).toHaveLength(2);
+    expect(before.steps.every((step) => step.reviewTaskEntityId === null)).toBe(
+      true,
+    );
+    const result = await cancelFlowRun({
+      safeDb,
+      workspaceId,
+      runId,
+      userId,
+      recordAuditEvent: async () => {
+        throw new FlowStepError({ message: "Audit recording unavailable" });
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    expect(await read()).toEqual(before);
+  });
+
+  test("cancellation commits one run audit with the abandoned steps", async () => {
+    const runId = await seedRun();
+    const result = await cancelFlowRun({
+      safeDb,
+      workspaceId,
+      runId,
+      userId,
+      recordAuditEvent: createBackgroundAuditRecorder({
+        organizationId,
+        workspaceId,
+        userId,
+        execution: {
+          performer: { type: "user", id: userId },
+          trigger: { type: "system", source: "flow_cancellation_test" },
+        },
+      }),
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toEqual({ runId, status: "cancelled" });
+    const run =
+      (await db.query.flowRuns.findFirst({
+        where: { id: { eq: runId } },
+      })) ?? panic("The cancelled fixture run must exist");
+    expect(run.status).toBe("cancelled");
+    expect(run.finishedAt).toBeInstanceOf(Date);
+    const steps = await db.query.flowRunSteps.findMany({
+      where: { runId: { eq: runId } },
+    });
+    expect(steps).toHaveLength(2);
+    for (const step of steps) {
+      expect(step.status).toBe("skipped");
+      expect(step.finishedAt).toEqual(run.finishedAt);
+    }
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, runId));
+    expect(audits).toHaveLength(1);
+    expect(audits.at(0)).toMatchObject({
+      action: AUDIT_ACTION.CANCEL,
+      resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+      userId,
+      workspaceId,
+    });
+  });
+
   test.each(["start", "pause", "failure"] as const)(
     "worker quietly finishes when run is deleted before %s",
     async (boundary) => {

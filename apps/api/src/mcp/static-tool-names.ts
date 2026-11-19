@@ -13,6 +13,7 @@ export const MCP_STATIC_TOOL_NAMES = [
   "case_law_coverage",
   "read_content_across_matters",
   "read_case_law_decision",
+  "verify_quote",
   "read_case_law_citations",
   "read_contact",
   "set_practice_jurisdictions",

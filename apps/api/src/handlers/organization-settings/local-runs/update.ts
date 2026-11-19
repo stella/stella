@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
-import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
+import { CHAT_LOCAL_RUN_APPROVAL_CEILINGS } from "@stll/api-contract/chat-run-target";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -22,7 +22,7 @@ const config = {
   // An agent that could change this could raise its own ceiling.
   mcp: { type: "internal", reason: "agent_autonomy_ceiling" },
   body: v.strictObject({
-    maxApprovals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
+    maxApprovals: v.picklist(CHAT_LOCAL_RUN_APPROVAL_CEILINGS),
   }),
 } satisfies HandlerConfig;
 

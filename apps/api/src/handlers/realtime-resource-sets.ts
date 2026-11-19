@@ -68,6 +68,11 @@ export const legalListRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.LEGAL_LIST,
 );
 
+/** A verification as its reviewers see it: a review decision changes it. */
+export const legalListVerificationRealtimeUpdates = workspaceResourceSetUpdates(
+  RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+);
+
 export const mcpConnectorRealtimeUpdates = organizationResourceSetUpdates(
   RESOURCE_TYPE.MCP_CONNECTOR,
 );

@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CompareVersionsPanel } from "@/components/inspector/compare-versions-panel";
@@ -258,7 +259,7 @@ export const VersionsFacet = ({
             variant="ghost"
           >
             <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-            <span className="truncate">{t("fileDetail.versionHistory")}</span>
+            <TruncatedText>{t("fileDetail.versionHistory")}</TruncatedText>
           </Button>
         </div>
         <CompareVersionsPanel

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adding outboundAction does not change parser IDs or parsed records.
 // parser-output-unchanged: Removal retry ID branding does not change parsed decision identities.
 // parser-output-unchanged: Adding citation doctrine review, search-history, chat revision, reader answer and chat tool grant ID kinds does not change parser IDs or parsed records.
 // parser-output-unchanged: [at-asylgh] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
@@ -29,11 +30,13 @@
 // parser-output-unchanged: [pl-uokik] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
 // parser-output-unchanged: [sk-us] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
 // parser-output-unchanged: [us-courtlistener] The request receipt ID kind leaves outputs identical in the #6013 parser-output-diff run (origin/main ade1138 vs head 97a8deb).
+// parser-output-unchanged: Adding conflict check ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";
 
 export { isUuid } from "@stll/uuid-codec";
 
 export type SafeIdType =
+  | "legalHold"
   | "accountDeletionRequest"
   | "agentSkill"
   | "agentSkillComment"
@@ -73,6 +76,7 @@ export type SafeIdType =
   | "chatTurn"
   | "chatThreadCompaction"
   | "chatThread"
+  | "chatBrowserSiteGrant"
   | "chatToolGrant"
   | "fileChatThread"
   | "templateChatThread"
@@ -81,6 +85,8 @@ export type SafeIdType =
   | "clauseCategory"
   | "clauseVariant"
   | "clauseVersion"
+  | "conflictCheck"
+  | "conflictCheckMatter"
   | "contact"
   | "correspondence"
   | "correspondenceFiler"
@@ -94,6 +100,7 @@ export type SafeIdType =
   | "requestIdempotencyReceipt"
   | "contactRelationship"
   | "corpusIndexProjectionIntent"
+  | "corpusIndexGenerationFlip"
   | "hostedCheckoutClaim"
   | "usageAllocation"
   | "usageLaneCounter"
@@ -105,6 +112,7 @@ export type SafeIdType =
   | "desktopEditSession"
   | "legalListClaim"
   | "legalListClaimReviewEvent"
+  | "legalGraphEdge"
   | "legalListVerificationRun"
   | "bilingualTranslationRun"
   | "bilingualTranslationRow"
@@ -148,6 +156,7 @@ export type SafeIdType =
   | "infoSoudTrackedCase"
   | "invoice"
   | "invoiceLine"
+  | "invoiceSend"
   | "invoicePayment"
   | "justification"
   | "legislationDocument"
@@ -199,7 +208,10 @@ export type SafeIdType =
   | "sellerProfile"
   | "numberSeries"
   | "reportExport"
+  // parser-output-unchanged: Adds the data export id kind; no parser reads or emits it.
+  | "dataExport"
   | "schedulerJobRun"
+  | "outboundAction"
   | "sharepointConnection"
   | "sharepointOAuthState"
   | "styleSet"

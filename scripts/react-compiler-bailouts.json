@@ -6,12 +6,8 @@
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/components/bilingual-review-rows.tsx::BilingualReviewRows": {
-    "memos": 0,
-    "reasons": ["Use of incompatible library"]
-  },
   "apps/web/src/components/chat-editor-provider.tsx::useChatEditor": {
-    "memos": 19,
+    "memos": 20,
     "reasons": [
       "Cannot access refs during render",
       "`try`/`finally` without `catch` is not supported by React Compiler"
@@ -29,12 +25,6 @@
     "memos": 0,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"
-    ]
-  },
-  "apps/web/src/components/chat/prompt-slash-list.tsx::PromptSlashList": {
-    "memos": 0,
-    "reasons": [
-      "(BuildHIR::lowerExpression) Handle UpdateExpression to variables captured within lambdas."
     ]
   },
   "apps/web/src/components/docx/docx-browser-editor.tsx::DocxBrowserEditorContent": {
@@ -140,6 +130,7 @@
     "memos": 0,
     "reasons": [
       "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause",
+      "Logical assignment operators (||=, &&=, ??=) are not yet supported",
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
   },
@@ -160,7 +151,7 @@
     "reasons": ["Support non-trivial for..of inits"]
   },
   "apps/web/src/features/chat/hooks/use-chat-session.ts::useChatSession": {
-    "memos": 40,
+    "memos": 60,
     "reasons": [
       "(BuildHIR::lowerExpression) Handle Import expressions",
       "Cannot access refs during render"
@@ -169,12 +160,14 @@
   "apps/web/src/features/guides/use-guide-runner.ts::useGuideRunner": {
     "memos": 0,
     "reasons": [
+      "(BuildHIR::lowerExpression) Handle Import expressions",
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
   },
   "apps/web/src/features/knowledge/playbook-editor/use-playbook-save-queue.ts::usePlaybookSaveQueue": {
     "memos": 0,
     "reasons": [
+      "Support functions with unreachable code that may contain hoisted declarations",
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
   },
@@ -202,17 +195,11 @@
     "memos": 1,
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
   },
-  "apps/web/src/routes/_protected.chat/index.tsx::ChatIndex": {
+  "apps/web/src/routes/_protected.chat/-components/chat-index.page.tsx::ChatIndexPage": {
     "memos": 4,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
-    ]
-  },
-  "apps/web/src/routes/_protected.contacts/index.tsx::CreateContactDialog": {
-    "memos": 0,
-    "reasons": [
-      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
     ]
   },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::RouteComponentInner": {
@@ -232,12 +219,6 @@
     "memos": 1,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"
-    ]
-  },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx::SplitEntryDialog": {
-    "memos": 0,
-    "reasons": [
-      "(BuildHIR::lowerExpression) Support UpdateExpression where argument is a global"
     ]
   },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx::CalendarView": {
@@ -298,7 +279,6 @@
   "apps/web/src/routes/knowledge/clauses.tsx::RouteComponent": {
     "memos": 5,
     "reasons": [
-      "Found extra memoization dependencies",
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]
   },

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
 import { compareCodeUnit } from "@stll/collation";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
@@ -28,7 +29,6 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
   const { REVIEW_ACCOUNT_REFUSAL_MESSAGE } =
     await import("@/api/lib/auth/review-account-policy");
-  const { readDevOtp } = await import("@/api/lib/dev-otp-store");
   const { MCP_DEFAULT_RESOURCE_SCOPES } = await import("@stll/api-contract");
   const { getMcpResourceUrl } = await import("@/api/mcp/constants");
   const { OAUTH_CONSENT_PAGE_PATH, readOAuthRedirect, registerOAuthClient } =
@@ -151,11 +151,22 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         },
       },
     ];
-    await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
-    const otp = readDevOtp(email);
-    if (!otp) {
-      panic("Auth did not issue the fixture OTP");
-    }
+    // No sign-in code is issued for the address; the one redeemed below
+    // stands for a code stored before the account was restricted.
+    const codeRequest = await post("/email-otp/send-verification-otp", {
+      email,
+      type: "sign-in",
+    });
+    expect(codeRequest.status).toBe(409);
+    expect(await codeRequest.json()).toMatchObject({
+      code: AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE,
+    });
+    const otp = "482916";
+    await context.internalAdapter.createVerificationValue({
+      identifier: `sign-in-otp-${email}`,
+      value: `${otp}:0`,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    });
     for (const { path, status, body } of httpCreationPaths) {
       const response = await post(path, {
         email,

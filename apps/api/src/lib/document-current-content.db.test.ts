@@ -150,8 +150,10 @@ test("checked matter ids stay immutable", async () => {
   await inMatter(async (tx) => {
     const workspaceIds = await checkedWorkspaceIds(tx, [ids.wsA1]);
     expect(() => {
-      // @ts-expect-error Checked matter ids expose no mutating methods.
-      workspaceIds.push(ids.wsA2);
+      // Checked matter ids expose no mutating methods; force the call anyway.
+      Reflect.apply(Reflect.get(workspaceIds, "push"), workspaceIds, [
+        ids.wsA2,
+      ]);
     }).toThrow(TypeError);
     expect([...workspaceIds]).toEqual([ids.wsA1]);
   });
@@ -246,7 +248,7 @@ test("current content requires a live current version and matter", async () => {
     expect(await readCurrent(tx)).toHaveLength(1);
     await tx
       .update(entityVersions)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
       .where(eq(entityVersions.id, ids.entityVersionA1));
     expect(await readCurrent(tx)).toEqual([]);
     await tx
@@ -320,7 +322,7 @@ test.each(["exact", "legacy"] as const)(
         .where(eq(entities.id, ids.entityA1));
       await tx
         .update(entityVersions)
-        .set({ deletedAt: new Date() })
+        .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
         .where(eq(entityVersions.id, ids.entityVersionA1));
       expect(await readCurrent(tx)).toEqual([]);
       await tx

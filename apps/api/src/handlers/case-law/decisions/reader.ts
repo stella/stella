@@ -322,6 +322,7 @@ export const readDecisionReaderSource = defineWindowedRead(
         extractionWarnings: decision.extractionWarnings,
         id: decision.id,
         caseNumber: decision.caseNumber,
+        appealReviews: decision.appealReviews,
         caseNumberType: decision.caseNumberType,
         courtAbbreviation: decision.courtAbbreviation,
         courtTier: decision.courtTier,

@@ -1,10 +1,11 @@
-import { Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { useLayout, useSelection } from "@/components/selection";
+import { SafeAreaView } from "@/components/ui/safe-area-view";
 import { PanelLeftIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
@@ -18,27 +19,26 @@ import { useUiColors } from "@/theme";
 export const Pane = ({
   children,
   title,
-}: React.PropsWithChildren<{ title: string }>) => {
+}: React.PropsWithChildren<{ title: React.ReactNode }>) => {
   const t = useTranslations("pane");
   const layout = useLayout();
   const selection = useSelection();
   const ui = useUiColors();
 
   return (
-    <SafeAreaView className="flex-1" edges={["top"]}>
+    <SafeAreaView edges={["top"]}>
       <View className="border-border flex-row items-center gap-3 border-b px-4 py-3">
         {layout.usesSplitView && layout.divisionWidth === 0 ? (
-          <Pressable
+          <Button
             accessibilityLabel={
               selection.listHidden ? t("showList") : t("hideList")
             }
-            accessibilityRole="button"
-            className="active:opacity-60"
-            hitSlop={8}
             onPress={selection.toggleList}
+            size="icon-xs"
+            variant="ghost"
           >
             <PanelLeftIcon color={ui.mutedForeground} size={20} />
-          </Pressable>
+          </Button>
         ) : null}
         <View className="flex-1">
           <Text accessibilityRole="header" numberOfLines={1} variant="headline">

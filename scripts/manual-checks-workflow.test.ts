@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
@@ -166,7 +167,10 @@ test("result writer emits the stable result shape and first twenty errors", () =
   writeFileSync(exit, "7\n");
   writeFileSync(start, `${Math.floor(Date.now() / 1000) - 2}\n`);
   const run = Bun.spawnSync(
-    ["bun", new URL("write-manual-check-result.ts", import.meta.url).pathname],
+    [
+      "bun",
+      fileURLToPath(new URL("write-manual-check-result.ts", import.meta.url)),
+    ],
     {
       cwd: directory,
       env: {
@@ -216,7 +220,10 @@ const writeResult = (files: WriteResultFiles) => {
     }
   }
   const run = Bun.spawnSync(
-    ["bun", new URL("write-manual-check-result.ts", import.meta.url).pathname],
+    [
+      "bun",
+      fileURLToPath(new URL("write-manual-check-result.ts", import.meta.url)),
+    ],
     {
       cwd: directory,
       env: {
@@ -276,7 +283,9 @@ test("result writer reports a check that never ran as a failure", () => {
   });
 });
 
-const runner = new URL("run-manual-test-files.ts", import.meta.url).pathname;
+const runner = fileURLToPath(
+  new URL("run-manual-test-files.ts", import.meta.url),
+);
 const testFile = (marker: string) =>
   `import { test } from "bun:test";\nimport { writeFileSync } from "node:fs";\ntest("ran", () => writeFileSync(${JSON.stringify(marker)}, ""));\n`;
 
@@ -434,7 +443,7 @@ test("missing, non-test, excessive, or inapplicable targets are rejected", () =>
   );
 });
 
-test("test lists separated by anything but spaces are rejected", () => {
+test("lists of tests separated by anything but spaces are rejected", () => {
   const root = fixtureRoot();
   assertProperty(
     "test lists separated by anything but spaces are rejected",

@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-citations-doctrine-cited-idx",
   revision: 160,
+  lifecycle: "finalized",
   type: "indexes",
   // Reviewed doctrine per cited decision: few rows carry a finding.
   values: [

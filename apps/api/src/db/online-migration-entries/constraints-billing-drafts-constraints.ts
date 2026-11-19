@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-billing-drafts-constraints",
   revision: 1315,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...BILLING_DRAFTS_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

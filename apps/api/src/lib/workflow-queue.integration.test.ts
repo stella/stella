@@ -103,6 +103,7 @@ const executionPlan: ExecutionLevel[] = [
         {
           id: extractedPropertyId,
           status: "stale",
+          answerShape: "value",
           content: { version: 1, type: "text" },
           tool: extractedTool,
           dependencies: [],

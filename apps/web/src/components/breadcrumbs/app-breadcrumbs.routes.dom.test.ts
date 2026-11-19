@@ -5,6 +5,7 @@ import { afterAll, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
@@ -31,6 +32,7 @@ const router = createRouter({
   routeTree,
   context: {
     analyticsValue,
+    presentationPrefs: defaultPresentationPrefs,
     queryClient: createAppQueryClient(),
     routeErrorLifecycle: createRouteErrorLifecycleController(
       analyticsValue.analytics,

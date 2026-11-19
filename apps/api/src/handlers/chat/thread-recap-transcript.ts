@@ -106,13 +106,14 @@ const buildTailTranscript = (
 
 /**
  * Flatten the transcript to plain `User:`/`Assistant:` lines, capped
- * to a char budget filled from the most recent end. When the budget
+ * to a char budget (the recap's by default) filled from the most recent end. When the budget
  * truncates the head, the original ask (first user line) is preserved
  * so the model can still tell what the thread set out to do, which is
  * what "what remains" is measured against.
  */
 export const buildRecapTranscript = (
   messages: readonly RecapMessage[],
+  maxChars: number = RECAP_TRANSCRIPT_MAX_CHARS,
 ): string => {
   const lines: string[] = [];
   for (const message of messages) {
@@ -132,12 +133,12 @@ export const buildRecapTranscript = (
   }
 
   const full = lines.join("\n\n");
-  if (full.length <= RECAP_TRANSCRIPT_MAX_CHARS) {
+  if (full.length <= maxChars) {
     return full;
   }
 
   const firstUserLine = lines.find((line) => line.startsWith("User: "));
-  const tailOnly = buildTailTranscript(lines, RECAP_TRANSCRIPT_MAX_CHARS);
+  const tailOnly = buildTailTranscript(lines, maxChars);
   if (!firstUserLine || tailOnly.includes(firstUserLine)) {
     return tailOnly;
   }
@@ -145,13 +146,11 @@ export const buildRecapTranscript = (
   const firstLineBudget = Math.min(
     firstUserLine.length,
     RECAP_PRESERVED_FIRST_LINE_MAX_CHARS,
-    RECAP_TRANSCRIPT_MAX_CHARS - RECAP_OMISSION_MARKER.length,
+    maxChars - RECAP_OMISSION_MARKER.length,
   );
   const preservedFirstLine = truncateLine(firstUserLine, firstLineBudget);
   const tailBudget =
-    RECAP_TRANSCRIPT_MAX_CHARS -
-    RECAP_OMISSION_MARKER.length -
-    preservedFirstLine.length;
+    maxChars - RECAP_OMISSION_MARKER.length - preservedFirstLine.length;
   const tail = buildTailTranscript(lines, tailBudget);
   return `${preservedFirstLine}${RECAP_OMISSION_MARKER}${tail}`;
 };

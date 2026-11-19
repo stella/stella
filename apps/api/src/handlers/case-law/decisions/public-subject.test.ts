@@ -86,12 +86,14 @@ describe("public decision routes are gated by construction", () => {
       .toSorted();
     expect(gated).toEqual([
       "GET /case/decisions/:decisionId",
+      "GET /case/decisions/:decisionId/anchor-redirects",
       "GET /case/decisions/:decisionId/citations",
       "GET /case/decisions/:decisionId/citations/leading",
       "GET /case/decisions/:decisionId/citations/summary",
       "GET /case/decisions/:decisionId/provisions",
       "GET /case/decisions/:decisionId/summary",
       "GET /case/decisions/by-slug/:slug",
+      "POST /case/decisions/quotes/verify",
     ]);
   });
 });

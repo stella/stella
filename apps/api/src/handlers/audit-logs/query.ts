@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, gte, inArray, lt, lte, not } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -175,7 +175,9 @@ export const toAuditLogConditions = ({
       conditions.push(auditPeoplePerformerSql(auditLogs.performerType));
       break;
     case AUDIT_PERFORMER_FILTER.automations:
-      conditions.push(not(auditPeoplePerformerSql(auditLogs.performerType)));
+      conditions.push(
+        sql`not (${auditPeoplePerformerSql(auditLogs.performerType)})`,
+      );
       break;
     default:
       filter.performer satisfies never;

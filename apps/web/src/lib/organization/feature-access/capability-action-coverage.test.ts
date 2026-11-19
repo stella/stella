@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   type JSXElement,
@@ -292,7 +293,7 @@ describe("capability flow action declarations", () => {
     () => {
       const root = new URL("../../../", import.meta.url);
       const files = [
-        ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: root.pathname }),
+        ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: fileURLToPath(root) }),
       ].filter((file) => !file.includes(".test.") && !file.includes("/dev/"));
       expect(files.length).toBeGreaterThan(100);
       const missing = files.flatMap((file) =>

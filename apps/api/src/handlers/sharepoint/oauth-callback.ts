@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { SharepointOAuthCallbackReason } from "@stll/api-contract/sharepoint";
 import { Temporal } from "@stll/time";
 
 import {
@@ -42,7 +43,8 @@ const config = {
 } satisfies HandlerConfig;
 
 type CallbackRedirectInput =
-  { status: "connected" } | { status: "error"; reason: string };
+  | { status: "connected" }
+  | { status: "error"; reason: SharepointOAuthCallbackReason };
 
 const buildCallbackRedirectUrl = (
   frontendUrl: string,

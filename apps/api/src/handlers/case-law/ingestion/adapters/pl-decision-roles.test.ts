@@ -181,6 +181,35 @@ describe("Polish decisions sign under their ruling", () => {
     expect(roleFindings(blocks)).toEqual([]);
   });
 
+  test.each([
+    ["SAOS", async () => await saosBlocks("548531")],
+    [
+      "the court's portal",
+      async () => await ncourtBlocks("pl-ncourt-viii-gc-1117-25.xml.gz"),
+    ],
+  ])(
+    "VIII GC 1117/25 from %s: the judge signs as Sędzia under the ruling and under the reasons",
+    async (_, read) => {
+      const blocks = await read();
+
+      expect(withRole(blocks, "holding").at(-1)).toStartWith("IV. ");
+      expect(withRole(blocks, "signature")).toEqual([
+        "Sędzia Przemysław Kociński",
+        "Sędzia Przemysław Kociński",
+      ]);
+      expect(roleFindings(blocks)).toEqual([]);
+    },
+  );
+
+  test("IV GC 42/26: the court assessor signs the reasons as ASR", async () => {
+    const blocks = await saosBlocks("546903");
+
+    expect(withRole(blocks, "signature")).toEqual(["ASR Maciej Skuczyński"]);
+    expect(withRole(blocks, "argumentation")).not.toContain(
+      "ASR Maciej Skuczyński",
+    );
+  });
+
   test("KIO 1675/10: the chamber's label and its blank sign, and the spaced reasons heading opens the reasons", async () => {
     const blocks = await saosBlocks("116508");
     // The court prints the heading spaced out (`U z a s a d n i e n i e`).
@@ -537,5 +566,29 @@ describe("a Polish decision's head matter set as headings", () => {
       "Przewodniczący: Ewa Sikorska",
       "Protokolant: Aldona Karpińska",
     ]);
+  });
+});
+
+describe("a Polish common court's paragraph numbers", () => {
+  test("IV GC 42/26: the numbers printed in the reasons move into the paragraphs", async () => {
+    const numbered = paragraphs(await saosBlocks("546903")).filter(
+      (block) => block.number !== undefined,
+    );
+
+    expect(numbered.map((block) => block.number)).toEqual(
+      Array.from({ length: 19 }, (_, index) => index + 1),
+    );
+    expect(numbered[0]?.plainText).toStartWith("(...) sp. z o.o. pozwała");
+    expect(numbered.some((block) => /^\d+\. /u.test(block.plainText))).toBe(
+      false,
+    );
+  });
+
+  test("I C 155/19: the ruling's numbered points number no paragraph", async () => {
+    const blocks = await ncourtBlocks("pl-ncourt-i-c-155-19.xml.gz");
+
+    expect(
+      paragraphs(blocks).filter((block) => block.number !== undefined),
+    ).toEqual([]);
   });
 });

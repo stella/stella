@@ -1,10 +1,14 @@
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
-import { paginationCursorSchema } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import {
   SOFT_LAW_DOCUMENT_CLASS,
   SOFT_LAW_SEARCH_PAGE_SIZE_MAX,
@@ -41,7 +45,7 @@ const servedDocumentEntries = {
 
 const accessSchema = v.picklist(["text", "metadata"]);
 
-export const searchSoftLawBodySchema = v.strictObject({
+export const searchSoftLawQuerySchema = v.strictObject({
   query: v.pipe(
     v.string(),
     v.trim(),
@@ -54,12 +58,7 @@ export const searchSoftLawBodySchema = v.strictObject({
   dateFrom: v.optional(apiDateSchema),
   dateTo: v.optional(apiDateSchema),
   limit: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(1),
-      v.maxValue(SOFT_LAW_SEARCH_PAGE_SIZE_MAX),
-    ),
+    numberFromString(paginationLimitSchema(SOFT_LAW_SEARCH_PAGE_SIZE_MAX)),
   ),
   cursor: v.optional(paginationCursorSchema()),
 });

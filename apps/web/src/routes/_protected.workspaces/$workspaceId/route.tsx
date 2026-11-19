@@ -116,7 +116,14 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
           ),
         () =>
           detached(
-            prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError),
+            prefetchRouteQuery(
+              qc,
+              overviewOptions({
+                workspaceId: wsId,
+                organizationId: context.user.activeOrganizationId,
+              }),
+              onPrefetchError,
+            ),
             "workspaces.prefetch",
           ),
         () =>
@@ -281,7 +288,11 @@ function ActiveMatterRoute() {
   };
 
   // Subscribe to workspace SSE events for real-time query invalidation.
-  useWorkspaceSSE(workspaceId, { onEvent: handleWorkspaceSSEEvent });
+  const user = Route.useRouteContext({ select: (context) => context.user });
+  useWorkspaceSSE(workspaceId, {
+    onEvent: handleWorkspaceSSEEvent,
+    identity: { userId: user.id, organizationId: user.activeOrganizationId },
+  });
 
   // Register the matter's entities as `@`-mention sources for any
   // chat editor mounted inside this workspace (right-panel chat,

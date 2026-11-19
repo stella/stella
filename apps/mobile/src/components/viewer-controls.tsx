@@ -1,10 +1,11 @@
 import type { ComponentProps } from "react";
 
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import {
@@ -72,21 +73,20 @@ export const ViewerControls = ({
           onZoom(zoomedOut(zoom));
         }}
       />
-      <Pressable
+      <Button
         accessibilityLabel={t("zoomFit")}
-        accessibilityRole="button"
         accessibilityValue={{ text: level }}
-        className="active:opacity-60"
-        hitSlop={4}
+        className="min-w-14"
         onPress={() => {
           onZoom(FIT_ZOOM);
         }}
-        style={styles.level}
+        size="touch"
+        variant="ghost"
       >
         <Text numberOfLines={1} variant="label">
           {level}
         </Text>
-      </Pressable>
+      </Button>
       <ControlButton
         disabled={zoom >= (ZOOM_STEPS.at(-1) ?? FIT_ZOOM)}
         glyph="plus"
@@ -141,17 +141,15 @@ const ControlButton = ({
 }) => {
   const colors = useAppColors();
   return (
-    <Pressable
+    <Button
       accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      className="active:opacity-60"
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, disabled ? styles.disabled : null]}
+      size="icon"
+      variant="ghost"
     >
       <LucideGlyphs color={colors.text} name={glyph} size={20} />
-    </Pressable>
+    </Button>
   );
 };
 
@@ -169,20 +167,6 @@ const styles = StyleSheet.create({
   row: {
     alignItems: "center",
     flexDirection: "row",
-    paddingHorizontal: 4,
-  },
-  button: {
-    alignItems: "center",
-    height: BAR_HEIGHT,
-    justifyContent: "center",
-    width: BAR_HEIGHT,
-  },
-  disabled: {
-    opacity: 0.35,
-  },
-  level: {
-    alignItems: "center",
-    minWidth: 56,
     paddingHorizontal: 4,
   },
   divider: {

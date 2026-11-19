@@ -240,6 +240,18 @@ const reportStoredCorpusValidation = (
   });
 };
 
+/** The corpus operations a timeout names, each its own telemetry label. */
+const CORPUS_IO_TIMEOUT_LABEL = {
+  "corpus-delete": "corpus-delete",
+  "corpus-read-ast": "corpus-read-ast",
+  "corpus-read-sections": "corpus-read-sections",
+  "corpus-read-text": "corpus-read-text",
+  "corpus-write-ast": "corpus-write-ast",
+  "corpus-write-sections": "corpus-write-sections",
+  "corpus-write-text": "corpus-write-text",
+} as const;
+type CorpusIoLabel = keyof typeof CORPUS_IO_TIMEOUT_LABEL;
+
 /**
  * The single bounded boundary for every corpus object read/write/delete.
  * Bun's S3 convenience methods (`.file(key).bytes()`, `.write`, `.delete`)
@@ -250,7 +262,7 @@ const reportStoredCorpusValidation = (
  * is safe to retry.
  */
 const boundedCorpusIo = async <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   {
     signal,
@@ -258,7 +270,7 @@ const boundedCorpusIo = async <T>(
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> =>
   await withTimeout(operation, {
-    label,
+    label: CORPUS_IO_TIMEOUT_LABEL[label],
     ...(signal === undefined ? {} : { signal }),
     timeoutMs,
   });
@@ -325,7 +337,7 @@ type SettleCancellableCorpusIoGroupOptions = {
  * cleanup deleted it.
  */
 const startCancellableCorpusIo = <T>(
-  label: string,
+  label: CorpusIoLabel,
   operation: (signal: AbortSignal) => Promise<T>,
   options: CorpusIoOptions,
 ): StartedCorpusIo<T> => {

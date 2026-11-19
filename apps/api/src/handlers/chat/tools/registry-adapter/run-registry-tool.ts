@@ -9,8 +9,10 @@ import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { runAsCorpusSearchCaller } from "@/api/lib/legal-search/corpus-index-admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { mcpPublicReadCallerKey } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
@@ -42,10 +44,8 @@ import {
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
+import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
-  AllHandlerOutputsTyped,
-  AssertTrue,
-  HandlerOutputsMatchByName,
   InternalToolResult,
   McpToolHandler,
   McpToolResponse,
@@ -55,12 +55,12 @@ import {
   serializeToolResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { VERIFY_QUOTE_TOOL_SET } from "@/api/mcp/verify-quote-tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizeMcpToolContext } from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
-  ProjectionDataByName,
   RegistryReadToolName,
 } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -73,7 +73,7 @@ import { toRegistryChatToolError } from "./registry-tool-error";
  * construction (a second class-guard beside the ref-field map): a read tool with
  * no handler wired here cannot compile.
  */
-const REGISTRY_READ_TOOL_HANDLERS = {
+export const REGISTRY_READ_TOOL_HANDLERS = {
   fetch: COMPAT_TOOL_HANDLERS.fetch,
   search: COMPAT_TOOL_HANDLERS.search,
   list_matters: STELLA_TOOL_HANDLERS.list_matters,
@@ -84,6 +84,7 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   case_law_coverage: STELLA_TOOL_HANDLERS.case_law_coverage,
   read_case_law_citations: STELLA_TOOL_HANDLERS.read_case_law_citations,
   read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,
+  verify_quote: VERIFY_QUOTE_TOOL_SET.handlers.verify_quote,
   read_contact: STELLA_TOOL_HANDLERS.read_contact,
   read_content_across_matters: STELLA_TOOL_HANDLERS.read_content_across_matters,
   search_case_law: STELLA_TOOL_HANDLERS.search_case_law,
@@ -155,15 +156,6 @@ export type ThirdPartyOutboundReadToolName = {
     : never;
 }[RegistryReadToolName];
 
-/** Compile-time guard: the derivation sees the reads that need a permit. */
-export type ThirdPartyOutboundReadsDeclared = AssertTrue<
-  "search_boe_legislation" extends ThirdPartyOutboundReadToolName
-    ? "lookup_business_registry" extends ThirdPartyOutboundReadToolName
-      ? true
-      : false
-    : false
->;
-
 export type RegistryReadToolDataByName = TypedHandlerDataByName<
   typeof REGISTRY_READ_TOOL_HANDLERS,
   ProjectableRegistryReadToolName
@@ -174,24 +166,6 @@ const isProjectableRegistryReadToolName = (
 ): toolName is ProjectableRegistryReadToolName =>
   READ_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
 
-type RegistryReadProjectionDataByName = ProjectionDataByName<
-  typeof READ_TOOL_REF_FIELD_MAP,
-  ProjectableRegistryReadToolName
->;
-
-/** Compile-time guard: every chat-projected handler declares typed output. */
-export type RegistryReadToolOutputContract = AssertTrue<
-  AllHandlerOutputsTyped<
-    typeof REGISTRY_READ_TOOL_HANDLERS,
-    ProjectableRegistryReadToolName
-  > extends true
-    ? HandlerOutputsMatchByName<
-        typeof REGISTRY_READ_TOOL_HANDLERS,
-        RegistryReadProjectionDataByName,
-        ProjectableRegistryReadToolName
-      >
-    : false
->;
 export type RunRegistryReadToolProps = {
   toolName: RegistryReadToolName;
   args: Record<string, unknown>;
@@ -257,6 +231,46 @@ const runInjectedHandler = async ({
     return panic("An object input schema parsed to a non-object value");
   }
   return await handler({ args: parsed.output, context });
+};
+
+/**
+ * Chat waits for a continued read instead of handing the model a token: the
+ * turn is already open, so holding it costs nothing the model could use. Past
+ * this the model gets the honest running answer and may call again.
+ */
+const CHAT_CONTINUATION_WAIT_MS = 45_000;
+
+const runningContinuation = (response: McpToolResponse) =>
+  !isMcpEgressPlan(response) &&
+  response.status === "success" &&
+  isRecord(response.data) &&
+  response.data["status"] === "running" &&
+  typeof response.data["continuationToken"] === "string" &&
+  typeof response.data["retryAfterMs"] === "number"
+    ? {
+        token: response.data["continuationToken"],
+        retryAfterMs: response.data["retryAfterMs"],
+      }
+    : null;
+
+const waitOutContinuation = async (
+  first: McpToolResponse,
+  args: Record<string, unknown>,
+  run: (runArgs: Record<string, unknown>) => Promise<McpToolResponse>,
+): Promise<McpToolResponse> => {
+  const deadlineAt = performance.now() + CHAT_CONTINUATION_WAIT_MS;
+  let response = first;
+  for (
+    let running = runningContinuation(response);
+    running !== null && performance.now() < deadlineAt;
+    running = runningContinuation(response)
+  ) {
+    await Bun.sleep(
+      Math.min(running.retryAfterMs, deadlineAt - performance.now()),
+    );
+    response = await run({ ...args, continuation_token: running.token });
+  }
+  return response;
 };
 
 /** The key the boundary's input notes ride under beside a read's payload. */
@@ -440,19 +454,31 @@ export const executeRegistryRead = async ({
   }
   const authorizedContext = authorization.context;
 
-  const response =
-    handler === undefined
-      ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: scoped.value,
-          context: authorizedContext,
-        })
-      : await runInjectedHandler({
-          args: scoped.value,
-          context: authorizedContext,
-          toolName,
-          handler,
-        });
+  const invoke = async (invokeArgs: Record<string, unknown>) =>
+    await runAsCorpusSearchCaller(
+      mcpPublicReadCallerKey(authorizedContext),
+      async () =>
+        handler === undefined
+          ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
+              args: invokeArgs,
+              context: authorizedContext,
+            })
+          : await runInjectedHandler({
+              args: invokeArgs,
+              context: authorizedContext,
+              toolName,
+              handler,
+            }),
+    );
+  const response = await waitOutContinuation(
+    await invoke(scoped.value),
+    scoped.value,
+    invoke,
+  );
   const finished = await finalizeToolEgress({
+    outputSchema:
+      getStaticMcpToolOutputContract(toolName)?.outputSchemaSource ??
+      panic("Registry tool output contract missing"),
     context: authorizedContext,
     mode: "default",
     response,

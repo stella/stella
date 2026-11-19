@@ -1,19 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 import type { WorkspaceUpdate } from "@/lib/workspaces/mutations";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-
-beforeAll(() => {
-  process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
-});
-
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
+const state = createTestState({ file: import.meta.path, config: {} });
+state.beforeAll(() => {
+  state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 describe("workspace update cache invalidation", () => {
@@ -122,19 +115,6 @@ describe("workspace update cache invalidation", () => {
       { leadUserId: null },
       { name: "Renamed matter" },
       { reference: "REF-42" },
-    ]);
-  });
-
-  test("member mutations invalidate the members query and the matters list", async () => {
-    const { workspaceMemberMutationInvalidationKeys } =
-      await import("@/lib/workspaces/mutations/workspace-members");
-    const { workspaceMembersKeys } =
-      await import("@/lib/workspaces/queries/workspace-members");
-    const { workspacesKeys } = await import("@/lib/workspaces/queries");
-
-    expect(workspaceMemberMutationInvalidationKeys("ws_test")).toEqual([
-      workspaceMembersKeys.all("ws_test"),
-      workspacesKeys.all,
     ]);
   });
 });

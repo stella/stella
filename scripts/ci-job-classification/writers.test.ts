@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -69,6 +69,8 @@ const classifiedFixture = (
 };
 
 const CONTENTS_WRITE = `    permissions:\n      contents: write\n${RUN_STEP}`;
+const SIGNED_COMMIT =
+  "    steps:\n      - uses: stella/.github/.github/actions/signed-commit@0000000000000000000000000000000000000000";
 const writerJobs = [
   ["contents write permission", CONTENTS_WRITE],
   ["write-all permissions", `    permissions: write-all\n${RUN_STEP}`],
@@ -76,10 +78,7 @@ const writerJobs = [
     "an app token requesting contents write",
     "    steps:\n      - uses: actions/create-github-app-token@0000000000000000000000000000000000000000\n        with:\n          permission-contents: write",
   ],
-  [
-    "the signed-commit action",
-    "    steps:\n      - uses: stella/.github/.github/actions/signed-commit@0000000000000000000000000000000000000000",
-  ],
+  ["the signed-commit action", SIGNED_COMMIT],
 ] as const;
 
 test.each(writerJobs)("a job with %s writes the repository", (_, job) => {
@@ -165,6 +164,23 @@ test("pull-request write alone publishes nothing", () => {
   expect([...jobs.values()].map((derived) => derived.writesRepository)).toEqual(
     [false],
   );
+});
+
+test("a repository writer owes a review without any token permission", () => {
+  // The signed-commit action writes with its own credential, so no
+  // permission, secret or runner marks the job privileged otherwise.
+  const { root, jobs } = classifiedFixture(SIGNED_COMMIT, "priority");
+  expect([...jobs.values()].map((derived) => derived.privileged)).toEqual([
+    true,
+  ]);
+  rmSync(path.join(root, ".github/ci-job-classification-decisions"), {
+    recursive: true,
+  });
+  const refused = checkJobClassification(root);
+  expect(refused.isErr()).toBe(true);
+  if (refused.isErr()) {
+    expect(refused.error.message).toContain("Missing or changed job review");
+  }
 });
 
 test("a repository writer must be classified priority", () => {

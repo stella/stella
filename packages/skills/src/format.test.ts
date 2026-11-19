@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import {
   hashSkillEntrypoint,
   hashSkillPackage,
+  isKnownBinaryResourcePath,
+  readSkillResourceReferences,
+  SKILL_PACKAGE_LIMITS,
+  SKILL_PACKAGE_RESOURCE_PATH_PATTERN,
   validateSkillPackage,
 } from "./format";
 
@@ -46,32 +52,233 @@ describe("skill package format", () => {
     }
   });
 
-  test("returns ancillary files as skipped without invalidating the package", () => {
+  test("keeps files in any folder and any case, as the Agent Skills spec allows", () => {
     const result = validateSkillPackage({
       files: [
-        { path: "skill/SKILL.md", content: skill() },
+        {
+          path: "skill/SKILL.md",
+          content: skill("Read `references/REFERENCE.md` and `docs/Guide.md`."),
+        },
         { path: "skill/README.md", content: "Read me" },
-        { path: "skill/LICENSE.txt", content: "License" },
+        { path: "skill/LICENSE", content: "License" },
         { path: "skill/notes/context.md", content: "Nested notes" },
-        { path: "skill/knowledge/context.md", content: "Legacy folder" },
+        { path: "skill/references/REFERENCE.md", content: "Reference" },
+        { path: "skill/docs/Guide.md", content: "Guide" },
+        { path: "skill/agents/openai.yaml", content: "interface: {}" },
+        { path: "skill/references/Smlouva o dílo.md", content: "Text" },
       ],
       tools: { type: "deferred" },
     });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(
-        result.value.skipped.map(({ path, reason }) => ({
-          path: `skill/${path}`,
-          reason,
-        })),
-      ).toEqual([
-        { path: "skill/README.md", reason: "folder" },
-        { path: "skill/LICENSE.txt", reason: "folder" },
-        { path: "skill/notes/context.md", reason: "folder" },
-        { path: "skill/knowledge/context.md", reason: "folder" },
+      expect(result.value.skipped).toEqual([]);
+      expect(result.value.resources.map(({ path }) => path)).toEqual([
+        "LICENSE",
+        "README.md",
+        "agents/openai.yaml",
+        "docs/Guide.md",
+        "notes/context.md",
+        "references/REFERENCE.md",
+        "references/Smlouva o dílo.md",
       ]);
     }
+  });
+
+  test("reports binary files as skipped and drops OS metadata unreported", () => {
+    const result = validateSkillPackage({
+      files: [
+        {
+          path: "skill/SKILL.md",
+          content: skill("Use `assets/logo.png` and `assets/table.dat`."),
+        },
+        { path: "skill/assets/logo.png", content: "\u0089PNG" },
+        { path: "skill/assets/table.dat", content: "a\0b" },
+        { path: "skill/.DS_Store", content: "Bud1\0" },
+        { path: "skill/references/._check.md", content: "\0" },
+        { path: "skill/references/check.md", content: "check" },
+      ],
+      tools: { type: "deferred" },
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.skipped).toEqual([
+        { path: "assets/logo.png", reason: "extension" },
+        { path: "assets/table.dat", reason: "binary" },
+      ]);
+      expect(result.value.resources.map(({ path }) => path)).toEqual([
+        "references/check.md",
+      ]);
+    }
+  });
+
+  test("does not take a reference to a file the caller skipped for missing", () => {
+    const files = [
+      { path: "skill/SKILL.md", content: skill("Load `data/rates.dat`.") },
+      { path: "skill/data/notes.md", content: "Notes" },
+    ];
+    expect(
+      validateSkillPackage({ files, tools: { type: "deferred" } }).isErr(),
+    ).toBe(true);
+    expect(
+      validateSkillPackage({
+        files,
+        skippedPaths: new Set(["data/rates.dat"]),
+        tools: { type: "deferred" },
+      }).isOk(),
+    ).toBe(true);
+  });
+
+  test("refuses paths that are unsafe to store, serve or unpack", () => {
+    for (const path of [
+      "references/../escape.md",
+      "references/./here.md",
+      "references//double.md",
+      "references/tab\there.md",
+      "references/new\nline.md",
+      "references/bidi\u202eexe.md",
+      "references/colon:name.md",
+      "references/star*.md",
+      "references/question?.md",
+      "references/pipe|name.md",
+      'references/quote"name.md',
+      "references/angle<name>.md",
+      "references/ leading.md",
+      "references/trailing.md ",
+      "references/trailing-dot.",
+      "references/trailing dot folder./a.md",
+    ]) {
+      expect(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)).toBe(false);
+    }
+    for (const path of [
+      "Guide.md",
+      "LICENSE",
+      ".gitignore",
+      "references/REFERENCE.md",
+      "references/Smlouva o dílo.md",
+      "references/v1.2/notes.md",
+      "references/c#.md",
+      "references/50%.md",
+      "assets/template (copy).txt",
+    ]) {
+      expect(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)).toBe(true);
+    }
+  });
+
+  test("treats paths that differ only in case or Unicode form as one file", () => {
+    expect(
+      diagnosticTypes([
+        { path: "skill/SKILL.md", content: skill() },
+        { path: "skill/references/a.md", content: "one" },
+        { path: "skill/references/A.md", content: "two" },
+      ]),
+    ).toEqual(["resource_duplicate"]);
+    expect(
+      diagnosticTypes([
+        { path: "skill/SKILL.md", content: skill() },
+        { path: "skill/skill.md", content: "shadow" },
+      ]),
+    ).toEqual(["resource_duplicate"]);
+    expect(
+      diagnosticTypes([
+        { path: "skill/SKILL.md", content: skill() },
+        { path: "skill/references/d\u00edlo.md", content: "composed" },
+        { path: "skill/references/di\u0301lo.md", content: "decomposed" },
+      ]),
+    ).toEqual(["resource_duplicate"]);
+  });
+
+  test("rejects a file at a path another file needs as its folder", () => {
+    for (const order of [
+      ["skill/docs", "skill/docs/guide.md"],
+      ["skill/docs/guide.md", "skill/docs"],
+      ["skill/Docs/guide.md", "skill/docs"],
+      ["skill/skill.md/guide.md"],
+    ]) {
+      expect(
+        diagnosticTypes([
+          { path: "skill/SKILL.md", content: skill() },
+          ...order.map((path) => ({ path, content: "text" })),
+        ]),
+        order.join(" + "),
+      ).toEqual(["resource_duplicate"]);
+    }
+    expect(
+      validateSkillPackage({
+        files: [
+          { path: "skill/SKILL.md", content: skill() },
+          { path: "skill/docs/a.md", content: "a" },
+          { path: "skill/docs/b.md", content: "b" },
+          { path: "skill/docs/sub/c.md", content: "c" },
+        ],
+        tools: { type: "deferred" },
+      }).isOk(),
+    ).toBe(true);
+  });
+
+  test("an entry point read without its folder names files it cannot check", () => {
+    const files = [
+      { path: "SKILL.md", content: skill("Run `scripts/helper.js`.") },
+    ];
+    expect(
+      validateSkillPackage({ files, tools: { type: "deferred" } }).isErr(),
+    ).toBe(true);
+    expect(
+      validateSkillPackage({
+        entrypointOnly: true,
+        files,
+        tools: { type: "deferred" },
+      }).isOk(),
+    ).toBe(true);
+  });
+
+  test("checks references only into folders the package uses", () => {
+    expect(
+      validateSkillPackage({
+        files: [
+          {
+            path: "skill/SKILL.md",
+            content: skill(
+              "Edit `src/index.ts`, see `https://example.test/a.md`, " +
+                "`references/check.md#usage` and `docs/*.md`.",
+            ),
+          },
+          { path: "skill/references/check.md", content: "check" },
+        ],
+        tools: { type: "deferred" },
+      }).isOk(),
+    ).toBe(true);
+    expect(
+      diagnosticTypes([
+        { path: "skill/SKILL.md", content: skill("Read `docs/missing.md`.") },
+        { path: "skill/docs/present.md", content: "present" },
+      ]),
+    ).toEqual(["resource_reference_missing"]);
+    expect(
+      readSkillResourceReferences("`Docs/Guide.md` and `a b/c.md`"),
+    ).toEqual(["Docs/Guide.md"]);
+  });
+
+  test("api-contract holds the same path grammar for browsers", () => {
+    // @stll/api-contract cannot import this package, so it carries a copy.
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "../../api-contract/src/agent-skills.ts"),
+      "utf-8",
+    );
+    const copy =
+      /export const SKILL_RESOURCE_PATH_PATTERN =\s*\/(.+)\/u;/u.exec(
+        source,
+      )?.[1];
+    expect(copy).toBe(SKILL_PACKAGE_RESOURCE_PATH_PATTERN.source);
+  });
+
+  test("knows binary files by extension in any case", () => {
+    expect(isKnownBinaryResourcePath("assets/Logo.PNG")).toBe(true);
+    expect(isKnownBinaryResourcePath("assets/report.pdf")).toBe(true);
+    expect(isKnownBinaryResourcePath("assets/diagram.svg")).toBe(false);
+    expect(isKnownBinaryResourcePath("assets/.png")).toBe(false);
+    expect(isKnownBinaryResourcePath("scripts/run")).toBe(false);
   });
 
   test("defers tool registry checks while enforcing the required-tool limit", () => {
@@ -98,6 +305,41 @@ describe("skill package format", () => {
       expect(
         result.error.some(({ type }) => type === "required_tool_unknown"),
       ).toBe(false);
+    }
+  });
+
+  test("stores a resource up to the resource cap and refuses one past it", () => {
+    const limit = SKILL_PACKAGE_LIMITS.resourceMaxChars;
+    // A text larger than one model window still fits a single stored file.
+    expect(limit).toBeGreaterThan(
+      SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
+    );
+    // Every file at the cap, in its widest UTF-8 form, fits one pack.
+    expect(limit * 4).toBeLessThanOrEqual(
+      SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
+    );
+    const validate = (content: string) =>
+      validateSkillPackage({
+        files: [
+          { path: "skill/SKILL.md", content: skill() },
+          { path: "skill/references/commentary.txt", content },
+        ],
+        tools: { type: "deferred" },
+      });
+
+    const atCap = validate("a".repeat(limit));
+    expect(atCap.isOk()).toBe(true);
+    if (atCap.isOk()) {
+      expect(atCap.value.resources.at(0)?.content.length).toBe(limit);
+    }
+    const pastCap = validate("a".repeat(limit + 1));
+    expect(pastCap.isErr()).toBe(true);
+    if (pastCap.isErr()) {
+      expect(pastCap.error).toContainEqual({
+        type: "limit_exceeded",
+        field: "references/commentary.txt",
+        limit,
+      });
     }
   });
 
@@ -185,8 +427,8 @@ describe("skill package format", () => {
           .replace("example-skill", "Invalid Name")
           .replace("Example\nmetadata", "Example\u202e\nmetadata"),
       },
-      { path: "skill/references/UPPER.md", content: "invalid path" },
-      { path: "skill/references/file.exe", content: "invalid extension" },
+      { path: "skill/references/bad:name.md", content: "invalid path" },
+      { path: "skill/references/file.exe", content: "skipped, binary" },
       { path: "skill/references/ok.md", content: "one" },
       { path: "skill/references/ok.md", content: "two" },
     ]);

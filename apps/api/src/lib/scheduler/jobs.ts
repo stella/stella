@@ -4,12 +4,14 @@ import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
+import type { AggregateIdentities } from "@/api/lib/db/aggregate-lock-entries/identities.gen";
 import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
@@ -26,6 +28,7 @@ import {
   SCHEDULER_BACKFILL_IDS,
   SCHEDULER_REPAIR_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
+import { reconcileFlowSchedule } from "@/api/lib/scheduler/reconcile-flow-schedule";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
@@ -51,12 +54,16 @@ import {
 } from "@/api/lib/scheduler/tasks/case-law-raw-storage";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import { SWEEP_CHAT_COMMAND_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
+import { SEND_CHAT_LIMIT_REMINDERS_TASK } from "@/api/lib/scheduler/tasks/chat-limit-reminders";
 import { SWEEP_CHAT_RUN_LOGS_TASK } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
 import { PURGE_CHAT_SECRETS_TASK } from "@/api/lib/scheduler/tasks/chat-secret-retention";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
+import { MAINTAIN_DATA_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
@@ -89,7 +96,6 @@ import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
-import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
@@ -169,7 +175,7 @@ export const ensureSchedulerJob = async (
 
 export const upsertSchedulerJob = async (
   definition: SchedulerJobDefinition,
-  db: SchedulerDb,
+  db: Pick<Transaction, "select" | "insert">,
 ): Promise<void> => {
   const {
     description,
@@ -219,10 +225,14 @@ export const upsertSchedulerJob = async (
     });
 };
 
-/** Drop one job's row, the counterpart of `ensureSchedulerJob`. */
-export const removeSchedulerJob = async (id: string): Promise<void> => {
-  await rootDb.delete(schedulerJobs).where(eq(schedulerJobs.id, id));
-};
+/** Reconcile one committed definition without exposing the scheduler connection. */
+export const reconcileCommittedFlowSchedule = async (
+  identity: AggregateIdentities["definition"],
+): Promise<void> =>
+  await reconcileFlowSchedule(identity, {
+    database: rootDb,
+    upsert: upsertSchedulerJob,
+  });
 
 const ensureOneShotSchedulerJob = async ({
   description,
@@ -420,6 +430,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     reads: { budget: "scheduled.caseLaw.refreshSitemapShards" },
+  },
+  {
+    description:
+      "Fold newer case-law decision timestamps into the public sitemap shards",
+    id: SCHEDULER_BACKFILL_IDS.sitemapTouches,
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK,
+    reads: "load-governed",
   },
   {
     // Hourly: nothing alarms on these gauges at a finer resolution, and a
@@ -687,6 +707,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
+    description:
+      "Tell members who asked that their computer's agent usage limit reset",
+    id: "chat.sendLimitReminders.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: SEND_CHAT_LIMIT_REMINDERS_TASK,
+    reads: { budget: "scheduled.chat.sendLimitReminders" },
+  },
+  {
     description: "Delete expired unused registrations",
     id: "auth.sweepRegistrations.hour",
     mode: "recurring",
@@ -732,6 +761,14 @@ export const DECLARED_SCHEDULER_JOBS = [
       env.ACTION_COST_RETENTION_DAYS !== undefined,
   },
   {
+    description: "Delete chat command receipts past their retention",
+    id: "chat.sweepCommandReceipts.tenMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 10 * 60 * 1000 },
+    task: SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
+    reads: { budget: "scheduled.chat.sweepCommandReceipts" },
+  },
+  {
     description: "Delete expired closed chat run logs",
     id: "chat.sweepRunLogs.minute",
     mode: "recurring",
@@ -748,7 +785,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive document review runs no queued job owns anymore",
+    description:
+      "Fail stuck document review runs and re-drive the ones no queued job owns anymore",
     id: "documentReviews.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -756,7 +794,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Re-drive list verification runs no queued job owns anymore",
+    description:
+      "Fail stuck list verification and fact extraction runs and re-drive the ones no queued job owns anymore",
     id: "listVerifications.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
@@ -780,6 +819,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_REPORT_EXPORTS_TASK,
     reads: "unmeasured",
+  },
+  {
+    description:
+      "Delete expired data export files, fail stalled export runs, and requeue lost export jobs",
+    id: "dataExports.maintain.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: MAINTAIN_DATA_EXPORTS_TASK,
+    reads: { budget: "scheduled.dataExports.maintain" },
   },
   {
     description: "Delete style set packages a replacement left behind",
@@ -833,15 +881,6 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60_000 },
     task: DRAIN_SANCTIONS_MONITORING_TASK,
-    reads: "unmeasured",
-  },
-  {
-    description: "Sync regulator guidance from served sources",
-    enabled: env.SOFT_LAW_SYNC_ENABLED,
-    id: "softLaw.sync.daily",
-    mode: "recurring",
-    schedule: { type: "interval", everyMs: DAY_IN_MS },
-    task: SYNC_SOFT_LAW_TASK,
     reads: "unmeasured",
   },
   {

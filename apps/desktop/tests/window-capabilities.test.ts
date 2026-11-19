@@ -45,15 +45,21 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/mainview/LocalSkillFoldersSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
+    "src/mainview/SigningDriverSection.tsx",
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
   ],
   "src-tauri/capabilities/accessibility-guide.json": [
     "src/onboarding/AccessibilityGuideApp.tsx",
   ],
+  "src-tauri/capabilities/transcribe.json": [
+    "src/transcribe/TranscribeApp.tsx",
+    "src/transcribe/TranscribeMatterPicker.tsx",
+  ],
   "src-tauri/capabilities/onboarding.json": [
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",
+    "src/onboarding/use-dictation.ts",
     "src/onboarding/HowItWorksStep.tsx",
     "src/onboarding/PermissionsStep.tsx",
     "src/onboarding/TryItStep.tsx",
@@ -122,6 +128,10 @@ const OVERLAY_TITLE_BAR_WINDOWS = {
   "src-tauri/src/pdf_signing.rs": {
     capability: "src-tauri/capabilities/pdf-sign-dialog.json",
     page: "src/mainview/pdf-sign-dialog.html",
+  },
+  "src-tauri/src/transcribe_window.rs": {
+    capability: "src-tauri/capabilities/transcribe.json",
+    page: "src/transcribe/TranscribeApp.tsx",
   },
 } as const satisfies Record<string, { capability: string; page: string }>;
 

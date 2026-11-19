@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -7,14 +7,20 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauseCategories, clauses } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { listClausesHandler } from "@/api/handlers/clauses/read";
+import {
+  listClausesHandler,
+  listClausesQuerySchema,
+} from "@/api/handlers/clauses/read";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -135,7 +141,10 @@ describe("clause cursor ordering", () => {
         organizationId: ids.orgA,
         query: {
           categoryId,
-          cursor: "2026-07-10T08:15:30.123456|not-a-uuid",
+          cursor: encodePaginationCursor([
+            "2026-07-10T08:15:30.123456",
+            "not-a-uuid",
+          ]),
         },
       }),
     );
@@ -143,6 +152,74 @@ describe("clause cursor ordering", () => {
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error).toMatchObject({ status: 400 });
+    }
+  });
+});
+
+describe("clause search admission", () => {
+  test("preserves the maximum query and refuses the next character", () => {
+    const query = "gov".padEnd(LIMITS.searchQueryMaxLength, " ");
+    expect(v.parse(listClausesQuerySchema, { q: query }).q).toBe(query);
+    expect(
+      v.safeParse(listClausesQuerySchema, { q: `${query}x` }).success,
+    ).toBe(false);
+  });
+
+  test("accepted queries retain prefix, substring and search cursor behavior", async () => {
+    const rows = await seedClausesWithinOneMillisecond(2);
+    const titleMatch = rows.at(0) ?? panic("Search fixture has a title match");
+    const contentMatch =
+      rows.at(1) ?? panic("Search fixture has a content match");
+    await testDb
+      .update(clauses)
+      .set({
+        title: "Alpha governing clause",
+        searchVector: sql`to_tsvector('english', '')`,
+      })
+      .where(eq(clauses.id, titleMatch.id));
+    await testDb
+      .update(clauses)
+      .set({
+        title: "Zulu terms",
+        searchVector: sql`to_tsvector('english', 'Governing obligations')`,
+      })
+      .where(eq(clauses.id, contentMatch.id));
+
+    const readContext = { safeDb, organizationId: ids.orgA };
+    for (const { q, limit, expectedIds } of [
+      {
+        q: "gov".padEnd(LIMITS.searchQueryMaxLength, " "),
+        limit: 10,
+        expectedIds: [contentMatch.id],
+      },
+      {
+        q: "vern",
+        limit: 10,
+        expectedIds: [titleMatch.id],
+      },
+      {
+        q: "gov",
+        limit: 1,
+        expectedIds: [titleMatch.id],
+      },
+    ]) {
+      const query = v.parse(listClausesQuerySchema, {
+        categoryId,
+        q,
+        limit: String(limit),
+        cursor: "ignored-while-searching",
+      });
+      expect(query.q).toBe(q);
+      const result = await Result.gen(() =>
+        listClausesHandler({
+          ...readContext,
+          query,
+        }),
+      );
+      const page = result.unwrap();
+      expect(page.items.map(({ id }) => id)).toEqual(expectedIds);
+      expect(page.limit).toBe(limit);
+      expect(page.nextCursor).toBeNull();
     }
   });
 });

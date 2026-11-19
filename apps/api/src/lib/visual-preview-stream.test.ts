@@ -98,7 +98,7 @@ describe("transient preview wire projection", () => {
           timestamp: 3,
           type: EventType.TOOL_CALL_END,
           toolCallId: "ordinary-call",
-          toolName: "example_image",
+          toolCallName: "example_image",
           input: {},
           output,
           result: output,
@@ -138,7 +138,7 @@ describe("transient preview wire projection", () => {
     const chunk = {
       type: EventType.TOOL_CALL_END,
       toolCallId: "preview-call",
-      toolName: VISUAL_PREVIEW_TOOL_NAME,
+      toolCallName: VISUAL_PREVIEW_TOOL_NAME,
       output,
       result: output,
       timestamp: 1,
@@ -338,7 +338,7 @@ describe("transient preview wire projection", () => {
     const chunks = normalizeStreamChunk({
       type: EventType.TOOL_CALL_END,
       toolCallId: "other-call",
-      toolName: "example_image",
+      toolCallName: "example_image",
       output,
       result: output,
     });
@@ -349,7 +349,7 @@ describe("transient preview wire projection", () => {
     const chunks = normalizeStreamChunk({
       type: EventType.TOOL_CALL_END,
       toolCallId: "preview-call",
-      toolName: VISUAL_PREVIEW_TOOL_NAME,
+      toolCallName: VISUAL_PREVIEW_TOOL_NAME,
       output: [
         {
           type: "image",
@@ -385,7 +385,7 @@ describe("transient preview wire projection", () => {
           yield* normalizeStreamChunk({
             type: EventType.TOOL_CALL_END,
             toolCallId: "preview-call",
-            toolName: VISUAL_PREVIEW_TOOL_NAME,
+            toolCallName: VISUAL_PREVIEW_TOOL_NAME,
             output: [
               {
                 type: "image",
@@ -427,7 +427,7 @@ describe("transient preview wire projection", () => {
       const cleanTurn = normalizeStreamChunk({
         type: EventType.TOOL_CALL_END,
         toolCallId: "preview-call",
-        toolName: "example_image",
+        toolCallName: "example_image",
         output,
         result: output,
       });

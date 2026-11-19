@@ -2,11 +2,20 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
+  section5Filed,
+  section5Text,
+  section5Unfiled,
+} from "@stll/legal-ast/fixtures/cz-435-2004-section-5";
+import {
   E_SBIRKA_ANCHORS,
   SLOV_LEX_ANCHORS,
 } from "@stll/legal-ast/statute-anchor-scheme";
 
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import {
+  extractProvisionText,
+  readProvision,
+} from "@/api/handlers/legislation/provision-text";
+import { LIMITS } from "@/api/lib/limits";
 
 /** Written as an escape so the fixture text is unambiguous in review. */
 const SECTION_SIGN = "\u00a7";
@@ -240,4 +249,72 @@ describe("extractProvisionText: Slov-Lex subdivision anchors", () => {
       ),
     ).toBeNull();
   });
+});
+
+describe("a read of § 5 písm. e) of the Employment Act", () => {
+  test("returns the sentence the publisher files under the letter", () => {
+    const reading = readProvision(czech(section5Filed), "par_5-pism_e");
+    expect(reading?.text.endsWith(section5Text.closing)).toBe(true);
+    expect(reading?.governing).toEqual([
+      {
+        anchor: "par_5-frag_6062863",
+        position: "lead-in",
+        text: section5Text.leadIn,
+      },
+    ]);
+  });
+
+  test("surfaces an unfiled closing sentence beside the letter instead of dropping it", () => {
+    const reading = readProvision(czech(section5Unfiled), "par_5-pism_e");
+    expect(reading?.text).not.toContain(section5Text.closing);
+    expect(reading?.governing).toEqual([
+      {
+        anchor: "frag_6062863",
+        position: "lead-in",
+        text: section5Text.leadIn,
+      },
+      {
+        anchor: "frag_6070235",
+        position: "closing",
+        text: section5Text.closing,
+      },
+    ]);
+  });
+
+  test("every block is readable by its own anchor or a unique tail of it", () => {
+    for (const stream of [section5Filed, section5Unfiled]) {
+      for (const block of stream) {
+        const own = readProvision(czech(stream), block.anchorId);
+        expect({
+          anchor: block.anchorId,
+          reads: own?.text.includes(block.plainText),
+        }).toEqual({
+          anchor: block.anchorId,
+          reads: true,
+        });
+      }
+    }
+    // A link written against the bare publisher id still reaches the filed
+    // wording.
+    expect(readProvision(czech(section5Filed), "frag_6070235")?.text).toBe(
+      section5Text.closing,
+    );
+  });
+});
+
+test("governing wording past its bound is flagged, never cut silently", () => {
+  const leadIns = Array.from(
+    { length: LIMITS.legislationGoverningTextMax + 3 },
+    (_, index) =>
+      paragraph(`par_9-frag_${String(1000 + index)}`, `Line ${String(index)}`),
+  );
+  const statute = czech([
+    heading("par_9", 2, "§ 9"),
+    ...leadIns,
+    paragraph("par_9-pism_a", "a) letter"),
+  ]);
+  const reading = readProvision(statute, "par_9-pism_a");
+  expect(reading?.governing).toHaveLength(LIMITS.legislationGoverningTextMax);
+  expect(reading?.governingTruncated).toBe(true);
+  expect(readProvision(statute, "par_9")?.governingTruncated).toBe(false);
 });

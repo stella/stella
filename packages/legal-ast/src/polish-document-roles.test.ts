@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   containsPlOperativeVerb,
@@ -332,6 +335,104 @@ describe("a Polish head-matter line", () => {
         "po rozpoznaniu na rozprawie w dniu 1 lutego 2022 roku",
       ),
     ).toBe(false);
+  });
+});
+
+describe("a Polish signature by title and name", () => {
+  // Lines the recorded common-court decisions sign with.
+  test.each([
+    "Sędzia Przemysław Kociński",
+    "ASR Maciej Skuczyński",
+    "Sędzia SO Roman Troll (spr.)",
+    "Sędzia Sądu Okręgowego Leszek Dąbek",
+    "sędzia Barbara Pyz-Kędzierska",
+    "asesor sądowy Aleksandra Zubowicz",
+    "Przewodniczący - Sędzia SO Magdalena Balion - Hajduk",
+    "Przewodniczący – SSR Tomasz Zieliński",
+    "Przewodnicząca Sędzia SR A. S.",
+    "SSR (del.) Sławomir Łabuz SSO Arkadia Wyraz – Wieczorek SSO Roman Troll",
+    "SSA w SO Andrzej Szawel",
+    "SSN Józef Dołhy (przewodniczący)",
+    "Sędzia NSA Anna Nowak",
+    "Referendarz sądowy Jan Kowalski",
+    "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
+    "Sędzia sprawozdawca:",
+  ])("signs: %p", (line) => {
+    expect(isPlSignatureLine(line)).toBe(true);
+  });
+
+  test.each([
+    // A sentence that opens on a title or office is the text, not a signature.
+    "Prezes Urzędu ustalił następujący stan faktyczny:",
+    "Prezes Urzędu ustalił, co następuje:",
+    "Prezes Urzędu Ochrony Konkurencji i Konsumentów zważył, co następuje.",
+    "Prezes Urzędu zważył, co następuje",
+    "Prezes Urzędu zakwestionował następujące postanowienia wzorca umowy zamówienie:",
+    "Sędzia Jan Kowalski wskazał, że apelacja jest zasadna.",
+    // Titles with no name, or a head-matter line naming the bench.
+    "Sędzia NSA Sędzia NSA Sędzia NSA",
+    "Sędzia Przewodniczący Sędzia",
+    "Przewodniczący SSN Krystyna Bednarczyk (sprawozdawca), Sędziowie SN:",
+    "Przewodniczący: Anna Kowalska",
+    // A clerk signs no decision.
+    "Starszy sekretarz sądowy Monika Nalewajk",
+  ])("does not sign: %p", (line) => {
+    expect(isPlSignatureLine(line)).toBe(false);
+  });
+
+  const TITLES = [
+    "SSO",
+    "SSA del.",
+    "Sędzia",
+    "Sędzia SR",
+    "Sędzia Sądu Apelacyjnego",
+    "ASR",
+    "Asesor sądowy",
+    "Referendarz sądowy",
+    "Przewodnicząca Sędzia SO",
+  ];
+  const nameWord = fc
+    .tuple(
+      fc.constantFrom("A", "B", "Ć", "K", "Ł", "M", "Ż"),
+      fc.stringMatching(/^[a-ząćęłńóśźż]{1,9}$/u),
+    )
+    .map(([initial, rest]) => `${initial}${rest}`);
+  const name = fc.array(nameWord, { minLength: 1, maxLength: 3 });
+  const verb = fc.constantFrom(
+    "ustalił,",
+    "zważył,",
+    "wskazał",
+    "zasądza",
+    "oddala",
+    "stwierdził,",
+  );
+
+  test("a title and a name and nothing else sign", () => {
+    assertProperty(
+      "a title and a name and nothing else sign",
+      fc.property(fc.constantFrom(...TITLES), name, (title, words) =>
+        isPlSignatureLine(`${title} ${words.join(" ")}`),
+      ),
+    );
+  });
+
+  test("a title and a name running on into a sentence sign nothing", () => {
+    assertProperty(
+      "a title and a name running on into a sentence sign nothing",
+      fc.property(
+        fc.constantFrom(...TITLES),
+        name,
+        verb,
+        fc.array(
+          fc.constantFrom("co", "następuje:", "że", "apelację", "kwotę"),
+          {
+            maxLength: 4,
+          },
+        ),
+        (title, words, said, rest) =>
+          !isPlSignatureLine([title, ...words, said, ...rest].join(" ")),
+      ),
+    );
   });
 });
 

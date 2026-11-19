@@ -75,7 +75,6 @@ test("shared writes require a trusted event and a validated scheduled main ident
     "merge_group",
     "schedule",
     "pull_request",
-    "pull_request_target",
     "workflow_dispatch",
     "workflow_run",
   ]) {

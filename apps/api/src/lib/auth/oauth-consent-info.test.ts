@@ -5,6 +5,7 @@ import {
   buildMobileClientMetadataDocument,
   mobileClientMetadataUrl,
 } from "@stll/api-contract/mobile-client";
+import { outlookClientMetadataUrl } from "@stll/api-contract/outlook-client";
 import {
   buildCliClientMetadataDocument,
   cliClientMetadataUrl,
@@ -56,6 +57,10 @@ const CLAUDE_HOSTED_DOCUMENT =
   "https://claude.ai/oauth/mcp-oauth-client-metadata";
 const MOBILE_DOCUMENT = mobileClientMetadataUrl("https://stella.example") ?? "";
 const CLI_DOCUMENT = cliClientMetadataUrl("https://stella.example") ?? "";
+const OUTLOOK_DOCUMENT =
+  outlookClientMetadataUrl("https://stella.example") ?? "";
+// The task-pane origin the API test environment configures.
+const OUTLOOK_CALLBACK = "https://outlook.stella.example/auth/callback.html";
 const CONNECTOR_DOCUMENT =
   "https://stella.example/v1/mcp/oauth/client-metadata.json";
 const CONNECTOR_CALLBACK = "https://stella.example/v1/mcp/oauth/callback";
@@ -75,6 +80,11 @@ const FIRST_PARTY_DOCUMENTS = {
       ...buildMobileClientMetadataDocument(MOBILE_DOCUMENT).redirect_uris,
     ],
     brand: "stella_ios",
+  },
+  outlook: {
+    clientId: OUTLOOK_DOCUMENT,
+    redirectUris: [OUTLOOK_CALLBACK],
+    brand: "stella_outlook",
   },
   mcp_connector: {
     clientId: CONNECTOR_DOCUMENT,
@@ -367,6 +377,7 @@ describe("OAuth consent app details", () => {
     const cli = firstParty(CLI_DOCUMENT);
     const mobile = firstParty(MOBILE_DOCUMENT);
     const connector = firstParty(CONNECTOR_DOCUMENT);
+    const outlook = firstParty(OUTLOOK_DOCUMENT);
     for (const [match, redirectUri, allowed] of [
       // Loopback: any port, the exact path, http only.
       [cli, "http://127.0.0.1/callback", true],
@@ -390,6 +401,14 @@ describe("OAuth consent app details", () => {
       [connector, CONNECTOR_CALLBACK, true],
       [connector, "https://stella.example/v1/mcp/oauth/callback?x=1", false],
       [connector, "https://other.example/v1/mcp/oauth/callback", false],
+      // The one callback on the configured task-pane origin.
+      [outlook, OUTLOOK_CALLBACK, true],
+      [outlook, `${OUTLOOK_CALLBACK}?x=1`, false],
+      [outlook, `${OUTLOOK_CALLBACK}#x`, false],
+      [outlook, "https://outlook.stella.example/auth/other.html", false],
+      [outlook, "https://other.example/auth/callback.html", false],
+      [outlook, "https://stella.example/auth/callback.html", false],
+      [outlook, "http://outlook.stella.example/auth/callback.html", false],
     ] as const) {
       expect(isFirstPartyRedirectAllowed(match, redirectUri), redirectUri).toBe(
         allowed,

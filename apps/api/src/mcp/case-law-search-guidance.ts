@@ -1,5 +1,7 @@
 import { apexCourtAbbreviations } from "@stll/api-contract/case-law-court-abbreviations";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import type { SearchTotal } from "@stll/api-contract/search";
 
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,16 +20,11 @@ import { LIMITS } from "@/api/lib/limits";
  */
 
 /**
- * Required terms from which a phrasing that fills fewer slots than it was
- * given carries `many_required_terms`.
+ * Required terms from which a phrasing whose all-word hits fill fewer slots
+ * than it was given carries `many_required_terms`, in every mode: the
+ * warning says what happened, which is not query-writing guidance.
  */
 export const MANY_REQUIRED_TERMS_THRESHOLD = 6;
-
-/** Which modes raise `many_required_terms`; total, so a new mode decides. */
-export const CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS = {
-  off: false,
-  v1: true,
-} as const satisfies Record<CaseLawSearchGuidanceMode, boolean>;
 
 export type SearchCaseLawTexts = {
   description: string;
@@ -36,12 +33,24 @@ export type SearchCaseLawTexts = {
   courts: string;
 };
 
+const TOTAL_NOT_COUNTED_NOTE =
+  "Not computed for this call, which does not mean zero. A total is computed only on the first page of one phrasing that names facets, and not under every filter.";
+
+/**
+ * The total as an agent reads it. An uncounted total says so in the output
+ * itself: a missing number next to a short list reads as a small result set.
+ */
+export const caseLawAgentSearchTotal = (total: SearchTotal) =>
+  total.type === SEARCH_TOTAL_TYPE.NOT_COUNTED
+    ? { ...total, note: TOTAL_NOT_COUNTED_NOTE }
+    : total;
+
 const DESCRIPTION_HEAD =
   "Search case law. `queries` merges phrasings; matchedQueries " +
   "names each hit's phrasings. `limit` is split evenly.";
 
 const DESCRIPTION_TAIL =
-  " Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values.";
+  " Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.";
@@ -60,15 +69,18 @@ const apexCourtExamples = (): string =>
       : [`${country} ${JSON.stringify(abbreviations).replaceAll(",", ", ")}`];
   }).join("; ");
 
+const CONTINUATION_TAIL =
+  ' Under load it may answer status "running": not a failure. After retryAfterMs, repeat the call with continuation_token; "partial" is never the full answer.';
+
 const SEARCH_CASE_LAW_TEXTS = {
   off: {
-    description: `${DESCRIPTION_HEAD}${DESCRIPTION_TAIL}`,
+    description: `${DESCRIPTION_HEAD}${DESCRIPTION_TAIL}${CONTINUATION_TAIL}`,
     queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ${QUERIES_TAIL}`,
     limit: LIMIT_OFF,
     courts: `Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. ${COURTS_TAIL}`,
   },
   v1: {
-    description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}`,
+    description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}${CONTINUATION_TAIL}`,
     queries:
       `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ` +
       "A full match needs every word of a phrasing except function words in " +

@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import type { TextMarkState } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { StateSwatch } from "@/features/avt/state-chip";
 import type { ClaimState, VerificationClaim } from "@/features/avt/types";
@@ -54,9 +55,7 @@ export const UnlocatedClaims = ({
                   variant={claim.id === selected ? "secondary" : "outline"}
                 >
                   <StateSwatch state={markOf(claim).state} />
-                  <span className="truncate" dir="auto">
-                    {claim.text}
-                  </span>
+                  <TruncatedText dir="auto">{claim.text}</TruncatedText>
                 </Button>
               </li>
             ))}

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import {
@@ -963,7 +964,7 @@ const runLagCli = async ({
     const child = Bun.spawn(
       [
         process.execPath,
-        new URL("check-npm-publish-lag.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("check-npm-publish-lag.ts", import.meta.url)),
         ...args,
       ],
       {

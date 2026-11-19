@@ -60,6 +60,13 @@ export const runWithPublicReadStatementTimeout = <T>(
   );
 
 /** Keep every transport alive through cancellation and resource cleanup. */
+/**
+ * Run `fn` outside the current public-read scope. A scope settles only after
+ * every read inside it, so work that outlives its request has to leave.
+ */
+export const runOutsidePublicReadScope = <T>(fn: () => T): T =>
+  publicReadTimeout.exit(fn);
+
 export const runWithPublicReadScope = async <T>(
   { budgetMs, signal }: PublicReadTimeoutOptions,
   fn: () => Promise<T>,

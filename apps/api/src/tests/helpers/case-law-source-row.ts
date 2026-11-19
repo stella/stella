@@ -25,6 +25,7 @@ const defaultCaseLawSourceRow = () =>
     enabled: true,
     syncCursor: "cursor-1",
     lastSyncAt: null,
+    importSnapshotDate: null,
     observationOrder: 0n,
     checkpointObservationOrder: 0n,
     removalCheckpoint: null,

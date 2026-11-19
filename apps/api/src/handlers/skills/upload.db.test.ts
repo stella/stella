@@ -113,6 +113,7 @@ test("a pack with a binary asset is installed and the response lists the file le
   if ("code" in result) {
     throw new TypeError("expected the pack to be installed");
   }
+  expect(result.name).toBe(name);
   expect(result.skippedFiles).toEqual([
     { path: "assets/logo.png", reason: "unsupported-extension" },
   ]);

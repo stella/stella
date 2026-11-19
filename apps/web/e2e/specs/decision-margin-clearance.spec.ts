@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -17,6 +17,8 @@ import {
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
+import { createProfileTestSession } from "../helpers/profile-session";
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
 const SECTION_COUNT = 6;
@@ -143,17 +145,20 @@ const openDecision = async (page: Page) => {
     async (route) => {
       const { pathname } = new URL(route.request().url());
       if (pathname.endsWith("/analysis")) {
-        await route.fulfill({
-          json: {
+        await respond(
+          route,
+          apiJson("v1/case/decisions/:decisionId/analysis", "get", {
             status: "done",
             analysis,
-          } satisfies { status: "done"; analysis: DecisionAnalysis },
-        });
+            aiDisclosure: aiDisclosure("caseLaw"),
+          }),
+        );
         return;
       }
       if (pathname === "/v1/organization-settings/ai-availability") {
-        await route.fulfill({
-          json: {
+        await respond(
+          route,
+          apiJson("v1/organization-settings/ai-availability", "get", {
             available: true,
             instanceProvisioned: true,
             orgConfigured: false,
@@ -161,11 +166,16 @@ const openDecision = async (page: Page) => {
             providerConfiguration: "allowed",
             deferredServiceTierAvailable: false,
             mockAnswers: false,
-          } satisfies OrganizationAIAvailability,
-        });
+          }),
+        );
         return;
       }
-      await route.fulfill({ json: decision });
+      await respond(
+        route,
+        pathname.includes("/by-slug/")
+          ? apiJson("v1/case/decisions/by-slug/:slug", "get", decision)
+          : apiJson("v1/case/decisions/:decisionId", "get", decision),
+      );
     },
   );
   await openMemberDecision(page, {
@@ -223,15 +233,34 @@ const visibleNoteBoxes = async (page: Page): Promise<Box[]> =>
     });
 
 const WIDE_CASES = [
-  { locale: "en-US", dir: "ltr", messages: en },
-  { locale: "ar", dir: "rtl", messages: ar },
+  { locale: "en-US", dir: "ltr", messages: en, profileLocale: undefined },
+  { locale: "ar", dir: "rtl", messages: ar, profileLocale: "ar" },
 ] as const;
 
 const VIEWPORT_HEIGHT = 900;
 
-for (const { locale, dir, messages } of WIDE_CASES) {
+for (const { locale, dir, messages, profileLocale } of WIDE_CASES) {
   test.describe(`decision reader margin at lg (${dir})`, () => {
     test.use({ locale, viewport: { width: 1440, height: VIEWPORT_HEIGHT } });
+
+    // A member's interface follows their saved language, not the browser's,
+    // so the right-to-left case signs in a member who chose Arabic.
+    if (profileLocale !== undefined) {
+      let profileSession:
+        Awaited<ReturnType<typeof createProfileTestSession>> | undefined;
+      test.beforeEach(async ({ baseURL, page }) => {
+        profileSession = await createProfileTestSession({
+          page,
+          label: "decision-margin-rtl",
+          webUrl: baseURL ?? "http://localhost:3000",
+          locale: profileLocale,
+        });
+      });
+      test.afterEach(async () => {
+        await profileSession?.cleanup();
+        profileSession = undefined;
+      });
+    }
 
     test("no floating reader chrome covers the notes column", async ({
       page,

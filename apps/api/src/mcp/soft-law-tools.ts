@@ -11,7 +11,6 @@ import {
 import {
   decodeSoftLawCursor,
   encodeSoftLawCursor,
-  isSoftLawCursor,
   readServedSoftLaw,
   searchServedSoftLaw,
   SOFT_LAW_SEARCH_PAGE_SIZE_MAX,
@@ -111,7 +110,6 @@ const searchGuidanceArgsSchema = nullAsAbsent(
     ),
     cursor: cursorInput({
       description: `Opaque cursor from a previous ${SEARCH_GUIDANCE_TOOL} call`,
-      issuedBy: isSoftLawCursor,
     }),
   }),
 );
@@ -255,6 +253,9 @@ const handleReadGuidanceTool: TypedMcpToolHandler<
       "Guidance document not found",
       `Find a served document with ${SEARCH_GUIDANCE_TOOL} and pass its documentId.`,
     );
+  }
+  if (document.text === null && cursor !== undefined) {
+    return invalidCursorResult({ cursor, tool: READ_GUIDANCE_TOOL });
   }
   const window =
     document.text === null

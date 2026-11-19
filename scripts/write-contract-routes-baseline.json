@@ -12,12 +12,6 @@
     "baselineId": "apps/api/src/handlers/legal-reader/annotations/update.ts"
   },
   {
-    "key": "PATCH /v1/saved-searches/:savedSearchId",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/saved-searches/update.ts"
-  },
-  {
     "key": "PATCH /v1/skills/:skillId",
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
@@ -160,12 +154,6 @@
     "count": 1,
     "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
     "baselineId": "apps/api/src/handlers/case-law/research/columns-reorder.ts"
-  },
-  {
-    "key": "PUT /v1/flows/:flowId",
-    "count": 1,
-    "reason": "Existing replacement awaits required schema precondition and caller enrollment.",
-    "baselineId": "apps/api/src/handlers/flows/update.ts"
   },
   {
     "key": "PUT /v1/lists/:workspaceId/item-fact-details",

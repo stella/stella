@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   MAX_PROVIDER_EVENT_REPLAY_IDS,
@@ -335,7 +336,7 @@ test("ECS identity failure refuses replay before opening results or the database
     const child = Bun.spawn({
       cmd: [
         process.execPath,
-        new URL("replay-provider-events.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("replay-provider-events.ts", import.meta.url)),
         "--event-id",
         "event-a",
         "--results",

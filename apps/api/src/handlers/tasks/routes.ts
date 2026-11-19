@@ -3,6 +3,7 @@ import moveAssignee from "@/api/handlers/tasks/assignees/move";
 import removeAssignee from "@/api/handlers/tasks/assignees/remove";
 import calendarTasks from "@/api/handlers/tasks/calendar/list";
 import createTask from "@/api/handlers/tasks/create";
+import deleteTask from "@/api/handlers/tasks/delete";
 import createEntityLink from "@/api/handlers/tasks/entity-links/create";
 import deleteEntityLink from "@/api/handlers/tasks/entity-links/delete";
 import listEntityLinks from "@/api/handlers/tasks/entity-links/list";
@@ -15,7 +16,7 @@ export const tasksRoute = routes(
   {
     "/": { PUT: createTask, PATCH: updateTask },
     "/calendar": { POST: calendarTasks },
-    "/:taskId": { GET: readTaskById },
+    "/:taskId": { GET: readTaskById, DELETE: deleteTask },
     "/assignees": { POST: addAssignee, DELETE: removeAssignee },
     "/assignees/move": { POST: moveAssignee },
     "/links": { POST: createEntityLink, DELETE: deleteEntityLink },

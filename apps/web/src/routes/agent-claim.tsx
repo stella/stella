@@ -28,6 +28,7 @@ import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
+import { AgentClaimConnected } from "@/routes/-agent-claim-connected";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -119,18 +120,7 @@ function AgentClaimPage() {
   };
 
   if (status === "claimed") {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Frame className="w-full max-w-sm">
-          <FrameHeader>
-            <FrameTitle>{t("agentClaim.connectedTitle")}</FrameTitle>
-            <FrameDescription>
-              {t("agentClaim.connectedDescription")}
-            </FrameDescription>
-          </FrameHeader>
-        </Frame>
-      </div>
-    );
+    return <AgentClaimConnected organizationName={organizationName} />;
   }
 
   return (

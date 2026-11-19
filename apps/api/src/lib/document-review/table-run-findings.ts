@@ -20,26 +20,33 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { documentReviewRuns, properties } from "@/api/db/schema";
+import { properties } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
 import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import {
   buildDocumentReviewFindingRow,
-  upsertDocumentReviewFindings,
+  writeReviewFindingBatch,
 } from "@/api/lib/document-review/finding-write";
-import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
+import type {
+  DocumentReviewFindingRow,
+  WriteReviewFindingBatchResult,
+} from "@/api/lib/document-review/finding-write";
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
+import { UNGRADED_VERDICT } from "@/api/lib/document-review/review-grade";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
-import {
-  DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-  DOCUMENT_REVIEW_RUN_EXECUTOR,
-} from "@/api/lib/document-review/run-contract";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewRunErrorCode } from "@/api/lib/document-review/run-contract";
-import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import {
+  failReviewRun,
+  recordRunWithheldSources,
+  reportFinalizedReviewRun,
+} from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
-import { logger } from "@/api/lib/observability/logger";
-import type { GradedVerdict } from "@/api/lib/workflow/verdict-engine";
+import type {
+  GradedVerdict,
+  UngradedVerdict,
+} from "@/api/lib/workflow/verdict-engine";
 
 export type RecordTableRunVerdictsArgs = {
   scopedDb: ScopedDb;
@@ -48,9 +55,13 @@ export type RecordTableRunVerdictsArgs = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   graded: readonly GradedVerdict[];
+  /** Positions the model declined or could not grade. Each one becomes the
+   *  finding the review worker writes for it, flagged for a person, and the
+   *  rest of the review stands. */
+  ungraded: readonly UngradedVerdict[];
   /** Verdicts this batch decided nothing about: a gate that no longer matches,
-   *  or a grading call that failed. Either one means the run's promised finding
-   *  set can never be completed. */
+   *  or an ASK whose extraction never finished. Either one means the run's
+   *  promised finding set can never be completed. */
   unresolvedPropertyIds: readonly SafeId<"property">[];
 };
 
@@ -58,64 +69,6 @@ export type RecordTableRunVerdictsResult =
   | { type: "no-run" }
   | { type: "written"; findingCount: number; completed: boolean }
   | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
-
-const updateActiveRun = async (
-  tx: Transaction,
-  {
-    workspaceId,
-    runId,
-  }: {
-    workspaceId: SafeId<"workspace">;
-    runId: SafeId<"documentReviewRun">;
-  },
-  values: Partial<typeof documentReviewRuns.$inferInsert>,
-): Promise<void> => {
-  // audit: skip — bookkeeping on the run row audited at create.
-  await tx
-    .update(documentReviewRuns)
-    .set(values)
-    .where(
-      and(
-        eq(documentReviewRuns.id, runId),
-        eq(documentReviewRuns.workspaceId, workspaceId),
-        inArray(documentReviewRuns.status, [
-          ...DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
-        ]),
-      ),
-    );
-};
-
-const failRun = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-  runId: SafeId<"documentReviewRun">,
-  errorCode: DocumentReviewRunErrorCode,
-): Promise<void> => {
-  await updateActiveRun(
-    tx,
-    { workspaceId, runId },
-    { status: "failed", errorCode, finishedAt: new Date() },
-  );
-};
-
-type RecordRunWithheldSourcesArgs = {
-  workspaceId: SafeId<"workspace">;
-  runId: SafeId<"documentReviewRun">;
-  withheld: readonly ReviewWithheldSource[];
-};
-
-/** Notes on a run which sources it read only in part. Every batch of a run reads
- *  the same document under the same model, so a later batch writes the same record. */
-export const recordRunWithheldSources = async (
-  tx: Transaction,
-  { workspaceId, runId, withheld }: RecordRunWithheldSourcesArgs,
-): Promise<void> => {
-  await updateActiveRun(
-    tx,
-    { workspaceId, runId },
-    { withheldSources: [...withheld] },
-  );
-};
 
 const loadPlaybookSourceIds = async (
   tx: Transaction,
@@ -188,18 +141,22 @@ export const recordTableRunDocumentRead = async ({
     }
     switch (read.type) {
       case "tooLarge":
-        await failRun(tx, workspaceId, run.id, "document_too_large");
+        await failReviewRun(
+          tx,
+          { workspaceId, runId: run.id },
+          "document_too_large",
+        );
         return;
       case "cut": {
         const withheld = read.withheld.filter(
           ({ fileFieldId }) => fileFieldId === run.fileFieldId,
         );
         if (withheld.length > 0) {
-          await recordRunWithheldSources(tx, {
-            workspaceId,
-            runId: run.id,
+          await recordRunWithheldSources(
+            tx,
+            { workspaceId, runId: run.id },
             withheld,
-          });
+          );
         }
         return;
       }
@@ -210,6 +167,21 @@ export const recordTableRunDocumentRead = async ({
   });
 };
 
+/** What one finding row records about its position. */
+type Judgment = Pick<
+  ReviewFinding,
+  "verdict" | "rationale" | "matchedRef" | "extracted"
+> & { propertyId: SafeId<"property"> };
+
+type RecordedBatch =
+  | Exclude<RecordTableRunVerdictsResult, { type: "written" }>
+  | {
+      type: "batch";
+      runId: SafeId<"documentReviewRun">;
+      rowCount: number;
+      finalized: WriteReviewFindingBatchResult;
+    };
+
 export const recordTableRunVerdicts = async ({
   scopedDb,
   organizationId,
@@ -217,13 +189,18 @@ export const recordTableRunVerdicts = async ({
   entityId,
   entityVersionId,
   graded,
+  ungraded,
   unresolvedPropertyIds,
 }: RecordTableRunVerdictsArgs): Promise<RecordTableRunVerdictsResult> => {
-  if (graded.length === 0 && unresolvedPropertyIds.length === 0) {
+  if (
+    graded.length === 0 &&
+    ungraded.length === 0 &&
+    unresolvedPropertyIds.length === 0
+  ) {
     return { type: "no-run" };
   }
 
-  return await scopedDb(async (tx): Promise<RecordTableRunVerdictsResult> => {
+  const recorded = await scopedDb(async (tx): Promise<RecordedBatch> => {
     // At most one active table run per document, and only a table-executed one
     // is ours to write into.
     const run = await lockActiveTableRun(tx, { workspaceId, entityId });
@@ -235,7 +212,7 @@ export const recordTableRunVerdicts = async ({
     // just graded is not what the run promised to judge, so the run fails
     // rather than mixing two versions into one review.
     if (run.entityVersionId !== entityVersionId) {
-      await failRun(tx, workspaceId, run.id, "pin_unresolved");
+      await failReviewRun(tx, { workspaceId, runId: run.id }, "pin_unresolved");
       return { type: "failed", errorCode: "pin_unresolved" };
     }
 
@@ -252,6 +229,7 @@ export const recordTableRunVerdicts = async ({
     // cell to the topic it answers.
     const propertyIds = [
       ...graded.map((verdict) => verdict.propertyId),
+      ...ungraded.map((verdict) => verdict.propertyId),
       ...unresolvedPropertyIds,
     ];
     const sourceIdByPropertyId = await loadPlaybookSourceIds(tx, {
@@ -270,12 +248,28 @@ export const recordTableRunVerdicts = async ({
       // The run promised one finding per planned position; a position that
       // decided nothing makes that promise unreachable. Fail now instead of
       // leaving the run open until the reconciler notices.
-      await failRun(tx, workspaceId, run.id, "playbook_check_failed");
+      await failReviewRun(
+        tx,
+        { workspaceId, runId: run.id },
+        "playbook_check_failed",
+      );
       return { type: "failed", errorCode: "playbook_check_failed" };
     }
 
     const rows: DocumentReviewFindingRow[] = [];
-    for (const verdict of graded) {
+    const judgments: Judgment[] = [
+      ...graded,
+      // The judgment the review worker records for a position it could not
+      // grade: a deviation a person must look at, with the reason it carries,
+      // never a verdict about the document.
+      ...ungraded.map(({ propertyId, extracted }): Judgment => ({
+        propertyId,
+        verdict: UNGRADED_VERDICT.verdict,
+        rationale: UNGRADED_VERDICT.rationale,
+        extracted,
+      })),
+    ];
+    for (const verdict of judgments) {
       const sourceId = sourceIdByPropertyId.get(verdict.propertyId);
       if (sourceId === undefined || sourceId === null) {
         continue;
@@ -325,29 +319,25 @@ export const recordTableRunVerdicts = async ({
       );
     }
 
-    await upsertDocumentReviewFindings(tx, rows);
-
-    const finalized = await finalizeReviewRun({
+    const finalized = await writeReviewFindingBatch({
       tx,
       workspaceId,
-      runId: run.id,
-      entityId,
-      fileFieldId: run.fileFieldId,
+      rows,
       executor: DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE,
+      run,
+      entityId,
       expectedFindingCount: plan.expectedFindingCount,
     });
-    if (finalized.type === "completed" && finalized.carried > 0) {
-      logger.info("document_review_run.decisions_carried", {
-        count: String(finalized.carried),
-        runId: run.id,
-        workspaceId,
-      });
-    }
-
-    return {
-      type: "written",
-      findingCount: rows.length,
-      completed: finalized.type === "completed",
-    };
+    return { type: "batch", runId: run.id, rowCount: rows.length, finalized };
   });
+  if (recorded.type !== "batch") {
+    return recorded;
+  }
+  const { runId, rowCount, finalized } = recorded;
+  reportFinalizedReviewRun(finalized, { workspaceId, runId });
+  return {
+    type: "written",
+    findingCount: rowCount,
+    completed: finalized.type === "completed",
+  };
 };

@@ -1,9 +1,9 @@
-import { eq } from "drizzle-orm";
-
 import type { Transaction } from "@/api/db/root";
-import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
+import {
+  lockWorkspaceCreationStatus,
+  withAggregateParentBatch,
+} from "@/api/lib/db/aggregate-lock";
 import type { RowLockMode } from "@/api/lib/db/aggregate-lock";
 
 /**
@@ -104,15 +104,7 @@ export const lockWorkspacesForEntityCap = async (
 export const lockWorkspaceForEntityCreate = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-) => {
-  await lockWorkspaceRows({ tx, workspaceIds: [workspaceId], mode: "update" });
-  const rows = await tx
-    .select({ status: workspaces.status })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1);
-  return rows.at(0)?.status;
-};
+) => await lockWorkspaceCreationStatus(tx, workspaceId);
 
 /**
  * Transfers wait on source entity/version/field locks. Existing writers may

@@ -13,6 +13,7 @@ import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_DECISION,
+  DOCUMENT_REVIEW_DECISION_REASON_MAX,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
   DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
@@ -138,9 +139,18 @@ export const documentReviewRuns = p.pgTable(
       .text("executor", { enum: DOCUMENT_REVIEW_RUN_EXECUTORS })
       .notNull()
       .default(DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
+    // Whether the run counts against the organization's document review
+    // caps (`lib/usage/model-run-caps`): a review a person starts on one document
+    // does; a playbook run over a table of documents is admitted as one batch
+    // and does not. Set when the run is inserted and never changed, so the
+    // triggers that charge and free the counter see the same answer.
+    orgCapped: p.boolean("org_capped").notNull().default(false),
     // Coarse progress over the expected finding set (see `expectedFindings`).
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
+    // Fixes the run did not stage because the requester could not open every
+    // matter its reference text came from, so the panel can say why.
+    fixesWithheld: p.integer("fixes_withheld").notNull().default(0),
     requestedBy: p
       .text("requested_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -414,7 +424,7 @@ export const documentReviewFindingDecisions = p.pgTable(
     ),
     p.check(
       "document_review_finding_decisions_reason_length_check",
-      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= 2000`,
+      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= ${sql.raw(String(DOCUMENT_REVIEW_DECISION_REASON_MAX))}`,
     ),
     p.pgPolicy("document_review_finding_decisions_workspace_select", {
       for: "select",

@@ -40,8 +40,8 @@ use crate::http_client::DesktopHttpClient;
 pub(crate) use oauth::{AGENT_NAME, RESOURCE};
 use oauth::{
   AuthorizationRequest, CallbackListener, CallbackPage, CallbackRejection,
-  CallbackResult, CallbackSlot, ClientSelection, DeliveredCallback, PLAN_USAGE_SCOPE,
-  Pkce,
+  CallbackResult, CallbackSlot, ClientSelection, ConnectedAccount, DeliveredCallback,
+  PLAN_USAGE_SCOPE, Pkce,
 };
 use store::{
   ChatGptRecord, ChatGptRegistration, ChatGptSession, ChatGptVault, VaultUnavailable,
@@ -192,6 +192,8 @@ pub(crate) struct ChatGptAuthHooks {
   pub changed: Box<dyn Fn() + Send + Sync>,
   /// Removes the harness's own sign-in state from its Stella-owned home.
   pub clear_harness_sign_in: Box<dyn Fn() + Send + Sync>,
+  /// The app's colour scheme now, so the browser's outcome page matches it.
+  pub color_scheme: Box<dyn Fn() -> crate::outcome_page::OutcomeScheme + Send + Sync>,
 }
 
 #[derive(Clone)]
@@ -677,9 +679,14 @@ impl ChatGptAuth {
       .map_err(|VaultUnavailable| ChatGptFailure::Storage)?;
     let target = select_target(&record, &intent);
     let state = oauth::random_token(32);
-    let listener = CallbackListener::bind(slot, state.clone(), self.0.config.page_wait)
-      .await
-      .map_err(|_bind| ChatGptFailure::CallbackUnavailable)?;
+    let listener = CallbackListener::bind(
+      slot,
+      state.clone(),
+      self.0.config.page_wait,
+      (self.0.hooks.color_scheme)(),
+    )
+    .await
+    .map_err(|_bind| ChatGptFailure::CallbackUnavailable)?;
     let redirect_uri = oauth::redirect_uri(listener.port());
     let nonce = oauth::random_token(32);
     let pkce = Pkce::generate();
@@ -719,22 +726,22 @@ impl ChatGptAuth {
     let result = self.complete(&pending, &url).await;
     if let Some(page) = page
       && page
-        .send(match result {
-          Ok(()) => CallbackPage::Connected,
-          _ => CallbackPage::NotConnected,
+        .send(match &result {
+          Ok(account) => CallbackPage::Connected(account.clone()),
+          Err(_) => CallbackPage::NotConnected,
         })
         .is_err()
     {
       tracing::debug!("ChatGPT sign-in callback page had no waiter");
     }
-    result
+    result.map(|_account| ())
   }
 
   async fn complete(
     &self,
     pending: &PendingSignIn<'_>,
     url: &str,
-  ) -> Result<(), ChatGptFailure> {
+  ) -> Result<ConnectedAccount, ChatGptFailure> {
     let (code, returned_client) =
       match oauth::parse_callback(url, pending.redirect_uri, pending.state) {
         Err(CallbackRejection::StateMismatch) => {
@@ -783,7 +790,10 @@ impl ChatGptAuth {
       .unwrap_or(Err(ChatGptFailure::Storage))
   }
 
-  async fn exchange_code(&self, exchange: CodeExchange) -> Result<(), ChatGptFailure> {
+  async fn exchange_code(
+    &self,
+    exchange: CodeExchange,
+  ) -> Result<ConnectedAccount, ChatGptFailure> {
     let body = oauth::form_body(&[
       ("grant_type", "authorization_code"),
       ("client_id", &exchange.client_id),
@@ -835,7 +845,7 @@ impl ChatGptAuth {
     &self,
     exchange: &CodeExchange,
     tokens: TokenResponse,
-  ) -> Result<(), ChatGptFailure> {
+  ) -> Result<ConnectedAccount, ChatGptFailure> {
     let client_id = exchange.client_id.as_str();
     let id_token = tokens
       .id_token
@@ -889,8 +899,8 @@ impl ChatGptAuth {
     record.put(ChatGptRegistration {
       client_id: client_id.to_owned(),
       subject: identity.subject,
-      email: identity.email,
-      plan: identity.plan,
+      email: identity.email.clone(),
+      plan: identity.plan.clone(),
       plan_usage_granted,
       reconnect_required: false,
       client_rejected: false,
@@ -911,7 +921,10 @@ impl ChatGptAuth {
       self.revoke_dropped(client_id, &replaced).await;
     }
     if plan_usage_granted {
-      Ok(())
+      Ok(ConnectedAccount {
+        email: identity.email,
+        plan: identity.plan,
+      })
     } else {
       Err(ChatGptFailure::PlanUsageNotGranted)
     }

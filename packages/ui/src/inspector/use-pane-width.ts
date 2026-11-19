@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -22,8 +22,8 @@ import {
  *
  * A pointer can be dragged well past either bound — off the window edge, or
  * across the whole viewport — so the raw distance is clamped here, before
- * anything keeps it. Persisting the raw distance is what made a pane dragged
- * narrower than the minimum from being persisted as an invalid preference.
+ * anything keeps it. The host persists the bounded distance rather than a
+ * raw drag coordinate.
  */
 export const resolveDragWidth = ({
   clientX,
@@ -80,16 +80,13 @@ export const resolveKeyboardWidth = ({
   }
 };
 
-export type InspectorPaneWidthPersistence = {
-  read: () => number;
-  write: (width: number) => void;
-};
-
 type UseInspectorPaneWidthOptions = {
   /** Inline size the sidebar takes out of the same layout row. */
   sidebarWidth: number;
-  /** Persistence is injected so this package stays independent of its host. */
-  persistence?: InspectorPaneWidthPersistence | undefined;
+  /** Desired width supplied by the host; updates apply between pointer drags. */
+  initialWidth?: number;
+  /** Persist the desired width on completed user resizes. */
+  onWidthChange?: (width: number) => void;
   /** Viewport width in CSS pixels; 0 before the viewport is known. */
   viewportWidth: number;
 };
@@ -133,47 +130,63 @@ type UseInspectorPaneWidthResult = {
  */
 export const useInspectorPaneWidth = ({
   sidebarWidth,
-  persistence,
   viewportWidth,
+  initialWidth,
+  onWidthChange,
 }: UseInspectorPaneWidthOptions): UseInspectorPaneWidthResult => {
-  const [desiredWidth, setDesiredWidth] = useState(() => {
-    const saved = persistence?.read();
-    return saved === undefined || !Number.isFinite(saved)
-      ? INSPECTOR_PANE_DEFAULT_WIDTH
-      : clampInspectorPaneWidth(saved);
-  });
-  const isDragging = useRef(false);
-  const lastPersisted = useRef({ persistence, desiredWidth });
-
-  useEffect(() => {
-    if (
-      persistence === undefined ||
-      (lastPersisted.current.persistence === persistence &&
-        lastPersisted.current.desiredWidth === desiredWidth)
-    ) {
-      return;
-    }
-    persistence.write(desiredWidth);
-    lastPersisted.current = { persistence, desiredWidth };
-  }, [desiredWidth, persistence]);
+  const normalizedInitialWidth =
+    initialWidth === undefined
+      ? undefined
+      : clampInspectorPaneWidth(initialWidth);
+  // A local choice belongs to the host width it was made against: once the
+  // host reports another width outside a drag, the host's width wins. A drag
+  // keeps the host width it started against, so host updates wait for release.
+  const [localChoice, setLocalChoice] = useState<{
+    hostWidth: number | undefined;
+    width: number;
+  } | null>(null);
+  const [dragStatus, setDragStatus] = useState<"idle" | "dragging">("idle");
+  const desiredWidth =
+    localChoice !== null &&
+    (localChoice.hostWidth === normalizedInitialWidth ||
+      dragStatus === "dragging")
+      ? localChoice.width
+      : (normalizedInitialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH);
+  const setDesiredWidth = (width: number) => {
+    setLocalChoice({ hostWidth: normalizedInitialWidth, width });
+  };
+  const setDraggedWidth = (width: number) => {
+    setLocalChoice((previous) => ({
+      hostWidth:
+        previous === null ? normalizedInitialWidth : previous.hostWidth,
+      width,
+    }));
+  };
+  // Pointer move and release can share a React batch; retain the latest width
+  // synchronously while state makes the drag status available during render.
+  const drag = useRef<
+    { status: "idle" } | { status: "dragging"; width: number }
+  >({ status: "idle" });
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
-    isDragging.current = true;
+    drag.current = { status: "dragging", width: desiredWidth };
+    setDesiredWidth(desiredWidth);
+    setDragStatus("dragging");
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!isDragging.current) {
+    if (drag.current.status === "idle") {
       return;
     }
-    setDesiredWidth(
-      resolveDragWidth({
-        clientX: event.clientX,
-        isRtl: document.documentElement.dir === "rtl",
-        viewportWidth: window.innerWidth,
-      }),
-    );
+    const width = resolveDragWidth({
+      clientX: event.clientX,
+      isRtl: document.documentElement.dir === "rtl",
+      viewportWidth: window.innerWidth,
+    });
+    drag.current = { status: "dragging", width };
+    setDraggedWidth(width);
   };
 
   /**
@@ -183,7 +196,11 @@ export const useInspectorPaneWidth = ({
    * would resize the pane on the next pointer movement with no button held.
    */
   const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    isDragging.current = false;
+    if (drag.current.status === "dragging") {
+      onWidthChange?.(drag.current.width);
+    }
+    drag.current = { status: "idle" };
+    setDragStatus("idle");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -207,11 +224,14 @@ export const useInspectorPaneWidth = ({
       return;
     }
     event.preventDefault();
-    setDesiredWidth(Math.min(clampInspectorPaneWidth(next), maxWidth));
+    const width = Math.min(clampInspectorPaneWidth(next), maxWidth);
+    setDesiredWidth(width);
+    onWidthChange?.(width);
   };
 
   const resetWidth = () => {
     setDesiredWidth(INSPECTOR_PANE_DEFAULT_WIDTH);
+    onWidthChange?.(INSPECTOR_PANE_DEFAULT_WIDTH);
   };
 
   const width = resolveInspectorPaneWidth({

@@ -4,6 +4,7 @@ import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 
 import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
@@ -15,6 +16,25 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 
 const EVIDENCE_SEPARATOR = " · ";
+
+/**
+ * Minutes are enough to tell most ranges' ends apart. A span inside one
+ * displayed minute would read "8:19 – 8:19", so it gains seconds; a span
+ * inside one second shows a single time.
+ */
+const suggestionTimeRange = (
+  formatTime: (date: Date, timeStyle: "short" | "medium") => string,
+  start: Date,
+  end: Date,
+) => {
+  const shortStart = formatTime(start, "short");
+  const shortEnd = formatTime(end, "short");
+  const [startLabel, endLabel] =
+    shortStart === shortEnd
+      ? [formatTime(start, "medium"), formatTime(end, "medium")]
+      : [shortStart, shortEnd];
+  return startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
+};
 
 export type TimeSuggestionRowActions = {
   onAccept: (suggestion: TimeEntrySuggestion, narrative: string) => void;
@@ -56,6 +76,11 @@ export const TimeSuggestionRow = ({
     suggestion.evidence,
     copyLabels,
   ).join(EVIDENCE_SEPARATOR);
+  const timeRange = suggestionTimeRange(
+    (date, timeStyle) => format.dateTime(date, { timeStyle }),
+    new Date(suggestion.startedAt),
+    new Date(suggestion.endedAt),
+  );
 
   return (
     <li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
@@ -91,30 +116,27 @@ export const TimeSuggestionRow = ({
           <CheckIcon className="text-muted-foreground size-4 shrink-0" />
           <span className="min-w-0 flex-1">
             {matterName !== undefined && (
-              <BidiText
-                as="span"
-                className="text-muted-foreground block truncate text-xs"
+              <TruncatedText
+                className="text-muted-foreground text-xs"
+                render={<BidiText as="span" />}
               >
                 {matterName}
-              </BidiText>
+              </TruncatedText>
             )}
-            <BidiText as="span" className="block truncate text-sm font-medium">
-              {narrative}
-            </BidiText>
-            <BidiText
-              as="span"
-              className="text-muted-foreground block truncate text-xs"
+            <TruncatedText
+              className="text-sm font-medium"
+              render={<BidiText as="span" />}
             >
-              {format.dateTime(new Date(suggestion.startedAt), {
-                timeStyle: "short",
-              })}
-              {" – "}
-              {format.dateTime(new Date(suggestion.endedAt), {
-                timeStyle: "short",
-              })}
+              {narrative}
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground text-xs"
+              render={<BidiText as="span" />}
+            >
+              {timeRange}
               {EVIDENCE_SEPARATOR}
               {evidence}
-            </BidiText>
+            </TruncatedText>
             <span className="text-muted-foreground block text-xs tabular-nums">
               {suggestion.alreadyCovered
                 ? t("alreadyCovered")

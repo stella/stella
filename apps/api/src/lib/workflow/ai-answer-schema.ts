@@ -25,6 +25,17 @@ export type Answer =
 
 type AnswerKind = AiExtractablePropertyContent["type"];
 
+/**
+ * How a column's answer relates to its source.
+ *
+ * - `value`: the answer is what the column stores and what any check reads.
+ * - `clause-summary`: a grader judges the clause, and every source has blocks,
+ *   so the answer is a short summary and the citations carry the wording.
+ * - `clause-quote`: a grader judges the clause, but a source has no block to
+ *   point at, so the answer has to carry the wording itself.
+ */
+export type AnswerShape = "value" | "clause-summary" | "clause-quote";
+
 type SelectContent = Extract<
   AiExtractablePropertyContent,
   { type: "single-select" | "multi-select" }
@@ -88,6 +99,34 @@ const ANSWER_CONTEXT = {
 } as const satisfies Record<
   AnswerKind,
   { description: string; examples: readonly unknown[]; hint: string }
+>;
+
+const CLAUSE_TEXT_CONTEXT = {
+  "clause-summary": {
+    description:
+      "A short plain-text summary of what the source says on this question, " +
+      "less than 100 characters. A reviewer reads the exact wording from the " +
+      "blocks you cite, so do not quote them here. Answer null if the source " +
+      "does not state this; never guess.",
+    examples: [
+      "Payable 30 days after invoice; fixed for the initial term",
+      null,
+    ],
+  },
+  "clause-quote": {
+    description:
+      "The source's own wording on every term the question covers, quoted " +
+      "verbatim and in full, at whatever length it takes, with no commentary " +
+      "and nothing said about a term the source does not address. Answer " +
+      "null if the source does not state this; never guess.",
+    examples: [
+      "Each correct invoice is payable within 30 days after receipt.",
+      null,
+    ],
+  },
+} as const satisfies Record<
+  Exclude<AnswerShape, "value">,
+  { description: string; examples: readonly unknown[] }
 >;
 
 const INT_AMOUNT = {
@@ -206,6 +245,32 @@ export const answerSchemaForContent = (
       content satisfies never;
       return panic(`Unhandled answer kind: ${String(content)}`);
     }
+  }
+};
+
+/**
+ * The answer schema for a column of a given shape. Only a text answer changes:
+ * a manual ask with a date, number or option answers in that type on any shape.
+ */
+export const answerSchemaForShape = (
+  content: AiExtractablePropertyContent,
+  shape: AnswerShape,
+): v.GenericSchema<Answer> | null => {
+  switch (shape) {
+    case "value":
+      return answerSchemaForContent(content);
+    case "clause-summary":
+    case "clause-quote":
+      return content.type === "text"
+        ? v.pipe(
+            v.nullable(v.string()),
+            v.description(CLAUSE_TEXT_CONTEXT[shape].description),
+            v.examples([...CLAUSE_TEXT_CONTEXT[shape].examples]),
+          )
+        : answerSchemaForContent(content);
+    default:
+      shape satisfies never;
+      return panic(`Unhandled answer shape: ${String(shape)}`);
   }
 };
 

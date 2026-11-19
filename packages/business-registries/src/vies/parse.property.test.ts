@@ -13,7 +13,7 @@ import {
   forEachRegistryMutation,
   registryExtras,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { validateVat } from "./client.js";
 import { parseValidation } from "./parse.js";
 import { isViesParticipant, VAT_FORMAT_RULES } from "./validation.js";

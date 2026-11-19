@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "constraints-legislation-matter-link-constraints",
   revision: 1355,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...LEGISLATION_MATTER_LINK_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

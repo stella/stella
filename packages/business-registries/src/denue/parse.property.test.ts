@@ -11,7 +11,7 @@ import {
   mutatedRegistryPayload,
   registryMutation,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { lookupByEstablishmentId } from "./client.js";
 import { parseEstablishment, parseSearchEntry } from "./parse.js";
 import type { DenueEstablishment, DenueRawEstablishment } from "./types.js";

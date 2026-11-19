@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-agent-skills-bound-workspace-idx",
   revision: 60,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

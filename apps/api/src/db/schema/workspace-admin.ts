@@ -2,12 +2,15 @@ import {
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   INVOICE_LANGUAGES,
 } from "@stll/api-contract";
-import { CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
+  CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
+} from "@stll/api-contract/chat-run-target";
 import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
-import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
@@ -215,7 +218,7 @@ export const organizationSettings = p.pgTable(
      */
     localRunMaxApprovalMode: p
       .text("local_run_max_approval_mode", {
-        enum: DESKTOP_RUNNER_APPROVAL_MODES,
+        enum: CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
       })
       .notNull()
       .default(CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS),
@@ -297,10 +300,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default({}),
     /**
-     * Legacy disable list kept for rolling deploy compatibility. New
-     * code reads nativeToolOverrides; keep writes in sync until a later
-     * migration can drop this column after all deployed versions no
-     * longer read it.
+     * Legacy disable list that nothing reads or writes any more. Each
+     * row keeps the value its last synced toggle left, so it may lag
+     * nativeToolOverrides, the only source of truth. A later migration
+     * drops this column.
      */
     disabledNativeTools: jsonb("disabled_native_tools")
       .$type<string[]>()
@@ -326,6 +329,8 @@ export const organizationSettings = p.pgTable(
       .text("managed_ai_residency", { enum: MANAGED_AI_RESIDENCIES })
       .notNull()
       .default(DEFAULT_MANAGED_AI_RESIDENCY),
+    /** Admin-authored instructions applied to every organization chat turn. */
+    aiInstructions: p.text("ai_instructions").notNull().default(""),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
@@ -337,6 +342,15 @@ export const organizationSettings = p.pgTable(
       .boolean("prompt_caching_enabled")
       .notNull()
       .default(true),
+    /**
+     * Whether Anchor Verification asks the decision model for each claim's
+     * verdict (`lists/verification/verdict-decider.ts`). Default off: the
+     * language model that grades a claim decides its verdict alone.
+     */
+    verificationDecisionModelEnabled: p
+      .boolean("verification_decision_model_enabled")
+      .notNull()
+      .default(false),
     /**
      * Org-level enablement for the delegated SharePoint / OneDrive
      * connection. Default-off (fail closed): even where the deployment
@@ -376,6 +390,10 @@ export const organizationSettings = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "organization_settings_ai_instructions_length_check",
+      sql`char_length(${table.aiInstructions}) <= ${sql.raw(String(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH))}`,
+    ),
     p.check(
       "organization_settings_ai_billing_drafts_mode_check",
       sql`${table.aiBillingDraftsMode} IN (${sql.join(
@@ -440,7 +458,7 @@ export const organizationSettings = p.pgTable(
     p.check(
       "organization_settings_local_run_max_approval_mode_check",
       sql`${table.localRunMaxApprovalMode} IN (${sql.join(
-        DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => sql`${mode}`),
+        CHAT_LOCAL_RUN_APPROVAL_CEILINGS.map((mode) => sql`${mode}`),
         sql`, `,
       )})`,
     ),

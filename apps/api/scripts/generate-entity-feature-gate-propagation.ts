@@ -1,12 +1,12 @@
-import { is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
+import { fileURLToPath } from "node:url";
 
 import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
 import { readEffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import * as schema from "../src/db/schema";
+import { schemaTables } from "../src/db/schema-tables";
 import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
 
-const tables = Object.values(schema).filter((table) => is(table, PgTable));
+const tables = schemaTables(schema);
 const descriptors = entityFeatureGateMetadata(tables);
 const effective = await readEffectiveEntityFeatureGateDefinitions();
 const changed = entityFeatureGateTableSql(tables, descriptors, effective);
@@ -15,7 +15,7 @@ if (changed.length > 0) {
   const drizzle = new URL("../drizzle/", import.meta.url);
   const newest = (
     await Array.fromAsync(
-      new Bun.Glob("*/migration.sql").scan({ cwd: drizzle.pathname }),
+      new Bun.Glob("*/migration.sql").scan({ cwd: fileURLToPath(drizzle) }),
     )
   )
     .map((path) => path.split("/").at(0) ?? "")
@@ -29,5 +29,5 @@ if (changed.length > 0) {
     new URL("migration.sql", folder),
     `SET lock_timeout = '2s';\nSET statement_timeout = '5min';\n--> statement-breakpoint\n${changed.join("\n--> statement-breakpoint\n")}\n`,
   );
-  console.log(folder.pathname);
+  console.log(fileURLToPath(folder));
 }

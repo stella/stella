@@ -16,6 +16,7 @@ import {
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
+import type { ChatLocalFilesUndoRead } from "@stll/api-contract/chat-local-files-undo";
 import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -55,7 +56,8 @@ const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 const { invalidateChatThread } = await import("@/features/chat/queries");
-const { useChatEditor } = await import("@/components/chat-editor-provider");
+const { CHAT_SEND_KEPT, CHAT_SEND_SENT, useChatEditor } =
+  await import("@/components/chat-editor-provider");
 const { composerText } = await import("@/components/chat-editor-source");
 const { EditorContent } = await import("@tiptap/react");
 const { useExternalSyncEffect } = await import("@/hooks/use-effect");
@@ -253,6 +255,29 @@ const createServer = ({
         webSearchAvailable: false,
         webSearchEnabled: false,
       });
+    }
+    // Nothing is queued in the chat.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      url.pathname === `/v1/chat/threads/${THREAD_ID}/queue`
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
+    // The edit form reads what an edit does on the member's computer: these
+    // turns ran in the cloud and touched no folder.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      /^\/v1\/chat\/threads\/[^/]+\/messages\/[^/]+\/local-files\/undo$/u.test(
+        url.pathname,
+      )
+    ) {
+      return Response.json({
+        files: { type: "none" },
+        conversation: { type: "continues" },
+        undo: null,
+      } satisfies ChatLocalFilesUndoRead);
     }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
@@ -747,68 +772,38 @@ describe("an accepted edit", () => {
   });
 });
 
-describe("queued prompts while an edit is open", () => {
-  const queuedPrompt = async (page: Page) => {
+describe("a new message while an edit is open", () => {
+  const sendNewMessage = async (page: Page) =>
     await page.session().sendMessage({
-      content: "A queued question",
+      content: "A new question",
       id: toSafeId<"chatMessage">(QUEUED),
     });
-  };
 
-  test("wait while the form is open and are sent once it closes", async () => {
+  test("stays with the member until the edit is sent or cancelled", async () => {
     const server = createServer({ answer: { type: "accepted" } });
     const page = await openPage(server);
     await editSecondQuestion(page);
 
-    await queuedPrompt(page);
+    // The edit drops every later turn: a message sent now would be lost to
+    // it, so the composer keeps it.
+    expect(await sendNewMessage(page)).toEqual(CHAT_SEND_KEPT);
     // real-time: give a send that should not happen the time to start.
     await sleep(50);
     expect(server.posted).toEqual([]);
-    expect(page.session().queuedMessages.map(({ text }) => text)).toEqual([
-      "A queued question",
-    ]);
 
     testing.fireEvent.click(
       testing
         .within(page.view.container)
         .getByRole("button", { name: translations.common.cancel }),
     );
-
     await testing.waitFor(() => {
-      expect(server.posted).toHaveLength(1);
+      expect(editField(page) === null).toBe(true);
     });
+
+    expect(await sendNewMessage(page)).toEqual(CHAT_SEND_SENT);
     expect(server.posted.at(0)?.["forwardedProps"]).toMatchObject({
       message: { id: QUEUED },
     });
-    expect(server.posted.at(0)?.["forwardedProps"]).not.toHaveProperty(
-      "turnIntent",
-    );
-  });
-
-  test("wait for the accepted edit's turn, then follow it", async () => {
-    const server = createServer({ answer: { type: "accepted" } });
-    const page = await openPage(server);
-    await editSecondQuestion(page);
-    await queuedPrompt(page);
-
-    sendEdit(page);
-
-    await testing.waitFor(() => {
-      expect(server.posted).toHaveLength(2);
-    });
-    expect(
-      server.posted.map((body): unknown => {
-        const forwarded: unknown = body["forwardedProps"];
-        const message: unknown =
-          typeof forwarded === "object" && forwarded !== null
-            ? Reflect.get(forwarded, "message")
-            : undefined;
-        const id: unknown =
-          typeof message === "object" && message !== null
-            ? Reflect.get(message, "id")
-            : undefined;
-        return id;
-      }),
-    ).toEqual([SECOND, QUEUED]);
+    expect(server.unexpected).toEqual([]);
   });
 });

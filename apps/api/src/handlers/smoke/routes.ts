@@ -36,10 +36,13 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { logger } from "@/api/lib/observability/logger";
 import { releaseLoadAllowed } from "@/api/lib/scheduler/release-load-deployment";
+import { parseJourneyPrerequisiteId } from "@/api/lib/smoke-session/journey-prerequisites";
 import {
+  bringJourneyPrerequisitesForward,
   bringReleaseLoadJobsForward,
   mintSmokeSession,
   parseSmokePrincipal,
+  readJourneyPrerequisites,
   readReleaseLoadJobRuns,
 } from "@/api/lib/smoke-session/store";
 
@@ -123,12 +126,70 @@ declareAggregateMutation(bringScheduledLoadJobsForward, {
     "Moves the next run of fixed recurring corpus jobs to now on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
 });
 
+const unknownJourney = () => new Response("Unknown journey", { status: 400 });
+
+/**
+ * The scheduled jobs a deployed journey depends on
+ * (`lib/smoke-session/journey-prerequisites.ts`), under the same two gates.
+ * The journey is parsed only after them, as the session route's principal.
+ */
+const bringJourneyPrerequisiteJobsForward = defineEndpoint.public(
+  { bodyMode: "none" },
+  async ({ request }) => {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
+      return notAvailable();
+    }
+    const journey = parseJourneyPrerequisiteId(
+      new URL(request.url).searchParams.get("journey"),
+    );
+    if (journey === null) {
+      return unknownJourney();
+    }
+    const dueAt = new Date();
+    const jobs = await bringJourneyPrerequisitesForward(journey);
+    logger.info("smoke.scheduled_jobs_brought_forward", {
+      "smoke.journey": journey,
+      "smoke.job_ids": jobs.map(({ id }) => id).join(","),
+    });
+    return { dueAt: dueAt.toISOString(), jobIds: jobs.map(({ id }) => id) };
+  },
+);
+
+declareAggregateMutation(bringJourneyPrerequisiteJobsForward, {
+  type: "independent",
+  reason:
+    "Moves the next run of a journey's declared recurring jobs ahead of every due job on a non-production deployment. The scheduler's lease claim arbitrates with every replica, so the update shares no aggregate with a request.",
+});
+
+const readJourneyPrerequisiteJobs = defineEndpoint.public(
+  { bodyMode: "none" },
+  async ({ request }) => {
+    if (!isAuthorizedReleaseLoadCaller(request)) {
+      return notAvailable();
+    }
+    const params = new URL(request.url).searchParams;
+    const journey = parseJourneyPrerequisiteId(params.get("journey"));
+    if (journey === null) {
+      return unknownJourney();
+    }
+    const since = new Date(params.get("since") ?? "");
+    if (Number.isNaN(since.getTime())) {
+      return new Response("since must be an ISO timestamp", { status: 400 });
+    }
+    return { prerequisites: await readJourneyPrerequisites(journey, since) };
+  },
+);
+
 export const smokeRoute = routes(
   {
     "/session": { POST: mintSession },
     "/scheduled-jobs": {
       GET: readScheduledLoadJobs,
       POST: bringScheduledLoadJobsForward,
+    },
+    "/scheduled-jobs/journey-prerequisites": {
+      GET: readJourneyPrerequisiteJobs,
+      POST: bringJourneyPrerequisiteJobsForward,
     },
   },
   { prefix: "/smoke" },

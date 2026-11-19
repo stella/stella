@@ -528,6 +528,14 @@ const partialProposalSchema = v.looseObject({
   skipped: v.optional(v.unknown()),
 });
 
+type DrainOptions<TItem> = {
+  raw: readonly unknown[];
+  closed: number;
+  cursor: "positions" | "skipped";
+  schema: v.GenericSchema<TItem>;
+  accept: (item: TItem) => ReviewProposalEvent[];
+};
+
 const readArray = (value: unknown): readonly unknown[] =>
   Array.isArray(value) ? value : [];
 
@@ -551,13 +559,13 @@ export const createPartialProposalReader = (
 ): ((value: unknown, final: boolean) => ReviewProposalEvent[]) => {
   const cursors = { positions: 0, skipped: 0, parties: false };
 
-  const drain = <TItem>(
-    raw: readonly unknown[],
-    closed: number,
-    cursor: "positions" | "skipped",
-    schema: v.GenericSchema<TItem>,
-    accept: (item: TItem) => ReviewProposalEvent[],
-  ): ReviewProposalEvent[] => {
+  const drain = <TItem>({
+    raw,
+    closed,
+    cursor,
+    schema,
+    accept,
+  }: DrainOptions<TItem>): ReviewProposalEvent[] => {
     const events: ReviewProposalEvent[] = [];
     while (cursors[cursor] < closed) {
       const parsed = v.safeParse(schema, raw[cursors[cursor]]);
@@ -591,26 +599,27 @@ export const createPartialProposalReader = (
 
     const rawPositions = readArray(positions);
     events.push(
-      ...drain(
-        rawPositions,
-        final || skipped !== undefined
-          ? rawPositions.length
-          : rawPositions.length - 1,
-        "positions",
-        proposedPositionSchema,
-        normalizer.position,
-      ),
+      ...drain({
+        raw: rawPositions,
+        closed:
+          final || skipped !== undefined
+            ? rawPositions.length
+            : rawPositions.length - 1,
+        cursor: "positions",
+        schema: proposedPositionSchema,
+        accept: normalizer.position,
+      }),
     );
 
     const rawSkipped = readArray(skipped);
     events.push(
-      ...drain(
-        rawSkipped,
-        final ? rawSkipped.length : rawSkipped.length - 1,
-        "skipped",
-        skippedTermSchema,
-        normalizer.skipped,
-      ),
+      ...drain({
+        raw: rawSkipped,
+        closed: final ? rawSkipped.length : rawSkipped.length - 1,
+        cursor: "skipped",
+        schema: skippedTermSchema,
+        accept: normalizer.skipped,
+      }),
     );
     return events;
   };

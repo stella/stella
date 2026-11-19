@@ -8,9 +8,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import { evaluate } from "./github-expression";
 
 // CI runs this file in "Test release policy scripts" without the dependency
@@ -700,7 +702,7 @@ describe("API deployment health receipt", () => {
     const checkouts = steps.filter(
       (step) =>
         typeof step["uses"] === "string" &&
-        step["uses"].startsWith("actions/checkout@"),
+        isRepositoryCheckoutAction(step["uses"]),
     );
     expect(checkouts).toHaveLength(1);
     const checkoutWith = checkouts.at(0)?.["with"];
@@ -864,7 +866,7 @@ describe("API deployment health receipt", () => {
     const workflowsDir = new URL("../.github/workflows/", import.meta.url);
     const consumers: { run: string; env: Record<string, unknown> }[] = [];
     for await (const file of new Bun.Glob("*.yml").scan(
-      workflowsDir.pathname,
+      fileURLToPath(workflowsDir),
     )) {
       const steps = workflowSteps(
         Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
@@ -1348,24 +1350,11 @@ describe("API deployment health receipt", () => {
       ),
       "utf-8",
     );
-    const psGalleryPreflight = desktopWindowsBuildAction.indexOf(
-      "Ensure PSGallery is registered",
-    );
-    const azureSigning = desktopWindowsBuildAction.indexOf(
-      "azure/trusted-signing-action@",
-    );
-    expect(psGalleryPreflight).toBeGreaterThanOrEqual(0);
-    expect(azureSigning).toBeGreaterThan(psGalleryPreflight);
-    expect(desktopWindowsBuildAction).toContain(
-      "Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue",
-    );
-    expect(desktopWindowsBuildAction).toContain("if (-not $repository) {");
-    expect(desktopWindowsBuildAction).toContain(
-      "Register-PSRepository -Default",
-    );
-    expect(desktopWindowsBuildAction).toContain(
-      "https://www.powershellgallery.com/api/v2",
-    );
+    const executableSigning =
+      desktopWindowsBuildAction.indexOf(" sign-windows ");
+    const updaterSigning = desktopWindowsBuildAction.indexOf(" resign ");
+    expect(executableSigning).toBeGreaterThanOrEqual(0);
+    expect(updaterSigning).toBeGreaterThan(executableSigning);
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: version.json");
     expect(desktopManifest).toContain(
@@ -1741,7 +1730,7 @@ test("target-owned journeys require their harness before setup and execution", (
         .findLastIndex(
           (step) =>
             typeof step["uses"] === "string" &&
-            step["uses"].startsWith("actions/checkout@"),
+            isRepositoryCheckoutAction(step["uses"]),
         );
       const setup = steps.findIndex((step) => step["name"] === "Setup Bun");
       expect(guard).toBeGreaterThan(checkout);
@@ -1776,7 +1765,7 @@ test("target-owned journeys require their harness before setup and execution", (
       }
     }
   }
-  expect(guardedJobs).toBe(4);
+  expect(guardedJobs).toBe(5);
 });
 
 test("journey reports upload from the directory the journey run writes", () => {
@@ -1879,7 +1868,7 @@ test("journey reports upload from the directory the journey run writes", () => {
       uploads += 1;
     }
   }
-  expect(uploads).toBe(4);
+  expect(uploads).toBe(5);
 });
 
 describe("deployment environment verification", () => {

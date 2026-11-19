@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { readFileEndpoint } from "@/api/handlers/files/routes";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
@@ -15,16 +17,14 @@ import {
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 describe("account lifecycle handlers", () => {
   test.each([undefined, "org_account"])(
     "checks account eligibility before membership or account changes with binding %s",
     async (binding) => {
-      const previous = {
-        email: env.DEMO_ACCOUNT_EMAIL,
-        organizationId: env.DEMO_ACCOUNT_ORGANIZATION_ID,
-      };
-      env.DEMO_ACCOUNT_EMAIL = "account@example.test";
-      env.DEMO_ACCOUNT_ORGANIZATION_ID = binding;
+      testState.setConfig("DEMO_ACCOUNT_EMAIL", "account@example.test");
+      testState.setConfig("DEMO_ACCOUNT_ORGANIZATION_ID", binding);
       const user = {
         id: toSafeId<"user">("user_account"),
         email: "account@example.test",
@@ -33,48 +33,47 @@ describe("account lifecycle handlers", () => {
         {},
         { visibleResources: { field: ["field_account"] } },
       );
-      try {
-        const downloaded = await readFileEndpoint.handler(
-          createTestHandlerContext<
-            Parameters<typeof readFileEndpoint.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb,
-            scopedDb,
-            user,
-            params: {
-              workspaceId: "workspace_account",
-              fieldId: "field_account",
-            },
-            query: { purpose: "download" },
-          }),
-        );
-        const added = await addWorkspaceMember.handler(
-          createTestHandlerContext<
-            Parameters<typeof addWorkspaceMember.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb: NO_DB,
-            scopedDb: NO_DB,
-            user,
-            body: { userId: "user_other" },
-          }),
-        );
-        const removed = await removeWorkspaceMember.handler(
-          createTestHandlerContext<
-            Parameters<typeof removeWorkspaceMember.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb: NO_DB,
-            scopedDb: NO_DB,
-            user,
-            params: { workspaceId: "workspace_account", userId: "user_other" },
-          }),
-        );
-        const created = await createWorkspace.handler(
-          createTestHandlerContext<
-            Parameters<typeof createWorkspace.handler>[0]
-          >({
+
+      const downloaded = await readFileEndpoint.handler(
+        createTestHandlerContext<
+          Parameters<typeof readFileEndpoint.handler>[0]
+        >({
+          audit: NO_AUDIT,
+          safeDb,
+          scopedDb,
+          user,
+          params: {
+            workspaceId: "workspace_account",
+            fieldId: "field_account",
+          },
+          query: { purpose: "download" },
+        }),
+      );
+      const added = await addWorkspaceMember.handler(
+        createTestHandlerContext<
+          Parameters<typeof addWorkspaceMember.handler>[0]
+        >({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          user,
+          body: { userId: "user_other" },
+        }),
+      );
+      const removed = await removeWorkspaceMember.handler(
+        createTestHandlerContext<
+          Parameters<typeof removeWorkspaceMember.handler>[0]
+        >({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          user,
+          params: { workspaceId: "workspace_account", userId: "user_other" },
+        }),
+      );
+      const created = await createWorkspace.handler(
+        createTestHandlerContext<Parameters<typeof createWorkspace.handler>[0]>(
+          {
             audit: NO_AUDIT,
             safeDb: NO_DB,
             scopedDb: NO_DB,
@@ -94,28 +93,25 @@ describe("account lifecycle handlers", () => {
               name: "Matter",
               filePropertyName: "Documents",
             },
-          }),
-        );
-        const deleted = await deleteAccountVerify.handler(
-          createTestHandlerContext<
-            Parameters<typeof deleteAccountVerify.handler>[0]
-          >({
-            audit: NO_AUDIT,
-            safeDb: NO_DB,
-            scopedDb: NO_DB,
-            user,
-            body: { code: "123456" },
-          }),
-        );
-        for (const response of [downloaded, added, removed, created, deleted]) {
-          expect(response).toMatchObject({
-            code: 403,
-            response: { code: "account_access_unavailable" },
-          });
-        }
-      } finally {
-        env.DEMO_ACCOUNT_EMAIL = previous.email;
-        env.DEMO_ACCOUNT_ORGANIZATION_ID = previous.organizationId;
+          },
+        ),
+      );
+      const deleted = await deleteAccountVerify.handler(
+        createTestHandlerContext<
+          Parameters<typeof deleteAccountVerify.handler>[0]
+        >({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          user,
+          body: { code: "123456" },
+        }),
+      );
+      for (const response of [downloaded, added, removed, created, deleted]) {
+        expect(response).toMatchObject({
+          code: 403,
+          response: { code: "account_access_unavailable" },
+        });
       }
     },
   );

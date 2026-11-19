@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { SKILL_RESOURCE_UPLOAD_MAX_BYTES } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { DocumentMark } from "@stll/ui/document-mark";
@@ -40,6 +41,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -47,6 +49,7 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
@@ -86,8 +89,6 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // translated default would fail validation.
 const NEW_FOLDER_BASE = "new-folder";
 
-const UPLOAD_MAX_BYTES_TEXT = 100_000;
-const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME = "application/pdf";
@@ -567,8 +568,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // drop, so identically named files get distinct paths instead of colliding.
   const handleUpload = async (file: File, takenPaths: Set<string>) => {
     const binary = isBinaryUpload(file);
-    const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
-    if (file.size > maxBytes) {
+    if (file.size > SKILL_RESOURCE_UPLOAD_MAX_BYTES) {
       notifyUserProblem(t("common.unexpectedError"), {
         description: tSkills("uploadHelp"),
       });
@@ -696,11 +696,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: {
-                      skillDisplayName: detail.data.name,
+                    activeSkill: skillEditorChatSkill({
+                      name: detail.data.name,
                       skillId,
-                      skillName: detail.data.slug,
-                    },
+                      slug: detail.data.slug,
+                    }),
                     label: detail.data.name,
                   })
                 }
@@ -1146,9 +1146,7 @@ function SkillFileTree({
           );
         }
         return (
-          <span className="overflow-hidden text-ellipsis whitespace-pre">
-            {node.name}
-          </span>
+          <TruncatedText className="whitespace-pre">{node.name}</TruncatedText>
         );
       }}
       selectedId={selectedId}

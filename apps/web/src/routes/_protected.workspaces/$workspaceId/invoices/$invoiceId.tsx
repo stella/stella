@@ -55,6 +55,12 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  CallerFeatureGate,
+  useCallerFeatureAdmission,
+} from "@/lib/organization/feature-access/access";
+import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -62,6 +68,7 @@ import {
   toFormErrors,
   trimmedStringSchema,
 } from "@/lib/schema";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   invoiceByIdOptions,
   invoicesKeys,
@@ -79,6 +86,10 @@ import {
   invoiceTakesPayments,
   isPartiallyPaid,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
+import {
+  InvoiceSendsSection,
+  SendInvoiceForm,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -234,6 +245,9 @@ const InvoiceDetail = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [sendDialog, setSendDialog] = useState<SendDialogState>({
+    type: "closed",
+  });
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const canUpdateInvoice = usePermissions({ invoice: ["update"] });
 
@@ -259,16 +273,28 @@ const InvoiceDetail = ({
   type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
   const transitionMutation = useMutation({
-    mutationFn: async (action: TransitionAction) => {
-      const response = await api
-        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
-          invoiceId: toSafeId<"invoice">(invoiceId),
-        })
-        .transition.post({
-          action,
-        });
-      return unwrapApiResponse(response);
-    },
+    mutationFn: resourceMutation({
+      mutation: "transitionInvoice",
+      queryClient,
+      mutationFn: async ({
+        action,
+        workspaceId: mutationWorkspaceId,
+      }: {
+        action: TransitionAction;
+        workspaceId: string;
+      }) => {
+        const response = await api
+          .invoices({
+            workspaceId: toSafeId<"workspace">(mutationWorkspaceId),
+          })({
+            invoiceId: toSafeId<"invoice">(invoiceId),
+          })
+          .transition.post({
+            action,
+          });
+        return unwrapApiResponse(response);
+      },
+    }),
     onSuccess: () => {
       invalidateAll();
     },
@@ -359,6 +385,7 @@ const InvoiceDetail = ({
             </h2>
             <InvoiceStatusBadge
               partiallyPaid={isPartiallyPaid(invoice)}
+              settlement={invoice.settlement}
               status={invoiceStatus}
             />
           </div>
@@ -368,6 +395,16 @@ const InvoiceDetail = ({
               {t("billing.invoices.payments.outstandingAmount", {
                 amount: formatCurrencyAmount(
                   invoice.outstandingAmount,
+                  invoice.currency,
+                ),
+              })}
+            </p>
+          )}
+          {invoice.settlement.kind === "overpaid" && (
+            <p className="text-muted-foreground text-sm tabular-nums">
+              {t("billing.invoices.payments.refundAmount", {
+                amount: formatCurrencyAmount(
+                  invoice.settlement.refundAmount,
                   invoice.currency,
                 ),
               })}
@@ -392,7 +429,10 @@ const InvoiceDetail = ({
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}
             onEdit={() => setEditOpen(true)}
-            onTransition={(action) => transitionMutation.mutate(action)}
+            onSend={() => setSendDialog({ type: "open", recipients: null })}
+            onTransition={(action) =>
+              transitionMutation.mutate({ action, workspaceId })
+            }
           />
         </div>
       </div>
@@ -689,6 +729,16 @@ const InvoiceDetail = ({
         </>
       )}
 
+      <InvoiceLinkControls
+        canUpdateInvoice={canUpdateInvoice}
+        invoiceId={invoiceId}
+        invoiceNumber={invoice.invoiceNumber}
+        invoiceStatus={invoiceStatus}
+        sendDialog={sendDialog}
+        setSendDialog={setSendDialog}
+        workspaceId={workspaceId}
+      />
+
       {/* Edit dialog */}
       <Dialog onOpenChange={setEditOpen} open={editOpen}>
         <DialogPopup className="max-w-md">
@@ -709,6 +759,78 @@ const InvoiceDetail = ({
   );
 };
 
+type SendDialogState =
+  { type: "closed" } | { type: "open"; recipients: readonly string[] | null };
+
+type InvoiceLinkControlsProps = {
+  canUpdateInvoice: boolean;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  invoiceStatus: InvoiceStatus;
+  sendDialog: SendDialogState;
+  setSendDialog: (state: SendDialogState) => void;
+  workspaceId: string;
+};
+
+function InvoiceLinkControls({
+  canUpdateInvoice,
+  invoiceId,
+  invoiceNumber,
+  invoiceStatus,
+  sendDialog,
+  setSendDialog,
+  workspaceId,
+}: InvoiceLinkControlsProps) {
+  const admission = useCallerFeatureAdmission(CALLER_FEATURE.invoiceLinks);
+  if (!canUpdateInvoice) {
+    return null;
+  }
+  return (
+    <>
+      {invoiceStatus !== "draft" && (
+        <InvoiceSendsSection
+          sendControl={
+            admission !== undefined && invoiceStatus !== "void"
+              ? {
+                  type: "available",
+                  admission,
+                  onSendAgain: (recipients) =>
+                    setSendDialog({ type: "open", recipients }),
+                }
+              : { type: "hidden" }
+          }
+          invoiceId={invoiceId}
+          workspaceId={workspaceId}
+        />
+      )}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendDialog({ type: "closed" });
+          }
+        }}
+        open={admission !== undefined && sendDialog.type === "open"}
+      >
+        <DialogPopup className="max-w-md">
+          {admission !== undefined &&
+          sendDialog.type === "open" &&
+          invoiceNumber !== null ? (
+            <SendInvoiceForm
+              admission={admission}
+              invoiceId={invoiceId}
+              invoiceNumber={invoiceNumber}
+              onClose={() => setSendDialog({ type: "closed" })}
+              recipients={sendDialog.recipients}
+              workspaceId={workspaceId}
+            />
+          ) : null}
+        </DialogPopup>
+      </Dialog>
+    </>
+  );
+}
+
 const InfoCell = ({ label, value }: { label: string; value: string }) => (
   <div>
     <p className="text-muted-foreground text-xs">{label}</p>
@@ -721,6 +843,7 @@ const InvoiceActions = ({
   onTransition,
   onEdit,
   onDelete,
+  onSend,
 }: {
   invoiceStatus: InvoiceStatus;
   onTransition: (
@@ -728,6 +851,7 @@ const InvoiceActions = ({
   ) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSend: () => void;
 }) => {
   const t = useTranslations("billing.invoices");
   const rootT = useTranslations();
@@ -771,13 +895,25 @@ const InvoiceActions = ({
       return (
         <>
           {canUpdateInvoice && (
+            <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+              {(admission) => (
+                <SendInvoiceButton
+                  admission={admission}
+                  onSend={onSend}
+                  variant="outline"
+                  label={t("send")}
+                />
+              )}
+            </CallerFeatureGate>
+          )}
+          {canUpdateInvoice && (
             <Button
               onClick={() => onTransition("send")}
               size="sm"
-              variant="outline"
+              variant="ghost"
             >
-              <SendIcon className="size-3.5" />
-              {t("send")}
+              <CheckIcon className="size-3.5" />
+              {t("markSent")}
             </Button>
           )}
           {canUpdateInvoice && (
@@ -807,15 +943,27 @@ const InvoiceActions = ({
     case "sent":
     case "paid":
       return canUpdateInvoice ? (
-        <ConfirmAction
-          description={t("confirmVoid")}
-          onConfirm={() => onTransition("void")}
-        >
-          <Button size="sm" variant="destructive">
-            <XCircleIcon className="size-3.5" />
-            {t("void")}
-          </Button>
-        </ConfirmAction>
+        <>
+          <CallerFeatureGate feature={CALLER_FEATURE.invoiceLinks}>
+            {(admission) => (
+              <SendInvoiceButton
+                admission={admission}
+                onSend={onSend}
+                variant="ghost"
+                label={t("sendByEmail")}
+              />
+            )}
+          </CallerFeatureGate>
+          <ConfirmAction
+            description={t("confirmVoid")}
+            onConfirm={() => onTransition("void")}
+          >
+            <Button size="sm" variant="destructive">
+              <XCircleIcon className="size-3.5" />
+              {t("void")}
+            </Button>
+          </ConfirmAction>
+        </>
       ) : null;
     case "void":
       return null;
@@ -1012,3 +1160,19 @@ const EditInvoiceForm = ({
     </Form>
   );
 };
+
+const SendInvoiceButton = ({
+  onSend,
+  variant,
+  label,
+}: {
+  admission: FeatureAdmission<"invoice-links">;
+  onSend: () => void;
+  variant: "outline" | "ghost";
+  label: string;
+}) => (
+  <Button onClick={onSend} size="sm" variant={variant}>
+    <SendIcon className="size-3.5" />
+    {label}
+  </Button>
+);

@@ -1,9 +1,10 @@
 import { panic, Result } from "better-result";
 
+import { SKILL_SOURCE_UNREACHABLE_CODE } from "@stll/api-contract";
 import type { ZipEntry } from "@stll/docx-core/zip";
 import {
-  isAllowedResourcePath,
-  isSkillResourceFolder,
+  isKnownBinaryResourcePath,
+  isOsMetadataPath,
   normalizeResourcePath,
   validateSkillPackage,
 } from "@stll/skills";
@@ -48,20 +49,30 @@ const USER_GITHUB_FETCH_ACCESS = { source: "user" } as const;
 type GithubSkillFetchAccess =
   { source: "catalogue"; githubToken?: string } | { source: "user" };
 
-const githubSkillFetchHeaders = ({
+/**
+ * GitHub API headers for one skill source request. A catalogue read uses the
+ * catalogue token; a source the person linked uses only the public-repository
+ * token, so it can never read what the catalogue token can see. Either token
+ * goes to api.github.com alone.
+ */
+export const githubSkillFetchHeaders = ({
   access,
   hostname,
+  publicGithubToken,
 }: {
   access: GithubSkillFetchAccess;
   hostname: string;
-}): Record<string, string> => ({
-  ...GITHUB_FETCH_HEADERS,
-  ...(access.source === "catalogue" &&
-  access.githubToken &&
-  hostname === "api.github.com"
-    ? { Authorization: `Bearer ${access.githubToken}` }
-    : {}),
-});
+  publicGithubToken?: string | undefined;
+}): Record<string, string> => {
+  const token =
+    access.source === "catalogue" ? access.githubToken : publicGithubToken;
+  return {
+    ...GITHUB_FETCH_HEADERS,
+    ...(token && hostname === "api.github.com"
+      ? { Authorization: `Bearer ${token}` }
+      : {}),
+  };
+};
 
 type ParsedSkillResource = {
   content: string;
@@ -87,7 +98,13 @@ export type ParsedSkillPackage = {
   version: string | null;
 };
 
-/** Why an uploaded package file was left out of the installed skill. */
+/**
+ * Why an uploaded package file was left out of the installed skill. A package
+ * keeps files in any folder now; `unsupported-folder` stays only because
+ * upload records written before still carry it. `unsupported-extension` is a
+ * file whose extension says it is binary, `not-utf8-text` one whose bytes are
+ * not UTF-8 text.
+ */
 export const SKIPPED_SKILL_FILE_REASON = {
   OUTSIDE_SKILL_FOLDER: "outside-skill-folder",
   UNSUPPORTED_FOLDER: "unsupported-folder",
@@ -184,6 +201,8 @@ type SkillSourceRequestBudget = {
   deadlineAt: number;
   permit: ThirdPartyOutboundPermit;
   fetchBytes?: typeof safeOutboundFetchBytes;
+  /** GitHub token limited to public repositories, for sources a person links. */
+  publicGithubToken?: string | undefined;
   remainingRequests?: number;
   timeoutMessage?: string;
 };
@@ -203,17 +222,20 @@ type CreateSkillPackageFetchContextOptions = {
     maxRequests: number;
   };
   fetchBytes?: typeof safeOutboundFetchBytes;
+  publicGithubToken?: string | undefined;
 };
 
 export const createSkillPackageFetchContext = ({
   permit,
   limits,
   fetchBytes = safeOutboundFetchBytes,
+  publicGithubToken,
 }: CreateSkillPackageFetchContextOptions): SkillPackageFetchContext => ({
   requestBudget: {
     deadlineAt: limits?.deadlineAt ?? Number.POSITIVE_INFINITY,
     fetchBytes,
     permit,
+    ...(publicGithubToken ? { publicGithubToken } : {}),
     ...(limits === undefined ? {} : { remainingRequests: limits.maxRequests }),
     timeoutMessage: "Skill import timed out",
   },
@@ -354,8 +376,7 @@ export const fetchGithubCatalogueSkillPackage = async ({
       source: "catalogue",
       ...(githubToken ? { githubToken } : {}),
     };
-    const fetched = await fetchGithubSkillFiles(skillTarget, context);
-    return fetched.map(({ files }) => files);
+    return await fetchGithubSkillFiles(skillTarget, context);
   },
   sourceUrl,
   target,
@@ -363,7 +384,7 @@ export const fetchGithubCatalogueSkillPackage = async ({
   permit: ThirdPartyOutboundPermit;
   fetchFiles?: (
     target: GithubSkillPath,
-  ) => Promise<Result<SkillFile[], HandlerError>>;
+  ) => Promise<Result<GithubSkillFiles, HandlerError>>;
   githubToken?: string;
   sourceUrl: string;
   target: GithubSkillPath;
@@ -374,7 +395,13 @@ export const fetchGithubCatalogueSkillPackage = async ({
       if (files.isErr()) {
         return Result.err(files.error);
       }
-      const parsed = parseSkillFiles(files.value);
+      const parsed = parseSkillFiles(
+        files.value.files,
+        skippedResourcePaths({
+          rootPrefix: "",
+          skippedFiles: files.value.skippedFiles,
+        }),
+      );
       if (parsed.isErr()) {
         return Result.err(parsed.error);
       }
@@ -389,12 +416,14 @@ export const fetchGithubCatalogueSkillPackage = async ({
 type DiscoverSkillPackagesFromUrlOptions = {
   fetchBytes?: typeof safeOutboundFetchBytes;
   permit: ThirdPartyOutboundPermit;
+  publicGithubToken?: string | undefined;
   rawUrl: string;
 };
 
 export const discoverSkillPackagesFromUrl = async ({
   fetchBytes = safeOutboundFetchBytes,
   permit,
+  publicGithubToken,
   rawUrl,
 }: DiscoverSkillPackagesFromUrlOptions): Promise<
   Result<SkillPackageDiscovery, HandlerError>
@@ -407,6 +436,7 @@ export const discoverSkillPackagesFromUrl = async ({
           GITHUB_DISCOVERY_TIMEOUT_MS,
         fetchBytes,
         permit,
+        ...(publicGithubToken ? { publicGithubToken } : {}),
       };
       const githubTarget = await parseGithubDiscoveryPath(rawUrl, budget);
       if (githubTarget.isErr()) {
@@ -442,16 +472,25 @@ export const discoverSkillPackagesFromUrl = async ({
     toError: toHandlerError,
   });
 
+/**
+ * A package of SKILL.md alone. `entrypointOnly` marks a SKILL.md read without
+ * its folder (discovery), whose named files are checked at import instead.
+ */
 const parseMarkdownSkillPackage = (
   source: string,
+  { entrypointOnly = false }: { entrypointOnly?: boolean } = {},
 ): Result<ParsedSkillPackage, HandlerError> =>
-  parseSkillFiles([
-    {
-      content: source,
-      path: SKILL_FILE_NAME,
-      sizeBytes: encodedSize(source),
-    },
-  ]);
+  parseSkillFiles(
+    [
+      {
+        content: source,
+        path: SKILL_FILE_NAME,
+        sizeBytes: encodedSize(source),
+      },
+    ],
+    new Set(),
+    { entrypointOnly },
+  );
 
 const parseMarkdownSkillPackageBytes = (
   buffer: ArrayBuffer | Uint8Array,
@@ -474,6 +513,7 @@ type ZipPackageEntry = {
 
 type PackagePathVerdict =
   | { type: "entrypoint" }
+  | { type: "ignored" }
   | { type: "resource" }
   | { type: "skipped"; reason: SkippedSkillFileReason };
 
@@ -501,13 +541,13 @@ const classifyPackageFilePath = ({
     };
   }
   const relativePath = path.slice(rootPrefix.length);
-  if (!isSkillResourceFolder(relativePath.split("/").at(0) ?? "")) {
-    return {
-      type: "skipped",
-      reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_FOLDER,
-    };
+  // Finder and archiver metadata is no part of any skill: dropped unreported.
+  if (isOsMetadataPath(relativePath)) {
+    return { type: "ignored" };
   }
-  if (!isAllowedResourcePath(relativePath)) {
+  // Any folder and file is part of the skill (Agent Skills spec); a file
+  // whose extension says it is binary is left out before it is read.
+  if (isKnownBinaryResourcePath(relativePath)) {
     return {
       type: "skipped",
       reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_EXTENSION,
@@ -560,6 +600,9 @@ const parseZipSkillPackage = async (
       rootPrefix,
       skillFilePath: skillFilePath.value,
     });
+    if (verdict.type === "ignored") {
+      continue;
+    }
     if (verdict.type === "skipped") {
       skippedFiles.push({ path, reason: verdict.reason });
       continue;
@@ -596,16 +639,36 @@ const parseZipSkillPackage = async (
     files.push({ content: content.value, path, sizeBytes: bytes.byteLength });
   }
 
-  const parsed = parseSkillFiles(files);
+  const parsed = parseSkillFiles(
+    files,
+    skippedResourcePaths({ rootPrefix, skippedFiles }),
+  );
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
   return Result.ok({ ...parsed.value, skippedFiles });
 };
 
+/**
+ * The skipped files' paths relative to the skill folder, so a SKILL.md that
+ * names a binary asset the import left out is not refused for a missing file.
+ */
+const skippedResourcePaths = ({
+  rootPrefix,
+  skippedFiles,
+}: {
+  rootPrefix: string;
+  skippedFiles: readonly SkippedSkillFile[];
+}): ReadonlySet<string> =>
+  new Set(
+    skippedFiles
+      .filter(({ path }) => path.startsWith(rootPrefix))
+      .map(({ path }) => path.slice(rootPrefix.length)),
+  );
+
 type DecodePackageFileOptions = {
   bytes: ArrayBuffer | Uint8Array;
-  verdict: Exclude<PackagePathVerdict, { type: "skipped" }>;
+  verdict: Exclude<PackagePathVerdict, { type: "ignored" | "skipped" }>;
 };
 
 /**
@@ -633,11 +696,19 @@ const checkZipUncompressedLimit = (
     ? Result.ok()
     : rejectSkillPackage("Skill pack uncompressed content is too large");
 
-const parseSkillFiles = (
+/**
+ * Validate a skill folder's files into the package every install path stores.
+ * `skippedPaths` are package files the import left out (binary files).
+ */
+export const parseSkillFiles = (
   files: readonly SkillFile[],
+  skippedPaths: ReadonlySet<string> = new Set(),
+  { entrypointOnly = false }: { entrypointOnly?: boolean } = {},
 ): Result<ParsedSkillPackage, HandlerError> => {
   const validated = validateSkillPackage({
+    entrypointOnly,
     files,
+    skippedPaths,
     tools: { known: skillRequirableToolNames(), type: "check" },
   });
   if (validated.isErr()) {
@@ -759,14 +830,17 @@ const fetchGithubSkillPackage = async (
     return Result.err(fetched.error);
   }
   const { files, skippedFiles } = fetched.value;
-  const parsed = parseSkillFiles(files);
+  const parsed = parseSkillFiles(
+    files,
+    skippedResourcePaths({ rootPrefix: "", skippedFiles }),
+  );
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
   return Result.ok({ ...parsed.value, skippedFiles, sourceUrl: originalUrl });
 };
 
-type GithubSkillFiles = {
+export type GithubSkillFiles = {
   files: SkillFile[];
   skippedFiles: SkippedSkillFile[];
 };
@@ -816,6 +890,9 @@ const fetchGithubSkillFiles = async (
       rootPrefix: "",
       skillFilePath: SKILL_FILE_NAME,
     });
+    if (verdict.type === "ignored") {
+      continue;
+    }
     if (verdict.type === "skipped") {
       skippedFiles.push({ path: normalizedPath, reason: verdict.reason });
       continue;
@@ -826,12 +903,14 @@ const fetchGithubSkillFiles = async (
       if (resourcePath.isErr()) {
         return Result.err(resourcePath.error);
       }
-      if (resourcePaths.has(normalizedPath)) {
+      // Paths that differ only in case or Unicode form unpack onto one file.
+      const collisionKey = normalizedPath.toLowerCase();
+      if (resourcePaths.has(collisionKey)) {
         return rejectSkillPackage(
           `Skill contains a duplicate resource path: ${normalizedPath}`,
         );
       }
-      resourcePaths.add(normalizedPath);
+      resourcePaths.add(collisionKey);
       resourceCount += 1;
       if (resourceCount > LIMITS.agentSkillResourcesPerSkill) {
         return rejectSkillPackage("Skill has too many resources");
@@ -933,11 +1012,8 @@ const fetchGithubTreeOnce = async ({
         path: item.path,
         rootPath,
       });
-      return (
-        relativePath !== null &&
-        !relativePath.includes("/") &&
-        isSkillResourceFolder(relativePath)
-      );
+      // Every folder beside SKILL.md belongs to the skill.
+      return relativePath !== null && !relativePath.includes("/");
     });
     const resourceTrees = await mapWithConcurrency({
       items: resourceRoots,
@@ -1325,31 +1401,37 @@ const fetchSafeBytes = async ({
   }
   const response = await (budget.fetchBytes ?? safeOutboundFetchBytes)({
     permit: budget.permit,
-    headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
+    headers: githubSkillFetchHeaders({
+      access,
+      hostname: url.hostname,
+      publicGithubToken: budget.publicGithubToken,
+    }),
     maxBytes,
     timeoutMs: timeoutMs.value,
     url,
   });
   if (Result.isError(response)) {
     return Result.err(
-      new HandlerError({
-        status: access.source === "catalogue" ? 503 : 400,
-        code: "internal_error",
-        message: response.error.message,
-        cause: response.error,
-      }),
+      access.source === "catalogue"
+        ? new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: response.error.message,
+            cause: response.error,
+          })
+        : skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (!response.value.ok) {
+    const message = `Skill source returned HTTP ${response.value.status}`;
     return Result.err(
-      new HandlerError({
-        status:
-          access.source === "catalogue"
-            ? catalogueUpstreamStatus(response.value.status)
-            : 400,
-        code: "internal_error",
-        message: `Skill source returned HTTP ${response.value.status}`,
-      }),
+      access.source === "catalogue"
+        ? new HandlerError({
+            status: catalogueUpstreamStatus(response.value.status),
+            code: "internal_error",
+            message,
+          })
+        : skillSourceUnreachable(message),
     );
   }
   return Result.ok(response.value);
@@ -1373,8 +1455,10 @@ const startSkillSourceRequest = (
   const remainingMs =
     budget.deadlineAt - Temporal.Now.instant().epochMilliseconds;
   if (remainingMs <= 0) {
-    return rejectSkillPackage(
-      budget.timeoutMessage ?? "GitHub skill discovery timed out",
+    return Result.err(
+      skillSourceUnreachable(
+        budget.timeoutMessage ?? "GitHub skill discovery timed out",
+      ),
     );
   }
   return Result.ok(Math.min(GITHUB_API_TIMEOUT_MS, remainingMs));
@@ -1423,19 +1507,17 @@ const githubRefKindExists = async ({
   });
   if (Result.isError(response)) {
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: response.error.message,
-        cause: response.error,
-      }),
+      skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (response.value.status === 404) {
     return Result.ok(false);
   }
   if (!response.value.ok) {
-    return rejectSkillPackage(
-      `Skill source returned HTTP ${response.value.status}`,
+    return Result.err(
+      skillSourceUnreachable(
+        `Skill source returned HTTP ${response.value.status}`,
+      ),
     );
   }
   return Result.ok(true);
@@ -1655,7 +1737,9 @@ const parseGithubDiscoveryPath = async (
     return Result.err(resolved.error);
   }
   if (!resolved.value) {
-    return rejectSkillPackage("GitHub branch or folder could not be resolved");
+    return Result.err(
+      skillSourceUnreachable("GitHub branch or folder could not be resolved"),
+    );
   }
   return Result.ok({ owner, repo, ...resolved.value });
 };
@@ -1775,7 +1859,9 @@ const toDiscoveredGithubSkill = ({
   if (source.isErr()) {
     return Result.err(source.error);
   }
-  const parsed = parseMarkdownSkillPackage(source.value);
+  const parsed = parseMarkdownSkillPackage(source.value, {
+    entrypointOnly: true,
+  });
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
@@ -2072,19 +2158,17 @@ const fetchGithubSkillSourceBytes = async ({
       return Result.ok(null);
     }
     return Result.err(
-      new HandlerError({
-        status: 400,
-        message: response.error.message,
-        cause: response.error,
-      }),
+      skillSourceUnreachable(response.error.message, response.error),
     );
   }
   if (!response.value.ok) {
     if (response.value.status === 404) {
       return Result.ok(null);
     }
-    return rejectSkillPackage(
-      `Skill source returned HTTP ${response.value.status}`,
+    return Result.err(
+      skillSourceUnreachable(
+        `Skill source returned HTTP ${response.value.status}`,
+      ),
     );
   }
   return Result.ok(response.value.body);
@@ -2220,8 +2304,11 @@ const isZipFile = ({
   );
 };
 
-const tryDecodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string | null =>
-  Result.try(() => UTF8_DECODER.decode(buffer)).unwrapOr(null);
+/** UTF-8 text, or `null` for bytes that are not (invalid UTF-8 or a NUL). */
+const tryDecodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string | null => {
+  const text = Result.try(() => UTF8_DECODER.decode(buffer)).unwrapOr(null);
+  return text === null || text.includes("\0") ? null : text;
+};
 
 const decodeUtf8 = (
   buffer: ArrayBuffer | Uint8Array,
@@ -2273,3 +2360,16 @@ const checkSkillResourcePath = (path: string): Result<void, HandlerError> =>
 
 const rejectSkillPackage = (message: string) =>
   Result.err(new HandlerError({ status: 400, message }));
+
+/**
+ * A source the person linked could not be fetched. It stays a 400, the
+ * person's link to fix or retry, but carries its own code so the import
+ * dialog can say so instead of a generic failure.
+ */
+const skillSourceUnreachable = (message: string, cause?: unknown) =>
+  new HandlerError({
+    status: 400,
+    code: SKILL_SOURCE_UNREACHABLE_CODE,
+    message,
+    cause,
+  });

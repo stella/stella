@@ -465,3 +465,34 @@ fn a_memory_journal_numbers_and_acknowledges_alike() {
     encoded_bytes(&event(2, "b")).unwrap()
   );
 }
+
+#[test]
+fn background_counts_are_held_for_the_next_socket_until_they_end() {
+  let journal = SharedJournal::default();
+  let (live, mut sent) = mpsc::unbounded_channel();
+  journal.set_live(live);
+  journal.report_background(RUN.to_owned(), 2);
+  journal.report_background("0192f3a0-6b1c-7d2e-8f30-000000000002".to_owned(), 1);
+  journal.report_background("0192f3a0-6b1c-7d2e-8f30-000000000002".to_owned(), 0);
+  let background = |run_id: &str, count: u32| {
+    DesktopMessage::RunBackground(RunBackground {
+      run_id: run_id.to_owned(),
+      count,
+    })
+  };
+  // Every change goes to the socket that is up, the end of one included.
+  let mut live_sent = Vec::new();
+  while let Ok(message) = sent.try_recv() {
+    live_sent.push(message);
+  }
+  assert_eq!(
+    live_sent,
+    vec![
+      background(RUN, 2),
+      background("0192f3a0-6b1c-7d2e-8f30-000000000002", 1),
+      background("0192f3a0-6b1c-7d2e-8f30-000000000002", 0),
+    ]
+  );
+  // A new socket hears only what still runs.
+  assert_eq!(journal.background_reports(), vec![background(RUN, 2)]);
+}

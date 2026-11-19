@@ -24,6 +24,7 @@ const ROOT_DATABASE_MEMBERS = [
   "insert",
   "query",
   "select",
+  "selectDistinctOn",
   "transaction",
   "update",
 ] as const;
@@ -62,6 +63,10 @@ const installDatabaseBoundary = (database: TestDatabase) => {
     insert: { configurable: true, value: database.insert.bind(database) },
     query: { configurable: true, value: database.query },
     select: { configurable: true, value: database.select.bind(database) },
+    selectDistinctOn: {
+      configurable: true,
+      value: database.selectDistinctOn.bind(database),
+    },
     transaction: {
       configurable: true,
       value: async <T>(

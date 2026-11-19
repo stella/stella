@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -17,13 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
-import {
-  buildCreateDocumentDownloadFileName,
-  type CreateDocumentDraft,
-} from "@/components/chat/create-document-draft.logic";
+import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { hasMessageExportCitations } from "@/components/chat/message-export-menu.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import type { TranslationKey } from "@/i18n/types";
@@ -68,9 +67,7 @@ type MessageExportMenuProps = {
   onOpenChange: (open: boolean) => void;
   open: boolean;
   threadRef: ChatThreadRef;
-  // Optional only for dev HMR compatibility: an already-mounted child can
-  // briefly receive the previous parent's prop shape during a module swap.
-  message?: PersistedChatMessage | undefined;
+  message: PersistedChatMessage;
 };
 
 const compileArtifactDraft = async (artifact: CreateDocumentDraft) => {
@@ -91,8 +88,7 @@ export const MessageExportMenu = ({
 }: MessageExportMenuProps) => {
   const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
-  const hasCitations =
-    message !== undefined && hasMessageExportCitations(message);
+  const hasCitations = hasMessageExportCitations(message);
   const [citationStyle, setCitationStyle] = useState<CitationStyle>(
     hasCitations ? "footnotes" : "none",
   );
@@ -111,12 +107,6 @@ export const MessageExportMenu = ({
     const result = await Result.tryPromise(async () => {
       const downloads: { blob: Blob; fileName: string }[] = [];
       if (includeMessage) {
-        if (message === undefined) {
-          throw new ClientOperationError({
-            action: "export-chat-message",
-            message: "Chat message is unavailable during a live update",
-          });
-        }
         const response = await idempotentSubmit.run({
           operation: `chat.${threadRef.threadId}.export`,
           body: {
@@ -251,9 +241,9 @@ export const MessageExportMenu = ({
                   fileName={artifactFileName}
                   mimeType={DOCX_MIME}
                 />
-                <span className="truncate text-xs font-normal">
+                <TruncatedText className="text-xs font-normal">
                   {artifactFileName}
-                </span>
+                </TruncatedText>
               </Label>
             </div>
           )}
@@ -287,7 +277,6 @@ export const MessageExportMenu = ({
             aria-live="polite"
             disabled={
               isExportPending ||
-              message === undefined ||
               (!includeMessage && (artifact === undefined || !includeArtifact))
             }
             onClick={() => {

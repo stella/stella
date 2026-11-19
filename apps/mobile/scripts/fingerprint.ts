@@ -23,7 +23,11 @@ import path from "node:path";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { APP_VERSION, BAR_GLYPHS_FOLDER } from "../app.config";
+import {
+  APP_VERSION,
+  BAR_GLYPHS_FOLDER,
+  SHARE_EXTENSION_FOLDER,
+} from "../app.config";
 
 export const NATIVE_PLATFORMS = ["ios", "android"] as const;
 
@@ -107,6 +111,17 @@ const createNativeFingerprint = async (
             filePath,
             reasons: ["widgetBundle"],
           }))
+        : []),
+      // The share extension's sources, copied into the native project at
+      // prebuild, out of the config's sight.
+      ...(platform === "ios"
+        ? [
+            {
+              type: "dir" as const,
+              filePath: SHARE_EXTENSION_FOLDER,
+              reasons: ["shareExtension"],
+            },
+          ]
         : []),
       // Copied into the asset catalog at prebuild, out of the config's sight.
       {

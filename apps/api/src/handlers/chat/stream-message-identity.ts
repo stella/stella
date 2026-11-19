@@ -1,11 +1,21 @@
 import {
   EventType,
+  interleaveActivityRecords,
+  modelMessagesToUIMessages,
   modelMessageToUIMessage,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import type { StreamChunk, ToolCall } from "@tanstack/ai";
+import type {
+  ChatMiddlewareContext,
+  StreamChunk,
+  ToolCall,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import {
+  CHAT_TOOL_DECLINED_ERROR,
+  isDeclinedChatToolCall,
+} from "@stll/api-contract/chat";
 import { Temporal } from "@stll/time";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -19,6 +29,7 @@ import type {
 import { classifyAIError } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { SNAPSHOT_OWNERS_METADATA_KEY } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -88,7 +99,7 @@ export const findDeniedApprovals = (
       parts.flatMap((part): [string, DeniedApproval][] =>
         part.type === "tool-call" &&
         "approval" in part &&
-        part.approval.approved === false
+        isDeclinedChatToolCall(part)
           ? [[part.id, part.approval]]
           : [],
       ),
@@ -106,7 +117,7 @@ export const remapOutgoingMessageIds = async function* ({
   mapMessageId,
   source,
 }: RemapOutgoingMessageIdsProps): AsyncIterable<PublicStreamChunk> {
-  const snapshotMessageIds = new Map<string, SafeId<"chatMessage">>();
+  const snapshotMessageIds = new Map<string, string>();
   for await (const chunk of source) {
     yield remapChunkMessageId({
       chunk,
@@ -115,6 +126,54 @@ export const remapOutgoingMessageIds = async function* ({
       snapshotMessageIds,
     });
   }
+};
+
+/** Snapshot-local evidence from the actual SDK model state, after guarding,
+ * compaction and new model calls. Only temporary conversion copies carry row
+ * markers; only the emitted chunk carries the resulting map. The remapper
+ * consumes it before either persistence or client delivery. */
+export const attachSnapshotMessageOwners = (
+  context: Pick<ChatMiddlewareContext, "messages" | "activities" | "runId">,
+  chunk: StreamChunk,
+): StreamChunk => {
+  if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+    return chunk;
+  }
+  const marker = "__stellaSnapshotOwner";
+  const modelUI = modelMessagesToUIMessages(
+    context.messages.map((message, index) => {
+      const id = message.id || `snapshot_${context.runId}_${index}`;
+      return {
+        ...message,
+        id,
+        metadata: { ...message.metadata, [marker]: id },
+      };
+    }),
+  );
+  const rows = uiMessagesToWire(
+    context.activities === undefined
+      ? modelUI
+      : interleaveActivityRecords(modelUI, [...context.activities]),
+    { includeSnapshotStructuredOutput: true, includeActivity: true },
+  );
+  const owners = Object.fromEntries(
+    rows.flatMap((row): [string, string][] => {
+      if (row.role !== "assistant") {
+        return [];
+      }
+      const owner: unknown = isRecord(row.metadata)
+        ? Reflect.get(row.metadata, marker)
+        : undefined;
+      if (typeof owner !== "string") {
+        return panic("The SDK snapshot conversion lost the assistant owner");
+      }
+      return [[row.id, owner]];
+    }),
+  );
+  return {
+    ...chunk,
+    metadata: { ...chunk.metadata, [SNAPSHOT_OWNERS_METADATA_KEY]: owners },
+  };
 };
 
 /**
@@ -158,8 +217,9 @@ export type StoredHistory = {
   rewrittenOnAcceptance: readonly ClientMessage[];
   /**
    * Every stored message the run was handed except the one it continues, by
-   * id, as served. Read at the first snapshot: only a snapshot shows the
-   * history, and most runs carry none.
+   * id, as served. Read at the first snapshot: only a snapshot repeats the
+   * history, and most runs carry none. The page already holds each of these,
+   * so a snapshot leaves them out (`withoutServedHistory`).
    */
   loadServed: () => Promise<
     Result<ReadonlyMap<string, ClientMessage>, SafeDbError>
@@ -208,16 +268,27 @@ const servedSnapshotMessage = (message: ClientMessage): SnapshotMessage => {
 };
 
 /**
- * `messages` with every message `served` holds as the page serves it. The
- * tool messages answering its calls and the reasoning ahead of it are the
- * engine's copy of what its served parts already carry, so they are left
- * out.
+ * `messages` without the stored history the page already holds: every
+ * message `served` holds other than one acceptance `rewritten`, which keeps
+ * its served form. The engine's copies of what served messages carry go too:
+ * the tool messages answering their calls and the reasoning ahead of them.
+ *
+ * The page keeps a message a snapshot leaves out (the web app's
+ * `keepPostedMessagesInSnapshots`), so repeating the history adds nothing but
+ * size: a snapshot that carried it would grow with the thread until the
+ * delivery log could no longer store it as one entry. A rewritten message is
+ * the exception because the page restores an omitted message from the copy it
+ * posted, from before the rewrite; it is one message, so it does not grow with
+ * the thread. What remains besides it is the message the run continues and
+ * what the run itself wrote, which a page load cannot know yet.
  */
-const withServedHistory = ({
+const withoutServedHistory = ({
   messages,
+  rewritten,
   served,
 }: {
   messages: readonly SnapshotMessage[];
+  rewritten: ReadonlySet<string>;
   served: ReadonlyMap<string, ClientMessage>;
 }): SnapshotMessage[] => {
   const servedCallIds = new Set(
@@ -243,19 +314,22 @@ const withServedHistory = ({
     while (presented.at(-1)?.role === "reasoning") {
       presented.pop();
     }
-    presented.push(servedSnapshotMessage(stored));
+    if (rewritten.has(message.id)) {
+      presented.push(servedSnapshotMessage(stored));
+    }
   }
   return presented;
 };
 
 /**
- * Presents the history a run was handed as the thread's page serves it, never
- * as the engine holds it: every snapshot carries each stored message the run
- * does not continue in its served form, so a snapshot and a page load agree
- * field for field, and a turn whose acceptance rewrote a message the page
- * holds opens with that message as stored.
+ * Presents the history a run was handed as the thread's page holds it, never
+ * as the engine holds it: no snapshot repeats a stored message the run does
+ * not continue, so the page keeps each as a page load serves it and a
+ * snapshot's size does not grow with the thread. A turn whose acceptance
+ * rewrote a message the page holds opens with that message as stored, and
+ * every snapshot carries it so.
  *
- * @yields Each chunk of `source`, its snapshots showing the stored history.
+ * @yields Each chunk of `source`, its snapshots without the stored history.
  */
 export const presentStoredHistory = async function* ({
   history: { loadServed, rewrittenOnAcceptance },
@@ -272,6 +346,9 @@ export const presentStoredHistory = async function* ({
           messages: rewrittenOnAcceptance.map(servedSnapshotMessage),
           timestamp: Temporal.Now.instant().epochMilliseconds,
         };
+  const rewritten: ReadonlySet<string> = new Set(
+    rewrittenOnAcceptance.map(({ id }) => id),
+  );
   let served: ReadonlyMap<string, ClientMessage> | undefined;
   for await (const chunk of source) {
     if (opening !== undefined && chunk.type !== EventType.RUN_STARTED) {
@@ -299,7 +376,11 @@ export const presentStoredHistory = async function* ({
     }
     yield {
       ...chunk,
-      messages: withServedHistory({ messages: chunk.messages, served }),
+      messages: withoutServedHistory({
+        messages: chunk.messages,
+        rewritten,
+        served,
+      }),
     };
   }
   if (opening !== undefined) {
@@ -324,29 +405,56 @@ export const ensureAssistantMessageStart = async function* ({
   getOrCreateMessageId,
   source,
 }: EnsureAssistantMessageStartProps): AsyncIterable<PublicStreamChunk> {
-  let hasAssistantMessageStart = false;
+  let binding: "unannounced" | "announced" | "snapshot" = "unannounced";
 
   for await (const chunk of source) {
+    if (chunk.type === EventType.RUN_STARTED) {
+      // Resumed tool results may announce the owner before the new run.
+      binding = "unannounced";
+      yield chunk;
+      continue;
+    }
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      // A snapshot resets SDK routing. Rehydrate an already announced
+      // owner's retained text instead of starting an empty accumulator.
+      if (binding !== "unannounced") {
+        binding = "snapshot";
+      }
+      yield chunk;
+      continue;
+    }
     if (chunk.type === EventType.TEXT_MESSAGE_START) {
-      hasAssistantMessageStart = true;
+      binding = "announced";
       yield chunk;
       continue;
     }
 
-    if (!hasAssistantMessageStart) {
+    if (binding !== "announced") {
       const messageId = getAssistantStartMessageId({
         chunk,
         getOrCreateMessageId,
       });
       if (messageId !== null) {
-        hasAssistantMessageStart = true;
-        yield assistantMessageStartChunk(messageId);
+        yield binding === "snapshot"
+          ? { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: "" }
+          : assistantMessageStartChunk(messageId);
+        binding = "announced";
       }
     }
 
     yield chunk;
   }
 };
+
+/** Reasoning ids identify signed blocks, not the assistant row owning them. */
+const isReasoningEvent = (chunk: PublicStreamChunk): boolean =>
+  chunk.type === EventType.REASONING_START ||
+  chunk.type === EventType.REASONING_MESSAGE_START ||
+  chunk.type === EventType.REASONING_MESSAGE_CONTENT ||
+  chunk.type === EventType.REASONING_MESSAGE_END ||
+  chunk.type === EventType.REASONING_END ||
+  chunk.type === EventType.REASONING_ENCRYPTED_VALUE ||
+  chunk.type === EventType.REASONING_MESSAGE_CHUNK;
 
 const getAssistantStartMessageId = ({
   chunk,
@@ -355,6 +463,9 @@ const getAssistantStartMessageId = ({
   chunk: PublicStreamChunk;
   getOrCreateMessageId: () => SafeId<"chatMessage">;
 }): string | null => {
+  if (isReasoningEvent(chunk)) {
+    return getOrCreateMessageId();
+  }
   if (hasMessageId(chunk)) {
     return chunk.messageId;
   }
@@ -396,7 +507,10 @@ type AssistantSnapshotMessage = Extract<SnapshotMessage, { role: "assistant" }>;
  * the run's messages fold into it rather than beside it.
  *
  * TanStack also splits every assistant message it replays at each tool
- * result, and every copy keeps the message's id. The client keeps one message
+ * result. Older copies shared an id; v1 gives segments unique ids. Ordered
+ * blocks within one model call additionally link with metadata.tanstack.continues.
+ * Result-boundary segments instead use the canonical history ownership map.
+ * The client keeps one message
  * per id, so the snapshot carries exactly one assistant message per id, at
  * the position of that id's first copy; each copy's reasoning moves ahead of
  * it, where the client attaches reasoning to the next assistant message.
@@ -406,17 +520,38 @@ const mergeSnapshotAssistantMessages = ({
   mapMessageId,
   messages,
   snapshotMessageIds,
+  snapshotOwners,
 }: {
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
   messages: readonly SnapshotMessage[];
-  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
+  snapshotMessageIds: Map<string, string>;
+  snapshotOwners: unknown;
 }): SnapshotMessage[] => {
+  const ownersByRowId = new Map<string, string>();
   const groupId = (message: AssistantSnapshotMessage): string => {
-    if (existingMessageIds.has(message.id)) {
-      return message.id;
+    const sourceOwner: unknown = isRecord(snapshotOwners)
+      ? snapshotOwners[message.id]
+      : undefined;
+    if (typeof sourceOwner === "string") {
+      const owner = existingMessageIds.has(sourceOwner)
+        ? sourceOwner
+        : mapMessageId(sourceOwner);
+      snapshotMessageIds.set(message.id, owner);
+      return owner;
     }
-    const mergedId = mapMessageId(message.id);
+    const metadata = isRecord(message.metadata) ? message.metadata : undefined;
+    const tanstack = metadata?.["tanstack"];
+    const continues = isRecord(tanstack) ? tanstack["continues"] : undefined;
+    const owner =
+      typeof continues === "string" ? ownersByRowId.get(continues) : undefined;
+    if (owner !== undefined) {
+      snapshotMessageIds.set(message.id, owner);
+      return owner;
+    }
+    const mergedId = existingMessageIds.has(message.id)
+      ? message.id
+      : mapMessageId(message.id);
     snapshotMessageIds.set(message.id, mergedId);
     return mergedId;
   };
@@ -435,6 +570,7 @@ const mergeSnapshotAssistantMessages = ({
       continue;
     }
     const id = groupId(message);
+    ownersByRowId.set(message.id, id);
     const group = groups.get(id);
     if (group === undefined) {
       const created: AssistantSnapshotGroup = {
@@ -563,6 +699,7 @@ const keepDeniedApprovals = ({
       return [message];
     }
     const toolCallMetadata = readToolCallMetadata(message) ?? {};
+    const denials = deniedOutputs({ deniedApprovals, messages });
     const { parts } = modelMessageToUIMessage(
       {
         content: typeof message.content === "string" ? message.content : null,
@@ -579,9 +716,7 @@ const keepDeniedApprovals = ({
     const inUIForm = {
       ...message,
       parts: parts.map((part) =>
-        part.type === "tool-call"
-          ? asStoredDenial(part, deniedApprovals)
-          : part,
+        part.type === "tool-call" ? asStoredDenial(part, denials) : part,
       ),
     };
     return [inUIForm];
@@ -609,19 +744,66 @@ type UIToolCallPart = Extract<
   { type: "tool-call" }
 >;
 
-/** A rebuilt call as the stored thread holds it when its approval was denied. */
+/** A denied call's approval and the output the engine settled it with. */
+type DeniedOutput = { approval: DeniedApproval; output: unknown };
+
+/**
+ * The output each denied call settles with, as the engine stores it: the
+ * content of the tool message answering it, parsed as the engine's stream
+ * processor parses a result, or the engine's own denial when no message
+ * answers it yet.
+ */
+const deniedOutputs = ({
+  deniedApprovals,
+  messages,
+}: {
+  deniedApprovals: ReadonlyMap<string, DeniedApproval>;
+  messages: readonly SnapshotMessage[];
+}): ReadonlyMap<string, DeniedOutput> => {
+  const answers = new Map(
+    messages.flatMap((message): [string, unknown][] =>
+      message.role === "tool" ? [[message.toolCallId, message.content]] : [],
+    ),
+  );
+  return new Map(
+    [...deniedApprovals].map(([callId, approval]): [string, DeniedOutput] => [
+      callId,
+      { approval, output: storedResultOutput(answers.get(callId)) },
+    ]),
+  );
+};
+
+/** A tool message's content as the engine stores it on the call it
+ *  answers: JSON text parsed, anything else as it is; the engine's denial
+ *  when no message answers the call. */
+const storedResultOutput = (content: unknown): unknown => {
+  if (content === undefined) {
+    return { error: CHAT_TOOL_DECLINED_ERROR };
+  }
+  if (typeof content !== "string") {
+    return content;
+  }
+  return Result.try((): unknown => JSON.parse(content)).unwrapOr(content);
+};
+
+/**
+ * A rebuilt call as the stored thread holds it when its approval was denied:
+ * settled as an error carrying the denial (`declineToolCall`), so the
+ * snapshot and a reload show the same call.
+ */
 const asStoredDenial = (
   part: UIToolCallPart,
-  deniedApprovals: ReadonlyMap<string, DeniedApproval>,
+  denials: ReadonlyMap<string, DeniedOutput>,
 ): UIToolCallPart => {
-  const approval = deniedApprovals.get(part.id);
-  if (approval === undefined) {
+  const denial = denials.get(part.id);
+  if (denial === undefined) {
     return part;
   }
   const denied: UIToolCallPart = {
     ...part,
-    approval,
-    state: "approval-responded",
+    approval: denial.approval,
+    output: denial.output,
+    state: "error",
   };
   return denied;
 };
@@ -635,16 +817,21 @@ const remapChunkMessageId = ({
   chunk: PublicStreamChunk;
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
-  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
+  snapshotMessageIds: Map<string, string>;
 }): PublicStreamChunk => {
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+    const { [SNAPSHOT_OWNERS_METADATA_KEY]: snapshotOwners, ...metadata } =
+      chunk.metadata ?? {};
+    const { metadata: _privateMetadata, ...snapshot } = chunk;
     return {
-      ...chunk,
+      ...snapshot,
+      ...(Object.keys(metadata).length > 0 && { metadata }),
       messages: mergeSnapshotAssistantMessages({
         existingMessageIds,
         mapMessageId,
         messages: chunk.messages,
         snapshotMessageIds,
+        snapshotOwners,
       }),
     };
   }
@@ -652,9 +839,10 @@ const remapChunkMessageId = ({
     existingMessageIds.has(messageId)
       ? messageId
       : (snapshotMessageIds.get(messageId) ?? mapMessageId(messageId));
-  const remappedChunk = hasMessageId(chunk)
-    ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
-    : chunk;
+  const remappedChunk =
+    !isReasoningEvent(chunk) && hasMessageId(chunk)
+      ? { ...chunk, messageId: remapMessageId(chunk.messageId) }
+      : chunk;
 
   const remappedParentChunk =
     "parentMessageId" in remappedChunk &&

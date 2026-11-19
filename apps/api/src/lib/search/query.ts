@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isDocumentReferenceQuery } from "@stll/api-contract";
+import { ownEntry } from "@stll/api-contract/own-key";
 import {
   applyArabicFolds,
   arabicNormalize,
@@ -17,16 +18,14 @@ const FILE_EXTENSION_RE = /^[\p{L}\p{N}]{1,10}$/u;
 const ARABIC_COMPATIBLE_VARIANT_LIMIT = 64;
 type ArabicFoldMode = "compatible" | "folded" | "legacy";
 
-const ARABIC_FOLD_TARGET_ALTERNATES: Readonly<
-  Record<string, readonly string[]>
-> = {
+const ARABIC_FOLD_TARGET_ALTERNATES = {
   ا: ["آ", "أ", "إ", "ٱ"],
   و: ["ؤ"],
   ي: ["ئ", "ى"],
   ه: ["ة"],
-};
+} as const;
 
-const ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
+const ARABIC_INDIC_DIGITS = {
   "0": "٠",
   "1": "١",
   "2": "٢",
@@ -37,9 +36,9 @@ const ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
   "7": "٧",
   "8": "٨",
   "9": "٩",
-};
+} as const;
 
-const EXTENDED_ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
+const EXTENDED_ARABIC_INDIC_DIGITS = {
   "0": "۰",
   "1": "۱",
   "2": "۲",
@@ -50,7 +49,7 @@ const EXTENDED_ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
   "7": "۷",
   "8": "۸",
   "9": "۹",
-};
+} as const satisfies Record<keyof typeof ARABIC_INDIC_DIGITS, string>;
 
 const compact = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -448,7 +447,7 @@ const expandArabicFoldTargetVariants = (text: string): string[] => {
       continue;
     }
 
-    const alternates = ARABIC_FOLD_TARGET_ALTERNATES[char];
+    const alternates = ownEntry(ARABIC_FOLD_TARGET_ALTERNATES, char);
     if (!alternates) {
       continue;
     }
@@ -481,10 +480,13 @@ const expandAsciiDigitVariants = (text: string): string[] => {
   }
 
   return [
-    text.replace(/[0-9]/gu, (digit) => ARABIC_INDIC_DIGITS[digit] ?? digit),
     text.replace(
       /[0-9]/gu,
-      (digit) => EXTENDED_ARABIC_INDIC_DIGITS[digit] ?? digit,
+      (digit) => ownEntry(ARABIC_INDIC_DIGITS, digit) ?? digit,
+    ),
+    text.replace(
+      /[0-9]/gu,
+      (digit) => ownEntry(EXTENDED_ARABIC_INDIC_DIGITS, digit) ?? digit,
     ),
   ].filter((variant) => variant !== text);
 };

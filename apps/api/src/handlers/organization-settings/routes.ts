@@ -26,6 +26,7 @@ import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-e
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import readOrganizationSettings from "@/api/handlers/organization-settings/get";
 import updateLocalRunApprovalCeiling from "@/api/handlers/organization-settings/local-runs/update";
+import updateMemberBillingAccess from "@/api/handlers/organization-settings/members/billing-access/update";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/practice-jurisdictions/update";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
@@ -36,6 +37,7 @@ import updateOrganizationSettings from "@/api/handlers/organization-settings/upd
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
+import updateVerificationDecisionModel from "@/api/handlers/organization-settings/verification-decision-model/update";
 import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -66,6 +68,13 @@ export const organizationSettingsRoute = mount(
           deploymentFeatureGate("FEATURE_TIME_BILLING"),
           featureAccessGate("time-billing"),
         ],
+      },
+    ),
+    routes(
+      { "/": { POST: updateVerificationDecisionModel } },
+      {
+        prefix: "/verification-decision-model",
+        middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
       },
     ),
     routes({
@@ -127,6 +136,17 @@ export const organizationSettingsRoute = mount(
         PUT: updateAnonymizationBlacklist,
       },
     }),
+    routes(
+      {
+        "/members/:memberId/billing": { PUT: updateMemberBillingAccess },
+      },
+      {
+        middleware: [
+          deploymentFeatureGate("FEATURE_TIME_BILLING"),
+          featureAccessGate("time-billing"),
+        ],
+      },
+    ),
   ],
   { prefix: "/organization-settings" },
 );

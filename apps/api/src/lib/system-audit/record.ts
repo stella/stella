@@ -8,7 +8,7 @@ import { SYSTEM_RUN_ACTOR_COUNTS } from "./actors";
 import type { SystemAuditCounts, SystemRunActor } from "./actors";
 
 export type SystemAuditEvent<A extends SystemRunActor> = {
-  /** The scheduler run, or the standalone script run, that made the change. */
+  /** The scheduler run or standalone maintenance operation that made the change. */
   subject: SafeId<"schedulerJobRun"> | SafeId<"systemScriptRun">;
   counts: SystemAuditCounts<A>;
 };

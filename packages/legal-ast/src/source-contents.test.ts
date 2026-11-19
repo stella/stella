@@ -7,6 +7,7 @@ import { DECISION_IDENTIFIER_TYPES } from "./decision-identifier.js";
 import type { Block, DocumentAst } from "./document-ast.js";
 import {
   comparableHeadingTitle,
+  headingTitlesNameSamePart,
   leadingSourceContentsBlockIds,
 } from "./source-contents.js";
 
@@ -218,6 +219,32 @@ describe("a contents list published as one block", () => {
       paragraph("recap", "Parties\n Grounds"),
     ];
     expect(leadingSourceContentsBlockIds(blocks).size).toBe(0);
+  });
+});
+
+describe("heading titles naming the same part", () => {
+  test.each([
+    ["II. Argumentace stěžovatele", "Argumentace stěžovatele"],
+    ["II.\nArgumentace stěžovatele", "ARGUMENTACE STĚŽOVATELE:"],
+    ["II) Argumentace", "II. Argumentace"],
+    ["(a) Arguments of the parties", "– Arguments of the parties"],
+    ["3. Findings", "Findings"],
+    ["Findings", "Findings"],
+  ])("%j names the part %j does", (left, right) => {
+    expect(headingTitlesNameSamePart(left, right)).toBe(true);
+    expect(headingTitlesNameSamePart(right, left)).toBe(true);
+  });
+
+  test.each([
+    ["I. Návrh", "II. Návrh"],
+    ["1. Findings", "2. Findings"],
+    ["II. Argumentace stěžovatele", "Argumentace vedlejšího účastníka"],
+    // Not a designator: the article number is what the title says.
+    ["Art. 5 Findings", "Findings"],
+    ["§ 5 Findings", "Findings"],
+  ])("%j does not name the part %j does", (left, right) => {
+    expect(headingTitlesNameSamePart(left, right)).toBe(false);
+    expect(headingTitlesNameSamePart(right, left)).toBe(false);
   });
 });
 

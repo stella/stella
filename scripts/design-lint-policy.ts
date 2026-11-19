@@ -163,7 +163,8 @@ const NO_NATIVE_UI_BACKLOG_RULES = [
  * design rules: they are API size-bound guards whose findings need scope
  * analysis, so no lexical `scripts/ratchet.ts` counter can measure them.
  * `no-computed-key-record-assignment` resolves its receiver by scope for the
- * same reason. They, and the function shape limits above, ride this per-file,
+ * same reason, and `exhaustive-union-map` finds a map's lookups through the
+ * same scope analysis. They, and the function shape limits above, ride this per-file,
  * oxlint-measured backlog because it is the one debt mechanism that counts
  * with the rule itself.
  */
@@ -176,6 +177,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "require-bounded-request-schema/require-bounded-request-schema",
   "no-unbounded-response-body/no-unbounded-response-body",
   "no-computed-key-record-assignment/no-computed-key-record-assignment",
+  "exhaustive-union-map/exhaustive-union-map",
   "no-direct-status-set/no-direct-status-set",
   "require-polite-publisher-fetch/require-polite-publisher-fetch",
   ...NO_NATIVE_UI_BACKLOG_RULES,
@@ -305,6 +307,14 @@ export const SHADCN_LINT_RULES = {
         {
           pattern: "^(?:BidiText|UserText)$",
           allow: ["layout", "typography", "color"],
+        },
+        // Truncation around the caller's own element (a span, a paragraph, a
+        // chip): the caller owns how it looks, the component owns only how
+        // the text is cut, so it takes every class but the ones that cut.
+        {
+          pattern: "^TruncatedText$",
+          allow: ["*"],
+          deny: ["truncate", "text-ellipsis", "text-clip", "line-clamp-*"],
         },
         // A placeholder mirrors the shape of the content it stands in for.
         { pattern: "^Skeleton$", allow: ["layout", "shape"] },
@@ -443,6 +453,7 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "require-bounded-request-schema/require-bounded-request-schema": "off",
   "no-unbounded-response-body/no-unbounded-response-body": "off",
   "no-computed-key-record-assignment/no-computed-key-record-assignment": "off",
+  "exhaustive-union-map/exhaustive-union-map": "off",
   "no-direct-status-set/no-direct-status-set": "off",
   "require-polite-publisher-fetch/require-polite-publisher-fetch": "off",
   ...Object.fromEntries(

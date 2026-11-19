@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { Workspace } from "@/lib/workspaces/types";
@@ -80,9 +81,9 @@ export const ClientFilterPopover = ({
                 size="row"
                 variant="ghost"
               >
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {c.displayName}
-                </BidiText>
+                </TruncatedText>
                 {active && (
                   <CheckIcon className="text-primary size-3.5 shrink-0" />
                 )}

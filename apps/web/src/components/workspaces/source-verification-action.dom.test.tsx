@@ -42,8 +42,10 @@ const itemEntityId = "019a0000-0000-7000-8000-000000000003";
 const utcTimeZone =
   parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
-  deploymentFeatures: { legalLists: true },
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
@@ -207,8 +209,9 @@ for (const { locale } of [{ locale: "en" }, { locale: "ar" }] as const) {
     });
     await waitFor(() =>
       expect(
-        mounted.queryByRole("button", { name: messages.common.accept }),
-      ).toBeNull(),
+        mounted.queryByRole("button", { name: messages.common.accept }) ===
+          null,
+      ).toBe(true),
     );
     expect(requests).toHaveLength(1);
     mounted.unmount();

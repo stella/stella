@@ -7,6 +7,7 @@ import {
 export default {
   id: "indexes-workspace-views-correspondence-uidx",
   revision: 640,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     onlineUniqueIndexDefinition(

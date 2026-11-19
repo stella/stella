@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { chatThreadOptions } from "@/features/chat/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -18,6 +19,10 @@ import {
 } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { routePresentation } from "@/routes/-route-presentation";
+import {
+  CHAT_COMPOSER_COLUMN_CLASS_NAME,
+  CHAT_READING_COLUMN_CLASS_NAME,
+} from "@/routes/_protected.chat/-components/chat-reading-column";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 import { loadThreadOrRedirect } from "@/routes/_protected.chat/-thread-scope-redirect-boundary";
 
@@ -145,7 +150,12 @@ const CHAT_SKELETON_BUBBLES = [
 function ChatThreadPending() {
   return (
     <div className="flex w-full flex-1 flex-col overflow-hidden">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
+      <div
+        className={cn(
+          CHAT_READING_COLUMN_CLASS_NAME,
+          "flex items-center justify-between gap-2 py-2",
+        )}
+      >
         <div className="flex items-center gap-2">
           <Skeleton className="h-8 w-24 rounded-md" />
           <Skeleton className="h-8 w-32 rounded-md" />
@@ -157,7 +167,12 @@ function ChatThreadPending() {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-hidden px-4 py-4">
+      <div
+        className={cn(
+          CHAT_READING_COLUMN_CLASS_NAME,
+          "flex flex-1 flex-col gap-4 overflow-hidden py-4",
+        )}
+      >
         {CHAT_SKELETON_BUBBLES.map((bubble) =>
           bubble.side === "user" ? (
             <div className="flex justify-end" key={bubble.key}>
@@ -173,8 +188,8 @@ function ChatThreadPending() {
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-5xl p-4">
-        <Skeleton className="h-24 w-full rounded-xl" />
+      <div className={cn(CHAT_COMPOSER_COLUMN_CLASS_NAME, "py-4")}>
+        <Skeleton className="mx-2 h-24 rounded-xl" />
       </div>
     </div>
   );

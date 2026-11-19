@@ -12,7 +12,6 @@ import {
   test,
 } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import type { ReferencePeekTarget } from "@stll/decision-reader/reference-peek.logic";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
@@ -77,6 +76,7 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 beforeEach(() => {
+  jest.useFakeTimers();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -137,21 +137,15 @@ const isOpen = (trigger: HTMLElement) =>
 const peek = () =>
   document.body.querySelector<HTMLElement>('[data-slot="reference-peek"]');
 
-/** Lets the popup mount or unmount on real timers. */
-const settle = async () => {
-  await act(async () => {
-    // real-time: Base UI mounts and unmounts the popup on its own timers,
-    // which these keyboard tests leave on the real clock.
-    await sleep(30);
-  });
-};
-
 /** Moves fake time on; the popup mounts behind a short timer of its own. */
 const advance = async (ms: number) => {
   await act(async () => {
     jest.advanceTimersByTime(ms);
   });
 };
+
+/** Lets Base UI's popup mount or unmount on the test clock. */
+const settle = async () => await advance(30);
 
 /** A mouse resting on the reference, as a person reading it would. */
 const restOn = async (trigger: HTMLElement) => {
@@ -239,7 +233,6 @@ describe("every kind of peek", () => {
 
 describe("hover intent", () => {
   test("a peek opens once the pointer has rested on the reference", async () => {
-    jest.useFakeTimers();
     const trigger = await mount(PEEKS.decision);
     await restOn(trigger);
     await advance(PEEK_OPEN_DELAY_MS - 1);
@@ -249,7 +242,6 @@ describe("hover intent", () => {
   });
 
   test("moving from the reference into the card keeps it open", async () => {
-    jest.useFakeTimers();
     const trigger = await mount(PEEKS.decision);
     await restOn(trigger);
     await advance(PEEK_OPEN_DELAY_MS + 50);
@@ -261,7 +253,6 @@ describe("hover intent", () => {
 
   // The control for the case above: the same exit, not into the card.
   test("moving from the reference elsewhere closes it after the close delay", async () => {
-    jest.useFakeTimers();
     const trigger = await mount(PEEKS.decision);
     await restOn(trigger);
     await advance(PEEK_OPEN_DELAY_MS + 50);
@@ -304,11 +295,8 @@ describe("the selection toolbar wins", () => {
     const release = await act(async () => holdReferencePeeks());
     try {
       await restOn(trigger);
-      await act(async () => {
-        // real-time: the whole open delay passes with the pointer resting,
-        // so nothing could still open after it.
-        await sleep(PEEK_OPEN_DELAY_MS + 50);
-      });
+      // The whole open delay passes on the test clock while the toolbar holds.
+      await advance(PEEK_OPEN_DELAY_MS + 50);
       await focus(trigger);
       await act(async () => {
         trigger.click();

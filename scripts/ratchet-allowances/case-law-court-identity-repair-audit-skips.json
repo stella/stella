@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "The court identity repair rewrites derived court attribution (directory id and official name) on public case-law decisions from an operator script; the rows hold no tenant data and no user actor, and every write is logged per row for rollback."
+}

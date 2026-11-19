@@ -9,7 +9,6 @@ import type {
 } from "@stll/api-contract/time-entry-report";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
 import { Button } from "@stll/ui/button";
-import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -44,7 +43,7 @@ export const ReportTable = ({
   data,
   filter,
 }: {
-  data: TimeEntryReport | undefined;
+  data: TimeEntryReport;
   filter: ReportFilter;
 }) => {
   const t = useTranslations();
@@ -60,9 +59,8 @@ export const ReportTable = ({
         : REPORT_LABELS.unassigned,
     );
   const compareNames = compareByLocale(locale);
-  // While loading the pivot has no rows; the skeleton rows stand in.
   const pivot = buildPivot(
-    data === undefined ? [] : data.rows,
+    data.rows,
     columns,
     (a, b) =>
       compareNames(label(a), label(b)) || compareCodeUnit(a.rowId, b.rowId),
@@ -104,11 +102,7 @@ export const ReportTable = ({
   return (
     <section className="flex min-w-0 flex-col gap-3">
       <div className="flex justify-end">
-        <Button
-          disabled={data === undefined}
-          onClick={exportCsv}
-          variant="outline"
-        >
+        <Button onClick={exportCsv} variant="outline">
           {t(REPORT_LABELS.exportCsv)}
         </Button>
       </div>
@@ -123,16 +117,6 @@ export const ReportTable = ({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data === undefined &&
-            Array.from({ length: 4 }, (_, index) => (
-              <TableRow key={index}>
-                {Array.from({ length: columns.length + 2 }, (_cell, cell) => (
-                  <TableCell key={cell}>
-                    <Skeleton className="h-5 w-16" />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
           {!gridFits && (
             <TableRow>
               <TableCell colSpan={columns.length + 2}>
@@ -200,24 +184,22 @@ export const ReportTable = ({
               </TableCell>
             </TableRow>
           ))}
-          {data !== undefined && visible.length === 0 && (
+          {visible.length === 0 && (
             <TableRow>
               <TableCell colSpan={columns.length + 2}>
                 {t(REPORT_LABELS.empty)}
               </TableCell>
             </TableRow>
           )}
-          {data !== undefined && (
-            <TableRow>
-              <TableCell>{t(REPORT_LABELS.total)}</TableCell>
-              {columns.map((column) => (
-                <TableCell key={column}>
-                  {hours(pivot.totals.get(column) ?? 0)}
-                </TableCell>
-              ))}
-              <TableCell>{hours(pivot.total)}</TableCell>
-            </TableRow>
-          )}
+          <TableRow>
+            <TableCell>{t(REPORT_LABELS.total)}</TableCell>
+            {columns.map((column) => (
+              <TableCell key={column}>
+                {hours(pivot.totals.get(column) ?? 0)}
+              </TableCell>
+            ))}
+            <TableCell>{hours(pivot.total)}</TableCell>
+          </TableRow>
         </TableBody>
       </Table>
     </section>

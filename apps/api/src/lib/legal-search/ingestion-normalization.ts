@@ -12,6 +12,7 @@ import {
   type DocumentAst,
   withProjectedPlainText,
 } from "@stll/legal-ast/document-ast";
+import { withStableBlockAnchors } from "@stll/legal-ast/stable-block-anchors";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
@@ -367,8 +368,11 @@ export const sanitizeResult = (
   }
   const preparedAst = preparedAstResult.value;
   const readableAst = preparedAst.ast;
+  // Anchors are made stable here, at the one boundary every write and every
+  // replay comparison reads through, so a stored row and a reparse of it are
+  // compared in the same anchors and a replay reaches a fixed point.
   const documentAst = isPreparedDocumentAst(readableAst)
-    ? withProjectedPlainText(readableAst)
+    ? withStableBlockAnchors(withProjectedPlainText(readableAst))
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);

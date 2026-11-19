@@ -63,6 +63,7 @@ export const aggregateFences = () => {
       aggregate: "organizationDataBoxes",
       id: { organizationId },
     },
+    organizationSettings: { aggregate: "organizationSettings", id: organizationId, mode: "update" },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -89,6 +90,10 @@ export const aggregateFences = () => {
     caseLawRepublication: {
       aggregate: "caseLawRepublication",
       id: "global",
+    },
+    corpusProjectionOfflineRequest: {
+      aggregate: "corpusProjectionOfflineRequest",
+      id: "0198e331-e578-7000-8000-0000000000b7",
     },
     caseLawSitemapMonth: {
       aggregate: "caseLawSitemapMonth",
@@ -239,6 +244,10 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"documentProcessingRun">(), workspaceId },
       mode: "update",
     },
+    invoiceSendCapacity: {
+      aggregate: "invoiceSendCapacity",
+      id: { organizationId },
+    },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
     billingDraftSettings: {
       aggregate: "billingDraftSettings",
@@ -277,6 +286,11 @@ export const aggregateFences = () => {
       aggregate: "chatToolGrants",
       id: { organizationId, userId },
     },
+    outboundAction: {
+      aggregate: "outboundAction",
+      id: { id: createSafeId<"outboundAction">(), organizationId, userId },
+      mode: "update",
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
@@ -289,6 +303,11 @@ export const aggregateFences = () => {
     chatMessage: {
       aggregate: "chatMessage",
       id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
+    },
+    savedSearch: {
+      aggregate: "savedSearch",
+      id: { id: createSafeId<"savedSearch">(), organizationId, userId },
       mode: "update",
     },
   } as const satisfies FenceFixtures;
@@ -313,17 +332,17 @@ export const aggregateExecutionRows = (statement: SQL, found = true) => {
     return found ? [{ id: "locked" }] : [];
   }
   const first = query.params.at(0);
-  const contact = query.sql.includes("'contact_capacity'");
+  const namespace = /hashtext\('([^']+)'\)/u.exec(query.sql)?.at(1);
   let key1 = hashFixture(first);
-  if (contact) {
-    key1 = hashFixture("contact_capacity");
+  if (namespace !== undefined) {
+    key1 = hashFixture(namespace);
   } else if (typeof first === "number") {
     key1 = first;
   }
   return [
     {
       key1,
-      key2: hashFixture(query.params.at(contact ? 0 : 1)),
+      key2: hashFixture(query.params.at(namespace === undefined ? 1 : 0)),
       acquired: true,
     },
   ];

@@ -9,6 +9,10 @@ import {
   softLawDocumentVersions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 
 import { softLawBodyVector, softLawTitleVector } from "./soft-law-search-sql";
@@ -150,6 +154,7 @@ export const searchSoftLawDocuments = async (
   const headline = sql<string | null>`CASE
     WHEN ${inArray(softLawDocuments.authority, textAuthorities)}
       AND ${softLawDocumentVersions.extractedText} IS NOT NULL
+      AND to_tsvector('simple'::regconfig, search_fold(left(${softLawDocumentVersions.extractedText}, ${sql.raw(String(SOFT_LAW_HEADLINE_TEXT_CHARS))}))) @@ ${query}
     THEN ts_headline(
       'simple',
       left(${softLawDocumentVersions.extractedText}, ${sql.raw(String(SOFT_LAW_HEADLINE_TEXT_CHARS))}),
@@ -315,18 +320,16 @@ export const searchServedSoftLaw = async (options: SearchSoftLawOptions) =>
 export const readServedSoftLaw = async (options: ReadSoftLawOptions) =>
   await publicLawReadDb(async (tx) => await readSoftLawDocument(tx, options));
 
-const CURSOR_PATTERN = /^o(?<offset>\d{1,5})$/u;
-
 /** An offset cursor: the single-statement search has no stable keyset across ranks. */
-export const encodeSoftLawCursor = (offset: number) => `o${offset}`;
-
-export const isSoftLawCursor = (value: string) => CURSOR_PATTERN.test(value);
+export const encodeSoftLawCursor = (offset: number) =>
+  encodePaginationCursor([offset]);
 
 export const decodeSoftLawCursor = (value: string): number | null => {
-  const offset = CURSOR_PATTERN.exec(value)?.groups?.["offset"];
-  if (offset === undefined) {
-    return null;
-  }
-  const parsed = Number(offset);
-  return parsed <= SOFT_LAW_SEARCH_OFFSET_MAX ? parsed : null;
+  const offset = decodePaginationCursor(value)?.[0];
+  return typeof offset === "number" &&
+    Number.isInteger(offset) &&
+    offset >= 0 &&
+    offset <= SOFT_LAW_SEARCH_OFFSET_MAX
+    ? offset
+    : null;
 };

@@ -1,8 +1,11 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+
+import { createTestState } from "@stll/test-state";
 
 // The query module imports the API client, which reads the API URL eagerly.
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.beforeAll(() => {
+  state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 const BOOLEAN_VALUES = [false, true] as const;

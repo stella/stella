@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   isObjectLiteralProperty,
@@ -43,7 +44,7 @@ describe("period identity coverage", () => {
     const declarations: string[] = [];
     const authorizedFiniteCallers: string[] = [];
     for (const file of new Bun.Glob("**/*.ts").scanSync({
-      cwd: srcRoot.pathname,
+      cwd: fileURLToPath(srcRoot),
     })) {
       if (file.includes(".test.") || file.startsWith("tests/")) {
         continue;
@@ -166,6 +167,9 @@ describe("period identity coverage", () => {
       "lib/rate-limit/queued-action-admission.ts",
     ]);
     expect(declarations.toSorted()).toEqual([
+      "handlers/ai/ask-email.ts",
+      "handlers/ai/draft-email.ts",
+      "handlers/ai/summarize.ts",
       "handlers/bilingual-translations/create-run.ts",
       "handlers/bilingual-translations/prepare.ts",
       "handlers/case-law/decisions/search-expand.ts",
@@ -177,18 +181,23 @@ describe("period identity coverage", () => {
       "handlers/clauses/rewrite.ts",
       "handlers/clauses/versions/summarize.ts",
       "handlers/contacts/extract-procuracao.ts",
+      "handlers/dictation/member-cleanup.ts",
       "handlers/dictation/transcribe.ts",
       "handlers/document-reviews/create-run.ts",
       "handlers/document-reviews/propose-positions.ts",
       "handlers/document-translations/runs/create.ts",
       "handlers/entities/placements/suggest.ts",
       "handlers/entities/versions/summarize.ts",
+      "handlers/lists/fact-extractions/create.ts",
+      "handlers/lists/verifications/claim-rechecks/bulk/create.ts",
+      "handlers/lists/verifications/claim-rechecks/create.ts",
       "handlers/lists/verifications/create.ts",
       "handlers/properties/preview.ts",
       "handlers/properties/prompt/suggest.ts",
       "handlers/search/routes.ts",
       "handlers/search/routes.ts",
       "handlers/skills/drafts/generate.ts",
+      "handlers/skills/from-chat/draft.ts",
       "handlers/skills/proposals/from-comments/create.ts",
       "handlers/skills/resources/rewrite.ts",
       "handlers/templates/fields/suggest.ts",
@@ -202,6 +211,8 @@ describe("period identity coverage", () => {
       "handlers/chat/get-thread-recap.ts",
       "handlers/chat/suggest-thread-title.ts",
       "handlers/desktop-time-entries/billing-drafts.ts",
+      "handlers/dictation/cleanup.ts",
+      "handlers/dictation/desktop-transcription.ts",
       "handlers/document-reviews/parties.ts",
       "handlers/templates/prefill.ts",
     ]);

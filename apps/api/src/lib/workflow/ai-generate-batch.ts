@@ -25,6 +25,7 @@ import {
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
 import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
+import { answerSchemaForShape } from "@/api/lib/workflow/ai-answer-schema";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
@@ -104,7 +105,39 @@ export type WorkflowDataOutput = Record<
 export type WorkflowDataGeneration = {
   output: WorkflowDataOutput;
   refusedPropertyIds: ReadonlySet<SafeId<"property">>;
+  /** The batch as it was asked, each property in its resolved answer shape. */
+  properties: AIBatchProperty[];
   fit: RequestFit<PreparedInputFile>;
+};
+
+/**
+ * What a finished batch holds for one property it was asked. A property the
+ * request owed an answer for but whose entry is absent is `omitted`: the
+ * request failed for it, which says nothing about the document, so a caller
+ * must fail rather than read it as "not stated".
+ */
+export type PropertyOutput =
+  | { type: "returned"; result: WorkflowDataOutput[string] }
+  | { type: "refused" }
+  /** A select with no options is left out of the request: nothing could be
+   *  chosen, so there is no answer to owe. */
+  | { type: "not-asked" }
+  | { type: "omitted" };
+
+export const propertyOutput = (
+  generation: Pick<WorkflowDataGeneration, "output" | "refusedPropertyIds">,
+  property: AIBatchProperty,
+): PropertyOutput => {
+  if (generation.refusedPropertyIds.has(property.id)) {
+    return { type: "refused" };
+  }
+  const result = generation.output[property.id];
+  if (result !== undefined) {
+    return { type: "returned", result };
+  }
+  return answerSchemaForShape(property.content, property.answerShape) === null
+    ? { type: "not-asked" }
+    : { type: "omitted" };
 };
 
 /** Everything but the tier, which only the chunk's admission can state. */
@@ -280,9 +313,47 @@ const askSystemOne = async ({
   });
 };
 
+type ClauseAnswerSources = {
+  files: readonly PreparedInputFile[];
+  textInputs: readonly TextInput[];
+};
+
+/**
+ * A clause summary relies on citations that resolve to exact wording, which
+ * only a DOCX block offers. One source without blocks makes the whole batch
+ * quote: the citation rules and the prompt are shared across its sources. A
+ * select label that only gates a column, such as its document type, holds no
+ * clause wording, so it is not such a source. Free text can, even as a gate.
+ */
+export const resolveClauseAnswerShapes = (
+  properties: readonly AIBatchProperty[],
+  { files, textInputs }: ClauseAnswerSources,
+): AIBatchProperty[] => {
+  const everyFileHasBlocks = files.every((file) => file.kind === "docx");
+  return properties.map((property) => {
+    if (property.answerShape !== "clause-summary") {
+      return property;
+    }
+    const gateIds = new Set(
+      property.dependencies.flatMap(({ dependsOnPropertyId, condition }) =>
+        condition === null ? [] : [dependsOnPropertyId],
+      ),
+    );
+    const everySourceHasBlocks =
+      everyFileHasBlocks &&
+      textInputs.every(
+        ({ propertyId, valueKind }) =>
+          valueKind === "label" && gateIds.has(propertyId),
+      );
+    return everySourceHasBlocks
+      ? property
+      : { ...property, answerShape: "clause-quote" };
+  });
+};
+
 export const generateWorkflowData = async ({
   files,
-  properties,
+  properties: requestedProperties,
   filenames,
   textInputs,
   linkedSkillsMessage,
@@ -305,6 +376,10 @@ export const generateWorkflowData = async ({
     WorkflowIntegrationError | DocumentTooLargeError
   >
 > => {
+  const properties = resolveClauseAnswerShapes(requestedProperties, {
+    files,
+    textInputs,
+  });
   const textInputsMessage =
     textInputs.length > 0 ? buildTextInputsMessage(textInputs) : null;
   const fit = fitFilesToRequestBudget({
@@ -445,6 +520,7 @@ export const generateWorkflowData = async ({
     return Result.ok({
       output: systemOneOutput,
       refusedPropertyIds: new Set(refusedPropertyIds),
+      properties,
       fit: fit.value,
     });
   }
@@ -604,31 +680,34 @@ export const generateWorkflowData = async ({
   // order, and only one at a time: the first chunk writes the shared prompt
   // prefix into the provider's cache and the rest read it, so overlapping
   // them would pay for that prefix once per chunk. Answers from earlier
-  // chunks accumulate into `merged`; the first failure ends the batch.
+  // chunks accumulate once by key; the first failure ends the batch.
   const chunkBatches = chunks.value;
+  const accumulated = new Map(Object.entries(systemOneOutput));
   const runFromChunk = async (
     index: number,
-    merged: WorkflowDataOutput,
   ): Promise<Result<WorkflowDataOutput, WorkflowIntegrationError>> => {
     const chunkProperties = chunkBatches.at(index);
     if (chunkProperties === undefined) {
-      return Result.ok(merged);
+      return Result.ok(Object.fromEntries(accumulated));
     }
 
     const chunkOutput = await runChunk(chunkProperties);
     if (Result.isError(chunkOutput)) {
       return chunkOutput;
     }
-    Object.assign(merged, chunkOutput.value);
-    return await runFromChunk(index + 1, merged);
+    for (const [key, value] of Object.entries(chunkOutput.value)) {
+      accumulated.set(key, value);
+    }
+    return await runFromChunk(index + 1);
   };
 
   // Chunk answers accumulate onto the System One answers; the two sets of
   // property ids are disjoint, so neither overwrites the other.
-  const generated = await runFromChunk(0, systemOneOutput);
+  const generated = await runFromChunk(0);
   return generated.map((output) => ({
     output,
     refusedPropertyIds: new Set(refusedPropertyIds),
+    properties,
     fit: fit.value,
   }));
 };

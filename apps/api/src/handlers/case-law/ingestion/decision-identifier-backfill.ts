@@ -59,7 +59,7 @@ export const MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = Math.floor(
     (DECISION_IDENTIFIER_MAX_COUNT * DECISION_IDENTIFIER_BIND_PARAMETERS +
       DECISION_PAGE_BIND_PARAMETERS),
 );
-export const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
+const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE;
 const MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS = 3;
 export const DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS = 6 * 60 * 60_000;
@@ -95,7 +95,7 @@ type CompleteBackfillCheckpoint = BackfillCheckpointBase & {
 type BackfillCheckpoint =
   RunningBackfillCheckpoint | CompleteBackfillCheckpoint;
 
-export type DecisionIdentifierBackfillGaps = {
+type DecisionIdentifierBackfillGaps = {
   decisionIdentifierMismatches: number;
   citationIdentifierMismatches: number;
   pendingTypedCitations: number;
@@ -607,8 +607,10 @@ const projectDecisionPage = async (
       )
     ), reopened AS (
       UPDATE case_law_citations citation
+      -- The link stays until the resolver answers again: this pass reaches many
+      -- citations at once, and most of them resolve to the same decision.
       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
-          cited_decision_id = NULL, resolution_rule_id = NULL,
+          resolution_rule_id = NULL,
           resolution_attempted_at = NULL
       WHERE ${settledCitationSql(sql.raw("citation.resolution_status"))}
         AND EXISTS (
@@ -743,14 +745,6 @@ const projectCitationPage = async (
             AND citation.normalized_identifier_value = projected.normalized_value
             THEN citation.resolution_status
           ELSE ${CITATION_RESOLUTION_STATUS.PENDING} END,
-        cited_decision_id = CASE
-          WHEN citation.identifier_type IS NULL
-            AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
-            THEN citation.cited_decision_id
-          WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
-            THEN citation.cited_decision_id
-          ELSE NULL END,
         resolution_rule_id = CASE
           WHEN citation.identifier_type IS NULL
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}

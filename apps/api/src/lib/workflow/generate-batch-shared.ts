@@ -119,6 +119,8 @@ const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
 export type TextInput = {
   propertyId: SafeId<"property">;
   value: string;
+  /** A `label` is a select option; `content` can hold any wording. */
+  valueKind: "label" | "content";
 };
 
 type PreparedBatchInput = {
@@ -216,6 +218,14 @@ export const prepareBatchInput = (
     textInputs.push({
       propertyId,
       value,
+      valueKind: "content",
+    });
+  };
+  const pushLabelInput = (propertyId: SafeId<"property">, value: string) => {
+    textInputs.push({
+      propertyId,
+      value,
+      valueKind: "label",
     });
   };
 
@@ -249,9 +259,9 @@ export const prepareBatchInput = (
     if (content.type === "text") {
       pushTextInput(field.propertyId, content.value);
     } else if (content.type === "single-select" && content.value !== null) {
-      pushTextInput(field.propertyId, content.value);
+      pushLabelInput(field.propertyId, content.value);
     } else if (content.type === "multi-select") {
-      pushTextInput(field.propertyId, content.value.join(", "));
+      pushLabelInput(field.propertyId, content.value.join(", "));
     } else if (content.type === "date" && content.value) {
       pushTextInput(field.propertyId, content.value);
     } else if (content.type === "record") {

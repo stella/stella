@@ -575,7 +575,7 @@ describe("isCurrentNativeExtractionSource", () => {
     const rejectionCases = {
       deletedVersion: {
         ...docxSource,
-        versionDeletedAt: new Date(),
+        versionDeletedAt: new Date("2026-04-30T09:00:00.000Z"),
       },
       encryptedFile: {
         ...docxSource,

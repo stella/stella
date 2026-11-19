@@ -137,6 +137,12 @@ const reportAttachmentIssues = (stderr: string, mimeType: string): void => {
 };
 
 type ExtractFileTextResultOptions = {
+  /**
+   * Characters of text the worker keeps; the rest is cut. A caller that must
+   * refuse an over-long text instead of storing it cut short asks for one
+   * character past its own limit and refuses when it gets that many.
+   */
+  maxChars?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
 };
@@ -144,6 +150,7 @@ type ExtractFileTextResultOptions = {
 export const extractFileTextResult = async (
   { bytes: buffer, mimeType }: ScannedFile,
   {
+    maxChars = LIMITS.extractedContentMaxChars,
     signal,
     timeoutMs = LIMITS.extractionTimeoutMs,
   }: ExtractFileTextResultOptions = {},
@@ -155,7 +162,7 @@ export const extractFileTextResult = async (
 
   const result = await spawnWorker({
     workerPath: WORKER_PATH,
-    args: [normalizedMimeType],
+    args: [normalizedMimeType, String(maxChars)],
     ...(signal ? { signal } : {}),
     stdin: new Blob([buffer]),
     timeoutMs,
@@ -195,8 +202,9 @@ export const extractFileTextResult = async (
 export const extractFileText = async (
   file: ScannedFile,
   context?: Record<string, string>,
+  options: Pick<ExtractFileTextResultOptions, "maxChars"> = {},
 ): Promise<string | null> => {
-  const first = await extractFileTextResult(file);
+  const first = await extractFileTextResult(file, options);
   if (!Result.isError(first)) {
     return first.value;
   }
@@ -206,7 +214,7 @@ export const extractFileText = async (
   // before giving up; there is no queue behind it to requeue into.
   const retryable =
     first.error.termination?.reason === SUBPROCESS_TERMINATION_REASON.external;
-  const result = retryable ? await extractFileTextResult(file) : first;
+  const result = retryable ? await extractFileTextResult(file, options) : first;
   if (!Result.isError(result)) {
     return result.value;
   }

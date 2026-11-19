@@ -1,9 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -45,13 +46,14 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 class UploadTransactionRefused extends TaggedError("UploadTransactionRefused")<{
   message: string;
 }> {}
 
 let testDb: TestDatabase;
 let ids: TestIds;
-const originalFlag = env.FEATURE_FILE_USAGE_LIMITS;
 const originalWorkerFlag =
   envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
 const policyId = createSafeId<"usagePolicy">();
@@ -66,7 +68,7 @@ const fileUsageDb = () =>
     testDb,
   );
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -95,7 +97,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = originalFlag;
   envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = originalWorkerFlag;
   await releaseTestDb();
 });
@@ -174,7 +175,7 @@ const putRequests = (store: FakeS3) =>
   store.requests.filter(({ method }) => method === "PUT");
 
 const configureStore = (flag: boolean, writeTimeoutMs?: number) => {
-  env.FEATURE_FILE_USAGE_LIMITS = flag;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", flag);
   envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = flag;
   const store = startFakeS3();
   configureS3ForTesting({

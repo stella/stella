@@ -1,5 +1,11 @@
 # @stll/html
 
+## 0.1.2
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the HTML parser and tree adapter to parse5 8 with domhandler 6.
+
 ## 0.1.1
 
 ### Patch Changes

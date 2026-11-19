@@ -1,4 +1,5 @@
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 
 import {
   bytea,
@@ -50,6 +51,10 @@ export const searchHistoryEntries = p.pgTable(
     /** When the latest use naming `country` happened; it decides refiling. */
     countryUsedAt: timestamptz("country_used_at"),
     courtId: p.varchar("court_id", { length: 128 }),
+    /** Opaque base identity carried through the additive country rollout. */
+    baseLookupKey: p.varchar("base_lookup_key", { length: 64 }),
+    /** Set when an old encrypted document cannot be assigned a country. */
+    countryRepairFailedAt: timestamptz("country_repair_failed_at"),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),
     iv: bytea("iv").notNull(),
@@ -64,6 +69,17 @@ export const searchHistoryEntries = p.pgTable(
     p
       .index("search_history_entries_owner_recent_idx")
       .on(table.organizationId, table.userId, table.lastUsedAt, table.id),
+    p
+      .index("search_history_entries_owner_read_identity_idx")
+      .on(
+        table.organizationId,
+        table.userId,
+        table.kind,
+        sql`COALESCE(${table.baseLookupKey}, ${table.lookupKey})`,
+        table.country,
+        table.lastUsedAt,
+        table.id,
+      ),
     // Built online (`ONLINE_MIGRATION_INDEXES`): the law home lists one
     // jurisdiction's entries.
     p
@@ -99,6 +115,17 @@ export const searchHistoryEntries = p.pgTable(
       "search_history_entries_used_order_check",
       sql`${table.firstUsedAt} <= ${table.lastUsedAt}`,
     ),
+    p
+      .index("search_history_entries_legacy_documents_pending_idx")
+      .on(table.id)
+      .where(sql`${table.country} IS NULL AND ${table.kind} <> 'search'`),
+    p.check(
+      "search_history_entries_country_check",
+      sql`${table.country} IS NULL OR ${table.country} IN (${sql.join(
+        PUBLIC_COUNTRIES.map((country) => sql`${country}`),
+        sql`, `,
+      )})`,
+    ),
     ...userOrganizationPolicies(),
     // Row security is forced, so the owning role (member removal, account
     // deletion, the review reset) is admitted by name; the app role never is.
@@ -123,6 +150,8 @@ export const searchHistoryOwners = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     clearedAt: timestamptz("cleared_at"),
+    /** Blocks countryless imports after any country clear. */
+    legacyClearedAt: timestamptz("legacy_cleared_at"),
     /** Oldest imports excluded after bounded tombstone compaction. */
     tombstoneCutoffAt: timestamptz("tombstone_cutoff_at"),
   },
@@ -134,6 +163,61 @@ export const searchHistoryOwners = p.pgTable(
       to: "public",
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
+    }),
+  ],
+);
+
+/** A country clear blocks old uses of that country without affecting others. */
+export const searchHistoryCountryClears = p.pgTable(
+  "search_history_country_clears",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    userId: p.text("user_id").notNull(),
+    country: p.varchar("country", { length: 8 }).notNull(),
+    clearedAt: timestamptz("cleared_at").notNull(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        name: "search_history_country_clears_org_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "search_history_country_clears_user_fk",
+        columns: [table.userId],
+        foreignColumns: [user.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      name: "search_history_country_clears_pk",
+      columns: [table.organizationId, table.userId, table.country],
+    }),
+    p
+      .foreignKey({
+        name: "search_history_country_clears_owner_fk",
+        columns: [table.organizationId, table.userId],
+        foreignColumns: [
+          searchHistoryOwners.organizationId,
+          searchHistoryOwners.userId,
+        ],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "search_history_country_clears_country_check",
+      sql`${table.country} IN (${sql.join(
+        PUBLIC_COUNTRIES.map((country) => sql`${country}`),
+        sql`, `,
+      )})`,
+    ),
+    ...userOrganizationPolicies(),
+    p.pgPolicy("search_history_country_clears_owner", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_country_clears'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_country_clears'::regclass)`,
     }),
   ],
 );

@@ -501,6 +501,7 @@ export const createFolderConsistencyReviewTools = ({
             sourceId: REVIEW_SOURCE_ID,
             question: buildReviewQuestion(snapshot.reviewDocuments),
             content: { type: "text", version: 1 },
+            answerShape: "value",
           },
         ],
         resolvedFiles: snapshot.reviewDocuments.map(({ file }) => file),
@@ -542,8 +543,8 @@ export const createFolderConsistencyReviewTools = ({
               },
         );
       }
-      const answer = extraction.value.contentBySourceId.get(REVIEW_SOURCE_ID);
-      if (!answer || answer.content.type !== "text") {
+      const answer = extraction.value.outcomeBySourceId.get(REVIEW_SOURCE_ID);
+      if (answer?.type !== "answered" || answer.content.type !== "text") {
         throw new ChatToolError({
           kind: "server-defect",
           message: "The folder consistency review returned no report.",

@@ -12,6 +12,7 @@ const HANDLED_OUTSIDE_MANUAL_STEPS: Readonly<Record<string, string>> = {
   user: "The account row itself is anonymized and soft-deleted.",
   chat_messages: "Deleted with the chat threads the account owns.",
   chat_message_revisions: "Deleted with the chat messages they revise.",
+  chat_queued_messages: "Deleted with the chat threads the account owns.",
   agent_skill_revisions:
     "Deleted with the personal skills they revise; team skill revisions are organization records.",
   legal_reader_answers:

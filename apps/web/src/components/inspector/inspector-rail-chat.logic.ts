@@ -34,6 +34,19 @@ type RailChatOpenArgs = {
   workspaceId?: string;
 };
 
+/**
+ * The skill a chat started from the rail is about. The rail stands beside the
+ * main view, so a skill that view's editor shows wins; otherwise the active
+ * Inspector tab's skill (a skill file, a skill chat, a tool detail) applies.
+ */
+export const railChatSkill = ({
+  activeTabSkill,
+  mainViewSkill,
+}: {
+  activeTabSkill: ChatTab["activeSkill"];
+  mainViewSkill: ChatTab["activeSkill"];
+}): ChatTab["activeSkill"] => mainViewSkill ?? activeTabSkill;
+
 export const railChatOpenArgs = ({
   activeSkill,
   legalDocument,

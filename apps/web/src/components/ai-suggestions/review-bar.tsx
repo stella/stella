@@ -47,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
@@ -525,12 +526,13 @@ const ChangeLabel = ({ change, onActivate }: ChangeLabelProps) => {
       variant="plain"
     >
       <span className="hover:bg-muted block min-w-0 flex-1 rounded-md px-1.5 py-0.5">
-        <BidiText
-          as="span"
-          className="text-foreground block truncate text-xs font-medium"
+        <TruncatedText
+          className="text-foreground text-xs font-medium"
+          hint={false}
+          render={<BidiText as="span" />}
         >
           {heading}
-        </BidiText>
+        </TruncatedText>
         {wording !== null && <SuggestionChangeLine change={wording} />}
       </span>
     </Button>
@@ -562,12 +564,12 @@ const SuggestionChangeLine = ({
   })();
 
   return (
-    <BidiText
-      as="span"
-      className="text-muted-foreground text-2xs block truncate leading-4"
+    <TruncatedText
+      className="text-muted-foreground text-2xs leading-4"
+      render={<BidiText as="span" />}
     >
       {text}
-    </BidiText>
+    </TruncatedText>
   );
 };
 

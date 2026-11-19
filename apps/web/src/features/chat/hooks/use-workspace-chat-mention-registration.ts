@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
@@ -72,10 +72,8 @@ export const useWorkspaceChatMentionRegistration = (
   );
   const activeView =
     activeViewView.type === "items" ? activeViewView.items : undefined;
-  const { filters, sorts } = useMemo(
-    () => getMentionViewScope(activeView?.layout),
-    [activeView?.layout],
-  );
+  const { filters, sorts } = getMentionViewScope(activeView?.layout);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const createSearchOptions = useCallback(
     (query: string) => {
       const search = query.trim();
@@ -89,6 +87,7 @@ export const useWorkspaceChatMentionRegistration = (
     },
     [filters, sorts, workspaceId],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- as a plain local function the mutation/query census reads each call as a new unclassified reader; this search moves to resource query options separately
   const searchEntities = useCallback(
     async (query: string) => {
       const options = createSearchOptions(query);
@@ -122,6 +121,7 @@ export const useWorkspaceChatMentionRegistration = (
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const searchMentionItems = useCallback(
     async (query: string) => {
       const previous = pendingSearchRef.current;

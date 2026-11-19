@@ -13,6 +13,8 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
+
 const schema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   jobs: v.record(
@@ -265,8 +267,8 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   const recording = read("network-baseline-record");
   const requester = read("network-baseline-request");
   expect(Object.keys(recording.on)).toEqual(["schedule", "workflow_dispatch"]);
-  expect(Object.keys(requester.on)).toEqual(["pull_request_target"]);
-  expect(requester.on["pull_request_target"]).toEqual({
+  expect(Object.keys(requester.on)).toEqual(["pull_request"]);
+  expect(requester.on["pull_request"]).toEqual({
     branches: ["main"],
     types: ["labeled", "closed"],
   });
@@ -276,7 +278,7 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
     for (const event_name of [
       "schedule",
       "workflow_dispatch",
-      "pull_request_target",
+      "pull_request",
       "push",
     ]) {
       for (const label of ["baseline:record", "unrelated"]) {
@@ -311,7 +313,7 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
       Object.values(job.permissions ?? {}).every((value) => value === "read"),
     ).toBe(true);
     for (const step of job.steps ?? []) {
-      if (!step.uses?.startsWith("actions/checkout@")) {
+      if (!isRepositoryCheckoutAction(step.uses)) {
         continue;
       }
       expect(step.with).toMatchObject({
@@ -346,20 +348,26 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
     label,
     merged,
     files = [],
+    headRepository = "example/repository",
   }: {
     event_name: string;
     action: string;
     label?: string;
     merged?: boolean;
     files?: { filename: string; previous_filename?: string }[];
+    headRepository?: string;
   }): Promise<unknown[]> => {
     const event = {
       action,
       ...(label === undefined ? {} : { label: { name: label } }),
-      pull_request: { number: 7, merged: merged ?? false },
+      pull_request: {
+        number: 7,
+        merged: merged ?? false,
+        head: { repo: { full_name: headRepository } },
+      },
     };
     const enabled = new Script(`Boolean(${requestCondition})`).runInNewContext({
-      github: { event_name, event },
+      github: { event_name, event, repository: "example/repository" },
     });
     if (!enabled) {
       return [];
@@ -405,16 +413,12 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
       ref: "main",
     },
   ];
-  for (const event_name of [
-    "pull_request_target",
-    "workflow_dispatch",
-    "schedule",
-  ]) {
+  for (const event_name of ["pull_request", "workflow_dispatch", "schedule"]) {
     for (const label of ["baseline:record", "unrelated"]) {
       expect(
         await dispatchFor({ event_name, action: "labeled", label }),
       ).toEqual(
-        event_name === "pull_request_target" && label === "baseline:record"
+        event_name === "pull_request" && label === "baseline:record"
           ? dispatched
           : [],
       );
@@ -434,7 +438,7 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   ]) {
     expect(
       await dispatchFor({
-        event_name: "pull_request_target",
+        event_name: "pull_request",
         action: "closed",
         merged: true,
         files,
@@ -442,10 +446,20 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
     ).toEqual(dispatched);
     expect(
       await dispatchFor({
-        event_name: "pull_request_target",
+        event_name: "pull_request",
         action: "closed",
         merged: false,
         files,
+      }),
+    ).toEqual([]);
+    // A fork's read-only token cannot dispatch; the nightly recording covers it.
+    expect(
+      await dispatchFor({
+        event_name: "pull_request",
+        action: "closed",
+        merged: true,
+        files,
+        headRepository: "fork/repository",
       }),
     ).toEqual([]);
   }
@@ -457,7 +471,7 @@ test("baseline labels dispatch trusted main while recording permissions stay rea
   ]) {
     expect(
       await dispatchFor({
-        event_name: "pull_request_target",
+        event_name: "pull_request",
         action: "closed",
         merged: true,
         files,

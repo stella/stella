@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 const historicalCatalogConsumers = new Set([
   // These compare a pre-cutover revision or published tarball with the shards.
@@ -8,12 +9,16 @@ const historicalCatalogConsumers = new Set([
   "scripts/check-cli-release-coupling.ts",
   "scripts/check-cli-release-coupling.test.ts",
   "scripts/cli-runtime-pack.test.ts",
+  // Asserts the contract guard names the catalog part it compared.
+  "scripts/cli-contract-derived.test.ts",
 ]);
 const runtimeAggregateOwners = new Set([
   // Checks that turbo declares the generated aggregate as an output.
   "apps/api/scripts/lib/web-api-turbo-inputs.test.ts",
   // The bundled API imports generated aggregates produced from the shards.
   "apps/api/src/mcp/capability-tools.ts",
+  // Tests read the entries the runtime generator embeds.
+  "apps/api/src/tests/helpers/repository-capability-catalog.ts",
   // Checks the cursor bounds of the bundled runtime output contracts.
   "apps/api/src/mcp/cursor-envelope-bounds.test.ts",
   // Generation, formatting, graph analysis and cache declarations own outputs.
@@ -61,7 +66,7 @@ test("catalog consumers cannot reintroduce the removed monolithic paths", () => 
         ":(exclude)provenance/**",
       ],
       {
-        cwd: new URL("../", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("../", import.meta.url)),
         stdout: "pipe",
         stderr: "pipe",
       },

@@ -915,19 +915,8 @@ const isAbsentKey = (
   return initializer !== null && isAbsentKey(context, initializer, seen);
 };
 
-const isExemptFile = (filename: string, options: unknown) => {
-  if (Object.keys(SHA256_OWNERS).some((owner) => filename === owner)) {
-    return true;
-  }
-  if (typeof options !== "object" || options === null) {
-    return false;
-  }
-  const files: unknown = Reflect.get(options, "allowedFiles");
-  return (
-    Array.isArray(files) &&
-    files.some((file: unknown) => typeof file === "string" && filename === file)
-  );
-};
+const isOwnerFile = (filename: string) =>
+  Object.keys(SHA256_OWNERS).some((owner) => filename === owner);
 
 type CryptoExportVisitorOptions = { context: Context; isExempt: () => boolean };
 const cryptoExportVisitors = ({
@@ -1008,7 +997,6 @@ export default eslintCompatPlugin({
           {
             type: "object",
             properties: {
-              allowedFiles: { type: "array", items: { type: "string" } },
               hmacTarget: { enum: ["bun"] },
             },
             additionalProperties: false,
@@ -1021,8 +1009,7 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const isExempt = () =>
-          isExemptFile(repoRelativeFilename(context), context.options.at(0));
+        const isExempt = () => isOwnerFile(repoRelativeFilename(context));
         const escaped = (
           node: ESTree.IdentifierReference | ESTree.MemberExpression,
         ) => {

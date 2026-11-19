@@ -40,7 +40,7 @@ type ProbeFetch = (opts: {
   url: string | URL;
 }) => ReturnType<typeof safeOutboundFetchBytes>;
 
-export const PROVIDER_PROBE_VALUES = [
+const PROVIDER_PROBE_VALUES = [
   "google",
   "openrouter",
   "openai",
@@ -51,7 +51,7 @@ export const PROVIDER_PROBE_VALUES = [
   "huggingface",
 ] as const;
 
-export type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
+type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
 
 export type ProviderProbeResult =
   | { valid: true }

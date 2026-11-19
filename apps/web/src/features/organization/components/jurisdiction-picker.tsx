@@ -10,6 +10,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@stll/ui/input-group";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { filterJurisdictionOptions } from "@/features/organization/components/jurisdiction-picker.logic";
@@ -128,9 +129,9 @@ export const JurisdictionPicker = ({
                 >
                   {isSelected && <CheckIcon className="size-3" />}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-normal">
+                <TruncatedText className="flex-1 font-normal">
                   {country.name}
-                </span>
+                </TruncatedText>
                 {isSuggested && (
                   <span className="bg-muted text-muted-foreground text-3xs rounded-full px-1.5 py-0.5">
                     {t("common.suggested")}

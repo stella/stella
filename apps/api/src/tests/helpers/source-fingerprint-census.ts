@@ -27,7 +27,10 @@ import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   atFindokFixture,
   atRisFixture,
+  brTjdftFixture,
+  brTstAcordaoFixture,
   czNsFixture,
+  czNsSbirkaFixture,
   czNssFixture,
   czRegionalFixture,
   czUohsFixture,
@@ -74,6 +77,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.CZ_US]: one(czUsFixture),
   [ADAPTER_KEYS.CZ_REGIONAL]: one(czRegionalFixture),
   [ADAPTER_KEYS.CZ_UOHS]: one(czUohsFixture),
+  [ADAPTER_KEYS.BR_TST]: one(brTstAcordaoFixture),
   [ADAPTER_KEYS.SK_COURTS]: one(skCourtsFixture),
   [ADAPTER_KEYS.SK_US]: one(skUsFixture),
   [ADAPTER_KEYS.PL_COURTS]: [
@@ -106,6 +110,8 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
     { name: "decision", fixture: plUokikFixture },
     { name: "ruling", fixture: plUokikRulingFixture },
   ],
+  [ADAPTER_KEYS.BR_TJDFT]: one(brTjdftFixture),
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: one(czNsSbirkaFixture),
 } as const satisfies Record<
   SourceRegistrationKey,
   readonly FingerprintDriver[]

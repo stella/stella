@@ -14,6 +14,9 @@
           "content-type": "application/json"
         },
         "body": {
+          "prompt_cache_options": {
+            "mode": "explicit"
+          },
           "include": [
             "reasoning.encrypted_content"
           ],
@@ -107,6 +110,9 @@
           "content-type": "application/json"
         },
         "body": {
+          "prompt_cache_options": {
+            "mode": "explicit"
+          },
           "include": [
             "reasoning.encrypted_content"
           ],

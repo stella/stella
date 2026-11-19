@@ -36,6 +36,7 @@ const VERSION_2020 = {
   windowDisposition: "effective",
   windowDispositionBasis: null,
   status: "found",
+  governingText: [],
   text: "A person may exercise this right. This wording applies in the first version.",
   nextTextCursor:
     "ptw1.76.zCTeT_qJpfxvyScxpKvf2ZUsXuPizOybc5k-5yBoLh8.Xgc8NU2ep8EOvsz4dzqjr1nEdiNeB-5ipD7bUVzu5bE",
@@ -52,6 +53,7 @@ const VERSION_2021 = {
   windowDisposition: "effective",
   windowDispositionBasis: null,
   status: "found",
+  governingText: [],
   text: "A person may exercise this updated right in the later version.",
   nextTextCursor: null,
   truncated: false,

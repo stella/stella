@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import path from "node:path";
+
+import { createTestState } from "@stll/test-state";
 
 import {
   resolveRuntimeWorkerPath,
@@ -10,16 +12,7 @@ import {
 } from "@/api/lib/runtime-worker-path";
 
 const WORKER_DIR_ENV = "STELLA_WORKER_DIR";
-const originalWorkerDir = process.env[WORKER_DIR_ENV];
-
-afterEach(() => {
-  if (originalWorkerDir === undefined) {
-    process.env[WORKER_DIR_ENV] = "";
-    return;
-  }
-
-  process.env[WORKER_DIR_ENV] = originalWorkerDir;
-});
+const state = createTestState({ file: import.meta.path, config: {} });
 
 describe("runtime worker paths", () => {
   test.each([
@@ -29,31 +22,22 @@ describe("runtime worker paths", () => {
   ])(
     "external asset paths reject Bun's virtual filesystem ($name)",
     ({ name, read }) => {
-      const previous = process.env[name];
-      try {
-        for (const value of [
-          "/$bunfs",
-          "/$bunfs/root/workers",
-          "/app/../$bunfs/root",
-        ]) {
-          process.env[name] = value;
-          expect(read).toThrow(
-            "External runtime assets must use a physical filesystem path",
-          );
-        }
-        process.env[name] = "/app/runtime/workers";
-        expect(read()).toBe("/app/runtime/workers");
-      } finally {
-        if (previous === undefined) {
-          Reflect.deleteProperty(process.env, name);
-        } else {
-          process.env[name] = previous;
-        }
+      for (const value of [
+        "/$bunfs",
+        "/$bunfs/root/workers",
+        "/app/../$bunfs/root",
+      ]) {
+        state.setEnv(name, value);
+        expect(read).toThrow(
+          "External runtime assets must use a physical filesystem path",
+        );
       }
+      state.setEnv(name, "/app/runtime/workers");
+      expect(read()).toBe("/app/runtime/workers");
     },
   );
   test("uses source worker path when no runtime worker directory is configured", () => {
-    process.env[WORKER_DIR_ENV] = "";
+    state.setEnv(WORKER_DIR_ENV, "");
 
     expect(
       resolveRuntimeWorkerPath({
@@ -65,7 +49,7 @@ describe("runtime worker paths", () => {
   });
 
   test("uses bundled worker artifact when runtime worker directory is configured", () => {
-    process.env[WORKER_DIR_ENV] = "/runtime/workers";
+    state.setEnv(WORKER_DIR_ENV, "/runtime/workers");
 
     expect(
       resolveRuntimeWorkerPath({
