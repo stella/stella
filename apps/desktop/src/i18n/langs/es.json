@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Abriendo en Office",
     "sessionSavingDraft": "Guardando borrador",
     "reconnectAccount": "Volver a conectar con stella web…",
-    "transcribeRecording": "Transcribir una grabación…"
+    "transcribeRecording": "Transcribir una grabación…",
+    "dictation": "Dictado",
+    "dictationHint": "Mantenga pulsado {key} para dictar",
+    "dictationSettings": "Ajustes de dictado…",
+    "dictationTurnOn": "Activar el dictado…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: los cambios permanecen locales y se reintentarán automáticamente",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
       "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo.",
       "passwordField": "Hay un campo de contraseña seleccionado, así que el dictado no se guardó ni se escribió.",
-      "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo."
+      "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo.",
+      "nothingHeard": "stella no oyó ninguna voz. Comprueba el dispositivo de entrada en los ajustes de Sonido."
     },
     "failureKeptInHistory": "El texto está en el historial del portapapeles.",
     "transcribeRecording": {
@@ -705,6 +710,38 @@
       "description": "Convierte en texto un archivo de dictáfono, una nota de voz o la grabación de una reunión de hasta 4 horas.",
       "open": "Abrir",
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo."
+    },
+    "notice": {
+      "title": "stella no oye tu micrófono",
+      "allowBody": "Permite el acceso al micrófono y vuelve a intentarlo.",
+      "checkBodyMac": "Comprueba el acceso al micrófono en Ajustes del Sistema y vuelve a intentarlo.",
+      "checkBodyPc": "Comprueba el acceso al micrófono en la Configuración de Windows y vuelve a intentarlo.",
+      "allow": "Permitir el micrófono",
+      "openSettingsMac": "Abrir Ajustes del Sistema",
+      "openSettingsPc": "Abrir Configuración",
+      "dismiss": "Cerrar",
+      "nothingTitle": "stella no oyó ninguna voz",
+      "nothingBody": "Habla mientras mantienes la tecla, o elige otra entrada en los ajustes de Sonido.",
+      "inputDevice": "Entrada: {device}",
+      "openSoundMac": "Abrir ajustes de Sonido",
+      "openSoundPc": "Abrir configuración de sonido",
+      "missingTitle": "{missing} no está conectado",
+      "missingBody": "El dictado usa {device} en su lugar.",
+      "chooseMicrophone": "Elegir micrófono…"
+    },
+    "microphone": {
+      "title": "Micrófono",
+      "hint": "Los auriculares Bluetooth tardan un momento en cambiar a su micrófono y graban con menos calidad. El micrófono integrado suele oírse mejor.",
+      "systemDefault": "Predeterminado del sistema",
+      "systemDefaultNamed": "Predeterminado del sistema ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (no conectado)",
+      "test": "Probar el micrófono",
+      "stopTest": "Detener",
+      "level": "Nivel de entrada",
+      "hearing": "Te oímos.",
+      "noSound": "No llega sonido de {device}.",
+      "checkAccess": "Comprobar el acceso al micrófono"
     },
     "preview": {
       "label": "Lo que ha dictado hasta ahora",
@@ -809,8 +846,8 @@
     "permissionsTitlePc": "Configure este ordenador",
     "permissionsBody": "Cada permiso es decisión suya. Puede cambiarlos más tarde en Ajustes.",
     "neverRequested": "Nunca se solicita:",
-    "tryTitle": "Pruébelo ahora",
-    "tryBody": "Copie cualquier texto y pulse {shortcut}.",
+    "tryTitle": "Pruebe el historial del portapapeles",
+    "tryBody": "Copie cualquier texto y pulse {shortcut} para abrir el historial del portapapeles.",
     "tryWaiting": "Esperando el atajo",
     "tryKeepGoing": "Siga…",
     "tryExtraModifier": "Eso es {pressed}. Use {shortcut}.",
@@ -850,7 +887,8 @@
       "microphone": {
         "title": "Que stella le oiga",
         "body": "Mantenga {shortcut} y hable, y el texto aparece donde está escribiendo. Primero, permita el micrófono para que stella pueda oírle.",
-        "bodyMac": "Mantenga {shortcut} y hable, y el texto aparece donde está escribiendo. Primero, permita el micrófono para que stella pueda oírle, y Accesibilidad para que pueda escribir el texto."
+        "bodyMac": "Mantenga {shortcut} y hable, y el texto aparece donde está escribiendo. Primero, permita el micrófono para que stella pueda oírle, y Accesibilidad para que pueda escribir el texto.",
+        "choose": "Micrófono para dictar"
       },
       "transcription": {
         "title": "¿Dónde quiere que se transcriba su voz?",

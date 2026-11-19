@@ -53,6 +53,16 @@ body:has(.accessibility-guide-window) {
   min-height: 100dvh;
 }
 
+/* The dictation notice is the same kind of borderless transparent panel. */
+body:has(.dictation-notice-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
+.dictation-notice-window {
+  min-height: 100dvh;
+}
+
 /* The dictation preview is a borderless transparent window that lets clicks
  * through; its card grows from the edge nearest the status icon. */
 body:has(.dictation-preview-window) {

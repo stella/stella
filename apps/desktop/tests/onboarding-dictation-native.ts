@@ -52,6 +52,21 @@ const PERMISSION_ROWS = {
   ],
 } satisfies PermissionsSnapshot;
 
+/** The input devices, the system default a Bluetooth headset. */
+const MICROPHONES = {
+  chosen: null,
+  chosenMissing: null,
+  defaultName: "AirPods Pro 3",
+  devices: [
+    {
+      bluetooth: false,
+      id: "coreaudio:BuiltInMicrophoneDevice",
+      name: "Built-in Microphone",
+    },
+    { bluetooth: true, id: "coreaudio:AA-BB-CC:input", name: "AirPods Pro 3" },
+  ],
+};
+
 /** The region's stella AI models, one of them from a provider that keeps
  *  the audio. */
 const CLOUD_MODELS = {
@@ -170,6 +185,12 @@ export const installNativeSide = (native: NativeSide) => {
           return dictation;
         case "dictation_get_cloud_models":
           return CLOUD_MODELS;
+        case "dictation_get_microphones":
+        case "dictation_set_microphone":
+          return MICROPHONES;
+        case "dictation_test_microphone_start":
+        case "dictation_test_microphone_stop":
+          return null;
         default: {
           if (!command.startsWith("dictation_")) {
             return null;

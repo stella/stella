@@ -14,7 +14,7 @@ import {
 } from "./desktop-window-harness";
 import type { DesktopTestPlatform } from "./desktop-window-harness";
 import { DICTATION_READY } from "./fixtures/desktop-window-snapshots";
-import { tauriInvocations } from "./tauri-ipc";
+import { emitTauriEvent, tauriInvocations } from "./tauri-ipc";
 
 /**
  * The Dictation step's screens, each drawn in the real setup window at its
@@ -157,6 +157,46 @@ for (const platform of [
     ).toHaveCount(platform === "mac" ? 1 : 0);
   });
 }
+
+test("the microphone screen tests the microphone and says whether it hears you", async ({
+  page,
+}) => {
+  await openOnboardingWindow(page, STEP, {
+    dictation: DICTATION,
+    language: "en",
+    platform: "mac",
+    scheme: "light",
+  });
+  const card = page.locator("[data-microphone-choice]");
+  await expect(card.getByRole("combobox")).toHaveText(
+    "System default (AirPods Pro 3)",
+  );
+
+  await card
+    .getByRole("button", { name: en.dictation.microphone.test })
+    .click();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "dictation_test_microphone_start",
+      ),
+    )
+    .toEqual([
+      { args: { id: null }, command: "dictation_test_microphone_start" },
+    ]);
+  await emitTauriEvent(page, "dictation-microphone-level", {
+    device: "AirPods Pro 3",
+    finished: false,
+    levelDb: -20,
+    peakDb: -14,
+    status: "hearing",
+  });
+  await expect(card.getByText(en.dictation.microphone.hearing)).toBeVisible();
+  await expect(
+    card.getByRole("meter", { name: en.dictation.microphone.level }),
+  ).toBeVisible();
+  await expectFits(page);
+});
 
 test("the transcription choice writes the destination Settings reads", async ({
   page,

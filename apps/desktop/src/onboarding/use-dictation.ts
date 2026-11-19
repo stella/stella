@@ -23,6 +23,7 @@ const DICTATION_FAILURES = [
   "focusUnconfirmed",
   "microphone",
   "modelMissing",
+  "nothingHeard",
   "passwordField",
   "shortcutHeld",
   "transcription",

@@ -102,6 +102,49 @@ test("the first screen names the macOS shortcut and asks for the microphone, the
   expect(steps[0]?.getAttribute("aria-current")).toBe("step");
 });
 
+test("the first screen picks the microphone and tests it with its level", async () => {
+  const native = nativeSide({ dictation: DICTATION_ON });
+  const view = await renderSetup(native);
+
+  const select = await view.findByRole("combobox", {
+    name: setup.microphone.choose,
+  });
+  expect(select.textContent).toContain(
+    dictation.microphone.systemDefaultNamed.replace("{name}", "AirPods Pro 3"),
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: dictation.microphone.test }),
+  );
+  await waitFor(() => {
+    expect(native.calls).toContainEqual({
+      args: { id: null },
+      command: "dictation_test_microphone_start",
+    });
+  });
+  await act(async () => {
+    await emit("dictation-microphone-level", {
+      device: "AirPods Pro 3",
+      finished: false,
+      levelDb: -20,
+      peakDb: -14,
+      status: "hearing",
+    });
+  });
+  await view.findByText(dictation.microphone.hearing);
+  await act(async () => {
+    await emit("dictation-microphone-level", {
+      device: "AirPods Pro 3",
+      finished: true,
+      levelDb: -90,
+      peakDb: -90,
+      status: "silent",
+    });
+  });
+  await view.findByText(
+    dictation.microphone.noSound.replace("{device}", "AirPods Pro 3"),
+  );
+});
+
 test("without dictation on this computer the step offers only to skip it", async () => {
   // A whole snapshot, so only its `available` flag hides the setup.
   const { findByRole, queryByRole, queryByText } = await renderSetup(

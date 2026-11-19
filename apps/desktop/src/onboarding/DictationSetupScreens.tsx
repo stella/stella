@@ -21,6 +21,8 @@ import {
   useCloudModels,
 } from "../mainview/DictationDestination";
 import type { CloudModelOffer } from "../mainview/DictationDestination";
+import { DictationInputFix } from "../mainview/DictationInputFix";
+import { DictationMicrophoneChoice } from "../mainview/DictationMicrophone";
 import { PermissionsSection } from "../mainview/PermissionsSection";
 import { formatHoldKey } from "../shared/hold-key";
 import type { Permission } from "../shared/permissions";
@@ -141,6 +143,7 @@ const MicrophoneScreen = ({
             window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
           />
         </div>
+        <MicrophoneCard />
         {snapshot.shortcutTaken ? (
           <p className="text-destructive-foreground text-sm">
             {dictationT("shortcutTaken", { shortcut })}
@@ -151,8 +154,46 @@ const MicrophoneScreen = ({
             {dictationT(`failure.${failure}`)}
           </p>
         )}
+        {failure === "microphone" || failure === "nothingHeard" ? (
+          // The same action the notice that reported it offers; keyed by
+          // the failure, so a new one reads its action afresh.
+          <DictationInputFix key={failure} />
+        ) : null}
       </ScreenContent>
     </>
+  );
+};
+
+/** Which microphone dictation listens to, and a test that shows its level
+ *  and says whether stella hears you. The same choice as Settings. */
+const MicrophoneCard = () => {
+  const t = useTranslations("dictation.microphone");
+  const setupT = useTranslations("onboarding.dictationSetup.microphone");
+  const id = useId();
+  return (
+    <DictationMicrophoneChoice
+      labelledBy={id}
+      layout={({ select, test }) => (
+        <div
+          className="bg-card flex flex-col gap-3 rounded-xl border px-4 py-3"
+          data-microphone-choice=""
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium" id={id}>
+                {setupT("choose")}
+              </p>
+              <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
+                {t("hint")}
+              </p>
+            </div>
+            {select}
+          </div>
+          {test}
+        </div>
+      )}
+      telemetryWindow={DESKTOP_TELEMETRY_WINDOWS.onboarding}
+    />
   );
 };
 
