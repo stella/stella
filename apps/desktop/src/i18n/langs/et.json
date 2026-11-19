@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Salvestise transkribeerimine",
+    "retry": "Proovi uuesti",
     "drop": {
       "title": "Lohistage salvestis siia",
       "release": "Laske lahti, et transkribeerida",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "Heli saadetakse transkribeerimiseks stellale ja mudeli {model} pakkujale. stella seda ei salvesta.",
       "localMissing": "Selles arvutis transkribeerimiseks laadige seadetes jaotises Dikteerimine alla kõnemudel.",
       "localMissingCloud": "Laadige seadetes jaotises Dikteerimine alla kõnemudel või transkribeerige stella AI abil.",
-      "retainsData": "{provider} säilitab kõigi sellele mudelile saadetud salvestiste heli ja transkriptsiooni. Ärge transkribeerige sellega konfidentsiaalseid ega klientide salvestisi või valige seadetes jaotises Dikteerimine muu mudel."
+      "retainsData": "{provider} säilitab kõigi sellele mudelile saadetud salvestiste heli ja transkriptsiooni. Ärge transkribeerige sellega konfidentsiaalseid ega klientide salvestisi või valige seadetes jaotises Dikteerimine muu mudel.",
+      "modelFailed": "stella AI mudelit ei õnnestunud lugeda, seega ei saa stella AI praegu transkribeerida. Proovige uuesti või transkribeerige selles arvutis."
     },
     "matter": {
       "title": "Toimik",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Transkribeerimist ei õnnestunud alustada. Proovige uuesti.",
+      "load": "Seda akent ei õnnestunud laadida. Proovige uuesti.",
       "modelMissing": "Kõnemudelit pole selles arvutis. Laadige see seadetes jaotises Dikteerimine alla.",
       "thisComputer": "Selle arvuti kõnemudel ei suutnud osa salvestisest transkribeerida. Seni saadud tekst jääb alles.",
       "cloud": "stella AI ei suutnud osa salvestisest transkribeerida. Seni saadud tekst jääb alles; proovige hiljem uuesti.",

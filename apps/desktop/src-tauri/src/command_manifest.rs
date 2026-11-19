@@ -50,6 +50,7 @@ macro_rules! with_stella_commands {
       dictation::dictation_remove_model => "dictation_remove_model",
       transcribe_recording::transcribe_open => "transcribe_open",
       transcribe_recording::transcribe_get_snapshot => "transcribe_get_snapshot",
+      transcribe_recording::transcribe_get_model => "transcribe_get_model",
       transcribe_recording::transcribe_choose_file => "transcribe_choose_file",
       transcribe_recording::transcribe_clear_file => "transcribe_clear_file",
       transcribe_recording::transcribe_start => "transcribe_start",

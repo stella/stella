@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Prepísať nahrávku",
+    "retry": "Skúsiť znova",
     "drop": {
       "title": "Presuňte sem nahrávku",
       "release": "Pustite ju a začne sa prepis",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "Zvuk sa na prepis odošle do stella AI a poskytovateľovi modelu {model}. stella ho neukladá.",
       "localMissing": "Ak chcete prepisovať v tomto počítači, stiahnite si v Nastaveniach v časti Diktovanie rečový model.",
       "localMissingCloud": "Stiahnite si v Nastaveniach v časti Diktovanie rečový model alebo prepisujte pomocou stella AI.",
-      "retainsData": "{provider} uchováva zvuk aj prepis všetkého, čo tomuto modelu pošlete. Neprepisujte s ním dôverné nahrávky ani nahrávky klientov, alebo v Nastaveniach v časti Diktovanie vyberte iný model."
+      "retainsData": "{provider} uchováva zvuk aj prepis všetkého, čo tomuto modelu pošlete. Neprepisujte s ním dôverné nahrávky ani nahrávky klientov, alebo v Nastaveniach v časti Diktovanie vyberte iný model.",
+      "modelFailed": "Model stella AI sa nepodarilo načítať, takže stella AI teraz nemôže prepisovať. Skúste to znova alebo prepisujte na tomto počítači."
     },
     "matter": {
       "title": "Spis",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Prepis sa nepodarilo spustiť. Skúste to znova.",
+      "load": "Okno sa nepodarilo načítať. Skúste to znova.",
       "modelMissing": "Rečový model v tomto počítači nie je. Stiahnite si ho v Nastaveniach v časti Diktovanie.",
       "thisComputer": "Rečový model v tomto počítači nedokázal prepísať časť nahrávky. Doterajší text zostáva.",
       "cloud": "stella AI nedokázala prepísať časť nahrávky. Doterajší text zostáva; skúste to neskôr.",

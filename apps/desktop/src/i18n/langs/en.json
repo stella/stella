@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Transcribe a recording",
+    "retry": "Try again",
     "drop": {
       "title": "Drop a recording here",
       "release": "Release to transcribe",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "The audio is sent to stella and to the provider of {model} for transcription. stella does not store it.",
       "localMissing": "Download the speech model in Settings, under Dictation, to transcribe on this computer.",
       "localMissingCloud": "Download the speech model in Settings, under Dictation, or transcribe with stella AI.",
-      "retainsData": "{provider} keeps the audio and transcript of everything sent to this model. Don’t transcribe confidential or client recordings with it, or choose another model in Settings, under Dictation."
+      "retainsData": "{provider} keeps the audio and transcript of everything sent to this model. Don’t transcribe confidential or client recordings with it, or choose another model in Settings, under Dictation.",
+      "modelFailed": "The stella AI model could not be read, so stella AI cannot transcribe right now. Try again, or transcribe on this computer."
     },
     "matter": {
       "title": "Matter",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "The transcription could not start. Try again.",
+      "load": "This window could not load. Try again.",
       "modelMissing": "The speech model is not on this computer. Download it in Settings, under Dictation.",
       "thisComputer": "The speech model on this computer could not transcribe part of the recording. The text so far is kept.",
       "cloud": "stella AI could not transcribe part of the recording. The text so far is kept; try again later.",

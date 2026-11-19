@@ -20,7 +20,21 @@ const MATTER = {
   color: "--option-emerald",
 };
 
-const open = async (page: Page, scheme: "light" | "dark") => {
+type Variant = {
+  /** Snapshot reads fail until the spec lets them answer. */
+  snapshotFails?: boolean;
+  /** The stella AI model cannot be read. */
+  modelFails?: boolean;
+};
+
+/** The page flag that keeps snapshot reads failing. */
+const SNAPSHOT_FAILS = "__TRANSCRIBE_SNAPSHOT_FAILS__";
+
+const open = async (
+  page: Page,
+  scheme: "light" | "dark",
+  variant: Variant = {},
+) => {
   await page.setViewportSize(SIZE);
   await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
   await page.addInitScript((userAgent) => {
@@ -29,54 +43,63 @@ const open = async (page: Page, scheme: "light" | "dark") => {
   await installTauriIpc(page, {
     windowLabel: "transcribe",
     unhandled: "rejectAsUnexpected",
-    arg: { matter: MATTER },
-    handlers: ({ matter }, ipc) => ({
-      account_record_use: () => null,
-      desktop_report_error: () => null,
-      get_desktop_language: () => "en",
-      transcribe_get_snapshot: () => ({
-        available: true,
-        localReady: true,
-        cloudAvailable: true,
-        destination: "cloud",
-        file: null,
-        running: null,
-      }),
-      dictation_get_snapshot: () => ({
-        cloudModel: "elevenlabs-direct/scribe-v3",
-      }),
-      dictation_get_cloud_models: () => ({
-        models: [
-          {
+    arg: { matter: MATTER, variant, failsFlag: SNAPSHOT_FAILS },
+    handlers: (
+      { matter, variant: { snapshotFails, modelFails }, failsFlag },
+      ipc,
+    ) => {
+      Reflect.set(window, failsFlag, snapshotFails === true);
+      return {
+        account_record_use: () => null,
+        desktop_report_error: () => null,
+        get_desktop_language: () => "en",
+        transcribe_get_snapshot: () => {
+          if (Reflect.get(window, failsFlag) === true) {
+            throw new Error("The snapshot is not readable yet");
+          }
+          return {
+            available: true,
+            localReady: true,
+            cloudAvailable: true,
+            destination: "cloud",
+            file: null,
+            running: null,
+          };
+        },
+        transcribe_get_model: () => {
+          if (modelFails === true) {
+            throw new Error("The model list is not readable");
+          }
+          return {
             id: "elevenlabs-direct/scribe-v3",
             displayName: "Scribe v3",
             provider: "ElevenLabs",
-            outsideRegion: false,
+            retainsData: false,
+          };
+        },
+        transcribe_clear_file: () => null,
+        transcribe_search_matters: () => [matter],
+        transcribe_choose_file: () => {
+          ipc.emit("transcribe-file", {
+            status: "ready",
+            selection: 1,
+            name: "Memo to file 2026-11-14.m4a",
+            format: "M4A",
+            durationMs: 42 * 60_000,
+          });
+          return null;
+        },
+        transcribe_start: () => ({
+          job: 1,
+          model: {
+            id: "elevenlabs-direct/scribe-v3",
+            displayName: "Scribe v3",
+            provider: "ElevenLabs",
             retainsData: false,
           },
-        ],
-        defaultModelId: "elevenlabs-direct/scribe-v3",
-        unavailable: null,
-      }),
-      transcribe_search_matters: () => [matter],
-      transcribe_choose_file: () => {
-        ipc.emit("transcribe-file", {
-          status: "ready",
-          name: "Memo to file 2026-11-14.m4a",
-          format: "M4A",
-          durationMs: 42 * 60_000,
-        });
-        return null;
-      },
-      transcribe_start: () => ({
-        job: 1,
-        model: {
-          id: "elevenlabs-direct/scribe-v3",
-          displayName: "Scribe v3",
-          retainsData: false,
-        },
-      }),
-    }),
+        }),
+      };
+    },
   });
   await page.goto("/");
 };
@@ -165,4 +188,31 @@ test("a dropped DS2 file is refused with the export note", async ({ page }) => {
   });
   await expect(page.getByRole("alert")).toHaveText(en.transcribe.note);
   expect(await unexpectedTauriCalls(page)).toEqual([]);
+});
+
+test("a window that could not load offers to try again", async ({ page }) => {
+  await open(page, "light", { snapshotFails: true });
+  await expect(page.getByRole("alert")).toHaveText(en.transcribe.failure.load);
+  await page.evaluate((flag) => {
+    Reflect.set(window, flag, false);
+  }, SNAPSHOT_FAILS);
+  await page.getByRole("button", { name: en.transcribe.retry }).click();
+  await expect(page.getByText(en.transcribe.drop.title)).toBeVisible();
+});
+
+test("stella AI takes no file until its model is read", async ({ page }) => {
+  await open(page, "light", { modelFails: true });
+  await expect(
+    page.getByText(en.transcribe.destination.modelFailed),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: en.transcribe.drop.choose }),
+  ).toBeDisabled();
+  // This computer stays available.
+  await page
+    .getByRole("button", { name: en.transcribe.destination.thisComputer })
+    .click();
+  await expect(
+    page.getByRole("button", { name: en.transcribe.drop.choose }),
+  ).toBeEnabled();
 });

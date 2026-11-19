@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -33,6 +33,7 @@ import {
   isFileChoice,
   isFinished,
   isPieceText,
+  isRecordingModel,
   isTranscribeSnapshot,
   paragraphsOf,
   progressShare,
@@ -77,6 +78,8 @@ type Saving =
  *  as it is transcribed, and copy or save it. */
 const TranscribeApp = () => {
   const [snapshot, setSnapshot] = useState<TranscribeSnapshot | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [model, setModel] = useState<ModelState>(MODEL_LOADING);
   const [destination, setDestination] =
     useState<TranscribeDestination>("local");
   const [matter, setMatter] = useState<DesktopMatter | null>(null);
@@ -90,11 +93,11 @@ const TranscribeApp = () => {
   const options = useRef<StartOptions>({
     destination: "local",
     matter: null,
-    usable: false,
+    snapshot: null,
+    model: MODEL_LOADING,
   });
   const chooseDestination = (next: TranscribeDestination) => {
     options.current.destination = next;
-    options.current.usable = usableFor(snapshot, next);
     setDestination(next);
   };
   const chooseMatter = (next: DesktopMatter | null) => {
@@ -102,7 +105,9 @@ const TranscribeApp = () => {
     setMatter(next);
   };
 
-  useEffect(() => {
+  // Reads what the window can offer; a read that fails offers to try again.
+  // Each read returns what cancels it.
+  const loadSnapshot = useCallback(() => {
     let disposed = false;
     // A named function, not one invoked in place: an inline call is read as
     // running before the cleanup below can ever set `disposed`.
@@ -114,33 +119,77 @@ const TranscribeApp = () => {
         return;
       }
       if (Result.isOk(result) && isTranscribeSnapshot(result.value)) {
+        // A window that starts afresh shows no transcript, so native code
+        // holds none either: a newly chosen file is taken.
+        if (result.value.running === null) {
+          void invoke("transcribe_clear_file").catch(() => undefined);
+        }
         options.current.destination = result.value.destination;
-        options.current.usable = usableFor(
-          result.value,
-          result.value.destination,
-        );
+        options.current.snapshot = result.value;
         setSnapshot(result.value);
         setDestination(result.value.destination);
         return;
       }
       report(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed);
+      setLoadFailed(true);
     };
     void load();
     return () => {
       disposed = true;
     };
   }, []);
+  useEffect(() => loadSnapshot(), [loadSnapshot]);
+
+  // The model a recording would go to, read before a file can be chosen
+  // for stella AI: the window shows it, with its warning where its provider
+  // keeps the audio, and a start names it back.
+  const loadModel = useCallback(() => {
+    let disposed = false;
+    const load = async () => {
+      const result = await Result.tryPromise(async () =>
+        invoke<unknown>("transcribe_get_model"),
+      );
+      if (disposed) {
+        return;
+      }
+      const next: ModelState =
+        Result.isOk(result) && isRecordingModel(result.value)
+          ? { status: "ready", model: result.value }
+          : { status: "failed" };
+      options.current.model = next;
+      setModel(next);
+    };
+    void load();
+    return () => {
+      disposed = true;
+    };
+  }, []);
+  const reloadModel = useCallback(() => {
+    options.current.model = MODEL_LOADING;
+    setModel(MODEL_LOADING);
+    loadModel();
+  }, [loadModel]);
+  const cloudAvailable = snapshot?.cloudAvailable === true;
+  useEffect(
+    () => (cloudAvailable ? loadModel() : undefined),
+    [cloudAvailable, loadModel],
+  );
 
   useEffect(() => {
     let starting = false;
+    // A file announced while another start is on its way; native code
+    // starts only the one it holds, so the newest is tried next.
+    let waiting: ReadyFile | null = null;
     const start = async (file: ReadyFile) => {
       if (starting) {
+        waiting = file;
         return;
       }
       const chosen = { ...options.current };
       setRefused(null);
-      setStartFailed(!chosen.usable);
-      if (!chosen.usable) {
+      const usable = usableFor(chosen);
+      setStartFailed(!usable);
+      if (!usable) {
         return;
       }
       starting = true;
@@ -149,12 +198,27 @@ const TranscribeApp = () => {
           request: {
             destination: chosen.destination,
             matterId: chosen.matter?.id ?? null,
+            selection: file.selection,
+            modelId:
+              chosen.destination === "cloud" && chosen.model.status === "ready"
+                ? chosen.model.model.id
+                : null,
           },
         }),
       );
       starting = false;
+      const next = waiting;
+      waiting = null;
       if (Result.isError(result)) {
         setStartFailed(true);
+        // The model may have changed since the window read it: read it
+        // again, so its warning shows before another file is started.
+        if (chosen.destination === "cloud") {
+          reloadModel();
+        }
+        if (next !== null) {
+          void start(next);
+        }
         return;
       }
       setSession({
@@ -204,18 +268,29 @@ const TranscribeApp = () => {
       stopPiece();
       stopFinished();
     };
-  }, []);
+  }, [reloadModel]);
 
   if (snapshot === null) {
-    return <main className="bg-background min-h-dvh" />;
+    return loadFailed ? (
+      <LoadFailed
+        onRetry={() => {
+          setLoadFailed(false);
+          loadSnapshot();
+        }}
+      />
+    ) : (
+      <main className="bg-background min-h-dvh" />
+    );
   }
   if (session === null) {
     return (
       <ChooseScreen
         destination={destination}
         matter={matter}
+        model={model}
         onDestinationChange={chooseDestination}
         onMatterChange={chooseMatter}
+        onRetryModel={reloadModel}
         refused={refused}
         snapshot={snapshot}
         startFailed={startFailed}
@@ -242,19 +317,33 @@ export default TranscribeApp;
 
 type RefusedFile = Extract<FileChoice, { status: "refused" }>;
 
+/** The stella AI model, as far as the window has read it. */
+type ModelState =
+  | { status: "loading" }
+  | { status: "ready"; model: RecordingModel }
+  | { status: "failed" };
+
+const MODEL_LOADING: ModelState = { status: "loading" };
+
 type StartOptions = {
   destination: TranscribeDestination;
   matter: DesktopMatter | null;
-  usable: boolean;
+  snapshot: TranscribeSnapshot | null;
+  model: ModelState;
 };
 
-/** Whether a file chosen now can be transcribed where the window says. */
-const usableFor = (
-  snapshot: TranscribeSnapshot | null,
-  destination: TranscribeDestination,
-): boolean =>
+/** Whether a file chosen now can be transcribed where the window says: on
+ *  this computer once its model is there, with stella AI once the model a
+ *  recording goes to, and any warning about it, is shown. */
+const usableFor = ({
+  snapshot,
+  destination,
+  model,
+}: Omit<StartOptions, "matter">): boolean =>
   snapshot !== null &&
-  (destination === "local" ? snapshot.localReady : snapshot.cloudAvailable);
+  (destination === "local"
+    ? snapshot.localReady
+    : snapshot.cloudAvailable && model.status === "ready");
 
 const report = (
   code:
@@ -291,6 +380,26 @@ const Shell = ({ children }: React.PropsWithChildren) => (
   </main>
 );
 
+/** What the window shows when it could not read what it can offer. */
+const LoadFailed = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("transcribe");
+  return (
+    <Shell>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-7 py-6 text-center">
+        <p
+          className="text-destructive max-w-md text-sm text-pretty"
+          role="alert"
+        >
+          {t("failure.load")}
+        </p>
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {t("retry")}
+        </Button>
+      </div>
+    </Shell>
+  );
+};
+
 const RecordingTile = ({ size }: { size: "large" | "small" }) => (
   <div
     aria-hidden="true"
@@ -317,6 +426,8 @@ const ChooseScreen = ({
   onDestinationChange,
   matter,
   onMatterChange,
+  model,
+  onRetryModel,
   refused,
   startFailed,
 }: {
@@ -325,6 +436,8 @@ const ChooseScreen = ({
   onDestinationChange: (destination: TranscribeDestination) => void;
   matter: DesktopMatter | null;
   onMatterChange: (matter: DesktopMatter | null) => void;
+  model: ModelState;
+  onRetryModel: () => void;
   refused: RefusedFile | null;
   startFailed: boolean;
 }) => {
@@ -355,7 +468,7 @@ const ChooseScreen = ({
       unlisten?.();
     };
   }, []);
-  const usable = usableFor(snapshot, destination);
+  const usable = usableFor({ snapshot, destination, model });
   const choose = async () => {
     setChoosing(true);
     setChooseFailed(false);
@@ -419,6 +532,8 @@ const ChooseScreen = ({
                 cloudAvailable={snapshot.cloudAvailable}
                 destination={destination}
                 localReady={snapshot.localReady}
+                model={model}
+                onRetryModel={onRetryModel}
               />
             </div>
             <ToggleGroup<TranscribeDestination>
@@ -466,120 +581,68 @@ const DestinationNote = ({
   destination,
   localReady,
   cloudAvailable,
+  model,
+  onRetryModel,
 }: {
   destination: TranscribeDestination;
   localReady: boolean;
   cloudAvailable: boolean;
+  model: ModelState;
+  onRetryModel: () => void;
 }) => {
-  const t = useTranslations("transcribe.destination");
-  const model = useDictationCloudModel(cloudAvailable);
+  const t = useTranslations("transcribe");
   if (destination === "local" && !localReady) {
     return (
       <p className="text-muted-foreground text-xs text-pretty">
-        {cloudAvailable ? t("localMissingCloud") : t("localMissing")}
+        {cloudAvailable
+          ? t("destination.localMissingCloud")
+          : t("destination.localMissing")}
       </p>
     );
   }
   if (destination === "local") {
     return (
       <p className="text-muted-foreground text-xs text-pretty">
-        {t("localDescription")}
+        {t("destination.localDescription")}
       </p>
     );
   }
-  if (model === null) {
+  if (model.status === "failed") {
+    return (
+      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="text-destructive text-xs text-pretty" role="alert">
+          {t("destination.modelFailed")}
+        </p>
+        <Button onClick={onRetryModel} size="xs" variant="ghost">
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  }
+  if (model.status === "loading") {
     return (
       <p className="text-muted-foreground text-xs text-pretty">
-        {t("cloudDescription")}
+        {t("destination.cloudDescription")}
       </p>
     );
   }
+  const { displayName, provider, retainsData } = model.model;
   return (
     <>
       <p className="text-muted-foreground text-xs text-pretty">
-        {t("cloudDescriptionModel", { model: model.displayName })}
+        {t("destination.cloudDescriptionModel", { model: displayName })}
       </p>
-      {model.retainsData ? (
+      {retainsData ? (
         <p className="text-destructive-foreground mt-1 flex gap-1.5 text-xs text-pretty">
           <TriangleAlertIcon
             aria-hidden="true"
             className="mt-px size-3.5 shrink-0"
           />
-          {t("retainsData", { provider: model.provider ?? model.displayName })}
+          {t("destination.retainsData", { provider: provider ?? displayName })}
         </p>
       ) : null}
     </>
   );
-};
-
-type DictationCloudModel = {
-  displayName: string;
-  provider: string | null;
-  retainsData: boolean;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/**
- * The stella AI model dictation uses, which a recording goes to as well:
- * its name, and whether its provider keeps the audio. Null until read, and
- * when stella AI is not offered.
- */
-const useDictationCloudModel = (
-  cloudAvailable: boolean,
-): DictationCloudModel | null => {
-  const [model, setModel] = useState<DictationCloudModel | null>(null);
-  useEffect(() => {
-    if (!cloudAvailable) {
-      return undefined;
-    }
-    let disposed = false;
-    const load = async () => {
-      const [snapshot, models] = await Promise.all([
-        Result.tryPromise(async () =>
-          invoke<unknown>("dictation_get_snapshot"),
-        ),
-        Result.tryPromise(async () =>
-          invoke<unknown>("dictation_get_cloud_models"),
-        ),
-      ]);
-      if (disposed || Result.isError(snapshot) || Result.isError(models)) {
-        return;
-      }
-      const offered =
-        isRecord(models.value) && Array.isArray(models.value["models"])
-          ? models.value["models"].filter(isRecord)
-          : [];
-      const stored =
-        isRecord(snapshot.value) &&
-        typeof snapshot.value["cloudModel"] === "string"
-          ? snapshot.value["cloudModel"]
-          : null;
-      const fallback =
-        isRecord(models.value) &&
-        typeof models.value["defaultModelId"] === "string"
-          ? models.value["defaultModelId"]
-          : null;
-      const chosen =
-        offered.find((entry) => entry["id"] === stored) ??
-        offered.find((entry) => entry["id"] === fallback);
-      if (chosen === undefined || typeof chosen["displayName"] !== "string") {
-        return;
-      }
-      setModel({
-        displayName: chosen["displayName"],
-        provider:
-          typeof chosen["provider"] === "string" ? chosen["provider"] : null,
-        retainsData: chosen["retainsData"] === true,
-      });
-    };
-    void load();
-    return () => {
-      disposed = true;
-    };
-  }, [cloudAvailable]);
-  return model;
 };
 
 const FAILURE_MESSAGES = {

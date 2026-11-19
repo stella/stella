@@ -5,6 +5,7 @@ import {
   isFileChoice,
   isFinished,
   isPieceText,
+  isRecordingModel,
   isTranscribeSnapshot,
   paragraphsOf,
   progressShare,
@@ -119,11 +120,30 @@ describe("what native code sends", () => {
     expect(
       isFileChoice({
         status: "ready",
+        selection: 1,
         name: "a.m4a",
         format: "M4A",
         durationMs: null,
       }),
     ).toBe(true);
+    // A start names the choice back; one without it cannot be started.
+    expect(
+      isFileChoice({
+        status: "ready",
+        name: "a.m4a",
+        format: "M4A",
+        durationMs: null,
+      }),
+    ).toBe(false);
+    expect(
+      isRecordingModel({
+        id: "elevenlabs-direct/scribe-v3",
+        displayName: "Scribe v3",
+        provider: null,
+        retainsData: true,
+      }),
+    ).toBe(true);
+    expect(isRecordingModel({ id: "m", displayName: "M" })).toBe(false);
     expect(
       isFileChoice({ status: "refused", name: "a.ds2", reason: "dictaphone" }),
     ).toBe(true);

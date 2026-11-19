@@ -16,6 +16,8 @@ export type RefusedReason =
 export type FileChoice =
   | {
       status: "ready";
+      /** Which choice this is; a start names it back. */
+      selection: number;
       name: string;
       format: string;
       durationMs: number | null;
@@ -31,9 +33,11 @@ export type TranscribeSnapshot = {
   running: number | null;
 };
 
+/** The stella AI model a recording goes to; a start names its id back. */
 export type RecordingModel = {
   id: string;
   displayName: string;
+  provider: string | null;
   retainsData: boolean;
 };
 
@@ -87,6 +91,7 @@ export const isFileChoice = (value: unknown): value is FileChoice => {
   }
   if (value["status"] === "ready") {
     return (
+      typeof value["selection"] === "number" &&
       typeof value["format"] === "string" &&
       (value["durationMs"] === null || typeof value["durationMs"] === "number")
     );
@@ -108,6 +113,13 @@ export const isTranscribeSnapshot = (
   (value["destination"] === "local" || value["destination"] === "cloud") &&
   (value["file"] === null || isFileChoice(value["file"])) &&
   (value["running"] === null || typeof value["running"] === "number");
+
+export const isRecordingModel = (value: unknown): value is RecordingModel =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  typeof value["displayName"] === "string" &&
+  (value["provider"] === null || typeof value["provider"] === "string") &&
+  typeof value["retainsData"] === "boolean";
 
 export const isPieceText = (value: unknown): value is PieceText =>
   isRecord(value) &&

@@ -90,6 +90,9 @@ pub enum Refused {
 )]
 pub enum FileChoice {
   Ready {
+    /// Which choice this is: a start names it, so it never transcribes a
+    /// file chosen after the window last heard.
+    selection: u64,
     name: String,
     format: &'static str,
     duration_ms: Option<u64>,
@@ -122,6 +125,11 @@ pub struct TranscribeSnapshot {
 pub struct StartRequest {
   destination: Destination,
   matter_id: Option<String>,
+  /// The chosen file the window announced.
+  selection: u64,
+  /// The stella AI model the window showed, with its warning where its
+  /// provider keeps the audio.
+  model_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -181,13 +189,80 @@ struct Chosen {
 struct Job {
   id: u64,
   stop: Arc<AtomicBool>,
+  workers: Arc<LocalWorkers>,
   task: tauri::async_runtime::JoinHandle<()>,
+}
+
+impl Job {
+  /// Ends the job now, the speech model's child included even while it is
+  /// in the middle of a piece.
+  fn end_now(&self) {
+    self.stop.store(true, Ordering::SeqCst);
+    self.task.abort();
+    self.workers.kill();
+  }
 }
 
 #[derive(Default)]
 struct Inner {
   file: Option<Chosen>,
   job: Option<Job>,
+  /// Counts choices, clears and closes: a file inspected under an older
+  /// count is stale and is dropped.
+  selection: u64,
+  /// The window shows a transcript of `file` until the user asks for
+  /// another; a newly chosen file does not replace it meanwhile.
+  holds_result: bool,
+}
+
+impl Inner {
+  fn refuse_change(&self) -> Result<(), String> {
+    if self.job.is_some() {
+      return Err("a recording is being transcribed".to_string());
+    }
+    if self.holds_result {
+      return Err("the last transcript is still open".to_string());
+    }
+    Ok(())
+  }
+
+  /// Starts a choice; its file is inspected outside the lock.
+  fn begin_choice(&mut self) -> Result<u64, String> {
+    self.refuse_change()?;
+    self.selection += 1;
+    Ok(self.selection)
+  }
+
+  /// Keeps an inspected file, unless the choice went stale meanwhile.
+  fn commit_choice(&mut self, selection: u64, chosen: Option<Chosen>) -> bool {
+    if self.selection != selection || self.refuse_change().is_err() {
+      return false;
+    }
+    self.file = chosen;
+    true
+  }
+
+  /// Forgets the file and whatever was being inspected.
+  fn clear(&mut self) {
+    self.selection += 1;
+    self.file = None;
+    self.holds_result = false;
+  }
+
+  /// The file a start names, if it is still the chosen one.
+  fn startable(&self, selection: u64) -> Result<&Chosen, String> {
+    self.refuse_change()?;
+    self
+      .file
+      .as_ref()
+      .filter(|chosen| {
+        matches!(
+          chosen.choice,
+          FileChoice::Ready { selection: current, .. } if current == selection
+        )
+      })
+      .ok_or_else(|| "choose a recording first".to_string())
+  }
 }
 
 #[derive(Default)]
@@ -245,7 +320,7 @@ fn extension(path: &Path) -> Option<String> {
 
 /// Looks at a file without decoding it: its format from the first bytes,
 /// its length from the header where the decoder can read one.
-fn inspect(path: &Path) -> (Option<Format>, FileChoice) {
+fn inspect(path: &Path, selection: u64) -> (Option<Format>, FileChoice) {
   let name = file_name(path);
   let refused = |reason| {
     (
@@ -285,6 +360,7 @@ fn inspect(path: &Path) -> (Option<Format>, FileChoice) {
   (
     Some(format),
     FileChoice::Ready {
+      selection,
       name,
       format: format.label(),
       duration_ms,
@@ -346,20 +422,22 @@ impl MonoSource for SystemSource {
 }
 
 /// Keeps a chosen file and tells the window. A file chosen while a
-/// transcription runs waits until it ends: the running one keeps its file.
+/// transcription runs, or while the window shows its transcript, is not
+/// taken: the transcript keeps its file until the user asks for another.
+/// An inspection that a newer choice, a clear or the window's close
+/// overtook is dropped.
 fn choose(app: &AppHandle, path: PathBuf) -> Result<FileChoice, String> {
   let state = app.state::<TranscribeState>();
-  if state.update(|inner| inner.job.is_some()) {
-    return Err("a recording is being transcribed".to_string());
-  }
-  let (format, choice) = inspect(&path);
-  state.update(|inner| {
-    inner.file = format.map(|format| Chosen {
-      path,
-      format,
-      choice: choice.clone(),
-    });
+  let selection = state.update(Inner::begin_choice)?;
+  let (format, choice) = inspect(&path, selection);
+  let chosen = format.map(|format| Chosen {
+    path,
+    format,
+    choice: choice.clone(),
   });
+  if !state.update(|inner| inner.commit_choice(selection, chosen)) {
+    return Err("a newer choice replaced this recording".to_string());
+  }
   crate::logging::best_effort(
     app.emit_to(TRANSCRIBE_WINDOW_LABEL, FILE_EVENT, &choice),
     "chosen recording was not announced",
@@ -383,12 +461,11 @@ pub(crate) fn dropped(app: &AppHandle, paths: &[PathBuf]) {
 /// Ends any transcription when the window closes, and forgets the file.
 pub(crate) fn window_closed(app: &AppHandle) {
   let job = app.state::<TranscribeState>().update(|inner| {
-    inner.file = None;
+    inner.clear();
     inner.job.take()
   });
   if let Some(job) = job {
-    job.stop.store(true, Ordering::SeqCst);
-    job.task.abort();
+    job.end_now();
   }
 }
 
@@ -419,6 +496,21 @@ pub fn transcribe_get_snapshot(
     file,
     running,
   })
+}
+
+/// The stella AI model a recording goes to, as the window shows it before
+/// a file can be chosen for it; a start names it back.
+#[tauri::command]
+pub async fn transcribe_get_model(
+  app: AppHandle,
+  window: Window,
+) -> Result<RecordingModel, String> {
+  require_window(&window)?;
+  require_available(&app)?;
+  if !dictation::cloud_available(&app) {
+    return Err("stella AI transcription is not available".to_string());
+  }
+  dictation_cloud::recording_model(&app).await
 }
 
 /// Opens the native picker; `None` when the user closes it.
@@ -461,7 +553,7 @@ pub fn transcribe_clear_file(
   require_window(&window)?;
   state.update(|inner| {
     if inner.job.is_none() {
-      inner.file = None;
+      inner.clear();
     }
   });
   Ok(())
@@ -485,29 +577,30 @@ pub async fn transcribe_start(
       if !dictation::cloud_available(&app) {
         return Err("stella AI transcription is not available".to_string());
       }
-      Some(dictation_cloud::recording_model(&app).await?)
+      let model = dictation_cloud::recording_model(&app).await?;
+      // The recording goes only to the model, and its warning, the window
+      // showed; a model changed since then is shown again first.
+      if request.model_id.as_deref() != Some(model.id.as_str()) {
+        return Err("the stella AI model changed; check it again".to_string());
+      }
+      Some(model)
     }
     Destination::Local => None,
   };
   let state = app.state::<TranscribeState>();
   let job = state.next_job.fetch_add(1, Ordering::SeqCst) + 1;
   let stop = Arc::new(AtomicBool::new(false));
+  let workers = Arc::new(LocalWorkers::default());
   let plan = Plan {
     job,
     destination: request.destination,
-    model_id: model.as_ref().map(|model| model.id.clone()),
+    model: model.clone(),
     matter_id,
     language: dictation::language(&app).hint,
+    workers: Arc::clone(&workers),
   };
   state.update(|inner| {
-    if inner.job.is_some() {
-      return Err("a recording is being transcribed".to_string());
-    }
-    let chosen = inner
-      .file
-      .as_ref()
-      .filter(|chosen| matches!(chosen.choice, FileChoice::Ready { .. }))
-      .ok_or("choose a recording first")?;
+    let chosen = inner.startable(request.selection)?;
     let task = tauri::async_runtime::spawn(run(
       app.clone(),
       chosen.path.clone(),
@@ -518,9 +611,11 @@ pub async fn transcribe_start(
     inner.job = Some(Job {
       id: job,
       stop,
+      workers,
       task,
     });
-    Ok(())
+    inner.holds_result = true;
+    Ok::<(), String>(())
   })?;
   Ok(Started { job, model })
 }
@@ -542,8 +637,7 @@ pub fn transcribe_stop(
     }
   });
   if let Some(running) = running {
-    running.stop.store(true, Ordering::SeqCst);
-    running.task.abort();
+    running.end_now();
     announce(&app, &Finished::Stopped { job });
   }
   Ok(())
@@ -564,9 +658,11 @@ fn valid_id(id: &str) -> Result<(), String> {
 struct Plan {
   job: u64,
   destination: Destination,
-  model_id: Option<String>,
+  /// The stella AI model, and the account the recording started for.
+  model: Option<RecordingModel>,
   matter_id: Option<String>,
   language: Option<&'static str>,
+  workers: Arc<LocalWorkers>,
 }
 
 fn announce(app: &AppHandle, finished: &Finished) {
@@ -636,18 +732,15 @@ async fn transcribe(
   });
   match plan.destination {
     Destination::Cloud => {
-      let model_id = plan.model_id.clone().ok_or(Failure::Cloud)?;
+      let model = plan.model.as_ref().ok_or(Failure::Cloud)?;
       let texts = decoded
-        .map(|item| {
-          let model_id = model_id.clone();
-          async move {
-            match item {
-              Decoded::Piece(piece) => {
-                let text = cloud_text(app, &piece, &model_id, plan).await;
-                Decoded::piece_text(piece, text)
-              }
-              other => Step::Other(other),
+        .map(|item| async move {
+          match item {
+            Decoded::Piece(piece) => {
+              let text = cloud_text(app, &piece, model, plan).await;
+              Decoded::piece_text(piece, text)
             }
+            other => Step::Other(other),
           }
         })
         .buffered(CLOUD_PIECES_AT_ONCE);
@@ -660,13 +753,20 @@ async fn transcribe(
         .map(|item| {
           let model = model.clone();
           let worker = Arc::clone(&worker);
+          let workers = Arc::clone(&plan.workers);
           async move {
             match item {
               Decoded::Piece(piece) => {
                 let language = plan.language;
                 let result = tauri::async_runtime::spawn_blocking(move || {
-                  let text =
-                    local_text(&worker, &model, &piece.samples, language, piece.speech);
+                  let text = local_text(
+                    &worker,
+                    &workers,
+                    &model,
+                    &piece.samples,
+                    language,
+                    piece.speech,
+                  );
                   (piece, text)
                 })
                 .await;
@@ -737,17 +837,21 @@ async fn deliver(
 }
 
 /// One piece through stella AI, tried again once before the recording
-/// fails. A piece without speech is not sent.
+/// fails. A piece without speech is not sent. Both attempts name the piece
+/// the same way, so stella counts it once. Once the dictation account is
+/// another than the one the recording started for, no piece is sent and
+/// the recording fails, keeping the text so far.
 async fn cloud_text(
   app: &AppHandle,
   piece: &Ready,
-  model_id: &str,
+  model: &RecordingModel,
   plan: &Plan,
 ) -> Result<String, Failure> {
   if !piece.speech {
     return Ok(String::new());
   }
   let wav = dictation_cloud::wav(&piece.samples, PIECE_SAMPLE_RATE);
+  let piece_id = uuid::Uuid::new_v4().to_string();
   for attempt in 0..2 {
     // Read before every request: stella AI may have been turned off.
     if !dictation::cloud_available(app) {
@@ -756,15 +860,22 @@ async fn cloud_text(
     match dictation_cloud::transcribe_recording_piece(
       app,
       wav.clone(),
-      model_id,
-      plan.language,
-      plan.matter_id.as_deref(),
-      PIECE_TIMEOUT,
+      dictation_cloud::RecordingPiece {
+        model,
+        piece_id: &piece_id,
+        language: plan.language,
+        matter_id: plan.matter_id.as_deref(),
+        timeout: PIECE_TIMEOUT,
+      },
     )
     .await
     {
       Ok(text) => return Ok(text.trim().to_string()),
-      Err(error) => {
+      Err(dictation_cloud::PieceFailure::AccountChanged) => {
+        tracing::info!("the dictation account changed during a recording");
+        return Err(Failure::Cloud);
+      }
+      Err(dictation_cloud::PieceFailure::Failed(error)) => {
         tracing::info!(%error, attempt, "a recording piece was not transcribed");
       }
     }
@@ -846,11 +957,55 @@ fn decode(
   });
 }
 
+type SharedChild = Arc<Mutex<std::process::Child>>;
+
+/// A job's speech-model child, reachable from Stop and the window's close
+/// while a piece holds its pipes: killing it ends the piece's wait for the
+/// reply, and once the job is stopped no new child is kept.
+#[derive(Default)]
+struct LocalWorkers {
+  stopped: AtomicBool,
+  child: Mutex<Option<SharedChild>>,
+}
+
+impl LocalWorkers {
+  fn kill(&self) {
+    self.stopped.store(true, Ordering::SeqCst);
+    let child = self
+      .child
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .take();
+    if let Some(child) = child {
+      kill_child(&child);
+    }
+  }
+
+  /// Keeps `child` where a stop finds it; `false`, with the child killed,
+  /// once the job was stopped.
+  #[cfg_attr(not(any(dictation, test)), allow(dead_code))]
+  fn register(&self, child: &SharedChild) -> bool {
+    *self.child.lock().unwrap_or_else(PoisonError::into_inner) =
+      Some(Arc::clone(child));
+    if self.stopped.load(Ordering::SeqCst) {
+      kill_child(child);
+      return false;
+    }
+    true
+  }
+}
+
+fn kill_child(child: &SharedChild) {
+  if let Err(error) = child.lock().unwrap_or_else(PoisonError::into_inner).kill() {
+    tracing::debug!(%error, "recording worker already gone");
+  }
+}
+
 /// The speech model on this computer, in a child process kept warm for the
 /// whole recording, as dictation runs it.
 #[cfg(dictation)]
 struct LocalWorker {
-  child: std::process::Child,
+  child: SharedChild,
   stdin: std::process::ChildStdin,
   stdout: std::io::BufReader<std::process::ChildStdout>,
 }
@@ -860,7 +1015,7 @@ struct LocalWorker;
 
 #[cfg(dictation)]
 impl LocalWorker {
-  fn start() -> std::io::Result<Self> {
+  fn start(workers: &LocalWorkers) -> std::io::Result<Self> {
     use std::process::{Command, Stdio};
     let mut process = Command::new(std::env::current_exe()?);
     process
@@ -874,11 +1029,16 @@ impl LocalWorker {
     let mut child = process.spawn()?;
     let stdin = child.stdin.take().ok_or(std::io::ErrorKind::BrokenPipe)?;
     let stdout = child.stdout.take().ok_or(std::io::ErrorKind::BrokenPipe)?;
-    Ok(Self {
-      child,
+    let worker = Self {
+      child: Arc::new(Mutex::new(child)),
       stdin,
       stdout: std::io::BufReader::new(stdout),
-    })
+    };
+    if workers.register(&worker.child) {
+      Ok(worker)
+    } else {
+      Err(std::io::ErrorKind::Interrupted.into())
+    }
   }
 
   fn transcribe(
@@ -899,10 +1059,13 @@ impl LocalWorker {
 #[cfg(dictation)]
 impl Drop for LocalWorker {
   fn drop(&mut self) {
-    if let Err(error) = self.child.kill() {
-      tracing::debug!(%error, "recording worker already gone");
-    }
-    if let Err(error) = self.child.wait() {
+    kill_child(&self.child);
+    if let Err(error) = self
+      .child
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .wait()
+    {
       tracing::debug!(%error, "recording worker could not be reaped");
     }
   }
@@ -912,6 +1075,7 @@ impl Drop for LocalWorker {
 #[cfg(dictation)]
 fn local_text(
   worker: &Mutex<Option<LocalWorker>>,
+  workers: &LocalWorkers,
   model: &Path,
   samples: &[f32],
   language: Option<&str>,
@@ -925,7 +1089,7 @@ fn local_text(
   let warm = worker.lock().unwrap_or_else(PoisonError::into_inner).take();
   let mut running = match warm {
     Some(running) => running,
-    None => LocalWorker::start().map_err(|_error| Failure::Local)?,
+    None => LocalWorker::start(workers).map_err(|_error| Failure::Local)?,
   };
   let text = match running.transcribe(model, samples, language) {
     Ok(Some(text)) => Ok(text.trim().to_string()),
@@ -941,6 +1105,7 @@ fn local_text(
 #[cfg(not(dictation))]
 fn local_text(
   _worker: &Mutex<Option<LocalWorker>>,
+  _workers: &LocalWorkers,
   _model: &Path,
   _samples: &[f32],
   _language: Option<&str>,
@@ -1150,6 +1315,85 @@ mod tests {
     assert_eq!(safe_file_name(".hidden"), "hidden");
   }
 
+  fn chosen(selection: u64) -> Chosen {
+    Chosen {
+      path: PathBuf::from("Hearing.m4a"),
+      format: Format::M4a,
+      choice: FileChoice::Ready {
+        selection,
+        name: "Hearing.m4a".to_string(),
+        format: "M4A",
+        duration_ms: None,
+      },
+    }
+  }
+
+  #[test]
+  fn an_inspection_overtaken_by_a_newer_choice_or_a_clear_is_dropped() {
+    let mut inner = Inner::default();
+    let first = inner.begin_choice().unwrap();
+    let second = inner.begin_choice().unwrap();
+    assert!(inner.commit_choice(second, Some(chosen(second))));
+    assert!(!inner.commit_choice(first, Some(chosen(first))));
+    assert!(inner.startable(second).is_ok());
+
+    let late = inner.begin_choice().unwrap();
+    inner.clear();
+    assert!(!inner.commit_choice(late, Some(chosen(late))));
+    assert!(inner.file.is_none());
+  }
+
+  #[test]
+  fn a_start_takes_only_the_file_the_window_announced() {
+    let mut inner = Inner::default();
+    let announced = inner.begin_choice().unwrap();
+    assert!(inner.commit_choice(announced, Some(chosen(announced))));
+    let newer = inner.begin_choice().unwrap();
+    assert!(inner.commit_choice(newer, Some(chosen(newer))));
+    assert!(inner.startable(announced).is_err());
+    assert!(inner.startable(newer).is_ok());
+  }
+
+  #[test]
+  fn a_transcript_keeps_its_file_until_the_user_asks_for_another() {
+    let mut inner = Inner::default();
+    let selection = inner.begin_choice().unwrap();
+    assert!(inner.commit_choice(selection, Some(chosen(selection))));
+    inner.holds_result = true;
+    assert!(inner.begin_choice().is_err());
+    assert!(inner.startable(selection).is_err());
+    inner.clear();
+    assert!(inner.begin_choice().is_ok());
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn stopping_kills_a_worker_that_is_still_busy() {
+    let workers = LocalWorkers::default();
+    let child: SharedChild = Arc::new(Mutex::new(
+      std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap(),
+    ));
+    assert!(workers.register(&child));
+    workers.kill();
+    let status = child.lock().unwrap().wait().unwrap();
+    assert!(!status.success());
+
+    let late: SharedChild = Arc::new(Mutex::new(
+      std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap(),
+    ));
+    assert!(
+      !workers.register(&late),
+      "a stopped job keeps no new worker"
+    );
+    assert!(!late.lock().unwrap().wait().unwrap().success());
+  }
+
   #[test]
   fn matter_ids_are_plain_identifiers() {
     assert!(valid_id("0198c5e2-7c1f-7a6e-9a3b-2f4d5e6f7a8b").is_ok());
@@ -1168,13 +1412,14 @@ mod tests {
       serde_json::json!({ "status": "refused", "name": "Memo.ds2", "reason": "dictaphone" })
     );
     let ready = FileChoice::Ready {
+      selection: 4,
       name: "Hearing.m4a".to_string(),
       format: "M4A",
       duration_ms: Some(1_000),
     };
     assert_eq!(
       serde_json::to_value(&ready).unwrap(),
-      serde_json::json!({ "status": "ready", "name": "Hearing.m4a", "format": "M4A", "durationMs": 1_000 })
+      serde_json::json!({ "status": "ready", "selection": 4, "name": "Hearing.m4a", "format": "M4A", "durationMs": 1_000 })
     );
     assert_eq!(
       serde_json::to_value(Finished::Done {

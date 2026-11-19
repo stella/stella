@@ -340,11 +340,13 @@ struct Transcript {
 
 /// Where a chunk goes besides its audio: the model, the language and, for
 /// a recording filed under a matter, that matter, whose names the API hands
-/// the model as vocabulary.
+/// the model as vocabulary. A recording's piece also names itself, the same
+/// on every attempt, so a retried piece is counted once.
 struct ChunkRequest<'a> {
   model_id: Option<&'a str>,
   language: Option<&'a str>,
   matter_id: Option<&'a str>,
+  piece_id: Option<&'a str>,
   timeout: Duration,
 }
 
@@ -366,6 +368,9 @@ async fn send_chunk(
   }
   if let Some(matter_id) = chunk.matter_id {
     form = form.text("matterId", matter_id.to_string());
+  }
+  if let Some(piece_id) = chunk.piece_id {
+    form = form.text("pieceId", piece_id.to_string());
   }
   let response = crate::http_client::device_proof_request(
     client(chunk.timeout)?
@@ -570,6 +575,7 @@ impl CloudSession {
               model_id: Some(&model_id),
               language,
               matter_id: None,
+              piece_id: None,
               timeout: CHUNK_TIMEOUT,
             },
           )
@@ -584,9 +590,12 @@ impl CloudSession {
 }
 
 /// The model a recording is transcribed with: the one dictation uses, the
-/// region's default where none is stored or the stored one is gone.
+/// region's default where none is stored or the stored one is gone. It
+/// names the account it was read for, which every piece is sent for.
 pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
-  let offered = models(app).await?;
+  let account = cloud_account(app).await?;
+  let namespace = account.local_data_namespace();
+  let offered = models_for(account).await?;
   let (_, stored) = dictation::destination(app);
   let choice =
     choose_model(stored.as_deref(), &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
@@ -601,7 +610,9 @@ pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, S
   Ok(RecordingModel {
     id: model.id.clone(),
     display_name: model.display_name.clone(),
+    provider: model.provider.clone(),
     retains_data: model.retains_data,
+    account: namespace,
   })
 }
 
@@ -611,37 +622,66 @@ pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, S
 pub(crate) struct RecordingModel {
   pub id: String,
   pub display_name: String,
+  /// Who runs the model, as a name to show.
+  pub provider: Option<String>,
   /// The provider keeps the audio; the window warns.
   pub retains_data: bool,
+  /// The account the model was read for; never shown.
+  #[serde(skip)]
+  pub account: String,
 }
 
-/// One piece of a recording, already 16 kHz WAV, transcribed by stella AI
-/// for the account the server still enables it for.
+/// A recording's piece, and where it goes.
+pub(crate) struct RecordingPiece<'a> {
+  pub model: &'a RecordingModel,
+  /// The same on every attempt at this piece.
+  pub piece_id: &'a str,
+  pub language: Option<&'a str>,
+  pub matter_id: Option<&'a str>,
+  pub timeout: Duration,
+}
+
+/// Why a recording's piece has no text.
+#[derive(Debug)]
+pub(crate) enum PieceFailure {
+  /// The dictation account is no longer the one the recording started
+  /// for; nothing was sent.
+  AccountChanged,
+  /// stella AI did not transcribe it; trying again may.
+  Failed(String),
+}
+
+/// One piece of a recording, already 16 kHz WAV, transcribed by stella AI,
+/// and only for the account the recording started for while the server
+/// still enables it.
 pub(crate) async fn transcribe_recording_piece(
   app: &AppHandle,
   wav: Vec<u8>,
-  model_id: &str,
-  language: Option<&str>,
-  matter_id: Option<&str>,
-  timeout: Duration,
-) -> Result<String, String> {
+  piece: RecordingPiece<'_>,
+) -> Result<String, PieceFailure> {
   if wav.len() > contract().max_audio_bytes {
-    return Err("the piece is larger than stella AI accepts".to_string());
+    return Err(PieceFailure::Failed(
+      "the piece is larger than stella AI accepts".to_string(),
+    ));
   }
-  let account = cloud_account(app).await?;
+  let account = cloud_account(app).await.map_err(PieceFailure::Failed)?;
+  if account.local_data_namespace() != piece.model.account {
+    return Err(PieceFailure::AccountChanged);
+  }
   let text = send_chunk(
     &account,
     wav,
     ChunkRequest {
-      model_id: Some(model_id),
-      language,
-      matter_id,
-      timeout,
+      model_id: Some(&piece.model.id),
+      language: piece.language,
+      matter_id: piece.matter_id,
+      piece_id: Some(piece.piece_id),
+      timeout: piece.timeout,
     },
   )
   .await;
   drop(account);
-  text
+  text.map_err(PieceFailure::Failed)
 }
 
 /// One model stella AI offers this organization. Fields a newer API adds are
@@ -680,7 +720,10 @@ impl CloudModels {
 }
 
 pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
-  let account = cloud_account(app).await?;
+  models_for(cloud_account(app).await?).await
+}
+
+async fn models_for(account: AccountRequest) -> Result<CloudModels, String> {
   let response = crate::http_client::device_proof_request(
     client(MODELS_TIMEOUT)?
       .get(format!(

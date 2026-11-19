@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Įrašo transkribavimas",
+    "retry": "Bandyti dar kartą",
     "drop": {
       "title": "Nuvilkite įrašą čia",
       "release": "Atleiskite, kad transkribuotumėte",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "Garsas transkribuoti siunčiamas stellai ir modelio {model} teikėjui. stella jo nesaugo.",
       "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
       "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella AI.",
-      "retainsData": "{provider} saugo visų šiam modeliui siunčiamų įrašų garsą ir transkripciją. Netranskribuokite juo konfidencialių ar klientų įrašų arba pasirinkite kitą modelį skiltyje Nustatymai, Diktavimas."
+      "retainsData": "{provider} saugo visų šiam modeliui siunčiamų įrašų garsą ir transkripciją. Netranskribuokite juo konfidencialių ar klientų įrašų arba pasirinkite kitą modelį skiltyje Nustatymai, Diktavimas.",
+      "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje."
     },
     "matter": {
       "title": "Byla",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Nepavyko pradėti transkribavimo. Bandykite dar kartą.",
+      "load": "Šio lango nepavyko įkelti. Bandykite dar kartą.",
       "modelMissing": "Kalbos modelio šiame kompiuteryje nėra. Atsisiųskite jį skiltyje Nustatymai, Diktavimas.",
       "thisComputer": "Šio kompiuterio kalbos modelis nepajėgė transkribuoti dalies įrašo. Iki šiol gautas tekstas išlieka.",
       "cloud": "stella AI nepajėgė transkribuoti dalies įrašo. Iki šiol gautas tekstas išlieka; bandykite vėliau.",

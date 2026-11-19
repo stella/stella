@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Transcrire un enregistrement",
+    "retry": "Réessayer",
     "drop": {
       "title": "Déposez un enregistrement ici",
       "release": "Relâchez pour transcrire",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "Le son est envoyé à stella et au fournisseur de {model} pour être transcrit. stella ne le conserve pas.",
       "localMissing": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, pour transcrire sur cet ordinateur.",
       "localMissingCloud": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, ou transcrivez avec stella AI.",
-      "retainsData": "{provider} conserve le son et la transcription de tout ce qui est envoyé à ce modèle. Ne transcrivez pas avec lui d’enregistrements confidentiels ou de clients, ou choisissez un autre modèle dans Paramètres, sous Dictée."
+      "retainsData": "{provider} conserve le son et la transcription de tout ce qui est envoyé à ce modèle. Ne transcrivez pas avec lui d’enregistrements confidentiels ou de clients, ou choisissez un autre modèle dans Paramètres, sous Dictée.",
+      "modelFailed": "Le modèle de stella AI n’a pas pu être lu : stella AI ne peut pas transcrire pour le moment. Réessayez ou transcrivez sur cet ordinateur."
     },
     "matter": {
       "title": "Dossier",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Impossible de lancer la transcription. Réessayez.",
+      "load": "Cette fenêtre n’a pas pu se charger. Réessayez.",
       "modelMissing": "Le modèle vocal n’est pas sur cet ordinateur. Téléchargez-le dans Paramètres, sous Dictée.",
       "thisComputer": "Le modèle vocal de cet ordinateur n’a pas pu transcrire une partie de l’enregistrement. Le texte obtenu jusqu’ici est conservé.",
       "cloud": "stella AI n’a pas pu transcrire une partie de l’enregistrement. Le texte obtenu jusqu’ici est conservé ; réessayez plus tard.",

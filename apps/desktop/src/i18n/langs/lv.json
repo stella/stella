@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Ieraksta transkribēšana",
+    "retry": "Mēģināt vēlreiz",
     "drop": {
       "title": "Velciet ierakstu šeit",
       "release": "Atlaidiet, lai transkribētu",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "Skaņa transkribēšanai tiek nosūtīta stella un modeļa {model} nodrošinātājam. stella to neglabā.",
       "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
       "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
-      "retainsData": "{provider} glabā visu šim modelim nosūtīto ierakstu skaņu un transkripciju. Netranskribējiet ar to konfidenciālus vai klientu ierakstus vai izvēlieties citu modeli sadaļā Iestatījumi, Diktēšana."
+      "retainsData": "{provider} glabā visu šim modelim nosūtīto ierakstu skaņu un transkripciju. Netranskribējiet ar to konfidenciālus vai klientu ierakstus vai izvēlieties citu modeli sadaļā Iestatījumi, Diktēšana.",
+      "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
     },
     "matter": {
       "title": "Lieta",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Neizdevās sākt transkribēšanu. Mēģiniet vēlreiz.",
+      "load": "Šo logu neizdevās ielādēt. Mēģiniet vēlreiz.",
       "modelMissing": "Runas modeļa šajā datorā nav. Lejupielādējiet to sadaļā Iestatījumi, Diktēšana.",
       "thisComputer": "Šī datora runas modelis nespēja transkribēt daļu ieraksta. Līdz šim iegūtais teksts paliek.",
       "cloud": "stella AI nespēja transkribēt daļu ieraksta. Līdz šim iegūtais teksts paliek; mēģiniet vēlāk.",

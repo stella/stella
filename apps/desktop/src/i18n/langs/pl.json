@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Transkrypcja nagrania",
+    "retry": "Spróbuj ponownie",
     "drop": {
       "title": "Upuść tutaj nagranie",
       "release": "Puść, aby transkrybować",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "Dźwięk jest wysyłany do transkrypcji do stella i do dostawcy modelu {model}. stella go nie przechowuje.",
       "localMissing": "Aby transkrybować na tym komputerze, pobierz model mowy w Ustawieniach, w sekcji Dyktowanie.",
       "localMissingCloud": "Pobierz model mowy w Ustawieniach, w sekcji Dyktowanie, albo transkrybuj za pomocą stella AI.",
-      "retainsData": "{provider} przechowuje dźwięk i transkrypcję wszystkiego, co trafia do tego modelu. Nie transkrybuj nim poufnych nagrań ani nagrań klientów albo wybierz inny model w Ustawieniach, w sekcji Dyktowanie."
+      "retainsData": "{provider} przechowuje dźwięk i transkrypcję wszystkiego, co trafia do tego modelu. Nie transkrybuj nim poufnych nagrań ani nagrań klientów albo wybierz inny model w Ustawieniach, w sekcji Dyktowanie.",
+      "modelFailed": "Nie udało się odczytać modelu stella AI, więc stella AI nie może teraz transkrybować. Spróbuj ponownie lub transkrybuj na tym komputerze."
     },
     "matter": {
       "title": "Sprawa",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Nie udało się rozpocząć transkrypcji. Spróbuj ponownie.",
+      "load": "Nie udało się wczytać tego okna. Spróbuj ponownie.",
       "modelMissing": "Na tym komputerze nie ma modelu mowy. Pobierz go w Ustawieniach, w sekcji Dyktowanie.",
       "thisComputer": "Model mowy na tym komputerze nie zdołał transkrybować części nagrania. Dotychczasowy tekst zostaje.",
       "cloud": "stella AI nie zdołała transkrybować części nagrania. Dotychczasowy tekst zostaje; spróbuj później.",

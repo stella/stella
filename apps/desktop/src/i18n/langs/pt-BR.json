@@ -974,6 +974,7 @@
   },
   "transcribe": {
     "title": "Transcrever uma gravação",
+    "retry": "Tentar novamente",
     "drop": {
       "title": "Solte uma gravação aqui",
       "release": "Solte para transcrever",
@@ -991,7 +992,8 @@
       "cloudDescriptionModel": "O áudio é enviado para a stella e para o provedor de {model} para ser transcrito. A stella não o armazena.",
       "localMissing": "Baixe o modelo de voz em Configurações, em Ditado, para transcrever neste computador.",
       "localMissingCloud": "Baixe o modelo de voz em Configurações, em Ditado, ou transcreva com a stella AI.",
-      "retainsData": "{provider} guarda o áudio e a transcrição de tudo o que é enviado a este modelo. Não transcreva com ele gravações confidenciais ou de clientes, ou escolha outro modelo em Configurações, em Ditado."
+      "retainsData": "{provider} guarda o áudio e a transcrição de tudo o que é enviado a este modelo. Não transcreva com ele gravações confidenciais ou de clientes, ou escolha outro modelo em Configurações, em Ditado.",
+      "modelFailed": "Não foi possível ler o modelo do stella AI, então o stella AI não pode transcrever agora. Tente novamente ou transcreva neste computador."
     },
     "matter": {
       "title": "Caso",
@@ -1011,6 +1013,7 @@
     },
     "failure": {
       "start": "Não foi possível iniciar a transcrição. Tente novamente.",
+      "load": "Não foi possível carregar esta janela. Tente novamente.",
       "modelMissing": "O modelo de voz não está neste computador. Baixe-o em Configurações, em Ditado.",
       "thisComputer": "O modelo de voz deste computador não conseguiu transcrever parte da gravação. O texto obtido até agora foi mantido.",
       "cloud": "A stella AI não conseguiu transcrever parte da gravação. O texto obtido até agora foi mantido; tente mais tarde.",
