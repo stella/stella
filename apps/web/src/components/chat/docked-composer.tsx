@@ -24,10 +24,12 @@ import {
   DOCKED_COMPOSER_VEIL_WIDTH_CLASS,
   DOCKED_COMPOSER_WIDTH_CLASS,
 } from "@/components/ai-suggestions/composer-geometry";
-import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
-import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
-import { ComposerVeil } from "@/components/chat/composer-veil";
+import {
+  ComposerControlSlot,
+  ComposerPlusFace,
+  ComposerSendFace,
+} from "@/components/chat/composer-row.pending";
+import { ComposerVeil } from "@/components/chat/composer-veil.pending";
 import {
   DOCKED_CHAT_COLUMN_SLOT,
   useDockedChatSlotRef,
@@ -106,14 +108,14 @@ export const PromptBarShell = ({
 
 /**
  * Complete prompt row rendered while the live editor hydrates. Known controls
- * stay real and fixed in place; only data-owned content belongs in a skeleton.
- * Keeping this beside `PromptBar` makes the attachment and send affordances a
- * single owned pair instead of asking each loading shell to mirror them.
+ * keep their place in their unavailable faces, drawn from the chat bar's own
+ * pieces (`composer-row.pending`), the ones the chat thread's loading view
+ * uses too; only data-owned content belongs in a skeleton.
  */
 export const PromptBarPending = ({ children }: { children: ReactNode }) => (
   <PromptBarShell aria-hidden>
     <ComposerControlSlot>
-      <ComposerPlusMenu disabled onOpenFilePicker={() => undefined} />
+      <ComposerPlusFace />
     </ComposerControlSlot>
     <div
       className={cn(
@@ -124,11 +126,7 @@ export const PromptBarPending = ({ children }: { children: ReactNode }) => (
       <PromptBarPlaceholderContent>{children}</PromptBarPlaceholderContent>
     </div>
     <ComposerControlSlot>
-      <ChatComposerActionButton
-        canSend={false}
-        isGenerating={false}
-        onSend={() => undefined}
-      />
+      <ComposerSendFace />
     </ComposerControlSlot>
   </PromptBarShell>
 );

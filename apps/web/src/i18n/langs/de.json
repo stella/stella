@@ -1494,6 +1494,10 @@
       "title": "Die Suche ist vorübergehend nicht verfügbar"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Suchen Sie nach dem Aktenzeichen oder der ECLI der Entscheidung, sofern bekannt.",
+        "message": "Zu dieser Fundstelle wurde keine genau passende Entscheidung gefunden."
+      },
       "noHits": {
         "hint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
         "message": "Nichts entspricht den Wörtern, die diese Suche verlangt hat."
@@ -2412,6 +2416,7 @@
       "save_document": "Dokument speichern",
       "save_matter": "Akte speichern",
       "save_playbook": "Playbook speichern",
+      "save_skill_package": "Skill speichern",
       "save_task": "Aufgabe speichern",
       "save_template": "Vorlage speichern",
       "save_time_entry": "Zeiteintrag speichern",
@@ -2440,6 +2445,7 @@
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "user_message": "Während der Arbeit des Agenten gesendet",
+      "validate_skill_package": "Skill prüfen",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -4044,6 +4050,12 @@
     "versionCreatedDescription": "Version {versionNumber} wurde erstellt. Alle können weiterarbeiten.",
     "versionCreatedTitle": "Version erstellt",
     "viewOnly": "Nur Ansicht"
+  },
+  "guidance": {
+    "notCaseLaw": "Von einer Aufsichtsbehörde herausgegebene Leitlinie. Dies ist keine Gerichtsentscheidung.",
+    "openAtPublisher": "Beim Herausgeber öffnen",
+    "source": "Quelle: {attribution}",
+    "textUnavailable": "Der Text dieses Dokuments ist hier nicht verfügbar. Lesen Sie ihn beim Herausgeber."
   },
   "guides": {
     "action": {

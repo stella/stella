@@ -19,9 +19,12 @@ export const TRANSCRIPTION_AUDIO_MEDIA_TYPES = [
 ] as const;
 
 export const MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES = 25 * 1024 * 1024;
-export const MAX_TRANSCRIPTION_VOCABULARY_TERMS = 100;
+// The vocabulary limits also live in desktop-dictation-transcription.json,
+// where the desktop reads them for its custom words.
+export const MAX_TRANSCRIPTION_VOCABULARY_TERMS = contract.maxVocabularyTerms;
 /** Lengths are UTF-16 code units, matching JavaScript string validation. */
-export const MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH = 100;
+export const MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH =
+  contract.maxVocabularyTermLength;
 export const MAX_TRANSCRIPTION_MODEL_ID_LENGTH = 128;
 
 /** The optional multipart field (set to `1`) a member client sends with a

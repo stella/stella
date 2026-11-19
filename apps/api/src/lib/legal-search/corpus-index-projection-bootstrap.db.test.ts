@@ -265,7 +265,7 @@ test("bulk bootstrap uses the same contract for legislation", async () => {
   expect(result.entityIds).toHaveLength(2);
 });
 
-test("bootstrap locks source policy before canonical rows for every family", async () => {
+test("bootstrap key-share locks the source before canonical rows for every family", async () => {
   const statements: string[] = [];
   const loggedDb = drizzle({
     client,
@@ -295,7 +295,7 @@ test("bootstrap locks source policy before canonical rows for every family", asy
     documentTable: string,
   ): void => {
     const sourceLock = statements.findIndex((query) =>
-      query.includes(`for share of "${sourceTable}"`),
+      query.includes(`for key share of "${sourceTable}"`),
     );
     const documentLock = statements.findIndex((query) =>
       query.includes(`for update of "${documentTable}"`),
@@ -347,7 +347,7 @@ test("a cursor page is an id-range seek, never an anti-join over the corpus", as
     sourceTable: string,
   ): void => {
     const cursorPages = statements.filter((query) =>
-      query.includes(`for share of "${sourceTable}"`),
+      query.includes(`for key share of "${sourceTable}"`),
     );
     expect(cursorPages).toHaveLength(1);
     const cursorPage = cursorPages.at(0);
