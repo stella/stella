@@ -35,7 +35,7 @@ import {
   type AppServerLaunch,
   startAppServer,
 } from "./app-server-client";
-import { CodexProcess } from "./background";
+import { CodexProcess, type CodexProcessSettings } from "./background";
 import { usageLimitResetsAt } from "./errors";
 import {
   CODEX_CLIENT_INFO,
@@ -485,6 +485,7 @@ const beginTurn = async ({
   threadId,
   prompt,
   continuation,
+  model,
 }: {
   client: AppServerClient;
   input: HarnessTurnInput;
@@ -492,11 +493,14 @@ const beginTurn = async ({
   threadId: string;
   prompt: string;
   continuation: HarnessContinuation;
+  /** Another model than the thread's, for this turn and later ones. */
+  model?: string;
 }): Promise<Result<HarnessTurn, HarnessStartError>> => {
   const files = await filesTheModelReads(client, input);
   const started = await client.request("turn/start", {
     threadId,
     input: turnInputItems(files, prompt),
+    ...(model === undefined ? {} : { model }),
     // Codex keeps it for later turns of the process, so a capacity
     // continuation runs at it too; omitted, the harness's own setting holds.
     ...(input.reasoningEffort === null
@@ -551,6 +555,21 @@ const continueTurn = async (
     });
   }
   const client = appServer.client;
+  // The approval mode is fixed with the thread, and an effort left unset
+  // would keep the last turn's: either needs a new process.
+  const ran = appServer.settings;
+  if (
+    ran === null ||
+    ran.approvals !== input.policy.approvals ||
+    (input.reasoningEffort === null && ran.effort !== null)
+  ) {
+    await settlesWithin(appServer.stop(client), options.gracePeriodMs);
+    await client.kill();
+    return startTurn(options, {
+      ...input,
+      continuation: { type: "resume", sessionId: live.sessionId },
+    });
+  }
   const session = turnSession(options, input, appServer);
   session.attach(client);
   const prompt = buildTurnPrompt({
@@ -573,9 +592,20 @@ const continueTurn = async (
     threadId,
     prompt: prompt.value,
     continuation: { type: "resumed" },
+    ...(input.model === ran.model ? {} : { model: input.model }),
   });
-  return Result.isError(begun) ? fail(begun.error) : begun;
+  if (Result.isError(begun)) {
+    return fail(begun.error);
+  }
+  appServer.settings = settingsOf(input);
+  return begun;
 };
+
+const settingsOf = (input: HarnessTurnInput): CodexProcessSettings => ({
+  model: input.model,
+  effort: input.reasoningEffort,
+  approvals: input.policy.approvals,
+});
 
 const startTurn = async (
   options: CodexHarnessAdapterOptions,
@@ -653,6 +683,7 @@ const startTurn = async (
   }
   const { threadId, continuation } = opened.value;
   appServer.threadId = threadId;
+  appServer.settings = settingsOf(input);
   const prompt = sessionHoldsHistory(continuation)
     ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
     : standalone;

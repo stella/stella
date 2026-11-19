@@ -408,6 +408,37 @@ export const FAKE_SCENARIOS = {
     result(),
   ],
   /**
+   * As `background_command`, and the next turn runs at another model and
+   * effort, which the process switches to.
+   */
+  background_command_switched: [
+    ...freshTurn(),
+    ...devServer,
+    backgroundTasks([["task-serve", "local_bash"]]),
+    result(),
+    { expect: "set_model", response: { model: "opus" } },
+    { expect: "apply_flag_settings", response: {} },
+    { expect: "set_permission_mode", response: {} },
+    { expectUser: true },
+    backgroundTasks([]),
+    assistant("msg-2", [{ type: "text", text: "It stopped." }]),
+    result(),
+  ],
+  /**
+   * As `background_command_switched`, but the CLI refuses the effort: the
+   * next turn resumes the session in a new process.
+   */
+  background_command_switch_refused: {
+    fresh: [
+      ...freshTurn(),
+      ...devServer,
+      backgroundTasks([["task-serve", "local_bash"]]),
+      result(),
+      { expect: "apply_flag_settings", error: "Unsupported control request" },
+    ],
+    resume: [...freshTurn(), result()],
+  },
+  /**
    * A turn that leaves a dev server and a sub-agent running in the
    * background. The sub-agent is stopped at the turn's end, and the turn
    * the CLI then opens itself to report it is interrupted.

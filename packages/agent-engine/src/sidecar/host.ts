@@ -169,7 +169,10 @@ const LIVE_SESSION_IDLE_MS = 4 * 60 * 60_000;
 
 /**
  * What a harness process was started with that a later turn cannot change:
- * a turn continues in a kept process only when this is the same.
+ * a turn continues in a kept process only when this is the same. The model,
+ * the reasoning effort and the approval mode are not part of it: the adapter
+ * switches them in the kept process, or starts a new one when its harness
+ * cannot (`HarnessLiveSession`).
  */
 const launchKey = (
   message: SidecarRunStart,
@@ -185,10 +188,9 @@ const launchKey = (
     message.toolPath,
     message.skillFolders,
     networkHosts,
-    message.model,
-    message.reasoningEffort,
     message.instructions,
-    message.policy,
+    message.policy.network,
+    message.policy.fs,
     message.mcp.serverName,
   ]);
 
