@@ -1424,61 +1424,70 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
       : notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
-  const items = page.items.map((item) => {
-    const version = {
-      ...legalCitationLinkFields({
-        url: buildLegislationDocumentAppUrl({
-          country: item.country,
-          documentId: item.documentId,
-          eli,
-          slug: item.slug,
-          version: item.versionValidFrom,
-          anchor,
+  // A consolidation whose structure could not be read carries no wording to
+  // hand over and no claim about it, so the agent-facing history leaves it
+  // out, as it always has; the reader shows it as a version without text.
+  const items = page.items
+    .filter(
+      (item): item is Extract<typeof item, { status: "found" }> =>
+        item.status === "found",
+    )
+    .map((item) => {
+      const version = {
+        ...legalCitationLinkFields({
+          url: buildLegislationDocumentAppUrl({
+            country: item.country,
+            documentId: item.documentId,
+            eli,
+            slug: item.slug,
+            version: item.versionValidFrom,
+            anchor,
+          }),
+          sourceUrl: item.sourceUrl,
         }),
-        sourceUrl: item.sourceUrl,
-      }),
-      ...provisionCitationField({ anchor, country: item.country, eli }),
-      documentId: item.documentId,
-      resourceName: legislationResourceName(item.documentId),
-      versionValidFrom: item.versionValidFrom,
-      versionValidTo: item.versionValidTo,
-      expressionKind: item.expressionKind,
-      windowDisposition: item.windowDisposition,
-      windowDispositionBasis: item.windowDispositionBasis,
-    };
-    if (!item.allowsDerivedAi) {
-      return {
-        type: "item" as const,
-        item: {
-          ...version,
-          message: WITHHELD_WORDING_MESSAGE,
-          status: PROVISION_STATUS.textWithheld,
-        },
+        ...provisionCitationField({ anchor, country: item.country, eli }),
+        documentId: item.documentId,
+        resourceName: legislationResourceName(item.documentId),
+        versionValidFrom: item.versionValidFrom,
+        versionValidTo: item.versionValidTo,
+        expressionKind: item.expressionKind,
+        windowDisposition: item.windowDisposition,
+        windowDispositionBasis: item.windowDispositionBasis,
       };
-    }
-    const window = windowBoundText({
-      ...(textCursor === undefined ? {} : { cursor: textCursor }),
-      limit: LIMITS.legislationProvisionTextChars,
-      subject: JSON.stringify([eli, anchor, String(item.documentId)]),
-      text: item.text,
-    });
-    return window.type === "invalid-cursor"
-      ? { type: "invalid-cursor" as const }
-      : {
+      if (!item.allowsDerivedAi) {
+        return {
           type: "item" as const,
           item: {
             ...version,
-            text: window.text,
-            governingText: textCursor === undefined ? item.governingText : [],
-            ...(textCursor === undefined && item.governingTextTruncated === true
-              ? { governingTextTruncated: true as const }
-              : {}),
-            truncated: window.truncated,
-            nextTextCursor: window.nextTextCursor,
-            status: PROVISION_STATUS.found,
+            message: WITHHELD_WORDING_MESSAGE,
+            status: PROVISION_STATUS.textWithheld,
           },
         };
-  });
+      }
+      const window = windowBoundText({
+        ...(textCursor === undefined ? {} : { cursor: textCursor }),
+        limit: LIMITS.legislationProvisionTextChars,
+        subject: JSON.stringify([eli, anchor, String(item.documentId)]),
+        text: item.text,
+      });
+      return window.type === "invalid-cursor"
+        ? { type: "invalid-cursor" as const }
+        : {
+            type: "item" as const,
+            item: {
+              ...version,
+              text: window.text,
+              governingText: textCursor === undefined ? item.governingText : [],
+              ...(textCursor === undefined &&
+              item.governingTextTruncated === true
+                ? { governingTextTruncated: true as const }
+                : {}),
+              truncated: window.truncated,
+              nextTextCursor: window.nextTextCursor,
+              status: PROVISION_STATUS.found,
+            },
+          };
+    });
   const readableItems = items.filter(
     (item) => item.type === "item" && "text" in item.item,
   );
