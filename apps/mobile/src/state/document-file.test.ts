@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import {
+  DATA_BOX_DOCUMENT_KIND,
+  DATA_BOX_MESSAGE_MIME_TYPE,
+} from "@stll/api-contract/data-box";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -233,9 +236,17 @@ describe("reading a document's file", () => {
     ]);
 
   test.each([
-    ["Doručenka.ZFO", "application/octet-stream", "receipt"],
-    ["Datová zpráva", DATA_BOX_MESSAGE_MIME_TYPE, "message"],
-  ])(
+    [
+      "Doručenka.ZFO",
+      "application/octet-stream",
+      DATA_BOX_DOCUMENT_KIND.receipt,
+    ],
+    [
+      "Datová zpráva",
+      DATA_BOX_MESSAGE_MIME_TYPE,
+      DATA_BOX_DOCUMENT_KIND.message,
+    ],
+  ] as const)(
     "opens %s through the audited data-box preview",
     async (fileName, mimeType, kind) => {
       const text = "Datová schránka: 1234567\n\n  Přijato: 15:20";
