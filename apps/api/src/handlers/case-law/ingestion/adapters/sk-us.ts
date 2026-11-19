@@ -54,6 +54,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -908,9 +909,18 @@ const SK_US_QUARANTINE_PREFIX = "sk-us-quarantine:";
 /** Why such a row is stored listing-only, under `listedOnlyReason`. */
 const SK_US_QUARANTINE_REASON = "no_usable_document_id";
 
-/** A stated string; empty, absent, null and every other type state nothing. */
-const statedSkUsString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+/**
+ * A stated string, without the characters ingestion strips from the stored
+ * raw, so an identity read off it is read off the raw again on replay; empty,
+ * absent, null and every other type state nothing.
+ */
+const statedSkUsString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const stated = stripDangerousChars(value);
+  return stated.trim().length > 0 ? stated : undefined;
+};
 
 /**
  * The audit identity of a search row, read off the fields the DMS states for

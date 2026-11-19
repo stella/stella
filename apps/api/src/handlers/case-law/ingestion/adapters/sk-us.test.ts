@@ -38,6 +38,7 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
@@ -790,6 +791,36 @@ describe("sk-us row without a usable document id", () => {
         sourceDocumentId: "another-row",
       }),
     ).toMatchObject({ type: "rejected" });
+  });
+
+  test("a stored quarantined row replays to itself when its docket carries a character ingestion strips", async () => {
+    mockFetch({ search: [] });
+    const docket = WITHOUT_DOCUMENT_ID.mkRSAPNumberOfFile;
+    const withStrippedCharacters = {
+      ...WITHOUT_DOCUMENT_ID,
+      mkRSAPNumberOfFile: `\u200B${docket}\uFEFF`,
+    };
+    const built = await buildSkUsDecision(withStrippedCharacters);
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+    // What the pipeline stores: the raw without the characters it strips.
+    const stored = sanitizeResult(built.decision).unwrap();
+
+    const replayed = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(stored),
+    );
+
+    expect(replayed).toMatchObject({
+      type: "parsed",
+      result: {
+        sourceDocumentId: stored.sourceDocumentId,
+        caseNumber: docket,
+      },
+    });
+    expect(skUsListingIdentity(withStrippedCharacters)).toEqual(
+      skUsListingIdentity(WITHOUT_DOCUMENT_ID),
+    );
   });
 
   test("a text field of another type reads as absent instead of failing the row", async () => {
