@@ -84,6 +84,7 @@
     "canary:ai-provider": "bun --cwd apps/api canary:ai-provider",
     "record:provider-cassettes": "bun --cwd apps/api record:provider-cassettes",
     "canary:mcp": "bun --filter @stll/api canary:mcp",
+    "incident:verify": "bun run --cwd=apps/api --silent incident:verify",
     "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",
     "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:lockfile-ages": "bun scripts/check-lockfile-release-ages.ts",
