@@ -8,6 +8,7 @@ import {
   publicLawReadDb,
 } from "@/api/lib/public-law-read-db";
 import {
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
@@ -27,6 +28,31 @@ const VALID_PERMISSIONS = {
 } as const satisfies PublicLawDatabaseRolePermissions;
 
 describe("external public-law database boundary", () => {
+  test("tolerates future collection-body grants without requiring or widening attachment access", () => {
+    const future = publicLawColumnPairs(
+      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+    );
+    const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(future.length).toBeGreaterThan(0);
+    for (const pair of future) {
+      expect(pair.grant).toBe("permitted");
+      expect(allowed).toContainEqual(pair);
+    }
+    expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
+      "case_law_held_decision_attachments",
+    );
+    const collection =
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies;
+    expect(collection).not.toHaveProperty("metadata");
+    expect(collection).not.toHaveProperty("source_raw_s3_key");
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions.id,
+    ).toBe("required");
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions,
+    ).not.toHaveProperty("normalized_s3_key");
+  });
+
   test("excludes tenant and operational relations", () => {
     expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
       "case_law_matter_links",
