@@ -210,7 +210,10 @@ beforeAll(
         language: "cs",
         languageGroupKey: "lookup-administrative",
         slug: "8-as-1-2019",
-        metadata: { keywords: [`${"x".repeat(450)}\nSecond line`] },
+        metadata: {
+          keywords: [`${"x".repeat(450)}\nSecond line`],
+          senate: "rozšířený senát",
+        },
       },
       {
         id: listingOnlyId,
@@ -406,6 +409,7 @@ test("an ECLI held only in the identifier rows resolves", async () => {
   });
 
   expect(rows.map(({ id }) => id)).toEqual([administrativeId]);
+  expect(rows.at(0)?.senate).toBe("rozšířený senát");
 });
 
 test("an ECLI held only in the column resolves in any letter case", async () => {

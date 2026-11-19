@@ -21,6 +21,7 @@
 
 import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { load } from "@stll/html";
 import { headingPathsByAnchor } from "@stll/legal-ast";
@@ -79,7 +80,7 @@ const readFixture = async (name: string): Promise<string | undefined> => {
 };
 
 const fixtureStems = await Array.fromAsync(
-  new Glob("*.html.gz").scan(FIXTURES_DIR.pathname),
+  new Glob("*.html.gz").scan(fileURLToPath(FIXTURES_DIR)),
 ).then((names) =>
   names.map((name) => name.replace(/\.html\.gz$/u, "")).toSorted(),
 );

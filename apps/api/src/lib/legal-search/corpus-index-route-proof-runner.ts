@@ -63,7 +63,7 @@ import {
   type CorpusIndexRoute,
   readCorpusIndexRouteProofsTx,
 } from "@/api/lib/legal-search/corpus-index-route-proof-store";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { isLockWaitRefusal } from "@/api/lib/pg-error";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 
 type Runner = IngestionTransactionRunner<Transaction>;
@@ -347,11 +347,6 @@ const fencedRunner =
       return await work(tx);
     });
 
-/** A lock the database did not grant in time: the flip's fence, most likely. */
-const isLockRefusal = (cause: unknown): boolean =>
-  isPgError(cause, PG_ERROR.LOCK_NOT_AVAILABLE) ||
-  isPgError(cause, PG_ERROR.DEADLOCK_DETECTED);
-
 const routeName = ({ generation, indexId }: CorpusIndexRoute) =>
   `${generation}/${indexId}`;
 
@@ -440,7 +435,7 @@ const stepOf = async (walk: Walk, route: CorpusIndexRoute): Promise<Step> => {
     catch: (cause) => cause,
   });
   if (ran.isErr()) {
-    return isLockRefusal(ran.error)
+    return isLockWaitRefusal(ran.error)
       ? { type: "lock_refused" }
       : { type: "failed", cause: ran.error };
   }

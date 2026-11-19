@@ -55,10 +55,8 @@ import {
 } from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import {
-  ChatMatterPicker,
-  ChatMatterPickerPending,
-} from "@/components/chat/chat-matter-picker";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker.pending";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
@@ -134,7 +132,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { REQUIREMENT } from "@/lib/platform/requirements.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
-import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import {
+  offeredSuggestedSkills,
+  useSuggestedSkills,
+} from "@/lib/prompts/use-suggested-skills";
 import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -432,7 +433,7 @@ export const ChatTabPanel = ({
     };
   }, [focusComposer, isGenerating, messages.length, tab.id]);
 
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   // A chat about a decision opens on the questions a judgment answers. The
   // suggested skills are the reader's own drafting and review skills, which are
   // about a document they are writing, not one a court handed down.
@@ -1097,7 +1098,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  * spinner flash, no layout shift.
  */
 export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   const decisionPrompts = useDecisionChatPrompts(tab.activeLegalKey);
   const threadRef = chatTabThreadRef(tab);
   return (

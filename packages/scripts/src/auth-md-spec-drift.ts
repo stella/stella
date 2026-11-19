@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -171,7 +172,7 @@ const readLockfile = async (): Promise<Lockfile | null> => {
   const parsed: unknown = await file.json();
   return isLockfile(parsed)
     ? parsed
-    : panic(`${LOCKFILE_URL.pathname} is not an auth.md spec lockfile`);
+    : panic(`${fileURLToPath(LOCKFILE_URL)} is not an auth.md spec lockfile`);
 };
 
 const update = async (): Promise<void> => {

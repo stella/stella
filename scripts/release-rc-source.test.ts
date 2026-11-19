@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const check = (incident: boolean, treeExit: string) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-rc-source-"));
@@ -17,7 +18,7 @@ const check = (incident: boolean, treeExit: string) => {
     return Bun.spawnSync(
       [
         "bash",
-        new URL("check-release-rc-source.sh", import.meta.url).pathname,
+        fileURLToPath(new URL("check-release-rc-source.sh", import.meta.url)),
         "stella/stella",
         "a".repeat(40),
       ],

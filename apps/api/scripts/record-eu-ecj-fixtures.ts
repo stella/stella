@@ -35,6 +35,7 @@
 
 import { panic } from "better-result";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -625,14 +626,14 @@ if (import.meta.main) {
 
   if (parserOnly || !only) {
     log(
-      `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
+      `Recording parser fixtures → ${path.basename(fileURLToPath(PARSER_FIXTURES_DIR))}/`,
     );
     await recordParserFixtures(celexOnly);
   }
 
   if (noticeOnly || !only) {
     log(
-      `Recording notice fixtures → ${path.basename(ADAPTER_FIXTURES_DIR.pathname)}/`,
+      `Recording notice fixtures → ${path.basename(fileURLToPath(ADAPTER_FIXTURES_DIR))}/`,
     );
     await recordNoticeFixtures();
   }
