@@ -11,15 +11,19 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
 import { dbClock } from "@stll/test-kit/db";
 
 import { session } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
+  correspondence,
+  correspondenceAttachments,
   entities,
   entityVersions,
   fields,
@@ -47,12 +51,15 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
+import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/payload-hash";
+import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   checkFileContentGrant,
   FILE_CONTENT_GRANT_TTL_MS,
 } from "@/api/lib/files/file-content-grant";
+import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import {
   readFileContentHandler,
   readFileHandler,
@@ -70,9 +77,13 @@ import {
 import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -162,6 +173,7 @@ type StoredFile = {
   fileName: string;
   mimeType: string;
   pdfFileId: string | null;
+  sha256Hex?: string;
 };
 
 type SeededFile = {
@@ -173,7 +185,12 @@ type SeededFile = {
 
 /** A document with one stored file in matter A1 (or B1 for `side: "b"`). */
 const seedFile = async (
-  { fileName, mimeType, pdfFileId }: StoredFile,
+  {
+    fileName,
+    mimeType,
+    pdfFileId,
+    sha256Hex: storedHash = "b".repeat(64),
+  }: StoredFile,
   side: "a" | "b" = "a",
 ): Promise<SeededFile> => {
   const workspaceId = side === "a" ? ids.wsA1 : ids.wsB1;
@@ -201,7 +218,7 @@ const seedFile = async (
       mimeType,
       sizeBytes: 2048,
       encrypted: false,
-      sha256Hex: "b".repeat(64),
+      sha256Hex: storedHash,
       pdfFileId,
     },
   });
@@ -933,6 +950,218 @@ const seedStored = async (stored: StoredFile, bytes: Uint8Array) => {
   return seeded;
 };
 
+const seedDataBox = async () =>
+  await seedStored(
+    {
+      fileName: "zprava.ZFO",
+      mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+      pdfFileId: null,
+    },
+    await zfoFile(),
+  );
+
+const readDataBox = async (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
+  await readDataBoxFile({
+    fieldId,
+    scopedDb,
+    workspaceId: ids.wsA1,
+    organizationId: ids.orgA,
+    recordAuditEvent: recorderA(),
+  });
+
+describe("data-box file preview", () => {
+  test("opens an unfiled source by field and audits the read", async () => {
+    const file = await seedDataBox();
+    const response = (await readDataBox(file.fieldId, scopedDbA())).unwrap();
+    expect(response).toMatchObject({
+      kind: "message",
+      annotation: FIXTURE_MESSAGE.annotation,
+      files: FIXTURE_MESSAGE.files.map(({ name }) => ({
+        fileName: name,
+        entityId: null,
+      })),
+      envelope: {
+        messageId: FIXTURE_MESSAGE.messageId,
+        seal: { status: "unverified" },
+      },
+    });
+    expect(response.text).toContain(FIXTURE_MESSAGE.annotation);
+    await expectOneContentRow(file.entityId, {
+      action: "access",
+      metadata: { fieldId: file.fieldId, format: "data-box" },
+    });
+  });
+
+  test("links a filed attachment only while its current file matches the embedded bytes", async () => {
+    const bytes = await zfoFile();
+    const message = parseDataBoxMessage(bytes).unwrap();
+    const identity = dataBoxPayloadIdentity(message);
+    const attachment = message.files.at(0);
+    expect(attachment).toBeDefined();
+    if (!attachment) {
+      return;
+    }
+    const source = await seedStored(
+      {
+        fileName: "zprava.zfo",
+        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+        pdfFileId: null,
+      },
+      bytes,
+    );
+    const filed = await seedFile({
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      pdfFileId: null,
+      sha256Hex: sha256Hex(attachment.bytes),
+    });
+    const correspondenceId = createSafeId<"correspondence">();
+    try {
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: filed.entityVersionId })
+        .where(eq(entities.id, filed.entityId));
+      // Inserting an uploaded correspondence registers its source via the
+      // same trigger used when the upload is filed.
+      await testDb.insert(correspondence).values({
+        id: correspondenceId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        channel: "data_box",
+        dataBox: message.envelope,
+        direction: null,
+        source: "upload",
+        sourceEntityId: source.entityId,
+        originalSignature: { status: "unverified" },
+        messageId: message.envelope.messageId,
+        contentHash: identity.contentHash,
+        dedupKey: correspondenceId.replaceAll("-", "").repeat(2),
+        from: { address: message.envelope.sender.boxId, name: null },
+        to: [{ address: message.envelope.recipient.boxId, name: null }],
+        cc: [],
+        subject: message.annotation,
+        receivedAt: new Date("2026-10-14T07:12:33.120Z"),
+        references: [],
+        bodyText: "",
+      });
+      await testDb.insert(correspondenceAttachments).values({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        correspondenceId,
+        entityId: filed.entityId,
+        ordinal: 0,
+        filename: attachment.fileName,
+        mediaType: attachment.mimeType,
+        byteSize: attachment.bytes.byteLength,
+        scanVerdict: "clean",
+      });
+
+      const opened = (await readDataBox(source.fieldId, scopedDbA())).unwrap();
+      expect(opened).toMatchObject({
+        kind: "message",
+        files: message.files.map(({ fileName }, index) => ({
+          fileName,
+          entityId: index === 0 ? filed.entityId : null,
+        })),
+      });
+
+      const editedVersionId = createSafeId<"entityVersion">();
+      const editedBytes = await pdfBytes();
+      const editedHash = sha256Hex(editedBytes);
+      expect(editedHash).not.toBe(sha256Hex(attachment.bytes));
+      await testDb.insert(entityVersions).values({
+        id: editedVersionId,
+        workspaceId: ids.wsA1,
+        entityId: filed.entityId,
+        versionNumber: 2,
+      });
+      await testDb.insert(fields).values({
+        id: createSafeId<"field">(),
+        workspaceId: ids.wsA1,
+        propertyId: ids.filePropertyA1,
+        entityVersionId: editedVersionId,
+        content: {
+          version: 1,
+          type: "file",
+          id: Bun.randomUUIDv7(),
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          sizeBytes: editedBytes.byteLength,
+          encrypted: false,
+          sha256Hex: editedHash,
+          pdfFileId: null,
+        },
+      });
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: editedVersionId })
+        .where(eq(entities.id, filed.entityId));
+
+      const edited = (await readDataBox(source.fieldId, scopedDbA())).unwrap();
+      expect(edited).toMatchObject({
+        kind: "message",
+        files: message.files.map(({ fileName }) => ({
+          fileName,
+          entityId: null,
+        })),
+      });
+    } finally {
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: null })
+        .where(eq(entities.id, filed.entityId));
+      await testDb
+        .delete(correspondence)
+        .where(eq(correspondence.id, correspondenceId));
+    }
+  });
+
+  test("a file in another matter cannot be previewed", async () => {
+    const file = await seedFile(
+      {
+        fileName: "jiná.zfo",
+        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+        pdfFileId: null,
+      },
+      "b",
+    );
+    const result = await readDataBox(file.fieldId, scopedDbA());
+    expect(result.isErr() ? result.error.status : null).toBe(404);
+  });
+
+  test("preview query cost stays bounded as the matter grows", async () => {
+    const file = await seedDataBox();
+    const measure = async (added: number) => {
+      const newRows = Array.from({ length: added }, () => ({
+        id: createSafeId<"entity">(),
+        name: "Docket entry",
+        kind: "document" as const,
+        workspaceId: ids.wsA1,
+      }));
+      seededEntityIds.push(...newRows.map(({ id }) => id));
+      await testDb.insert(entities).values(newRows);
+      return await dataBoxPreviewScalingScenario.measure(
+        createTestHandlerContext<
+          Parameters<typeof dataBoxPreviewScalingScenario.definition.handler>[0]
+        >({
+          workspaceId: ids.wsA1,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          audit: recorderA(),
+          scopedDb: scopedDbA(),
+          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          params: { workspaceId: ids.wsA1, fieldId: file.fieldId },
+        }),
+      );
+    };
+    const small = await measure(10);
+    const large = await measure(190);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(small.rows).toBe(FIXTURE_MESSAGE.files.length);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
 const seedStampableDocx = async () => {
   const seeded = await seedStored(
     { fileName: "smlouva.docx", mimeType: DOCX_MIME_TYPE, pdfFileId: null },
@@ -976,6 +1205,14 @@ const answeredStatus = (answer: unknown): number => {
 };
 
 const STREAMED_PATHS: readonly StreamedPath[] = [
+  {
+    name: "a data-box preview",
+    seed: seedDataBox,
+    read: async ({ fieldId }, scopedDb) => {
+      const result = await readDataBox(fieldId, scopedDb);
+      return result.isErr() ? result.error.status : 200;
+    },
+  },
   {
     name: "an email preview",
     seed: seedEmail,

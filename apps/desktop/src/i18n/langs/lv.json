@@ -705,6 +705,11 @@
       "description": "Līdz 4 stundām garu diktofona failu, balss piezīmi vai sanāksmes ierakstu pārvērš tekstā.",
       "open": "Atvērt",
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz."
+    },
+    "preview": {
+      "label": "Līdz šim diktētais teksts",
+      "listening": "Klausās…",
+      "finishing": "Tiek pabeigts…"
     }
   },
   "shortcut": {
@@ -983,6 +988,14 @@
       "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
       "unreadable": "Šo mapi neizdevās nolasīt."
     }
+  },
+  "keepAwake": {
+    "title": "Neļaut iemigt",
+    "enabled": "Neļaut šim datoram iemigt, kamēr strādā aģenti",
+    "description": "Kamēr šajā datorā strādā aģents, dators dīkstāvē neiemieg, tāpēc ilgi uzdevumi turpinās. Displejs joprojām var izslēgties. Mac klēpjdators tomēr iemieg, kad aizverat tā vāku.",
+    "onBattery": "Arī no akumulatora",
+    "onBatteryDescription": "Ja šī opcija ir izslēgta, dators, darbojoties no akumulatora, iemieg kā parasti, arī tad, kad strādā aģents.",
+    "errorSave": "Šo iestatījumu neizdevās saglabāt. Mēģiniet vēlreiz."
   },
   "transcribe": {
     "title": "Ieraksta transkribēšana",

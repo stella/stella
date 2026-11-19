@@ -99,14 +99,37 @@ describe("registry tool output ref resolution", () => {
     const workspaceId = toSafeId<"workspace">("workspace-opaque");
     const entityId = toSafeId<"entity">("entity-opaque");
 
-    expect(
-      hydrateRegistryToolOutputRefs({
-        inputState: PERSISTED_REF_INPUT_STATE,
-        output: { entityId, workspaceId },
-        refRegistry: registry,
-        toolName: "read_content_across_matters",
-      }),
-    ).toEqual({ entityId: "ent_1", workspaceId: "mat_1" });
+    const childId = toSafeId<"entity">("attached-file");
+    const hydrated = hydrateRegistryToolOutputRefs({
+      inputState: PERSISTED_REF_INPUT_STATE,
+      output: {
+        entityId,
+        workspaceId,
+        attachments: [{ position: 1, entityId: childId }],
+      },
+      refRegistry: registry,
+      toolName: "read_content_across_matters",
+    });
+
+    const targets = registry
+      .resolveEntityRefTargets(["ent_1", "ent_2"])
+      .unwrap();
+    expect(new Set(targets)).toEqual(
+      new Set([
+        { entityId, workspaceId },
+        { entityId: childId, workspaceId },
+      ]),
+    );
+    expect(hydrated).toEqual({
+      entityId: registry.toEntityRef({ entityId, workspaceId }),
+      workspaceId: "mat_1",
+      attachments: [
+        {
+          position: 1,
+          entityId: registry.toEntityRef({ entityId: childId, workspaceId }),
+        },
+      ],
+    });
   });
 
   test("hydrates an input-entity output from persisted call context", () => {

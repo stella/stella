@@ -705,6 +705,11 @@
       "description": "Legfeljebb 4 órás diktafonfájlt, hangjegyzetet vagy értekezlet-felvételt alakít szöveggé.",
       "open": "Megnyitás",
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra."
+    },
+    "preview": {
+      "label": "Az eddig diktált szöveg",
+      "listening": "Figyelés…",
+      "finishing": "Befejezés…"
     }
   },
   "shortcut": {
@@ -983,6 +988,14 @@
       "protected": "Ez a mappa a stella saját adatait vagy egy készségmappát tartalmaz, ezért az ügynök nem dolgozhat benne.",
       "unreadable": "Ezt a mappát nem sikerült beolvasni."
     }
+  },
+  "keepAwake": {
+    "title": "Ébren tartás",
+    "enabled": "A számítógép ébren tartása, amíg ügynökök dolgoznak",
+    "description": "Amíg egy ügynök dolgozik ezen a számítógépen, az tétlenség miatt nem alszik el, így a hosszú feladatok tovább futnak. A kijelző továbbra is kikapcsolhat. A Mac laptop a fedél lecsukásakor ettől függetlenül alvó állapotba kerül.",
+    "onBattery": "Akkumulátorról is",
+    "onBatteryDescription": "Ha ez ki van kapcsolva, a számítógép akkumulátorról a szokásos módon alvó állapotba kerül, akkor is, ha egy ügynök dolgozik.",
+    "errorSave": "Ezt a beállítást nem sikerült menteni. Próbálja újra."
   },
   "transcribe": {
     "title": "Felvétel átírása",

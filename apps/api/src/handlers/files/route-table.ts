@@ -1,3 +1,4 @@
+import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
@@ -19,6 +20,7 @@ import { routes } from "@/api/http/route";
 export const filesRoute = routes(
   {
     "/url/:fieldId": { GET: readFileEndpoint },
+    "/data-box/:fieldId": { GET: dataBoxEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {
       GET: officeCitationEndpoint,

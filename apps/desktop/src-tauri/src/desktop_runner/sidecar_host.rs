@@ -179,6 +179,9 @@ struct HostRun {
   /// The chat folder the run works in; unknown for a run picked up after a
   /// restart, whose holder still refuses a restore of the folder it uses.
   folder_id: Option<Uuid>,
+  /// Keeps the computer awake while the run is relayed, its browser steps
+  /// included; released whichever way the entry goes.
+  _awake: crate::keep_awake::WorkHold,
 }
 
 struct Shared {
@@ -1144,6 +1147,7 @@ impl HarnessHost for SidecarHarnessHost {
           model: None,
           thread_id: None,
           folder_id: None,
+          _awake: crate::keep_awake::hold(),
         },
       );
       fresh.push(run);
@@ -1227,6 +1231,7 @@ impl HarnessHost for SidecarHarnessHost {
         model: Some(start.model.clone()),
         thread_id: Some(thread_id.clone()),
         folder_id: Some(folder_id),
+        _awake: crate::keep_awake::hold(),
       },
     );
     let run_id = start.run_id.clone();

@@ -41,6 +41,18 @@ mod windows_hold_key;
 pub use windows_hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
 
 #[cfg(target_os = "macos")]
+mod idle_sleep;
+#[cfg(target_os = "macos")]
+pub use idle_sleep::{IdleSleepAssertion, on_battery_power, prevent_idle_sleep};
+
+#[cfg(target_os = "windows")]
+mod windows_idle_sleep;
+#[cfg(target_os = "windows")]
+pub use windows_idle_sleep::{
+  IdleSleepAssertion, on_battery_power, prevent_idle_sleep,
+};
+
+#[cfg(target_os = "macos")]
 mod managed_preferences;
 #[cfg(target_os = "macos")]
 pub use managed_preferences::{ManagedPreference, managed_preference};
@@ -131,4 +143,5 @@ mod park;
 pub use park::{
   disable_occlusion_detection, is_panel_presented, park_window,
   prepare_transient_overlay, present_activating_window, present_key_panel,
+  present_passive_overlay,
 };

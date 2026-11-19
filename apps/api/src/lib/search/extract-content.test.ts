@@ -3,13 +3,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
+import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
+import { parseDataBoxDocument } from "@/api/lib/email/correspondence/data-box/zfo";
 import { LIMITS } from "@/api/lib/limits";
 import {
   OCTET_STREAM_MIME_TYPE,
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
-import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
+import { receiptXml, sealContent, zfoFile } from "@/api/tests/fixtures/zfo";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -119,15 +121,27 @@ describe("extractFileText", () => {
     expect(whole).toHaveLength(shared + 10);
   });
 
-  test("extracts a data-box message's envelope, not an unreadable one", async () => {
-    const zfo = await zfoFile();
-    const text = await extractFixtureText(
-      new Uint8Array(zfo).buffer,
-      DATA_BOX_MESSAGE_MIME_TYPE,
-    );
-    expect(text).toContain(FIXTURE_MESSAGE.annotation);
-    expect(text).toContain("12 C 345/2026");
+  test.each([
+    ["message", zfoFile],
+    [
+      "receipt",
+      async () => await sealContent(new TextEncoder().encode(receiptXml())),
+    ],
+  ] as const)(
+    "projects the same readable %s into search and file reads",
+    async (_kind, source) => {
+      const bytes = await source();
+      const text = await extractFixtureText(
+        new Uint8Array(bytes).buffer,
+        DATA_BOX_MESSAGE_MIME_TYPE,
+      );
+      expect(text).toBe(
+        dataBoxDocumentText(parseDataBoxDocument(bytes).unwrap()),
+      );
+    },
+  );
 
+  test("returns no projection of an unreadable ZFO container", async () => {
     expect(
       await extractFixtureText(
         toArrayBuffer("not a data-box message"),

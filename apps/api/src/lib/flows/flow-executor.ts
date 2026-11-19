@@ -10,7 +10,6 @@ import {
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
-import { drainFanOut } from "@stll/concurrency";
 import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -468,10 +467,10 @@ const runAiStep = async ({
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
-    ? await loadInputDocuments(
+    ? await loadInputDocuments({
         scopedDb,
         organizationId,
-        await scopedDb(async (tx) =>
+        workspaceIds: await scopedDb(async (tx) =>
           (
             await authorizedWorkspaceIds(tx, {
               organizationId,
@@ -479,8 +478,8 @@ const runAiStep = async ({
             })
           ).unwrap("The scoped workspace authorization read must succeed"),
         ),
-        run.inputEntityIds,
-      )
+        entityIds: run.inputEntityIds,
+      })
     : [];
 
   const prompt = buildAiStepPrompt({
@@ -625,12 +624,18 @@ const readPriorAiMarkdown = async (
   return markdown;
 };
 
-export const loadInputDocuments = async (
-  scopedDb: ReturnType<typeof createRootScopedDb>,
-  organizationId: SafeId<"organization">,
-  workspaceIds: AuthorizedWorkspaceIds,
-  entityIds: SafeId<"entity">[],
-): Promise<FlowStepDocument[]> => {
+type LoadInputDocumentsOptions = {
+  scopedDb: ReturnType<typeof createRootScopedDb>;
+  organizationId: SafeId<"organization">;
+  workspaceIds: AuthorizedWorkspaceIds;
+  entityIds: SafeId<"entity">[];
+};
+export const loadInputDocuments = async ({
+  scopedDb,
+  organizationId,
+  workspaceIds,
+  entityIds,
+}: LoadInputDocumentsOptions): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
     return [];
   }
@@ -642,7 +647,10 @@ export const loadInputDocuments = async (
     }
     const missingEntities = await scopedDb((tx) =>
       tx.query.entities.findMany({
-        where: { id: { in: missingIds } },
+        where: {
+          id: { in: missingIds },
+          workspaceId: { in: [...workspaceIds] },
+        },
         columns: { name: true },
         limit: missingIds.length,
       }),
@@ -658,41 +666,25 @@ export const loadInputDocuments = async (
 
   // Availability is decided from provenance alone; text is decrypted only for
   // a complete input set, and a document that became unavailable in between
-  // gets the same refusal.
+  // gets the same refusal. A data-box file is read like any other input, from
+  // its stored text.
+  const options = { entityIds, organizationId, workspaceIds };
   const sources = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedSources(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
+    async (tx) => await loadCurrentExtractedSources(tx, options),
   );
   await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
   const available = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedContents(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
+    async (tx) => await loadCurrentExtractedContents(tx, options),
   );
   await refuseUnavailable(new Set(available.map((row) => row.entityId)));
-
-  const drained = await drainFanOut({
-    items: available,
-    signal: new AbortController().signal,
-    operation: async (row, signal) => {
-      signal.throwIfAborted();
-      return await Promise.resolve({
-        label: row.name,
-        text: row.text,
-      });
-    },
-  });
-  if (Result.isError(drained)) {
-    throw drained.error;
-  }
-  return drained.value;
+  // The prompt lists documents in the order the run selected them.
+  const inputOrder = new Map(entityIds.map((id, index) => [id, index]));
+  return available
+    .toSorted(
+      (a, b) =>
+        (inputOrder.get(a.entityId) ?? 0) - (inputOrder.get(b.entityId) ?? 0),
+    )
+    .map((row) => ({ label: row.name, text: row.text }));
 };
 
 /**

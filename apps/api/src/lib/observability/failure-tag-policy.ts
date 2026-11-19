@@ -70,6 +70,7 @@ export const TAGGED_FAILURE_REASON = {
   CapabilityRequestMismatchError: "tagged_failure",
   CaseLawBatchApplyError: "tagged_failure",
   CaseLawBatchBoundsError: "tagged_failure",
+  CaseLawDocumentLanguageUndeclaredError: "tagged_failure",
   CaseLawServingFlipClusterMismatchError: "tagged_failure",
   CaseLawServingFlipIncompleteError: "tagged_failure",
   CaseLawServingFlipNoServingGenerationError: "tagged_failure",

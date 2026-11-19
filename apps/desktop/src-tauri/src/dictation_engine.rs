@@ -35,6 +35,7 @@ use crate::{
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
   dictation_pauses::Segmenter,
+  dictation_preview,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
@@ -70,6 +71,8 @@ struct Active {
   focus: Option<FocusTarget>,
   context: CleanupContext,
   trace: Trace,
+  /// How often the panel checks for a password field between results.
+  password_watch: dictation_preview::PasswordWatch,
 }
 
 /// What a dictation that did not fail came to.
@@ -98,10 +101,16 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
         let focus = dictation_focus::current(app);
         if dictation_focus::in_password_field(focus.as_ref()) {
           dictation::report_failure(app, Failure::PasswordField);
-          end(&trace, Outcome::Failed(Failure::PasswordField.into()), None);
+          end(
+            app,
+            &trace,
+            Outcome::Failed(Failure::PasswordField.into()),
+            None,
+          );
         } else {
           let model = dictation::start_recording(app);
-          match begin(app, model, &mut worker) {
+          dictation_preview::start(app);
+          match begin(app, model, focus.as_ref(), &mut worker) {
             Ok(capture) => {
               // Read once recording runs, so it never delays capture; the
               // context is where the speaker pressed the shortcut.
@@ -114,12 +123,13 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
                 focus,
                 context,
                 trace,
+                password_watch: dictation_preview::PasswordWatch::default(),
               });
             }
             Err(failure) => {
               dictation::report_failure(app, failure);
               dictation::set_phase(app, Phase::Idle);
-              end(&trace, Outcome::Failed(failure.into()), None);
+              end(app, &trace, Outcome::Failed(failure.into()), None);
             }
           }
         }
@@ -141,10 +151,12 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           focus,
           context,
           mut trace,
+          ..
         }) = active.take()
         {
           dictation::set_phase(app, Phase::Transcribing);
           trace.release();
+          dictation_preview::release(app);
           let mut moved = None;
           let outcome = match finish(
             app,
@@ -164,11 +176,20 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             }
           };
           dictation::set_phase(app, Phase::Idle);
-          end(&trace, outcome, moved);
+          end(app, &trace, outcome, moved);
         }
       }
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
-        Some(active) => active.capture.listen(),
+        Some(active) => {
+          active.capture.listen();
+          // Between transcription results too: a password field that takes
+          // focus while the panel shows hides it at once.
+          if active.password_watch.due(dictation_preview::showing(app))
+            && focused_on_password(app, active.focus.as_ref())
+          {
+            dictation_preview::block(app);
+          }
+        }
         None => worker = None,
       },
       Err(RecvTimeoutError::Disconnected) => break,
@@ -216,10 +237,17 @@ fn cancel(app: &AppHandle, active: Active, worker: &mut Option<Worker>) {
   );
   capture.cancel(worker);
   dictation::set_phase(app, Phase::Idle);
-  end(&trace, Outcome::Cancelled, None);
+  end(app, &trace, Outcome::Cancelled, None);
 }
 
-fn end(trace: &Trace, outcome: Outcome, moved: Option<dictation_focus::Moved>) {
+/// Logs how the dictation ended; whatever the end, the preview goes.
+fn end(
+  app: &AppHandle,
+  trace: &Trace,
+  outcome: Outcome,
+  moved: Option<dictation_focus::Moved>,
+) {
+  dictation_preview::end(app);
   Line::End {
     duration: trace.since_press(),
     outcome,
@@ -259,6 +287,7 @@ impl Capture {
 fn begin(
   app: &AppHandle,
   model: Option<PathBuf>,
+  focus: Option<&FocusTarget>,
   worker: &mut Option<Worker>,
 ) -> Result<Capture, Failure> {
   // stella AI transcribes without the speech model on this computer.
@@ -283,6 +312,10 @@ fn begin(
     model,
     language: language.hint,
     destination,
+    preview: PreviewFeed {
+      app: app.clone(),
+      focus: focus.cloned(),
+    },
   };
   let transcription = Transcription::new(engines, destination, local_installed);
   let live =
@@ -480,6 +513,15 @@ struct Engines {
   language: Option<&'static str>,
   /// Where the speaker chose to transcribe, for the local log.
   destination: Destination,
+  preview: PreviewFeed,
+}
+
+/// Where the text so far goes while the key is down.
+struct PreviewFeed {
+  app: AppHandle,
+  /// The app the speaker pressed in: while its focused field is a password
+  /// field, nothing is shown.
+  focus: Option<FocusTarget>,
 }
 
 impl Transcribe for Engines {
@@ -497,6 +539,24 @@ impl Transcribe for Engines {
     let model = self.model.as_deref()?;
     transcribe(&mut self.worker, model, samples, self.language)
   }
+
+  fn preview(&mut self, text: &str) {
+    let PreviewFeed { app, focus } = &self.preview;
+    if !text.is_empty() && focused_on_password(app, focus.as_ref()) {
+      dictation_preview::block(app);
+    } else {
+      dictation_preview::text(app, text);
+    }
+  }
+}
+
+/// Whether a password field has focus now, wherever focus went since the
+/// press. When focus cannot be read now, the app pressed in is asked
+/// instead: the panel is hidden whenever either says so, and shown only
+/// when neither can tell, as typing is.
+fn focused_on_password(app: &AppHandle, pressed: Option<&FocusTarget>) -> bool {
+  let now = dictation_focus::current(app);
+  dictation_focus::in_password_field(now.as_ref().or(pressed))
 }
 
 fn transcribe(

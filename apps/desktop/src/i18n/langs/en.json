@@ -705,6 +705,11 @@
       "description": "Turn a dictaphone file, voice memo or meeting recording of up to 4 hours into text.",
       "open": "Open",
       "failed": "The window could not be opened. Try again."
+    },
+    "preview": {
+      "label": "What you have said so far",
+      "listening": "Listening…",
+      "finishing": "Finishing…"
     }
   },
   "shortcut": {
@@ -983,6 +988,14 @@
       "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
       "unreadable": "This folder could not be read."
     }
+  },
+  "keepAwake": {
+    "title": "Keep awake",
+    "enabled": "Keep this computer awake while agents work",
+    "description": "While a coding agent works on this computer, it does not go to sleep when left idle, so long tasks keep running. The display can still turn off. A Mac laptop still sleeps when you close its lid.",
+    "onBattery": "Also on battery",
+    "onBatteryDescription": "When this is off, the computer sleeps as usual on battery power, even while an agent works.",
+    "errorSave": "Could not save this setting. Try again."
   },
   "transcribe": {
     "title": "Transcribe a recording",
