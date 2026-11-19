@@ -4,6 +4,7 @@ import { type SQL, sql } from "drizzle-orm";
 import {
   BackfillFailedError,
   BackfillHeldError,
+  BackfillLockWaitError,
 } from "@stll/db-load-gate/backfill-pass";
 import {
   backfillHeartbeat,
@@ -39,10 +40,18 @@ import {
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
 import { runReadCommittedUnit } from "../lib/db/read-committed-unit";
-import { isPgError, PG_ERROR } from "../lib/pg-error";
+import {
+  isLockWaitRefusal,
+  isPgError,
+  lockWaitRelation,
+  PG_ERROR,
+} from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
-import type { BackfillCheckpoint } from "./adaptive-backfill";
+import type {
+  AdaptiveBackfillOptions,
+  BackfillCheckpoint,
+} from "./adaptive-backfill";
 import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
 import { createBoundedIndicatorQuery } from "./indicator-query";
 import type { IndicatorQuery } from "./indicator-query";
@@ -54,6 +63,7 @@ import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 export {
   BackfillFailedError,
   BackfillHeldError,
+  BackfillLockWaitError,
 } from "@stll/db-load-gate/backfill-pass";
 
 type Query = IndicatorQuery;
@@ -369,6 +379,38 @@ const throwIfBackfillDeferred = ({
   }
 };
 
+/**
+ * A batch runs under the lock timeout this runtime sets, and a failed batch
+ * rolled back whole: a lost lock wait moved nothing, so it is the pass's to
+ * retry, not a failure of the run. Any other failure passes unchanged.
+ */
+const lostLockWaitOr = (name: string, cause: unknown): unknown => {
+  if (cause instanceof BackfillLockWaitError || !isLockWaitRefusal(cause)) {
+    return cause;
+  }
+  const relation = lockWaitRelation(cause);
+  return new BackfillLockWaitError({
+    message: `Backfill ${name} batch waited on a lock${relation === null ? "" : ` on ${relation}`} past its timeout; nothing moved`,
+    relation,
+    cause,
+  });
+};
+
+/** Runs one batch, rethrowing a lost lock wait as `BackfillLockWaitError`. */
+const runBackfillBatch = async <BatchTransaction, Item, Cursor>(
+  name: string,
+  options: AdaptiveBackfillOptions<BatchTransaction, Item, Cursor>,
+) => {
+  const attempted = await Result.tryPromise({
+    try: async () => await runAdaptiveBackfillBatch(options),
+    catch: (cause: unknown) => lostLockWaitOr(name, cause),
+  });
+  if (attempted.isErr()) {
+    throw attempted.error;
+  }
+  return attempted.value;
+};
+
 type SettledMaintenanceVerdictReaderOptions = Omit<
   Parameters<typeof admitCaseLawPopulationMaintenance>[0],
   "query" | "verdict"
@@ -503,7 +545,7 @@ const createRuntime = <BatchTransaction>({
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
     let previousHeldSince: number | null = null;
-    const result = await runAdaptiveBackfillBatch({
+    const result = await runBackfillBatch(name, {
       runInTransaction,
       config,
       clock,
