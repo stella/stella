@@ -31,6 +31,10 @@ use crate::{
 const LOG_TARGET: &str = "stella_desktop::keep_awake";
 /// What the system lists as the assertion's reason (`pmset -g assertions`).
 #[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg_attr(
+  test,
+  allow(dead_code, reason = "tests never touch the system's power")
+)]
 const REASON: &str = "stella desktop: agents are working";
 const ENABLED_FILE: &str = "keep-awake";
 const ON_BATTERY_FILE: &str = "keep-awake-on-battery";
