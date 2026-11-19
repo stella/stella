@@ -12,8 +12,8 @@ export default {
   values: [
     {
       introducedBy: "20261119215600_case_number_match_key_indexes",
-      createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_citation_match_key_idx" ON public."case_law_decisions" USING btree ((${MATCH_KEY}), "country", "decision_date", "id", "citation_key") WHERE "citation_key" IS NOT NULL`,
-      definitionBody: String.raw`ON public.case_law_decisions USING btree (regexp_replace((citation_key)::text, '/(?:19|20)([0-9]{2})(-[0-9]+)?$'::text, '/\1\2'::text), country, decision_date, id, citation_key) WHERE (citation_key IS NOT NULL)`,
+      createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_citation_match_key_idx" ON public."case_law_decisions" USING btree ((${MATCH_KEY}), "country", "decision_date", "id") WHERE "citation_key" IS NOT NULL`,
+      definitionBody: String.raw`ON public.case_law_decisions USING btree (regexp_replace((citation_key)::text, '/(?:19|20)([0-9]{2})(-[0-9]+)?$'::text, '/\1\2'::text), country, decision_date, id) WHERE (citation_key IS NOT NULL)`,
       isUnique: false,
       name: "case_law_decisions_citation_match_key_idx",
       tableName: "case_law_decisions",

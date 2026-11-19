@@ -758,10 +758,9 @@ const publishedLanguageDateIndex = (
  *
  * Every comparison of a key reads its match key (`case-number-match-key.ts`),
  * so a citation printed with a four-digit year finds the holder stored with
- * two, and the reverse; the match-key pair serves those reads. It carries
- * the key itself last, because the planner reads an index alone only when it
- * holds every column a query names, and the match key names `citation_key`.
- * The raw-key pair stays until no running release reads it.
+ * two, and the reverse; the match-key pair serves those reads. It does not
+ * carry the raw key, so a raw-key read is never answered from it. The
+ * raw-key pair stays until no running release reads it.
  */
 const citationCandidateIndexes = (
   t: PublishedCourtDateColumns & { citationKey: PgColumn },
@@ -778,23 +777,11 @@ const citationCandidateIndexes = (
     ),
   p
     .index("case_law_decisions_citation_match_key_idx")
-    .on(
-      caseNumberMatchKeySql(t.citationKey),
-      t.country,
-      t.decisionDate,
-      t.id,
-      t.citationKey,
-    )
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
     .where(isNotNull(t.citationKey)),
   p
     .index("case_law_decisions_citation_match_key_published_idx")
-    .on(
-      caseNumberMatchKeySql(t.citationKey),
-      t.country,
-      t.decisionDate,
-      t.id,
-      t.citationKey,
-    )
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
     .where(
       sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
     ),
@@ -1443,15 +1430,9 @@ export const caseLawDecisionIdentifiers = p.pgTable(
       .on(t.type, t.normalizedValue, t.decisionId),
     // Every lookup and join by an identifier's value compares match keys
     // (`case-number-match-key.ts`), whichever year form each side printed.
-    // The value itself rides last so a lookup reads the index alone.
     p
       .index("case_law_decision_identifiers_match_key_idx")
-      .on(
-        t.type,
-        caseNumberMatchKeySql(t.normalizedValue),
-        t.decisionId,
-        t.normalizedValue,
-      ),
+      .on(t.type, caseNumberMatchKeySql(t.normalizedValue), t.decisionId),
     p.check(
       "case_law_decision_identifiers_type_values",
       sql`${t.type} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,

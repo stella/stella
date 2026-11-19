@@ -21,8 +21,8 @@ export default {
   values: [
     {
       introducedBy: "20261119215600_case_number_match_key_indexes",
-      createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_citation_match_key_published_idx" ON public."case_law_decisions" USING btree ((${MATCH_KEY}), "country", "decision_date", "id", "citation_key") WHERE "citation_key" IS NOT NULL AND ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
-      definitionBody: `ON public.case_law_decisions USING btree (${MATCH_KEY_DEFINITION}, country, decision_date, id, citation_key) WHERE ((citation_key IS NOT NULL) AND ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION})`,
+      createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_citation_match_key_published_idx" ON public."case_law_decisions" USING btree ((${MATCH_KEY}), "country", "decision_date", "id") WHERE "citation_key" IS NOT NULL AND ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
+      definitionBody: `ON public.case_law_decisions USING btree (${MATCH_KEY_DEFINITION}, country, decision_date, id) WHERE ((citation_key IS NOT NULL) AND ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION})`,
       isUnique: false,
       name: "case_law_decisions_citation_match_key_published_idx",
       tableName: "case_law_decisions",
