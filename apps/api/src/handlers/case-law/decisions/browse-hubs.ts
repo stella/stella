@@ -108,7 +108,7 @@ export const listBrowseCourtsHandler = async (
   if (admitted.kind === "answer") {
     return admitted.answer;
   }
-  const excluded = await readNonRedistributableCaseLawSourceIds();
+  const excluded = await readNonRedistributableCaseLawSourceIds(caseLawDb);
   if (Result.isError(excluded)) {
     // Fail closed: naming courts without the source policy could name one
     // whose every source is withheld.

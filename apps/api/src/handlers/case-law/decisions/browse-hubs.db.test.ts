@@ -3,7 +3,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { readBrowseCalendarHandler } from "@/api/handlers/case-law/decisions/browse-hubs";
+import {
+  listBrowseCourtsHandler,
+  readBrowseCalendarHandler,
+} from "@/api/handlers/case-law/decisions/browse-hubs";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -142,6 +145,27 @@ test(
       ],
       undated: 0,
     });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// timeout: each read runs on an embedded Postgres.
+test(
+  "the court list reads the source policy through the handle it was given",
+  async () => {
+    let reads = 0;
+    const counted = Object.assign(
+      async <T>(fn: (tx: CaseLawPublicReadTransaction) => Promise<T>) => {
+        reads += 1;
+        return await caseLawDb(fn);
+      },
+      caseLawDb,
+    );
+    const answer = await listBrowseCourtsHandler({ country: "CZE" }, counted);
+    expect(answer).toEqual({ courts: expect.any(Array), truncated: false });
+    // One read for the source policy, one for the court page; neither goes
+    // around the injected handle.
+    expect(reads).toBe(2);
   },
   DB_TEST_TIMEOUT_MS,
 );
