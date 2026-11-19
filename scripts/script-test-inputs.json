@@ -85,6 +85,7 @@
     "scripts/check-oxlint-rule-coverage.test.ts": ["**"],
     "scripts/check-oxlint-test-timeouts.test.ts": ["**"],
     "scripts/check-parser-versions.test.ts": ["**"],
+    "scripts/check-patched-dependencies.test.ts": ["**"],
     "scripts/check-playwright-config-scope.test.ts": ["**"],
     "scripts/check-policy-evidence.test.ts": ["**"],
     "scripts/check-pr-body.test.ts": ["**"],
