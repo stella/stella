@@ -230,6 +230,10 @@ const EXCEPTIONS = new Map([
     "mcp/file-comparison-run.ts",
     "Comparison staging object cleanup delegates to the guarded organization-file deletion owner.",
   ],
+  [
+    "handlers/reports/report-export-queue.ts",
+    "Deletes a generated report export its writer left unpublished (exports/ keys), not the retained matter sources it was generated from; the key has no organization prefix, so no hold applies.",
+  ],
 ]);
 
 type DeletionCensus = {
