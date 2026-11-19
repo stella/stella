@@ -55,13 +55,13 @@ describe("caseNumberMatchKey", () => {
     "a key printed with its full year matches the two-digit printing",
     () => {
       assertProperty(
-        "full and two-digit years key alike",
+        "a key printed with its full year matches the two-digit printing",
         fc.property(prefix, fullYear, sheet, (head, year, page) => {
           const tail = page === undefined ? "" : `-${String(page)}`;
           const full = `${head}/${String(year)}${tail}`;
           const short = `${head}/${String(year).slice(2)}${tail}`;
           expect(caseNumberMatchKey(full)).toBe(short);
-          expect(caseNumberMatchKey(short)).toBe(caseNumberMatchKey(short));
+          expect(caseNumberMatchKey(short)).toBe(short);
         }),
         { seed: propertySeed() },
       );
@@ -73,7 +73,7 @@ describe("caseNumberMatchKey", () => {
     "the match key is idempotent and keeps everything before the year",
     () => {
       assertProperty(
-        "folding twice is folding once; the head survives",
+        "the match key is idempotent and keeps everything before the year",
         fc.property(fc.string({ maxLength: 40 }), (key) => {
           const folded = caseNumberMatchKey(key);
           expect(caseNumberMatchKey(folded)).toBe(folded);
@@ -93,7 +93,7 @@ describe("caseNumberMatchKey", () => {
     "a key ending in anything but digits keeps its spelling",
     () => {
       assertProperty(
-        "no trailing year, no change",
+        "a key ending in anything but digits keeps its spelling",
         fc.property(
           fc.string({ maxLength: 30 }),
           fc.constantFrom("a", "x", ".", "/", " ", "ú"),
