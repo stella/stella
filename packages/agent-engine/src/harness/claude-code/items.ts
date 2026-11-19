@@ -494,13 +494,46 @@ export const resultText = (block: ClaudeToolResult) => {
     .join("");
 };
 
+const AGENT_ID = "agentId: ";
+const WORKTREE_LINES = ["worktreePath: ", "worktreeBranch: "] as const;
+
+/** Whether `line` names the agent as the CLI does: an id, then a note. */
+const isAgentIdLine = (line: string) => {
+  const rest = line.slice(AGENT_ID.length);
+  const space = rest.indexOf(" ");
+  return (
+    line.startsWith(AGENT_ID) &&
+    rest !== "" &&
+    space !== 0 &&
+    (space === -1 || (rest.slice(space).startsWith(" (") && rest.endsWith(")")))
+  );
+};
+
 /**
- * The notes the CLI appends to a subagent's result for the parent model:
- * the agent id it can be continued by (with any worktree it ran in), then
- * what it used. At the very end, after the report.
+ * `text` without the notes the CLI appends to a subagent's result for the
+ * parent model, at its very end: the agent id it can be continued by (with
+ * any worktree it ran in), then what it used.
  */
-const SUBAGENT_TRAILER =
-  /\n?agentId: \S+(?: \([^\n]*\))?(?:\n(?:worktreePath|worktreeBranch): [^\n]*)*(?:\n<usage>[^<]*<\/usage>)?\s*$/u;
+const withoutTrailer = (text: string) => {
+  const at = text.lastIndexOf(AGENT_ID);
+  if (at === -1) {
+    return text;
+  }
+  const [first = "", ...rest] = text.slice(at).trimEnd().split("\n");
+  const worktree = rest.findIndex(
+    (line) => !WORKTREE_LINES.some((prefix) => line.startsWith(prefix)),
+  );
+  const usage = (worktree === -1 ? [] : rest.slice(worktree)).join("\n");
+  if (
+    !isAgentIdLine(first) ||
+    (usage !== "" &&
+      !(usage.startsWith("<usage>") && usage.endsWith("</usage>")))
+  ) {
+    return text;
+  }
+  const report = text.slice(0, at);
+  return report.endsWith("\n") ? report.slice(0, -1) : report;
+};
 
 /** The line that opens a report the CLI frames for the parent model. */
 const HAND_BACK_FRAME = "[Subagent hand-back]";
@@ -515,7 +548,7 @@ const HAND_BACK_INDENT = "  ";
  * newer releases put around it. The model still gets the whole result.
  */
 export const subagentReport = (result: string) => {
-  const report = result.replace(SUBAGENT_TRAILER, "");
+  const report = withoutTrailer(result);
   const lines = report.split("\n");
   const frame = lines.findIndex((line) => line.startsWith(HAND_BACK_FRAME));
   if (frame === -1) {
