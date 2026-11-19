@@ -21,10 +21,10 @@ import {
   QUIET_THRESHOLD,
   type StallAlertState,
   type StallAlertStep,
+  stepAdapterCycleHealth,
   stepCadence,
   stepStallAlert,
   UNPRODUCTIVE_THRESHOLD,
-  updateStalledAdapter,
 } from "./cycle-progress";
 import { ingestionHealthRecord } from "./ingestion-health";
 
@@ -553,26 +553,18 @@ describe("stalled-source causes", () => {
     cursorAdvanced: false,
   });
 
-  const runHealthCycles = (
-    cycles: readonly Exclude<
-      CycleResult,
-      { outcome: typeof CYCLE_OUTCOME.PAUSED }
-    >[],
-  ) => {
+  const runHealthCycles = (cycles: readonly CycleResult[]) => {
     let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
     const stalledAdapters = new Map<string, IngestionStopKind>();
     return cycles.map((cycle) => {
-      const stall = stepStallAlert(
-        stallAlert,
-        cycleMadeProgress(cycle),
-        THRESHOLD,
-      );
-      stallAlert = stall.state;
-      updateStalledAdapter(stalledAdapters, {
+      const { stall } = stepAdapterCycleHealth({
         adapterKey: "test-source",
+        cycle,
         stallAlert,
-        stopKind: cycleStopKind(cycle),
+        stalledAdapters,
+        threshold: THRESHOLD,
       });
+      stallAlert = stall.state;
       return {
         stall,
         health: ingestionHealthRecord({
