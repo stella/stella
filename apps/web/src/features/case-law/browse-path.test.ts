@@ -11,29 +11,40 @@ import {
 
 const court = "nejvyssi-soud";
 
-const targets: CaseLawBrowseTarget[] = [
-  { level: "court", court },
-  { level: "year", court, year: 2023 },
-  { level: "month", court, year: 2023, month: 5, page: 1 },
-  {
-    level: "month",
-    court,
-    year: 2023,
-    month: 12,
-    page: CASE_LAW_BROWSE_MAX_PAGES,
-  },
-  { level: "day", court, year: 2024, month: 2, day: 29, page: 1 },
-  { level: "day", court, year: 2023, month: 1, day: 9, page: 2 },
+const hub = "/law/cze/courts/nejvyssi-soud";
+
+const targets: [CaseLawBrowseTarget, string][] = [
+  [{ level: "court", court }, hub],
+  [{ level: "year", court, year: 2023 }, `${hub}/2023`],
+  [{ level: "month", court, year: 2023, month: 5, page: 1 }, `${hub}/2023/05`],
+  [
+    {
+      level: "month",
+      court,
+      year: 2023,
+      month: 12,
+      page: CASE_LAW_BROWSE_MAX_PAGES,
+    },
+    `${hub}/2023/12/page/${String(CASE_LAW_BROWSE_MAX_PAGES)}`,
+  ],
+  [
+    { level: "day", court, year: 2024, month: 2, day: 29, page: 1 },
+    `${hub}/2024/02/29`,
+  ],
+  [
+    { level: "day", court, year: 2023, month: 1, day: 9, page: 2 },
+    `${hub}/2023/01/09/page/2`,
+  ],
 ];
 
 describe("case-law browse paths", () => {
   test.each(targets)(
-    "round-trips %o through its one canonical path",
-    (target) => {
+    "round-trips %o through its one canonical path %s",
+    (target, expected) => {
       const path = createCaseLawBrowsePath("cze", target);
+      expect(path).toBe(expected);
       const splat = path.slice("/law/cze/courts/".length);
       expect(parseCaseLawBrowseSplat(splat)).toEqual(target);
-      expect(path).not.toContain("?");
     },
   );
 
