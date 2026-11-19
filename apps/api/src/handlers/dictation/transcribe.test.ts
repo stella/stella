@@ -1112,12 +1112,14 @@ describe("a member's labels flag", () => {
     ).toBe(false);
     expect(v.safeParse(desktopDictationBodySchema, upload).success).toBe(false);
     // A desktop names the matter a recording is filed under; the API reads
-    // that matter's vocabulary itself.
+    // that matter's vocabulary itself. A recording's piece names itself, so
+    // a retry is counted once.
     expect(Object.keys(desktopDictationBodySchema.entries).toSorted()).toEqual([
       "file",
       "language",
       "matterId",
       "modelId",
+      "pieceId",
     ]);
   });
 });

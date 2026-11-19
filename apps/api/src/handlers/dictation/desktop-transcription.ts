@@ -24,6 +24,7 @@ import {
 } from "@stll/api-contract/transcription";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { typedDictationText } from "@/api/handlers/dictation/cleanup-model";
@@ -32,6 +33,7 @@ import {
   DEFAULT_DICTATION_DEPENDENCIES,
   type DictationCaller,
   type DictationDependencies,
+  type DictationUsageKey,
   executeDictation,
   RETAINING_MODELS_FEATURE_ID,
 } from "@/api/handlers/dictation/transcribe";
@@ -331,6 +333,23 @@ const takesVocabulary = (modelId: string | undefined): boolean =>
   (TRANSCRIPTION_MODELS[modelId].vocabularyMechanism === "groq-prompt" ||
     TRANSCRIPTION_MODELS[modelId].vocabularyMechanism === "azure-phrase-list");
 
+/**
+ * A recording's piece is counted once however often the desktop sends it:
+ * the key is the member, the piece's own id and its audio, so an id sent
+ * again with other audio is a new piece and is counted.
+ */
+const desktopPieceUsageKey = async (
+  userId: SafeId<"user">,
+  pieceId: string,
+  audio: Blob,
+): Promise<DictationUsageKey> => {
+  const digest = sha256Hex(new Uint8Array(await audio.arrayBuffer()));
+  return {
+    idempotencyKey: `desktop-dictation-piece:${userId}:${pieceId}:${digest}`,
+    resourceId: pieceId,
+  };
+};
+
 type DesktopTranscribeOptions = DesktopDictationOptions & {
   dependencies?: Partial<DictationDependencies>;
   admit?: typeof withActionAdmission;
@@ -392,7 +411,8 @@ export const createDesktopDictationTranscribeEndpoint = ({
         ),
       },
       async function* (ctx) {
-        const { request, body } = ctx;
+        const { request } = ctx;
+        const { pieceId, ...body } = ctx.body;
         const { account, safeDb, settings, retainingModels } =
           yield* Result.await(authorizeDictation(request, options));
         yield* Result.await(admitStandardAccount(account, readAccountEmail));
@@ -464,6 +484,15 @@ export const createDesktopDictationTranscribeEndpoint = ({
                   },
                   request,
                   modelAdmission,
+                  ...(pieceId === undefined
+                    ? {}
+                    : {
+                        usageKey: await desktopPieceUsageKey(
+                          account.userId,
+                          pieceId,
+                          body.file,
+                        ),
+                      }),
                 },
                 { ...DEFAULT_DICTATION_DEPENDENCIES, ...dependencies },
               ),

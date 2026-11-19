@@ -465,6 +465,8 @@ const exerciseTranscribe = async ({
   modelId,
   matterId,
   readMatter,
+  pieceId,
+  audioMs = 1234,
 }: {
   withhold?: () => void;
   email?: string | null;
@@ -473,8 +475,14 @@ const exerciseTranscribe = async ({
   modelId?: string;
   matterId?: string;
   readMatter?: DesktopTranscribeReadMatter;
+  pieceId?: string;
+  audioMs?: number;
 } = {}) => {
   withhold();
+  const settle = mock(
+    async (_options: Parameters<DictationDependencies["settle"]>[0]) =>
+      await Promise.resolve(Result.ok(undefined)),
+  );
   const transcribe = mock(
     async (options: Parameters<DictationDependencies["transcribe"]>[0]) =>
       await Promise.resolve(
@@ -503,7 +511,7 @@ const exerciseTranscribe = async ({
       credential: async () => await Promise.resolve(Result.ok({ apiKey: "k" })),
       limit: async () => await Promise.resolve(Result.ok(undefined)),
       preflight: async () => await Promise.resolve(Result.ok(undefined)),
-      settle: async () => await Promise.resolve(Result.ok(undefined)),
+      settle,
     }),
     admit: asTestRaw<typeof withActionAdmission>(
       async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
@@ -518,10 +526,13 @@ const exerciseTranscribe = async ({
   const form = new FormData();
   form.set(
     "file",
-    new File([makeWavAudioBytes(1234)], "dictation.wav", {
+    new File([makeWavAudioBytes(audioMs)], "dictation.wav", {
       type: "audio/wav",
     }),
   );
+  if (pieceId !== undefined) {
+    form.set("pieceId", pieceId);
+  }
   form.set("language", "cs");
   if (modelId !== undefined) {
     form.set("modelId", modelId);
@@ -532,7 +543,7 @@ const exerciseTranscribe = async ({
   const response = await server.fetch(
     new Request("http://localhost/transcribe", { method: "POST", body: form }),
   );
-  return { response, transcribe };
+  return { response, transcribe, settle };
 };
 
 test("a model whose provider keeps the audio transcribes only for a member granted such models", async () => {
@@ -575,6 +586,35 @@ test("a granted desktop's audio is transcribed with the region's default model a
     modelId: defaultTranscriptionModelId("eu"),
     language: "cs",
   });
+});
+
+test("a recording's piece sent again is counted under the key of its first attempt", async () => {
+  const pieceId = "0198c5e2-7c1f-4a6e-9a3b-2f4d5e6f7a8b";
+  const usageKeyOf = async (options: {
+    pieceId?: string;
+    audioMs?: number;
+  }) => {
+    const { response, settle } = await exerciseTranscribe(options);
+    expect(response.status).toBe(200);
+    return settle.mock.calls.at(0)?.[0].usageKey;
+  };
+  const first = await usageKeyOf({ pieceId });
+  const again = await usageKeyOf({ pieceId });
+  expect(first?.resourceId).toBe(pieceId);
+  expect(again).toEqual(first);
+  // The same id with other audio is another piece, counted on its own.
+  const other = await usageKeyOf({ pieceId, audioMs: 2345 });
+  expect(other?.idempotencyKey).not.toBe(first?.idempotencyKey);
+  // Dictation's own chunks name no piece; each request is its own event.
+  expect(await usageKeyOf({})).toBeUndefined();
+});
+
+test("a piece id that is not a UUID is refused before any audio is sent", async () => {
+  const { response, transcribe } = await exerciseTranscribe({
+    pieceId: "piece-1",
+  });
+  expect(response.status).toBe(422);
+  expect(transcribe).not.toHaveBeenCalled();
 });
 
 test("a transcript is answered without a character the desktop would not type", async () => {
