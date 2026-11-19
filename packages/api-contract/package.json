@@ -207,6 +207,8 @@
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./statute-route": "./src/statute-route.ts",
     "./statute-identity": "./src/statute-identity.ts",
+    "./statute-work-identifier": "./src/statute-work-identifier.ts",
+    "./magyar-kozlony-designation": "./src/magyar-kozlony-designation.ts",
     "./workspace-contacts": "./src/workspace-contacts.ts",
     "./workflow-status": "./src/workflow-status.ts",
     "./statute-display-label": "./src/statute-display-label.ts",

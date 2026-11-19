@@ -1550,13 +1550,26 @@
     "./landing": [
       "LANDING_ROW_CLASS",
       "LANDING_SECTION_HEADING_CLASS",
+      "LandingBoxPending",
       "LandingButton",
       "LandingEmpty",
       "LandingGreeting",
       "LandingItemText",
       "LandingLayout",
       "LandingRowIcon",
-      "LandingSection"
+      "LandingRowsPending",
+      "LandingSection",
+      "LandingSectionHeadingPending"
+    ],
+    "./landing-shell": [
+      "LANDING_ROW_CLASS",
+      "LANDING_SECTION_HEADING_CLASS",
+      "LandingBoxPending",
+      "LandingGreeting",
+      "LandingLayout",
+      "LandingRowsPending",
+      "LandingSection",
+      "LandingSectionHeadingPending"
     ],
     "./layout-tokens": [
       "PROPERTY_ROW_GRID",
@@ -2108,6 +2121,7 @@
     "KanbanVirtualCell.footerPlacement": ["end", "sticky-start"],
     "Kbd.variant": ["cap", "plain"],
     "Label.variant": ["choice", "choice-card", "default", "muted"],
+    "LandingBoxPending.box": ["composer", "search"],
     "LandingItemText.iconTone": ["matter", "muted"],
     "LandingRowIcon.tone": ["matter", "muted"],
     "ListItemDescription.variant": ["code", "paragraph", "text"],

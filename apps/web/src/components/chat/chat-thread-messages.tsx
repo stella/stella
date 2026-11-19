@@ -2409,6 +2409,12 @@ const AssistantMessageParts = ({
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
+  // A failed step the turn went on past is part of the work; only a turn
+  // that settled without an answer makes the failure its result.
+  const failureOutcome =
+    isTurnActive || isAwaitingUser || hasAnswerContent
+      ? "recovered"
+      : "terminal";
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
   // Start open while this message is actively streaming its reasoning (no
   // answer text yet), but always render the same disclosure so the user can
@@ -2493,6 +2499,7 @@ const AssistantMessageParts = ({
         <ToolCallCard
           activeOrganizationId={activeOrganizationId}
           key={part.id}
+          failureOutcome={failureOutcome}
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
@@ -2600,6 +2607,7 @@ const AssistantMessageParts = ({
           action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
+          failureOutcome={failureOutcome}
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
