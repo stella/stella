@@ -340,7 +340,7 @@ const configOf = (state: AcpSessionState, category: string) =>
   state?.configOptions?.find((option) => option.category === category) ?? null;
 
 /** The models a session offers: its model list, else its model setting. */
-export const sessionModels = (
+const sessionModels = (
   state: AcpSessionState,
   agent: AcpInitializeResponse,
 ): HarnessModel[] => {

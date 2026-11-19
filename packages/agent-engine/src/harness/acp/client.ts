@@ -49,7 +49,7 @@ export type AcpLaunch = {
  * (the first launch of an agent that unpacks itself, connecting stella's
  * MCP server), or none (a prompt).
  */
-export type AcpWait = "request" | "startup" | "unbounded";
+type AcpWait = "request" | "startup" | "unbounded";
 
 const STARTUP_REQUESTS: ReadonlySet<AcpClientRequestMethod> = new Set([
   "initialize",

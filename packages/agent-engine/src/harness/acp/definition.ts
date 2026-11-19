@@ -2,7 +2,7 @@ import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 /** What a definition's environment is built from, per process. */
-export type AcpLaunchContext = {
+type AcpLaunchContext = {
   /**
    * The stella-owned directory the agent keeps its state in, so the
    * member's own configuration is never read or written.
@@ -19,7 +19,7 @@ export type AcpLaunchContext = {
  * asked to `authenticate` with `methodId` before each session; it reads its
  * stored sign-in then and never starts a sign-in of its own.
  */
-export type AcpStoredSignIn = {
+type AcpStoredSignIn = {
   methodId: string;
   /** Whether the agent's stored sign-in is there. */
   signedIn: (configDir: string) => boolean;
@@ -89,9 +89,3 @@ export type AcpAgentDefinition = {
   readonly discardSession:
     ((configDir: string, sessionId: string) => void) | null;
 };
-
-/** Approval modes that need no sandbox: stella answers or asks every request. */
-export const ACP_DEFAULT_APPROVAL_MODES = [
-  "ask",
-  "auto",
-] as const satisfies readonly DesktopRunnerApprovalMode[];

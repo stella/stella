@@ -46,7 +46,7 @@ export const ACP_ERROR = {
 } as const;
 
 /** Requests stella sends the agent. */
-export const ACP_CLIENT_REQUESTS = [
+const ACP_CLIENT_REQUESTS = [
   "initialize",
   "authenticate",
   "session/new",
@@ -59,7 +59,7 @@ export const ACP_CLIENT_REQUESTS = [
 ] as const;
 export type AcpClientRequestMethod = (typeof ACP_CLIENT_REQUESTS)[number];
 
-export const ACP_CLIENT_NOTIFICATIONS = ["session/cancel"] as const;
+const ACP_CLIENT_NOTIFICATIONS = ["session/cancel"] as const;
 export type AcpClientNotificationMethod =
   (typeof ACP_CLIENT_NOTIFICATIONS)[number];
 
@@ -173,9 +173,6 @@ export const AcpNewSessionResponseSchema = v.object({
   sessionId: v.pipe(v.string(), v.nonEmpty()),
   ...SessionState,
 });
-export type AcpNewSessionResponse = v.InferOutput<
-  typeof AcpNewSessionResponseSchema
->;
 
 /** `session/load` and `session/resume` may answer `null`. */
 export const AcpOpenedSessionResponseSchema = v.nullish(v.object(SessionState));
@@ -202,7 +199,6 @@ export const AcpPromptResponseSchema = v.object({
     }),
   ),
 });
-export type AcpPromptResponse = v.InferOutput<typeof AcpPromptResponseSchema>;
 
 /** A content block the agent wrote; only text is read as text. */
 const ContentBlock = v.looseObject({ type: v.string() });
@@ -225,7 +221,6 @@ export const ACP_TOOL_KINDS = [
   "switch_mode",
   "other",
 ] as const;
-export type AcpToolKind = (typeof ACP_TOOL_KINDS)[number];
 
 export const ACP_TOOL_STATUSES = [
   "pending",
@@ -233,7 +228,6 @@ export const ACP_TOOL_STATUSES = [
   "completed",
   "failed",
 ] as const;
-export type AcpToolStatus = (typeof ACP_TOOL_STATUSES)[number];
 
 const ToolCallContent = v.variant("type", [
   v.object({ type: v.literal("content"), content: ContentBlock }),
@@ -255,7 +249,7 @@ export type AcpLocation = v.InferOutput<typeof Location>;
  * (unchanged) or, on an update, `null` (cleared). A content entry of a kind
  * stella does not know is dropped, not refused.
  */
-export const AcpToolCallFieldsSchema = v.object({
+const AcpToolCallFieldsSchema = v.object({
   toolCallId: v.pipe(v.string(), v.nonEmpty()),
   title: v.nullish(v.string()),
   kind: v.nullish(v.string()),
@@ -328,8 +322,6 @@ export const ACP_PERMISSION_OPTION_KINDS = [
   "reject_once",
   "reject_always",
 ] as const;
-export type AcpPermissionOptionKind =
-  (typeof ACP_PERMISSION_OPTION_KINDS)[number];
 
 export const AcpRequestPermissionSchema = v.object({
   sessionId: v.string(),
@@ -342,9 +334,6 @@ export const AcpRequestPermissionSchema = v.object({
     }),
   ),
 });
-export type AcpRequestPermission = v.InferOutput<
-  typeof AcpRequestPermissionSchema
->;
 
 /** How stella answers a permission request. */
 export type AcpPermissionOutcome =
