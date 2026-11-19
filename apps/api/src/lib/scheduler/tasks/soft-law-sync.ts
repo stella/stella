@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 
-import { captureError } from "@/api/lib/analytics/capture";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 export const SYNC_SOFT_LAW_TASK = "softLaw.sync" as const;
+
+const sourceSyncRejected = failureSink({
+  event: "scheduler.soft_law_source_sync_rejected",
+  expected: [],
+});
 
 type SoftLawSyncDependencies<Authority extends string> = {
   authorities: () => readonly Authority[];
@@ -38,12 +43,10 @@ export const createSoftLawSyncTask =
       // An aborted run stops here; any other rejection fails this source only.
       signal.throwIfAborted();
       if (Result.isError(attempt)) {
-        captureError(
-          attempt.error,
-          handlerErrorContext("scheduler.softLawSync", {
-            softLawAuthority: authority,
-          }),
-        );
+        observeFailure(attempt.error, {
+          sink: sourceSyncRejected,
+          ctx: { source: authority },
+        });
       }
       const status = Result.isError(attempt) ? "failed" : attempt.value.status;
       logger.info("scheduler.soft_law_source_synced", {
