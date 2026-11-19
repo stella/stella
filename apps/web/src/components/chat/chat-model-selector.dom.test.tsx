@@ -190,6 +190,13 @@ const CODEX_PLACE = "Runs on: Your computer, Codex";
 const AUTO_LABEL = messages.chat.modelSelector.autoLabel;
 const SEARCH = messages.organization.aiConfig.modelIdPlaceholder;
 
+/**
+ * A model row's name: its text without the selected mark and the maker's
+ * mark, which is titled for assistive technology ("OpenAI").
+ */
+const modelRowName = (item: HTMLElement) =>
+  item.textContent.replace(/^Selected/u, "").replace(/^OpenAI/u, "");
+
 test("the model chip names the reasoning effort once one is chosen", async () => {
   renderChips({ ...LOCAL_TARGET, reasoningEffort: "high" });
   expect(
@@ -213,18 +220,17 @@ test("the where chip switches the place, and the model chip lists that place's m
   // Picking a place closes the menu.
   await waitForMenuClosed();
 
-  // On the computer: the agent's models and none of stella's. This agent
-  // marks no default, so none is called recommended.
+  // On the computer: the agent's models and none of stella's, in the same
+  // picker, search included. Auto is stella's routing, so it is not offered
+  // here. This agent marks no default, so none is called recommended.
   expect(await screen.findByRole("button", { name: CODEX_PLACE })).toBeTruthy();
   const localModels = await openMenu("GPT-5 Codex");
-  expect(within(localModels).getByText("Codex models")).toBeTruthy();
+  expect(within(localModels).getByPlaceholderText(SEARCH)).toBeTruthy();
   expect(
-    within(localModels)
-      .getAllByRole("menuitemradio")
-      .map((item) => item.textContent.replace(/^Selected/u, "")),
+    within(localModels).getAllByRole("menuitemradio").map(modelRowName),
   ).toEqual(["GPT-5 Codex"]);
-  expect(within(localModels).queryByPlaceholderText(SEARCH)).toBeNull();
   expect(within(localModels).queryByText(CLOUD_MODEL.displayName)).toBeNull();
+  expect(within(localModels).queryByText(AUTO_LABEL)).toBeNull();
   await closeMenu();
 
   await choose(await openMenu(CODEX_PLACE), messages.chat.runOn.cloud);
@@ -320,12 +326,28 @@ test("an agent starts on the model it marks as its default, offered first", asyn
   await choose(await openMenu(CLOUD_PLACE), "Codex");
   expect(chosen).toEqual([{ ...LOCAL_TARGET, model: "gpt-6.1-sol" }]);
   await waitForMenuClosed();
+  // The default is the agent's Recommended model, as stella's are listed;
+  // the rest wait under All models.
   const models = await openMenu("GPT-6.1 Sol");
-  expect(
-    within(models)
-      .getAllByRole("menuitemradio")
-      .map((item) => item.textContent.replace(/^Selected/u, "")),
-  ).toEqual([`${messages.chat.runOn.modelDefault}GPT-6.1 Sol`, "GPT-5 Codex"]);
+  const rows = () =>
+    within(models).getAllByRole("menuitemradio").map(modelRowName);
+  expect(within(models).getByText(messages.common.recommended)).toBeTruthy();
+  expect(rows()).toEqual(["GPT-6.1 Sol"]);
+  await act(async () => {
+    fireEvent.click(
+      within(models).getByRole("menuitem", {
+        name: new RegExp(messages.chat.modelSelector.allModels, "u"),
+      }),
+    );
+  });
+  expect(rows()).toEqual(["GPT-6.1 Sol", "GPT-5 Codex"]);
+  // Search covers every model the agent offers, folded or not.
+  await act(async () => {
+    fireEvent.change(within(models).getByPlaceholderText(SEARCH), {
+      target: { value: "5 codex" },
+    });
+  });
+  expect(rows()).toEqual(["GPT-5 Codex"]);
 });
 
 test("a member who may not run turns on a computer sees the model chip alone", async () => {

@@ -1,16 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 import { Button } from "@stll/ui/button";
-import {
-  Frame,
-  FrameFooter,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 
 import { useSignOut } from "@/hooks/use-sign-out";
 import { signalSessionChange } from "@/lib/account/session-signal";
@@ -20,18 +13,20 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { destinationNavigation } from "@/lib/redirect";
 
-type ProfessionalUsePanelProps = {
-  redirectTo: string;
-  userId: string;
-};
+import { ProfessionalUseShell } from "./-professional-use.pending";
+
+const routeApi = getRouteApi("/auth/professional-use");
 
 /** Records the displayed statement, then continues to the requested page. */
-export const ProfessionalUsePanel = ({
-  redirectTo,
-  userId,
-}: ProfessionalUsePanelProps) => {
+export const ProfessionalUsePage = () => {
+  const userId = routeApi.useRouteContext({
+    select: (context) => context.userId,
+  });
+  const redirectTo = routeApi.useSearch({
+    select: (search) => search.redirectTo,
+  });
   const t = useTranslations();
-  const navigate = useNavigate();
+  const navigate = routeApi.useNavigate();
   const queryClient = useQueryClient();
   const signOut = useSignOut();
 
@@ -53,38 +48,28 @@ export const ProfessionalUsePanel = ({
   });
 
   return (
-    <Frame className="w-full max-w-md">
-      <FrameHeader>
-        <FrameTitle>{t("auth.professionalUse.title")}</FrameTitle>
-      </FrameHeader>
-      <FramePanel>
-        <p className="text-foreground text-sm text-pretty">
-          {t("auth.professionalUseStatement")}
-        </p>
-      </FramePanel>
-      <FrameFooter>
-        <div className="flex justify-end gap-2">
-          <Button
-            disabled={accept.isPending || signOut.isPending}
-            loading={signOut.isPending}
-            onClick={() => {
-              signOut.mutate();
-            }}
-            variant="ghost"
-          >
-            {t("common.signOut")}
-          </Button>
-          <Button
-            disabled={accept.isPending || signOut.isPending}
-            loading={accept.isPending}
-            onClick={() => {
-              accept.mutate();
-            }}
-          >
-            {t("common.accept")}
-          </Button>
-        </div>
-      </FrameFooter>
-    </Frame>
+    <ProfessionalUseShell
+      title={t("auth.professionalUse.title")}
+      statement={t("auth.professionalUseStatement")}
+      signOut={
+        <Button
+          disabled={accept.isPending || signOut.isPending}
+          loading={signOut.isPending}
+          onClick={() => signOut.mutate()}
+          variant="ghost"
+        >
+          {t("common.signOut")}
+        </Button>
+      }
+      accept={
+        <Button
+          disabled={accept.isPending || signOut.isPending}
+          loading={accept.isPending}
+          onClick={() => accept.mutate()}
+        >
+          {t("common.accept")}
+        </Button>
+      }
+    />
   );
 };
