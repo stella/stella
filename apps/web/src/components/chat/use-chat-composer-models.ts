@@ -201,9 +201,20 @@ export const useChatComposerModels = ({
   const desired = useSyncExternalStore(owner.subscribe, owner.desired);
   const shown =
     desired ?? (stored === undefined ? undefined : choiceOf(stored, start));
+  // Before the first read, a surface that opens new chats lays its row out
+  // for where a new chat starts, the member's last Run on choice, which this
+  // browser holds: the web search switch, for one, is absent for a chat on
+  // the member's computer, so it does not show and then leave. Nothing is
+  // decided on it (the start is decided on the read, above), and the menus
+  // and the model chip stay pending until then.
+  const shownTarget =
+    shown?.runTarget ??
+    (runOn === "choice" && startsOnLastChoice
+      ? rememberedRunTarget(activeOrganizationId)
+      : undefined);
   const choiceTarget = useEffectiveRunTarget(
     activeOrganizationId,
-    runOn === "choice" ? shown?.runTarget : undefined,
+    runOn === "choice" ? shownTarget : undefined,
   );
   const runTarget = runOn === "choice" ? choiceTarget : CHAT_CLOUD_RUN_TARGET;
   const getRunTarget = useLatestCallback((): ChatRunTarget => {
