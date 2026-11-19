@@ -299,6 +299,24 @@ const providerFile = async (pattern: string) => {
   return Bun.file(new URL(name, directory)).text();
 };
 
+/** The one provider bundle that defines `name`; chunk names change between releases. */
+const providerFileDefining = async (name: string) => {
+  const directory = new URL(
+    ".",
+    import.meta.resolve("@better-auth/oauth-provider"),
+  );
+  const sources = await Promise.all(
+    [...new Bun.Glob("*.mjs").scanSync(fileURLToPath(directory))].map(
+      async (file) => await Bun.file(new URL(file, directory)).text(),
+    ),
+  );
+  const defining = sources.filter((source) =>
+    source.includes(`function ${name}(`),
+  );
+  expect(defining).toHaveLength(1);
+  return defining.at(0) ?? panic(`Missing OAuth provider bundle for ${name}`);
+};
+
 const providerFunction = (source: string, name: string) => {
   const start = source.indexOf(`function ${name}(`);
   expect(start).toBeGreaterThanOrEqual(0);
@@ -341,7 +359,7 @@ test("the pinned provider assigns every direct grant refusal and shared protocol
       directRefusalsClassified(body.replaceAll('"expired"', '"new_refusal"')),
     ).toBe(!body.includes('"expired"'));
   }
-  const utils = await providerFile("utils-*.mjs");
+  const utils = await providerFileDefining("extractClientCredentials");
   for (const [file, names] of [
     [
       source,
