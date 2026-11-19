@@ -97,8 +97,7 @@ const SCRIPT_READ_AREA = {
 } as const satisfies Record<StellaMcpToolName, ScriptReadArea>;
 
 /** The legal research a code-mode run does, when that is all it reads. */
-export type CodeToolResearch =
-  "caseLaw" | "legislation" | "legislationAndCaseLaw";
+type CodeToolResearch = "caseLaw" | "legislation" | "legislationAndCaseLaw";
 
 const CODE_TOOL_RESEARCH_TITLE_KEYS = {
   caseLaw: "chat.toolCall.searchingCaseLaw",
@@ -204,7 +203,7 @@ const researchOf = (
   return areas.has("legislation") ? "legislation" : "caseLaw";
 };
 
-export type CodeToolSummary = {
+type CodeToolSummary = {
   /** Set only when every read the script makes is legislation or case law. */
   research: CodeToolResearch | undefined;
   /** A cited provision, else the first search phrasing. */
