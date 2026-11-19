@@ -30,6 +30,7 @@ import {
 } from "@/api/handlers/case-law/decisions/citations";
 import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
+import { readServedDecisionText } from "@/api/handlers/case-law/decisions/served-text";
 import { decisionTextCompletionReasons } from "@/api/handlers/case-law/decisions/text-completion";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
@@ -516,39 +517,40 @@ const resolveDecisionBody = async ({
   let bodySource: DecisionBodySource = { textSource: "host" };
   let collectionDigest: string | null = null;
   let hostSectionsPresent = false;
-  if (
-    !astIsUsable &&
-    !fulltext &&
-    !corpusPayloadUnavailable &&
-    decision.redactedAt === null
-  ) {
-    const hostSections = await containPayloadUnavailable(async () => {
-      if (
-        corpusReadEnabled() &&
-        decision.normalizedS3Key !== null &&
-        decision.contentHash !== null
-      ) {
-        return await readCorpusPayloadOrFallback({
-          documentId: decisionId,
-          key: decision.normalizedS3Key,
-          step: "readDecision.corpusSections",
-          read: async () =>
-            await readCorpusSections(
-              decision.normalizedS3Key ??
-                panic("Normalized key narrowed before read"),
-              { readTombstones },
-            ),
-          fallback: async () => null,
-        });
-      }
+  if (!astIsUsable && !fulltext && decision.redactedAt === null) {
+    const readRowSections = async () => {
       const [row] = await tx
         .select({ sections: publishedCaseLawDecisions.sections })
         .from(publishedCaseLawDecisions)
         .where(eq(publishedCaseLawDecisions.id, decisionId))
         .limit(1);
       return row?.sections ?? null;
+    };
+    const hostSections = await containPayloadUnavailable(async () => {
+      const { normalizedS3Key } = decision;
+      if (
+        corpusReadEnabled() &&
+        normalizedS3Key !== null &&
+        decision.contentHash !== null
+      ) {
+        return await readCorpusPayloadOrFallback({
+          documentId: decisionId,
+          key: normalizedS3Key,
+          step: "readDecision.corpusSections",
+          read: async () =>
+            await readCorpusSections(normalizedS3Key, { readTombstones }),
+          fallback: async () => {
+            const rowSections = await readRowSections();
+            return rowSections !== null && rowSections.length > 0
+              ? rowSections
+              : null;
+          },
+        });
+      }
+      return await readRowSections();
     }, decisionId);
-    corpusPayloadUnavailable = hostSections.unavailable;
+    corpusPayloadUnavailable =
+      corpusPayloadUnavailable || hostSections.unavailable;
     hostSectionsPresent = (hostSections.payload?.length ?? 0) > 0;
     const sectionsText = hostSections.payload
       ?.map((section) => section.text)
@@ -1110,19 +1112,19 @@ const resolveFulltext = async ({
     return fallback?.fulltext ?? null;
   };
 
-  if (corpusReadEnabled() && textS3Key !== null && contentHash !== null) {
-    return await containPayloadUnavailable(
-      async () =>
-        await readCorpusPayloadOrFallback({
-          documentId: decisionId,
-          key: textS3Key,
-          step: "readDecision.corpusText",
-          read: async () => await readCorpusText(textS3Key, { readTombstones }),
-          fallback: postgresFulltext,
-        }),
-      decisionId,
-    );
-  }
-
-  return { payload: await postgresFulltext(), unavailable: false };
+  return await containPayloadUnavailable(
+    async () =>
+      await readServedDecisionText({
+        textS3Key,
+        contentHash,
+        decisionId,
+        corpusReadEnabled: corpusReadEnabled(),
+        readStore: async () =>
+          textS3Key === null
+            ? null
+            : await readCorpusText(textS3Key, { readTombstones }),
+        readRow: postgresFulltext,
+      }),
+    decisionId,
+  );
 };
