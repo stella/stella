@@ -476,8 +476,9 @@ export const corpusProjectionRevisionBuildFailure = (
           message: failure.message,
         },
       };
-    // Neither shrinks nor changes language on a retry: only a corrected row
-    // or a declaration unblocks it.
+    // Neither shrinks nor changes language on a retry. A corrected row, or a
+    // declaration of the language (which changes the decision's fingerprint,
+    // see the descriptor), makes it eligible again.
     case "revision_too_large":
     case "document_language_undeclared":
       return {
