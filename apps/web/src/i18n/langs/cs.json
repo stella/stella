@@ -2416,6 +2416,7 @@
       "save_document": "Uložit dokument",
       "save_matter": "Uložit spis",
       "save_playbook": "Uložit playbook",
+      "save_skill_package": "Uložit dovednost",
       "save_task": "Uložit úkol",
       "save_template": "Uložit vzor",
       "save_time_entry": "Uložit časový záznam",
@@ -2444,6 +2445,7 @@
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
       "user_message": "Odesláno během práce agenta",
+      "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
@@ -4048,6 +4050,12 @@
     "versionCreatedDescription": "Byla vytvořena verze {versionNumber}. Všichni mohou pokračovat v úpravách.",
     "versionCreatedTitle": "Verze vytvořena",
     "viewOnly": "Jen ke čtení"
+  },
+  "guidance": {
+    "notCaseLaw": "Metodický dokument vydaný regulátorem. Nejde o soudní rozhodnutí.",
+    "openAtPublisher": "Otevřít u vydavatele",
+    "source": "Zdroj: {attribution}",
+    "textUnavailable": "Text tohoto dokumentu zde není k dispozici. Přečtěte si ho u vydavatele."
   },
   "guides": {
     "action": {

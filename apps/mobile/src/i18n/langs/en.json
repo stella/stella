@@ -186,6 +186,7 @@
       "save_document": "Save document",
       "save_matter": "Save matter",
       "save_playbook": "Save playbook",
+      "save_skill_package": "Save skill",
       "save_task": "Save task",
       "save_template": "Save template",
       "save_time_entry": "Save time entry",
@@ -208,6 +209,7 @@
       "update_reader_annotation": "Edit highlight or comment",
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
+      "validate_skill_package": "Check skill",
       "web_search": "Searching the web"
     },
     "localRun": {

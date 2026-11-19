@@ -2416,6 +2416,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -2444,6 +2445,7 @@
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "user_message": "Az ügynök munkája közben elküldve",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -4048,6 +4050,12 @@
     "versionCreatedDescription": "A(z) {versionNumber}. verzió létrejött. Mindenki folytathatja a szerkesztést.",
     "versionCreatedTitle": "Verzió létrehozva",
     "viewOnly": "Csak megtekintés"
+  },
+  "guidance": {
+    "notCaseLaw": "Szabályozó hatóság által kiadott iránymutatás. Ez nem bírósági határozat.",
+    "openAtPublisher": "Megnyitás a kiadónál",
+    "source": "Forrás: {attribution}",
+    "textUnavailable": "A dokumentum szövege itt nem érhető el. Olvassa el a kiadónál."
   },
   "guides": {
     "action": {

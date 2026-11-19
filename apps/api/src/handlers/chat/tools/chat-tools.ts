@@ -76,6 +76,7 @@ import {
 } from "@/api/handlers/chat/tools/show-app-tool";
 import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import {
   businessRegistryCallScope,
   restrictChatToolsToSourceScope,
@@ -339,6 +340,7 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
+type SkillPackageTools = ReturnType<typeof createSkillPackageTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
@@ -406,6 +408,7 @@ type BuiltInChatTools = OrgTools &
   ConnectorTools &
   ChatExecutionTools &
   SkillTools &
+  SkillPackageTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
   CounterpartyCheckTools &
@@ -1124,6 +1127,13 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     skills: skillMetadata,
     userId,
   });
+  const skillPackageTools = createSkillPackageTools({
+    memberRole,
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    userId,
+  });
   // Unified business-registry tool: register once with a dynamic
   // `jurisdiction` enum derived from the per-adapter native-tool
   // enablement. Adapters are filtered by organization/deployment credential
@@ -1482,6 +1492,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...connectorTools,
       ...executionTools,
       ...skillTools,
+      ...skillPackageTools,
       ...businessRegistryTools,
       ...counterpartyCheckTools,
       ...boeTools,
