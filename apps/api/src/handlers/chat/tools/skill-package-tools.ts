@@ -241,8 +241,20 @@ const nextStep = (check: SkillPackageCheck): string => {
   return "The package is complete.";
 };
 
+/**
+ * Which skill package tools a turn registers. They are skill authoring
+ * tools, so a turn carries them only when one of its skills declares them in
+ * `stella-required-tools` (`declared`); every other chat keeps them out of
+ * its prompt. `every` is for the sets that must name all a run could offer:
+ * persisted-call validation and skill availability, where declaring them is
+ * what makes them available.
+ */
+export type SkillPackageToolOffer =
+  { type: "declared"; names: ReadonlySet<string> } | { type: "every" };
+
 type CreateSkillPackageToolsProps = {
   memberRole: AuthorizedMemberRole;
+  offer: SkillPackageToolOffer;
   organizationId: SafeId<"organization">;
   /** Bound to approved mutations; absent offers only the check. */
   recordAuditEvent: AuditRecorder | undefined;
@@ -257,6 +269,7 @@ type CreateSkillPackageToolsProps = {
  */
 export const createSkillPackageTools = ({
   memberRole,
+  offer,
   organizationId,
   recordAuditEvent,
   safeDb,
@@ -381,11 +394,19 @@ export const createSkillPackageTools = ({
   const canAuthor = hasMemberPermission(memberRole, {
     agentSkill: ["create"],
   });
+  const offered = (name: string) =>
+    canAuthor && (offer.type === "every" || offer.names.has(name));
   return {
-    [VALIDATE_SKILL_PACKAGE_TOOL_NAME]: canAuthor ? validate : undefined,
+    [VALIDATE_SKILL_PACKAGE_TOOL_NAME]: offered(
+      VALIDATE_SKILL_PACKAGE_TOOL_NAME,
+    )
+      ? validate
+      : undefined,
     // Saves record an audit event, which only an approved run carries.
     [SAVE_SKILL_PACKAGE_TOOL_NAME]:
-      canAuthor && recordAuditEvent !== undefined ? save : undefined,
+      offered(SAVE_SKILL_PACKAGE_TOOL_NAME) && recordAuditEvent !== undefined
+        ? save
+        : undefined,
   };
 };
 
