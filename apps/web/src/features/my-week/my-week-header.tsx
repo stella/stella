@@ -3,12 +3,14 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { WeekNavigator } from "@/components/billing/week-navigator";
+import { MyWeekTotalsSkeleton } from "@/features/my-week/my-week-day.pending";
 import type { WeekTotals } from "@/features/my-week/my-week.logic";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
+import { MyWeekHeaderFrame } from "@/routes/-my-week.pending";
 
 type MyWeekHeaderProps = {
   date: string;
-  totals: WeekTotals;
+  totals: WeekTotals | undefined;
   onSelectDate: (date: string) => void;
   onToday: () => void;
   /** Week-level actions, such as submitting the week once that step exists. */
@@ -25,24 +27,26 @@ export const MyWeekHeader = ({
   const t = useTranslations("timesheets.week");
 
   return (
-    <header className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-1.5">
-      <div className="min-w-0">
-        <h1 className="text-sm font-medium">{t("title")}</h1>
-        <p className="text-muted-foreground text-xs tabular-nums">
-          {t("totals", {
+    <MyWeekHeaderFrame
+      title={t("title")}
+      totals={
+        totals === undefined ? (
+          <MyWeekTotalsSkeleton />
+        ) : (
+          t("totals", {
             logged: formatMinutes(totals.loggedMinutes),
             billable: formatMinutes(totals.billableMinutes),
-          })}
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
+          })
+        )
+      }
+      navigator={
         <WeekNavigator
           date={date}
           onSelectDate={onSelectDate}
           onToday={onToday}
         />
-        {actions}
-      </div>
-    </header>
+      }
+      actions={actions}
+    />
   );
 };

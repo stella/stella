@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { routeLoadMode, routeRowsPhase } from "@/lib/query-view.logic";
+
 import {
   PUBLIC_LAW_SEARCH_STATE,
-  publicLawLoadMode,
-  publicLawRowsPhase,
   publicLawSearchOutage,
   queryAnsweredByRows,
   rowsAnswerRequestedSearch,
@@ -11,28 +11,33 @@ import {
 
 describe("whether the results route waits for its rows", () => {
   test("a cold arrival waits: there is nothing to show and nothing to list", () => {
-    expect(publicLawLoadMode({ cause: "enter", hasCachedPages: false })).toBe(
+    expect(routeLoadMode({ cause: "enter", hasCachedPages: false })).toBe(
       "await",
     );
   });
 
   test("a preload waits too, so the cache it fills is the whole page", () => {
-    expect(publicLawLoadMode({ cause: "preload", hasCachedPages: false })).toBe(
+    expect(routeLoadMode({ cause: "preload", hasCachedPages: false })).toBe(
       "await",
     );
   });
 
   test("changing a filter on a drawn page never waits", () => {
-    expect(publicLawLoadMode({ cause: "stay", hasCachedPages: false })).toBe(
+    expect(routeLoadMode({ cause: "stay", hasCachedPages: false })).toBe(
       "background",
     );
   });
 
   test("a search already in the cache never waits, however it was reached", () => {
-    for (const cause of ["enter", "preload", "stay"] as const) {
-      expect(publicLawLoadMode({ cause, hasCachedPages: true })).toBe(
-        "background",
-      );
+    const causes = {
+      enter: "enter",
+      preload: "preload",
+      stay: "stay",
+    } as const satisfies {
+      [Cause in Parameters<typeof routeLoadMode>[0]["cause"]]: Cause;
+    };
+    for (const cause of Object.values(causes)) {
+      expect(routeLoadMode({ cause, hasCachedPages: true })).toBe("background");
     }
   });
 });
@@ -40,7 +45,7 @@ describe("whether the results route waits for its rows", () => {
 describe("what the results region shows while the page stays put", () => {
   test("a pending render stands in skeleton, never in rows it does not have", () => {
     expect(
-      publicLawRowsPhase({
+      routeRowsPhase({
         isLoading: false,
         isPlaceholderData: true,
         keptRowCount: 3,
@@ -51,7 +56,7 @@ describe("what the results region shows while the page stays put", () => {
 
   test("a first fetch under a drawn page is the same skeleton", () => {
     expect(
-      publicLawRowsPhase({
+      routeRowsPhase({
         isLoading: true,
         isPlaceholderData: false,
         keptRowCount: 3,
@@ -62,7 +67,7 @@ describe("what the results region shows while the page stays put", () => {
 
   test("rows kept from the previous search are stale, not loading", () => {
     expect(
-      publicLawRowsPhase({
+      routeRowsPhase({
         isLoading: false,
         isPlaceholderData: true,
         keptRowCount: 3,
@@ -73,7 +78,7 @@ describe("what the results region shows while the page stays put", () => {
 
   test("an empty page kept from the previous search waits instead of answering this one", () => {
     expect(
-      publicLawRowsPhase({
+      routeRowsPhase({
         isLoading: false,
         isPlaceholderData: true,
         keptRowCount: 0,
@@ -84,7 +89,7 @@ describe("what the results region shows while the page stays put", () => {
 
   test("a settled empty page is this search's answer", () => {
     expect(
-      publicLawRowsPhase({
+      routeRowsPhase({
         isLoading: false,
         isPlaceholderData: false,
         keptRowCount: 0,
@@ -95,7 +100,7 @@ describe("what the results region shows while the page stays put", () => {
 
   test("a settled page shows its own rows", () => {
     expect(
-      publicLawRowsPhase({
+      routeRowsPhase({
         isLoading: false,
         isPlaceholderData: false,
         keptRowCount: 3,

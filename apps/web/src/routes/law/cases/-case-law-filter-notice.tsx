@@ -5,11 +5,11 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import type { PublicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
 import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawNoResults } from "@/features/case-law/components/case-law-no-results";
 import { useFormatter } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
+import type { RouteRowsPhase } from "@/lib/query-view.logic";
 import type { CaseLawIndexSearch } from "@/routes/law/cases/-case-law-search-schema";
 
 type CaseLawFilterNoticeProps = {
@@ -76,7 +76,7 @@ export const CaseLawFilterNotice = ({
 
 type CaseLawResultsFeedbackOptions = {
   notice: CaseLawFilterNoticeProps;
-  phase: PublicLawRowsPhase;
+  phase: RouteRowsPhase;
   resultCount: number;
   unavailable: boolean;
   isTextSearch: boolean;
