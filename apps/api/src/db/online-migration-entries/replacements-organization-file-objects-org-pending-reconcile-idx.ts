@@ -7,7 +7,7 @@ export default {
   type: "replacements",
   values: [
     {
-      introducedBy: "20261119190300_file_reservation_reconciliation_state",
+      introducedBy: "20261119213400_file_reservation_reconciliation_state",
       legacyName: "organization_file_objects_org_pending_reconcile_idx",
       replacementNames: ["organization_file_objects_org_active_reconcile_idx"],
     },
