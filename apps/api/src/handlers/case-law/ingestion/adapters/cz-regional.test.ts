@@ -249,6 +249,60 @@ describe("the stored payload is an envelope of every response read", () => {
     ).toBe(true);
   });
 
+  test("exact recovery preserves retained chain metadata with fresh document bytes", async () => {
+    const crawled = await build({
+      listing: LISTING,
+      docket: DISTRICT_DOCKET,
+      document: DISTRICT_DOCUMENT,
+      chain: CHAIN,
+    });
+    const recover = czRegionalAdapter.buildStoredDocument;
+    if (recover === undefined) {
+      return panic("Regional recovery required");
+    }
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(await readFixture(DISTRICT_DOCUMENT), {
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    try {
+      const recovered = await recover({
+        reference: DISTRICT_DOCKET,
+        signal: AbortSignal.timeout(5000),
+        stored: {
+          raw: new TextEncoder().encode(crawled.sourceRaw),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          caseNumber: crawled.caseNumber,
+          sourceDocumentId: crawled.sourceDocumentId ?? null,
+          language: crawled.language,
+          court: crawled.court,
+          ecli: crawled.ecli ?? null,
+          decisionDate: crawled.decisionDate ?? null,
+          decisionType: crawled.decisionType ?? null,
+          sourceUrl: crawled.sourceUrl ?? null,
+          documentUrl: crawled.documentUrl ?? null,
+          metadata: crawled.metadata,
+        },
+      });
+      expect(recovered.type).toBe("built");
+      if (recovered.type === "built") {
+        expect(recovered.decision.metadata["affectingDocs"]).toEqual(
+          crawled.metadata["affectingDocs"],
+        );
+        expect(
+          decodeSourceRawEnvelope(recovered.decision.sourceRaw ?? "")?.[
+            "chain"
+          ],
+        ).toBe(decodeSourceRawEnvelope(crawled.sourceRaw ?? "")?.["chain"]);
+      }
+    } finally {
+      testFetchState.restore();
+    }
+  });
+
   test("a payload stored before the envelope is reported, not guessed at", async () => {
     // What every row written by the previous adapter holds: the document
     // payload alone, under the publisher's own media type. The listing row

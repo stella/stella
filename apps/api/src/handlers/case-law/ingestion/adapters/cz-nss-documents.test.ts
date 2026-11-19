@@ -335,3 +335,157 @@ describe("NSS document recovery", () => {
     }
   });
 });
+
+test.each(["legacy", "superseded", "fresh-html"])(
+  "stored NSS document build retains %s input without inventing a listing",
+  async (retainedKind) => {
+    const detail = gunzipSync(
+      await Bun.file(
+        new URL("cz-nss-extended-chamber-detail.html.gz", fixtures),
+      ).bytes(),
+    );
+    const retainedHeadnote = "Retained publisher headnote.";
+    const retainedDetail = `<div data-field-id="citace"><span class="det-textval">č. 123/2008 Sb. NSS</span></div><div data-field-id="pravnivetaupravena"><span class="det-textval">${retainedHeadnote}</span></div>`;
+    const freshDetail = `<div data-field-id="citace"><span class="det-textval">č. 999/2020 Sb. NSS</span></div><div data-field-id="pravnivetaupravena"><span class="det-textval">Wrong portal headnote.</span></div>${new TextDecoder().decode(detail)}`;
+    expect(parseCzNssDetailMetadata(freshDetail).legalSentence).toContain(
+      "Wrong portal headnote.",
+    );
+    const registry = gunzipSync(
+      await Bun.file(
+        new URL("cz-nss-extended-chamber-registry.html.gz", fixtures),
+      ).bytes(),
+    );
+    const pdf = await Bun.file(
+      new URL("cz-nss-extended-chamber-original.pdf", fixtures),
+    ).bytes();
+    const urls: string[] = [];
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        urls.push(url.href);
+        if (url.pathname === "/") {
+          return new Response(
+            '<form><input name="__RequestVerificationToken" value="test"></form>',
+          );
+        }
+        if (url.pathname.startsWith("/DokumentDetail/Index/")) {
+          return new Response(freshDetail);
+        }
+        if (url.pathname.startsWith("/DokumentOriginal/")) {
+          if (retainedKind === "fresh-html") {
+            return new Response(
+              `<html><body><p>5 As 140/2014-76</p><p>USNESENÍ</p><p>${"Rozšířený senát rozhodl o předložené věci. ".repeat(30)}</p></body></html>`,
+            );
+          }
+          return new Response(Buffer.from("N/A", "utf16le"));
+        }
+        if (url.pathname === "/rozhodovaci-cinnost/rozsireny-senat") {
+          return new Response(registry);
+        }
+        if (
+          url.pathname ===
+          "/modalni-obsah/rozhodovaci-cinnost/rozhodnuti-225964-anonymizovana-verze"
+        ) {
+          return new Response(pdf, {
+            headers: { "content-type": "application/pdf" },
+          });
+        }
+        throw new TypeError(`Unexpected exact recovery request: ${url.href}`);
+      }),
+    );
+    try {
+      const recover = czNssAdapter.buildStoredDocument;
+      if (recover === undefined) {
+        throw new TypeError("NSS recovery required");
+      }
+      const result = await recover({
+        reference: nssRecoveryReference,
+        signal: AbortSignal.timeout(10_000),
+        stored: {
+          raw: new TextEncoder().encode(
+            retainedKind === "legacy"
+              ? "N/A"
+              : encodeSourceRawEnvelope({
+                  document: "old document",
+                  text: "wrong old body ".repeat(100),
+                  "extended-chamber-pdf-base64": "invalid old PDF",
+                  detail: retainedDetail,
+                }),
+          ),
+          contentType:
+            retainedKind === "legacy"
+              ? "text/html"
+              : SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          caseNumber: "5 As 140/2014",
+          sourceDocumentId: "641220",
+          language: "cs",
+          court: "Nejvyšší správní soud",
+          ecli: "ECLI:CZ:NSS:2017:5.As.140.2014.76",
+          decisionDate: "2017-02-02",
+          decisionType: "Usnesení",
+          sourceUrl: "https://vyhledavac.nssoud.cz/DokumentDetail/Index/641220",
+          documentUrl: null,
+          metadata: {
+            publisherOwned: ["retained", 123],
+            citation: "č. 123/2008 Sb. NSS",
+            legalSentence: retainedHeadnote,
+            publishedCaseNumber: nssRecoveryReference,
+          },
+        },
+      });
+      expect(result.type).toBe("built");
+      if (result.type !== "built") {
+        return;
+      }
+      expect(result.decision.fulltext).toContain("5 As 140/2014");
+      expect(JSON.stringify(result.decision.metadata["publisherOwned"])).toBe(
+        JSON.stringify(["retained", 123]),
+      );
+      expect(
+        Bun.deepEquals(result.decision.textFields.legalSentence, {
+          type: "present",
+          text: retainedHeadnote,
+        }),
+      ).toBe(true);
+      expect(
+        result.decision.identifiers
+          ?.map((identifier) => identifier.value)
+          .join(" "),
+      ).toContain("123/2008");
+      expect(
+        result.decision.identifiers
+          ?.map((identifier) => identifier.value)
+          .join(" "),
+      ).not.toContain("999/2020");
+      const parts = decodeSourceRawEnvelope(result.decision.sourceRaw ?? "");
+      expect(parts?.["fetched-detail"]).toBe(freshDetail);
+      expect(parts?.["detail"]).toBe(
+        retainedKind === "legacy" ? undefined : retainedDetail,
+      );
+      expect(parts?.["listing"]).toBeUndefined();
+      if (retainedKind === "legacy") {
+        expect(parts?.["retained-input"]).toBe("N/A");
+      } else {
+        expect(parts?.["superseded-extended-chamber-pdf-base64"]).toBe(
+          "invalid old PDF",
+        );
+        expect(parts?.["text"] ?? "").not.toContain("wrong old body");
+        expect(parts?.["superseded-text"]).toContain("wrong old body");
+      }
+      if (retainedKind === "fresh-html") {
+        expect(parts?.["extended-chamber-pdf-base64"]).toBeUndefined();
+        expect(result.decision.fulltext).toContain("Rozšířený senát rozhodl");
+        expect(urls.some((url) => url.includes("/rozsireny-senat"))).toBe(
+          false,
+        );
+      } else {
+        expect(parts?.["extended-chamber-pdf-base64"]).toBeDefined();
+      }
+      expect(urls.some((url) => url.includes("/Home/"))).toBe(false);
+    } finally {
+      testFetchState.restore();
+    }
+  },
+);

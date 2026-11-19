@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: Named fetchDecisionContent options preserve its body, argument values and evaluation order.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -17,6 +18,7 @@ import { classifyFailure } from "@stll/errors";
 import { load } from "@stll/html";
 import type { CheerioAPI } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
@@ -27,6 +29,7 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { nssDocumentReferenceMatches } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-document-identity";
 import {
   decodeNssDocument,
   isNssDocumentPlaceholder,
@@ -108,6 +111,8 @@ import type {
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  StoredDocumentBuildInput,
+  StoredDocumentBuildOutcome,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -3166,6 +3171,124 @@ const buildCzNssFromPayload = async (
   }
 };
 
+/**
+ * A legacy body's locator is not a reconstructed listing. Its original
+ * publisher metadata remains authoritative; only verified document bytes are
+ * refreshed. No listing row is invented or serialized by this path.
+ */
+const buildCzNssStoredDocument = async ({
+  stored,
+  reference,
+  signal,
+}: StoredDocumentBuildInput): Promise<StoredDocumentBuildOutcome> => {
+  const documentId = stored.sourceDocumentId;
+  if (
+    documentId === null ||
+    !/^\d+$/u.test(documentId) ||
+    splitCaseReference(reference).sheetNumber === undefined
+  ) {
+    return {
+      type: "incomplete-locator",
+      detail:
+        "NSS recovery needs the exact document id and full published sheet reference",
+    };
+  }
+  const row = {
+    caseNumber: stored.caseNumber,
+    publishedCaseNumber: reference,
+    decisionDate: stored.decisionDate ?? undefined,
+    decisionType: stored.decisionType ?? undefined,
+    outcome: undefined,
+    documentUrl: detailUrl(documentId),
+    documentId,
+  };
+  const session = await getSession(signal);
+  const detailRead = await fetchDetailMetadata(documentId, session, signal);
+  if (detailRead.type === "unavailable") {
+    return { type: "detail-unavailable" };
+  }
+  const detail = detailRead.detail;
+  const read = await fetchDecisionContent({
+    documentId,
+    row,
+    detail,
+    session,
+    signal,
+  });
+  if (read.type === "unavailable") {
+    return { type: "detail-unavailable" };
+  }
+  let content = read.content;
+  if (!content.fulltext && !hasUsableAst(content.documentAst)) {
+    const original = await fetchRegistryDocument({ row, detail, signal });
+    if (original.type === "unavailable") {
+      return { type: "detail-unavailable" };
+    }
+    content = {
+      ...original.content,
+      sourceRaw: content.sourceRaw,
+      fallbackText: content.fallbackText,
+    };
+  }
+  if (
+    !content.fulltext ||
+    !nssDocumentReferenceMatches(reference, content.fulltext.slice(0, 2048))
+  ) {
+    return {
+      type: "incomplete-locator",
+      detail:
+        "Publisher body did not verify the complete selected sheet reference",
+    };
+  }
+  const retained = new TextDecoder().decode(stored.raw);
+  const parts = decodeSourceRawEnvelope(retained) ?? {
+    "retained-input": retained,
+  };
+  // Retain superseded bytes without letting their reader precedence select
+  // an older PDF or text representation over the freshly verified document.
+  const retainedParts = Object.fromEntries(
+    Object.entries(parts).map(([key, value]) => [
+      key === CZ_NSS_RAW_PART.DOCUMENT ||
+      key === CZ_NSS_RAW_PART.TEXT ||
+      key === CZ_NSS_RAW_PART.PDF
+        ? `superseded-${key}`
+        : key,
+      value,
+    ]),
+  );
+  const raw = encodeSourceRawEnvelope({
+    ...retainedParts,
+    ...(content.sourceRaw === undefined
+      ? {}
+      : { [CZ_NSS_RAW_PART.DOCUMENT]: content.sourceRaw }),
+    ...(content.fallbackText === undefined
+      ? {}
+      : { [CZ_NSS_RAW_PART.TEXT]: content.fallbackText }),
+    ...content.recovery,
+    // The portal detail may identify another sheet. Its response is evidence,
+    // but body recovery must not replace retained publisher metadata with it.
+    ...(detailRead.html === null ? {} : { "fetched-detail": detailRead.html }),
+  });
+  const parsed = await reparseStoredRaw({
+    ...stored,
+    raw: new TextEncoder().encode(raw),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+  if (parsed.type !== "parsed") {
+    return {
+      type: "incomplete-locator",
+      detail: "Recovered raw did not rebuild one complete NSS decision",
+    };
+  }
+  return {
+    type: "built",
+    decision: plainTextIngestionResult({
+      ...parsed.result,
+      metadata: { ...parsed.result.metadata, ...stored.metadata },
+    }),
+  };
+};
+
 const CZ_NSS_MISSING_COUNT_ATTEMPTS = 3;
 
 type CzNssCursor = {
@@ -3375,6 +3498,7 @@ export const czNssAdapter = defineSourceAdapter({
    * day, key each row the way the ingest would, and compare against what is
    * held.
    */
+  buildStoredDocument: buildCzNssStoredDocument,
   reconciliation: {
     // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
     revisionOf: (payload) =>

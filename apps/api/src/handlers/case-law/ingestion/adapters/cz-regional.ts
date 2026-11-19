@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-regional] recapture upgrades a document-only stored payload to the crawl's envelope; crawl and replay build decisions as before.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -2843,6 +2844,52 @@ export const czRegionalAdapter = defineSourceAdapter({
    * day contains is answerable without re-crawling it: enumerate the day, key
    * each item the way the ingest would, and compare against what is held.
    */
+  buildStoredDocument: async ({ stored, signal }) => {
+    const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+    const payload = parts === null ? null : parsedPart(parts, RAW_PART.LISTING);
+    const identity = czRegionalListingIdentity(payload);
+    if (
+      identity.type !== "document" ||
+      identity.sourceDocumentId !== stored.sourceDocumentId
+    ) {
+      return {
+        type: "incomplete-locator",
+        detail:
+          "Stored payload does not retain this regional-court listing row",
+      };
+    }
+    const built = await buildCzRegionalFromPayload(payload, signal);
+    const retainedChain = parts?.[RAW_PART.CHAIN];
+    if (built.type !== "built" || retainedChain === undefined) {
+      return built;
+    }
+    const fresh =
+      built.decision.sourceRaw === undefined
+        ? null
+        : decodeSourceRawEnvelope(built.decision.sourceRaw);
+    if (fresh === null) {
+      return {
+        type: "incomplete-locator",
+        detail: "Fresh regional document did not retain its raw envelope",
+      };
+    }
+    const reparsed = await reparseCzRegionalStoredRaw({
+      ...stored,
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({
+          ...fresh,
+          [RAW_PART.CHAIN]: retainedChain,
+        }),
+      ),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    });
+    return reparsed.type === "parsed"
+      ? { type: "built", decision: plainTextIngestionResult(reparsed.result) }
+      : {
+          type: "incomplete-locator",
+          detail: "Retained regional chain could not be rebuilt",
+        };
+  },
   reconciliation: {
     // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
     revisionOf: (payload) =>
