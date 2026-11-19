@@ -294,6 +294,63 @@ test("a listed reasoned kit-allow is reviewed without consuming the budget", () 
   ).toEqual([]);
 });
 
+test("a reviewed boundary repeated in its file reviews none of its copies", () => {
+  const line =
+    "tokio::time::sleep(duration).await; // kit-allow: lets a peer settle";
+  const source = `#[test] fn first() {\n${line}\n}\n#[test] fn second() {\n${line}\n}`;
+  const copies = scanRustTestDeterminism({ source, integrationTest: false });
+  expect(copies).toEqual([
+    { line: 2, kind: "sleep", escaped: true },
+    { line: 5, kind: "sleep", escaped: true },
+  ]);
+  const reviewedBoundaryText = JSON.stringify([
+    { file: FILE, line, reason: "lets a peer settle" },
+  ]);
+  const files = new Map([[FILE, copies]]);
+  const sources = new Map([[FILE, source]]);
+  expect(
+    evaluateRustTestBaseline({
+      files,
+      sources,
+      baselineText: "{}",
+      reviewedBoundaryText,
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      line: 2,
+      message: expect.stringContaining("repeated in its file"),
+    }),
+    expect.objectContaining({
+      line: 5,
+      message: expect.stringContaining("repeated in its file"),
+    }),
+  ]);
+  const single = `#[test] fn first() {\n${line}\n}`;
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([
+        [
+          FILE,
+          scanRustTestDeterminism({ source: single, integrationTest: false }),
+        ],
+      ]),
+      sources: new Map([[FILE, single]]),
+      baselineText: "{}",
+      reviewedBoundaryText,
+    }),
+  ).toEqual([]);
+  expect(
+    createRustTestBaseline({
+      sources: [{ file: FILE, crate: "crates/example" }],
+      files,
+      sourceText: sources,
+      reviewedBoundaryText,
+    }),
+  ).toEqual({
+    [FILE]: expect.objectContaining({ count: 2 }),
+  });
+});
+
 test("a baseline write followed by a check ignores reviewed boundaries", () => {
   const source =
     "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";

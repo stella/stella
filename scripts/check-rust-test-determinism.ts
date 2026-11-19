@@ -197,16 +197,24 @@ const budgetedRustTestHits = ({
   reviewed,
 }: BudgetedRustTestHitsOptions) => {
   const sourceLines = source.split("\n");
-  return hits.filter(
-    (hit) =>
-      !hit.escaped ||
-      !reviewed.has(
-        boundaryId({
-          file,
-          line: sourceLines.at(hit.line - 1) ?? "",
-        }),
-      ),
-  );
+  const idOf = (hit: RustTestDeterminismHit) =>
+    boundaryId({ file, line: sourceLines.at(hit.line - 1) ?? "" });
+  // A reviewed boundary covers the one line it names. A copy of that line is
+  // a new occurrence, so a boundary repeated in its file reviews no copy: the
+  // copies share one helper instead, which is reviewed once.
+  const reviewedLines = new Map<string, Set<number>>();
+  for (const hit of hits) {
+    const id = idOf(hit);
+    if (hit.escaped && reviewed.has(id)) {
+      reviewedLines.set(id, (reviewedLines.get(id) ?? new Set()).add(hit.line));
+    }
+  }
+  return hits
+    .filter((hit) => !hit.escaped || reviewedLines.get(idOf(hit))?.size !== 1)
+    .map((hit) => ({
+      ...hit,
+      repeatedBoundary: hit.escaped && reviewed.has(idOf(hit)),
+    }));
 };
 
 type RustTestBaselineSource = { file: string; crate: string };
@@ -252,6 +260,20 @@ export const createRustTestBaseline = ({
           ];
     }),
   );
+};
+
+const excessMessage = ({
+  kind,
+  escaped,
+  repeatedBoundary,
+}: RustTestDeterminismHit & { repeatedBoundary: boolean }) => {
+  if (repeatedBoundary) {
+    return `Rust test ${kind}: this reviewed boundary is repeated in its file; a reviewed boundary covers one line, so move the copies into one helper.`;
+  }
+  if (escaped) {
+    return `Rust test ${kind}: Escaped occurrences still need a baseline slot.`;
+  }
+  return `Rust test ${kind}: inject clocks, use channels/barriers, or isolate process-global state; document an intentional boundary with // kit-allow: <reason>.`;
 };
 
 export const evaluateRustTestBaseline = ({
@@ -304,9 +326,7 @@ export const evaluateRustTestBaseline = ({
       diagnostics.push({
         file,
         line: hit.line,
-        message: hit.escaped
-          ? `Rust test ${hit.kind}: Escaped occurrences still need a baseline slot.`
-          : `Rust test ${hit.kind}: inject clocks, use channels/barriers, or isolate process-global state; document an intentional boundary with // kit-allow: <reason>.`,
+        message: excessMessage(hit),
       });
     }
   }
