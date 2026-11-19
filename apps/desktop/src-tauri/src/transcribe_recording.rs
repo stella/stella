@@ -1339,7 +1339,7 @@ mod tests {
   fn stopping_kills_a_worker_that_is_still_busy() {
     let workers = LocalWorkers::default();
     let child: SharedChild = Arc::new(Mutex::new(
-      std::process::Command::new("sleep")
+      std::process::Command::new("sleep") // kit-allow: a real worker process, killed and reaped; no timing is waited on
         .arg("30")
         .spawn()
         .unwrap(),
@@ -1350,7 +1350,7 @@ mod tests {
     assert!(!status.success());
 
     let late: SharedChild = Arc::new(Mutex::new(
-      std::process::Command::new("sleep")
+      std::process::Command::new("sleep") // kit-allow: a real worker process, killed and reaped; no timing is waited on
         .arg("30")
         .spawn()
         .unwrap(),
