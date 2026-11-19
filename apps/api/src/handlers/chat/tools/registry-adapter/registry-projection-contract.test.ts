@@ -60,6 +60,7 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import {
   SOFT_LAW_DOCUMENT_CLASS,
   SOFT_LAW_NATURE_NOTICE,
@@ -314,7 +315,10 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,
         executeRegistryLookup: executeRegistryLookupMock,
-        legalFileReaders: { dataBox: readDataBoxFileMock },
+        legalFileReaders: {
+          ...LEGAL_FILE_READERS,
+          dataBox: readDataBoxFileMock,
+        },
       },
     }),
   );
