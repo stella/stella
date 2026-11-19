@@ -51,23 +51,23 @@ export const readAsicPreview = async (
     maxOutputBytes: ASIC_PREVIEW_MAX_OUTPUT_BYTES,
   });
   if (result.isErr()) {
-    switch (result.error.exitCode) {
-      case ASIC_PREVIEW_WORKER_EXIT.unreadable:
-        return Result.err(unavailable("The ASiC file could not be read"));
-      case ASIC_PREVIEW_WORKER_EXIT.rejected:
-        return Result.err(
-          unavailable("An embedded file did not pass the security scan"),
-        );
-      default:
-        return Result.err(
-          new HandlerError({
-            status: 503,
-            code: "upstream_unavailable",
-            message: "The ASiC reader is unavailable",
-            cause: result.error,
-          }),
-        );
+    const { exitCode } = result.error;
+    if (exitCode === ASIC_PREVIEW_WORKER_EXIT.unreadable) {
+      return Result.err(unavailable("The ASiC file could not be read"));
     }
+    if (exitCode === ASIC_PREVIEW_WORKER_EXIT.rejected) {
+      return Result.err(
+        unavailable("An embedded file did not pass the security scan"),
+      );
+    }
+    return Result.err(
+      new HandlerError({
+        status: 503,
+        code: "upstream_unavailable",
+        message: "The ASiC reader is unavailable",
+        cause: result.error,
+      }),
+    );
   }
 
   const parsed = v.safeParse(

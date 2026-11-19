@@ -109,11 +109,11 @@ const decodeName = (entry: ZipEntry): string | undefined => {
     !hasConsistentPathExtras(entry.extraFields.local, entry.name) ||
     !hasConsistentPathExtras(entry.extraFields.central, entry.name)
   ) {
-    return;
+    return undefined;
   }
   const text = entry.name.toString("utf-8");
   if (!Buffer.from(text).equals(entry.name)) {
-    return;
+    return undefined;
   }
   return text;
 };
