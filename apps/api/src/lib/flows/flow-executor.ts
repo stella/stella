@@ -8,6 +8,7 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
 import { todayFor } from "@stll/time";
@@ -38,6 +39,8 @@ import {
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import { transition } from "@/api/lib/db/transitions";
 import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
@@ -91,6 +94,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readWorkspaceOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -1167,19 +1171,23 @@ const pauseAtReviewGate = async ({
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       )
       .limit(1);
-    const reviewTaskEntityId =
-      stepRows.at(0)?.reviewTaskEntityId ??
-      (await raiseReviewTask({
-        tx,
-        run,
-        stepDef,
-        actorUserId,
-        features,
-        recordAuditEvent,
-      }));
+    const existingTaskEntityId = stepRows.at(0)?.reviewTaskEntityId;
+    const task = existingTaskEntityId
+      ? { type: "reused" as const, entityId: existingTaskEntityId }
+      : {
+          type: "created" as const,
+          entityId: await raiseReviewTask({
+            tx,
+            run,
+            stepDef,
+            actorUserId,
+            features,
+            recordAuditEvent,
+          }),
+        };
     await tx
       .update(flowRunSteps)
-      .set({ status: "awaiting_review", reviewTaskEntityId })
+      .set({ status: "awaiting_review", reviewTaskEntityId: task.entityId })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
@@ -1205,18 +1213,31 @@ const pauseAtReviewGate = async ({
     return {
       payload: await readRunProgress(tx, runId),
       pings: gatePings,
-      taskEntityId: reviewTaskEntityId,
+      task,
     };
   });
   if (paused === null) {
     return;
   }
-  const { payload, pings, taskEntityId } = paused;
+  const { payload, pings, task } = paused;
+  switch (task.type) {
+    case "created":
+      broadcastWorkspaceResourceUpdated(
+        workspaceId,
+        resourceRef({ type: RESOURCE_TYPE.ENTITY, id: task.entityId }),
+      );
+      break;
+    case "reused":
+      break;
+    default:
+      task satisfies never;
+      panic(`Unhandled review task: ${String(task)}`);
+  }
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
   detached(
     async () =>
-      flushSearchRepairs([taskEntityId]).catch(
+      flushSearchRepairs([task.entityId]).catch(
         createErrorCapture(
           handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
         ),
@@ -1657,7 +1678,7 @@ export type CancelFlowRunOptions = {
   workspaceId: SafeId<"workspace">;
   runId: SafeId<"flowRun">;
   userId: SafeId<"user">;
-  /** Records the cancellation of an open review task as the caller's act. */
+  /** Records cancellation of the run and any open review task as the caller's act. */
   recordAuditEvent: AuditRecorder;
 };
 
@@ -1709,6 +1730,10 @@ export const cancelFlowRun = async ({
             }),
           );
         }
+        const changedBeforeCancellation = new HandlerError({
+          status: 409,
+          message: "This run changed before it could be cancelled.",
+        });
         // Progressing work remains cancellable. A request that observed an
         // open gate cannot replace a decision committed while it waited.
         if (
@@ -1716,17 +1741,28 @@ export const cancelFlowRun = async ({
           (run.status === "awaiting_review" &&
             current.run.status !== "awaiting_review")
         ) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "This run changed before it could be cancelled.",
-            }),
-          );
+          return Result.err(changedBeforeCancellation);
         }
-        await tx
-          .update(flowRuns)
-          .set({ status: "cancelled", finishedAt: now })
-          .where(eq(flowRuns.id, runId));
+        const cancellation = await transition({
+          tx,
+          spec: FLOW_RUN_TRANSITIONS_V1,
+          id: runId,
+          options: {
+            from: [current.run.status],
+            to: "cancelled",
+            set: { finishedAt: now },
+          },
+          recordTransitionAuditEvent: async (auditTx, row) => {
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.CANCEL,
+              resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+              resourceId: row.id,
+            });
+          },
+        });
+        if (cancellation.type === "stale") {
+          return Result.err(changedBeforeCancellation);
+        }
         // Any not-yet-terminal step is abandoned, and the task an open gate
         // raised is withdrawn with it.
         const abandoned = await tx

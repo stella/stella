@@ -83,4 +83,34 @@ describe("eager route graph", () => {
       "entry.ts -> bridge/index.ts -> intermediate.tsx -> feature.ts",
     ]);
   });
+
+  test("a route's page module is its split component, not eager code", () => {
+    const root = nodePath.resolve(SOURCE_ROOT, "__virtual_eager_graph__");
+    const files = new Map([
+      [
+        "route.tsx",
+        'import { Page } from "./-route.page"; import { Pending } from "./-route.pending";',
+      ],
+      ["-route.page.tsx", 'import { value } from "./feature";'],
+      ["-route.pending.tsx", "export const Pending = () => null;"],
+      ["feature.ts", "export const value = 1;"],
+    ]);
+    const options = {
+      root,
+      entry: "route.tsx",
+      forbidden: ["@/feature"],
+      isFile: (file: string) => files.has(repoRelativePath(root, file)),
+      readSource: (file: string) => {
+        const source = files.get(repoRelativePath(root, file));
+        assert.ok(source !== undefined, `Missing fixture module ${file}`);
+        return source;
+      },
+    };
+    expect(walkEagerGraph(options).violations).toEqual([]);
+    // The same import from the eager pending module is a violation.
+    files.set("-route.pending.tsx", 'import { value } from "./feature";');
+    expect(walkEagerGraph(options).violations).toEqual([
+      "route.tsx -> -route.pending.tsx -> feature.ts",
+    ]);
+  });
 });

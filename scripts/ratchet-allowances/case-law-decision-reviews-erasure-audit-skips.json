@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "Erasing a decision removes its own appeal-review evidence rows and unlinks reviews other decisions hold of it, in removal-stores.ts beside the sibling derived stores. The rows are derived from the public corpus with no tenant data and no actor, and the canonical redaction audit already records the erasure in the same transaction."
+}

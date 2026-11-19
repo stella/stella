@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/lib/legal-search/case-law-ranking-signal-drain.ts",
-  "delta": 1,
-  "reason": "The drain reconciles one source per transaction, in source order, because every canonical writer takes one source's policy lock before that source's decisions; one transaction across sources would hold several sources' decisions while waiting on another source's lock. The claim bounds the whole drain to one repair batch of 32 decisions."
-}

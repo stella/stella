@@ -12,7 +12,13 @@ import { envBase } from "@/api/env-base";
 import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
-import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import {
+  chatTurnRelinquishmentOf,
+  relinquishChatTurnRuns,
+} from "@/api/handlers/chat/chat-turn-run";
+import { startChatLimitResumer } from "@/api/handlers/chat/limit-reminder/limit-resume-sender";
+import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
+import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import { createHttpApp } from "@/api/http/app";
@@ -261,6 +267,9 @@ const startServer = async (): Promise<void> => {
 
   // Before the listener opens, so no runner upgrade finds the gateway absent.
   await startDesktopRunnerGateway();
+  const stopChatQueueSender = startChatQueueSender();
+  const stopChatLimitResumer = startChatLimitResumer();
+  const stopChatTurnAdopter = startChatTurnAdopter();
 
   const server = Bun.serve({
     port: getApiPort(),
@@ -314,7 +323,17 @@ const startServer = async (): Promise<void> => {
           "error.type": errorTag(error),
         });
       },
-      relinquishChatTurnRuns,
+      // Off by default: every task must adopt (`CHAT_TURN_HANDED_OVER_ROLLOUT`)
+      // before any releases a turn to one.
+      relinquishChatTurnRuns: async () =>
+        await relinquishChatTurnRuns(
+          chatTurnRelinquishmentOf(
+            isDeploymentFeatureEnabled("FEATURE_CHAT_TURN_HANDOVER"),
+          ),
+        ),
+      stopChatQueueSender,
+      stopChatLimitResumer,
+      stopChatTurnAdopter,
       stopHttp: async () => {
         // Runner sockets are asked to reconnect elsewhere before the
         // listener stops waiting on open connections.

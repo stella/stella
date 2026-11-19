@@ -39,6 +39,7 @@ import {
   metadataUrlSchemaForAdapter,
 } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
@@ -46,6 +47,7 @@ import {
   EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+  SOURCE_EXCLUSION_REASONS,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
@@ -59,10 +61,14 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { sourceExclusionCensus } from "@/api/lib/legal-search/source-exclusion-census";
+import {
+  publisherFieldRetentionAudit,
+  sourceExclusionCensus,
+} from "@/api/lib/legal-search/source-exclusion-census";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   CASE_LAW_CONFORMANCE_FIXTURES,
   plCourtsFixture,
@@ -79,8 +85,6 @@ import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-import legacySourceExclusions from "./legacy-source-exclusions.json";
-
 const testFetchState = createTestFetch();
 
 afterEach(() => {
@@ -95,24 +99,24 @@ const adapterFor = (key: SourceRegistrationKey) =>
   getSourceRegistration(key)?.source ??
   panic(`${key} is declared but not registered`);
 
-test("every exclusion is visible and legacy exclusions match the migration census exactly", () => {
-  const census = Object.fromEntries(
-    DECLARED_ADAPTER_KEYS.map((key) => [
+test("every registered source has a reviewable exclusion census", () => {
+  const census = Object.fromEntries([
+    ...DECLARED_ADAPTER_KEYS.map((key) => [
       key,
       sourceExclusionCensus(adapterFor(key).sourceFields),
     ]),
-  );
-  const legacy = Object.fromEntries(
-    Object.entries(census).flatMap(([key, rows]) => {
-      const fields = Object.fromEntries(
-        rows
-          .filter(({ policy }) => policy === "legacy")
-          .map(({ field, reason }) => [field, reason]),
-      );
-      return Object.keys(fields).length === 0 ? [] : [[key, fields]];
-    }),
-  );
-  expect(legacy).toEqual(legacySourceExclusions);
+    ...Object.entries(SOFT_LAW_ADMISSIONS).flatMap(
+      ([authority, registration]) =>
+        registration.state === "registered"
+          ? [
+              [
+                authority,
+                sourceExclusionCensus(registration.adapter.sourceFields),
+              ],
+            ]
+          : [],
+    ),
+  ]);
   expect(census).toMatchSnapshot();
 });
 
@@ -146,6 +150,20 @@ const isPresent = (value: unknown): boolean => {
   return Array.isArray(value) ? value.length > 0 : true;
 };
 
+const nestedMetadataValue = (
+  value: unknown,
+  path: readonly string[],
+): unknown => {
+  let current = value;
+  for (const key of path) {
+    if (!isRecord(current) || !Object.hasOwn(current, key)) {
+      return undefined;
+    }
+    current = current[key];
+  }
+  return current;
+};
+
 /** What the row holds where a disposition says the field is stored. */
 const storedValueOf = (
   decision: IngestionResult,
@@ -158,7 +176,9 @@ const storedValueOf = (
         target,
       );
     case "metadata":
-      return decision.metadata[target.key];
+      return target.path === undefined
+        ? decision.metadata[target.key]
+        : nestedMetadataValue(decision.metadata[target.key], target.path);
     case "textField":
       return storeTextField(decision.textFields[target.key]);
     case "result":
@@ -182,7 +202,7 @@ const describeTarget = (target: SourceFieldTarget): string => {
     case "raw":
       return `raw.${target.part}.${target.path.join(".")}`;
     case "metadata":
-      return `metadata.${target.key}`;
+      return `metadata.${target.key}${target.path === undefined ? "" : `.${target.path.join(".")}`}`;
     case "textField":
       return `textFields.${target.key}`;
     case "result":
@@ -350,33 +370,58 @@ describe("every adapter accounts for the fields its source states", () => {
           `${key}: the stored envelope states no fields at all, so this suite would certify nothing. Check listSourceFields against the parts the adapter writes.`,
         ).toBeGreaterThan(0);
 
-        const undeclared = stated.filter(
-          (field) => sourceFields.fields[field] === undefined,
+        const audit = publisherFieldRetentionAudit(sourceFields, stated);
+        expect(audit.status, `${key}: publisher fields must be auditable`).toBe(
+          "audited",
         );
-        expect(
-          undeclared,
-          `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
-        ).toEqual([]);
+        switch (audit.status) {
+          case "audited":
+            expect(
+              audit.unmappedFields,
+              `${key}: its source states fields nothing decided about: ${audit.unmappedFields.join(", ")}. Store them, or exclude them with the reason.`,
+            ).toEqual([]);
+            break;
+          case "unavailable":
+            break;
+          default:
+            audit satisfies never;
+            panic("Unhandled publisher field retention observation");
+        }
 
-        // `excludedSourceField` rejects a blank reason at the call site, so this
-        // is the backstop for a reason that reaches an inventory some other way.
+        // Validate policies that reach the inventory through a dynamic boundary.
         const unreasoned = stated.filter((field) => {
           const disposition: SourceFieldDisposition | undefined =
             sourceFields.fields[field];
           return (
             disposition?.disposition === "excluded" &&
-            disposition.reason.trim().length === 0
+            (!SOURCE_EXCLUSION_REASONS.includes(disposition.reason) ||
+              disposition.justification.trim().length === 0 ||
+              disposition.pointer.trim().length === 0)
           );
         });
         expect(
           unreasoned,
-          `${key}: these fields are excluded with a blank reason: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
+          `${key}: these fields have an invalid exclusion policy or missing evidence: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
         ).toEqual([]);
 
         const unstored = stated.flatMap((field) => {
           const disposition: SourceFieldDisposition | undefined =
             sourceFields.fields[field];
           if (disposition?.disposition !== "stored") {
+            return [];
+          }
+          if (
+            disposition.target.type === "metadata" &&
+            disposition.target.path !== undefined
+          ) {
+            expect(
+              Object.hasOwn(evidence.rawFieldValues ?? {}, field),
+              `${key}: missing source value oracle for nested metadata ${field}`,
+            ).toBe(true);
+            expect(
+              storedValueOf(decision, disposition.target),
+              `${key}: publisher value ${field} changed`,
+            ).toEqual(evidence.rawFieldValues?.[field]);
             return [];
           }
           if (disposition.target.type === "raw") {

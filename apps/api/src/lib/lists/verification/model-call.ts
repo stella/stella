@@ -24,10 +24,10 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
-import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import type { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 
 /** The task both passes dispatch on, and the one a run records. */
 export const VERIFICATION_MODEL_TASK = "pdf";
@@ -41,7 +41,7 @@ export type VerificationModelDeps = {
   accessProof: ListVerificationAccessProof;
   refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
   admission: ModelDispatchAdmission;
-  checkRunBudget: () => Promise<Result<void, ListVerificationRunCapError>>;
+  checkRunBudget: () => Promise<Result<void, ModelRunCapError>>;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
@@ -62,6 +62,32 @@ const proofMatchesRequest = (
   proof.featureId === LIST_VERIFICATION_FEATURE_ID &&
   proof.organizationId === deps.organizationId &&
   proof.userId === deps.usageMetering.userId;
+
+/**
+ * Whether a verification pass may send customer text to a model now: the
+ * requester still holds access and the run's budget has room. Every model
+ * call of a pass, generative or decision, asks first.
+ */
+export const admitVerificationDispatch = async (
+  deps: VerificationModelDeps,
+): Promise<
+  Result<void, ListVerificationAccessRevokedError | ModelRunCapError>
+> => {
+  const proof = await deps.refreshAccessProof();
+  if (
+    !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
+    proof === null ||
+    !proofMatchesRequest(proof, deps) ||
+    !proofMatchesRequest(deps.accessProof, deps)
+  ) {
+    return Result.err(
+      new ListVerificationAccessRevokedError({
+        message: "List verification access is unavailable",
+      }),
+    );
+  }
+  return await deps.checkRunBudget();
+};
 
 /** Blocks as `[id] text` lines: the ids are what the model cites. */
 export const blocksText = (blocks: readonly VerificationBlock[]): string =>
@@ -84,7 +110,7 @@ export type VerificationCall<TSchema extends v.GenericSchema> = {
   ) => Promise<
     Result<
       v.InferOutput<TSchema>,
-      ListVerificationAccessRevokedError | ListVerificationRunCapError
+      ListVerificationAccessRevokedError | ModelRunCapError
     >
   >;
   captureError: (cause: unknown) => void;
@@ -132,22 +158,9 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
       content: [...sharedParts, { type: "text", content: task }],
     }),
     generate: async (messages) => {
-      const proof = await deps.refreshAccessProof();
-      if (
-        !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
-        proof === null ||
-        !proofMatchesRequest(proof, deps) ||
-        !proofMatchesRequest(deps.accessProof, deps)
-      ) {
-        return Result.err(
-          new ListVerificationAccessRevokedError({
-            message: "List verification access is unavailable",
-          }),
-        );
-      }
-      const budget = await deps.checkRunBudget();
-      if (Result.isError(budget)) {
-        return budget;
+      const admitted = await admitVerificationDispatch(deps);
+      if (Result.isError(admitted)) {
+        return admitted;
       }
       return Result.ok(
         await generate({

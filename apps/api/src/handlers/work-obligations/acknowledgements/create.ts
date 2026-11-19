@@ -12,6 +12,8 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
@@ -61,51 +63,51 @@ const acknowledgeWorkObligation = createSafeHandler(
         }
 
         const now = new Date();
-        const updated = await tx
-          .update(workObligations)
-          .set({
-            status: WORK_OBLIGATION_STATUS.ACTIVE,
-            acknowledgedAt: now,
-            acknowledgedByUserId: user.id,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(workObligations.entityId, params.entityId),
-              eq(workObligations.workspaceId, workspaceId),
-              eq(
-                workObligations.status,
-                WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-              ),
-              eq(workObligations.ownerUserId, user.id),
-            ),
-          )
-          .returning({ entityId: workObligations.entityId });
+        const updated = await transitionBatch({
+          tx,
+          spec: TRANSITIONS.workObligations,
+          ids: [params.entityId],
+          options: {
+            from: [WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT],
+            to: WORK_OBLIGATION_STATUS.ACTIVE,
+            set: {
+              acknowledgedAt: now,
+              acknowledgedByUserId: user.id,
+              updatedAt: now,
+            },
+            guard:
+              and(
+                eq(workObligations.workspaceId, workspaceId),
+                eq(workObligations.ownerUserId, user.id),
+              ) ?? panic("Acknowledgement scope must exist"),
+          },
+          recordTransitionAuditEvent: async (auditTx) => {
+            await auditTx.insert(workObligationEvents).values({
+              id: createSafeId<"workObligationEvent">(),
+              workspaceId,
+              obligationEntityId: params.entityId,
+              actorUserId: user.id,
+              type: WORK_OBLIGATION_EVENT_TYPE.ACKNOWLEDGED,
+              details: { type: "acknowledged" },
+              occurredAt: now,
+            });
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+              resourceId: params.entityId,
+              changes: {
+                status: {
+                  old: existing.status,
+                  new: WORK_OBLIGATION_STATUS.ACTIVE,
+                },
+                acknowledgedAt: { old: null, new: now.toISOString() },
+              },
+            });
+          },
+        });
         if (!updated.at(0)) {
           return { status: "conflict" as const };
         }
-
-        await tx.insert(workObligationEvents).values({
-          id: createSafeId<"workObligationEvent">(),
-          workspaceId,
-          obligationEntityId: params.entityId,
-          actorUserId: user.id,
-          type: WORK_OBLIGATION_EVENT_TYPE.ACKNOWLEDGED,
-          details: { type: "acknowledged" },
-          occurredAt: now,
-        });
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-          resourceId: params.entityId,
-          changes: {
-            status: {
-              old: existing.status,
-              new: WORK_OBLIGATION_STATUS.ACTIVE,
-            },
-            acknowledgedAt: { old: null, new: now.toISOString() },
-          },
-        });
 
         return { status: "acknowledged" as const };
       }),

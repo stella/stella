@@ -32,6 +32,7 @@ import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -167,14 +168,17 @@ export const ExistingFileOrganizerDialog = ({
     suggestionStatus !== "generating" &&
     (rows.length > 0 || selectedDeleteFolders.length > 0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const folderByEntityId = useMemo(
     () => new Map(existingFolders.map((folder) => [folder.entityId, folder])),
     [existingFolders],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const fileByEntityId = useMemo(
     () => new Map(files.map((file) => [file.entityId, file])),
     [files],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const initialRows = useMemo(
     () =>
       buildFileNameSuggestions(
@@ -201,44 +205,32 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [files, fileByEntityId, folderByEntityId],
   );
-  const requestKey = useMemo(
-    () =>
-      JSON.stringify({
-        existingFolders: existingFolders.map((folder) => ({
-          id: folder.entityId,
-          name: folder.name,
-          path: folder.path,
-          parentId: folder.parentId,
-        })),
-        files: files.map((file) => ({
-          id: file.entityId,
-          name: file.originalName,
-          parentId: file.parentId,
-        })),
-      }),
-    [existingFolders, files],
-  );
+  const requestKey = JSON.stringify({
+    existingFolders: existingFolders.map((folder) => ({
+      id: folder.entityId,
+      name: folder.name,
+      path: folder.path,
+      parentId: folder.parentId,
+    })),
+    files: files.map((file) => ({
+      id: file.entityId,
+      name: file.originalName,
+      parentId: file.parentId,
+    })),
+  });
   const getSuggestionRequestState = useLatestCallback(() => ({
     open,
     requestKey,
   }));
-  const suggestionRequestFolders = useMemo(
-    () =>
-      existingFolders.map((folder) => ({
-        entityId: toSafeId<"entity">(folder.entityId),
-        name: folder.name,
-        path: folder.path,
-      })),
-    [existingFolders],
-  );
-  const suggestionRequestFiles = useMemo(
-    () =>
-      files.map((file) => ({
-        entityId: toSafeId<"entity">(file.entityId),
-        originalName: file.originalName,
-      })),
-    [files],
-  );
+  const suggestionRequestFolders = existingFolders.map((folder) => ({
+    entityId: toSafeId<"entity">(folder.entityId),
+    name: folder.name,
+    path: folder.path,
+  }));
+  const suggestionRequestFiles = files.map((file) => ({
+    entityId: toSafeId<"entity">(file.entityId),
+    originalName: file.originalName,
+  }));
 
   // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
   // editable rows on each open. Cached AI results for the same files are reshown
@@ -369,7 +361,7 @@ export const ExistingFileOrganizerDialog = ({
     );
   };
 
-  const summary = useMemo<RowChangeSummary>(() => {
+  const summary: RowChangeSummary = (() => {
     // Move and rename are counted independently: a file that both
     // moves and renames increments both "moved" and "renamed". Only
     // files that neither move nor rename count as "unchanged". The
@@ -404,7 +396,7 @@ export const ExistingFileOrganizerDialog = ({
       renamedCount: renamed,
       unchangedCount: unchanged,
     };
-  }, [fileByEntityId, folderByEntityId, rows]);
+  })();
 
   const handleApply = () => {
     const rowsSnapshot = rows;
@@ -554,19 +546,21 @@ export const ExistingFileOrganizerDialog = ({
           trimmedInstructions,
         ],
         queryFn: async ({ signal }) => {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["organize-suggestions"].post(
-              {
-                existingFolders: suggestionRequestFolders,
-                files: suggestionRequestFiles,
-                locale: requestLocale,
-                ...(trimmedInstructions.length > 0
-                  ? { userInstructions: trimmedInstructions }
-                  : {}),
-              },
-              { fetch: { signal } },
-            );
+          const entitiesApi = api.entities({
+            workspaceId: toSafeId<"workspace">(workspaceId),
+          });
+
+          const response = await entitiesApi["organize-suggestions"].post(
+            {
+              existingFolders: suggestionRequestFolders,
+              files: suggestionRequestFiles,
+              locale: requestLocale,
+              ...(trimmedInstructions.length > 0
+                ? { userInstructions: trimmedInstructions }
+                : {}),
+            },
+            { fetch: { signal } },
+          );
 
           return unwrapApiResponse(response);
         },
@@ -867,9 +861,9 @@ const UserInstructionsSection = ({
               {t("workspaces.importOrganizer.instructionsTitle")}
             </span>
             {!expanded && (
-              <span className="text-muted-foreground truncate text-xs">
+              <TruncatedText className="text-muted-foreground text-xs">
                 {summary}
-              </span>
+              </TruncatedText>
             )}
           </span>
         </Button>
@@ -1005,6 +999,7 @@ const OrganizerTreePreview = ({
 }: OrganizerTreePreviewProps) => {
   const t = useTranslations();
   const locale = useI18nStore((s) => s.loadedLang);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const root = useMemo(() => buildOrganizerTree(rows, locale), [rows, locale]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
@@ -1245,9 +1240,9 @@ const OrganizerFolderNode = ({
             onClick={() => setIsEditing(true)}
             variant="plain"
           >
-            <span className="hover:bg-muted/40 block truncate rounded-sm px-1 font-medium">
+            <TruncatedText className="hover:bg-muted/40 rounded-sm px-1 font-medium">
               {folder.name}
-            </span>
+            </TruncatedText>
           </Button>
         )}
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
@@ -1351,9 +1346,12 @@ const OrganizerFileNode = ({
           value={row.suggestedName}
         />
         {secondaryParts.length > 0 && (
-          <p className="text-muted-foreground truncate ps-3 text-xs">
+          <TruncatedText
+            className="text-muted-foreground ps-3 text-xs"
+            render={<p />}
+          >
             {secondaryParts.join(" · ")}
-          </p>
+          </TruncatedText>
         )}
       </div>
     </li>
@@ -1472,7 +1470,9 @@ const DeleteFoldersSection = ({
                 }
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{folder.folderPath}</p>
+                <TruncatedText className="font-medium" render={<p />}>
+                  {folder.folderPath}
+                </TruncatedText>
                 <p className="text-muted-foreground text-xs">{folder.reason}</p>
               </div>
             </li>

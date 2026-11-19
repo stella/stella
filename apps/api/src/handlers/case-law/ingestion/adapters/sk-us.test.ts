@@ -9,6 +9,7 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -703,10 +704,7 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({
-      items: [],
-      totalPages: 0,
-    });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -2377,7 +2375,7 @@ describe("the responses this court served, as recorded", () => {
     const file = Bun.gunzipSync(
       new Uint8Array(
         await Bun.file(
-          new URL("sk-us-decision.pdf.gz", FIXTURES).pathname,
+          fileURLToPath(new URL("sk-us-decision.pdf.gz", FIXTURES)),
         ).arrayBuffer(),
       ),
     );

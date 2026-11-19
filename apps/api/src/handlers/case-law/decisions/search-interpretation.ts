@@ -4,8 +4,13 @@ import {
   type DecisionQueryIntent,
   isWholeEntryIdentifier,
 } from "@stll/api-contract/decision-query-intent";
-import type { CaseLawSearchWarning } from "@stll/api-contract/search";
+import type {
+  CaseLawHitOrder,
+  CaseLawSearchWarning,
+  SearchPhaseState,
+} from "@stll/api-contract/search";
 
+import type { TermDecisionCounts } from "@/api/handlers/case-law/decisions/search-relaxed";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
 import { caseLawQueryLanguage } from "@/api/lib/legal-search/corpus-index-read-contract";
@@ -59,6 +64,8 @@ const SEARCH_OPTION_EFFECT = {
   courts: "narrows",
   category: "narrows",
   hasLegalSentence: "narrows",
+  docketRegisters: "narrows",
+  senate: "narrows",
   provision: "narrows",
   cursor: "shapes",
   dateFrom: "narrows",
@@ -92,6 +99,8 @@ const NARROWING_FILTERS = {
   courts: ({ courts }) => courts !== undefined,
   category: ({ category }) => category !== undefined,
   hasLegalSentence: ({ hasLegalSentence }) => hasLegalSentence !== undefined,
+  docketRegisters: ({ docketRegisters }) => docketRegisters !== undefined,
+  senate: ({ senate }) => senate !== undefined,
   provision: ({ provision }) => provision !== undefined,
   dateFrom: ({ dateFrom }) => dateFrom !== undefined,
   dateTo: ({ dateTo }) => dateTo !== undefined,
@@ -203,11 +212,19 @@ type SearchAnswerOptions = {
    * hits, so "nothing matched" would be false there.
    */
   countsResultSet: boolean;
+  /** How the partial-match phase ended; `not_due` when it had no place here. */
+  partialMatches?: SearchPhaseState;
+  /** Per-word decision counts, when few decisions hold every word. */
+  termDecisionCounts?: TermDecisionCounts | null;
+  /** The order the page's hits are in; passage pages tier by construction. */
+  hitOrder?: CaseLawHitOrder;
 };
 
 export type SearchAnswer = {
+  hitOrder: CaseLawHitOrder;
   queryUsed: string;
   relaxedHitCount: number;
+  termDecisionCounts: TermDecisionCounts | null;
   warnings: CaseLawSearchWarning[];
 };
 
@@ -221,13 +238,21 @@ export const searchAnswer = ({
   hitCount,
   partialHitCount = 0,
   countsResultSet,
+  partialMatches = "not_due",
+  termDecisionCounts = null,
+  hitOrder = "all_words_first",
 }: SearchAnswerOptions): SearchAnswer => ({
+  hitOrder,
   queryUsed: interpretation.queryUsed,
   relaxedHitCount: partialHitCount,
+  termDecisionCounts,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     partialHitCount,
     filters: narrowingFilters(body),
-    emptyResultSet: countsResultSet && hitCount === 0,
+    // With the partial matches unread, an empty page has not shown that
+    // nothing matched.
+    emptyResultSet:
+      countsResultSet && hitCount === 0 && partialMatches !== "skipped",
   }),
 });

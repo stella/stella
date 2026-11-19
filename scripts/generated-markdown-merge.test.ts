@@ -13,11 +13,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { buildCapabilityCatalog } from "../apps/api/scripts/export-capability-catalog";
 import {
   type CoverageDocEntry,
   serializeCoverageDoc,
 } from "../apps/api/scripts/lib/capability-catalog";
-import { readCapabilityCatalog } from "../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../packages/cli/src/capability-catalog-load";
 import {
   capabilityDomainsOf,
@@ -27,12 +27,16 @@ import { generateRouteMap } from "../packages/cli/src/generate-route-map";
 import { generateCliSkill } from "../packages/cli/src/generate-skill";
 import type { RegistryToolListing } from "../packages/cli/src/route-types";
 
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
 const root = path.resolve(import.meta.dir, "..");
 const generated = Bun.spawnSync(
   [process.execPath, "--cwd=packages/cli", "run", "codegen:runtime"],
   { cwd: root, stdout: "pipe", stderr: "pipe" },
 );
-expect(generated.exitCode, generated.stderr.toString()).toBe(0);
+if (generated.exitCode !== 0) {
+  throw new Error(`codegen:runtime failed: ${generated.stderr.toString()}`);
+}
 const { generatedToolAnnotations: TOOL_ANNOTATIONS } =
   await import("../packages/cli/src/generated/tool-annotations");
 const outputs = [
@@ -42,7 +46,7 @@ const outputs = [
 const registry: RegistryToolListing[] = await Bun.file(
   path.join(root, "packages/cli/src/generated/registry-snapshot.json"),
 ).json();
-const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {
   panic("Capability shards do not match the expected entry shape");
 }

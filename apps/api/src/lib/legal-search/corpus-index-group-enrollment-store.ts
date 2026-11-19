@@ -50,6 +50,7 @@ import {
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { revokeCorpusIndexRouteProofTx } from "@/api/lib/legal-search/corpus-index-route-proof-store";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 
@@ -233,6 +234,18 @@ export const attestCorpusIndexGroupEnrollmentTx = async (
     )
     .returning({ indexGroup: corpusIndexGroupEnrollments.indexGroup });
   if (attested.length === 1) {
+    // A new attestation vouches for the index as it is now, which a pass
+    // started before it never walked: only a pass started after it proves
+    // the route, so the revocation lives here, in the attesting transaction.
+    await revokeCorpusIndexRouteProofTx(
+      tx,
+      {
+        family: group.manifest.family,
+        generation: group.manifest.generation,
+        indexId: group.indexId,
+      },
+      "group_attested",
+    );
     return;
   }
   const readiness = await readRegisteredGroupReadinessTx(tx, group);
@@ -336,6 +349,17 @@ export const withdrawCorpusIndexGroupEnrollmentTx = async (
     actor,
     reason: statedReason.slice(0, WITHDRAWAL_REASON_LIMIT),
   });
+  // The index may be recreated or changed while the group is withdrawn, so
+  // the route's proof ends with the attestation, in the same transaction.
+  await revokeCorpusIndexRouteProofTx(
+    tx,
+    {
+      family: group.manifest.family,
+      generation: group.manifest.generation,
+      indexId: group.indexId,
+    },
+    "group_withdrawn",
+  );
   return true;
 };
 
@@ -548,7 +572,7 @@ const readAttachedGenerationTx = async (
     (row.status !== "building" && row.status !== "serving")
   ) {
     return panic(
-      `A flipped jurisdiction names a generation that is not active: ${family}/${generation}`,
+      `A read names a generation that is not active (building or serving): ${family}/${generation}`,
     );
   }
   requireRegisteredCorpusIndexManifest(row);
@@ -600,6 +624,26 @@ const mergeAttachedTarget = ({
     }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH),
   };
 };
+
+/**
+ * The target a read of one named generation reaches, serving or still
+ * building, resolved the way the serving read resolves a flipped
+ * jurisdiction's generation. For callers that measure a candidate generation
+ * beside the serving one (evaluations); no reader of the public routes uses
+ * it, because only the jurisdiction-serving pointer moves readers.
+ */
+export const readGenerationCorpusIndexTargetTx = async (
+  tx: ReadTransaction,
+  {
+    family,
+    generation,
+    jurisdiction,
+  }: { family: CorpusFamily; generation: string; jurisdiction: string },
+): Promise<Result<ServingCorpusIndexTarget, CorpusIndexGroupNotReadyError>> =>
+  await resolveGenerationTargetTx(tx, {
+    serving: await readAttachedGenerationTx(tx, { family, generation }),
+    jurisdiction,
+  });
 
 /**
  * The generations a family's readers are served from: the family's serving

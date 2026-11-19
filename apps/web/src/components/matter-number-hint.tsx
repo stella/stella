@@ -9,6 +9,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -164,8 +165,8 @@ const MatterNumberHintBody = ({
   }
 
   return (
-    <p className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
       {t("workspaces.referenceConventionHint", { example })}
-    </p>
+    </TruncatedText>
   );
 };

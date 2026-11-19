@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -122,7 +123,7 @@ const ValueTypeLabel = ({
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };

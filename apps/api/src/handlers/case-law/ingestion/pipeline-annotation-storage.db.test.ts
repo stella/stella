@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
+import { withStableBlockAnchors } from "@stll/legal-ast/stable-block-anchors";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -139,6 +140,10 @@ test.each(["SVK", "CZE"])(
             input: plainTextIngestionResult({
               ...input(documentId),
               country,
+              court:
+                country === "CZE"
+                  ? "Nejvyšší soud"
+                  : "Najvyšší súd Slovenskej republiky",
               courtId: undefined,
               citationScopes: [
                 {
@@ -187,8 +192,12 @@ const storedAst = async (pack: EncodedPack, decisionId: string) => {
     pack.bytes.slice(offset, offset + length),
     10 * 1024 * 1024,
   );
-  return JSON.parse(decoded);
+  return JSON.parse(decoded) as unknown;
 };
+
+/** Narrows a proxied member to a callable that can be bound to its owner. */
+const isCallable = (value: unknown): value is (...args: unknown[]) => unknown =>
+  typeof value === "function";
 
 const runBeforeQuery = <T extends object>(
   target: T,
@@ -206,7 +215,11 @@ const runBeforeQuery = <T extends object>(
           onRejected?: (reason: unknown) => unknown,
         ) => {
           await before();
-          return await Reflect.apply(value, object, [onFulfilled, onRejected]);
+          const settled: unknown = await Reflect.apply(value, object, [
+            onFulfilled,
+            onRejected,
+          ]);
+          return settled;
         };
       }
       return (...args: unknown[]) => {
@@ -225,7 +238,7 @@ const wrapLockedSelect = <T extends object>(
   new Proxy(target, {
     get(object, key) {
       const method: unknown = Reflect.get(object, key);
-      if (typeof method !== "function") {
+      if (!isCallable(method)) {
         return method;
       }
       if (key === "then") {
@@ -269,7 +282,7 @@ const withDocumentWinner = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));
@@ -310,7 +323,7 @@ const withScopeReadWinner = (
               });
             };
           }
-          return typeof value === "function" ? value.bind(object) : value;
+          return isCallable(value) ? value.bind(object) : value;
         },
       });
       return await callback(asTestRaw(racing));
@@ -877,6 +890,8 @@ test.each([inlineCorpus, packedCorpus])(
     }
     ast.blocks.push({ ...first, id: "p2", anchorId: "p2", role: "apparatus" });
     expect(isDocumentAst(ast)).toBe(false);
+    // Stored as written, apart from the anchors ingestion makes stable.
+    const expected = withStableBlockAnchors(ast);
     const report = spyOn(logger, "warn");
     try {
       const outcome = (
@@ -914,13 +929,13 @@ test.each([inlineCorpus, packedCorpus])(
       }
       if (corpus.mode === "off") {
         expect(row.fulltext).toBe("Decision text.");
-        expect(row.documentAst).toEqual(ast);
+        expect(row.documentAst).toEqual(expected);
       } else {
         const pack = packs.at(-1);
         if (pack === undefined) {
           expect.unreachable("Canonical mode stores a pack");
         }
-        expect(await storedAst(pack, row.id)).toEqual(ast);
+        expect(await storedAst(pack, row.id)).toEqual(expected);
         const textEntry = pack.entries.find(
           ({ member }) =>
             member.documentId === row.id && member.kind === "text",
@@ -1000,7 +1015,9 @@ test.each([inlineCorpus, packedCorpus])(
                 expect.unreachable("Canonical mode stores a pack"),
               row.id,
             );
-      expect(stored).toEqual(ast);
+      // Stored as written, apart from the anchors ingestion makes stable;
+      // the scopes name block ids, which those anchors leave alone.
+      expect(stored).toEqual(withStableBlockAnchors(ast));
       if (!isRecord(stored)) {
         expect.unreachable("The stored AST is an object");
       }
@@ -1019,7 +1036,7 @@ test.each([inlineCorpus, packedCorpus])(
   },
 );
 
-test("the pipeline stores a reader-valid AST unchanged", async () => {
+test("the pipeline stores a reader-valid AST unchanged apart from stable anchors", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const decision = input(documentId, "Decision text.");
   (
@@ -1038,7 +1055,11 @@ test("the pipeline stores a reader-valid AST unchanged", async () => {
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.sourceDocumentId, documentId))
   ).at(0);
-  expect(row?.documentAst).toEqual(decision.documentAst);
+  const written = decision.documentAst;
+  if (!isDocumentAst(written)) {
+    expect.unreachable("The fixture is a reader-valid AST");
+  }
+  expect(row?.documentAst).toEqual(withStableBlockAnchors(written));
 });
 
 test("a pending mirror replay retains readable late head matter", async () => {

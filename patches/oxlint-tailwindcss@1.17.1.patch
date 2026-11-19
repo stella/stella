@@ -47,11 +47,15 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3745,6 +3760,11 @@ function resolveCacheDir() {
+@@ -3745,6 +3760,15 @@ function resolveCacheDir() {
  	return (0, node_path.join)((0, node_os.tmpdir)(), cacheDirName());
  }
  const CACHE_DIR = resolveCacheDir();
 +const CACHE_READ_ONLY = process.env.OXLINT_TAILWINDCSS_CACHE_READ_ONLY === "1";
++// Cache generation lints read-only and spawns no worker: a class without a
++// persisted declaration answer is appended to this file, and the generator
++// answers it in its own thread before its next pass.
++const CACHE_COLLECT_FILE = CACHE_READ_ONLY ? process.env.OXLINT_TAILWINDCSS_CACHE_COLLECT ?? "" : "";
 +const CACHE_GENERATE_COMMAND = "bun scripts/generate-tailwind-classes.ts --write";
 +function readOnlyCacheError(detail) {
 +	return new DesignSystemLoadError(`Tailwind cache is incomplete: ${detail}.`, `Run \`${CACHE_GENERATE_COMMAND}\` and commit the generated cache.`);
@@ -59,7 +63,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3884,6 +3904,90 @@ function packageVersionFrom(fromDir, name) {
+@@ -3884,6 +3908,90 @@ function packageVersionFrom(fromDir, name) {
  		dir = parent;
  	}
  }
@@ -150,7 +154,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /**
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
-@@ -3937,7 +4041,17 @@ function hashableContent(entryPath, entryContent) {
+@@ -3937,7 +4045,17 @@ function hashableContent(entryPath, entryContent) {
  		const baseDir = (0, node_path.dirname)(cssPath);
  		for (const spec of collect(IMPORT_RE, content)) {
  			if (!isPathSpecifier(spec)) {
@@ -169,7 +173,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  				continue;
  			}
  			const importPath = (0, node_path.resolve)(baseDir, spec);
-@@ -4195,7 +4309,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4195,7 +4313,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -178,7 +182,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4203,6 +4317,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4203,6 +4321,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -186,7 +190,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4705,6 +4820,7 @@ var DesignSystemWorker = class {
+@@ -4705,6 +4824,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -194,7 +198,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5640,6 +5756,73 @@ function answersFor(cache) {
+@@ -5640,6 +5760,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -268,14 +272,31 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5660,12 +5843,15 @@ function answersFor(cache) {
+@@ -5658,14 +5845,32 @@ function answersFor(cache) {
+ * `designSystemUnavailable` (what `enforce-canonical` does with the canonicalize
+ * worker), a DS-OPTIONAL rule catches it and degrades.
  */
++const collectedDeclarationQuestions = /* @__PURE__ */ new Map();
++function collectDeclarationQuestions(cssPath, classes) {
++	let seen = collectedDeclarationQuestions.get(cssPath);
++	if (!seen) {
++		seen = /* @__PURE__ */ new Set();
++		collectedDeclarationQuestions.set(cssPath, seen);
++	}
++	const fresh = classes.filter((cls) => !seen.has(cls));
++	if (fresh.length === 0) return;
++	for (const cls of fresh) seen.add(cls);
++	(0, node_fs.appendFileSync)(CACHE_COLLECT_FILE, `${JSON.stringify({ cssPath, classes: fresh })}\n`);
++}
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
 +	loadDeclarationAnswers(cssPath, cache, classes);
  	const pending = [...new Set(classes.filter((cls) => !known.has(cls)))];
  	if (pending.length === 0) return;
-+	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
++	if (CACHE_READ_ONLY) {
++		if (CACHE_COLLECT_FILE !== "") return collectDeclarationQuestions(cssPath, pending);
++		throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
++	}
  	const response = declWorker.callSync(cssPath, { classes: pending });
  	const invalid = new Set(response.invalid);
  	for (const cls of pending) known.set(cls, !invalid.has(cls));
@@ -287,7 +308,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
 diff --git a/dist/index.d.mts b/dist/index.d.mts
 --- a/dist/index.d.mts
 +++ b/dist/index.d.mts
-@@ -3990,4 +3990,9 @@ interface CreateOnceRule {
+@@ -3990,4 +3990,13 @@ interface CreateOnceRule {
    createOnce: (context: Context) => VisitorWithHooks;
  }
  declare const plugin: Plugin;
@@ -298,20 +319,26 @@ diff --git a/dist/index.d.mts b/dist/index.d.mts
 +  json: string;
 +  lock: string;
 +};
-+export { cacheArtifactPaths, plugin as default };
++/** Compiles a stylesheet's design-system snapshot in this thread, without a worker, into `cacheDir`; resolves to the snapshot's path. */
++declare function writeDesignSystemSnapshot(cssPath: string, cacheDir: string): Promise<string>;
++/** Answers declaration questions for a stylesheet in this thread, without a worker, and persists them to `cacheDir`. */
++declare function writeDeclarationAnswers(cssPath: string, classes: readonly string[], cacheDir: string): Promise<void>;
++export { cacheArtifactPaths, plugin as default, writeDeclarationAnswers, writeDesignSystemSnapshot };
 \ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -1,7 +1,7 @@
+@@ -1,8 +1,8 @@
  import { createRequire, isBuiltin } from "node:module";
  import { Worker, threadId } from "node:worker_threads";
  import { createHash } from "node:crypto";
 -import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
-+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
- import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+-import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
++import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
++import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
  import { tmpdir, userInfo } from "node:os";
  // \0rolldown/runtime.js
+ var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
 @@ -2306,10 +2306,10 @@ var DesignSystemCache = class DesignSystemCache {
  		const memo = this.declMemo.get(key);
  		if (memo) return memo;
@@ -358,11 +385,15 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3747,6 +3762,11 @@ function resolveCacheDir() {
+@@ -3747,6 +3762,15 @@ function resolveCacheDir() {
  	return join(tmpdir(), cacheDirName());
  }
  const CACHE_DIR = resolveCacheDir();
 +const CACHE_READ_ONLY = process.env.OXLINT_TAILWINDCSS_CACHE_READ_ONLY === "1";
++// Cache generation lints read-only and spawns no worker: a class without a
++// persisted declaration answer is appended to this file, and the generator
++// answers it in its own thread before its next pass.
++const CACHE_COLLECT_FILE = CACHE_READ_ONLY ? process.env.OXLINT_TAILWINDCSS_CACHE_COLLECT ?? "" : "";
 +const CACHE_GENERATE_COMMAND = "bun scripts/generate-tailwind-classes.ts --write";
 +function readOnlyCacheError(detail) {
 +	return new DesignSystemLoadError(`Tailwind cache is incomplete: ${detail}.`, `Run \`${CACHE_GENERATE_COMMAND}\` and commit the generated cache.`);
@@ -370,7 +401,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3886,6 +3906,90 @@ function packageVersionFrom(fromDir, name) {
+@@ -3886,6 +3910,90 @@ function packageVersionFrom(fromDir, name) {
  		dir = parent;
  	}
  }
@@ -461,7 +492,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  /**
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
-@@ -3939,7 +4043,17 @@ function hashableContent(entryPath, entryContent) {
+@@ -3939,7 +4047,17 @@ function hashableContent(entryPath, entryContent) {
  		const baseDir = dirname(cssPath);
  		for (const spec of collect(IMPORT_RE, content)) {
  			if (!isPathSpecifier(spec)) {
@@ -480,7 +511,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  				continue;
  			}
  			const importPath = resolve(baseDir, spec);
-@@ -4197,7 +4311,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4197,7 +4315,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -489,7 +520,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4205,6 +4319,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4205,6 +4323,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -497,7 +528,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4707,6 +4822,7 @@ var DesignSystemWorker = class {
+@@ -4707,6 +4826,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -505,13 +536,35 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5642,6 +5758,73 @@ function answersFor(cache) {
+@@ -5574,8 +5694,7 @@ function resolveEntryPointForFile(ruleOptionEntry, settingsEntry, filePath, cwd
+ 	}
+ 	throw new MissingEntryPointError(`\`settings.tailwindcss.entryPoint\` is required${filePath ? ` (linting \`${filePath}\`)` : ""}.`, "Set it to a string (single-project) or an array of `{ files, use }` mappings (monorepo).");
+ }
+-const declWorker = new DesignSystemWorker({
+-	workerScript: makeWorkerScript(`(ds, request) => {
++const DECL_HANDLER_SOURCE = `(ds, request) => {
+   const decls = {};
+   const values = {};
+   const invalid = [];
+@@ -5618,7 +5737,9 @@ const declWorker = new DesignSystemWorker({
+     if (list.length > 0) decls[cls] = list;
+   }
+   return { decls, values, invalid };
+-}`, DECL_EXTRACTOR_SOURCE),
++}`;
++const declWorker = new DesignSystemWorker({
++	workerScript: makeWorkerScript(DECL_HANDLER_SOURCE, DECL_EXTRACTOR_SOURCE),
+ 	serviceName: "declarations"
+ });
+ /**
+@@ -5642,6 +5763,142 @@ function answersFor(cache) {
  	}
  	return map;
  }
 +const declarationPersistLoaded = /* @__PURE__ */ new WeakMap();
-+function declarationShardFile(cssPath, cls) {
-+	const { json } = cacheArtifactPaths(cssPath);
++function declarationShardFile(cssPath, cls, cacheDir) {
++	const snapshot = cacheArtifactPaths(cssPath).json;
++	const json = cacheDir === void 0 ? snapshot : join(cacheDir, basename(snapshot));
 +	const shard = createHash("md5").update(cls).digest("hex").slice(0, 2);
 +	return json.replace(/\.json$/, `.decl-${shard}.json`);
 +}
@@ -538,11 +591,11 @@ diff --git a/dist/index.mjs b/dist/index.mjs
 +		} catch {}
 +	}
 +}
-+function persistDeclarationAnswers(cssPath, pending, response) {
++function persistDeclarationAnswers(cssPath, pending, response, cacheDir) {
 +	const invalid = new Set(response.invalid);
 +	const byFile = /* @__PURE__ */ new Map();
 +	for (const cls of pending) {
-+		const file = declarationShardFile(cssPath, cls);
++		const file = declarationShardFile(cssPath, cls, cacheDir);
 +		let entries = byFile.get(file);
 +		if (!entries) {
 +			try { entries = JSON.parse(readFileSync(file, "utf-8")); } catch { entries = {}; }
@@ -576,17 +629,88 @@ diff --git a/dist/index.mjs b/dist/index.mjs
 +		} finally { tryUnlink(lockPath); }
 +	}
 +}
++const collectedDeclarationQuestions = /* @__PURE__ */ new Map();
++function collectDeclarationQuestions(cssPath, classes) {
++	let seen = collectedDeclarationQuestions.get(cssPath);
++	if (!seen) {
++		seen = /* @__PURE__ */ new Set();
++		collectedDeclarationQuestions.set(cssPath, seen);
++	}
++	const fresh = classes.filter((cls) => !seen.has(cls));
++	if (fresh.length === 0) return;
++	for (const cls of fresh) seen.add(cls);
++	appendFileSync(CACHE_COLLECT_FILE, `${JSON.stringify({ cssPath, classes: fresh })}\n`);
++}
++const inThreadRequire = createRequire(import.meta.url);
++const inThreadDesignSystems = /* @__PURE__ */ new Map();
++function tailwindNodeFor(resolvedPath) {
++	const { nodePath } = resolveTailwindNodeFor(resolvedPath);
++	if (nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
++	return nodePath;
++}
++/**
++* Cache generation without worker threads: compiles the design-system snapshot
++* of `cssPath` with the precompute script the workers run, in the caller's own
++* thread, and writes it to `cacheDir` under the name lint looks up. Resolves to
++* that file's path.
++*/
++async function writeDesignSystemSnapshot(cssPath, cacheDir) {
++	const resolvedPath = resolve(cssPath);
++	const tailwindNodePath = tailwindNodeFor(resolvedPath);
++	const cachePath = join(cacheDir, basename(cacheArtifactPaths(resolvedPath).json));
++	const sharedBuffer = new SharedArrayBuffer(ERR_BUFFER_SIZE);
++	const control = new Int32Array(sharedBuffer, 0, 4);
++	const workerData = {
++		sharedBuffer,
++		cssPath: resolvedPath,
++		cachePath,
++		tmpPath: `${cachePath}.tmp.${process.pid}.${threadId}.${precomputeSeq++}`,
++		tailwindNodePath
++	};
++	new Function("require", PRECOMPUTE_SCRIPT)((id) => id === "worker_threads" ? { workerData } : inThreadRequire(id));
++	while (Atomics.load(control, PRECOMPUTE_SIGNAL_INDEX) === 0) await new Promise((done) => setTimeout(done, 5));
++	if (Atomics.load(control, PRECOMPUTE_SIGNAL_INDEX) === -1) {
++		const length = new DataView(sharedBuffer, 16, 4).getUint32(0);
++		throw precomputeLoadError(resolvedPath, new Error(length > 0 ? Buffer.from(new Uint8Array(sharedBuffer, 20, length)).toString("utf-8") : "the precompute reported no cause"));
++	}
++	if (tryReadCache(cachePath) === null) throw new DesignSystemLoadError(`Precompute finished but wrote no valid snapshot for "${resolvedPath}".`, "Check that the cache directory is writable.");
++	return cachePath;
++}
++/**
++* Cache generation without worker threads: answers `classes` for `cssPath`
++* with the declarations service's own handler, in the caller's own thread,
++* and persists the answers to the declaration shards in `cacheDir`.
++*/
++async function writeDeclarationAnswers(cssPath, classes, cacheDir) {
++	const pending = [...new Set(classes)].sort();
++	if (pending.length === 0) return;
++	const resolvedPath = resolve(cssPath);
++	// Keyed by the snapshot name, which hashes everything the stylesheet is
++	// built from, so changed inputs load their own design system.
++	const snapshot = cacheArtifactPaths(resolvedPath).json;
++	let ds = inThreadDesignSystems.get(snapshot);
++	if (ds === void 0) {
++		const { __unstable__loadDesignSystem: loadDesignSystem } = inThreadRequire(tailwindNodeFor(resolvedPath));
++		ds = loadDesignSystem(readFileSync(resolvedPath, "utf-8"), { base: dirname(resolvedPath) });
++		inThreadDesignSystems.set(snapshot, ds);
++	}
++	const handler = new Function("require", `${DECL_EXTRACTOR_SOURCE}\nreturn ${DECL_HANDLER_SOURCE};`)(inThreadRequire);
++	persistDeclarationAnswers(resolvedPath, pending, await handler(await ds, { classes: pending }), cacheDir);
++}
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5662,12 +5845,15 @@ function answersFor(cache) {
+@@ -5662,12 +5919,18 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
 +	loadDeclarationAnswers(cssPath, cache, classes);
  	const pending = [...new Set(classes.filter((cls) => !known.has(cls)))];
  	if (pending.length === 0) return;
-+	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
++	if (CACHE_READ_ONLY) {
++		if (CACHE_COLLECT_FILE !== "") return collectDeclarationQuestions(cssPath, pending);
++		throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
++	}
  	const response = declWorker.callSync(cssPath, { classes: pending });
  	const invalid = new Set(response.invalid);
  	for (const cls of pending) known.set(cls, !invalid.has(cls));
@@ -595,9 +719,9 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
-@@ -10857,4 +11043,4 @@ const plugin = definePlugin({
+@@ -10857,4 +11120,4 @@ const plugin = definePlugin({
  		})
  	}
  });
 -export { plugin as default };
-+export { cacheArtifactPaths, plugin as default };
++export { cacheArtifactPaths, plugin as default, writeDeclarationAnswers, writeDesignSystemSnapshot };

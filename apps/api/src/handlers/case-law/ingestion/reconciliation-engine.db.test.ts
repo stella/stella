@@ -80,11 +80,6 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const testFetchState = createTestFetch();
 
-// Spies created in a test stay attached if it fails before restoring them.
-afterEach(() => {
-  mock.restore();
-});
-
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
 // read is a bounded oldest-first window, so without a deliberate touch enough
@@ -145,13 +140,13 @@ const listed: ReconciliationSlicePageOptions[] = [];
 const LISTING_ITEMS = [
   {
     jednaciCislo: "999 C 1/2099-1",
-    soud: "Fixture court A",
+    soud: "Krajský soud v Brně",
     odkaz:
       "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000001",
   },
   {
     jednaciCislo: "999 Cm 2/2099-1",
-    soud: "Fixture court B",
+    soud: "Krajský soud v Praze",
     odkaz:
       "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000002",
   },
@@ -166,7 +161,7 @@ const DOCUMENT_KEYS = LISTING_ITEMS.map(
     }) ?? panic("Fixture document identity must be keyable"),
 );
 const FIXTURE_CASE_NUMBERS = ["999 C 1/2099", "999 Cm 2/2099"] as const;
-const FIXTURE_COURT = "Fixture court A";
+const FIXTURE_COURT = "Krajský soud v Brně";
 const FIXTURE_LANGUAGE = "cs";
 
 /**
@@ -193,6 +188,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   logs.restore();
 });
 

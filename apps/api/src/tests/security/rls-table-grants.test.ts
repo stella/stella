@@ -58,6 +58,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // read only their organization's counter and object records.
   "organization_file_usage",
   "organization_file_objects",
+  // What local runs' steps produced: the gateway's owner connection writes a
+  // step with its run's budget; a scoped request reads it with its thread.
+  "chat_local_run_step_contents",
   // History written only by the record_agent_skill_revision trigger.
   "agent_skill_revisions",
   "search_document_preview_passages",
@@ -78,6 +81,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
+  "case_law_completeness_census",
   // Listed decisions the reconciliation could not ingest. Same shape as the
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.
@@ -118,6 +122,12 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // the ingestion pipeline.
   "case_law_judges",
   "case_law_decision_judges",
+  // Where a replaced decision's anchors went: written by the decision write,
+  // read by the public anchor redirect read.
+  "case_law_decision_anchor_redirects",
+  // Appeal links between decisions: global legal data read by public
+  // case-law reads, written only by the ingestion pipeline.
+  "case_law_decision_reviews",
   // A directory court's rank: global legal data read by case-law search and
   // citation scoring, written only by its seed migrations and the seed script.
   "case_law_court_directory_ranks",
@@ -138,6 +148,13 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "corpus_index_jurisdiction_serving",
   // Withdrawal history is read by requests and appended only by ingestion.
   "corpus_index_group_withdrawals",
+  // Seeding facts: request code may read whether a route is seeded; only the
+  // seeding walk and the generation's lifecycle write them.
+  "corpus_index_generation_seeding_passes",
+  "corpus_index_route_seedings",
+  // Flip receipts: request code may read them; only the guarded flip
+  // appends one.
+  "corpus_index_generation_flips",
   // Mutation revisions are appended and pruned only by ingestion triggers;
   // request code may read the current proof watermark.
   "corpus_index_projection_revisions",
@@ -146,6 +163,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // mutates the state machine.
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  // Route readiness proofs: request code may read whether a route is proven;
+  // only the projection runner advances or revokes one.
+  "corpus_index_route_proofs",
   // Global reference editions are read by request code and written by ingestion.
   "sanctions_edition_fanouts",
   "sanctions_sources",
@@ -161,6 +181,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
   "chat_thread_names",
   "chat_message_revisions",
   "document_review_finding_decisions",
+  "legal_graph_edges",
   "legal_list_item_source_decisions",
 ]);
 
@@ -173,11 +194,31 @@ const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
   "time_daily_targets",
+  // Action state transitions use UPDATE; owner cleanup and thread cascades delete.
+  "outbound_actions",
   // Account export ledger: request transactions create and transition rows;
   // only the table owner deletes them, during account erasure.
   "account_exports",
+  // Legal holds: request transactions place and release holds; a hold row is
+  // removed only by the delete backstop after release, never by the request
+  // role.
+  "legal_holds",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
+
+// The link identity and access stamp are outside request writers' authority.
+const POST_BOOTSTRAP_COLUMN_MUTABLE_TABLES = new Map([
+  [
+    "invoice_sends",
+    new Set([
+      "delivery_status",
+      "failed_recipients",
+      "revoked_at",
+      "revoked_by_user_id",
+    ]),
+  ],
+]);
+const COLUMN_MUTABLE_TABLE_PRIVILEGES = new Set(["select", "insert"]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide
 // SELECT. Privileged workers own reads; a table may additionally grant a
@@ -198,7 +239,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
   "synthetic_session_control",
-  // Guidance ingestion is owner-only until a read capability is introduced.
+  // Guidance is ingestion-owned; reads go through the public-law reader only.
   "soft_law_sources",
   "soft_law_ingestion_attempts",
   "soft_law_documents",
@@ -211,8 +252,13 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
   // projection drain consumes; request code never reads them.
   "case_law_ranking_signal_changes",
+  // The settlement queue: owner-run triggers enqueue delete tasks, the
+  // ingestion role's settlement leases and drops them; request code never
+  // reads them.
+  "corpus_index_projection_delete_tasks",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
+  "case_law_sitemap_touches",
   // Coverage populations: owner-maintained, read only by the public-law reader.
   "case_law_population_counts",
   "case_law_population_deltas",
@@ -257,6 +303,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "desktop_runner_runs",
   "desktop_runner_commands",
   "desktop_runner_events",
+  "desktop_runner_app_calls",
+  "desktop_runner_folder_restores",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",
@@ -283,6 +331,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
+  // Court-qualified fallback identity keys are reserved with the decision row
+  // write by ingestion; request transactions never read them.
+  "case_law_decision_fallback_identities",
   // UUID retirement is ingestion-owned; request transactions cannot access it.
   "case_law_decision_aliases",
   // Retired publisher identities are ingestion repair state; request
@@ -291,6 +342,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",
+  // A source's record held as an attachment to another source's decision:
+  // ingestion state only, never read through the request role.
+  "case_law_held_decision_attachments",
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",
@@ -379,6 +433,7 @@ type GrantsRequiredPrivilegesOptions = {
   table: string;
   privileges: Set<string>;
   grantsTableDml: boolean;
+  columnUpdates?: Set<string>;
 };
 
 const TABLE_MUTATION_PRIVILEGES = new Set([
@@ -406,7 +461,18 @@ const grantsRequiredPrivileges = ({
   table,
   privileges,
   grantsTableDml,
+  columnUpdates,
 }: GrantsRequiredPrivilegesOptions): boolean => {
+  const mutableColumns = POST_BOOTSTRAP_COLUMN_MUTABLE_TABLES.get(table);
+  if (mutableColumns !== undefined) {
+    return (
+      privileges.isSupersetOf(COLUMN_MUTABLE_TABLE_PRIVILEGES) &&
+      privileges.isSubsetOf(COLUMN_MUTABLE_TABLE_PRIVILEGES) &&
+      columnUpdates !== undefined &&
+      columnUpdates.isSupersetOf(mutableColumns) &&
+      columnUpdates.isSubsetOf(mutableColumns)
+    );
+  }
   if (POST_BOOTSTRAP_SELECT_ONLY_TABLES.has(table)) {
     return (
       privileges.has("select") &&
@@ -481,6 +547,7 @@ type StellaTableGrant =
       type: "tables";
       privileges: Set<string>;
       tables: string[];
+      columnUpdates?: Set<string>;
     }
   | {
       type: "all_tables_in_schema";
@@ -598,7 +665,17 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
     return null;
   }
 
-  const privileges = new Set(identifierNamesFromSql(privilegesSql));
+  const columnUpdates = new Set<string>();
+  const tablePrivilegesSql = privilegesSql.replace(
+    /\bUPDATE\s*\(([^)]*)\)/giu,
+    (_match, columns: string) => {
+      for (const column of identifierNamesFromSql(columns)) {
+        columnUpdates.add(column);
+      }
+      return "";
+    },
+  );
+  const privileges = new Set(identifierNamesFromSql(tablePrivilegesSql));
   const allTablesPrefix = "ALL TABLES IN SCHEMA ";
   if (startsWithSqlKeyword(tablesSql, allTablesPrefix, 0)) {
     return {
@@ -611,7 +688,12 @@ const stellaTableGrant = (statement: string): StellaTableGrant | null => {
     (name) => name !== "public",
   );
 
-  return { type: "tables", privileges, tables };
+  return {
+    type: "tables",
+    privileges,
+    tables,
+    ...(columnUpdates.size === 0 ? {} : { columnUpdates }),
+  };
 };
 
 const explicitStellaGrantTables = (statement: string): string[] => {
@@ -632,12 +714,38 @@ const explicitStellaGrantTables = (statement: string): string[] => {
       table,
       privileges: grant.privileges,
       grantsTableDml,
+      ...(grant.columnUpdates === undefined
+        ? {}
+        : { columnUpdates: grant.columnUpdates }),
     }),
   );
 };
 
+const mutationPrivileges = (grant: StellaTableGrant) =>
+  grant.type === "tables" && grant.columnUpdates !== undefined
+    ? new Set([...grant.privileges, "update"])
+    : grant.privileges;
+
+const columnMutableExcessGrantTargets = (grant: StellaTableGrant): string[] => {
+  if (grant.type === "all_tables_in_schema") {
+    return grant.schemas.includes("public") &&
+      !grant.privileges.isSubsetOf(COLUMN_MUTABLE_TABLE_PRIVILEGES)
+      ? ["all tables in schema public"]
+      : [];
+  }
+  return grant.tables.filter((table) => {
+    const allowed = POST_BOOTSTRAP_COLUMN_MUTABLE_TABLES.get(table);
+    return (
+      allowed !== undefined &&
+      (!grant.privileges.isSubsetOf(COLUMN_MUTABLE_TABLE_PRIVILEGES) ||
+        (grant.columnUpdates !== undefined &&
+          !grant.columnUpdates.isSubsetOf(allowed)))
+    );
+  });
+};
+
 const selectOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
-  if (grant.privileges.isDisjointFrom(TABLE_MUTATION_PRIVILEGES)) {
+  if (mutationPrivileges(grant).isDisjointFrom(TABLE_MUTATION_PRIVILEGES)) {
     return [];
   }
   if (grant.type === "all_tables_in_schema") {
@@ -652,7 +760,9 @@ const selectOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
 };
 
 const appendOnlyMutationTargets = (grant: StellaTableGrant): string[] => {
-  if (grant.privileges.isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)) {
+  if (
+    mutationPrivileges(grant).isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)
+  ) {
     return [];
   }
   if (grant.type === "all_tables_in_schema") {
@@ -689,6 +799,7 @@ const collectRlsGrantState = () => {
   const appendOnlyMutationGrants: string[] = [];
   const unexpectedDynamicGrantSites: string[] = [];
   const mutableProjectionExcessGrants: string[] = [];
+  const columnMutableExcessGrants: string[] = [];
 
   for (const path of migrationSqlFiles()) {
     const migration = nodePath.basename(nodePath.resolve(path, ".."));
@@ -743,6 +854,9 @@ const collectRlsGrantState = () => {
       for (const target of mutableProjectionExcessGrantTargets(grant)) {
         mutableProjectionExcessGrants.push(`${migration}: ${target}`);
       }
+      for (const target of columnMutableExcessGrantTargets(grant)) {
+        columnMutableExcessGrants.push(`${migration}: ${target}`);
+      }
     }
   }
 
@@ -754,6 +868,7 @@ const collectRlsGrantState = () => {
     appendOnlyMutationGrants,
     unexpectedDynamicGrantSites,
     mutableProjectionExcessGrants,
+    columnMutableExcessGrants,
   };
 };
 
@@ -893,6 +1008,27 @@ describe("RLS table grants", () => {
     expect(missingGrants).toEqual([]);
   });
 
+  test("column-scoped delivery writers cannot gain credential or access-stamp updates", () => {
+    expect(collectRlsGrantState().columnMutableExcessGrants).toEqual([]);
+    const limited =
+      'GRANT SELECT, INSERT, UPDATE ("delivery_status", "failed_recipients", "revoked_at", "revoked_by_user_id") ON TABLE "invoice_sends" TO stella';
+    expect(explicitStellaGrantTables(limited)).toEqual(["invoice_sends"]);
+    for (const statement of [
+      'GRANT SELECT, INSERT, UPDATE ON TABLE "invoice_sends" TO stella',
+      'GRANT UPDATE ("first_viewed_at") ON TABLE "invoice_sends" TO stella',
+      'GRANT UPDATE ("token_hash") ON TABLE "invoice_sends" TO PUBLIC',
+      'GRANT DELETE ON TABLE "invoice_sends" TO stella',
+    ]) {
+      const grant = stellaTableGrant(statement);
+      expect(grant).not.toBeNull();
+      if (grant !== null) {
+        expect(columnMutableExcessGrantTargets(grant)).toEqual([
+          "invoice_sends",
+        ]);
+      }
+    }
+  });
+
   test("the classification sets name no table a migration has dropped", () => {
     const { droppedTables } = collectRlsGrantState();
 
@@ -903,6 +1039,7 @@ describe("RLS table grants", () => {
         ...POST_BOOTSTRAP_INSERT_ONLY_TABLES,
         ...POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES,
         ...POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES,
+        ...POST_BOOTSTRAP_COLUMN_MUTABLE_TABLES.keys(),
         ...POST_BOOTSTRAP_DENY_STELLA_TABLES,
       ].filter((table) => droppedTables.has(table)),
     ).toEqual([]);

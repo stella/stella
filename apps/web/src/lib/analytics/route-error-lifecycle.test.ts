@@ -1,3 +1,4 @@
+import { CancelledError } from "@tanstack/react-query";
 import { describe, expect, mock, test } from "bun:test";
 
 import type {
@@ -8,6 +9,7 @@ import type {
 import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
+  RouteCancelledReadError,
 } from "./route-error-lifecycle";
 import { createLoadedRouteErrorLifecycleController } from "./route-error-lifecycle-loaded";
 
@@ -71,6 +73,43 @@ describe("route error lifecycle diagnostics", () => {
     expect(events.at(0)).toMatchObject({
       inspectorState: "open",
       routeTemplate: ROUTE_TEMPLATE,
+    });
+  });
+
+  test("reports a cancelled read on a visible error page exactly once", () => {
+    const { analytics, errors } = setup();
+    const controller = createRouteErrorLifecycleController(analytics);
+    const cancelled = new CancelledError({ revert: true });
+    controller.caught(ROUTE_TEMPLATE);
+    controller.shown({
+      error: cancelled,
+      recovery: "retry-route",
+      reference: FIRST_REFERENCE,
+    });
+    controller.shown({
+      error: cancelled,
+      recovery: "retry-route",
+      reference: FIRST_REFERENCE,
+    });
+    // A boundary reset shows the same stored error under a new reference.
+    controller.shown({
+      error: cancelled,
+      recovery: "retry-route",
+      reference: SECOND_REFERENCE,
+    });
+
+    expect(errors).toHaveLength(1);
+    const reported = errors.at(0)?.error;
+    expect(reported).toBeInstanceOf(RouteCancelledReadError);
+    expect(reported).not.toBeInstanceOf(CancelledError);
+    expect(reported).toMatchObject({
+      cause: cancelled,
+      reference: FIRST_REFERENCE,
+      routeTemplate: ROUTE_TEMPLATE,
+    });
+    expect(errors.at(0)?.context).toEqual({
+      reference: FIRST_REFERENCE,
+      type: "recovery",
     });
   });
 

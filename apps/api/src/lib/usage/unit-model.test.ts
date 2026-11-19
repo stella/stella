@@ -101,6 +101,8 @@ describe("computeRawUsageMicroUnits", () => {
     "gpt-5.6": [272_000, 110_800, 220_601],
     "gpt-5.6-luna": [272_000, 5560, 11_061],
     "gpt-5.6-terra": [272_000, 55_600, 110_601],
+    "gpt-6.2-astra": [272_000, 221_600, 441_202],
+    "gpt-6.2-sol": [272_000, 55_400, 110_301],
     "gpt-6-astra": [272_000, 277_000, 551_502],
     "gpt-6-sol": [272_000, 55_400, 110_301],
     "gpt-6-luna": [272_000, 2770, 5516],
@@ -313,35 +315,38 @@ describe("computeRawUsageMicroUnits", () => {
 });
 
 describe("normalizeProviderPromptTokens", () => {
-  test("Anthropic warm cache: cache reads exceed input tokens legitimately", () => {
-    // Production-shaped Anthropic usage on a warm cache: `input_tokens`
-    // excludes cache reads and cache writes, so cached >> input.
-    const normalized = normalizeProviderPromptTokens({
-      provider: "anthropic",
-      modelId: "claude-sonnet-5",
-      promptTokens: 217,
-      cacheReadTokens: 45_082,
-      cacheWriteTokens: 1204,
-    });
-
-    expect(normalized).toEqual({
-      uncachedInputTokens: 217,
-      cacheReadTokens: 45_082,
-      cacheWriteTokens: 1204,
-    });
-    expect(analytics.exceptions()).toEqual([]);
-
-    // End to end: 217 uncached at 200_000/MTok (44), 1204 cache-write at
-    // 250_000/MTok (301), 45_082 cache-read at 20_000/MTok (902), and 1538
-    // output at 1_000_000/MTok (1538).
-    expect(
-      computeRawUsageMicroUnits({
+  test.each(["anthropic", "bedrock"] as const)(
+    "%s cached tokens split out of canonical input",
+    (provider) => {
+      // The adapter adds native input, cache reads and cache writes before
+      // exposing canonical TokenUsage to metering.
+      const normalized = normalizeProviderPromptTokens({
+        provider,
         modelId: "claude-sonnet-5",
-        outputTokens: 1538,
-        ...normalized,
-      }),
-    ).toBe(44 + 301 + 902 + 1538);
-  });
+        promptTokens: 46_503,
+        cacheReadTokens: 45_082,
+        cacheWriteTokens: 1204,
+      });
+
+      expect(normalized).toEqual({
+        uncachedInputTokens: 217,
+        cacheReadTokens: 45_082,
+        cacheWriteTokens: 1204,
+      });
+      expect(analytics.exceptions()).toEqual([]);
+
+      // End to end: 217 uncached at 200_000/MTok (44), 1204 cache-write at
+      // 250_000/MTok (301), 45_082 cache-read at 20_000/MTok (902), and 1538
+      // output at 1_000_000/MTok (1538).
+      expect(
+        computeRawUsageMicroUnits({
+          modelId: "claude-sonnet-5",
+          outputTokens: 1538,
+          ...normalized,
+        }),
+      ).toBe(44 + 301 + 902 + 1538);
+    },
+  );
 
   test("OpenAI subset semantics: cached tokens split out of the prompt total", () => {
     // Production-shaped OpenAI usage: `prompt_tokens` includes
@@ -424,13 +429,18 @@ describe("normalizeProviderPromptTokens", () => {
     });
     expect(
       analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject(
-      Object.keys(counts).map((field) => ({
+    ).toMatchObject([
+      ...Object.keys(counts).map((field) => ({
         anomaly: `invalid-${field}`,
         modelId: "claude-sonnet-5-malformed-shape",
         source: "usage-unit-model",
       })),
-    );
+      {
+        anomaly: "cache-tokens-exceed-included-prompt",
+        modelId: "claude-sonnet-5-malformed-shape",
+        source: "usage-unit-model",
+      },
+    ]);
   });
 
   test("anomaly telemetry dedupes per model id and anomaly", () => {

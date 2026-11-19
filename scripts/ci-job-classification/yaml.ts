@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { isRepositoryCheckoutAction } from "./checkout-actions";
 import { sha256 } from "./classification-values";
 import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
 
@@ -181,7 +182,6 @@ const hasEffectiveWritePermission = (
 };
 
 const PRIVILEGED_EVENTS = new Set([
-  "pull_request_target",
   "workflow_run",
   "issue_comment",
   "pull_request_review",
@@ -263,7 +263,7 @@ const checksOutUntrustedRef = (job: JsonRecord): boolean => {
     const inputs = candidate["with"];
     if (
       typeof uses === "string" &&
-      uses.startsWith("actions/checkout@") &&
+      isRepositoryCheckoutAction(uses) &&
       isRecord(inputs)
     ) {
       const ref = inputs["ref"];
@@ -525,7 +525,7 @@ const addActionDependencies = (
     const withInputs = step["with"];
     if (
       typeof uses === "string" &&
-      uses.startsWith("actions/checkout@") &&
+      isRepositoryCheckoutAction(uses) &&
       isRecord(withInputs) &&
       typeof withInputs["path"] === "string"
     ) {

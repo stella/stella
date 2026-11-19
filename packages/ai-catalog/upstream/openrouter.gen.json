@@ -31,6 +31,18 @@
       }
     },
     {
+      "id": "anthropic/claude-fable-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "anthropic/claude-fable-5.2:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "anthropic/claude-fable-5:batch",
       "reasoning": {
         "default_effort": "high"
@@ -145,9 +157,15 @@
       }
     },
     {
-      "id": "bytedance-seed/seed-2.0-code",
+      "id": "baidu/ernie-5.5-flash-preview:free",
       "reasoning": {
-        "default_effort": "medium"
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "baidu/ernie-light-dt-1.0-intl",
+      "reasoning": {
+        "default_effort": "max"
       }
     },
     {
@@ -206,6 +224,12 @@
     },
     {
       "id": "deepseek/deepseek-v4.1-flash-1017",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4.1-flash-1017:batch",
       "reasoning": {
         "default_effort": "high"
       }
@@ -361,6 +385,42 @@
       }
     },
     {
+      "id": "google/gemini-4-carbon",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-carbon:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-hydrogen",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-hydrogen:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-neon",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-neon:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "google/gemini-nano-banana-2.1",
       "reasoning": {
         "default_effort": "minimal"
@@ -385,21 +445,9 @@
       }
     },
     {
-      "id": "inception/mercury-2",
+      "id": "meta/muse-ember",
       "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "inception/mercury-2.5",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "inception/mercury-3",
-      "reasoning": {
-        "default_effort": "medium"
+        "default_effort": "max"
       }
     },
     {
@@ -499,6 +547,12 @@
       }
     },
     {
+      "id": "moonshotai/kimi-k3.1-pro:batch",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "moonshotai/kimi-k3:batch",
       "reasoning": {
         "default_effort": "max"
@@ -512,6 +566,12 @@
     },
     {
       "id": "nex-agi/nex-n2.5-pro",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "nex-agi/nex-n2.6",
       "reasoning": {
         "default_effort": "high"
       }
@@ -919,6 +979,54 @@
       }
     },
     {
+      "id": "openai/gpt-6.2-astra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-astra:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.2-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "openai/gpt-oss-120b",
       "reasoning": {
         "default_effort": "medium"
@@ -944,6 +1052,12 @@
     },
     {
       "id": "particle-ai/particle-1",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "particle-ai/particle-1:free",
       "reasoning": {
         "default_effort": "high"
       }
@@ -985,9 +1099,21 @@
       }
     },
     {
+      "id": "qwen/qwen3.8-max-0902:batch",
+      "reasoning": {
+        "default_effort": "xhigh"
+      }
+    },
+    {
       "id": "qwen/qwen3.8-max-prime",
       "reasoning": {
         "default_effort": "xhigh"
+      }
+    },
+    {
+      "id": "qwen/qwen4-max",
+      "reasoning": {
+        "default_effort": "high"
       }
     },
     {
@@ -1018,12 +1144,6 @@
       "id": "sakana/sakana-namazu",
       "reasoning": {
         "default_effort": "high"
-      }
-    },
-    {
-      "id": "stealth/crouton-alpha",
-      "reasoning": {
-        "default_effort": "max"
       }
     },
     {
@@ -1064,6 +1184,18 @@
     },
     {
       "id": "thinkingmachines/inkling",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-2-small",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "thinkingmachines/inkling-2-small:free",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1142,6 +1274,12 @@
     },
     {
       "id": "z-ai/glm-5.2",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.2:batch",
       "reasoning": {
         "default_effort": "high"
       }

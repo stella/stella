@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
-import { republishedRulingCourtPredicate } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import type { SafeId } from "@/api/lib/branded-types";
+import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
 import { lockCaseLawRepublication } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -29,6 +29,7 @@ export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.CZ_NSS]: 0,
   [ADAPTER_KEYS.CZ_US]: 0,
   [ADAPTER_KEYS.CZ_UOHS]: 0,
+  [ADAPTER_KEYS.BR_TST]: 0,
   [ADAPTER_KEYS.SK_COURTS]: 1,
   [ADAPTER_KEYS.SK_US]: 0,
   [ADAPTER_KEYS.PL_COURTS]: 1,
@@ -55,6 +56,8 @@ export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+  [ADAPTER_KEYS.BR_TJDFT]: 0,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: 0,
 } as const satisfies Record<AdapterKey, number>;
 
 type CandidateSide = {

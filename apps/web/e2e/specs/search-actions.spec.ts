@@ -1,6 +1,9 @@
 import type { Page } from "@playwright/test";
 
 import { apiStatus } from "../helpers/api";
+import { createProfileTestSession } from "../helpers/profile-session";
+import type { ApiOk } from "../helpers/route-mock";
+import { apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -67,6 +70,20 @@ const assertActionsAboveFold = async (page: Page) => {
 for (const locale of ["en", "ar"] as const) {
   test.describe(`search actions (${locale})`, () => {
     test.use({ locale });
+    let profileSession:
+      Awaited<ReturnType<typeof createProfileTestSession>> | undefined;
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "search-actions",
+        webUrl: baseURL ?? "http://localhost:3000",
+        locale,
+      });
+    });
+    test.afterEach(async () => {
+      await profileSession?.cleanup();
+      profileSession = undefined;
+    });
 
     test("empty search exposes actions without scrolling", async ({ page }) => {
       const input = await openSearch(page);
@@ -84,6 +101,20 @@ for (const locale of ["en", "ar"] as const) {
 for (const locale of ["en", "ar"] as const) {
   test.describe(`localized action keyboard selection (${locale})`, () => {
     test.use({ locale });
+    let profileSession:
+      Awaited<ReturnType<typeof createProfileTestSession>> | undefined;
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "search-actions",
+        webUrl: baseURL ?? "http://localhost:3000",
+        locale,
+      });
+    });
+    test.afterEach(async () => {
+      await profileSession?.cleanup();
+      profileSession = undefined;
+    });
 
     test("remains keyboard selectable after clearing a query", async ({
       page,
@@ -267,15 +298,13 @@ test.describe("global create actions", () => {
     const navigationRoute = "**/v1/workspaces/navigation**";
     await page.route(navigationRoute, async (route) => {
       const response = await route.fetch();
-      const body: unknown = await response.json();
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("workspaces" in body)
-      ) {
-        throw new Error("Navigation response has no workspaces");
-      }
-      await route.fulfill({ response, json: { ...body, workspaces: [] } });
+      const body: ApiOk<"v1/workspaces/navigation", "get"> =
+        await response.json();
+      await respond(
+        route,
+        apiJson("v1/workspaces/navigation", "get", { ...body, workspaces: [] }),
+        { response },
+      );
     });
     await openSearch(page, `/workspaces/${testWorkspace.id}`);
     await page

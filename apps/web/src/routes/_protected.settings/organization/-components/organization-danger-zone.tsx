@@ -20,6 +20,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 import { OrganizationAuditArchive } from "./organization-audit-archive";
 
@@ -110,34 +111,39 @@ export const OrganizationDangerZone = ({
     | { status: "completed"; action: "leave" | "delete" }
   >({ status: "active" });
   const mutation = useMutation({
-    mutationFn: async (action: "leave" | "delete") => {
-      setOutcome({ status: "active" });
-      const result =
-        action === "delete"
-          ? await authClient.organization.delete({ organizationId })
-          : await authClient.organization.leave({ organizationId });
-      if (result.error) {
-        // A refusal is an outcome the section shows, not a thrown failure.
-        analytics.captureError(toAuthClientError(result.error), {
-          fingerprintKey: "OrganizationDangerZone.refused:failure",
-          scope: {
-            type: "handler",
-            handlerId: "OrganizationDangerZone.refused:failure",
-          },
-        });
-        setOutcome({ status: "refused", code: result.error.code });
-        if (AUDIT_EXPORT_REFUSAL_CODES.includes(result.error.code)) {
-          await queryClient.invalidateQueries({
-            queryKey: auditExportOptions.queryKey,
+    mutationFn: resourceMutation({
+      mutation: "deleteOrganization",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (action: "leave" | "delete") => {
+        setOutcome({ status: "active" });
+        const result =
+          action === "delete"
+            ? await authClient.organization.delete({ organizationId })
+            : await authClient.organization.leave({ organizationId });
+        if (result.error) {
+          // A refusal is an outcome the section shows, not a thrown failure.
+          analytics.captureError(toAuthClientError(result.error), {
+            fingerprintKey: "OrganizationDangerZone.refused:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OrganizationDangerZone.refused:failure",
+            },
           });
+          setOutcome({ status: "refused", code: result.error.code });
+          if (AUDIT_EXPORT_REFUSAL_CODES.includes(result.error.code)) {
+            await queryClient.invalidateQueries({
+              queryKey: auditExportOptions.queryKey,
+            });
+          }
+          return "refused" as const;
         }
-        return "refused" as const;
-      }
-      setOutcome({ status: "completed", action });
-      setDeleteOpen(false);
-      await onSuccess();
-      return "completed" as const;
-    },
+        setOutcome({ status: "completed", action });
+        setDeleteOpen(false);
+        await onSuccess();
+        return "completed" as const;
+      },
+    }),
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "OrganizationDangerZone.mutation:failure",

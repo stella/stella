@@ -24,6 +24,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
+  brandPersistedChatThreadId,
+  brandPersistedChatTurnId,
   brandPersistedDesktopEditSessionId,
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -59,15 +61,22 @@ type WorkspaceConnectionAuthorizer = (
 
 /**
  * Whether one user still holds an active membership in the organization their
- * user-channel connection was opened for. The user channel is its own routing
- * table, so this is the only membership question it has to ask — no workspace
- * bucket is scanned to find a user's streams.
+ * user-channel connections were opened for, and which of their browser
+ * sessions among `sessionIds` are still live. The user channel is its own
+ * routing table, so this is the only membership question it has to ask — no
+ * workspace bucket is scanned to find a user's streams.
  */
 type UserConnectionAuthorizer = (lookup: {
   organizationId: SafeId<"organization">;
   sessionIds: readonly string[];
   userId: SafeId<"user">;
-}) => Promise<ReadonlySet<string>>;
+}) => Promise<UserConnectionAudience>;
+
+export type UserConnectionAudience = {
+  readonly member: boolean;
+  /** Only ever non-empty for a member. */
+  readonly liveSessionIds: ReadonlySet<string>;
+};
 
 /** Workspace ID → connected SSE streams on THIS instance. */
 const connections = new Map<SafeId<"workspace">, Set<SSEConnection>>();
@@ -83,7 +92,37 @@ let authorizeWorkspaceConnections: WorkspaceConnectionAuthorizer | null = null;
 type UserSSEConnection = {
   controller: ReadableStreamDefaultController;
   organizationId: SafeId<"organization">;
-  sessionId: string;
+  holder: UserStreamHolder;
+};
+
+/**
+ * Who holds a user-channel stream. `id` keys the per-holder stream cap: the
+ * browser session, or for an app's access token the `oauth-client:` id its
+ * requests carry, so one app's streams for a person share one cap whichever
+ * device or refreshed token opened them. `kind` is the stream's binding kind
+ * and decides what each delivery re-checks: a browser session must still be
+ * live; a credential has no session row, so delivery re-checks the
+ * organization membership and the bound-stream sweep revalidates the token
+ * itself.
+ */
+type UserStreamHolder = {
+  readonly id: string;
+  readonly kind: SseStreamBinding["kind"];
+};
+
+const holdsUserStream = (
+  audience: UserConnectionAudience,
+  holder: UserStreamHolder,
+): boolean => {
+  switch (holder.kind) {
+    case "session":
+      return audience.liveSessionIds.has(holder.id);
+    case "credential":
+      return audience.member;
+    default:
+      holder.kind satisfies never;
+      return panic(`Unhandled user stream holder: ${String(holder.kind)}`);
+  }
 };
 
 /** User ID → that user's connected streams on THIS instance. */
@@ -447,6 +486,36 @@ const enqueueOrDrop = <TConnection extends StreamConnection>({
   }
 };
 
+type AddStreamWithinLimitOptions<TConnection extends StreamConnection> = {
+  close: (connection: TConnection) => void;
+  connection: TConnection;
+  limit: number;
+  /** Whether a registered stream belongs to the same holder as `connection`. */
+  sameHolder: (registered: TConnection) => boolean;
+  set: Set<TConnection>;
+};
+
+/**
+ * Register a stream, keeping at most `limit` streams per holder in `set`: the
+ * holder's oldest streams beyond it are removed and closed. The newest stream
+ * is the one a reconnecting client reads, so closing older ones never ends the
+ * stream the client is waiting on.
+ */
+export const addStreamWithinLimit = <TConnection extends StreamConnection>({
+  close,
+  connection,
+  limit,
+  sameHolder,
+  set,
+}: AddStreamWithinLimitOptions<TConnection>): void => {
+  set.add(connection);
+  const held = [...set].filter(sameHolder);
+  for (const stale of held.slice(0, Math.max(0, held.length - limit))) {
+    set.delete(stale);
+    close(stale);
+  }
+};
+
 /**
  * Register a new SSE connection for a workspace.
  * Returns a ReadableStream that stays open until the client disconnects.
@@ -494,7 +563,15 @@ export const subscribe = ({
         set = new Set();
         connections.set(workspaceId, set);
       }
-      set.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          closeControllerQuietly(stale.controller);
+        },
+        connection: conn,
+        limit: LIMITS.sseStreamsPerSession,
+        sameHolder: (registered) => registered.sessionId === sessionId,
+        set,
+      });
 
       const cleanup = () => {
         set.delete(conn);
@@ -513,7 +590,7 @@ export const subscribe = ({
 
 type SubscribeUserOptions = {
   organizationId: SafeId<"organization">;
-  sessionId: string;
+  holder: UserStreamHolder;
   signal: AbortSignal;
   userId: SafeId<"user">;
 };
@@ -525,7 +602,7 @@ type SubscribeUserOptions = {
  */
 export const subscribeUser = ({
   organizationId,
-  sessionId,
+  holder,
   signal,
   userId,
 }: SubscribeUserOptions): ReadableStream<Uint8Array> => {
@@ -543,7 +620,7 @@ export const subscribeUser = ({
       const conn: UserSSEConnection = {
         controller,
         organizationId,
-        sessionId,
+        holder,
       };
 
       let set = userConnections.get(userId);
@@ -551,7 +628,17 @@ export const subscribeUser = ({
         set = new Set();
         userConnections.set(userId, set);
       }
-      set.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          closeControllerQuietly(stale.controller);
+        },
+        connection: conn,
+        limit: LIMITS.sseStreamsPerSession,
+        sameHolder: (registered) =>
+          registered.holder.kind === holder.kind &&
+          registered.holder.id === holder.id,
+        set,
+      });
 
       const cleanup = () => {
         set.delete(conn);
@@ -730,7 +817,9 @@ const broadcastLocalToUser = async (
     try: async () =>
       await authorizer({
         organizationId,
-        sessionIds: targets.map((connection) => connection.sessionId),
+        sessionIds: targets.flatMap(({ holder }) =>
+          holder.kind === "session" ? [holder.id] : [],
+        ),
         userId,
       }),
     catch: (cause) => cause,
@@ -748,7 +837,7 @@ const broadcastLocalToUser = async (
     if (!set.has(conn)) {
       continue;
     }
-    if (!reauthorized.value.has(conn.sessionId)) {
+    if (!holdsUserStream(reauthorized.value, conn.holder)) {
       set.delete(conn);
       closeControllerQuietly(conn.controller);
       continue;
@@ -915,6 +1004,18 @@ const dispatchRedisMessage = (message: string): void => {
           parsed.userId === undefined
             ? undefined
             : brandPersistedUserId(parsed.userId),
+      });
+    }
+    return;
+  }
+  if (parsed.scope === "chat-turn-handover") {
+    // This replica's own release already rang its adopter in process.
+    if (parsed.originInstanceId !== INSTANCE_ID) {
+      chatTurnHandoverDeliveryHandler?.({
+        organizationId: brandPersistedOrganizationId(parsed.organizationId),
+        threadId: brandPersistedChatThreadId(parsed.threadId),
+        turnId: brandPersistedChatTurnId(parsed.id),
+        userId: brandPersistedUserId(parsed.userId),
       });
     }
     return;
@@ -1225,6 +1326,55 @@ export const announceMcpToolProjectionChange = async (
   change: McpToolProjectionChange,
 ): Promise<void> => {
   await publishMcpToolProjectionAttempt(change, 0);
+};
+
+// ── Chat turn handovers ─────────────────────────────────
+//
+// A stopping replica releases its local chat turns for another to adopt. The
+// adopter registers a handler here so a release on another replica reaches
+// it at once; its sweep finds a release whose announcement was lost.
+
+type ChatTurnHandover = {
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  turnId: SafeId<"chatTurn">;
+  userId: SafeId<"user">;
+};
+
+let chatTurnHandoverDeliveryHandler: ((turn: ChatTurnHandover) => void) | null =
+  null;
+
+/** Register this replica's adopter for turns released elsewhere. */
+export const registerChatTurnHandoverDelivery = (
+  handler: ((turn: ChatTurnHandover) => void) | null,
+): void => {
+  chatTurnHandoverDeliveryHandler = handler;
+};
+
+const CHAT_TURN_HANDOVER_PUBLISH_FAILURE_SINK = failureSink({
+  event: "sse.chat_turn_handover_publish_failed",
+  expected: [],
+});
+
+/**
+ * Announce a released turn to the other replicas, once and without waiting:
+ * the releasing replica is stopping, and an adopter's sweep finds a turn
+ * whose announcement was lost.
+ */
+export const announceChatTurnHandover = (turn: ChatTurnHandover): void => {
+  detached(async () => {
+    const published = await Result.tryPromise(
+      async () =>
+        await activePublisher().publishChatTurnHandover(turn, {
+          originInstanceId: INSTANCE_ID,
+        }),
+    );
+    if (Result.isError(published)) {
+      observeFailure(published.error, {
+        sink: CHAT_TURN_HANDOVER_PUBLISH_FAILURE_SINK,
+      });
+    }
+  }, "sse.publish-chat-turn-handover");
 };
 
 // ── Desktop-edit session events ─────────────────────────

@@ -117,4 +117,49 @@ describe("layoutThreadContext", () => {
     expect(layout.inline).toEqual({ files: [], matters: ["m1"] });
     expect(layout.overflowCount).toBe(3);
   });
+
+  test("a chat that drew on every matter names none of them, even past the preview", () => {
+    const layout = layoutThreadContext(
+      {
+        fileCount: 3,
+        files: named("f", 3),
+        matterCount: 12,
+        matters: named("m", 8),
+      },
+      { accessibleMatterCount: 12 },
+    );
+
+    expect(layout.allMatters).toBe(true);
+    expect(layout.inline).toEqual({ files: ["f1", "f2"], matters: [] });
+    expect(layout.hidden).toEqual({ files: ["f3"], matters: [] });
+    expect(layout.overflowCount).toBe(1);
+    expect(layout.unnamedCount).toBe(0);
+    expect(layout.hasContext).toBe(true);
+  });
+
+  test("still covers every matter after the reader's list shrank", () => {
+    const layout = layoutThreadContext(
+      { fileCount: 0, files: [], matterCount: 3, matters: named("m", 3) },
+      { accessibleMatterCount: 2 },
+    );
+
+    expect(layout.allMatters).toBe(true);
+    expect(layout.overflowCount).toBe(0);
+  });
+
+  test("names the matters while some are left out or the list is unknown", () => {
+    const context = {
+      fileCount: 0,
+      files: [],
+      matterCount: 3,
+      matters: named("m", 3),
+    };
+
+    for (const accessibleMatterCount of [4, undefined, 0]) {
+      const layout = layoutThreadContext(context, { accessibleMatterCount });
+      expect(layout.allMatters).toBe(false);
+      expect(layout.inline.matters).toEqual(["m1", "m2"]);
+      expect(layout.overflowCount).toBe(1);
+    }
+  });
 });

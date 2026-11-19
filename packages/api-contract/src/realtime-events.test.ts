@@ -18,6 +18,8 @@ import {
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
   type WorkspaceRealtimeEvent,
 } from "./realtime-events";
 import { RESOURCE_TYPE, resourceRef } from "./resource-ref";
@@ -263,6 +265,12 @@ describe("user realtime events", () => {
       }),
     ).toBeNull();
     expect(parseWorkspaceRealtimeEvent(event)).toBeNull();
+  });
+
+  test("a runs change reads the chats again, since an ended run makes its chat unread", () => {
+    expect(USER_EVENT_READS[REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED]).toContain(
+      USER_EVENT_READ.CHAT_THREADS,
+    );
   });
 
   test("the user channel does not accept workspace events", () => {

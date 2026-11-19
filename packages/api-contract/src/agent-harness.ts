@@ -5,3 +5,10 @@
  */
 export const AGENT_HARNESSES = ["codex", "claude-code", "opencode"] as const;
 export type AgentHarness = (typeof AGENT_HARNESSES)[number];
+
+/**
+ * The CUSTOM stream event carrying a harness's native session id: sent once
+ * the session took the turn, and read by the chat and the run store.
+ */
+export const harnessSessionIdEvent = (harness: AgentHarness) =>
+  `${harness}.session-id`;

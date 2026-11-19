@@ -1,5 +1,4 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { array, looseObject, parse, string } from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -7,6 +6,8 @@ import { getStorageKey } from "../../src/consts";
 import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiGet } from "../helpers/api";
+import type { ApiOk } from "../helpers/route-mock";
+import { apiError, apiJson, respond } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
@@ -58,9 +59,9 @@ const selectGuideWorkspace = async ({
   request,
   workspaceId,
 }: GuideWorkspaceOptions) => {
-  const navigation = parse(
-    looseObject({ workspaces: array(looseObject({ id: string() })) }),
-    await apiGet(request, "/workspaces/navigation?statusScope=active"),
+  const navigation = await apiGet<ApiOk<"v1/workspaces/navigation", "get">>(
+    request,
+    "/workspaces/navigation?statusScope=active",
   );
   const workspaces = navigation.workspaces.filter(
     ({ id }) => id === workspaceId,
@@ -69,13 +70,14 @@ const selectGuideWorkspace = async ({
   // Keep the outside-matter entry point deterministic while parallel tests
   // create and delete their own matters in the same organization.
   await page.route(/\/v1\/workspaces\/navigation(?:\?|$)/u, async (route) => {
-    await route.fulfill({
-      json: {
+    await respond(
+      route,
+      apiJson("v1/workspaces/navigation", "get", {
         ...navigation,
         items: workspaces,
         workspaces,
-      },
-    });
+      }),
+    );
   });
 };
 
@@ -476,10 +478,10 @@ for (const availability of [
       ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
       browserErrors.expectCaptured(/Failed to load resource:.*503/u);
       await page.route(availability.path, async (route) => {
-        await route.fulfill({
-          status: 503,
-          json: { message: "Guide availability test failure" },
-        });
+        await respond(
+          route,
+          apiError(503, { message: "Guide availability test failure" }),
+        );
       });
       await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
       const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });

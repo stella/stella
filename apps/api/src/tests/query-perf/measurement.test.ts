@@ -1,25 +1,249 @@
 import { expect, test } from "bun:test";
 
-import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 
+import { projectionStateRowsVisited } from "./legislation-candidate-plan";
 import {
   budgetProblem,
   budgetViolations,
   median,
   metricsFromPlan,
   scaleViolations,
+  scheduledJobBudgetProblems,
   shapeViolations,
   sharedBlockSampleProblem,
   summarize,
   sumMetrics,
+  writeScaleViolations,
 } from "./measurement";
-import { analyzePlan } from "./plan-analyzer";
+import { analyzePlan, relationRowsVisited } from "./plan-analyzer";
 import { PLAN_EXCEPTIONS } from "./plan-exceptions";
+import {
+  classifyMeasuredStatement,
+  queuedExportReadWork,
+} from "./scheduled-run";
 
 const plan = (Plan: Record<string, unknown>, executionTime = 1) => ({
   Plan,
   "Execution Time": executionTime,
+});
+
+const insertPlan = (rows: number) => ({
+  "Node Type": "ModifyTable",
+  Operation: "Insert",
+  "Actual Rows": 0,
+  Plans: [
+    {
+      "Node Type": "Values Scan",
+      "Parent Relationship": "Outer",
+      "Actual Rows": rows,
+      "Actual Loops": 1,
+    },
+  ],
+});
+
+test("visited relation rows include repeated and rejected work without counting catalog lookups", () => {
+  const tree = {
+    "Node Type": "Nested Loop",
+    Plans: [
+      {
+        "Relation Name": "pg_class",
+        "Actual Rows": 100,
+        "Actual Loops": 4,
+      },
+      {
+        "Relation Name": "organization_data_exports",
+        "Actual Rows": 2,
+        "Rows Removed by Filter": 3,
+        "Rows Removed by Index Recheck": 1,
+        "Actual Loops": 2,
+      },
+      {
+        "Node Type": "Recursive Union",
+        Plans: [
+          {
+            "Relation Name": "organization_data_exports",
+            "Actual Rows": 1,
+            "Actual Loops": 3,
+          },
+        ],
+      },
+      {
+        "Relation Name": "corpus_index_projection_states",
+        "Actual Rows": 4,
+        "Rows Removed by Filter": 1,
+        "Rows Removed by Index Recheck": 2,
+        "Actual Loops": 3,
+      },
+    ],
+  };
+  expect(relationRowsVisited(tree, "organization_data_exports")).toBe(15);
+  expect(projectionStateRowsVisited(tree)).toBe(21);
+  expect(() => relationRowsVisited({ Plans: [null] }, "exports")).toThrow(
+    "Plan children are malformed",
+  );
+  expect(() =>
+    relationRowsVisited(
+      {
+        "Relation Name": "exports",
+        "Actual Rows": "3",
+        "Actual Loops": 1,
+      },
+      "exports",
+    ),
+  ).toThrow("Actual Rows is not a number");
+});
+
+test("queued export work derives its lookahead bound from the captured parameter", () => {
+  const text = 'select "queued_export_keys"."id" from candidates limit $2';
+  const scan = {
+    "Relation Name": "organization_data_exports",
+    "Actual Rows": 3,
+    "Actual Loops": 1,
+  };
+  expect(queuedExportReadWork({ text, params: [99, 3], plan: scan })).toEqual({
+    lookaheadLimit: 3,
+    rowsVisited: 3,
+  });
+  expect(
+    queuedExportReadWork({ text: "select 1", params: [], plan: {} }),
+  ).toBeUndefined();
+  for (const params of [[], [99, 0], [99, -1], [99, 1.5], [99, "3"]]) {
+    expect(() => queuedExportReadWork({ text, params, plan: scan })).toThrow(
+      "Queued export read has no positive bound parameter",
+    );
+  }
+  expect(() =>
+    queuedExportReadWork({
+      text: 'select "queued_export_keys"."id" from candidates',
+      params: [3],
+      plan: scan,
+    }),
+  ).toThrow("Queued export read has no positive bound parameter");
+  const broad = queuedExportReadWork({
+    text,
+    params: [99, 3],
+    plan: { ...scan, "Actual Rows": 2000 },
+  });
+  expect(broad).toBeDefined();
+  if (broad !== undefined) {
+    expect(broad.rowsVisited).toBeGreaterThan(2 * broad.lookaheadLimit);
+  }
+});
+
+test("measured statements use one read/write classifier", () => {
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT 1",
+      plan: { "Node Type": "Result" },
+    }),
+  ).toEqual({ kind: "read", writtenRows: 0 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "INSERT INTO fixture SELECT * FROM source",
+      plan: insertPlan(7),
+    }),
+  ).toEqual({ kind: "write", writtenRows: 7 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT ensure_case_law_provision_extraction_state($1)",
+      plan: { "Node Type": "Result" },
+      nestedPlans: [insertPlan(50)],
+    }),
+  ).toEqual({ kind: "write", writtenRows: 50 });
+  expect(
+    classifyMeasuredStatement({
+      statement: "SELECT lower($1)",
+      plan: { "Node Type": "Result" },
+    }),
+  ).toEqual({ kind: "read", writtenRows: 0 });
+});
+
+test("scheduled write budgets fail closed and enforce both write limits", () => {
+  const measured = (writtenRows: number, writePages: number) => ({
+    readMetrics: { sharedBlocks: 1, executionTimeMs: 1 },
+    writeMetrics: { sharedBlocks: writePages, executionTimeMs: 1 },
+    writtenRows,
+  });
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(1, 1),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(0, 0),
+    ),
+  ).toEqual([]);
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(0, 20_001),
+    ).join("\n"),
+  ).toContain("20001 write pages per run");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(1000, 20_000),
+    ).join("\n"),
+  ).toContain("20001 combined pages per run");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(1, 0),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(0, 1),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(10, 301),
+    ).join("\n"),
+  ).toContain("30.1 write pages per row");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.backfillProvisionState",
+      measured(10_000, 300_001),
+    ).join("\n"),
+  ).toContain("300001 write pages per run");
+});
+
+test("write pages per written row hold across corpus sizes", () => {
+  const run = (writtenRows: number, sharedBlocks: number) => ({
+    writeMetrics: { sharedBlocks, executionTimeMs: 1 },
+    writtenRows,
+  });
+  expect(writeScaleViolations({ size: run(0, 0), double: run(0, 0) })).toEqual(
+    [],
+  );
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(200, 2000) }),
+  ).toEqual([]);
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(100, 1164) }),
+  ).toEqual([]);
+  expect(
+    writeScaleViolations({ size: run(100, 1000), double: run(100, 1165) }).join(
+      "\n",
+    ),
+  ).toContain("write pages per written row grow with the corpus");
+  expect(
+    writeScaleViolations({ size: run(0, 0), double: run(5, 50) }).join("\n"),
+  ).toContain("writes appear at only one size");
 });
 
 test("a sequential scan on a large table fails while a declared small table passes", () => {
@@ -291,7 +515,9 @@ test("the owner-named plan exception ledger only contains reviewed existing debt
 });
 
 test("an absolute budget accepts its own page count and rejects one page more", () => {
-  for (const { pages } of Object.values(READ_BUDGETS)) {
+  for (const budget of Object.values(READ_BUDGETS)) {
+    const pages =
+      budget.surface === "scheduled-job" ? budget.reads.pages : budget.pages;
     expect(
       budgetViolations({ sharedBlocks: pages, executionTimeMs: 1 }, pages),
     ).toEqual([]);
@@ -415,11 +641,18 @@ test("scheduled runs retain execution time and reject a slow statement within th
     ],
   ]) {
     const metrics = sumMetrics(statements);
-    expect(metrics.sharedBlocks).toBeLessThan(READ_BUDGETS[id].pages);
+    expect(metrics.sharedBlocks).toBeLessThan(readBudgetPages(id));
     expect(metrics.executionTimeMs).toBe(10_001);
     expect(budgetProblem(id, metrics)).toContain(
       "execution time hang guard exceeded",
     );
+    expect(
+      scheduledJobBudgetProblems(id, {
+        readMetrics: { sharedBlocks: 1, executionTimeMs: 5000 },
+        writeMetrics: { sharedBlocks: 1, executionTimeMs: 5001 },
+        writtenRows: 1,
+      }).join("\n"),
+    ).toContain("execution time hang guard exceeded");
   }
   expect(
     budgetProblem(

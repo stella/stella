@@ -283,15 +283,19 @@ describe("euEcjAdapter.fetchPage", () => {
         });
         return;
       }
-      expect(result.isErr()).toBe(true);
-      if (!result.isErr()) {
-        throw new TypeError("Expected a notice read failure");
+      // A retryable failure is the variant's, carried as unread: the pipeline
+      // holds the page on it for a bounded number of cycles.
+      expect(result.isOk()).toBe(true);
+      if (!result.isOk()) {
+        throw new TypeError("Expected the variant carried as unread");
       }
-      expect(result.error).toBeInstanceOf(AdapterFetchError);
-      expect(result.error).toMatchObject({
-        cursor: null,
-        httpStatus: status,
-      });
+      expect(result.value.decisions).toHaveLength(0);
+      expect(result.value.unreadItems?.map(({ outcome }) => outcome)).toEqual([
+        { type: "unavailable", cause: { kind: "status", status } },
+      ]);
+      expect(result.value.nextCursor).toBe(
+        `2024-01-18:${enBinding.celex.value}:ENG`,
+      );
     },
   );
 

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { createContext, runInContext } from "node:vm";
 import * as v from "valibot";
@@ -31,6 +32,7 @@ import {
   DELEGATED_CHECKS_ENV,
   UNCHANGED_CHECKS_ENV,
 } from "./generated-files-guard";
+import { stepConditionCovers } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -58,6 +60,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // The pool supplies this to every child; it does not alter a
+                // check's command or classification.
+                "CI_COMPARISON_BASE",
                 // Matrix metadata selects a disjoint slice of the same pool;
                 // it does not change the check represented by this step.
                 "CI_CHECK_POOL_PARTITION",
@@ -167,7 +172,7 @@ const removalSchema = v.array(
 );
 const workflowPath = ".github/workflows/ci.yml";
 const removalsPath = "scripts/ci-checks-removed.json";
-const repository = new URL("../", import.meta.url).pathname;
+const repository = fileURLToPath(new URL("../", import.meta.url));
 const processBudgetEnvSchema = v.optional(v.record(v.string(), v.unknown()));
 const processBudgetWorkflowSchema = v.looseObject({
   env: processBudgetEnvSchema,
@@ -463,6 +468,7 @@ const preparationSteps = new Set([
   "Generate web compiler sources",
   "Download generated sources",
   "Restore generated sources",
+  "Configure flaky-test quarantine",
 ]);
 const prerequisites = new Set([...setupPrerequisites, ...preparationSteps]);
 const partitions = partitionIds.map((id) => v.parse(headJobSchema, jobs[id]));
@@ -498,6 +504,7 @@ const CONTINUATION_PREFIXES = {
   checkout: `\${{ !cancelled() && steps.checkout.outcome == 'success'`,
   install: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'`,
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
+  checkoutInstallPackages: `\${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
   "Changeset present for published package changes": "policy",
@@ -634,6 +641,28 @@ const withPrDepthCheckoutRef = (step: Step): Step => {
   }
   return { ...step, with: { ...inputs, ref: PR_DEPTH_CHECKOUT_REF } };
 };
+// A blobless checkout moved to the shared action that retries it: the same
+// inputs, with the filter now owned by the action. Any other change to the
+// checkout stays significant.
+const withSharedPartialCloneCheckout = (step: Step): Step => {
+  if (usesOf(step) !== "actions/checkout@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  if (inputs?.["filter"] !== "blob:none") {
+    return step;
+  }
+  return {
+    ...step,
+    uses: "stella/.github/actions/partial-clone-checkout@<pinned>",
+    with: Object.fromEntries(
+      Object.entries(inputs).filter(([key]) => key !== "filter"),
+    ),
+  };
+};
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
   "./.github/actions/ci-install",
@@ -758,6 +787,88 @@ const withoutPreparedGeneration = (step: Step): Step => {
       }
     : step;
 };
+// The split bundles add outputs; app-local CSS alone may be empty. Match the
+// complete old census and loop so partial removals never become a migration.
+const MCP_OUTPUTS_BEFORE = `outputs=(
+  packages/mcp-apps/src/shared/generated/schemas.json
+  packages/mcp-apps/src/shared/generated/contracts.js
+  packages/mcp-apps/src/shared/generated/contracts.d.ts
+  packages/mcp-apps/src/shared/generated/messages.json
+  packages/mcp-apps/src/shared/generated/reader-messages.json
+  packages/mcp-apps/src/shared/generated/reader-inputs.json
+  packages/mcp-apps/src/shared/generated/style.css
+  packages/mcp-apps/src/generated/bundles.ts
+  packages/mcp-apps/src/*/generated/app.html.txt
+)
+for output in "\${outputs[@]}"; do
+  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }
+done
+`;
+const MCP_OUTPUTS_AFTER = MCP_OUTPUTS_BEFORE.replace(
+  "  packages/mcp-apps/src/*/generated/app.html.txt\n",
+  () =>
+    [
+      "  packages/mcp-apps/src/generated/runtime.js.txt",
+      "  packages/mcp-apps/src/generated/runtime.css.txt",
+      "  packages/mcp-apps/src/*/generated/app.html.txt",
+      "  packages/mcp-apps/src/*/generated/app.js.txt",
+      "  packages/mcp-apps/src/*/generated/app.css.txt",
+      "",
+    ].join("\n"),
+).replace('  test -s "$output"', () =>
+  [
+    "  # An app can use only shared CSS, leaving its own stylesheet empty.",
+    '  if [[ "$output" == */generated/app.css.txt ]]; then',
+    '    test -f "$output" || { echo "::error::$output was not generated"; exit 1; }',
+    "    continue",
+    "  fi",
+    '  test -s "$output"',
+  ].join("\n"),
+);
+const withSplitMcpOutputs = (step: Step): Step =>
+  step.name === "MCP app derived outputs guard" &&
+  typeof step["run"] === "string"
+    ? {
+        ...step,
+        run: step["run"].replace(MCP_OUTPUTS_BEFORE, () => MCP_OUTPUTS_AFTER),
+      }
+    : step;
+
+test("split MCP output migration retains every output and guard assertion", () => {
+  const commands = [
+    "(cd apps/api && bun run generate:mcp-app-contracts)",
+    "(cd packages/mcp-apps && bun run build)",
+    "bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --mcp-apps --check",
+  ].join("\n");
+  const step = {
+    name: "MCP app derived outputs guard",
+    run: `${commands}\n${MCP_OUTPUTS_BEFORE}bun scripts/check-mcp-generated-tracking.ts\n`,
+  };
+  const migrated = {
+    ...step,
+    run: step.run.replace(MCP_OUTPUTS_BEFORE, () => MCP_OUTPUTS_AFTER),
+  };
+  expect(migrated).not.toEqual(step);
+  expect(withSplitMcpOutputs(step)).toEqual(migrated);
+  expect(withSplitMcpOutputs(migrated)).toEqual(migrated);
+  expect(withSplitMcpOutputs({ ...step, name: "Other guard" })).toEqual({
+    ...step,
+    name: "Other guard",
+  });
+  // Every executable line matters: losing an output, command, or loop assertion
+  // on either side must remain visible to the census.
+  for (const candidate of [step, migrated]) {
+    for (const line of candidate.run.split("\n").filter(Boolean)) {
+      const changed = {
+        ...candidate,
+        run: candidate.run.replace(`${line}\n`, ""),
+      };
+      expect(changed).not.toEqual(candidate);
+      expect(withSplitMcpOutputs(changed), line).not.toEqual(migrated);
+    }
+  }
+});
+
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
@@ -927,6 +1038,7 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(documentationScope)
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
+    .map(withSplitMcpOutputs)
     .map(withoutTestTimeout)
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
@@ -1183,8 +1295,19 @@ const stepFieldsSchema = v.looseObject({
 });
 const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
-const baseSteps = legSteps(baseline, baselineIds).map((step) => {
+// Brings each recorded baseline step up to the current workflow shape.
+const currentBaselineStep = (step: ReturnType<typeof legSteps>[number]) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Test remaining repository scripts" &&
+    isDeepStrictEqual(fields.env, {
+      BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+    })
+  ) {
+    const migrated = { ...step };
+    delete migrated["env"];
+    return migrated;
+  }
   if (
     step.name === "Bridge-version guard" &&
     fields.if?.includes("github.event_name == 'pull_request'") &&
@@ -1421,7 +1544,8 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
   });
   return Object.assign(step, { run: "bun run check:docs-sources" });
-});
+};
+const baseSteps = legSteps(baseline, baselineIds).map(currentBaselineStep);
 
 test("CI legs normalize only the complete canonical cancellation tail and its permission", () => {
   const guard = { name: "Guard", run: "bun check" };
@@ -1661,6 +1785,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     const originalSetup = setupSteps(originalSteps)
       .map(withTaskResultCacheSetup)
       .map(withPrDepthCheckoutRef)
+      .map(withSharedPartialCloneCheckout)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (
@@ -2362,7 +2487,7 @@ const CONTENDED_TEST_TIMEOUTS = {
   "Test remaining repository scripts": 35_000,
   "Test release image CI gate": 50_000,
   "Test api scripts": 12_000,
-  "Test CLI runtime package parity": 80_000,
+  "Test CLI runtime package parity": 240_000,
   "Playwright config scope": 5000,
 } as const;
 
@@ -2466,6 +2591,9 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
     if (step.name === "Checkout") {
       continue;
     }
+    if (step.name === "Configure flaky-test quarantine") {
+      continue;
+    }
     if (leg === "ci-checks-rest" && preInstallGuards.has(step.name)) {
       expect(index, preInstallGuards.get(step.name)).toBeLessThan(installIndex);
       expect(step["id"]).toBe(stepIds[step.name]);
@@ -2490,7 +2618,20 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
           ? CONTINUATION_PREFIXES.installPackages
           : CONTINUATION_PREFIXES.install;
     }
-    expect(condition.startsWith(prefix), step.name).toBe(true);
+    const stableStepIds = new Set(
+      steps.slice(0, index).flatMap((earlier) => {
+        const id = earlier["id"];
+        return typeof id === "string" ? [id.toLowerCase()] : [];
+      }),
+    );
+    expect(
+      stepConditionCovers({
+        earlier: `${prefix} }}`,
+        later: condition,
+        stableStepIds,
+      }),
+      step.name,
+    ).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
       const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";

@@ -33,6 +33,8 @@ import {
   SEARCH_HIT_MARK,
   TextMark,
 } from "@stll/ui/text-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
@@ -40,7 +42,7 @@ import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
 import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
-import { decisionClampClassName } from "@/features/case-law/decision-columns.logic";
+import { decisionClampLines } from "@/features/case-law/decision-columns.logic";
 import type {
   DecisionColumnId,
   DecisionContentMode,
@@ -70,6 +72,8 @@ const EMPTY_VALUE = "—";
 export type Decision = {
   /** Search match semantics; absent on browse rows. */
   match?: DecisionSearchMatch;
+  /** The query words a search hit's decision lacks; absent on browse rows. */
+  missingTerms?: readonly string[];
   /** Search hits report text separately from publisher summaries. */
   textAvailability?: DecisionTextAvailability;
   id: string;
@@ -193,11 +197,28 @@ export const CaseNumberCell = ({
             availability={decision.textAvailability}
           />
         )}
-        {decision.match === "some_terms" && (
-          <span className="text-muted-foreground text-xs">
-            {t("caseLaw.searchWarnings.partialMatch")}
-          </span>
-        )}
+        {decision.match === "some_terms" &&
+          (decision.missingTerms === undefined ||
+          decision.missingTerms.length === 0 ? (
+            <span className="text-muted-foreground text-xs">
+              {t("caseLaw.searchWarnings.partialMatch")}
+            </span>
+          ) : (
+            // Which words the decision lacks, exactly: the search checked
+            // each one against the whole decision.
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="text-muted-foreground text-xs" />}
+              >
+                {t("caseLaw.searchWarnings.partialMatch")}
+              </TooltipTrigger>
+              <TooltipPopup>
+                {t("caseLaw.searchWarnings.partialMatchMissing", {
+                  terms: format.list([...decision.missingTerms]),
+                })}
+              </TooltipPopup>
+            </Tooltip>
+          ))}
         {multilingual && displayLanguage !== null && (
           <DecisionLanguageMenu
             alternates={languageAlternates}
@@ -257,9 +278,9 @@ const identityLineValue = (
   switch (field) {
     case "court":
       return (
-        <BidiText as="span" className="truncate" title={decision.court}>
+        <TruncatedText render={<BidiText as="span" />}>
           {decision.court}
-        </BidiText>
+        </TruncatedText>
       );
     case "date": {
       const date = formatDecisionDate(decision.decisionDate, format);
@@ -621,8 +642,7 @@ export const HeadnoteProse = ({
 
   return (
     <div>
-      <BidiText
-        as="p"
+      <TruncatedText
         className={cn(
           SUMMARY_TEXT_CLASS_NAME,
           // The publisher's own line breaks: a headnote written as numbered
@@ -630,17 +650,18 @@ export const HeadnoteProse = ({
           // clamp still counts rendered lines, so a break costs one of the
           // two a compact row shows.
           "whitespace-pre-line",
-          // A row the reader opened is read, not scanned: the density control
-          // still governs every other row on the page.
-          showingWhole ? "" : decisionClampClassName(contentMode),
         )}
+        // A row the reader opened is read, not scanned: the density control
+        // still governs every other row on the page.
+        lines={showingWhole ? "none" : decisionClampLines(contentMode)}
+        render={<BidiText as="p" />}
       >
         <HighlightedProse
           columnId={columnId}
           queryTokens={queryTokens}
           text={showingWhole ? view.text : preview.text}
         />
-      </BidiText>
+      </TruncatedText>
       {preview.truncated && (
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
           {view.type === HEADNOTE_VIEW.FAILED && (
@@ -679,21 +700,31 @@ const HighlightedPassage = ({
   contentMode: DecisionContentMode;
   html: string;
 }) => (
-  <p
+  <TruncatedText
     className={cn(
       SUMMARY_TEXT_CLASS_NAME,
       // The grid cell sets `whitespace-nowrap` for the scannable columns, so
       // a passage that does not turn it back off is one long line clipped at
-      // the cell's edge, and the clamp below has a single line to count.
+      // the cell's edge, and the clamp has a single line to count.
       // `wrap-break-word` keeps an unbroken citation inside the cell.
       "wrap-break-word whitespace-normal",
-      decisionClampClassName(contentMode),
-      SEARCH_HIT_DESCENDANT_MARK_CLASS,
     )}
     dangerouslySetInnerHTML={{
       // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
       __html: html,
     }}
+    lines={decisionClampLines(contentMode)}
+    // The paragraph styles the server's marks inside it.
+    render={<p className={SEARCH_HIT_DESCENDANT_MARK_CLASS} />}
+    tooltip={
+      <span
+        className={SEARCH_HIT_DESCENDANT_MARK_CLASS}
+        dangerouslySetInnerHTML={{
+          // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler
+          __html: html,
+        }}
+      />
+    }
   />
 );
 

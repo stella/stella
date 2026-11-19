@@ -112,6 +112,7 @@ const uploadSkill = createSafeRootHandler(
 
     return Result.ok({
       ...installResult.value,
+      name: parsed.name,
       skippedFiles: parsed.skippedFiles,
     });
   },

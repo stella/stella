@@ -16,8 +16,13 @@ import {
   ACCOUNT,
   ACTIVITY_SETTINGS,
   APP_STATE,
+  CLOUD_MODELS,
+  DICTATION_READY,
   PERMISSIONS,
+  SETTINGS_DICTATION,
+  SETUP_PERMISSIONS,
   SHORTCUT,
+  SIGNING_DRIVER,
 } from "./fixtures/desktop-window-snapshots";
 import {
   installTauriIpc,
@@ -63,6 +68,8 @@ export const WINDOW_VARIANTS = [
 const tour = (step: OnboardingSnapshot["step"]): OnboardingSnapshot => ({
   activityAvailable: true,
   activityPermissions: ["accessibility"],
+  dictationAvailable: true,
+  dictationPermissions: ["microphone", "accessibility"],
   documentApp: { iconDataUrl: null, name: "Microsoft Word" },
   linked: false,
   mode: { type: "tour" },
@@ -92,9 +99,16 @@ export const ONBOARDING_SCREENS = [
       mode: { feature: "activityTimeline", type: "introduce" },
     },
   },
+  {
+    name: "introduce-dictation",
+    snapshot: {
+      ...tour("welcome"),
+      mode: { feature: "dictation", type: "introduce" },
+    },
+  },
   // A taskbar along the bottom, with the icon near the clock.
   {
-    name: "07-done-taskbar",
+    name: "08-done-taskbar",
     snapshot: {
       ...tour("done"),
       trayLocation: { along: 0.94, edge: "bottom" },
@@ -102,7 +116,7 @@ export const ONBOARDING_SCREENS = [
   },
   // An icon the OS cannot place, such as one in a hidden overflow area.
   {
-    name: "07-done-unplaced",
+    name: "08-done-unplaced",
     snapshot: { ...tour("done"), trayLocation: null },
   },
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
@@ -112,12 +126,18 @@ type WindowFixture = {
   activity: ActivitySettingsSnapshot | null;
   account: DesktopAccountSnapshot;
   appState: AppSnapshot;
+  /** The region's stella AI transcription models. */
+  cloudModels: unknown;
+  /** The dictation snapshot. */
+  dictation: unknown;
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
   /** What the OS answers when the window asks for a permission. */
   requestOutcome: PermissionStatus;
   shortcut: ClipboardShortcutSnapshot;
+  /** The smart card driver setting, or null where it is not offered. */
+  signingDriver: unknown;
 };
 
 const openWindow = async (
@@ -156,6 +176,8 @@ const openWindow = async (
       // No install status either, read the same as the refusal with local agents off.
       harness_get_status: () => null,
       local_skill_folders_get: () => null,
+      signing_driver_get: () => data.signingDriver,
+      local_linked_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,
@@ -175,7 +197,8 @@ const openWindow = async (
       },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
-      dictation_get_snapshot: () => ({ available: false }),
+      dictation_get_snapshot: () => data.dictation,
+      dictation_get_cloud_models: () => data.cloudModels,
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
       // Consent given, so Settings lays out its stella AI drafting rows too.
@@ -204,11 +227,14 @@ export const openOnboardingWindow = async (
       account: { server: ACCOUNT.server, status: "disconnected" },
       activity: null,
       appState: APP_STATE,
+      cloudModels: CLOUD_MODELS,
+      dictation: DICTATION_READY,
       language: options.language,
       onboarding: snapshot,
-      permissions: PERMISSIONS,
+      permissions: SETUP_PERMISSIONS,
       requestOutcome: options.requestOutcome ?? "granted",
       shortcut: SHORTCUT,
+      signingDriver: null,
     },
     path: "/",
     platform: options.platform,
@@ -220,32 +246,45 @@ export const openOnboardingWindow = async (
   await settle(page);
 };
 
-export const SETTINGS_TABS = [
+/** The pages every platform shows; Signing is macOS only. */
+export const SETTINGS_PAGES = [
   "general",
+  "dictation",
+  "clipboard",
+  "agents",
   "activity",
   "notifications",
+  "permissions",
   "about",
 ] as const;
 
-export type SettingsTab = (typeof SETTINGS_TABS)[number];
+/** Pages only macOS shows. */
+export const MAC_SETTINGS_PAGES = ["signing"] as const;
 
-/** Opens the settings window, linked to an account, on one tab. */
+export type SettingsPage =
+  (typeof SETTINGS_PAGES)[number] | (typeof MAC_SETTINGS_PAGES)[number];
+
+/** Opens the settings window, linked to an account, on one page. */
 export const openSettingsWindow = async (
   page: Page,
-  tab: SettingsTab,
+  tab: SettingsPage,
   options: WindowVariant,
 ) => {
   await openWindow(page, {
     fixture: {
       account: ACCOUNT,
-      // On for every tab, so each one is checked with the Activity tab shown.
+      // On for every page, so each one is checked with the Activity and
+      // Dictation pages in the sidebar.
       activity: ACTIVITY_SETTINGS,
       appState: APP_STATE,
+      cloudModels: CLOUD_MODELS,
+      dictation: SETTINGS_DICTATION,
       language: options.language,
       onboarding: null,
       permissions: PERMISSIONS,
       requestOutcome: "granted",
       shortcut: SHORTCUT,
+      signingDriver: SIGNING_DRIVER,
     },
     path: `/#${tab}`,
     platform: options.platform,
@@ -253,8 +292,10 @@ export const openSettingsWindow = async (
     size: DESKTOP_WINDOW_SIZES.settings,
     windowLabel: "main",
   });
-  await expect(page.getByRole("tabpanel")).toBeVisible();
-  // Every tab reads its data from the native side before it settles.
+  await expect(
+    page.locator(`[data-slot=settings-page][data-page=${tab}]`),
+  ).toBeVisible();
+  // Every page reads its data from the native side before it settles.
   if (tab === "general") {
     await expect(page.getByText(ACCOUNT.account.email)).toBeVisible();
     await expect(page.getByRole("switch").first()).toBeVisible();
@@ -266,6 +307,25 @@ export const openSettingsWindow = async (
   }
   if (tab === "notifications") {
     await expect(page.getByRole("checkbox").first()).toBeEnabled();
+  }
+  if (tab === "dictation") {
+    const pane = page.locator("[data-slot=settings-page]");
+    await expect(pane.getByRole("alert")).toBeVisible();
+    // Cleanup and both of its context switches, all switchable.
+    await expect(
+      pane.locator("[data-slot=settings-row] [role=switch]"),
+    ).toHaveCount(3);
+    await expect(
+      pane.locator("[data-slot=settings-row][data-disabled]"),
+    ).toHaveCount(0);
+  }
+  if (tab === "signing") {
+    await expect(
+      page.locator("[data-slot=settings-page] [data-slot=list] button").first(),
+    ).toBeVisible();
+  }
+  if (tab === "permissions") {
+    await expect(page.locator("[data-permission]").first()).toBeVisible();
   }
   await settle(page);
 };
@@ -445,15 +505,16 @@ export const windowGeometryViolations = async (page: Page, inset: number) =>
 
 /**
  * The height and type size of every text control inside `scope`, buttons
- * and fields alike, measured on the box a reader sees. Switches, checkboxes
- * and tabs have scales of their own.
+ * and fields alike, measured on the box a reader sees. Switches, checkboxes,
+ * tabs and the items of a segmented control have scales of their own, and a
+ * fact with a tooltip is text, not a control.
  */
 export const controlMetrics = async (page: Page, scope: string) =>
   await page.evaluate(
     (container) =>
       [
         ...document.querySelectorAll(
-          `${container} button:not([role=switch], [role=checkbox], [role=tab]), ${container} [data-slot=input-control]`,
+          `${container} button:not([role=switch], [role=checkbox], [role=tab], [data-slot=toggle-group-item], [data-slot=tooltip-trigger].decoration-dotted), ${container} [data-slot=input-control]`,
         ),
       ]
         .filter((control) => control.getBoundingClientRect().height > 1)
@@ -473,7 +534,7 @@ export const controlMetrics = async (page: Page, scope: string) =>
 export const scrollSettingsPaneToEnd = async (page: Page) =>
   await page.evaluate(() => {
     const viewport = document.querySelector(
-      "[role=tabpanel] [data-slot=scroll-area-viewport]",
+      "[data-slot=scroll-area-viewport]:has([data-slot=settings-page])",
     );
     if (!viewport || viewport.scrollHeight <= viewport.clientHeight) {
       return false;

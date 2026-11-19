@@ -72,7 +72,7 @@ export type DocumentOcrResult = {
   truncated: boolean;
 };
 
-export const parseOcrBox = (
+const parseOcrBox = (
   value: unknown,
   width: number,
   height: number,

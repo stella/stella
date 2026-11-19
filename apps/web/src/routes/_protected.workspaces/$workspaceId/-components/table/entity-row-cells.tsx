@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type React from "react";
 
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -216,13 +217,10 @@ export const DraggableRow = ({
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
-  const setRowRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      rowRef.current = element;
-      measureElement(element);
-    },
-    [measureElement],
-  );
+  const setRowRef = (element: HTMLDivElement | null) => {
+    rowRef.current = element;
+    measureElement(element);
+  };
   const [bulkEntities, setBulkEntities] = useState<TableTreeNode[] | undefined>(
     undefined,
   );
@@ -877,9 +875,9 @@ const FolderCell = ({
           }}
           variant="plain"
         >
-          <span className="min-w-0 overflow-hidden text-sm text-ellipsis whitespace-pre">
+          <TruncatedText className="text-sm whitespace-pre">
             {name}
-          </span>
+          </TruncatedText>
         </Button>
       )}
     </div>

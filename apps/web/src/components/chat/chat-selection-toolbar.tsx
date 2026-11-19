@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
@@ -21,6 +21,7 @@ import {
 } from "@/components/chat/side-panel-chat-status";
 import { SIDE_PANEL_CHAT_STATUS } from "@/components/chat/side-panel-chat-status.logic";
 import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
+import { useSelectionCopyControl } from "@/components/copy-control";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
@@ -115,11 +116,21 @@ export const ChatSelectionToolbar = ({
     null,
   );
 
-  const refreshEditedAnswer = useCallback(async () => {
+  // The bar copies the words selected across this transcript's messages
+  // while it offers its actions.
+  const selectionCopy = useSelectionCopyControl({
+    ownsSelection: (selection, root) =>
+      selected !== null &&
+      editing === null &&
+      selectedMessageRange(selection, root) !== null,
+    rootRef,
+  });
+
+  const refreshEditedAnswer = async () => {
     if (editing !== null) {
       await onAnswerEdited?.(editing.anchor.messageId);
     }
-  }, [editing, onAnswerEdited]);
+  };
 
   const readSelection = useLatestCallback(
     (ownerDoc: Document, pointer?: { x: number; y: number }) => {
@@ -361,6 +372,7 @@ export const ChatSelectionToolbar = ({
             actions={actions}
             askInNewChat={askInNewChat}
             quoteInReply={quoteInReply}
+            copy={selectionCopy}
             copyText={selected.quote}
           />
         </div>

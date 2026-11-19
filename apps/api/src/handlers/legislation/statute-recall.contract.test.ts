@@ -88,7 +88,7 @@ const baselineSchema = v.strictObject({
   ),
 });
 const baseline = v.parse(baselineSchema, fixtureBaseline);
-export const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
+const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
 const fixtureFingerprint = hashSha256Hex(
   JSON.stringify([fixtureQueries, fixtureDocuments]),
 );
@@ -417,7 +417,10 @@ describe.skipIf(!runEngineTests)(
         });
         if (result.isOk()) {
           engineReads.push({
-            query: options.query,
+            query:
+              typeof options.query === "string"
+                ? options.query
+                : JSON.stringify(options.query.query),
             documentIds: result.value.hits.map(
               (hit) => hit.fields["document_id"],
             ),

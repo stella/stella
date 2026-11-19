@@ -115,6 +115,25 @@ test("the census resolves a filtered workspace script and fails on an unknown co
   ).toThrow("Census cannot resolve the command");
 });
 
+test("the census resolves a package script's own sibling scripts", () => {
+  const catalog = generator("capability-catalog");
+  // `bun --cwd=packages/cli run codegen` runs `bun run generate:capabilities`
+  // inside packages/cli, which changes to the root before its entry points.
+  const undeclared = {
+    ...catalog,
+    write: ["bun", "--cwd=packages/cli", "run", "codegen"],
+    inputs: [],
+    checkInputs: [],
+  } satisfies Generator;
+  const census = generatorInputCensus([undeclared]);
+  expect(census).toContain(
+    "capability-catalog: undeclared import packages/cli/scripts/codegen.ts",
+  );
+  expect(census).toContain(
+    "capability-catalog: undeclared import apps/api/scripts/export-capability-catalog.ts",
+  );
+});
+
 test("the census follows both a preload and the entry point of one Bun command", () => {
   const skills =
     GENERATORS.find(({ id }) => id === "skill-manifests") ??

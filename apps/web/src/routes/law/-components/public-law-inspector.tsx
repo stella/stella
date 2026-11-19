@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { PanelRightIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
@@ -125,7 +126,7 @@ const PublicLawRail = ({
             />
           }
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </Tooltip>
       }
     >

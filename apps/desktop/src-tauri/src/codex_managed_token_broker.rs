@@ -635,11 +635,17 @@ mod tests {
 
   fn exchange(endpoint: &str, request: &[u8]) -> Vec<u8> {
     let mut stream = std::os::unix::net::UnixStream::connect(endpoint).unwrap();
-    stream
+    // The broker closes a refused peer at once. On macOS a timeout set on a
+    // socket whose peer already closed fails (EINVAL): that is the refusal,
+    // and no response follows.
+    if stream
       .set_read_timeout(Some(Duration::from_secs(10)))
-      .unwrap();
-    // The broker closes a refused peer at once, so these can lose that race;
-    // only the response says what the broker decided.
+      .is_err()
+    {
+      return Vec::new();
+    }
+    // The rest can lose the same race; only the response says what the
+    // broker decided.
     #[expect(
       clippy::let_underscore_must_use,
       reason = "the broker may close a refused peer first; only the response is asserted"

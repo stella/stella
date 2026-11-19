@@ -8,7 +8,10 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { matchCarriedDecisions } from "@/api/lib/document-review/decision-carry-over";
+import {
+  matchCarriedDecisions,
+  planCarriedDecisions,
+} from "@/api/lib/document-review/decision-carry-over";
 import type { CarryOverFinding } from "@/api/lib/document-review/decision-carry-over";
 import type { DocumentReviewFindingPayload } from "@/api/lib/document-review/run-contract";
 import type {
@@ -357,5 +360,61 @@ describe("matchCarriedDecisions when the position's rules moved", () => {
   test("does not carry when a run's pin does not list the position", () => {
     expect(carriedAcross(tierPosition(OTHER_POSITION_ID), base)).toEqual([]);
     expect(carriedAcross(base, tierPosition(OTHER_POSITION_ID))).toEqual([]);
+  });
+});
+
+describe("planCarriedDecisions outcomes", () => {
+  const plan = (current: CarryOverFinding[], prior: CarryOverFinding[]) =>
+    planCarriedDecisions({
+      current,
+      prior,
+      currentPositions: POSITIONS,
+      priorPositions: POSITIONS,
+    });
+
+  test("names what became of every answered prior finding, and only those", () => {
+    const carried = finding({ decision: "accepted" });
+    const reworded = finding({
+      decision: "accepted",
+      positionId: OTHER_POSITION_ID,
+    });
+    const unanswered = finding({
+      positionId: "00000000-0000-4000-8000-000000000000",
+    });
+    const { outcomes } = plan(
+      [
+        finding(),
+        finding({
+          positionId: OTHER_POSITION_ID,
+          payload: payload("This Agreement is governed by Scots law"),
+        }),
+      ],
+      [carried, reworded, unanswered],
+    );
+    expect(outcomes).toEqual(
+      new Map([
+        [carried.id, "carried"],
+        [reworded.id, "text-changed"],
+      ]),
+    );
+  });
+
+  test("another conclusion is a changed verdict, a missing answer is unmatched", () => {
+    const regraded = finding({ decision: "accepted" });
+    const dropped = finding({
+      decision: "dismissed",
+      positionId: OTHER_POSITION_ID,
+    });
+    const { carried, outcomes } = plan(
+      [finding({ outcome: "non-compliant" })],
+      [regraded, dropped],
+    );
+    expect(carried).toEqual([]);
+    expect(outcomes).toEqual(
+      new Map([
+        [regraded.id, "verdict-changed"],
+        [dropped.id, "unmatched"],
+      ]),
+    );
   });
 });

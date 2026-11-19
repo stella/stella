@@ -1,4 +1,8 @@
+// parser-output-unchanged: a decision type spelled as an address is refused at this boundary; every registered adapter emits printed labels, so their output is unchanged.
+// parser-output-unchanged: Removes migration-only field exclusions after all producers migrate.
+// parser-output-unchanged: Adds nested inventory addresses without changing result construction.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: The optional reconciliation publisherCount field carries census observations; decision parser inputs and output are unchanged.
 // parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
 // parser-output-unchanged: Stored-object readers and metadata-only replay outcomes leave ingestion parsing unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
@@ -198,7 +202,9 @@ export type RawIngestionResult = {
    * Exact source URLs emitted by an older adapter version for this same
    * publisher document. This is a narrowly scoped identity-migration hint:
    * the pipeline may use it to attach a newly learned `sourceDocumentId` to
-   * the right legacy null-id row without guessing from a shared docket.
+   * the right legacy null-id row without guessing from a shared docket. A URL
+   * that holds the document id itself proves the row even over a contradicting
+   * ECLI: a publisher can reissue one when it adds a sibling to the docket.
    */
   legacySourceUrls?: readonly string[] | undefined;
   /**
@@ -419,6 +425,25 @@ const requiredLabel = (raw: string) =>
 const optionalPlainText = (raw: string | undefined) =>
   raw === undefined ? Result.ok(undefined) : toPlainText(raw);
 
+const ADDRESS_RE = /^\s*[a-z][a-z\d+.-]*:\/\//iu;
+
+/**
+ * A decision's type is the label its publisher prints ("rozsudek",
+ * "judgment"). A publisher's codelist address names a type without being
+ * one: it belongs in metadata beside the label, and as the type it would be
+ * shown and filtered on as one. Refused here, at the one boundary every
+ * stored decision crosses, so no adapter can store one.
+ */
+const optionalDecisionTypeLabel = (raw: string | undefined) =>
+  raw !== undefined && ADDRESS_RE.test(raw)
+    ? Result.err(
+        new PlainTextError({
+          message: "A decision type is a printed label, not an address",
+          reason: "address-as-label",
+        }),
+      )
+    : optionalPlainText(raw);
+
 /** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
 export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
@@ -462,7 +487,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
-      decisionType: yield* optionalPlainText(raw.decisionType),
+      decisionType: yield* optionalDecisionTypeLabel(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
         raw.metadata,
         metadataUrlSchema,
@@ -1142,9 +1167,20 @@ export const parseListingIdentityKey = (
   };
 };
 
+/** Court evidence qualifies census observations, independently of persisted reconciliation keys. */
+export type CensusCourtEvidence =
+  | { type: "known"; court: string; courtId: string | null }
+  | { type: "unknown" };
+
+export type CensusListingIdentity = ListingIdentity & {
+  censusCourtEvidence?: CensusCourtEvidence;
+};
+
 /** One item as the publisher lists it, plus how the ingest would key it. */
 export type ReconciliationListingItem = {
   identity: ListingIdentity;
+  /** Absent evidence is explicitly unmeasured for a case-number census entry. */
+  censusCourtEvidence?: CensusCourtEvidence;
   /** Verbatim listing payload, JSON-serializable; replayed into buildDecision. */
   payload: unknown;
 };
@@ -1153,6 +1189,8 @@ export type ReconciliationSlicePage = {
   items: ReconciliationListingItem[];
   /** 0 where the publisher lists nothing for the slice at all. */
   totalPages: number;
+  /** Exact count stated for this whole slice by the listing already fetched. */
+  publisherCount?: number | undefined;
 };
 
 export type ReconciliationSlicePageOptions = {
@@ -1251,10 +1289,78 @@ export type HeldRowRules = {
 };
 
 /**
+ * What recapturing one stored row's missing publisher responses produced.
+ *
+ * `identity-mismatch` is a finding, not a failure to retry: the listed item and
+ * the payload already held describe different decisions, and neither is
+ * written over the other.
+ */
+export type StoredRawRecaptureOutcome =
+  | {
+      type: "recaptured";
+      /** The envelope the crawl would have stored for this row. */
+      raw: string;
+      contentType: string;
+    }
+  | { type: "identity-mismatch"; detail: string }
+  | { type: "not-recapturable"; detail: string };
+
+export type StoredRawRecaptureInput = {
+  /** One item exactly as the slice listing serves it. */
+  listingPayload: unknown;
+  stored: StoredRawReparseInput;
+};
+
+/**
+ * Re-reading the publisher responses an older stored payload never kept.
+ *
+ * A row the crawl wrote before the adapter stored a response (most often the
+ * listing row) cannot be replayed: the replay rebuilds from retained bytes
+ * alone. The listing is cheap to ask again, so the row is upgraded to the
+ * envelope a crawl writes today and then rebuilt by `reparseStoredRaw` like
+ * any other row; the envelope and the decision each keep a single builder.
+ */
+export type SourceRecapture = {
+  /**
+   * What to ask the publisher for to find the stored row, read off what the
+   * row holds: a slice where the publisher lists by slice (one request then
+   * serves every row it lists), a narrower query where a slice is too large to
+   * be served whole. Null where the row names nothing to ask for.
+   */
+  lookupOf: (stored: StoredRawReparseInput) => string | null;
+  /** One page of what the publisher lists for a lookup, keyed as the crawl keys it. */
+  listLookup: (
+    options: ReconciliationSlicePageOptions,
+  ) => Promise<ReconciliationSlicePage>;
+  /**
+   * Whether a listed item is the stored row. The adapter decides, because a
+   * row stored without the publisher's id can only be told by what it holds.
+   */
+  matchesStored: (
+    item: ReconciliationListingItem,
+    stored: StoredRawReparseInput,
+  ) => boolean;
+  /**
+   * The envelope for `stored` with the listed item added. Pure: the payload
+   * already held is reused, never fetched again.
+   *
+   * Absent where what a legacy row holds cannot stand in for the responses a
+   * crawl reads (a document file the adapter no longer parses, where the text
+   * comes from another rendition): such a row is located here and then
+   * re-observed through `buildDecision`, never upgraded from bytes that would
+   * build a poorer decision than the one stored.
+   */
+  recaptureStoredRaw?:
+    ((input: StoredRawRecaptureInput) => StoredRawRecaptureOutcome) | undefined;
+};
+
+/**
  * The capability that makes a source reconcilable: the publisher can be asked
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
+  /** Present where rows stored without a listing can be upgraded from it. */
+  recapture?: SourceRecapture | undefined;
   /**
    * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
    * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
@@ -1387,7 +1493,7 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
  * a result field is a column of the row, and the last two are not fields at all.
  */
 export type SourceFieldTarget =
-  /** Exact JSON field retained in a named raw part; `*` visits every array row. */
+  /** Empty paths retain the whole response; JSON paths address exact values (`*` visits every row). */
   | {
       readonly type: "raw";
       readonly part: string;
@@ -1395,7 +1501,12 @@ export type SourceFieldTarget =
       readonly reason: string;
     }
   /** `metadata[key]` on the stored row. */
-  | { readonly type: "metadata"; readonly key: string }
+  | {
+      readonly type: "metadata";
+      readonly key: string;
+      /** Exact nested publisher value; an aggregate object cannot certify its children. */
+      readonly path?: readonly string[];
+    }
   /** A publisher-authored field represented by the decision text contract. */
   | { readonly type: "textField"; readonly key: DecisionTextFieldKey }
   /** A field of the ingestion result itself, spelled as the contract does. */
@@ -1442,23 +1553,7 @@ export type SourceFieldDisposition =
       readonly justification: string;
       readonly pointer: string;
       readonly [STATED_REASON]: true;
-    }
-  | {
-      readonly disposition: "excluded";
-      readonly legacy: true;
-      readonly reason: string;
-      readonly [STATED_REASON]: true;
     };
-
-/** Migration-only constructor, held to the exact legacy source exclusion census. */
-export const legacyExcludedSourceField = <const TText extends string>(
-  reason: StatedReason<TText>,
-): SourceFieldDisposition => ({
-  disposition: "excluded",
-  reason,
-  legacy: true,
-  [STATED_REASON]: true,
-});
 
 /** Closed policy vocabulary; exclusion is a decision that must be reviewable. */
 export const SOURCE_EXCLUSION_REASONS = [
@@ -1799,6 +1894,29 @@ const replayedPublisherRecord = (
   }
 };
 
+/**
+ * A page fetch that threw, as the failure a cycle stores. It keeps the
+ * cause's own words: they are stored on the cycle event, logged when the
+ * cycle stops and what a park compares, and the wrapper's text alone says
+ * nothing about why the page failed. A thrown adapter failure passes through
+ * as it was raised.
+ */
+const thrownPageFailure = (
+  adapterKey: AdapterKey,
+  cursor: string | null,
+  cause: unknown,
+): AdapterFetchError =>
+  cause instanceof AdapterFetchError
+    ? cause
+    : new AdapterFetchError({
+        message: `Adapter page fetch failed: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+        adapterKey,
+        cursor,
+        cause,
+      });
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1896,13 +2014,7 @@ export const defineSourceAdapter = <
         fetchPage: async () => {
           const fetched = await Result.tryPromise({
             try: async () => await adapter.fetchPage(cursor, config, signal),
-            catch: (cause) =>
-              new AdapterFetchError({
-                message: "Adapter page fetch failed",
-                adapterKey: adapter.key,
-                cursor,
-                cause,
-              }),
+            catch: (cause) => thrownPageFailure(adapter.key, cursor, cause),
           });
           const page = fetched.andThen((outcome) => outcome);
           if (Result.isError(page)) {
@@ -1946,6 +2058,18 @@ export const defineSourceAdapter = <
             return inspectBuild(createSliceBuildDecision.call(this));
           }),
   } satisfies ScopedCallbacks<SourceReconciliation>;
+  const recapture =
+    reconciliation.recapture === undefined
+      ? undefined
+      : ({
+          lookupOf: scoped(reconciliation.recapture.lookupOf),
+          listLookup: scoped(reconciliation.recapture.listLookup),
+          matchesStored: scoped(reconciliation.recapture.matchesStored),
+          recaptureStoredRaw:
+            reconciliation.recapture.recaptureStoredRaw === undefined
+              ? undefined
+              : scoped(reconciliation.recapture.recaptureStoredRaw),
+        } satisfies SourceRecapture);
   const sourceFieldCallbacks = {
     listSourceFields: scoped(adapter.sourceFields.listSourceFields),
   } satisfies ScopedCallbacks<SourceFieldInventory>;
@@ -1984,6 +2108,7 @@ export const defineSourceAdapter = <
       ...reconciliation,
       ...reconciliationCallbacks,
       textlessHeldRecheck: textless,
+      recapture,
     },
   };
 };

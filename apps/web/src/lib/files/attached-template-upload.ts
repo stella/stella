@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
   type AttachedTemplateTargetKind,
@@ -12,7 +13,10 @@ import {
 import { isDocxFile } from "@/lib/consts";
 import { createUuid } from "@/lib/uuid";
 
-const MAX_INSPECTED_DOCX_BYTES = 50 * 1024 * 1024;
+/** Every document the upload accepts: the API refuses an attached template
+ *  this preflight could not inspect, so a smaller bound would turn a large
+ *  upload with a template link into a refusal. */
+const MAX_INSPECTED_DOCX_BYTES = UPLOAD_DOCUMENT_MAX_BYTES;
 const MAX_ARCHIVE_ENTRIES = 1000;
 const MAX_RELATIONSHIPS_ENTRY_BYTES = 1024 * 1024;
 const MAX_RELATIONSHIPS_TOTAL_BYTES = 8 * 1024 * 1024;
@@ -151,8 +155,9 @@ export const prepareAttachedTemplateFiles = async (
   files: readonly File[],
 ): Promise<readonly PreparedAttachedTemplateFile[]> => {
   const prepared: PreparedAttachedTemplateFile[] = [];
-  // Deliberately serial: a batch can contain several 50 MB DOCX files, and
-  // inflating them concurrently would multiply the tab's peak memory use.
+  // Deliberately serial: a batch can contain several maximum-size DOCX
+  // files, and inflating them concurrently would multiply the tab's peak
+  // memory use.
   for (const file of files) {
     const result = await prepareAttachedTemplateFile(file);
     if (result !== null) {

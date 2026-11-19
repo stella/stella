@@ -92,12 +92,13 @@ const readBillingDraftConfiguration = createSafeRootHandler(
         clientIds: query.clientId ? [query.clientId] : [],
       }),
     );
-    const client = query.clientId
+    const clientId = query.clientId;
+    const client = clientId
       ? yield* Result.await(
           safeDb((tx) =>
             tx.query.contacts.findFirst({
               where: {
-                id: { eq: query.clientId },
+                id: { eq: clientId },
                 organizationId: { eq: organizationId },
               },
               columns: { timeBillingFormat: true },

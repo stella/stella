@@ -2,6 +2,7 @@ import type { App } from "@modelcontextprotocol/ext-apps";
 import { describe, expect, test } from "bun:test";
 
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
+import { waitFor } from "@stll/test-kit";
 
 import { CASE_LAW_RESULTS_APP, DECISION_READER_APP } from "../manifest";
 import {
@@ -351,5 +352,91 @@ describe("MCP app web navigation", () => {
       fail: () => expect.unreachable("Unexpected navigation refusal"),
     });
     expect(opened).toEqual(["https://app.example/law/cz/2020/1#section=2"]);
+  });
+});
+
+describe("a read the server is still working on", () => {
+  const running = (token: string) => ({
+    content: [],
+    structuredContent: {
+      status: "running",
+      continuationToken: token,
+      retryAfterMs: 5,
+    },
+  });
+  const finished = { content: [], structuredContent: { results: ["done"] } };
+
+  const followed = () => {
+    const sent: Record<string, unknown>[] = [];
+    const replies = [running("token-2"), finished];
+    const listeners = new Map<string, unknown>();
+    const emit = (name: string, event: unknown) => {
+      const listener = listeners.get(name);
+      if (typeof listener === "function") {
+        Reflect.apply(listener, undefined, [event]);
+      }
+    };
+    const waits = Promise.withResolvers<undefined>();
+    const bridge = createPresentationBridge({
+      manifest: CASE_LAW_RESULTS_APP,
+      parse: (payload) => ({ payload }),
+      wait: async () => await waits.promise,
+      host: {
+        callServerTool: async (request) => {
+          sent.push(request.arguments ?? {});
+          return replies.shift() ?? finished;
+        },
+        addEventListener: (name, listener) => {
+          listeners.set(name, listener);
+        },
+        removeEventListener: () => {},
+        getHostContext: () => ({}),
+        getHostCapabilities: () => ({}),
+        connect: async () => undefined,
+        openLink: async () => ({}),
+        requestDisplayMode: async () => ({ mode: "inline" }),
+        onteardown: undefined,
+      },
+    });
+    return { bridge, sent, emit, waits };
+  };
+
+  test("the host's running answer shows as in progress, then polls to the answer", async () => {
+    const { bridge, sent, emit, waits } = followed();
+    emit("toolinput", {
+      arguments: { country: "CZE", queries: ["náhrada škody"] },
+    });
+    emit("toolresult", running("token-1"));
+
+    expect(bridge.getSnapshot().result).toEqual({
+      status: "loading",
+      phase: "continuing",
+    });
+    waits.resolve(undefined);
+    await waitFor(
+      () => (bridge.getSnapshot().result.status === "ready" ? true : undefined),
+      { description: "the polled answer is shown" },
+    );
+
+    expect(sent.map((request) => request["continuation_token"])).toEqual([
+      "token-1",
+      "token-2",
+    ]);
+    expect(sent.at(0)?.["country"]).toBe("CZE");
+    expect(bridge.getSnapshot().result).toEqual({
+      status: "ready",
+      view: { payload: { results: ["done"] } },
+    });
+  });
+
+  test("a newer call ends the polling", async () => {
+    const { bridge, sent, emit, waits } = followed();
+    emit("toolinput", { arguments: { country: "CZE" } });
+    emit("toolresult", running("token-1"));
+    emit("toolinput", { arguments: { country: "SVK" } });
+    waits.resolve(undefined);
+    await Promise.resolve();
+    expect(sent).toEqual([]);
+    expect(bridge.getSnapshot().result).toEqual({ status: "loading" });
   });
 });

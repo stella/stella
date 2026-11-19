@@ -84,7 +84,7 @@ export const resolveConfigurationPlaceholders = ({
   values,
   derivationInputs = {},
 }: ResolveConfigurationPlaceholdersOptions): ConfigurationPlaceholderResolution => {
-  const runtimeEnv: RuntimeEnvValues = { ...values };
+  const runtimeEnv = new Map(Object.entries(values));
   const reported: string[] = [];
   const scan = (
     entries: Record<string, EnvSchemaEntry>,
@@ -97,7 +97,7 @@ export const resolveConfigurationPlaceholders = ({
       if (typeof value !== "string" || !isPlaceholderForVariable(name, value)) {
         continue;
       }
-      runtimeEnv[name] = undefined;
+      runtimeEnv.set(name, undefined);
       // Only a seeded literal is worth naming. An empty value is unset, and
       // reporting it here would pre-empt the schema (or a derivation that
       // falls back to another input) that already handles an absent value.
@@ -112,7 +112,7 @@ export const resolveConfigurationPlaceholders = ({
   scan(schema, false);
   scan(derivationInputs, true);
   return {
-    runtimeEnv,
+    runtimeEnv: Object.fromEntries(runtimeEnv),
     violation:
       reported.length === 0
         ? null

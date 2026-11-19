@@ -42,6 +42,7 @@ export type TestTimestampMisbehaviour = {
 /** A timestamping certificate: self-signed unless `issuer` is given. */
 export const createTestTimestampCertificate = async ({
   critical = true,
+  crlUrl,
   extendedKeyUsages = [TIME_STAMPING_USAGE],
   issuer,
   keyPool,
@@ -49,6 +50,7 @@ export const createTestTimestampCertificate = async ({
   notBefore,
 }: {
   critical?: boolean;
+  crlUrl?: string;
   extendedKeyUsages?: string[];
   issuer?: TestCertificate;
   keyPool?: TestRsaKeyPool;
@@ -58,6 +60,7 @@ export const createTestTimestampCertificate = async ({
   await createTestCertificate({
     commonName: "stella test timestamp authority",
     ...(keyPool !== undefined && { keyPool }),
+    ...(crlUrl !== undefined && { crlUrl }),
     extendedKeyUsages,
     extendedKeyUsagesCritical: critical,
     ...(issuer !== undefined && { issuer }),

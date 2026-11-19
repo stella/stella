@@ -16,6 +16,7 @@ import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import { SHOW_APP_TOOL_NAME } from "@stll/api-contract/stella-mcp-app";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -23,6 +24,7 @@ import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-co
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
+import { SHOW_APP_DEPLOYMENT_FEATURE } from "@/api/handlers/chat/tools/show-app-tool";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
@@ -40,6 +42,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { hiddenMcpDescriptorIds } from "@/api/mcp/feature-access-prose";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 
 import type { CanaryProvider } from "./ai-provider-canary-config";
 
@@ -179,6 +182,7 @@ const buildChatToolsForScenario = ({
       store: () => panic("The provider canary must not publish views."),
       preview: () => panic("The provider canary must not render previews."),
     },
+    appTools: { origin: createVisualResourceOrigin() },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
     browserExtension: {
@@ -257,9 +261,15 @@ export const buildCanaryChatToolsets = (
   const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
   // The canary has no feature admission. Account for those tools through the
   // same registry-derived visibility rule chat uses, without granting access.
-  const gatedNames = hiddenMcpDescriptorIds(undefined, [
-    ...DEFAULT_MCP_TOOL_DEFINITIONS,
-    ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  const gatedNames = new Set([
+    ...hiddenMcpDescriptorIds(undefined, [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS,
+      ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+    ]),
+    // A deployment without the public corpus offers no app to show.
+    ...(isMcpToolFeatureEnabled(SHOW_APP_DEPLOYMENT_FEATURE)
+      ? []
+      : [SHOW_APP_TOOL_NAME]),
   ]);
   const missing = catalogNames.filter(
     (name) => !registeredNames.has(name) && !gatedNames.has(name),

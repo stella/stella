@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,6 +9,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   assertCorpusEngineTestCoverage,
   CORPUS_ENGINE_GATE,
+  CORPUS_ENGINE_METASTORE,
   CORPUS_ENGINE_REPORT_CHECK,
   CORPUS_ENGINE_TEST_FILES,
   executeCorpusSuite,
@@ -27,6 +29,28 @@ type SuiteCommand = Parameters<
   NonNullable<Parameters<typeof executeCorpusSuite>[0]["run"]>
 >[0];
 
+type PlannedSuite = ReturnType<typeof planCorpusEngineSuites>[number];
+
+const fileEngine = ({ engine }: PlannedSuite) => {
+  if (engine.type !== CORPUS_ENGINE_METASTORE.file) {
+    throw new TypeError("fixture suite has no file metastore");
+  }
+  return engine;
+};
+
+const plannedSuite = (
+  outputRoot: string,
+  metastore: PlannedSuite["engine"]["type"],
+) => {
+  const suite = planCorpusEngineSuites({ outputRoot, runId: metastore }).find(
+    ({ engine }) => engine.type === metastore,
+  );
+  if (suite === undefined) {
+    throw new TypeError(`no ${metastore} metastore suite is planned`);
+  }
+  return suite;
+};
+
 test("suite execution mounts isolated daemon-owned data and passes isolated endpoint and temporary storage", async () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "corpus-lifecycle-"));
   const commands: SuiteCommand[] = [];
@@ -34,11 +58,16 @@ test("suite execution mounts isolated daemon-owned data and passes isolated endp
     const planned = planCorpusEngineSuites({
       outputRoot: fixture,
       runId: "lifecycle",
-    }).slice(0, 2);
+    })
+      .filter(({ engine }) => engine.type === CORPUS_ENGINE_METASTORE.file)
+      .slice(0, 2);
+    expect(planned).toHaveLength(2);
     for (const suite of planned) {
+      const { dataVolume } = fileEngine(suite);
       const result = await executeCorpusSuite({
         apiRoot,
         image: "engine-image",
+        metastoreImage: "metastore-image",
         signal: new AbortController().signal,
         suite,
         run: async (options) => {
@@ -52,7 +81,7 @@ test("suite execution mounts isolated daemon-owned data and passes isolated endp
           ({ command }) =>
             command.includes(suite.containerName) &&
             command.includes(
-              `type=volume,source=${suite.dataVolume},target=/quickwit/qwdata`,
+              `type=volume,source=${dataVolume},target=/quickwit/qwdata`,
             ),
         ),
       ).toBe(true);
@@ -66,7 +95,7 @@ test("suite execution mounts isolated daemon-owned data and passes isolated endp
           ({ command }) =>
             command.at(1) === "volume" &&
             command.at(2) === "create" &&
-            command.includes(suite.dataVolume),
+            command.includes(dataVolume),
         ),
       ).toBe(true);
       expect(
@@ -74,7 +103,7 @@ test("suite execution mounts isolated daemon-owned data and passes isolated endp
           ({ command }) =>
             command.at(1) === "volume" &&
             command.at(2) === "rm" &&
-            command.includes(suite.dataVolume),
+            command.includes(dataVolume),
         ),
       ).toBe(true);
       const child = commands.find(({ command }) =>
@@ -88,6 +117,12 @@ test("suite execution mounts isolated daemon-owned data and passes isolated endp
       );
       expect(child?.environment?.["STELLA_RUN_POSTGRES_TESTS"]).toBeUndefined();
       expect(child?.environment?.["PGLITE_TEST_SNAPSHOT"]).toBeUndefined();
+      expect(
+        child?.environment?.["STELLA_CORPUS_ENGINE_TEST_CONTAINER"],
+      ).toBeUndefined();
+      expect(
+        child?.environment?.["STELLA_CORPUS_METASTORE_TEST_URL"],
+      ).toBeUndefined();
       expect(child?.command).toContain(`--reporter-outfile=${suite.junitPath}`);
       const admission = commands.findIndex(({ command }) =>
         command.some((argument) => argument.endsWith("/ingest?commit=force")),
@@ -127,6 +162,7 @@ test.each([
         executeCorpusSuite({
           apiRoot,
           image: "engine-image",
+          metastoreImage: "metastore-image",
           signal: abort.signal,
           suite,
           run: async (options) => {
@@ -158,7 +194,7 @@ test.each([
       const volumeCleanup = commands.find(
         ({ command }) => command.at(1) === "volume" && command.at(2) === "rm",
       );
-      expect(volumeCleanup?.command).toContain(suite.dataVolume);
+      expect(volumeCleanup?.command).toContain(fileEngine(suite).dataVolume);
       expect(volumeCleanup?.signal).toBeUndefined();
       for (const operation of ["logs", "rm"]) {
         const cleanup = commands.find(
@@ -310,16 +346,170 @@ test("each suite and each run own distinct output, data, report and container na
       runId: "another",
     }),
   ];
-  for (const field of [
-    "outputDir",
-    "dataVolume",
-    "junitPath",
-    "containerName",
-  ] as const) {
+  for (const field of ["outputDir", "junitPath", "containerName"] as const) {
     expect(new Set(planned.map((suite) => suite[field])).size).toBe(
       planned.length,
     );
   }
+  const engineResources = planned.flatMap(({ engine }) => {
+    switch (engine.type) {
+      case CORPUS_ENGINE_METASTORE.file:
+        return [engine.dataVolume];
+      case CORPUS_ENGINE_METASTORE.postgres:
+        return [engine.network, engine.metastoreContainerName];
+      default:
+        engine satisfies never;
+        throw new TypeError("unhandled engine");
+    }
+  });
+  expect(new Set(engineResources).size).toBe(engineResources.length);
+});
+
+describe("a suite whose engine keeps its metastore in Postgres", () => {
+  const execute = async (
+    fixture: string,
+    fail: (command: readonly string[]) => boolean = () => false,
+  ) => {
+    const suite = plannedSuite(fixture, CORPUS_ENGINE_METASTORE.postgres);
+    const commands: SuiteCommand[] = [];
+    const outcome = await Result.tryPromise(
+      async () =>
+        await executeCorpusSuite({
+          apiRoot,
+          image: "engine-image",
+          metastoreImage: "metastore-image",
+          signal: new AbortController().signal,
+          suite,
+          run: async (options) => {
+            commands.push(options);
+            if (fail(options.command)) {
+              throw new TypeError("fixture failure");
+            }
+            if (options.command.at(1) !== "port") {
+              return "";
+            }
+            return options.command.at(3) === "5432/tcp"
+              ? "127.0.0.1:15432"
+              : "127.0.0.1:12345";
+          },
+        }),
+    );
+    if (suite.engine.type !== CORPUS_ENGINE_METASTORE.postgres) {
+      throw new TypeError("fixture suite has no Postgres metastore");
+    }
+    return { suite, engine: suite.engine, commands, outcome };
+  };
+
+  test("starts the metastore on the suite's own network before the node, mounts nothing, and names both to the test process", async () => {
+    const fixture = mkdtempSync(path.join(tmpdir(), "corpus-postgres-"));
+    try {
+      const { suite, engine, commands, outcome } = await execute(fixture);
+      expect(outcome.isOk()).toBe(true);
+      const index = (predicate: (command: readonly string[]) => boolean) =>
+        commands.findIndex(({ command }) => predicate(command));
+      const network = index(
+        (command) =>
+          command.at(1) === "network" &&
+          command.at(2) === "create" &&
+          command.includes(engine.network),
+      );
+      const metastore = index(
+        (command) =>
+          command.at(1) === "run" &&
+          command.includes(engine.metastoreContainerName) &&
+          command.includes("metastore-image") &&
+          command.includes(engine.network),
+      );
+      const ready = index(
+        (command) =>
+          command.at(1) === "exec" &&
+          command.includes(engine.metastoreContainerName) &&
+          command.some((argument) => argument.includes("pg_isready")),
+      );
+      const node = index(
+        (command) =>
+          command.at(1) === "run" &&
+          command.includes(suite.containerName) &&
+          command.includes("engine-image") &&
+          command.includes(engine.network) &&
+          command.includes(
+            `QW_METASTORE_URI=postgres://postgres@${engine.metastoreContainerName}:5432/metastore`,
+          ),
+      );
+      expect([network, metastore, ready, node].every((at) => at >= 0)).toBe(
+        true,
+      );
+      expect(network).toBeLessThan(metastore);
+      expect(metastore).toBeLessThan(ready);
+      expect(ready).toBeLessThan(node);
+      expect(
+        commands.some(
+          ({ command }) =>
+            command.includes("--mount") || command.at(1) === "volume",
+        ),
+      ).toBe(false);
+      const child = commands.find(({ command }) =>
+        command.includes(suite.file),
+      );
+      expect(child?.environment?.["STELLA_CORPUS_ENGINE_TEST_ENDPOINT"]).toBe(
+        "http://127.0.0.1:12345",
+      );
+      expect(child?.environment?.["STELLA_CORPUS_ENGINE_TEST_CONTAINER"]).toBe(
+        suite.containerName,
+      );
+      expect(child?.environment?.["STELLA_CORPUS_METASTORE_TEST_URL"]).toBe(
+        "postgres://postgres@127.0.0.1:15432/metastore",
+      );
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  test("removes the node, the metastore and the network even when readiness fails", async () => {
+    const fixture = mkdtempSync(path.join(tmpdir(), "corpus-postgres-"));
+    try {
+      const { suite, engine, commands, outcome } = await execute(
+        fixture,
+        (command) => command.at(0) === "curl",
+      );
+      expect(outcome.isErr()).toBe(true);
+      const teardown = commands
+        .filter(
+          ({ command }) =>
+            command.at(1) === "rm" ||
+            (command.at(1) === "network" && command.at(2) === "rm"),
+        )
+        .map(({ command, signal }) => ({ command, signal }));
+      expect(teardown).toEqual([
+        {
+          command: [
+            "docker",
+            "rm",
+            "--force",
+            "--volumes",
+            suite.containerName,
+          ],
+          signal: undefined,
+        },
+        {
+          command: [
+            "docker",
+            "rm",
+            "--force",
+            "--volumes",
+            engine.metastoreContainerName,
+          ],
+          signal: undefined,
+        },
+        {
+          command: ["docker", "network", "rm", engine.network],
+          signal: undefined,
+        },
+      ]);
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
 });
 
 test("coverage enumerates the real sources and detects added and removed gated files", async () => {
@@ -341,7 +531,10 @@ test("coverage enumerates the real sources and detects added and removed gated f
       message: expect.stringContaining(`unlisted=${extra}`),
     });
     rmSync(path.join(fixture, extra));
-    const removed = CORPUS_ENGINE_TEST_FILES[0];
+    const removed = CORPUS_ENGINE_TEST_FILES.at(0);
+    if (removed === undefined) {
+      throw new TypeError("no corpus engine test file is listed");
+    }
     rmSync(path.join(fixture, removed));
     expect(
       await rejectionOf(assertCorpusEngineTestCoverage(fixture)),

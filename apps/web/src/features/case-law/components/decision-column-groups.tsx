@@ -12,15 +12,13 @@ import { TagIcon } from "@stll/ui/icons";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
+import { DECISION_COLUMN_ICONS } from "@/features/case-law/components/decision-table.pending";
 import type {
   DecisionColumnId,
   DecisionExtraColumn,
   DecisionReferenceColumnKind,
 } from "@/features/case-law/decision-columns.logic";
-import {
-  DECISION_COLUMN_ICONS,
-  useDecisionTableSchema,
-} from "@/features/case-law/decision-table-columns";
+import { useDecisionTableSchema } from "@/features/case-law/decision-table-columns";
 import { questionColumnId } from "@/features/case-law/research/question-columns.logic";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 

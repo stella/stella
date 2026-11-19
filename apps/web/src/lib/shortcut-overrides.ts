@@ -65,7 +65,10 @@ export const parseUserShortcuts = (
     return {};
   }
 
-  const overrides: ShortcutOverrides = {};
+  const overrides = new Map<
+    ShortcutId,
+    Extract<ShortcutBinding, { type: "hotkey" }>
+  >();
   for (const [id, value] of Object.entries(record)) {
     if (typeof value !== "string" || !isShortcutId(id)) {
       continue;
@@ -77,20 +80,17 @@ export const parseUserShortcuts = (
     if (!hasNonModifierKey(hotkey)) {
       continue;
     }
-    overrides[id] = { type: "hotkey", hotkey };
+    overrides.set(id, { type: "hotkey", hotkey });
   }
-  return overrides;
+  return Object.fromEntries(overrides);
 };
 
-export const serializeUserShortcuts = (
-  overrides: ShortcutOverrides,
-): string => {
-  const record: Record<string, string> = {};
-  for (const [id, binding] of Object.entries(overrides)) {
-    record[id] = binding.hotkey;
-  }
-  return JSON.stringify(record);
-};
+export const serializeUserShortcuts = (overrides: ShortcutOverrides): string =>
+  JSON.stringify(
+    Object.fromEntries(
+      Object.entries(overrides).map(([id, binding]) => [id, binding.hotkey]),
+    ),
+  );
 
 /**
  * Apply an override map onto the default registry, returning a fresh group
@@ -267,12 +267,15 @@ export const resetShortcutOverride = (
   overrides: ShortcutOverrides,
   id: ShortcutId,
 ): ShortcutOverrides => {
-  const next: ShortcutOverrides = {};
+  const next = new Map<
+    ShortcutId,
+    Extract<ShortcutBinding, { type: "hotkey" }>
+  >();
   for (const key of REBINDABLE_SHORTCUT_IDS) {
     const binding = overrides[key];
     if (key !== id && binding) {
-      next[key] = binding;
+      next.set(key, binding);
     }
   }
-  return next;
+  return Object.fromEntries(next);
 };

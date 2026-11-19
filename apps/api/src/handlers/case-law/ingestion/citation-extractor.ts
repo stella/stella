@@ -94,7 +94,8 @@ export type ExtractedCitation = {
    * where a sentence names one decision twice over — by docket and by
    * collection number. There the entry anchors on the docket the reader sees
    * and takes its identity from the collection number, which names exactly
-   * one decision where a docket may name a file's worth.
+   * one decision where a docket may name a file's worth. A docket printed
+   * with its sheet names one decision too, and keeps its own identity.
    */
   identifierValue: string;
   /**
@@ -1202,6 +1203,21 @@ const normalizeDashes = (text: string): string => text.replace(DASH_RE, "-");
  * dot normalization, splitting it into its three components so the dedup
  * key can rebuild them with one canonical separator.
  */
+/**
+ * Registers whose decisions the publisher stores under another spelling than
+ * the one the courts print, keyed by the printed spelling (lowercased). The
+ * Czech Supreme Court's insolvency register is printed "NSČR" in judgments
+ * ("sen. zn. 29 NSČR 112/2013"), while its own database, and the ECLI it
+ * assigns (`29.NSCR.112.2013`), spell it "NSCR"; the stored case number takes
+ * that spelling. Without the fold a citation keyed `29nsčr/…` never meets the
+ * decision keyed `29nscr/…`. The fold is per register rather than a blanket
+ * diacritic strip, because other registers (the Slovak "Sžo") are stored with
+ * their diacritic and their stored keys must keep matching.
+ */
+const REGISTER_KEY_SPELLINGS: ReadonlyMap<string, string> = new Map([
+  ["nsčr", "nscr"],
+]);
+
 const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
@@ -1440,13 +1456,18 @@ const canonicalizeDedupKey = (text: string): string => {
 
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
   if (numeric?.groups) {
-    const canonical = `${requiredGroup(numeric.groups, "number")}${requiredGroup(numeric.groups, "registry")}/${requiredGroup(numeric.groups, "docket")}`;
+    const registry = requiredGroup(numeric.groups, "registry").toLowerCase();
+    const canonical = `${requiredGroup(numeric.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(numeric.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
-    const canonical = `${requiredGroup(consolidated.groups, "number")}${requiredGroup(consolidated.groups, "registry")}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
+    const registry = requiredGroup(
+      consolidated.groups,
+      "registry",
+    ).toLowerCase();
+    const canonical = `${requiredGroup(consolidated.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 
@@ -1941,9 +1962,10 @@ const collectionJoinAfterDocket = (
  * collection number becomes the identity, because it names exactly one
  * decision where a docket names a whole file.
  *
- * A Constitutional Court docket is the exception: the collection mention
- * beside it is absorbed into the docket's citation, which keeps the docket's
- * identity.
+ * Two dockets are the exception: a Constitutional Court docket, and a docket
+ * printed with its sheet, which names one decision already. The collection
+ * mention beside either is absorbed into the docket's citation, which keeps
+ * the docket's identity.
  *
  * Czech collections only. A Hungarian docket already names one decision (its
  * document number), and the only Hungarian reporter-type citation, a
@@ -1987,8 +2009,14 @@ const mergeCollectionCitations = ({
       }
       // A Constitutional Court docket keeps resolving by itself: the
       // collection numbers reach a ruling only once its row carries them, and
-      // the docket reaches it either way.
-      if (join !== CZ_US_COLLECTION_AFTER_DOCKET) {
+      // the docket reaches it either way. So does a docket printed with its
+      // sheet ("č. j. 1 Azs 13/2006-39"): docket and sheet name one decision
+      // as exactly as the collection number does, and every row carries its
+      // docket while few carry their collection number.
+      if (
+        join !== CZ_US_COLLECTION_AFTER_DOCKET &&
+        docket.citedSheetNumber === null
+      ) {
         docket.identifierType = reporter.identifierType;
         docket.identifierValue = reporter.identifierValue;
       }

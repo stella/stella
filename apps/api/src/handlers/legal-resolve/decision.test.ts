@@ -3,6 +3,8 @@ import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { czNsCollectionIdentifierValues } from "@stll/api-contract/cz-ns-collection-citation";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -93,11 +95,14 @@ const decisionAst = (texts = ["Text"], numbered = false) =>
     })),
   }) satisfies DocumentAst;
 
-const readableDecision: typeof readDecisionReaderSource = async () => ({
+const readableDecision: typeof readDecisionReaderSource = async ({
+  decisionId,
+}) => ({
   status: "read",
   decision: {
     extractionWarnings: [],
-    id: row().id,
+    id: decisionId,
+    appealReviews: noDecisionReviewFound(),
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,
     courtAbbreviation: row().courtAbbreviation,
@@ -120,9 +125,9 @@ const readableDecision: typeof readDecisionReaderSource = async () => ({
 
 const readableDecisionWith =
   (ast: DocumentAst): typeof readDecisionReaderSource =>
-  async () => {
+  async ({ decisionId }) => {
     const base = await readableDecision({
-      decisionId: row().id,
+      decisionId,
       phase: "blocks",
       audience: "model",
       surface: "search",
@@ -135,9 +140,11 @@ const readableDecisionWith =
 
 const missingDecision: typeof readDecisionReaderSource = async () => null;
 
-const licensedDecision: typeof readDecisionReaderSource = async () => {
+const licensedDecision: typeof readDecisionReaderSource = async ({
+  decisionId,
+}) => {
   const readable = await readableDecision({
-    decisionId: row().id,
+    decisionId,
     phase: "blocks",
     audience: "model",
     surface: "search",
@@ -147,6 +154,9 @@ const licensedDecision: typeof readDecisionReaderSource = async () => {
   }
   return { ...readable, textAccess: "withheld", ast: null };
 };
+
+/** A coverage snapshot that could not be read. */
+const noCoverage = async () => await Promise.resolve(null);
 
 describe("decision legal resolution", () => {
   test("returns every non-resolved envelope status", async () => {
@@ -180,15 +190,24 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
-        dependencies: { lookup: lookupRows([]) },
+        dependencies: {
+          readCoverage: noCoverage,
+          lookup: lookupRows([]),
+        },
       }),
-    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+    ).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
+    });
     expect(
       await resolveDecision({
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
-        dependencies: { lookup: lookupRows([row(), row()]) },
+        dependencies: {
+          lookup: lookupRows([row(), row()]),
+        },
       }),
     ).toMatchObject({
       status: "ambiguous",
@@ -199,18 +218,70 @@ describe("decision legal resolution", () => {
     });
   });
 
+  test("says what the reconciled listing knows about a decision it did not find", async () => {
+    const regional = {
+      adapterKey: "cz-regional",
+      name: "Okresní, krajské a vrchní soudy",
+      decisionYearFrom: 2006,
+      decisionYearTo: 2026,
+      knownGaps: {
+        type: "reconciled" as const,
+        summary: { missing: 0, shortSlices: 0, unlistedSlices: 0 },
+        years: [2024, 2025, 2026].map((year) => ({
+          year,
+          type: "complete" as const,
+        })),
+      },
+      courts: [{ court: "Vrchní soud v Olomouci" }],
+    };
+    const result = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "Vrchní soud v Olomouci 5 Cmo 174/2025",
+      dependencies: {
+        lookup: lookupRows([]),
+        readCoverage: async () =>
+          await Promise.resolve({
+            generatedAt: "2026-11-17T19:00:00.000Z",
+            countries: [{ country: "CZE", sources: [regional] }],
+          }),
+      },
+    });
+    expect(v.parse(legalResolveResponseSchema, result)).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      hint: "coverage: every candidate publisher listing is reconciled complete for these years; the publisher has not published this decision. Do not scan the publisher.",
+      coverage: {
+        status: "read",
+        asOf: "2026-11-17T19:00:00.000Z",
+        sources: [
+          {
+            verdict: "not_published",
+            source: "cz-regional",
+            sourceName: "Okresní, krajské a vrchní soudy",
+            years: { from: 2025, to: 2026 },
+          },
+        ],
+      },
+    });
+  });
+
   test("returns identity and text status for an exact identity, never the text", async () => {
     const result = await resolveDecision({
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([row()]), read: readableDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: readableDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
       document: {
         kind: "decision",
         decisionId: expect.any(String),
+        appealReviews: noDecisionReviewFound(),
         text: { status: "readable", charCount: expect.any(Number) },
       },
     });
@@ -235,7 +306,10 @@ describe("decision legal resolution", () => {
       fc.asyncProperty(
         fc.array(
           fc.string({ minLength: 1, maxLength: MCP_CONTENT_MAX_CHARS + 20 }),
-          { minLength: 1, maxLength: 4 },
+          {
+            minLength: 1,
+            maxLength: 4,
+          },
         ),
         // Court-numbered paragraphs are served with their number, which the
         // count has to include the way read_case_law_decision's charCount does.
@@ -274,7 +348,10 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([row()]), read: licensedDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: licensedDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -291,7 +368,10 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008",
-      dependencies: { lookup: lookupRows([row()]), read: readableDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: readableDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -305,7 +385,10 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([unsheeted]), read: readableDecision },
+      dependencies: {
+        lookup: lookupRows([unsheeted]),
+        read: readableDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -331,7 +414,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "22 Ad 11/2023",
-        dependencies: { lookup: lookupRows([brno, ostrava]) },
+        dependencies: {
+          lookup: lookupRows([brno, ostrava]),
+        },
       }),
     ).toMatchObject({
       status: "ambiguous",
@@ -370,7 +455,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "EU",
         identifier: "C-144/04",
-        dependencies: { lookup: lookupRows([opinion, judgment]) },
+        dependencies: {
+          lookup: lookupRows([opinion, judgment]),
+        },
       }),
     ).toMatchObject({
       status: "ambiguous",
@@ -415,7 +502,10 @@ describe("decision legal resolution", () => {
         admission,
         country: "EU",
         identifier: caseNumber,
-        dependencies: { lookup, read: readableDecision },
+        dependencies: {
+          lookup,
+          read: readableDecision,
+        },
       });
       expect([caseNumber, result.status]).toEqual([caseNumber, "resolved"]);
     }
@@ -431,9 +521,17 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - II.",
-        dependencies: { lookup: lookupRows([bare]), read: readableDecision },
+        dependencies: {
+          readCoverage: noCoverage,
+          lookup: lookupRows([bare]),
+          read: readableDecision,
+        },
       }),
-    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+    ).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
+    });
   });
 
   test("never picks one of several unrecorded sheets for a printed sheet", async () => {
@@ -444,9 +542,60 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
-        dependencies: { lookup: lookupRows([first, second]) },
+        dependencies: {
+          readCoverage: noCoverage,
+          lookup: lookupRows([first, second]),
+        },
       }),
-    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+    ).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
+    });
+  });
+
+  test("an absorbed reader's reviews do not replace the requested identity's reviews", async () => {
+    const requested = row();
+    const expected = noDecisionReviewFound();
+    let reviewedIds: readonly string[] = [];
+    const result = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: requested.caseNumber,
+      dependencies: {
+        lookup: lookupRows([requested]),
+        read: async (options) => {
+          const content = await readableDecision(options);
+          if (content?.status !== "read") {
+            return panic("Expected readable fixture");
+          }
+          return {
+            ...content,
+            decision: {
+              ...content.decision,
+              id: createSafeId<"caseLawDecision">(),
+              appealReviews: {
+                status: "unknown",
+                basis: "available_corpus",
+                reviewedBy: [],
+                reviews: [],
+                reviewedByTruncated: false,
+                reviewsTruncated: false,
+              },
+            },
+          };
+        },
+        readReviews: async ({ decisionIds }) => {
+          reviewedIds = decisionIds;
+          return new Map(decisionIds.map((id) => [id, expected]));
+        },
+      },
+    });
+    expect(reviewedIds).toEqual([requested.id]);
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { decisionId: requested.id, appealReviews: expected },
+    });
   });
 
   test("marks a missing read as unavailable, not licensed", async () => {
@@ -454,7 +603,12 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([row()]), read: missingDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: missingDecision,
+        readReviews: async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -463,9 +617,11 @@ describe("decision legal resolution", () => {
   });
 
   test("marks a readable decision without a body as unavailable", async () => {
-    const bodyless: typeof readDecisionReaderSource = async () => {
+    const bodyless: typeof readDecisionReaderSource = async ({
+      decisionId,
+    }) => {
       const readable = await readableDecision({
-        decisionId: row().id,
+        decisionId,
         phase: "blocks",
         audience: "model",
         surface: "search",
@@ -480,7 +636,10 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
-        dependencies: { lookup: lookupRows([row()]), read },
+        dependencies: {
+          lookup: lookupRows([row()]),
+          read,
+        },
       });
       expect(result).toMatchObject({
         status: "resolved",
@@ -496,9 +655,16 @@ describe("decision legal resolution", () => {
           admission,
           country: "CZE",
           identifier,
-          dependencies: { lookup: lookupRows([row()]) },
+          dependencies: {
+            readCoverage: noCoverage,
+            lookup: lookupRows([row()]),
+          },
         }),
-      ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+      ).toEqual({
+        status: "not_found",
+        reason: "no_exact_identity",
+        coverage: { status: "unavailable" },
+      });
     }
   });
 
@@ -881,12 +1047,14 @@ describe("a docket at other courts", () => {
       country: "CZ",
       identifier: "KS Praha 65 A 3/2025",
       dependencies: {
+        readCoverage: noCoverage,
         lookup: lookupRows([{ ...row("65 As 3/2025"), ecli: null }]),
       },
     });
     expect(result).toEqual({
       status: "not_found",
       reason: "no_exact_identity",
+      coverage: { status: "unavailable" },
     });
   });
   test("a single other-court holder is still a mismatch", async () => {
@@ -1021,5 +1189,63 @@ describe("a district court named around the docket", () => {
       status: "not_found",
       reason: "not_at_this_court",
     });
+  });
+});
+
+describe("a Supreme Court collection citation", () => {
+  const collectionRow = (
+    part: "civil" | "criminal",
+    caseNumber: string,
+  ): DecisionIdentityRow => ({
+    ...row(caseNumber),
+    id: createSafeId<"caseLawDecision">(),
+    court: "Nejvyšší soud",
+    courtAbbreviation: "NS",
+    ecli: null,
+    identifiers: czNsCollectionIdentifierValues({
+      part,
+      number: 9,
+      year: 1971,
+    }).map((value) => ({ type: "reporter-citation", value })),
+  });
+
+  test("reads by its canonical spelling, and resolves the one entry that carries it", async () => {
+    const civil = collectionRow("civil", "6 Cz 90/70");
+    const locators: unknown[] = [];
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "č. 9/1971 Sb. rozh. obč.",
+      dependencies: {
+        lookup: async ({ locator }) => {
+          locators.push(locator);
+          return locator.kind === "reporter" && locator.value === "Rc 9/1971"
+            ? [civil]
+            : [];
+        },
+        read: readableDecision,
+      },
+    });
+    expect(locators).toContainEqual({ kind: "reporter", value: "Rc 9/1971" });
+    expect(result).toMatchObject({ status: "resolved" });
+  });
+
+  test("a citation leaving the part out names both entries of that number, and says so", async () => {
+    const civil = collectionRow("civil", "6 Cz 90/70");
+    const criminal = collectionRow("criminal", "4 Tz 26/70");
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "R 9/1971",
+      dependencies: {
+        lookup: async ({ locator }) =>
+          locator.kind === "reporter" && locator.value === "R 9/1971"
+            ? [civil, criminal]
+            : [],
+        read: async () =>
+          panic("An ambiguous citation must not open a decision"),
+      },
+    });
+    expect(result.status).toBe("ambiguous");
   });
 });

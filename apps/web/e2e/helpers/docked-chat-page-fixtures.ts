@@ -2,6 +2,8 @@ import type { Page } from "@playwright/test";
 
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatPagePayloads } from "./docked-chat-page-payloads";
+import { apiJson, respond } from "./route-mock";
+import type { RouteReply } from "./route-mock";
 
 type DockedChatPageFixtureOptions = {
   workspaceId: string;
@@ -16,12 +18,22 @@ export const installDockedChatPageFixtures = async (
 ) => {
   const { invoice, report, correspondence, registryLookup } =
     dockedChatPagePayloads({ workspaceId, resourceId });
-  const responses = new Map<string, unknown>([
-    [`/v1/invoices/${workspaceId}/${resourceId}`, invoice],
-    [`/v1/workspaces/${workspaceId}/reports/${resourceId}`, report],
+  const responses = new Map<string, RouteReply>([
+    [
+      `/v1/invoices/${workspaceId}/${resourceId}`,
+      apiJson("v1/invoices/:workspaceId/:invoiceId", "get", invoice),
+    ],
+    [
+      `/v1/workspaces/${workspaceId}/reports/${resourceId}`,
+      apiJson("v1/workspaces/:workspaceId/reports/:exportId", "get", report),
+    ],
     [
       `/v1/workspaces/${workspaceId}/correspondence/${resourceId}`,
-      correspondence,
+      apiJson(
+        "v1/workspaces/:workspaceId/correspondence/:correspondenceId",
+        "get",
+        correspondence,
+      ),
     ],
   ]);
   const apiOrigin = new URL(E2E_API_ORIGIN).origin;
@@ -43,12 +55,12 @@ export const installDockedChatPageFixtures = async (
       // A successful no-match lookup renders the real registry page without
       // credentials, an external request, or a fabricated registry record.
       const response = isRegistryFixture(requestUrl)
-        ? registryLookup
+        ? apiJson("v1/contacts/business-registries", "get", registryLookup)
         : responses.get(pathname);
       if (response === undefined) {
         throw new Error(`Missing docked-chat page fixture for ${pathname}`);
       }
-      await route.fulfill({ status: 200, json: response });
+      await respond(route, response);
     },
   );
 };

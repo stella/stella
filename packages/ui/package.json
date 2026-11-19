@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.67.0",
+  "version": "0.75.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -82,6 +82,8 @@
     "./field": "./src/components/field.tsx",
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
+    "./file-size": "./src/lib/file-size.ts",
+    "./highlighted-textarea": "./src/components/highlighted-textarea.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
     "./identity-text": "./src/components/identity-text.tsx",
@@ -99,6 +101,7 @@
     "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
+    "./landing-shell": "./src/components/landing-shell.tsx",
     "./document-mark": {
       "react-native": "./src/components/document-mark.native.tsx",
       "default": "./src/components/document-mark.tsx"
@@ -132,6 +135,10 @@
     "./review-severity-dot": "./src/review/review-severity-dot.tsx",
     "./review-status-badge": "./src/review/review-status-badge.tsx",
     "./text-mark": "./src/review/text-mark.tsx",
+    "./run-state-mark": {
+      "react-native": "./src/components/run-state-mark.native.tsx",
+      "default": "./src/components/run-state-mark.tsx"
+    },
     "./scroll-area": "./src/components/scroll-area.tsx",
     "./horizontal-scroller": "./src/components/horizontal-scroller.tsx",
     "./scroll-to-top": "./src/components/scroll-to-top.tsx",
@@ -159,6 +166,7 @@
       "default": "./src/components/loader.tsx"
     },
     "./middle-truncate": "./src/components/middle-truncate.tsx",
+    "./outcome-screen": "./src/components/outcome-screen.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
@@ -197,6 +205,7 @@
     "./utils": "./src/lib/utils.ts",
     "./week": "./src/lib/week.ts",
     "./inspector": "./src/inspector/index.ts",
+    "./pane-width": "./src/inspector/pane-width.ts",
     "./layout-tokens": "./src/inspector/layout-tokens.ts",
     "./kanban": "./src/kanban/index.ts",
     "./theme.css": "./src/styles/theme.css",
@@ -260,7 +269,10 @@
     },
     "./components/sidebar": "./src/components/sidebar.tsx",
     "./components/skeleton": "./src/components/skeleton.tsx",
-    "./components/stella-mark": "./src/components/stella-mark.tsx",
+    "./components/stella-mark": {
+      "react-native": "./src/components/stella-mark.native.tsx",
+      "default": "./src/components/stella-mark.tsx"
+    },
     "./components/stella-wordmark": {
       "react-native": "./src/components/stella-wordmark.native.tsx",
       "default": "./src/components/stella-wordmark.tsx"
@@ -297,8 +309,8 @@
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ui",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/ui",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/ui",
     "prepack": "bun run build"
   },
   "dependencies": {
@@ -317,12 +329,12 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@happy-dom/global-registrator": "21.0.4",
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tanstack/react-virtual": "^3.14.24",
+    "@tanstack/react-virtual": "^3.14.26",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@types/react": "catalog:react19",

@@ -41,6 +41,9 @@ export const MCP_TOOL_LATENCY_DEFAULT_BUDGET_MS = 2000;
 /** A corpus or workspace search: an index scan plus row hydration. */
 const SEARCH_BUDGET_MS = 8000;
 
+/** The OpenAI-compatible search, which waits out a continued read. */
+const COMPAT_SEARCH_BUDGET_MS = 30_000;
+
 /**
  * The tools whose work is long by design. Every other key gets the default,
  * so the record below is total over exactly these: a name missing from
@@ -67,9 +70,9 @@ type LongByDesignTool = Extract<
 
 export const MCP_TOOL_LATENCY_BUDGET_OVERRIDES = {
   search: {
-    budgetMs: SEARCH_BUDGET_MS,
+    budgetMs: COMPAT_SEARCH_BUDGET_MS,
     reason:
-      "Searches case law and legislation for the OpenAI-compatible search surface in one call.",
+      "Searches case law and legislation for the OpenAI-compatible search surface in one call. Its result has no way to say a search is still running, so under load it waits for the continued read.",
   },
   search_case_law: {
     budgetMs: SEARCH_BUDGET_MS,

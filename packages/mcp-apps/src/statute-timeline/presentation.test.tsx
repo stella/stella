@@ -19,6 +19,7 @@ const historical = {
   windowDisposition: "effective",
   windowDispositionBasis: null,
   status: "found",
+  governingText: [],
   nextTextCursor: null,
   text: "Historical wording",
   truncated: false,

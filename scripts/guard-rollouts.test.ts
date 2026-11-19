@@ -35,12 +35,12 @@ const guardEnforcesLine = (
     ...options,
     rollouts: [
       {
-        id: "portable-path",
+        id: "fixture-guard",
         type: "changed-lines",
         expiresAt: "2026-10-20T00:00:00.000Z",
         check: ["bun", "scripts/check-fixture.ts"],
       },
-      ...GUARD_ROLLOUTS.filter(({ id }) => id !== "portable-path"),
+      ...GUARD_ROLLOUTS,
     ],
   });
 
@@ -64,6 +64,7 @@ const readFixtures = (directory: string) =>
     });
 
 const fixtures = readFixtures(FIXTURES);
+const EXPECT_ERROR_MARKER = /^\s*\/\/\s*expect-error:/u;
 
 test("fixture discovery reads TypeScript and test fixture suffixes", () => {
   const directory = mkdtempSync(path.join(ROOT, ".fixture-discovery-"));
@@ -89,8 +90,13 @@ for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
       let violations = 0;
       for (const { file, source } of fixtures) {
         for (const [index, line] of source.split("\n").entries()) {
+          // Directive fixtures suppress the hit; expect-error fixtures mark it
+          // (.oxlint-plugins/README.md). Both name the rule on the line above.
           if (
-            !line.includes("oxlint-disable-next-line") ||
+            !(
+              line.includes("oxlint-disable-next-line") ||
+              EXPECT_ERROR_MARKER.test(line)
+            ) ||
             !line.includes(rule)
           ) {
             continue;
@@ -116,7 +122,7 @@ for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
 test("fixture scope does not include similarly named directories", () => {
   expect(
     guardEnforcesLine({
-      guard: "portable-path",
+      guard: "fixture-guard",
       file: `${FIXTURES}-other/path.ts`,
       line: 1,
       changedLines: new Map(),
@@ -126,7 +132,7 @@ test("fixture scope does not include similarly named directories", () => {
 
 test("a rollout past its deadline still enforces only changed lines", () => {
   const options = {
-    guard: "portable-path",
+    guard: "fixture-guard",
     file: "scripts/path.ts",
     changedLines: new Map([["scripts/path.ts", new Set([4])]]),
   };
@@ -138,7 +144,7 @@ test("the healing probe's full scope enforces unchanged lines", () => {
   testState.setEnv("STELLA_GUARD_SCOPE", "all");
   expect(
     guardEnforcesLine({
-      guard: "portable-path",
+      guard: "fixture-guard",
       file: "scripts/path.ts",
       line: 3,
       changedLines: new Map(),

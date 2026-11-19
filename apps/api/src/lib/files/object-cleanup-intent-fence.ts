@@ -59,20 +59,3 @@ export const lockOrganizationObjectIntentsForWriter = async (
   }
   await lockLegacyOrganizationObjectIntentKey(tx, organizationId, "shared");
 };
-
-/** Exclude new exact-key writers while lifecycle teardown transfers intents. */
-export const lockOrganizationObjectIntentsForLifecycle = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  const result = await withAggregateLock({
-    aggregate: "organizationObjectIntent",
-    id: organizationId,
-    mode: "exclusive",
-    tx,
-  });
-  if (result.status !== "locked") {
-    return panic("Organization object-intent lifecycle fence was not acquired");
-  }
-  await lockLegacyOrganizationObjectIntentKey(tx, organizationId, "exclusive");
-};

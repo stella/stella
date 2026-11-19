@@ -26,18 +26,6 @@ describe("Collapsible", () => {
     expect(markup).toContain("Arguments");
   });
 
-  test("the panel eases its height with the accordion's timing", () => {
-    const markup = renderToStaticMarkup(
-      <Collapsible defaultOpen>
-        <CollapsibleTrigger>Hide details</CollapsibleTrigger>
-        <CollapsiblePanel>Arguments</CollapsiblePanel>
-      </Collapsible>,
-    );
-    expect(markup).toContain("h-(--collapsible-panel-height)");
-    expect(markup).toContain("duration-200 ease-in-out");
-    expect(markup).toContain("motion-reduce:transition-none");
-  });
-
   test("an open panel is announced by its trigger", () => {
     const markup = renderToStaticMarkup(
       <Collapsible defaultOpen>

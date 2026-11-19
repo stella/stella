@@ -50,6 +50,14 @@ const DOCUMENTS = [
       await Bun.file(new URL("hu-bhgy-decision.rtf", PARSER_FIXTURES)).bytes(),
   },
   {
+    // "§" in a double-byte font, and "õ" for "ő" written as `\u245`.
+    name: "hu-bhgy-m-6030-2010-24.rtf",
+    bytes: async () =>
+      await Bun.file(
+        new URL("hu-bhgy-m-6030-2010-24.rtf", PARSER_FIXTURES),
+      ).bytes(),
+  },
+  {
     name: "synthetic RTF with footnotes",
     bytes: async () =>
       await Promise.resolve(

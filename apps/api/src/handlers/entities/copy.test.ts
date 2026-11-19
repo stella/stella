@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { Transaction } from "@/api/db/root";
 import {
   documentCounters,
   entities,
@@ -17,6 +18,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
@@ -27,21 +29,13 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
 import type { copyFileObjects, FileMapping } from "./copy-utils";
-
-beforeEach(() => {
-  copyFileObjectsMock.mockClear();
-  enqueueDocumentProcessingRunMock.mockClear();
-  enqueueEntitySearchRepairsMock.mockClear();
-  enqueueImageThumbnailOrMarkFailedMock.mockClear();
-  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
-  flushEntitySearchRepairsMock.mockClear();
-  requestNativeExtractionRunsMock.mockClear();
-  syncWorkspaceSearchActivityMock.mockClear();
-});
 
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
@@ -101,8 +95,20 @@ const copyFileObjectsMock = mock(
   },
 );
 
+const createFileDeletionTx = () =>
+  asTestRaw<Transaction>({
+    select: () => createSelectQueryMock([]),
+    selectDistinct: () => createSelectQueryMock([]),
+  });
 const copyToWorkspace = createCopyToWorkspace({
   copyFileObjects: copyFileObjectsMock,
+  deleteCopiedObjects: async (keys, signal) =>
+    await deleteOrganizationFilesWithSignal(keys, signal, {
+      fileUsageDb: {
+        transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
+          await callback(createFileDeletionTx()),
+      },
+    }),
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
@@ -252,6 +258,14 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  copyFileObjectsMock.mockClear();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
   analytics = installRecordingAnalytics();
   fake = startFakeS3();
   seedSourceObject(sourceFileId, sourceFileMimeType);

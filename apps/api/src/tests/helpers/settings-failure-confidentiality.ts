@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import type { OrgAIConfigReadFailure } from "@/api/lib/ai-config-crypto";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
@@ -148,8 +149,9 @@ const REPOSITORY_FRAME = new RegExp(
   "u",
 );
 const STACK_FUNCTION = "(?:async )?(?:[A-Za-z_$][A-Za-z0-9_$.<>]*|<anonymous>)";
-const BETTER_RESULT_SOURCE = new URL(import.meta.resolve("better-result"))
-  .pathname;
+const BETTER_RESULT_SOURCE = fileURLToPath(
+  import.meta.resolve("better-result"),
+);
 const STACK_LOCATION = `(?:${REPOSITORY_SOURCE.source.slice(1, -1)}|${escapeRegExp(BETTER_RESULT_SOURCE)}):\\d+:\\d+`;
 const STACK_FRAME = new RegExp(
   `^ {4}at ${STACK_FUNCTION} (?:\\(${STACK_LOCATION}\\)|${STACK_LOCATION})$`,

@@ -9,6 +9,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -75,7 +76,7 @@ export const DocumentAiSourceBar = ({
     selectJustificationByFieldId(s.justifications, fieldId),
   );
 
-  const slots = useMemo(() => {
+  const slots = (() => {
     if (!justification || !entity || !properties) {
       return [];
     }
@@ -88,7 +89,7 @@ export const DocumentAiSourceBar = ({
         return { fieldId: f.id, property: prop };
       })
       .filter((s) => s !== null);
-  }, [entity, justification, properties]);
+  })();
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
   const prevSlot = currentIdx > 0 ? slots[currentIdx - 1] : null;
@@ -110,6 +111,7 @@ export const DocumentAiSourceBar = ({
   const pages = useOptionalPDFStore((s) => s.pages);
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const activeDocumentJustificationContent = useMemo(
     () =>
       justification
@@ -127,6 +129,7 @@ export const DocumentAiSourceBar = ({
         : null,
     [activeTab.id, justification],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const citations = useMemo(
     () =>
       activeDocumentJustificationContent
@@ -154,14 +157,16 @@ export const DocumentAiSourceBar = ({
         return panic("bounding-box generation ran without a justification id");
       }
       const result = await Result.tryPromise(async () => {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["bounding-boxes"].post(
-            {
-              justificationId: toSafeId<"justification">(justificationId),
-            },
-            { fetch: { signal } },
-          );
+        const workspaceApi = api.workspaces({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+
+        const response = await workspaceApi["bounding-boxes"].post(
+          {
+            justificationId: toSafeId<"justification">(justificationId),
+          },
+          { fetch: { signal } },
+        );
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -435,14 +440,14 @@ export const DocumentAiSourceBar = ({
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
           variant="plain"
         >
-          <span className="block truncate">
+          <TruncatedText>
             {propertyName && (
               <span className="text-muted-foreground">{propertyName}: </span>
             )}
             <span className="font-medium">
               {shortAnswer ?? t("workspaces.pdf.evidence")}
             </span>
-          </span>
+          </TruncatedText>
         </Button>
         <Button
           aria-label={t("common.previous")}

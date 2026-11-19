@@ -630,6 +630,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               stickyColumnHeader && "sticky top-0",
             )}
             ref={headerRowsRef}
+            role="rowgroup"
           >
             {table.getHeaderGroups().map((headerGroup) => (
               <WorkspaceGridRow key={headerGroup.id}>
@@ -667,7 +668,11 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               </WorkspaceGridRow>
             ))}
           </div>
-          <div className="flex flex-1 flex-col" ref={rowsContainerRef}>
+          <div
+            className="flex flex-1 flex-col"
+            ref={rowsContainerRef}
+            role="rowgroup"
+          >
             {paddingTop > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell

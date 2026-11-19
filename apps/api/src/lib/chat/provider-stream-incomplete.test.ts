@@ -32,6 +32,7 @@ const cutOffRunError = async (): Promise<
     },
   });
   for await (const chunk of withProviderStreamContract(adapter).chatStream({
+    threadId: "provider-stream-incomplete-thread",
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",

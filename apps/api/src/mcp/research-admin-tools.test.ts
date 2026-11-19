@@ -2,7 +2,9 @@ import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -22,8 +24,11 @@ import { listMcpTools } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -160,14 +165,14 @@ describe("search_boe_legislation feature gating", () => {
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
     });
     try {
       await run();
     } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeaturePublicLaw);
       restoreRuntimeMode();
     }
   };
@@ -390,6 +395,39 @@ describe("matter membership and organization settings", () => {
       definitions.find((tool) => tool.name === "remove_matter_member")
         ?.destructiveBehavior,
     ).toEqual({ type: "always" });
+  });
+
+  // Organization AI instructions stay off the curated tool, which keeps the
+  // connect-time tool list within budget; agents reach them on demand through
+  // the organization-settings.update capability instead.
+  test("AI instructions are written through the settings capability, not the curated tool", async () => {
+    expect(
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
+          args: { ai_instructions: "Use concise language." },
+          context: createContext(),
+        }),
+      ),
+    ).toContain("validation_error");
+    const entry = repositoryCapabilityCatalog.find(
+      (candidate) =>
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "id" in candidate &&
+        candidate.id === "organization-settings.update",
+    );
+    expect(entry).toMatchObject({
+      inputSchema: {
+        body: {
+          properties: {
+            aiInstructions: {
+              type: "string",
+              maxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+            },
+          },
+        },
+      },
+    });
   });
 
   test("settings reject empty updates, unpaired numbering, and member fields", async () => {

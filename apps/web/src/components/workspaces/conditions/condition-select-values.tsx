@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
@@ -165,7 +166,7 @@ type OptionRowProps = {
 const OptionRow = ({ label, color, count, showCounts }: OptionRowProps) => (
   <span className="flex w-full items-center gap-1.5">
     {color !== undefined && <SelectColorIcon color={color} />}
-    <span className="flex-1 truncate">{label}</span>
+    <TruncatedText className="flex-1">{label}</TruncatedText>
     {showCounts && (
       <span className="text-muted-foreground tabular-nums">{count ?? 0}</span>
     )}

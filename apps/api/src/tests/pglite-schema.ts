@@ -13,6 +13,10 @@ import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 
 import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
 import { readDecisionDocketFilingYearMigration } from "./decision-docket-filing-year-migration";
+import {
+  findingDecisionHistoryMigrationPath,
+  findingDecisionHistoryMigrations,
+} from "./finding-decision-history-migrations";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
@@ -60,6 +64,11 @@ const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
   "20260827120000_docx_suggestion_source_matters",
   "migration.sql",
 );
+const LIST_GENERATION_FACT_DETAILS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261109180000_list_generation_fact_details",
+  "migration.sql",
+);
 const AGENT_SKILL_REVISIONS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827080000_agent_skill_revisions",
@@ -75,9 +84,24 @@ const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
   "20261019070000_monitoring_session",
   "migration.sql",
 );
+const CONFLICT_CHECKS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261112043800_conflict_checks",
+  "migration.sql",
+);
 const STORED_KEYS_ORGANIZATION_SCOPE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261020000100_stored_keys_organization_scope",
+  "migration.sql",
+);
+const CHAT_TURN_ORDINALS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261114200000_chat_turn_ordinals",
+  "migration.sql",
+);
+const SEARCH_HISTORY_COUNTRY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261111230200_search_history_country_expand",
   "migration.sql",
 );
 const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
@@ -171,6 +195,40 @@ export const installPgliteFlowTransitions = async (db: PgliteSchemaDb) => {
       if (statement.trim()) {
         await db.execute(sql.raw(statement));
       }
+    }
+  }
+};
+
+/** Install the same stale-import fence that protects the PostgreSQL history writer. */
+export const installPgliteSearchHistoryClearFence = async (
+  db: PgliteSchemaDb,
+) => {
+  for (const statement of readMigrationStatements(
+    SEARCH_HISTORY_COUNTRY_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith(
+        "CREATE FUNCTION public.search_history_entries_clear_cutoff_fence",
+      ) ||
+      source.startsWith("CREATE TRIGGER search_history_entries_clear_cutoff_")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
+/** Install the trigger that gives every inserted chat turn its position. */
+export const installPgliteChatTurnOrdinal = async (db: PgliteSchemaDb) => {
+  for (const statement of readMigrationStatements(
+    CHAT_TURN_ORDINALS_MIGRATION_PATH,
+  )) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith("CREATE FUNCTION public.assign_chat_turn_ordinal") ||
+      source.startsWith("CREATE TRIGGER chat_turns_assign_ordinal")
+    ) {
+      await db.execute(sql.raw(statement));
     }
   }
 };
@@ -294,7 +352,7 @@ export const installPgliteSchemaPrerequisites = async (
   await db.execute(
     sql.raw(
       latestMigrationStatementContaining(
-        "CREATE FUNCTION stella_list_verification_day",
+        "CREATE FUNCTION stella_model_run_day",
       ),
     ),
   );
@@ -369,9 +427,12 @@ export const installPgliteWorkspaceAccessObjects = async (
   // check, so a table whose policies carry a further predicate in the schema
   // needs its own ALTER POLICY statements replayed afterwards. The column
   // itself already exists from the push, so only the policy statements run.
-  const policyStatements = readMigrationStatements(
+  const policyStatements = [
     DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH,
-  ).filter((statement) => executableSql(statement).startsWith("ALTER POLICY"));
+    LIST_GENERATION_FACT_DETAILS_MIGRATION_PATH,
+  ]
+    .flatMap(readMigrationStatements)
+    .filter((statement) => executableSql(statement).startsWith("ALTER POLICY"));
   for (const statement of policyStatements) {
     await db.execute(sql.raw(statement));
   }
@@ -430,6 +491,27 @@ export const installPgliteSyntheticMembershipTrigger = async (
   });
   if (statements.length !== 3) {
     panic("Expected the dedicated principal membership function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the conflict-check routines omitted by schema push: they read
+ * across matter walls and exist only in their migration.
+ */
+export const installPgliteConflictCheckRoutines = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readFileSync(
+    CONFLICT_CHECKS_MIGRATION_PATH,
+    "utf-8",
+  ).match(
+    /CREATE FUNCTION public\.stella_conflict_[a-z_]+\([\s\S]*?\n\$\$;|REVOKE ALL ON FUNCTION public\.stella_conflict_[^;]*;|GRANT EXECUTE ON FUNCTION public\.stella_conflict_[^;]*;/gu,
+  );
+  if (statements?.length !== 6) {
+    panic("Expected the two conflict-check routines and their grants");
   }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
@@ -933,6 +1015,75 @@ export const installPglitePdfSigningTokenScopes = async (
   }
 };
 
+const INVOICE_SENDS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261117170100_invoice_sends",
+  "migration.sql",
+);
+
+const INVOICE_LINK_STATEMENT_PREFIXES = [
+  'CREATE FUNCTION "invoice_sends_guard_update"',
+  'REVOKE ALL ON FUNCTION "invoice_sends_guard_update"',
+  'CREATE TRIGGER "invoice_sends_immutable"',
+  'CREATE FUNCTION "invoice_link_settlement"',
+  'REVOKE ALL ON FUNCTION "invoice_link_settlement"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_settlement"',
+  'CREATE FUNCTION "invoice_link_mark_viewed"',
+  'REVOKE ALL ON FUNCTION "invoice_link_mark_viewed"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_mark_viewed"',
+  'ALTER TABLE "invoice_sends" FORCE ROW LEVEL SECURITY',
+  'CREATE FUNCTION "invoice_link_scope"',
+  'REVOKE ALL ON FUNCTION "invoice_link_scope"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_scope"',
+  'CREATE FUNCTION "invoice_sends_organization_count"',
+  'REVOKE ALL ON FUNCTION "invoice_sends_organization_count"',
+  'GRANT EXECUTE ON FUNCTION "invoice_sends_organization_count"',
+  'CREATE FUNCTION "invoice_link_invoice"',
+  'REVOKE ALL ON FUNCTION "invoice_link_invoice"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_invoice"',
+  'CREATE FUNCTION "invoice_link_lines"',
+  'REVOKE ALL ON FUNCTION "invoice_link_lines"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_lines"',
+  'CREATE FUNCTION "invoice_link_time"',
+  'REVOKE ALL ON FUNCTION "invoice_link_time"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_time"',
+  'CREATE FUNCTION "invoice_link_expenses"',
+  'REVOKE ALL ON FUNCTION "invoice_link_expenses"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_expenses"',
+  'CREATE FUNCTION "invoice_link_seller"',
+  'REVOKE ALL ON FUNCTION "invoice_link_seller"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_seller"',
+  'CREATE FUNCTION "invoice_link_matters"',
+  'REVOKE ALL ON FUNCTION "invoice_link_matters"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_matters"',
+  'CREATE FUNCTION "invoice_link_original"',
+  'REVOKE ALL ON FUNCTION "invoice_link_original"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_original"',
+] as const;
+
+/**
+ * Install what schema push cannot say about invoice sends: forced row
+ * security, the token lookup an invoice link goes through, and the
+ * organization-wide send count.
+ */
+export const installPgliteInvoiceLinks = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    INVOICE_SENDS_MIGRATION_PATH,
+  ).filter((statement) =>
+    INVOICE_LINK_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  if (statements.length !== INVOICE_LINK_STATEMENT_PREFIXES.length) {
+    panic("Invoice link migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Schema push omits the scoped, owner-executed run-id collision lookup. */
 export const installPgliteChatTurnRunIdLookup = async (
   db: PgliteSchemaDb,
@@ -1320,6 +1471,36 @@ export const caseLawParsedInputStateStatements = (): string[] => {
 };
 
 /**
+ * Install the content-change stamp's function and trigger from the production
+ * migration after schema push, which already holds the column.
+ */
+export const installPgliteCaseLawContentChangedAt = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261117160000_case_law_content_changed_at",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION stamp_case_law_content_change") ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_decisions_zy_content_changed_at",
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the content-change stamp function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
  * Install the sitemap change-log functions and triggers from the production
  * migration after schema push.
  */
@@ -1349,11 +1530,19 @@ export const installPgliteCaseLawSitemapChanges = async (
           'CREATE TRIGGER "case_law_decisions_sitemap_update"',
         )
           ? latestMigrationStatementContaining(
-              'CREATE TRIGGER "case_law_decisions_sitemap_update"',
+              'TRIGGER "case_law_decisions_sitemap_update"\nAFTER UPDATE',
             )
           : statement,
       ),
     );
+  }
+  // A later updated_at alone is queued as a touch, not as a month.
+  for (const fragment of [
+    'CREATE FUNCTION "log_case_law_sitemap_decision_touch"',
+    'CREATE TRIGGER "case_law_decisions_sitemap_touch"',
+  ]) {
+    // db-await-in-loop: the function precedes the trigger that executes it
+    await db.execute(sql.raw(latestMigrationStatementContaining(fragment)));
   }
 };
 
@@ -1384,6 +1573,44 @@ export const installPgliteCaseLawRankingSignalChanges = async (
   if (statements.length !== 7) {
     panic(
       "Expected the bucket function, two change functions and four triggers",
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the triggers that queue a delete task when a revision gains its
+ * delete receipt; schema push creates the queue table but not its writers.
+ */
+export const installPgliteCorpusProjectionDeleteTasks = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261118193000_corpus_projection_delete_tasks",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE FUNCTION "queue_corpus_projection_delete_task"',
+      ) ||
+      source.startsWith(
+        'CREATE TRIGGER "corpus_projection_intents_delete_task_',
+      ) ||
+      source.startsWith(
+        'ALTER TABLE "corpus_index_projection_delete_tasks" FORCE ROW LEVEL SECURITY',
+      )
+    );
+  });
+  // Schema push enables row security but does not force it; production does.
+  if (statements.length !== 4) {
+    panic(
+      "Expected the delete task queue function, its two triggers and forced row security",
     );
   }
   for (const statement of statements) {
@@ -1480,6 +1707,27 @@ export const installPgliteOrganizationMemberCapacity = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the legal-hold delete backstop on matters, items and matter contacts. */
+export const installPgliteLegalHoldDeleteBackstop = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261114235900_legal_holds", "migration.sql"),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  if (statements.length !== 5) {
+    panic(
+      "Expected the legal-hold backstop function, its revoke and three triggers",
+    );
+  }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
@@ -1704,31 +1952,45 @@ export const installPgliteDecisionCitationStats = async (
   }
 };
 
-/** Install the migration-owned verification counter and Prague day function. */
-export const installPgliteListVerificationBudgets = async (
+/** Install the migration-owned model run counter function and the triggers
+ *  that charge list verifications, fact extractions and capped document
+ *  reviews to it; the Prague day function is installed before the push. */
+export const installPgliteModelRunBudgets = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
+  // The verification error-code domain the caps migration widened.
+  const runConstraints = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
       "20261005120400_list_verification_run_caps",
       "migration.sql",
     ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith(
+      "ALTER TABLE legal_list_verification_runs",
+    ),
+  );
+  const counter = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261112203235_model_run_caps_owner",
+      "migration.sql",
+    ),
   ).filter((statement) => {
     const source = executableSql(statement);
-    if (source.startsWith("CREATE FUNCTION stella_list_verification_day")) {
-      return false;
-    }
-    return [
-      "CREATE FUNCTION",
-      "CREATE TRIGGER",
-      "REVOKE ALL ON FUNCTION",
-      "ALTER TABLE",
-    ].some((prefix) => source.startsWith(prefix));
+    return (
+      source.startsWith("CREATE FUNCTION maintain_model_run_budget") ||
+      source.startsWith("REVOKE ALL ON FUNCTION maintain_model_run_budget") ||
+      source.startsWith("CREATE TRIGGER")
+    );
   });
-  for (const statement of statements) {
+  for (const statement of [...runConstraints, ...counter]) {
     await db.execute(sql.raw(statement));
   }
+  // The counter took over the forced list counter's table in place.
+  await db.execute(
+    sql.raw('ALTER TABLE "model_run_budgets" FORCE ROW LEVEL SECURITY'),
+  );
 };
 
 /** Install invoice authorization and guards from the production migration after schema push. */
@@ -1766,6 +2028,28 @@ export const installPgliteInvoiceObjects = async (
   }
 };
 
+/** Install current timer presence from its production migration after schema push. */
+export const installPgliteMatterTimerPresence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261116190212_matter_timer_presence",
+      "migration.sql",
+    ),
+  )
+    .map(executableSql)
+    .filter((statement) =>
+      /^(?:CREATE FUNCTION|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
+        statement,
+      ),
+    );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install filing-year semantics from the committed function migration. */
 export const installPgliteDecisionDocketFilingYear = async (
   db: PgliteSchemaDb,
@@ -1798,4 +2082,91 @@ export const installPgliteCaseLawPopulationCounts = async (
     await db.execute(sql.raw(statement));
   }
   await db.execute(sql`SELECT public.seed_case_law_population_counts(128)`);
+};
+
+/**
+ * Install the trigger that writes every finding decision's history event, so
+ * a writer that changes a decision in a test gets its history exactly as it
+ * would in production.
+ */
+export const installPgliteFindingDecisionHistory = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const folder of findingDecisionHistoryMigrations()) {
+    await installPgliteMigration({
+      db,
+      migrationPath: findingDecisionHistoryMigrationPath(folder),
+    });
+  }
+};
+
+const CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261116160000_corpus_index_route_seedings",
+  "migration.sql",
+);
+
+/**
+ * Apply what schema push omits from the seeding tables: forced row security
+ * and the status trigger that deletes a generation's seeding pass when it
+ * leaves or re-enters the active set.
+ */
+export const installPgliteCorpusIndexSeedingLifecycle = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CORPUS_INDEX_ROUTE_SEEDINGS_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      (source.startsWith("ALTER TABLE") &&
+        source.endsWith("FORCE ROW LEVEL SECURITY;")) ||
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 5) {
+    panic(
+      `Corpus index seeding lifecycle migration statements changed: ${statements.length}`,
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const CORPUS_INDEX_GENERATION_RETIRE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261117203000_corpus_index_generation_retire",
+  "migration.sql",
+);
+
+/**
+ * Apply what schema push omits from the retire migration: the guard that
+ * refuses every projection write to a retired generation and the page
+ * function that deletes its history. The history delete guard and the
+ * registry's terminal guard it also replaces are not installed in tests
+ * (their triggers are allowlisted), so their new bodies are left out.
+ */
+export const installPgliteCorpusIndexGenerationRetire = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CORPUS_INDEX_GENERATION_RETIRE_MIGRATION_PATH,
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.includes("refuse_retired_corpus_index_projection_write") ||
+      source.includes("purge_retired_corpus_index_generation_page")
+    );
+  });
+  if (statements.length !== 7) {
+    panic(
+      `Corpus index generation retire migration statements changed: ${statements.length}`,
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
 };

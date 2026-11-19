@@ -53,6 +53,18 @@ export const TABLE_RETENTION = {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxCommandsPerRun commands per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
+  desktop_runner_app_calls: {
+    boundedBy:
+      "MAX_APP_CALLS_PER_RUN rows per run, a few more only when calls were answered at the same moment, each within the chat app part limit, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_folder_restores: {
+    boundedBy:
+      "At most one live undo per run and one more per refused or expired attempt the member asks again, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  chat_local_run_step_contents: {
+    boundedBy:
+      "One row per step of a chat's local runs, each within CHAT_LOCAL_RUN_STEP_MAX_BYTES and all of one run within CHAT_LOCAL_RUN_STEP_CONTENT_RUN_BUDGET; cascade-deleted with the turn or message that shows the step, and with the thread.",
+  },
   desktop_runner_events: {
     boundedBy:
       "At most DESKTOP_RUNNER_LIMITS.maxMessagesPerRun messages and maxMessageBytesPerRun bytes per run, cascade-deleted when pruneEndedRuns deletes the ended run.",

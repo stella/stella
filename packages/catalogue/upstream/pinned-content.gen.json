@@ -24,7 +24,20 @@
           "path": "skills/playbook-reviewer-anthropic"
         }
       ],
-      "resources": [],
+      "resources": [
+        {
+          "byteLength": 11358,
+          "path": "skills/playbook-reviewer-anthropic/LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "utf16Length": 11358
+        },
+        {
+          "byteLength": 277,
+          "path": "skills/playbook-reviewer-anthropic/README.md",
+          "sha256": "3ece30cc4a7bc83d465cbd9a4fbc2d2654cab4dea01464e8af90069c1e8bd927",
+          "utf16Length": 277
+        }
+      ],
       "skill": {
         "bodyUtf16Length": 10536,
         "byteLength": 10943,
@@ -84,7 +97,14 @@
           "path": "skills/argentine-supreme-court-analysis-adrian-lerer"
         }
       ],
-      "resources": [],
+      "resources": [
+        {
+          "byteLength": 247,
+          "path": "skills/argentine-supreme-court-analysis-adrian-lerer/README.md",
+          "sha256": "aed6783bf055a163834f243d7a7047ae7ab96fda9763100532c5e92548808962",
+          "utf16Length": 247
+        }
+      ],
       "skill": {
         "bodyUtf16Length": 4542,
         "byteLength": 5694,
@@ -126,7 +146,7 @@
       }
     }
   ],
-  "factsSha256": "320ebc12d038af33f47084f3300bb0b4e0a020a8dd754d1f5556e5c73a2a6051",
-  "parserFingerprint": "1174ca67564e17b9874f99477386b8682b12258db95bdea7c41b21b387604e4e",
+  "factsSha256": "28d4946a9f3a5656496c3c01db2c8a1199312edca3d6f68a6c3dc1b4d5244d03",
+  "parserFingerprint": "e07517896c35433aac7109619935cbbcffb1e8ad35f8c9354a50ce22352ee872",
   "version": 2
 }

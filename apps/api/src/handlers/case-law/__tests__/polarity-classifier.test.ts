@@ -8,6 +8,7 @@ import {
   POLARITIES,
   POLARITY,
   POLARITY_PRECEDENCE,
+  POLARITY_RULE_KIND,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
@@ -234,18 +235,17 @@ describe("seed rules", () => {
   });
 
   /**
-   * A case recited with "srov." and rejected a page later: the rule tier
-   * reads both windows and records that they disagree. Reading the first
-   * window alone is what filed the overruled case as supported; reading only
-   * the severest of the two lost the reliance the court also expressed.
+   * A citation-form marker says nothing about treatment. A rejection in a
+   * later mention therefore remains the citation's only stance.
    */
-  test("mentions that disagree are stored as one mixed reading", () => {
+  test("a form-only mention cannot dilute a later rejection", () => {
     const rules = compileRules(
       SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
         id: createSafeId<"caseLawPolarityRule">(),
         pattern: r.pattern,
         polarity: r.polarity,
         confidence: 1,
+        kind: r.kind,
       })),
     );
     const recital =
@@ -261,28 +261,27 @@ describe("seed rules", () => {
     expect(windows?.mentions).toHaveLength(2);
     expect(
       selectCitationPolarity(rules, windows?.mentions[0] ?? "")?.polarity,
-    ).toBe(POLARITY.SUPPORTIVE);
+    ).toBe(POLARITY.NEUTRAL);
     expect(
       selectCitationPolarity(rules, windows?.mentions[1] ?? "")?.polarity,
     ).toBe(POLARITY.NEGATIVE);
     expect(
       selectCitationPolarity(rules, windows?.mentions ?? [])?.polarity,
-    ).toBe(POLARITY.MIXED);
+    ).toBe(POLARITY.NEGATIVE);
   });
 
   /**
-   * The same disagreement a paragraph closer. The mentions sit within one
-   * window of each other, so the excerpt the model tiers read is a single
-   * merged window carrying both cues; reading the rule tier off that window
-   * returned one match and filed the departure as the whole citation.
+   * The same form and stance within one composed context retain the negative
+   * precedence used everywhere else in the rule tier.
    */
-  test("mentions that disagree are mixed even where their windows merge", () => {
+  test("a nearby form marker cannot dilute a rejection", () => {
     const rules = compileRules(
       SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
         id: createSafeId<"caseLawPolarityRule">(),
         pattern: r.pattern,
         polarity: r.polarity,
         confidence: 1,
+        kind: r.kind,
       })),
     );
     const recital =
@@ -299,7 +298,7 @@ describe("seed rules", () => {
     expect(windows?.mentions).toHaveLength(2);
     expect(
       selectCitationPolarity(rules, windows?.mentions ?? [])?.polarity,
-    ).toBe(POLARITY.MIXED);
+    ).toBe(POLARITY.NEGATIVE);
   });
 
   /**
@@ -355,6 +354,7 @@ describe("seed rules", () => {
         pattern: r.pattern,
         polarity: r.polarity,
         confidence: 1,
+        kind: r.kind,
       })),
     );
     const context =
@@ -364,15 +364,89 @@ describe("seed rules", () => {
     );
   });
 
+  /**
+   * What a court says when the cited decision answered another question or
+   * does not carry over: a party's reliance on it is being turned down, and a
+   * `supportive` cue beside it must not stand.
+   */
+  test("Czech distinguishing cues read as negative", () => {
+    const negativeRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "negative",
+    );
+
+    const windows = [
+      "potom pomíjí, že soud ve zmiňované věci řešil otázku ochrany osobních údajů při pořizování kamerového záznamu, nikoliv možnost použití obrazového záznamu jako důkazu.",
+      "Odkazovaný rozsudek řešil jinou otázku než tu, kterou nastolil dovolatel.",
+      "Oba judikáty však neobsahují žádné zobecnitelné závěry, které by byly přenositelné na kamerové systémy.",
+      "Závěry citovaného nálezu nelze přenést na nyní posuzovanou věc.",
+      "Citovaný rozsudek na projednávanou věc nedopadá.",
+    ];
+
+    for (const text of windows) {
+      const fired = negativeRules.filter((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect({ text, fired: fired.length > 0 }).toEqual({ text, fired: true });
+    }
+  });
+
+  test("Czech distinguishing cues stay silent when no cited decision is named", () => {
+    const negativeRules = SEED_RULES.filter(
+      (r) => r.language === "cs" && r.polarity === "negative",
+    );
+
+    const windows = [
+      // The case at hand, not the authority.
+      "Soud v předmětné věci řešil otázku náhrady škody, nikoliv otázku bezdůvodného obohacení.",
+      "Závěry odvolacího soudu nelze přenést na jiného účastníka.",
+      "Na toto rozhodnutí ustanovení § 5 nedopadá.",
+      "Dovolání nesměřuje proti výroku rozsudku a neobsahuje žádné zobecnitelné závěry.",
+    ];
+
+    for (const text of windows) {
+      const fired = negativeRules.filter((r) =>
+        new RegExp(r.pattern, "iu").test(text),
+      );
+      expect({ text, fired: fired.map((r) => r.pattern) }).toEqual({
+        text,
+        fired: [],
+      });
+    }
+  });
+
+  /**
+   * A long sentence names the decision at its start and answers it at its
+   * end, past a window cut at a fixed width, where only the party's reliance
+   * was read.
+   */
+  test("a citation the court distinguishes at the end of its sentence is negative", () => {
+    const sentence =
+      "Namítá-li žalobce s poukazem na rozsudek Nejvyššího správního soudu ze dne 23. 8. 2013, č. j. 5 As 158/2012-49, že se soudy při posouzení otázky přípustnosti provedení důkazu obrazovým záznamem pořízeným soukromou osobou bez vědomí nahrávané osoby odchýlily od „přiléhající judikatury“ a nesprávně posoudily zachování „proporcionality mezi právem na ochranu osobnosti žalobce a právem žalovaného k prokázání svých skutkových tvrzení“, potom pomíjí, že soud ve zmiňované věci řešil otázku ochrany osobních údajů při pořizování kamerového záznamu, nikoliv možnost použití obrazového záznamu jako důkazu v občanském soudním řízení.";
+    const windows = extractContexts(
+      [{ text: sentence }],
+      "č. j. 5 As 158/2012",
+      0,
+    );
+    const rows = SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
+      id: createSafeId<"caseLawPolarityRule">(),
+      pattern: r.pattern,
+      polarity: r.polarity,
+      kind: r.kind,
+      confidence: 1,
+    }));
+
+    expect(
+      selectCitationPolarity(compileRules(rows), windows?.mentions ?? [""])
+        ?.polarity,
+    ).toBe(POLARITY.NEGATIVE);
+  });
+
   test("Czech supportive rules match expected phrases", () => {
     const supportiveRules = SEED_RULES.filter(
       (r) => r.language === "cs" && r.polarity === "supportive",
     );
 
     const testCases = [
-      "srov. rozhodnutí",
-      "viz nález",
-      "srovnej usnesení",
       "Nejvyšší soud judikoval",
       "lze odkázat na precedenční",
       "má oporu v rozhodovací činnosti",
@@ -477,6 +551,7 @@ describe("rule precedence", () => {
     pattern,
     polarity,
     confidence: 1,
+    kind: POLARITY_RULE_KIND.STANCE,
   });
 
   test("a quashed judgment under review does not turn a compare-cue negative", () => {
@@ -499,7 +574,7 @@ describe("rule precedence", () => {
       POLARITY.NEGATIVE,
     );
     expect(selectCitationPolarity(rules, context)?.polarity).toBe(
-      POLARITY.SUPPORTIVE,
+      POLARITY.NEUTRAL,
     );
   });
 
@@ -615,6 +690,7 @@ describe("rule precedence", () => {
         pattern: "viz",
         polarity: POLARITY.SUPPORTIVE,
         confidence: 0.8,
+        kind: POLARITY_RULE_KIND.STANCE,
       },
     ]);
 

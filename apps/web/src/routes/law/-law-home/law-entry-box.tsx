@@ -4,17 +4,14 @@ import { Button } from "@stll/ui/button";
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_BOX_FOCUS_CLASS,
-  COMPOSER_CONTROL_BUTTON_SIZE,
   COMPOSER_LARGE_ACTION_ROW_CLASS,
-  COMPOSER_LARGE_EDITOR_CLASS,
   COMPOSER_LARGE_TEXT_WELL_CLASS,
   COMPOSER_LEADING_GROUP_CLASS,
-  COMPOSER_SEND_BUTTON_CLASS,
-  COMPOSER_TEXT_CLASS,
   ComposerStatusRow,
 } from "@stll/ui/composer";
 import { Form } from "@stll/ui/form";
 import { SearchIcon } from "@stll/ui/icons";
+import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -70,14 +67,11 @@ export const LawEntryBox = ({
           <div
             className={cn("relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS)}
           >
-            <textarea
+            <Textarea
               aria-label={searchLabel}
               autoComplete="off"
-              className={cn(
-                "placeholder:text-foreground-placeholder block w-full resize-none bg-transparent outline-none",
-                COMPOSER_TEXT_CLASS,
-                COMPOSER_LARGE_EDITOR_CLASS,
-              )}
+              appearance="composer"
+              fieldSizing="fixed"
               dir={contentDir(query)}
               maxLength={maxLength}
               onChange={(event) => onQueryChange(event.currentTarget.value)}
@@ -105,14 +99,12 @@ export const LawEntryBox = ({
             <div className="flex items-center gap-0.5">
               <Button
                 aria-label={searchLabel}
-                className={cn(
-                  COMPOSER_SEND_BUTTON_CLASS,
-                  trimmed.length === 0 && "opacity-50",
-                )}
+                className={cn(trimmed.length === 0 && "opacity-50")}
                 disabled={trimmed.length === 0}
-                size={COMPOSER_CONTROL_BUTTON_SIZE}
+                size="icon-round"
                 tooltip={searchLabel}
                 type="submit"
+                variant="composer"
               >
                 <SearchIcon className="size-3.5" />
               </Button>

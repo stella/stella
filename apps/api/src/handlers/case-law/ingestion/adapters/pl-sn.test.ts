@@ -558,6 +558,49 @@ describe("walking decision-date months oldest first", () => {
     },
   );
 
+  // The publisher's bot management answers in the proxy's place, at 200 and
+  // as HTML, for every task. That is sn.pl refusing automated clients, which
+  // the source's health must say, not an envelope this adapter misread.
+  test.each(["searchOrzeczenia", "detailsOrzeczenie", "OrzeczeniePlikPdf"])(
+    "a bot challenge answering %s fails the page as a publisher refusal",
+    async (challengedTask) => {
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          const task = url.searchParams.get("task");
+          if (task === challengedTask) {
+            return await Promise.resolve(
+              new Response(
+                '<html><head><script src="/_Incapsula_Resource?SWJIYLWA=0"></script></head>' +
+                  "<body><iframe>Request unsuccessful. Incapsula incident ID: 0-0</iframe></body></html>",
+                { headers: { "Content-Type": "text/html" } },
+              ),
+            );
+          }
+          const rows = [
+            {
+              id: "x",
+              sygnatura_sprawy: "I CSK 1/94",
+              forma_orzeczenia: "wyrok SN",
+            },
+          ];
+          return await Promise.resolve(
+            jsonResponse(envelope(task === "searchOrzeczenia" ? rows : [])),
+          );
+        }),
+      );
+
+      const result = await plSnAdapter.fetchPage("1994-03:0", {});
+
+      expect(Result.isError(result) && result.error).toMatchObject({
+        stopKind: "publisher_refusal",
+        message: `sn.pl: ${challengedTask} answered a bot challenge (imperva)`,
+      });
+    },
+  );
+
   test("a listed row whose document the proxy withholds is still stored", async () => {
     sourceHolding("1994-03", [
       { id: "x", sygnatura_sprawy: "I CSK 1/94", forma_orzeczenia: "wyrok SN" },

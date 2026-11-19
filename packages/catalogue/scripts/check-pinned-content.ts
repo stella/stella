@@ -2,8 +2,9 @@
 import { panic, Result } from "better-result";
 
 import {
+  isKnownBinaryResourcePath,
+  isOsMetadataPath,
   SKILL_FILE_NAME,
-  SKILL_RESOURCE_FOLDERS,
   type SkillPackageDiagnostic,
   type SkillPackageFile,
   validateSkillPackage,
@@ -110,9 +111,10 @@ const collectPinnedFiles = async (
       sizeBytes: skill.byteLength,
     },
   ];
+  // An install keeps every folder beside SKILL.md (any name, any case) and
+  // leaves out binary files and OS metadata; this walk mirrors it.
   const pending = [target.directory];
   const queued = new Set(pending);
-  const resourceFolders = SKILL_RESOURCE_FOLDERS;
 
   while (pending.length > 0) {
     const directory = pending.shift();
@@ -130,18 +132,18 @@ const collectPinnedFiles = async (
         continue;
       }
       if (item.type === "dir") {
-        const root = relative.split("/").at(0);
-        if (root && resourceFolders.has(root) && !queued.has(item.path)) {
+        if (relative !== "__MACOSX" && !queued.has(item.path)) {
           queued.add(item.path);
           pending.push(item.path);
         }
         continue;
       }
-      if (item.type !== "file" || relative === SKILL_FILE_NAME) {
-        continue;
-      }
-      const root = relative.split("/").at(0);
-      if (!root || !resourceFolders.has(root)) {
+      if (
+        item.type !== "file" ||
+        relative === SKILL_FILE_NAME ||
+        isOsMetadataPath(relative) ||
+        isKnownBinaryResourcePath(relative)
+      ) {
         continue;
       }
       const resource = await source.resource({ path: item.path, target });
@@ -149,6 +151,9 @@ const collectPinnedFiles = async (
         throw new PinnedContentError({
           message: `resource ${relative} disappeared during validation`,
         });
+      }
+      if (resource.binary === true) {
+        continue;
       }
       files.push({
         content: "x".repeat(resource.utf16Length),

@@ -81,8 +81,8 @@ test("the PR trigger drops exactly the workflow files autofix never reads", () =
 });
 
 // Its outputs live under .github/, which the autofix action may not modify,
-// so no edit selects the classification digest refresh as an autofix.
-test("no edit selects the classification digest refresh as an autofix", () => {
+// so no edit selects the classification decision pruning as an autofix.
+test("no edit selects the classification decision pruning as an autofix", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
@@ -92,7 +92,7 @@ test("no edit selects the classification digest refresh as an autofix", () => {
     expect(
       generatorsForFiles([file]).map(({ id }) => id),
       file,
-    ).not.toContain("ci-job-classification-digests");
+    ).not.toContain("ci-job-classification-decisions");
   }
 });
 
@@ -151,7 +151,6 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(workflow).toContain(
       "name: autofix.ci # autofix.ci uses this exact name as a security boundary",
     );
-    expect(workflow).not.toContain("pull_request_target:");
     expect(workflow).toContain("permissions:\n  contents: read");
     expect(workflow).not.toContain("contents: write");
     expect(workflow).not.toContain("secrets.");

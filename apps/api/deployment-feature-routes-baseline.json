@@ -176,10 +176,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:DELETE /v1/saved-searches/:savedSearchId",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:DELETE /v1/sharepoint/connection",
     "reason": "pending gate classification"
   },
@@ -736,15 +732,7 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:GET /v1/saved-searches",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:GET /v1/sharepoint/connection",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/sharepoint/drive/root",
     "reason": "pending gate classification"
   },
   {
@@ -1173,10 +1161,6 @@
   },
   {
     "key": "unclassified-route:PATCH /v1/reader/annotations/:annotationId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PATCH /v1/saved-searches/:savedSearchId",
     "reason": "pending gate classification"
   },
   {
@@ -1777,10 +1761,6 @@
   },
   {
     "key": "unclassified-route:POST /v1/reader/annotations",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/saved-searches",
     "reason": "pending gate classification"
   },
   {

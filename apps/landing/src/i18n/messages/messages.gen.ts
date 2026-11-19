@@ -18,32 +18,6 @@ type Messages = {
     "getCli": "Get the CLI";
     "startFree": "Start free";
   };
-  "demo": {
-    "addView": "Add view";
-    "askStella": "Ask stella";
-    "close": "Close";
-    "documentType": "Document type";
-    "documents": "Documents";
-    "dueDate": "Due date";
-    "files": "Files";
-    "filter": "Filter";
-    "matters": "Matters";
-    "notes": "Notes";
-    "overview": "Overview";
-    "sectionBody": "Captured directly from the running product. What you see here is what you use.";
-    "sectionLabel": "The actual product";
-    "sectionTitle": "stella, as it is.";
-    "sort": "Sort";
-    "source": "Source";
-    "sources": "Sources";
-    "status": "Status";
-    "statusActive": "Active";
-    "statusClosed": "Closed";
-    "statusInReview": "In review";
-    "statusOnHold": "On hold";
-    "table": "Table";
-    "todos": "Todos";
-  };
   "footer": {
     "agent": "AI agent";
     "anonymization": "Anonymization";
@@ -59,7 +33,6 @@ type Messages = {
     "privacy": "Privacy";
     "publicData": "Public data";
     "resources": "Resources";
-    "sourceCode": "Source code";
     "status": "Status";
     "support": "Support";
     "tabularReview": "Tabular review";
@@ -93,8 +66,6 @@ type Messages = {
   };
   "nav": {
     "aiFactSheet": "AI fact sheet";
-    "aiFactSheetBlurb": "stella in machine-readable form.";
-    "beta": "Beta";
     "blog": "Blog";
     "changelog": "Changelog";
     "chooseLanguage": "Choose a language";

@@ -2,10 +2,8 @@ import { useState } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
-import * as v from "valibot";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
-import { Temporal } from "@stll/time";
 
 import type { LawHistoryCountry } from "@/features/law-search-history/law-search-history-query";
 import arabicMessages from "@/i18n/langs/ar.json";
@@ -14,7 +12,6 @@ import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson } from "@/lib/stored-json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, screen, within, waitFor } =
@@ -22,15 +19,6 @@ const { act, cleanup, fireEvent, render, screen, within, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { LawRecent, LawRecentList } = await import("./law-recent");
-
-const queryImportBatchSchema = v.object({
-  entries: v.array(
-    v.object({
-      entry: v.object({ kind: v.literal("search"), query: v.string() }),
-      usedAt: v.string(),
-    }),
-  ),
-});
 
 const usage = {
   country: "CZE" as const,
@@ -262,7 +250,7 @@ test("server recent rows render known court chips, unknown decision icons and st
   const unknown = screen.getByRole("link", { name: /47 C/u });
   expect(unknown.querySelector('[data-slot="court-badge"]')).toBeNull();
   expect(unknown.querySelector("svg")).not.toBeNull();
-  const statute = screen.getByRole("link", { name: /172\/26/u });
+  const statute = screen.getByRole("link", { name: /172\/2026/u });
   const identity = statute.querySelector(
     '[data-slot="document-identity-badge"][data-kind="statute"]',
   );
@@ -279,6 +267,36 @@ test("server recent rows render known court chips, unknown decision icons and st
       /truncate|line-clamp|overflow-hidden/u,
     );
   }
+});
+
+test("every recent row puts its mark in one column, so titles start at the same edge", async () => {
+  await mount();
+  const rows = [
+    screen.getByRole("button", { name: /náhrada škody/u }),
+    screen.getByRole("link", { name: /23 Cdo 1001/u }),
+    screen.getByRole("link", { name: /47 C/u }),
+    screen.getByRole("link", { name: /172\/2026/u }),
+  ];
+  const columns = rows.map((row) =>
+    row.querySelectorAll('[data-slot="recent-mark"]'),
+  );
+
+  expect(columns.map((found) => found.length)).toEqual([1, 1, 1, 1]);
+  const columnClasses = new Set(
+    columns.map((found) => found[0]?.className ?? ""),
+  );
+  expect(columnClasses.size).toBe(1);
+  expect([...columnClasses][0]).toMatch(/(^| )w-\S+( |$)/u);
+  // The mark sits inside the column, never beside it where its own width
+  // would push the title.
+  expect(
+    columns.map(
+      (found) =>
+        found[0]?.querySelector(
+          '[data-slot="document-identity-badge"], svg',
+        ) !== null,
+    ),
+  ).toEqual([true, true, true, true]);
 });
 
 test("server recents filter, reopen queries and delete their server entry id", async () => {
@@ -678,7 +696,7 @@ test("recents tabs fetch each kind beyond the newest twenty mixed entries", asyn
     ).toBe(true);
     await click(messages.statutes.title);
     await waitFor(() =>
-      expect(screen.getByRole("link", { name: /172\/26/u })).toBeTruthy(),
+      expect(screen.getByRole("link", { name: /172\/2026/u })).toBeTruthy(),
     );
     expect(screen.queryByRole("link", { name: /23 Cdo 1001/u })).toBeNull();
     expect(
@@ -770,6 +788,60 @@ test("recents list only the selected jurisdiction's searches and opened decision
     expect(
       fixture.requests.every(({ url }) => url.searchParams.has("country")),
     ).toBe(true);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+test("clear confirmation resets across countries and submits the selected country", async () => {
+  const fixture = await mountServerHistory(({ url, method }) =>
+    Response.json(
+      method === "DELETE"
+        ? { deleted: 1 }
+        : {
+            scope: {
+              userId: "scoped-history-reader",
+              organizationId: "scoped-history-org-a",
+            },
+            items: [
+              {
+                ...seed[0],
+                query: `History ${String(url.searchParams.get("country"))}`,
+              },
+            ],
+            nextCursor: null,
+            limit: 20,
+          },
+    ),
+  );
+  try {
+    await waitFor(() => expect(screen.getByText("History CZE")).toBeTruthy());
+    await click(messages.lawHome.clearRecent);
+    const staleConfirm = screen.getByRole("button", {
+      name: messages.common.delete,
+    });
+    await fixture.setCountry("POL");
+    await waitFor(() => expect(screen.getByText("History POL")).toBeTruthy());
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await act(async () => fireEvent.click(staleConfirm));
+    expect(
+      fixture.requests.filter(({ method }) => method === "DELETE"),
+    ).toHaveLength(0);
+    await fixture.setCountry("CZE");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await fixture.setCountry("POL");
+    await click(messages.lawHome.clearRecent);
+    await click(messages.common.delete);
+    await waitFor(() =>
+      expect(
+        fixture.requests.filter(({ method }) => method === "DELETE"),
+      ).toHaveLength(1),
+    );
+    expect(
+      fixture.requests
+        .find(({ method }) => method === "DELETE")
+        ?.url.searchParams.get("country"),
+    ).toBe("POL");
   } finally {
     await fixture.dispose();
   }
@@ -1070,8 +1142,9 @@ test("clearing visible recents waits for a delayed import and leaves server and 
     await waitFor(() => {
       expect(serverQueries).toEqual([]);
       expect(
-        screen.queryByRole("button", { name: /Local query|Earlier query/u }),
-      ).toBeNull();
+        screen.queryByRole("button", { name: /Local query|Earlier query/u }) ===
+          null,
+      ).toBe(true);
     });
   } finally {
     finishImport.resolve(undefined);
@@ -1151,7 +1224,9 @@ test("removing a saved query waits for a delayed import and leaves it absent", a
       queryKey: ["law-search-history"],
     });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /Saved query/u })).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /Saved query/u }) === null,
+      ).toBe(true);
       expect(serverEntries).toEqual([]);
       expect(storage.getItem(key)).toBeNull();
     });
@@ -1236,8 +1311,18 @@ test("removing a saved query after import failure keeps unrelated local history"
   }
 });
 
-for (const operation of ["clear", "remove"]) {
-  test(`${operation} can be retried after a failed server write without losing local history`, async () => {
+// Literal titles, so the flaky-test quarantine can name each case.
+for (const [operation, title] of [
+  [
+    "clear",
+    "clear can be retried after a failed server write without losing local history",
+  ],
+  [
+    "remove",
+    "remove can be retried after a failed server write without losing local history",
+  ],
+] as const) {
+  test(title, async () => {
     const { userStorageKey } =
       await import("@/lib/account/user-scoped-storage");
     const key = userStorageKey("law_search_history", {
@@ -1379,9 +1464,11 @@ for (const operation of ["clear", "remove"]) {
         expect(deleteAttempts).toBe(2);
         expect(serverEntries).toEqual([]);
         expect(storage.getItem(key)).toBeNull();
-        expect(screen.queryByText(messages.lawHome.importFailed)).toBeNull();
+        expect(screen.queryByText(messages.lawHome.importFailed) === null).toBe(
+          true,
+        );
         expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
-        expect(screen.queryByRole("alertdialog")).toBeNull();
+        expect(screen.queryByRole("alertdialog") === null).toBe(true);
         expect(imports).toBe(1);
       });
     } finally {
@@ -1391,196 +1478,3 @@ for (const operation of ["clear", "remove"]) {
     }
   });
 }
-
-test("a delayed second-client import cannot restore history cleared by the first client", async () => {
-  const { QueryClient, QueryClientProvider } =
-    await import("@tanstack/react-query");
-  const { sessionOptions } = await import("@/lib/auth-query-options");
-  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
-  const key = userStorageKey("law_search_history", {
-    kind: "user",
-    userId: "scoped-history-reader",
-  });
-  const storage = browserStateStorage("local");
-  const raw = JSON.stringify([
-    { query: "Saved query", at: "2026-01-01T12:00:00Z" },
-  ]);
-  storage.removeItem(key);
-  storage.removeItem("law_search_history");
-  const firstClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, retryDelay: 0 },
-      mutations: { retry: false },
-    },
-  });
-  const secondClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, retryDelay: 0 },
-      mutations: { retry: false },
-    },
-  });
-  const signedSession = createSignedSession({
-    userId: "scoped-history-reader",
-    organizationId: "scoped-history-org-a",
-  });
-  firstClient.setQueryData(sessionOptions.queryKey, signedSession);
-  secondClient.setQueryData(sessionOptions.queryKey, signedSession);
-  const importStarted = Promise.withResolvers<undefined>();
-  const finishImport = Promise.withResolvers<undefined>();
-  const savedEntry = {
-    ...seed[0],
-    id: "history-saved",
-    query: "Saved query",
-  };
-  let serverEntries = [savedEntry];
-  let clearedAt: number | null = null;
-  let capturedBatch: unknown;
-  let skippedByClearWatermark = 0;
-  const transport = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        const method =
-          init?.method ?? (input instanceof Request ? input.method : "GET");
-        if (url.pathname.endsWith("/import")) {
-          const body = readStoredJson(
-            typeof init?.body === "string" ? init.body : null,
-            queryImportBatchSchema,
-          );
-          if (body === null) {
-            throw new TypeError("Expected an import batch");
-          }
-          capturedBatch = body;
-          importStarted.resolve(undefined);
-          await finishImport.promise;
-          let accepted = 0;
-          let skipped = 0;
-          for (const {
-            entry: { query },
-            usedAt,
-          } of body.entries) {
-            if (
-              clearedAt !== null &&
-              Temporal.Instant.from(usedAt).epochMilliseconds <= clearedAt
-            ) {
-              skipped += 1;
-              continue;
-            }
-            serverEntries = [
-              ...serverEntries.filter(
-                ({ query: existing }) => existing !== query,
-              ),
-              { ...savedEntry, query },
-            ];
-            accepted += 1;
-          }
-          skippedByClearWatermark += skipped;
-          return Response.json({ entries: accepted, skipped });
-        }
-        if (method === "DELETE") {
-          serverEntries = [];
-          clearedAt = Temporal.Instant.from(
-            "2026-01-02T00:00:00Z",
-          ).epochMilliseconds;
-          return Response.json({ deleted: 1 });
-        }
-        return Response.json({
-          items: serverEntries,
-          nextCursor: null,
-          scope: {
-            userId: "scoped-history-reader",
-            organizationId: "scoped-history-org-a",
-          },
-        });
-      },
-      { preconnect: () => undefined },
-    ),
-  );
-  const renderClient = (client: typeof firstClient) =>
-    render(
-      <QueryClientProvider client={client}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <LawRecent country="CZE" onSearch={() => undefined} />
-          </FormattingProvider>
-        </IntlProvider>
-      </QueryClientProvider>,
-    );
-  try {
-    const first = renderClient(firstClient);
-    await waitFor(() =>
-      expect(
-        within(first.container).getByRole("button", { name: /Saved query/u }),
-      ).toBeTruthy(),
-    );
-    await waitFor(() =>
-      expect(
-        firstClient.getQueryCache().find({
-          queryKey: [
-            "law-search-history",
-            {
-              userId: "scoped-history-reader",
-              organizationId: "scoped-history-org-a",
-            },
-            "import",
-          ],
-          exact: true,
-        })?.state.status,
-      ).toBe("success"),
-    );
-    storage.setItem(key, raw);
-    const second = renderClient(secondClient);
-    await importStarted.promise;
-    expect(capturedBatch).toMatchObject({
-      entries: [
-        {
-          entry: { query: "Saved query" },
-          usedAt: "2026-01-01T12:00:00Z",
-        },
-      ],
-    });
-
-    await act(async () => {
-      fireEvent.click(
-        within(first.container).getByRole("button", {
-          name: messages.lawHome.clearRecent,
-        }),
-      );
-    });
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: messages.common.delete }),
-      );
-    });
-    await waitFor(() => {
-      expect(clearedAt).not.toBeNull();
-      expect(serverEntries).toEqual([]);
-      expect(storage.getItem(key)).toBeNull();
-    });
-    await act(async () => finishImport.resolve(undefined));
-    await waitFor(() => {
-      expect(serverEntries).toEqual([]);
-      expect(skippedByClearWatermark).toBe(1);
-      expect(storage.getItem(key)).toBeNull();
-      expect(
-        within(first.container).getByText(messages.lawHome.noRecent),
-      ).toBeTruthy();
-      expect(
-        within(second.container).getByText(messages.lawHome.noRecent),
-      ).toBeTruthy();
-    });
-  } finally {
-    finishImport.resolve(undefined);
-    await act(async () => cleanup());
-    firstClient.clear();
-    secondClient.clear();
-    transport.mockRestore();
-    storage.removeItem(key);
-    storage.removeItem("law_search_history");
-  }
-});

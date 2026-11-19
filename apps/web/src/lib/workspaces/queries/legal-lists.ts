@@ -135,6 +135,9 @@ export const legalListItemsOptions = ({
     enabled: listId.length > 0,
   });
 
+/** How often a list re-reads its runs while stella is still producing one. */
+const GENERATION_POLL_INTERVAL_MS = 2500;
+
 export const legalListGenerationsOptions = (
   workspaceId: string,
   listId: string,
@@ -153,6 +156,17 @@ export const legalListGenerationsOptions = (
       return response.data;
     },
     enabled: listId.length > 0,
+    // Only stella's own runs settle by themselves; an external producer's
+    // run stays open until that client submits, so it is not polled.
+    refetchIntervalInBackground: true,
+    refetchInterval: (query) =>
+      query.state.data?.items.some(
+        (run) =>
+          run.producer === "stella" &&
+          (run.status === "queued" || run.status === "running"),
+      )
+        ? GENERATION_POLL_INTERVAL_MS
+        : false,
   });
 
 export const legalListCandidatesOptions = (

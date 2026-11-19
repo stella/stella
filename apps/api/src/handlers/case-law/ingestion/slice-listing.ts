@@ -1,16 +1,19 @@
 /**
- * Listing one reconciliation slice end to end, keyed the way the ingest keys
- * it. Shared by the reconciliation walk, which compares the listing against
- * what is held, and the listing census, which sums it; both must count the
- * same identities, or a census total and the ledger's `reported` would
- * disagree about the same slice.
+ * List one slice with main's persisted reconciliation keys. Court evidence is
+ * retained separately before those keys deduplicate the publisher's entries;
+ * the census derives its distinct court-qualified observations from it.
  */
 
 import { Result } from "better-result";
 
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
+import {
+  censusListingEvidenceKey,
+  censusListingIdentity,
+} from "@/api/lib/case-law/census-listing-identity";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type {
+  CensusListingIdentity,
   ReconciliationListingItem,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -30,10 +33,14 @@ export const MAX_SLICE_PAGES = 200;
 export type ListedSlice = {
   /** Distinct keyable identities, first listing of each. */
   keyed: Map<string, ReconciliationListingItem>;
+  /** Full census evidence before the coarser reconciliation keys deduplicate items. */
+  censusIdentities: CensusListingIdentity[];
   /** Items the publisher listed, including repeats and unkeyable ones. */
   listed: number;
   unidentifiable: number;
   duplicate: number;
+  /** Absent when the listing exposes only enumeration, rather than a count. */
+  publisherCount?: number | undefined;
   /** Page requests the listing made, the first included. */
   pages: number;
 };
@@ -89,6 +96,7 @@ const listSlicePass = async ({
 > => {
   const listing: ListedSlice = {
     keyed: new Map(),
+    censusIdentities: [],
     listed: 0,
     unidentifiable: 0,
     duplicate: 0,
@@ -109,9 +117,28 @@ const listSlicePass = async ({
           ? timeoutSignal
           : AbortSignal.any([signal, timeoutSignal]),
     });
+    if (listed.publisherCount !== undefined) {
+      if (
+        !Number.isSafeInteger(listed.publisherCount) ||
+        listed.publisherCount < 0 ||
+        (listing.publisherCount !== undefined &&
+          listing.publisherCount !== listed.publisherCount)
+      ) {
+        return Result.err(
+          new AdapterFetchError({
+            message:
+              "Slice listing stated an invalid or changing publisher count",
+            adapterKey,
+            cursor: slice,
+          }),
+        );
+      }
+      listing.publisherCount = listed.publisherCount;
+    }
     listing.pages += 1;
     listing.listed += listed.items.length;
     for (const item of listed.items) {
+      listing.censusIdentities.push(censusListingIdentity(item));
       const identityKey = listingIdentityKey(item.identity);
       if (identityKey === null) {
         listing.unidentifiable += 1;
@@ -143,7 +170,23 @@ const listSlicePass = async ({
   }
 };
 
+const sameCensusEvidence = (
+  first: readonly CensusListingIdentity[],
+  second: readonly CensusListingIdentity[],
+): boolean => {
+  const keys = (entries: readonly CensusListingIdentity[]) =>
+    new Set(
+      entries.map(censusListingEvidenceKey).filter((key) => key !== null),
+    );
+  const left = keys(first);
+  const right = keys(second);
+  return left.size === right.size && [...left].every((key) => right.has(key));
+};
+
 const sameIdentities = (first: ListedSlice, second: ListedSlice): boolean =>
+  first.publisherCount === second.publisherCount &&
+  first.unidentifiable === second.unidentifiable &&
+  sameCensusEvidence(first.censusIdentities, second.censusIdentities) &&
   first.keyed.size === second.keyed.size &&
   [...first.keyed.keys()].every((identityKey) => second.keyed.has(identityKey));
 

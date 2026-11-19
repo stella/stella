@@ -20,7 +20,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
@@ -111,9 +110,7 @@ export const compactMessagesForContext = async ({
   usageLane,
   userId,
   workspaceId,
-}: CompactMessagesForContextProps): Promise<
-  Result<CompactedHistory<ChatMessage>, HandlerError>
-> => {
+}: CompactMessagesForContextProps): Promise<CompactedHistory<ChatMessage>> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     usageMetering: {

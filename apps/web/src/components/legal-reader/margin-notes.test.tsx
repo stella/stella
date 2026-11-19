@@ -189,7 +189,8 @@ const readerAdapters = {
     provisionActText: ({ statuteTitle }) => statuteTitle,
     formatLabelList: (labels) => labels.join(", "),
   },
-  copyPermalink: async () => true,
+  renderPermalinkCopy: ({ render: renderMark }) =>
+    renderMark({ copied: false, copy: () => undefined }),
   openProvision: () => undefined,
   // oxlint-disable-next-line jsx-a11y/anchor-has-content -- a render element; the peek supplies its content
   provisionPageLink: ({ payload }) => <a href={`#${payload.anchorId}`} />,
@@ -218,7 +219,7 @@ test("an expanding provision card pushes the following gutter note below its new
   };
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
-    get() {
+    get(this: HTMLElement) {
       return this.parentElement?.dataset["marginNote"] === "provision"
         ? provisionHeight
         : 20;

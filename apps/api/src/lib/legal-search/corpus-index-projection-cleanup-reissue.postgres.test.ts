@@ -98,30 +98,34 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
     adapterKey: `projection-reissue-${suffix}`,
     name: "Projection reissue",
   });
-  await db.insert(caseLawDecisions).values(
-    entityIds.map((id, index) => ({
-      id: toSafeId<"caseLawDecision">(id),
-      sourceId: toSafeId<"caseLawSource">(sourceId),
-      caseNumber: `projection-reissue-${suffix}-${index}`,
-      court: "Test court",
-      country: "CZE",
-      language: "cs",
-      contentHash: "c".repeat(64),
-      projectionEpoch: 1n,
-    })),
-  );
-  await db.insert(corpusIndexProjectionStates).values(
-    entityIds.map((entityId) => ({
-      family: "case_law" as const,
-      generation: GENERATION,
-      entityId,
-      desiredAction: "upsert" as const,
-      desiredEpoch: 1n,
-      desiredFingerprint: fingerprint,
-      desiredIndexId: indexId,
-      updatedAt: seededAt,
-    })),
-  );
+  // The decisions and their states commit together, as a desired writer
+  // leaves them: the seeding guard checks every commit.
+  await db.transaction(async (tx) => {
+    await tx.insert(caseLawDecisions).values(
+      entityIds.map((id, index) => ({
+        id: toSafeId<"caseLawDecision">(id),
+        sourceId: toSafeId<"caseLawSource">(sourceId),
+        caseNumber: `projection-reissue-${suffix}-${index}`,
+        court: "Test court",
+        country: "CZE",
+        language: "cs",
+        contentHash: "c".repeat(64),
+        projectionEpoch: 1n,
+      })),
+    );
+    await tx.insert(corpusIndexProjectionStates).values(
+      entityIds.map((entityId) => ({
+        family: "case_law" as const,
+        generation: GENERATION,
+        entityId,
+        desiredAction: "upsert" as const,
+        desiredEpoch: 1n,
+        desiredFingerprint: fingerprint,
+        desiredIndexId: indexId,
+        updatedAt: seededAt,
+      })),
+    );
+  });
   await db.insert(corpusIndexProjectionIntents).values(
     entityIds.map((entityId, index) => ({
       id: intentIds[index] ?? panic("intent id"),
@@ -164,12 +168,14 @@ const commitDelete = async (
   const leaseToken = Bun.randomUUIDv7();
   const leases = await db.transaction(
     async (tx) =>
-      await claimCorpusProjectionCleanupTx(tx, {
-        ...scopeOf(fixture),
-        limit: 10,
-        leaseMs: 60_000,
-        newLeaseToken: () => leaseToken,
-      }),
+      (
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...scopeOf(fixture),
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => leaseToken,
+        })
+      ).leases,
   );
   expect(leases).toHaveLength(fixture.intentIds.length);
   await db.transaction(

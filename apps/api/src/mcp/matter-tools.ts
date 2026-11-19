@@ -737,15 +737,15 @@ const CONTACT_SAVE_FIELD_SCHEMAS = {
   ),
   registration_number: v.pipe(
     updateContactBodySchema.entries.registrationNumber,
-    v.description("Registration number"),
+    v.description("Business register number"),
   ),
   tax_id: v.pipe(
     updateContactBodySchema.entries.taxId,
-    v.description("Tax identifier"),
+    v.description("Business tax number"),
   ),
   vat_id: v.pipe(
     updateContactBodySchema.entries.vatId,
-    v.description("VAT identifier"),
+    v.description("VAT number"),
   ),
   vat_payer: v.pipe(
     updateContactBodySchema.entries.vatPayer,
@@ -2680,6 +2680,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     const removed = await Result.gen(() =>
       deleteWorkspaceContactHandler({
         safeDb: context.safeDb,
+        organizationId: context.organizationId,
         workspaceId,
         workspaceContactId,
         recordAuditEvent,
@@ -2729,7 +2730,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
 
 // --- tool definitions -----------------------------------------------------
 
-export const MATTER_TOOL_DEFINITIONS = [
+const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:

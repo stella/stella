@@ -13,7 +13,8 @@ describe("search_case_law guidance", () => {
   test("off keeps the search contract without experimental guidance", () => {
     expect(searchCaseLawTexts("off")).toEqual({
       description:
-        "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values.",
+        "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values." +
+        ' Under load it may answer status "running": not a failure. After retryAfterMs, repeat the call with continuation_token; "partial" is never the full answer.',
       queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.`,
       limit:
         "Merged-page size, split evenly across the queries (at least one hit each)",
@@ -30,8 +31,7 @@ describe("search_case_law guidance", () => {
     );
     // Partial matches can top up a short page, so v1 never says every hit
     // holds every word.
-    expect(description).toContain("after all_terms hits");
-    expect(description).toContain("Relevance pages may add some_terms hits");
+    expect(description).toContain("Pages may append some_terms hits");
     expect(queries).toContain("two to four words");
     expect(queries).toContain("a phrasing of its own");
     expect(queries).toContain("`§ N` plus the act's name or abbreviation");

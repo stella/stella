@@ -13,13 +13,16 @@ import listInvoicePayments from "@/api/handlers/invoices/payments/list";
 import voidInvoicePayment from "@/api/handlers/invoices/payments/void";
 import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import prefillInvoice from "@/api/handlers/invoices/prefill";
+import sendInvoice from "@/api/handlers/invoices/sends/create";
+import listInvoiceSends from "@/api/handlers/invoices/sends/list";
+import revokeInvoiceSend from "@/api/handlers/invoices/sends/revoke";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
-import { routes } from "@/api/http/route";
+import { mount, routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const invoicesRoute = routes(
+const gatedInvoicesRoute = routes(
   {
     "/": { GET: readInvoices, PUT: createInvoice },
     "/prefill": { GET: prefillInvoice },
@@ -51,3 +54,35 @@ export const invoicesRoute = routes(
     ],
   },
 );
+
+/** Sending requires the organization invitation and caller enrolment. */
+export const invoiceSendsRoute = routes(
+  {
+    "/:invoiceId/sends": { POST: sendInvoice },
+  },
+  {
+    prefix: "/invoices/:workspaceId",
+    middleware: [
+      deploymentFeatureGate("FEATURE_TIME_BILLING"),
+      featureAccessGate("invoice-links"),
+    ],
+  },
+);
+
+/** Existing authority remains manageable without an invitation or personal enrolment. */
+export const invoiceSendManagementRoute = routes(
+  {
+    "/:invoiceId/sends": { GET: listInvoiceSends },
+    "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
+  },
+  {
+    prefix: "/invoices/:workspaceId",
+    middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")],
+  },
+);
+
+export const invoicesRoute = mount([
+  gatedInvoicesRoute,
+  invoiceSendsRoute,
+  invoiceSendManagementRoute,
+]);

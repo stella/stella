@@ -122,21 +122,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-57",
           "excerpt": "dle odst. 1 písm. b) hranici 10 procent na hranici 6 procent ⏎ písm. c)"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-149",
-          "excerpt": "nodárce, rozhodně by však neměla absentovat jakákoli podobná ⏎ pojistka."
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-162",
-          "excerpt": "o změně a doplnění některých dalších zákonů, ve znění zákona ⏎ č. 204/2000 Sb., které zní \"Politické straně, politickému"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-165",
-          "excerpt": "átní příspěvek a jeho výše vycházejí až z výsledků voleb, na ⏎ rozdíl od kaucí, které mohou být někdy obtížně překonatel"
         }
       ],
       "cz-us-page.json.gz[4]": [
@@ -307,28 +292,13 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-7",
-          "excerpt": "otorových vozidel a doprava, trvale bytem Adresa obviněného, ⏎ je vinen, že"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-12",
           "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 1), ⏎ jednak poskytl jinému úplatek v souvislosti s obstarávání"
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-13",
-          "excerpt": "becného zájmu a spáchal takový čin vůči úřední osobě (ad 2), ⏎ čímž spáchal"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-15",
           "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 1), ⏎ jednak zločin podplacení podle § 332 odst. 1 alinea první"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-16",
-          "excerpt": " 1 alinea první, odst. 2 písm. b) trestního zákoníku (ad 2), ⏎ a odsuzuje se"
         }
       ]
     },
@@ -1256,16 +1226,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-7",
           "excerpt": "rozpoznaniu na rozprawie w dniu 22 marca 2018 r. w Warszawie ⏎ sprawy z powództwa P. M."
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-30",
-          "excerpt": "8 września 2016 r. powódka nie pojawiła się w pracy i około godz. 10:00 poinformowała w wiadomości SMS przełożonego M. R"
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-34",
-          "excerpt": "12 września 2016 r. M. R. zwrócił się do dyrektora Agencji o podjęcie stosownych działań dyscyplinarnych w stosunku do p"
         }
       ],
       "pl-courts-dump-day.json.gz:74": [
@@ -1299,11 +1259,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-12",
           "excerpt": "ości przekraczających zakres zwykłego zarządu rzeczą wspólną ⏎ na skutek apelacji wnioskodawców"
-        },
-        {
-          "rule": "stray-leading-number",
-          "anchorId": "p-27",
-          "excerpt": "13 marca 2017 r. zmarła wnioskodawczyni U. G.. Postanowieniem z 27 kwietnia 2017 r. Sąd Rejonowy zawiesił postępowanie ("
         }
       ],
       "pl-courts-dump-day.json.gz:81": [
@@ -1459,16 +1414,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-30",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 3.2. zasądza od wykonawcy A. Polska Spółka z ograniczoną "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-35",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 4.2. zasądza od wykonawcy B-Act Spółka akcyjna w Bydgoszc"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-79",
           "excerpt": "tyczące zgodności z przepisami o minimalnym wynagrodzeniu za ⏎ pracę oraz minimalnej stawce godzinowej, ustalonych na po"
         },
@@ -1496,11 +1441,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-14",
-          "excerpt": "z ograniczoną odpowiedzialnością tytułem wpisu od odwołania, ⏎ 2.2. zasądza od Uniwersytetu Medycznego im. Piastów Śląsk"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-81",
           "excerpt": "równowartość kwoty 20.000.000 euro, a dla dostaw lub usług - ⏎ 10.000.000 euro;"
         }
@@ -1513,11 +1453,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-14",
-          "excerpt": "z ograniczoną odpowiedzialnością tytułem wpisu od odwołania, ⏎ 2.2. zasądza od Uniwersytetu Medycznego im. Piastów Śląsk"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-81",
           "excerpt": "równowartość kwoty 20.000.000 euro, a dla dostaw lub usług - ⏎ 10.000.000 euro;"
         }
@@ -1527,16 +1462,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-23",
           "excerpt": "mówienia publicznego prowadzonym przez innego zamawiającego, ⏎ ii. nie upłynął 2-letni okres wykluczenia SAFEGE S.A.S. w"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-30",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 3.2. zasądza od wykonawcy A. Polska Spółka z ograniczoną "
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-35",
-          "excerpt": "kę akcyjną w Warszawie – tytułem wynagrodzenia pełnomocnika, ⏎ 4.2. zasądza od wykonawcy B-Act Spółka akcyjna w Bydgoszc"
         },
         {
           "rule": "sentence-cut",
@@ -1611,31 +1536,11 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-20",
-          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-21",
           "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-266",
-          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-268",
-          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
         }
       ],
       "eu-ecj/61990CJ0006.en.html.gz (recorded document; census metadata)": [
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-21",
-          "excerpt": "Karen Banks, members of its Legal Service, acting as Agents, ⏎ having regard to the Report for the Hearing,"
-        },
         {
           "rule": "sentence-cut",
           "anchorId": "p-23",
@@ -1709,11 +1614,6 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-18",
-          "excerpt": "az B.R. Killmanna, działających w charakterze pełnomocników, ⏎ po zapoznaniu się z opinią rzecznika generalnego na posie"
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-19",
           "excerpt": "cznika generalnego na posiedzeniu w dniu 5 września 2018 r., ⏎ wydaje następujący"
         },
@@ -1750,11 +1650,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-19",
           "excerpt": "written procedure and further to the hearing on 9 July 2019, ⏎ after considering the observations submitted on behalf of"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-40",
-          "excerpt": "n Board (EDPB), by A. Jelinek and K. Behn, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
         },
         {
           "rule": "sentence-cut",
@@ -1856,23 +1751,8 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-20",
-          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-21",
           "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-266",
-          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-268",
-          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
         }
       ],
       "eu-ecj/62022CJ0128.en.page.html.gz (recorded document; census metadata)": [
@@ -1883,23 +1763,8 @@
         },
         {
           "rule": "sentence-cut",
-          "anchorId": "p-20",
-          "excerpt": " by E. Montaguti, J. Tomkin and F. Wilman, acting as Agents, ⏎ after hearing the Opinion of the Advocate General at the "
-        },
-        {
-          "rule": "sentence-cut",
           "anchorId": "p-21",
           "excerpt": " of the Advocate General at the sitting on 7 September 2023, ⏎ gives the following"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-266",
-          "excerpt": "3/96/EEC, read in conjunction with Articles 4 and 5 thereof, ⏎ must be interpreted as not precluding legislation of gene"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-268",
-          "excerpt": " European Parliament and of the Council of 30 November 2017, ⏎ must be interpreted as not precluding legislation of a Me"
         }
       ],
       "eu-ecj/62023CO0786.en.html.gz (recorded document; census metadata)": [
@@ -2078,11 +1943,6 @@
       ],
       "pl-kis-listing-17-opw.json:0": [
         {
-          "rule": "sentence-cut",
-          "anchorId": "p-3",
-          "excerpt": "akres wniosku o opinię w sprawie opodatkowania wyrównawczego ⏎ 1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o"
-        },
-        {
           "rule": "stray-leading-number",
           "anchorId": "p-4",
           "excerpt": "1 stycznia 2026 r. wpłynął wniosek z 1 stycznia 2026 r. o opinię w sprawie opodatkowania wyrównawczego. Przedmiotowy wni"
@@ -2117,11 +1977,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": " str. 35), zwanego dalej również „rozporządzeniem 2016/679”, ⏎ po przeprowadzeniu wszczętego z urzędu postępowania admin"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "ą w G. przy ul. (…), Prezes Urzędu Ochrony Danych Osobowych, ⏎ stwierdzając naruszenie przez Prokuraturę Rejonową w G. z"
         }
       ],
       "pl-uodo-listing-2023.json.gz:14": [
@@ -2129,11 +1984,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": " str. 35), zwanego dalej również „rozporządzeniem 2016/679”, ⏎ po przeprowadzeniu wszczętego z urzędu postępowania admin"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "ą w G. przy ul. (…), Prezes Urzędu Ochrony Danych Osobowych, ⏎ stwierdzając naruszenie przez Prokuraturę Rejonową w G. z"
         }
       ],
       "pl-uodo-zsoss-440-82-2019.xml:recorded-listing-context": [
@@ -2141,11 +1991,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-3",
           "excerpt": "em i zwalczaniem przestępczości (Dz. U. z 2019 r. poz. 125), ⏎ po przeprowadzeniu postępowania administracyjnego w spraw"
-        },
-        {
-          "rule": "sentence-cut",
-          "anchorId": "p-4",
-          "excerpt": "ionej jego danych osobowych przez Prokuraturę Okręgową w W., ⏎ umarzam postępowanie"
         }
       ]
     }

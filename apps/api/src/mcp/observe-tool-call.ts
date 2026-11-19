@@ -133,7 +133,9 @@ const describeRefusal = ({
 }) => {
   const envelope = readToolErrorEnvelope(result);
   if (envelope === undefined) {
-    return undefined;
+    // A failure without the typed envelope still says so: an absent code
+    // reads as a logging gap, not as a tool answering in plain text.
+    return result.isError === true ? { "error.code": "unknown" } : undefined;
   }
   const declared = Object.keys(
     getStaticMcpToolDefinition(toolName, mode)?.inputSchema.properties ?? {},

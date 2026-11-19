@@ -1,3 +1,5 @@
+import type { Temporal } from "temporal-polyfill/full";
+
 import type { HarnessFailure } from "../events";
 import type { CodexRateLimits, CodexTurnError } from "./protocol";
 
@@ -9,6 +11,9 @@ import type { CodexRateLimits, CodexTurnError } from "./protocol";
 
 const EXHAUSTED_PERCENT = 100;
 const HTTP_UNAUTHORIZED = 401;
+/** Codex's error code for a model at capacity. */
+const SERVER_OVERLOADED = "serverOverloaded";
+const USAGE_LIMIT_EXCEEDED = "usageLimitExceeded";
 
 /** Rate-limit updates are partial; omitted windows keep earlier values. */
 export const mergeRateLimits = (
@@ -31,10 +36,19 @@ export const mergeRateLimits = (
     primary: update.primary === undefined ? previous.primary : update.primary,
     secondary:
       update.secondary === undefined ? previous.secondary : update.secondary,
+    credits: update.credits === undefined ? previous.credits : update.credits,
   };
 };
 
-const usageLimitResetsAt = (limits: CodexRateLimits | null): string | null => {
+/**
+ * When the plan's exhausted windows reset. `null` when none is exhausted, or
+ * one is and its reset is unknown. A window whose reset is not after `now`
+ * has already reset, whatever its percentage says, so it limits nothing.
+ */
+export const usageLimitResetsAt = (
+  limits: CodexRateLimits | null,
+  now: Temporal.Instant,
+): string | null => {
   const resets: number[] = [];
   for (const window of [limits?.primary, limits?.secondary]) {
     if (
@@ -48,7 +62,9 @@ const usageLimitResetsAt = (limits: CodexRateLimits | null): string | null => {
       // One exhausted window without a reset time: the reset is unknown.
       return null;
     }
-    resets.push(window.resetsAt);
+    if (window.resetsAt * 1000 > now.epochMilliseconds) {
+      resets.push(window.resetsAt);
+    }
   }
   if (resets.length === 0) {
     return null;
@@ -87,16 +103,23 @@ const httpStatus = (info: CodexTurnError["codexErrorInfo"]): number | null => {
 };
 
 /**
- * The selected model was at capacity. Codex itself retries transient errors
- * inside a turn; this one ends the turn, and a continuation on the same
- * thread is how it resumes (approach from t3code, MIT, `CodexAdapterV2.ts`).
+ * The selected model was at capacity (`serverOverloaded`), a transient state
+ * of the provider; the member's own allowance is `usageLimitExceeded`. Codex
+ * itself retries transient errors inside a turn; this one ends the turn, and
+ * a continuation on the same thread is how it resumes (approach from t3code,
+ * MIT, `CodexAdapterV2.ts`).
  */
 export const isCapacityFailure = (error: CodexTurnError | null): boolean =>
-  errorCode(error?.codexErrorInfo ?? null) === "serverOverloaded";
+  errorCode(error?.codexErrorInfo ?? null) === SERVER_OVERLOADED;
+
+/** The member's plan allowance ran out, which its rate limits time. */
+export const isPlanUsageLimit = (error: CodexTurnError | null): boolean =>
+  errorCode(error?.codexErrorInfo ?? null) === USAGE_LIMIT_EXCEEDED;
 
 type ClassifyTurnFailureOptions = {
   error: CodexTurnError | null;
   rateLimits: CodexRateLimits | null;
+  now: Temporal.Instant;
 };
 
 /**
@@ -109,6 +132,7 @@ const SHARING_LIMIT_TEXT = "has reached their Subscription Sharing usage limit";
 export const classifyTurnFailure = ({
   error,
   rateLimits,
+  now,
 }: ClassifyTurnFailureOptions): HarnessFailure => {
   const message = error?.message ?? "The harness turn failed.";
   const info = error?.codexErrorInfo ?? null;
@@ -116,12 +140,16 @@ export const classifyTurnFailure = ({
   if (code === "unauthorized" || httpStatus(info) === HTTP_UNAUTHORIZED) {
     return { type: "auth_required", message };
   }
-  if (code === "usageLimitExceeded") {
+  if (code === USAGE_LIMIT_EXCEEDED) {
     return {
       type: "usage_limit",
       message,
-      resetsAt: usageLimitResetsAt(rateLimits),
+      resetsAt: usageLimitResetsAt(rateLimits, now),
     };
+  }
+  // Reached once the continuations are spent, or when no turn may continue.
+  if (code === SERVER_OVERLOADED) {
+    return { type: "model_at_capacity", message };
   }
   if (message.includes(SHARING_LIMIT_TEXT)) {
     // This allowance has its own reset, which the plan's rate limits do not say.

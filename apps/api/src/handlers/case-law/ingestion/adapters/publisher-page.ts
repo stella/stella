@@ -2,6 +2,7 @@
 // parser-output-unchanged: failure stop kinds and fingerprint fields classify rejected pages only; accepted page validation and parsed records are unchanged.
 // parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
+// parser-output-unchanged: a bot-management challenge is rejected as a refusal; accepted pages and parsed records are unchanged.
 import { panic, Result } from "better-result";
 import { parseXmlDocument } from "slimdom";
 
@@ -58,6 +59,57 @@ export class PublisherPageError extends AdapterFetchError {
     this.reason = reason;
   }
 }
+
+/**
+ * The bot-management products a publisher can put in front of its site.
+ *
+ * Their challenge pages answer an automated client in place of the page it
+ * asked for, often with a 200, so a parser reads them as a malformed or empty
+ * answer and the source fails as if our code were broken. Each is recognised
+ * by a header or a marker that its challenge always carries and that a
+ * published decision or listing does not.
+ */
+export type BotChallengeVendor =
+  "imperva" | "cloudflare" | "aws-waf" | "datadome";
+
+const BOT_CHALLENGE_BODY_MARKERS = [
+  { vendor: "imperva", marker: "_Incapsula_Resource" },
+  { vendor: "imperva", marker: "Incapsula incident ID" },
+  { vendor: "cloudflare", marker: "/cdn-cgi/challenge-platform/" },
+  { vendor: "aws-waf", marker: "AwsWafIntegration" },
+  { vendor: "datadome", marker: "captcha-delivery.com" },
+] as const satisfies readonly { vendor: BotChallengeVendor; marker: string }[];
+
+/**
+ * A challenge is a stub that loads a script or an iframe; a body longer than
+ * this is a page someone published, whatever words it quotes.
+ */
+const BOT_CHALLENGE_MAX_CHARS = 64 * 1024;
+
+/**
+ * The vendor whose bot challenge answered in place of the publisher, or null
+ * when the response is the publisher's own. A challenge is the publisher
+ * refusing automated clients, never a defect of the reader that met it.
+ */
+export const readBotChallenge = (
+  text: string,
+  headers?: Headers,
+): BotChallengeVendor | null => {
+  if (headers?.get("cf-mitigated")?.toLowerCase() === "challenge") {
+    return "cloudflare";
+  }
+  const wafAction = headers?.get("x-amzn-waf-action")?.toLowerCase();
+  if (wafAction === "challenge" || wafAction === "captcha") {
+    return "aws-waf";
+  }
+  if (text.length > BOT_CHALLENGE_MAX_CHARS) {
+    return null;
+  }
+  return (
+    BOT_CHALLENGE_BODY_MARKERS.find(({ marker }) => text.includes(marker))
+      ?.vendor ?? null
+  );
+};
 
 type PublisherPageKind = "json" | "html" | "xml" | "pdf" | "zip";
 
@@ -247,15 +299,20 @@ export const validatePublisherPage = ({
   if (bytes.byteLength < (expectation.minBytes ?? 1)) {
     return reject("too-small");
   }
-  if (!matchesContentType(headers, expectation.kind)) {
-    return reject("content-type");
-  }
   const text =
     typeof body === "string"
       ? body
       : new TextDecoder().decode(
           expectation.kind === "zip" ? bytes.subarray(0, 256) : bytes,
         );
+  // Before the content type: a challenge served as HTML where JSON was asked
+  // for is the publisher refusing us, not a page in the wrong format.
+  if (readBotChallenge(text, headers) !== null) {
+    return reject("interstitial");
+  }
+  if (!matchesContentType(headers, expectation.kind)) {
+    return reject("content-type");
+  }
   if (
     (expectation.kind === "json" ||
       expectation.kind === "html" ||

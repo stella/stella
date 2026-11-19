@@ -255,3 +255,24 @@ test("amendments of a work whose ELI cannot be indexed beside them are refused, 
     "target_eli_too_long",
   );
 });
+
+test("the largest work a publisher states keeps every relation", () => {
+  // 134/1998 Sb. carries 56,958 consolidation links in e-Sbírka: every one is
+  // stored, none dropped to fit a bound.
+  const stated = 56_958;
+  const result = sanitizeLegislationAmendments({
+    ...snapshot,
+    relations: Array.from({ length: stated }, (_, index) => ({
+      amendingEli: "eli/cz/sb/1998/134-amending",
+      amendingTitle: null,
+      amendingAnchor: null,
+      affectedAnchor: `par_${String(index)}`,
+      changeKind: "changed" as const,
+      effective: { type: "date" as const, on: "2027-01-01" },
+      publisherInstruction: "UPRAVUJE",
+      publisherId: `publisher:${String(index)}`,
+    })),
+  });
+  expect(result.isOk() ? result.value.relations.length : null).toBe(stated);
+  expect(LEGISLATION_AMENDMENT_SNAPSHOT_MAX).toBeGreaterThan(stated);
+});

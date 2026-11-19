@@ -3,16 +3,15 @@ import { panic } from "better-result";
 import { normalizeCountry } from "@stll/agent-input";
 import {
   exactDecisionMatches,
-  parseDecisionQuery,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   isPublicCountry,
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -23,9 +22,16 @@ import {
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import {
+  type AbsenceCoverageSnapshot,
+  decisionAbsenceCoverage,
+  decisionAbsenceHint,
+} from "@/api/handlers/legal-resolve/decision-absence-coverage";
+import {
   admitResolvedDecision,
   atNamedCourt,
+  type DecisionConstraints,
   decisionConstraints,
+  decisionResolveIntent,
   type DecisionResolveResponse,
   namesCourt,
   namesUnrecognizedCourt,
@@ -33,6 +39,10 @@ import {
 } from "@/api/handlers/legal-resolve/decision-constraints";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
+import {
+  readDecisionReviews,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
@@ -42,7 +52,38 @@ import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
   read?: typeof readDecisionReaderSource;
+  readReviews?: typeof readDecisionReviews;
+  readCoverage?: () => Promise<AbsenceCoverageSnapshot | null>;
 };
+
+/**
+ * The stored coverage answer, or null when it could not be read. Imported on
+ * use, as the coverage tool does, so resolve loads it only for an absence.
+ */
+const readStoredCoverage =
+  async (): Promise<AbsenceCoverageSnapshot | null> => {
+    const { readCaseLawCoverageHandler } =
+      await import("@/api/handlers/case-law/decisions/coverage");
+    const answer = await readCaseLawCoverageHandler(caseLawPublicReadDb);
+    return "message" in answer ? null : answer;
+  };
+
+/** The directory courts a citation's words name, for narrowing its sources. */
+const namedCourtsOf = (constraints: DecisionConstraints): string[] =>
+  constraints.courts.flatMap((constraint) => {
+    switch (constraint.type) {
+      case "court":
+        return [...constraint.courts];
+      case "ecli-code":
+        return constraint.court === undefined ? [] : [constraint.court];
+      case "unrecognized":
+        return [];
+      default: {
+        constraint satisfies never;
+        return panic(`Unhandled court constraint: ${String(constraint)}`);
+      }
+    }
+  });
 
 type ResolvedDecisionDocument = Extract<
   Extract<LegalResolveResponse, { status: "resolved" }>["document"],
@@ -135,10 +176,17 @@ const candidate = (row: DecisionIdentityRow) => ({
  * The document of a decision. Only `admitResolvedDecision` turns it into a
  * resolved answer, once the decision has met every constraint.
  */
-const decisionDocument = async (
-  row: DecisionIdentityRow,
-  read: typeof readDecisionReaderSource,
-): Promise<ResolvedDecisionDocument> => {
+type DecisionDocumentOptions = {
+  row: DecisionIdentityRow;
+  read: typeof readDecisionReaderSource;
+  readReviews: typeof readDecisionReviews;
+};
+
+const decisionDocument = async ({
+  row,
+  read,
+  readReviews,
+}: DecisionDocumentOptions): Promise<ResolvedDecisionDocument> => {
   const content = await read({
     decisionId: row.id,
     phase: "blocks",
@@ -170,6 +218,16 @@ const decisionDocument = async (
     ecli: row.ecli,
     readerUrl,
     text: decisionText(content),
+    appealReviews:
+      content?.status === "read" && content.decision.id === row.id
+        ? content.decision.appealReviews
+        : requireDecisionReviews(
+            await readReviews({
+              decisionIds: [row.id],
+              caseLawDb: caseLawPublicReadDb,
+            }),
+            row.id,
+          ),
   };
 };
 
@@ -200,6 +258,8 @@ const resolveConstrainedDecision = async ({
   dependencies: {
     lookup = lookupDecisionsByIdentity,
     read = readDecisionReaderSource,
+    readReviews = readDecisionReviews,
+    readCoverage = readStoredCoverage,
   } = {},
 }: ResolveDecisionOptions): Promise<DecisionResolveResponse> => {
   if (identifier.trim().length === 0) {
@@ -222,14 +282,10 @@ const resolveConstrainedDecision = async ({
   }
   const grammar = decisionDocketGrammarForCountry(country);
   const reporters = decisionReporterGrammarForJurisdiction(country);
-  const parsed = parseDecisionQuery(identifier, { grammar, reporters });
-  if (parsed.type !== "identifier") {
-    return { status: "not_found", reason: "no_exact_identity" };
-  }
   const { intent, courtText } = readDecisionCitation({
     country,
     identifier,
-    intent: parsed,
+    intent: decisionResolveIntent(identifier, { grammar, reporters }),
     grammar,
     reporters,
   });
@@ -309,7 +365,8 @@ const resolveConstrainedDecision = async ({
     await admitResolvedDecision({
       constraints,
       row,
-      document: async (verified) => await decisionDocument(verified, read),
+      document: async (verified) =>
+        await decisionDocument({ row: verified, read, readReviews }),
       candidate,
       otherCourtCandidate,
       otherCourtCandidates,
@@ -325,47 +382,79 @@ const resolveConstrainedDecision = async ({
   const resolution = resolveDecisionIdentity(intent, scopedRows, {
     reporters,
   });
-  switch (resolution.status) {
-    case "none":
-      return withOtherCourts({
-        status: "not_found",
-        reason: "no_exact_identity",
-      });
-    case "ambiguous": {
-      // A printed sheet no stored decision is known to carry. One decision
-      // in the file is the one the reader asked for; several are left open.
-      if (resolution.reason === "selector_unmatched") {
-        // Only a printed sheet narrows the open candidates to decisions with
-        // no recorded sheet; a part selector leaves the whole file open, so a
-        // lone candidate may be a sibling under another part.
-        const [only, ...rest] = resolution.candidates;
-        const printedSheet =
-          intent.kind === "docket" && intent.selector.kind === "sheet";
-        return printedSheet && only !== undefined && rest.length === 0
-          ? await admit(only)
-          : withOtherCourts({
-              status: "not_found",
-              reason: "no_exact_identity",
-            });
+  const answer = async (): Promise<DecisionResolveResponse> => {
+    switch (resolution.status) {
+      case "none":
+        return withOtherCourts({
+          status: "not_found",
+          reason: "no_exact_identity",
+        });
+      case "ambiguous": {
+        // A printed sheet no stored decision is known to carry. One decision
+        // in the file is the one the reader asked for; several are left open.
+        if (resolution.reason === "selector_unmatched") {
+          // Only a printed sheet narrows the open candidates to decisions with
+          // no recorded sheet; a part selector leaves the whole file open, so a
+          // lone candidate may be a sibling under another part.
+          const [only, ...rest] = resolution.candidates;
+          const printedSheet =
+            intent.kind === "docket" && intent.selector.kind === "sheet";
+          return printedSheet && only !== undefined && rest.length === 0
+            ? await admit(only)
+            : withOtherCourts({
+                status: "not_found",
+                reason: "no_exact_identity",
+              });
+        }
+        return withOtherCourts({
+          status: "ambiguous",
+          candidates: resolution.candidates
+            .slice(0, LIMITS.caseLawLookupCandidatesMax)
+            .map(candidate),
+        });
       }
-      return withOtherCourts({
-        status: "ambiguous",
-        candidates: resolution.candidates
-          .slice(0, LIMITS.caseLawLookupCandidatesMax)
-          .map(candidate),
-      });
+      case "unique":
+        return await admit(resolution.decision);
+      case "incomplete_identifier":
+        // A bare docket of a file that can hold several decisions, of which the
+        // lookup found exactly one: that is the decision. Asking for a sheet the
+        // reader does not have only hides it; several are `ambiguous`.
+        return await admit(resolution.decision);
+      default:
+        resolution satisfies never;
+        return panic("Unhandled decision identity resolution");
     }
-    case "unique":
-      return await admit(resolution.decision);
-    case "incomplete_identifier":
-      // A bare docket of a file that can hold several decisions, of which the
-      // lookup found exactly one: that is the decision. Asking for a sheet the
-      // reader does not have only hides it; several are `ambiguous`.
-      return await admit(resolution.decision);
-    default:
-      resolution satisfies never;
-      return panic("Unhandled decision identity resolution");
-  }
+  };
+  // Every absence says what the reconciled listings know about it, so a
+  // reader can tell "not published" from "not ingested" without the publisher.
+  const withAbsenceCoverage = async (
+    response: DecisionResolveResponse,
+  ): Promise<DecisionResolveResponse> => {
+    if (
+      response.status !== "not_found" ||
+      response.reason !== "no_exact_identity"
+    ) {
+      return response;
+    }
+    const snapshot = await readCoverage();
+    if (snapshot === null) {
+      return { ...response, coverage: { status: "unavailable" } };
+    }
+    const coverage = decisionAbsenceCoverage({
+      snapshot,
+      country,
+      intent,
+      grammar,
+      namedCourts: namedCourtsOf(constraints),
+    });
+    const hint = decisionAbsenceHint(coverage);
+    return {
+      ...response,
+      coverage,
+      ...(hint === undefined ? {} : { hint }),
+    };
+  };
+  return await withAbsenceCoverage(await answer());
 };
 
 export const resolveDecision = async (

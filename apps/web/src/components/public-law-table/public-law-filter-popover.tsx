@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { SlidersHorizontalIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import {
   Popover,
@@ -13,6 +12,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -24,6 +24,10 @@ import type {
   FacetItem,
   FacetSourceBucket,
 } from "@/components/public-law-table/public-law-facets.logic";
+import {
+  PublicLawFiltersButton,
+  PublicLawFiltersLabel,
+} from "@/components/public-law-table/public-law-results-toolbar.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type PublicLawFilterPopoverProps = {
@@ -48,20 +52,11 @@ export const PublicLawFilterPopover = ({
   children,
 }: PublicLawFilterPopoverProps) => {
   const t = useTranslations();
-  const format = useFormatter();
 
   return (
     <Popover>
-      <PopoverTrigger
-        render={<Button className="shrink-0" size="sm" variant="outline" />}
-      >
-        <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
-        {t("common.filters")}
-        {activeFilterCount > 0 && (
-          <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
-            {format.number(activeFilterCount)}
-          </span>
-        )}
+      <PopoverTrigger render={<PublicLawFiltersButton />}>
+        <PublicLawFiltersLabel activeFilterCount={activeFilterCount} />
       </PopoverTrigger>
       <PopoverPanel
         align="start"
@@ -196,16 +191,15 @@ export const FacetOptions = ({
                 type="radio"
                 value={item.value}
               />
-              <BidiText
-                as="span"
+              <TruncatedText
                 className={cn(
-                  "min-w-0 flex-1 truncate",
+                  "flex-1",
                   checked ? "text-foreground font-medium" : "text-foreground",
                 )}
-                title={item.label}
+                render={<BidiText as="span" />}
               >
                 {item.label}
-              </BidiText>
+              </TruncatedText>
               {item.count !== null && (
                 <bdi className="text-muted-foreground text-2xs shrink-0 tabular-nums">
                   {formatFacetCount(item, format.number)}

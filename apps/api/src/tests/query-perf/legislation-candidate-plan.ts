@@ -7,6 +7,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import { LEGISLATION_GENERATION } from "./corpus-seed";
+import { relationRowsVisited } from "./plan-analyzer";
 
 const PROJECTION_STATES = "corpus_index_projection_states";
 
@@ -63,33 +64,10 @@ export const estimatedGenerationStates = async (
       WHERE family = 'legislation' AND generation = ${LEGISLATION_GENERATION}`),
   );
 
-const count = (node: Record<string, unknown>, name: string) => {
-  const value = node[name] ?? 0;
-  return typeof value === "number"
-    ? value
-    : panic(`Plan node ${name} is not a number`);
-};
-
 /**
  * Projection state rows the plan visited: what each states scan returned or
  * filtered out, over all of its loops.
  */
 export const projectionStateRowsVisited = (
   node: Record<string, unknown>,
-): number => {
-  const own =
-    node["Relation Name"] === PROJECTION_STATES
-      ? (count(node, "Actual Rows") +
-          count(node, "Rows Removed by Filter") +
-          count(node, "Rows Removed by Index Recheck")) *
-        count(node, "Actual Loops")
-      : 0;
-  const children = node["Plans"] ?? [];
-  if (!isUnknownArray(children) || !children.every(isRecord)) {
-    return panic("Plan children are malformed");
-  }
-  return children.reduce(
-    (sum, child) => sum + projectionStateRowsVisited(child),
-    own,
-  );
-};
+): number => relationRowsVisited(node, PROJECTION_STATES);

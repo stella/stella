@@ -26,7 +26,7 @@ const createsResource = ({ definition }: RouteEntry): boolean => {
   );
 };
 
-export const createRouteIdOffenders = (
+const createRouteIdOffenders = (
   routeEntries: readonly RouteEntry[],
 ): string[] =>
   routeEntries.flatMap((route) =>

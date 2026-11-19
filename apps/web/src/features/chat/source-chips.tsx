@@ -17,6 +17,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
@@ -210,10 +211,10 @@ const CaseLawSourceRow = ({
       >
         {caseLaw.courtShortCode}
       </span>
-      <BidiText as="span" className="min-w-0 truncate font-medium">
+      <TruncatedText className="font-medium" render={<BidiText as="span" />}>
         {caseLaw.caseNumber}
         {date ? ` · ${date}` : ""}
-      </BidiText>
+      </TruncatedText>
     </>
   );
   const rowClassName = "flex min-w-0 items-center gap-1.5";
@@ -344,9 +345,9 @@ const SourceChip = ({
           sourceDocument={sourceDocument}
           workspaceId={resolvedWorkspaceId}
         />
-        <BidiText as="span" className="max-w-full min-w-0 truncate">
+        <TruncatedText render={<BidiText as="span" />}>
           {sourceDocument.title}
-        </BidiText>
+        </TruncatedText>
       </span>
     </Button>
   );

@@ -37,7 +37,7 @@ export type DenueRawEstablishment = {
   NumLocal?: string;
 };
 
-export type DenueErrorResponse = string[];
+type DenueErrorResponse = string[];
 export type DenueResponse = DenueRawEstablishment[] | DenueErrorResponse;
 
 export type DenueCoordinates = {

@@ -448,6 +448,7 @@ const serializeFullCoverageChatTools = (): Tool[] =>
   });
 
 const commonProviderOptions = (tools: Tool[]) => ({
+  threadId: "tool-schema-thread",
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   tools,
@@ -512,7 +513,7 @@ const providerRequestProbes: ProviderRequestProbe[] = [
       return groups.flatMap((group) => {
         const record = requireRecord(group, "Gemini tool group");
         return Array.isArray(record["functionDeclarations"])
-          ? record["functionDeclarations"]
+          ? (record["functionDeclarations"] as unknown[])
           : [record];
       });
     },
@@ -2035,6 +2036,7 @@ describe("chat tool schemas", () => {
     const chunks: StreamChunk[] = [];
 
     for await (const chunk of adapter.chatStream({
+      threadId: "tool-schema-thread",
       logger: resolveDebugOption(false),
       messages: [{ role: "user", content: "Run the round-trip tool." }],
       model: adapter.model,
@@ -2060,6 +2062,7 @@ describe("chat tool schemas", () => {
     }
 
     for await (const chunk of adapter.chatStream({
+      threadId: "tool-schema-thread",
       logger: resolveDebugOption(false),
       messages: [
         { role: "user", content: "Run the round-trip tool." },

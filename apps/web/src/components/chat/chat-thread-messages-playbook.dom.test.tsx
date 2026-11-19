@@ -2,13 +2,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { createTestState } from "@stll/test-state";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(
   async () => await Promise.resolve(Response.json(null)),
@@ -37,11 +38,6 @@ afterEach(async () => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-  } else {
-    process.env["VITE_API_URL"] = previousApiUrl;
-  }
   await unregisterDomEnvironment();
 });
 

@@ -83,10 +83,10 @@ for (const rowCount of [10, 100]) {
       } as const;
       const refreshes: Promise<void>[] = [];
       handleWorkspaceMutationEvent(client, event, () => {
-        for (const action of getWorkspaceRealtimeQueryActions(
-          event,
+        for (const action of getWorkspaceRealtimeQueryActions(event, {
           workspaceId,
-        )) {
+          queryClient: client,
+        })) {
           refreshes.push(
             client.invalidateQueries({ queryKey: action.queryKey }),
           );

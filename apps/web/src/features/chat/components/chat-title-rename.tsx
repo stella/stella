@@ -6,6 +6,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AiActionIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -299,18 +300,18 @@ const ChatTitleRenameSession = ({
 
   return (
     <Button
-      className="group/plain -mx-1 flex min-w-0"
+      className="group/plain -mx-1 flex min-w-6"
       onClick={startEditing}
       tooltip={t("chat.renameThread")}
       variant="plain"
     >
       <span className="group-hover/plain:bg-accent group-hover/plain:text-accent-foreground flex min-w-0 items-center rounded-sm px-1 py-0.5">
-        <BidiText
-          as="span"
-          className="max-w-full overflow-hidden text-ellipsis whitespace-pre"
+        <TruncatedText
+          className="whitespace-pre"
+          render={<BidiText as="span" />}
         >
           {displayTitle}
-        </BidiText>
+        </TruncatedText>
       </span>
     </Button>
   );

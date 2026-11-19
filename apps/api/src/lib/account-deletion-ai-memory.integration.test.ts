@@ -138,7 +138,11 @@ describe("account deletion assistant memory", () => {
         // The fixture must reach the fault: every seeded row exists first.
         expect(await selectSeeded()).toHaveLength(seededIds.length);
 
-        await deletePersonalAiMemories(asTestRaw<Transaction>(tx), ids.userA1);
+        await deletePersonalAiMemories({
+          tx: asTestRaw<Transaction>(tx),
+          currentUserId: ids.userA1,
+          retainedWorkspaceIds: [],
+        });
 
         const remaining = await selectSeeded();
         expect(remaining).toHaveLength(3);

@@ -46,6 +46,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
   REGIONAL_FORMAT_LABELS,
@@ -56,6 +57,7 @@ import {
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
+import { createUserUpdateMutation } from "@/lib/account/update-user";
 import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -64,7 +66,6 @@ import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
@@ -332,12 +333,14 @@ function ProfilePageBody() {
   });
 
   const updateTimezone = useMutation({
-    mutationFn: async (timezoneId: string) => {
-      const { error } = await authClient.updateUser({ timezoneId });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: (timezoneId: string) => ({ timezoneId }),
+    }),
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.timezoneSaved"),
@@ -353,14 +356,14 @@ function ProfilePageBody() {
   });
 
   const updateDisplayName = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.updateUser({
-        name: displayName.trim(),
-      });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: () => ({ name: displayName.trim() }),
+    }),
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.displayNameSaved"),
@@ -376,15 +379,17 @@ function ProfilePageBody() {
   });
 
   const updateWordEditIdentity = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.updateUser({
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: () => ({
         preferredName: preferredName.trim(),
         wordEditShortcut: wordEditShortcut.trim(),
-      });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+      }),
+    }),
     onSuccess: async () => {
       stellaToast.add({
         title: t("settings.account.wordEditIdentitySaved"),
@@ -846,9 +851,9 @@ const PreferenceRow = ({
 );
 
 const LocalePreferences = () => {
+  const queryClient = useQueryClient();
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
   const regionalFormat = useI18nStore((s) => s.regionalFormat);
   const setRegionalFormat = useI18nStore((s) => s.setRegionalFormat);
   const calendar = useI18nStore((s) => s.calendar);
@@ -870,7 +875,10 @@ const LocalePreferences = () => {
           <Select
             onValueChange={(value) => {
               if (value) {
-                detached(setLang(value), "settings-account-profile.set-lang");
+                detached(
+                  setLang(queryClient, value),
+                  "settings-account-profile.set-lang",
+                );
               }
             }}
             value={lang}

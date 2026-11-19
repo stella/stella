@@ -7,10 +7,12 @@ import {
 
 import {
   BROWSER_EXTENSION_CAPABILITY,
+  BROWSER_EXTENSION_LOCAL_RUN,
   BROWSER_EXTENSION_PROTOCOL_MISMATCH,
   browserExtensionPolicy,
   composeBrowserExtensionPromptLine,
 } from "./browser-extension-capability";
+import { resolveTurnBrowserExtension } from "./chat-schema";
 
 const ASKED_FOR_A_WEBSITE =
   "Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ";
@@ -102,6 +104,7 @@ describe("browser extension capability policy", () => {
       [
         ...Object.values(BROWSER_EXTENSION_STATUS),
         BROWSER_EXTENSION_PROTOCOL_MISMATCH,
+        BROWSER_EXTENSION_LOCAL_RUN,
       ].toSorted(),
     );
 
@@ -116,7 +119,11 @@ describe("browser extension capability policy", () => {
     }
   });
 
-  test.each(ALL_ROWS.filter(([, row]) => !row.toolOffered))(
+  test.each(
+    ALL_ROWS.flatMap(([key, row]) =>
+      "recoveryStep" in row ? [[key, row] as const] : [],
+    ),
+  )(
     "%s composes a line that stays silent unless the user asks for a website",
     (_key, row) => {
       const line = composeBrowserExtensionPromptLine(row);
@@ -133,10 +140,14 @@ describe("browser extension capability policy", () => {
   test.each(ALL_ROWS)(
     "%s carries no unconditional instruction to the user in its raw text",
     (_key, row) => {
-      const rawTexts =
-        "recoveryStep" in row
+      const rawTexts = (() => {
+        if ("statedByRun" in row) {
+          return [];
+        }
+        return "recoveryStep" in row
           ? [row.availability, row.recoveryStep]
           : [row.availability];
+      })();
       for (const text of rawTexts) {
         expect(text).not.toMatch(IMPERATIVE_TO_THE_USER);
         expect(text).not.toMatch(/\btell the user\b/iu);
@@ -147,6 +158,29 @@ describe("browser extension capability policy", () => {
       }
     },
   );
+
+  test("a turn on the member's computer leaves the browser to the run, whatever the tab reports", () => {
+    const connected = {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: BROWSER_EXTENSION_STATUS.connected,
+    };
+    // The same report offers the browser to a turn that runs on stella.
+    expect(
+      browserExtensionPolicy(
+        resolveTurnBrowserExtension({
+          reported: connected,
+          runsLocally: false,
+        }),
+      ).toolOffered,
+    ).toBe(true);
+    const policy = browserExtensionPolicy(
+      resolveTurnBrowserExtension({ reported: connected, runsLocally: true }),
+    );
+    // stella's own browser tool is never offered there, and the chat prompt
+    // claims nothing about a browser: stella desktop tells the run whether
+    // it has browser tools.
+    expect(policy).toEqual({ promptLine: "", toolOffered: false });
+  });
 
   test("the connected row keeps its availability line", () => {
     expect(

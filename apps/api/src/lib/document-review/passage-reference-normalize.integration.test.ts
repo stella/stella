@@ -169,8 +169,8 @@ beforeAll(async () => {
     contentSha256: "e".repeat(64),
     basis: olderBasis(),
     status: "completed",
-    startedAt: new Date(),
-    finishedAt: new Date(),
+    startedAt: new Date("2026-04-30T09:00:00.000Z"),
+    finishedAt: new Date("2026-04-30T09:01:00.000Z"),
   });
   await testDb.insert(documentReviewFindings).values({
     id: findingId,

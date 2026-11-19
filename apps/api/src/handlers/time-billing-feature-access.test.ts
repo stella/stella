@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
@@ -23,7 +23,11 @@ import billingDrafts, {
 } from "@/api/handlers/desktop-time-entries/billing-drafts";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
-import { invoicesRoute } from "@/api/handlers/invoices/routes";
+import {
+  invoiceSendManagementRoute,
+  invoiceSendsRoute,
+  invoicesRoute,
+} from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
@@ -82,10 +86,16 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+const testState = createTestState({ file: import.meta.path, config: env });
+testState.beforeAll(() => {
+  testState.setConfig("FEATURE_INVOICE_LINKS", true);
+});
+
+const capabilityCatalog = parseCatalog(repositoryCapabilityCatalog);
 
 const FLAG = "FEATURE_TIME_BILLING";
 const FEATURE_ID = "time-billing";
@@ -133,11 +143,19 @@ const enrolledContext = () =>
     memberRole: "owner",
   });
 
+// Invoice link sending and its management are measured by their own tests.
+const INVOICE_SEND_ROUTES = [
+  ...invoiceSendsRoute,
+  ...invoiceSendManagementRoute,
+];
+const isInvoiceSendRoute = (entry: RouteEntry) =>
+  INVOICE_SEND_ROUTES.some(({ definition }) => definition === entry.definition);
+
 const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   billingCodesRoute,
   expensesRoute,
   internalTimeEntriesRoute,
-  invoicesRoute,
+  invoicesRoute: invoicesRoute.filter((entry) => !isInvoiceSendRoute(entry)),
   clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
@@ -145,6 +163,9 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   numberSeriesRoute,
   organizationBillingDraftsRoute: organizationSettingsRoute.filter(({ path }) =>
     path.startsWith("/organization-settings/billing-drafts"),
+  ),
+  memberBillingAccessRoute: organizationSettingsRoute.filter(({ path }) =>
+    /^\/organization-settings\/members\/[^/]+\/billing$/u.test(path),
   ),
   ratesRoute,
   savedTimeNarrativesRoute,
@@ -192,14 +213,14 @@ const withTimeBilling = async <T>(
   run: () => Promise<T>,
 ): Promise<T> => {
   const previous = env[FLAG];
-  env[FLAG] = enabled;
+  testState.setConfig(FLAG, enabled);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
   try {
     return await run();
   } finally {
-    env[FLAG] = previous;
+    testState.setConfig(FLAG, previous);
     restoreRuntimeMode();
   }
 };
@@ -244,7 +265,7 @@ const describeResponse = async (response: Response) => ({
 /** What another flagged route group answers while its own flag is off. */
 const disabledFlagResponse = async () => {
   const previous = env.FEATURE_LEGAL_LISTS;
-  env.FEATURE_LEGAL_LISTS = false;
+  testState.setConfig("FEATURE_LEGAL_LISTS", false);
   const restoreRuntimeMode = setRuntimeModeForTesting({
     mode: RUNTIME_MODE.strict,
   });
@@ -254,7 +275,7 @@ const disabledFlagResponse = async () => {
       await server.fetch(new Request(`http://localhost/lists/${PATH_ID}`)),
     );
   } finally {
-    env.FEATURE_LEGAL_LISTS = previous;
+    testState.setConfig("FEATURE_LEGAL_LISTS", previous);
     restoreRuntimeMode();
   }
 };
@@ -277,12 +298,14 @@ const timeBillingToolNames = (mode: (typeof MCP_MODES)[number]) =>
     .toSorted();
 
 describe("time billing admission census", () => {
-  test("every deployment-gated route group is exercised and every owned handler requires enrolment", async () => {
-    // Every served route behind the flag is in the census, and every census
-    // route is behind both gates, the flag first.
+  test("every gated route is exercised and owned handlers require their feature decision", async () => {
+    // Caller-enrolled routes are measured separately from invoice management.
     const census = Object.values(TIME_BILLING_ROUTES).flat();
-    const flagged = apiRoutes.filter(({ middleware }) =>
-      middleware.some((stage) => deploymentFeatureGateFlag(stage) === FLAG),
+    const flagged = apiRoutes.filter(
+      (entry) =>
+        entry.middleware.some(
+          (stage) => deploymentFeatureGateFlag(stage) === FLAG,
+        ) && !isInvoiceSendRoute(entry),
     );
     expect(flagged.length).toBeGreaterThan(0);
     // A group's paths lack the mount prefix; its definitions are the same
@@ -348,17 +371,43 @@ describe("time billing admission census", () => {
         if (!/createSafe(?:Root)?Handler\(/u.test(source)) {
           continue;
         }
-        const module = await import(`${absolute}/${filename}`);
+        const module: { default?: unknown } = await import(
+          `${absolute}/${filename}`
+        );
         expect(
-          isRecord(module.default) && isRecord(module.default.config),
+          isRecord(module.default) && isRecord(module.default["config"]),
         ).toBe(true);
-        if (!isRecord(module.default) || !isRecord(module.default.config)) {
+        if (!isRecord(module.default) || !isRecord(module.default["config"])) {
           continue;
         }
-        expect(module.default.config.featureAccess).toEqual({
-          featureId: FEATURE_ID,
-          type: "required",
-        });
+        const invoiceLinks = invoiceSendsRoute.some(
+          ({ definition }) => definition === module.default,
+        );
+        if (
+          invoiceSendManagementRoute.some(
+            ({ definition }) => definition === module.default,
+          )
+        ) {
+          expect(module.default["config"]["featureAccess"]).toBeUndefined();
+          expect(module.default["config"]["permissions"]).toEqual({
+            invoice: ["update"],
+          });
+          continue;
+        }
+        if (invoiceLinks) {
+          expect(module.default["config"]["featureAccess"]).toEqual({
+            featureId: "invoice-links",
+            type: "required",
+          });
+          expect(module.default["config"]["permissions"]).toEqual({
+            invoice: ["update"],
+          });
+        } else {
+          expect(module.default["config"]["featureAccess"]).toEqual({
+            featureId: FEATURE_ID,
+            type: "required",
+          });
+        }
       }
     }
     for (const mode of MCP_MODES) {
@@ -367,6 +416,80 @@ describe("time billing admission census", () => {
           expect(definition.featureId).toBe(FEATURE_ID);
         }
       }
+    }
+  });
+
+  test("the exported invoice link group requires its organization invitation decision", () => {
+    expect(invoiceSendsRoute.length).toBeGreaterThan(0);
+    const served = apiRoutes.filter((entry) =>
+      invoiceSendsRoute.some(
+        ({ definition }) => definition === entry.definition,
+      ),
+    );
+    expect(served).toHaveLength(invoiceSendsRoute.length);
+    for (const entry of served) {
+      expect(entry.definition.access).toBe("workspace");
+      expect(entry.definition.config["permissions"]).toEqual({
+        invoice: ["update"],
+      });
+      expect(entry.definition.config["featureAccess"]).toEqual({
+        featureId: "invoice-links",
+        type: "required",
+      });
+      expect(
+        entry.middleware.some(
+          (stage) => featureAccessGateFeature(stage) === "invoice-links",
+        ),
+      ).toBe(true);
+      expect(
+        entry.middleware.some(
+          (stage) => deploymentFeatureGateFlag(stage) === FLAG,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("invoice history and revocation require normal invoice access and only billing availability", () => {
+    const served = apiRoutes.filter((entry) =>
+      invoiceSendManagementRoute.some(
+        ({ definition }) => definition === entry.definition,
+      ),
+    );
+    expect(served).toHaveLength(2);
+    expect(served).toHaveLength(invoiceSendManagementRoute.length);
+    for (const entry of served) {
+      expect(entry.definition.access).toBe("workspace");
+      expect(entry.definition.config["permissions"]).toEqual({
+        invoice: ["update"],
+      });
+      expect(entry.definition.config["featureAccess"]).toBeUndefined();
+      expect(
+        entry.middleware.some(
+          (stage) => deploymentFeatureGateFlag(stage) === FLAG,
+        ),
+      ).toBe(true);
+      expect(
+        entry.middleware.some(
+          (stage) => featureAccessGateFeature(stage) !== undefined,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  test("invoice management is hidden when time billing is unavailable", async () => {
+    await using server = serveRoutes(invoiceSendManagementRoute);
+    const responses = await withTimeBilling(
+      false,
+      async () =>
+        await Promise.all(
+          requestsFor(invoiceSendManagementRoute).map(
+            async (request) => await server.fetch(request),
+          ),
+        ),
+    );
+    expect(responses).toHaveLength(invoiceSendManagementRoute.length);
+    for (const response of responses) {
+      expect(response.status).toBe(404);
     }
   });
 

@@ -37,6 +37,11 @@ const nativeSize = (
 
 /** The fixed-size windows that render the design system's controls. */
 export const DESKTOP_WINDOW_SIZES = {
+  activity: nativeSize(
+    "activity_window.rs",
+    "ACTIVITY_WINDOW_WIDTH",
+    "ACTIVITY_WINDOW_HEIGHT",
+  ),
   onboarding: nativeSize("onboarding.rs", "WINDOW_WIDTH", "WINDOW_HEIGHT"),
   settings: nativeSize(
     "lib.rs",

@@ -11,12 +11,16 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { SafeId } from "@stll/api-contract/safe-id";
-import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
+import {
+  searchHistoryEntryMatch,
+  searchHistoryPathCountry,
+} from "@stll/api-contract/search-history-identity";
 import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
 import { Temporal } from "@stll/time";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -198,7 +202,7 @@ type HistoryWrite = { scope: LawHistoryOwner } & (
         id: SafeId<"searchHistoryEntry">;
       };
     }
-  | { type: "clear" }
+  | { type: "clear"; country: LawHistoryCountry }
 );
 
 type CoordinateHistoryWriteOptions = {
@@ -234,6 +238,12 @@ const coordinateHistoryWrite = async ({
       ? []
       : snapshots.flatMap(({ entries }) =>
           entries
+            .filter(
+              (entry) =>
+                write.type !== "clear" ||
+                entry.kind === "search" ||
+                searchHistoryPathCountry(entry.path) === write.country,
+            )
             .map(localIdentity)
             .filter((key) => target === null || key === target),
         ),
@@ -293,7 +303,12 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
       );
       return;
     case "clear":
-      unwrapApiResponse(await api["search-history"].delete({}, request));
+      unwrapApiResponse(
+        await api["search-history"].delete(
+          {},
+          { ...request, query: { ...request.query, country: write.country } },
+        ),
+      );
       return;
     default:
       write satisfies never;
@@ -304,9 +319,13 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
 const useLawHistoryState = ({ filter, country }: LawHistoryList) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  // The public server render has no session. A list that hydrates after the
+  // browser read it must render that same unknown visitor first.
+  const hydrated = useHydrated();
   const sessionView = queryView(useQuery(sessionOptions));
   useQueryViewError(sessionView, "useLawHistory:query");
-  const session = sessionView.type === "items" ? sessionView.items : null;
+  const session =
+    hydrated && sessionView.type === "items" ? sessionView.items : null;
   const userId = session?.user.id;
   const organizationId = session?.session.activeOrganizationId;
   const keyScope = { userId, organizationId };
@@ -436,7 +455,14 @@ const useLawHistoryState = ({ filter, country }: LawHistoryList) => {
   );
   const clearEntries = useLatestCallback(
     (capturedScope: LawHistoryOwner, options: { onSuccess: () => void }) => {
-      mutation.mutate({ type: "clear", scope: capturedScope }, options);
+      mutation.mutate(
+        {
+          type: "clear",
+          scope: capturedScope,
+          country: country ?? panic("Country is required to clear history"),
+        },
+        options,
+      );
     },
   );
   const list = (() => {
@@ -457,7 +483,7 @@ const useLawHistoryState = ({ filter, country }: LawHistoryList) => {
   // Until the session says who is visiting (always so in the server render),
   // their history is unknown, not empty.
   const visitorList =
-    sessionView.type === "pending"
+    !hydrated || sessionView.type === "pending"
       ? ({ status: "pending" } as const)
       : ({ status: "ready", entries: [] } as const);
   return {

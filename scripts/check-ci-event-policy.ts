@@ -36,6 +36,15 @@ const policySchema = v.object({
   ),
 });
 
+/**
+ * No workflow may trigger on pull_request_target, whatever its jobs do.
+ * `pull_request` runs a pull request's checks unprivileged; a step that needs
+ * secrets or a write token moves to a workflow_run workflow, which runs the
+ * default branch's code and treats the triggering run as untrusted data.
+ */
+export const PULL_REQUEST_TARGET_BANNED =
+  "pull_request_target is banned: GitHub restricts it on public repositories, and it runs base-branch code with secrets for pull request events. Use pull_request, plus a workflow_run workflow for any step that needs secrets or a write token";
+
 const WHOLE_CONTEXT_BUDGET_TEST =
   "whole workflow contexts stay below the per-variable environment budget";
 
@@ -96,6 +105,8 @@ export const WHOLE_CONTEXT_ENV_BUDGET_CASES = {
   },
   "publish-npm.yml/release-summary/Report published, failed and skipped packages/NPM_RELEASE_NEEDS":
     { context: "needs", budget: "publish-npm release-summary needs" },
+  "release-desktop.yml/release-complete/Require all release jobs to complete/NEEDS":
+    { context: "needs", budget: "release-desktop release-complete needs" },
 } as const satisfies Record<string, WholeContextBudgetCase>;
 
 const WHOLE_CONTEXT_BUDGETS = new Map(
@@ -429,18 +440,16 @@ const checkArmedPolicy = ({
   if (!condition.includes(HEAVY_PROOF_GATE)) {
     problems.push(`${key}: armed job must gate on ${HEAVY_PROOF_GATE}`);
   }
-  for (const event of ["pull_request", "pull_request_target"]) {
-    if (
-      Object.hasOwn(triggers, event) &&
-      !definitelyFalse(condition, {
-        values: {
-          "github.event_name": event,
-          "needs.ci-plan.outputs.heavy_proof": "false",
-        },
-      })
-    ) {
-      problems.push(`${key}: armed job can run on an unarmed ${event}`);
-    }
+  if (
+    Object.hasOwn(triggers, "pull_request") &&
+    !definitelyFalse(condition, {
+      values: {
+        "github.event_name": "pull_request",
+        "needs.ci-plan.outputs.heavy_proof": "false",
+      },
+    })
+  ) {
+    problems.push(`${key}: armed job can run on an unarmed pull_request`);
   }
   return problems;
 };
@@ -552,17 +561,13 @@ const checkJobEventPolicy = ({
   if (eventPolicy !== "queue" && eventPolicy !== "main") {
     return problems;
   }
-  for (const event of ["pull_request", "pull_request_target"]) {
-    if (!Object.hasOwn(triggers, event)) {
-      continue;
-    }
-    if (
-      !definitelyFalse(condition, {
-        values: { "github.event_name": event },
-      })
-    ) {
-      problems.push(`${key}: ${eventPolicy} job can run on ${event}`);
-    }
+  if (
+    Object.hasOwn(triggers, "pull_request") &&
+    !definitelyFalse(condition, {
+      values: { "github.event_name": "pull_request" },
+    })
+  ) {
+    problems.push(`${key}: ${eventPolicy} job can run on pull_request`);
   }
   return problems;
 };
@@ -685,6 +690,9 @@ export const checkCiEventPolicies = ({
   );
   problems.push(...checkWholeContextEnvironment(parsedWorkflows));
   for (const [file, workflow] of Object.entries(parsedWorkflows)) {
+    if (Object.hasOwn(workflow.on, "pull_request_target")) {
+      problems.push(`${file}: ${PULL_REQUEST_TARGET_BANNED}`);
+    }
     if (file === "codeql.yml") {
       problems.push(...checkCodeqlWorkflow(workflow));
     }

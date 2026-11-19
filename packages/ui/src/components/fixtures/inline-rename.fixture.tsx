@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 
 import { InlineRenameInput } from "../inline-rename";
@@ -15,7 +16,21 @@ document.documentElement.classList.toggle(
 
 const empty = params.get("empty") === "true";
 const fill = params.get("fill") === "true";
-const initialTitle = rtl ? "مراجعة العقد" : "Contract review";
+// A short title beside a shrinkable sibling in a row sized to its content,
+// the way a breadcrumb lays out a matter name and its number.
+const sibling = params.get("sibling") === "true";
+const longTitle = rtl ? "مراجعة العقد" : "Contract review";
+const initialTitle = sibling ? "003" : longTitle;
+
+const wrapInSiblingRow = (field: ReactElement) =>
+  sibling ? (
+    <span data-sibling-row>
+      <span data-sibling>Test</span>
+      {field}
+    </span>
+  ) : (
+    field
+  );
 
 const Fixture = () => {
   const [value, setValue] = useState(empty ? "" : initialTitle);
@@ -43,39 +58,41 @@ const Fixture = () => {
           data-title-container
           data-fallback={params.get("fallback") === "true"}
         >
-          {editing ? (
-            <InlineRenameInput
-              ref={(element) => {
-                if (element) {
-                  element.dataset["refExposed"] = "true";
-                }
-              }}
-              aria-label="Title"
-              fill={fill}
-              {...(empty ? { placeholder: "Add reference" } : {})}
-              value={draft}
-              onValueChange={setDraft}
-              onCommit={commit}
-              onCancel={() => {
-                if (!retain) {
-                  setEditing(false);
-                }
-                setCancels((count) => count + 1);
-                setOutcome("cancelled");
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              data-title-view
-              onClick={() => {
-                setDraft(value);
-                setOutcome("");
-                setEditing(true);
-              }}
-            >
-              {value === "" && empty ? "Add reference" : value}
-            </button>
+          {wrapInSiblingRow(
+            editing ? (
+              <InlineRenameInput
+                ref={(element) => {
+                  if (element) {
+                    element.dataset["refExposed"] = "true";
+                  }
+                }}
+                aria-label="Title"
+                fill={fill}
+                {...(empty ? { placeholder: "Add reference" } : {})}
+                value={draft}
+                onValueChange={setDraft}
+                onCommit={commit}
+                onCancel={() => {
+                  if (!retain) {
+                    setEditing(false);
+                  }
+                  setCancels((count) => count + 1);
+                  setOutcome("cancelled");
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                data-title-view
+                onClick={() => {
+                  setDraft(value);
+                  setOutcome("");
+                  setEditing(true);
+                }}
+              >
+                {value === "" && empty ? "Add reference" : value}
+              </button>
+            ),
           )}
         </div>
         <button type="button">Outside</button>

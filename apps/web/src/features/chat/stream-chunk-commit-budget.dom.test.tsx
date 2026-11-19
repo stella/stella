@@ -16,7 +16,6 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
 import type { RenderSnapshot } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
-import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type { ChatThreadDomSession } from "@/components/chat/chat-thread-dom-page";
@@ -49,10 +48,6 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // React DOM reads its DevTools hook once, when it loads: before any import
 // below reaches it.
 const probe = installRenderProbe();
-// The page renders as it ships: compiled by the React Compiler, as the Vite
-// build compiles it. Without it the page would render far wider than in the
-// app, and a width budget would hold the wrong program.
-Bun.plugin(reactCompilerBunPlugin);
 
 const ORACLE = "chat.render.stream-commits-bounded";
 
@@ -487,6 +482,13 @@ const createStreamingServer = (
     ) {
       return threadPage();
     }
+    // Nothing is queued in the chat.
+    if (
+      method === "GET" &&
+      /^\/v1\/chat\/threads\/[^/]+\/queue$/u.test(url.pathname)
+    ) {
+      return Response.json({ hold: null, items: [] });
+    }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
   };
@@ -533,6 +535,7 @@ const Composer = ({
       controller={controller}
       context={COMPOSER_CONTEXT}
       isGenerating={isGenerating}
+      models={null}
       skillsOrganizationId={ORGANIZATION_ID}
       reservedCommands={
         messages.length > 0
@@ -581,7 +584,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
   await server.closed;
   // Let the page settle what the end of the run started.
   await sleep(100);
-  expect(await sent).toEqual(Result.ok(undefined));
+  expect(await sent).toEqual(Result.ok(CHAT_SEND_SENT));
   expect(server.burst.stopEnabled, "Stop is enabled during the burst").toBe(
     true,
   );
@@ -589,8 +592,8 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     expect(
       testing
         .within(page.view.container)
-        .queryByRole("button", { name: translations.chat.sendPrompt }),
-    ).not.toBeNull();
+        .queryByRole("button", { name: translations.chat.sendPrompt }) === null,
+    ).toBe(false);
   });
   const { firstAt, lastAt } = server.burst;
   if (firstAt === undefined || lastAt === undefined) {

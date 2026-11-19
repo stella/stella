@@ -9,12 +9,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const repository = "stella/stella";
 const version = "1.2.4";
 const releaseTag = `v${version}`;
 const rcTag = `${releaseTag}-rc.1`;
-const scriptPath = (name: string) => new URL(name, import.meta.url).pathname;
+const scriptPath = (name: string) =>
+  fileURLToPath(new URL(name, import.meta.url));
 
 type SelectOptions = {
   requestedSha?: string;
@@ -89,6 +91,7 @@ fi
 case "$*" in
   *pulls?*) cat "$TEST_ROOT/pulls.json" ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  *actions/workflows/*/runs?*) printf '{"workflow_runs":[]}\\n' ;;
   *actions/runs/*) endpoint="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{endpoint##*/}.json" ;;
   *issues?*) printf '[[]]\\n' ;;
   *commits/*)
@@ -212,7 +215,16 @@ esac
         target_url: htmlUrl,
       };
     });
-    writeFileSync(path.join(root, "statuses.json"), JSON.stringify([statuses]));
+    const gate = {
+      context: "release/prod-gate",
+      state: "success",
+      creator: { login: "release-operator", type: "User" },
+      target_url: "",
+    };
+    writeFileSync(
+      path.join(root, "statuses.json"),
+      JSON.stringify([[gate, ...statuses]]),
+    );
   };
   return {
     sha,

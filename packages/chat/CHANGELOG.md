@@ -1,5 +1,96 @@
 # @stll/chat
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`9083d12`](https://github.com/stella/stella/commit/9083d12e2b853c009066c81117fea294e3b548dc), [`9e0fd52`](https://github.com/stella/stella/commit/9e0fd526ef113a0ccf90546b8ef92ea5fff36318), [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8), [`f2d9c52`](https://github.com/stella/stella/commit/f2d9c5236e757123bc254e2783d60414c6b7db91), [`54d4095`](https://github.com/stella/stella/commit/54d409572d79298687864e424ed8dd555ea075e2), [`0dad4da`](https://github.com/stella/stella/commit/0dad4da417b4a99c6141363e2c05a757a314fb72), [`7c534ed`](https://github.com/stella/stella/commit/7c534ed29c09e58efc43fcb3d985941eb52e12b6), [`e8aa798`](https://github.com/stella/stella/commit/e8aa7988f19952963102e45c4a95af1005045437)]:
+  - @stll/ui@0.75.0
+  - @stll/ai-catalog@0.15.0
+
+## 0.6.0
+
+### Minor Changes
+
+- [#8725](https://github.com/stella/stella/pull/8725) [`eed7337`](https://github.com/stella/stella/commit/eed73373605dafa4c513e800efeaefa52b7909cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export `finishedChatRunResponse` from `@stll/chat/durable-transport`: the stream that only ends a run, which a client reads when it follows the turn in the stored thread instead of its live stream.
+
+### Patch Changes
+
+- Updated dependencies [[`178d3f9`](https://github.com/stella/stella/commit/178d3f9f9007de5933b40fd76f8bbaaf65ad089f), [`d8eea73`](https://github.com/stella/stella/commit/d8eea7352a0a6cdeac6498e6231a17818e8cd2d2), [`f6d0e9c`](https://github.com/stella/stella/commit/f6d0e9c9d9966961d52a3d8038a253193632ef2b), [`b1ce389`](https://github.com/stella/stella/commit/b1ce389d73729179bd174166e78499310331479e), [`6359411`](https://github.com/stella/stella/commit/6359411768fbe352d04d63ead41386de9e70137b), [`b9120cd`](https://github.com/stella/stella/commit/b9120cd4f32b6019e3e1db42309ac50960badf2f), [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9), [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005)]:
+  - @stll/ui@0.74.0
+  - @stll/ai-catalog@0.14.0
+
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`501e484`](https://github.com/stella/stella/commit/501e48459f95e38d4594eff47b6daf2040380582), [`64d8cfd`](https://github.com/stella/stella/commit/64d8cfd04b20823f8f8ceabb9dbd0d79bf76ee66), [`c6f510f`](https://github.com/stella/stella/commit/c6f510fb3b4fe3ebcb8a3c761d623dd13cc53c63)]:
+  - @stll/ui@0.73.0
+
+## 0.5.0
+
+### Minor Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use TanStack AI Client v1 for chat transport and persisted conversation replay.
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the supported chart, editor, icon, and styling dependency versions.
+
+- [#8492](https://github.com/stella/stella/pull/8492) [`a70d772`](https://github.com/stella/stella/commit/a70d7721c00f79cc3f9f1c5e03420d3ca20c8c8a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `createDurableChatTransport` gives each dropped connection its own reconnect window. A turn that stayed silent between two drops used to spend the first drop's window on the second and fail its reconnection.
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Stop reconnecting immediately when the server refuses access or returns an invalid resume response. Preserve the typed error and the transcript already received.
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+- Updated dependencies [[`e87f7e2`](https://github.com/stella/stella/commit/e87f7e2f6e0607577e1a07f984151c1787cac989), [`c115c6c`](https://github.com/stella/stella/commit/c115c6cf21780277c98908cbd26a8bb5f279591f), [`7b112d3`](https://github.com/stella/stella/commit/7b112d309728e72aa60d00c8c5d120f83aff698c), [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f), [`7600aee`](https://github.com/stella/stella/commit/7600aee38e07fc7f5956849dd6619e547f3fe400), [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f), [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f), [`617b308`](https://github.com/stella/stella/commit/617b308dc6d81b9d5cfb15395de717419afcff99), [`f6326a3`](https://github.com/stella/stella/commit/f6326a3fbfbbdadaa8839b122e162249ea42ec54)]:
+  - @stll/ai-catalog@0.13.0
+  - @stll/ui@0.72.0
+  - @stll/html@0.1.2
+
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [[`7ac6369`](https://github.com/stella/stella/commit/7ac63690af36c69a3e80e14ebf738a911fbb578d), [`64b1a13`](https://github.com/stella/stella/commit/64b1a130fc710feaeb068e9f971a035b237b7eb0), [`7e56257`](https://github.com/stella/stella/commit/7e5625775367ae55b8719fe9a7dabbd79edc9688)]:
+  - @stll/ui@0.71.0
+
+## 0.4.5
+
+### Patch Changes
+
+- [#7621](https://github.com/stella/stella/pull/7621) [`010b3cb`](https://github.com/stella/stella/commit/010b3cb50b5f12466dcc81ba387a4765cb1184ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep text that does not fit inside its container, and show the whole of it on hover, focus or tap only where it is actually cut.
+
+  `@stll/workspace-ui/field-value` no longer exports `getIntClassName`: numeric field values render through `NumericFieldText`, which cuts them with `TruncatedText`.
+
+  `@stll/ui` widens `TruncatedText` (more `lines` values and a `hint` switch) and changes `COMPOSER_PLACEHOLDER_CLASS`; the composer placeholder renders through the new `ComposerPlaceholder`.
+
+- Updated dependencies [[`53ddfb1`](https://github.com/stella/stella/commit/53ddfb1619d4b2d41e5cdc4fd88699a5077e8606), [`010b3cb`](https://github.com/stella/stella/commit/010b3cb50b5f12466dcc81ba387a4765cb1184ce), [`8997182`](https://github.com/stella/stella/commit/899718207e93ac2ed8cab63ea022f595d5b5ad02)]:
+  - @stll/ui@0.70.0
+
+## 0.4.4
+
+### Patch Changes
+
+- Updated dependencies [[`459ba98`](https://github.com/stella/stella/commit/459ba9864a0928dfd04e21ab77d0a0eca1f21ebf), [`a168fa2`](https://github.com/stella/stella/commit/a168fa2b2fcd5ac1f63b0d47f4f4ecfe9f3dc0e7), [`c98d90f`](https://github.com/stella/stella/commit/c98d90f08913deef444adcc8e821f16ecd9ce7f6), [`7f4b66d`](https://github.com/stella/stella/commit/7f4b66d3518d62c6da22fbfb89517ef8c14ec40b), [`91b7234`](https://github.com/stella/stella/commit/91b7234554c474741dc9a2bf5f36a8117bc5c10c), [`fdc86ae`](https://github.com/stella/stella/commit/fdc86ae113bd086fda0d174b200f59dce7abeaa1), [`e7d8040`](https://github.com/stella/stella/commit/e7d80400c14af980d49c15ca0555e21bc8e78534)]:
+  - @stll/ai-catalog@0.12.0
+  - @stll/ui@0.69.0
+
+## 0.4.3
+
+### Patch Changes
+
+- [#8195](https://github.com/stella/stella/pull/8195) [`0e08bd9`](https://github.com/stella/stella/commit/0e08bd976be878c201d47dd4904640ff9b373bfe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatLink` accepts `urlLabel: "written"` to keep a link's own text when that text is a URL, instead of showing the bare host.
+
+## 0.4.2
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`26a454c`](https://github.com/stella/stella/commit/26a454c7de75da7fabf3ac4c7746e68f09bdb1a1), [`a673b9c`](https://github.com/stella/stella/commit/a673b9ce9ae19be276457c14a29969f176e3daba), [`5afd089`](https://github.com/stella/stella/commit/5afd0899278f2dd459ad8789b7d8b94d6e1de2c5), [`faad54b`](https://github.com/stella/stella/commit/faad54bc23ee324f40fbcffa36094197fd2a0b1d), [`704ca22`](https://github.com/stella/stella/commit/704ca22912cd096ae056e181286e4a7aefc03064), [`e06b815`](https://github.com/stella/stella/commit/e06b81538abe018cd8015a5ba2732e84981ff9a2)]:
+  - @stll/ui@0.68.0
+  - @stll/html@0.1.1
+  - @stll/ai-catalog@0.11.0
+
 ## 0.4.1
 
 ### Patch Changes

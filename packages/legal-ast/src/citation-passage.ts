@@ -114,7 +114,7 @@ export const locateCitationSpans = <Source extends CitationSource>({
     return {};
   }
 
-  const result: Record<string, CitationSpan<Source>[]> = {};
+  const result = new Map<string, CitationSpan<Source>[]>();
   for (const block of blocks) {
     if (!hasBlockInlines(block)) {
       continue;
@@ -145,10 +145,10 @@ export const locateCitationSpans = <Source extends CitationSource>({
       continue;
     }
 
-    result[block.id] = dropOverlappingSpans(hits);
+    result.set(block.id, dropOverlappingSpans(hits));
   }
 
-  return result;
+  return Object.fromEntries(result);
 };
 
 /**
