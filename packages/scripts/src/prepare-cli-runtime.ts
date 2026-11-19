@@ -1,7 +1,9 @@
+import { fileURLToPath } from "node:url";
+
 import { childExitStatus } from "./child-exit-status";
 import { hasPreparedGeneratedSources } from "./prepared-generated-sources";
 
-const root = new URL("../../../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 const prepared = hasPreparedGeneratedSources(root);
 if (!prepared) {
   const apps = Bun.spawnSync(["bun", "scripts/prepare-mcp-apps.ts"], {

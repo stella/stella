@@ -8209,6 +8209,38 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test.each([
+    ["/eli/sk/zz/2005/300", "https://www.slov-lex.sk/eli/sk/zz/2005/300"],
+    [
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny",
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny",
+    ],
+    [
+      "URN:HU:MAGYAR-KOZLONY:2013-EVI-V-TORVENY",
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny",
+    ],
+    ["2013. évi V. törvény", "urn:hu:magyar-kozlony:2013-evi-v-torveny"],
+    [
+      "123/2020. (IV. 30.) Korm. rendelet",
+      "urn:hu:magyar-kozlony:123-2020-iv-30-korm-rendelet",
+    ],
+  ])(
+    "read_statute reads the work identifier %p in its publisher's form",
+    async (eli, canonical) => {
+      resolveStatuteExpressionMock.mockResolvedValue({ type: "unknown-work" });
+
+      await handleMcpToolCall({
+        args: { eli },
+        context: createContext(),
+        toolName: "read_statute",
+      });
+
+      expect(
+        resolveStatuteExpressionMock.mock.calls.at(0)?.at(0),
+      ).toMatchObject({ eli: canonical });
+    },
+  );
+
   describe("case_law_coverage", () => {
     const readCoverage = mock(async () => CASE_LAW_COVERAGE_FIXTURE);
     const call = async (
