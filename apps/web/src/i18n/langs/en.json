@@ -2124,6 +2124,7 @@
     },
     "newChat": "New chat",
     "newChatInSidePanel": "The new chat is available in the side panel",
+    "nextSteps": "Next steps",
     "noPromptPresetOnly": "No message, preset only",
     "noThreads": "No conversations yet",
     "officeCitationUnavailable": "This citation is no longer available.",
@@ -2312,7 +2313,6 @@
     "stopping": "Stopping…",
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
-    "suggestedFollowupsLabel": "Suggested follow-up prompts",
     "suggestingTitle": "Suggesting a title…",
     "suggestionSeverity": {
       "style": "Style",
@@ -2323,7 +2323,6 @@
       "accepted": "Applied",
       "rejected": "Rejected"
     },
-    "tabToAsk": "→ to ask: \"{prompt}\"",
     "tableChart": {
       "bar": "Bar",
       "kind": "Chart type",

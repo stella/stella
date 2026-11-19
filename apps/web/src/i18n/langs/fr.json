@@ -2124,6 +2124,7 @@
     },
     "newChat": "Nouvelle conversation",
     "newChatInSidePanel": "La nouvelle conversation est disponible dans le panneau latéral",
+    "nextSteps": "Prochaines étapes",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -2312,7 +2313,6 @@
     "stopping": "Arrêt en cours…",
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
-    "suggestedFollowupsLabel": "Suggestions de questions de suivi",
     "suggestingTitle": "Suggestion d'un titre…",
     "suggestionSeverity": {
       "style": "Style",
@@ -2323,7 +2323,6 @@
       "accepted": "Appliqué",
       "rejected": "Rejeté"
     },
-    "tabToAsk": "→ pour demander : « {prompt} »",
     "tableChart": {
       "bar": "Barres",
       "kind": "Type de graphique",

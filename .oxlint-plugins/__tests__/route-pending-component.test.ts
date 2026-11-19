@@ -189,6 +189,8 @@ test("a pending half imports only pending-safe modules", async () => {
         'import { SkillIcon } from "@stll/ui/icons";',
         'import { LandingRowsPending } from "@stll/ui/landing-shell";',
         'import { PendingText } from "@/components/pending-text";',
+        'import { Skeleton } from "@stll/ui/skeleton";',
+        'import { TableSkeletonRows } from "@stll/ui/table-shell";',
         'import { RowsPending } from "./rows.pending";',
         'import { columnWidths } from "./columns.logic";',
         'import type { User } from "@/lib/authenticated-user-context";',
@@ -198,7 +200,7 @@ test("a pending half imports only pending-safe modules", async () => {
   expect(
     await pendingRule(
       [
-        'import { Button } from "@stll/ui/button";',
+        'import { Dialog } from "@stll/ui/dialog";',
         'import { DefaultPendingComponent } from "@/components/route-components";',
         'import { Menu } from "@stll/ui/menu";',
         'import { useQuery } from "@tanstack/react-query";',

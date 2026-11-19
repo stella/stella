@@ -350,7 +350,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `Checkbox` `appearance`: `cell`, `default`
 - `Checkbox` `firstLine`: `control`, `text`
-- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `SortableHeadFace`, `TableCell`, `TableHead`, `TableShellCell` `align`: `center`, `end`, `start`
+- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `SortableHeadFace`, `TableCell`, `TableCellFace`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
@@ -404,7 +404,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `PreviewPane` `overflow`: `clip`, `scroll`
 - `PreviewPane` `size`: `default`, `thumbnail`
 - `Prose` `size`: `default`, `lede`, `sm`
-- `Prose`, `TableCell`, `TableRow`, `TableShellCell` `tone`: `default`, `muted`
+- `Prose`, `TableCell`, `TableCellFace`, `TableRow` `tone`: `default`, `muted`
 - `ReviewDecisionActions` `emphasis`: `primary`, `quiet`
 - `ReviewDecisionActions` `state`: `accepted`, `applying`, `dismissed`, `pending`, `rejected`
 - `ReviewOutOfDateNotice` `tone`: `muted`, `warning`

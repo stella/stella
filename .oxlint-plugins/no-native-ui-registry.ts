@@ -402,8 +402,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     ],
   }),
   "table-chart": noNative("a chart drawn from table data"),
-  "table-shell": noNative(
-    "the table's markup without popups, for loading views",
+  "table-shell": owned(
+    nativeRuleId("table"),
+    "native table markup is reported by the table rule",
   ),
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
@@ -723,9 +724,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   switch: renderer("Switch from @stll/ui/switch", ["Switch"]),
   table: webOnly("a phone lists records in rows, not a table"),
   "table-chart": webOnly("the app draws no charts"),
-  "table-shell": webOnly(
-    "the web table's shell for loading views; a phone lists records in rows",
-  ),
+  "table-shell": webOnly("a phone lists records in rows, not a table"),
   tabs: webOnly("a phone switches sections with the platform's tab bar"),
   text: renderer("Text from @stll/ui/text", ["Text"]),
   "text-mark": webOnly("the app highlights no text"),

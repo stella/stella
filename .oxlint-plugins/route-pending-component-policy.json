@@ -13,6 +13,7 @@
     "@stll/ui/layout-tokens",
     "@stll/ui/list-shell",
     "@stll/ui/matter-icon",
+    "@stll/ui/scroll-area",
     "@stll/ui/separator",
     "@stll/ui/skeleton",
     "@stll/ui/stella-mark",

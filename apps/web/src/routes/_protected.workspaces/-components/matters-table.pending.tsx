@@ -9,11 +9,11 @@ import {
   SortableHeadFace,
   Table,
   TableBody,
+  TableCellFace,
   TableHead,
   TableHeader,
   TableHeadLabel,
   TableRow,
-  TableShellCell,
 } from "@stll/ui/table-shell";
 
 import { PendingText } from "@/components/pending-text";
@@ -236,9 +236,9 @@ const MattersTableRowsPending = ({
   MATTERS_TABLE_ROW_PENDING_KEYS.map((rowKey) => (
     <TableRow aria-hidden="true" key={rowKey}>
       {columns.map((column) => (
-        <TableShellCell key={column.id}>
+        <TableCellFace key={column.id}>
           <MattersCellPending columnId={column.id} />
-        </TableShellCell>
+        </TableCellFace>
       ))}
     </TableRow>
   ));

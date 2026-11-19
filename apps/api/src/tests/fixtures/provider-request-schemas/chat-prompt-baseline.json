@@ -72,6 +72,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 36247
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 36526
       }
     ],
     "anthropic/extended": [
@@ -146,6 +150,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 36738
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 37017
       }
     ],
     "bedrock/default": [
@@ -216,6 +224,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 36507
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 36786
       }
     ],
     "bedrock/extended": [
@@ -286,6 +298,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37179
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 37459
       }
     ],
     "google/default": [
@@ -352,6 +368,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 35237
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 35516
       }
     ],
     "google/extended": [
@@ -414,6 +434,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 35714
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 35993
       }
     ],
     "mistral/default": [
@@ -484,6 +508,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37940
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38219
       }
     ],
     "mistral/extended": [
@@ -554,6 +582,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38467
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38747
       }
     ],
     "openai/default": [
@@ -624,6 +656,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37516
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 37794
       }
     ],
     "openai/extended": [
@@ -694,6 +730,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38031
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38310
       }
     ],
     "openrouter-anthropic/default": [
@@ -764,6 +804,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37925
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38204
       }
     ],
     "openrouter-anthropic/extended": [
@@ -834,6 +878,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38436
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38716
       }
     ],
     "openrouter/default": [
@@ -904,6 +952,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 37925
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38204
       }
     ],
     "openrouter/extended": [
@@ -974,6 +1026,10 @@
       {
         "reason": "read-skill-resource takes a cursor and answers windows of a long resource",
         "tokens": 38436
+      },
+      {
+        "reason": "Chat scripts read verify_quote, resolve_case_law_decision and resolve_law_citation; each is one lazy catalog line.",
+        "tokens": 38716
       }
     ]
   },

@@ -2,16 +2,15 @@ import type * as React from "react";
 
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { ButtonFace } from "./control-face";
+import { buttonFaceClassName } from "./control-face";
+import { Skeleton } from "./skeleton";
+import {
+  resolveTableAlign,
+  TABLE_ALIGN_CLASS,
+  TableCellFace,
+} from "./table-cell";
+import type { TableAlign, TableTone } from "./table-cell";
 import { TRUNCATED_TEXT_LINES_CLASS } from "./truncated-text-face";
-
-/*
- * The table's own markup with no popup and no tooltip: the box, the header and
- * body, rows, heads and plain cells, and the face of a sortable head. `Table`,
- * `SortableHead` and the truncating cell (./table.tsx) are built from these,
- * so a loading view that draws the table it stands in for (header, column
- * widths, placeholder rows) can import them before the page's providers mount.
- */
 
 /**
  * How far cells pad their content from the column edges.
@@ -137,12 +136,6 @@ const TableFooter = ({
   />
 );
 
-/**
- * `muted` greys out a row or a cell whose value no longer counts (a voided
- * payment) or that only supports its neighbours (a secondary column).
- */
-type TableTone = "default" | "muted";
-
 const TableRow = ({
   className,
   tone = "default",
@@ -158,24 +151,6 @@ const TableRow = ({
     {...props}
   />
 );
-
-/**
- * Where a column sets its content. `end` lines up figures and amounts;
- * `start` is the default reading edge. A `numeric` head or cell sets to the
- * end unless it names an alignment, so a figures column needs one prop.
- */
-type TableAlign = "start" | "center" | "end";
-
-const TABLE_ALIGN_CLASS = {
-  center: "text-center",
-  end: "text-end",
-  start: "text-start",
-} as const satisfies Record<TableAlign, string>;
-
-const resolveTableAlign = (
-  align: TableAlign | undefined,
-  numeric: boolean,
-): TableAlign | undefined => align ?? (numeric ? "end" : undefined);
 
 // The obsolete `align` attribute of th/td gives way to the alignment prop.
 type TableHeadProps = Omit<React.ComponentProps<"th">, "align"> & {
@@ -207,60 +182,23 @@ const TableHead = ({
   />
 );
 
-type TableCellClassOptions = {
-  align?: TableAlign | undefined;
-  tone?: TableTone | undefined;
-  numeric?: boolean | undefined;
-  flush?: boolean | undefined;
-  className?: string | undefined;
-};
-
-/** A body cell's classes: its padding, alignment, tone and figures. */
-const tableCellClassName = ({
-  align,
-  tone = "default",
-  numeric = false,
-  flush = false,
+const TableCaption = ({
   className,
-}: TableCellClassOptions): string => {
-  const resolvedAlign = resolveTableAlign(align, numeric);
-  return cn(
-    "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
-    flush
-      ? "p-0"
-      : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
-    "in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
-    resolvedAlign !== undefined && TABLE_ALIGN_CLASS[resolvedAlign],
-    tone === "muted" && "text-muted-foreground",
-    numeric && "tabular-nums",
-    className,
-  );
-};
-
-type TableShellCellProps = Omit<React.ComponentProps<"td">, "align"> &
-  Omit<TableCellClassOptions, "className"> & {
-    className?: string | undefined;
-  };
-
-/** A body cell that never cuts its text (`TableCell` without `truncate`). */
-const TableShellCell = ({
-  align,
-  className,
-  flush,
-  numeric,
-  tone,
   ...props
-}: TableShellCellProps) => (
-  <td
-    className={tableCellClassName({ align, className, flush, numeric, tone })}
-    data-slot="table-cell"
+}: React.ComponentProps<"caption">) => (
+  <caption
+    className={cn(
+      "text-muted-foreground mt-4 text-sm in-data-[slot=frame]:my-4",
+      className,
+    )}
+    data-slot="table-caption"
     {...props}
   />
 );
 
 type SortDirection = "asc" | "desc" | null;
 
-/** The `aria-sort` a sortable head carries for its direction. */
+/** A sortable head's `aria-sort` for its direction. */
 const ariaSortOf = (
   direction: SortDirection,
 ): "ascending" | "descending" | "none" => {
@@ -273,7 +211,7 @@ const ariaSortOf = (
   return "none";
 };
 
-/** The arrow after a sorted head's label, or nothing. */
+/** The arrow after a sorted head's label; nothing for an unsorted one. */
 const SortDirectionIcon = ({ direction }: { direction: SortDirection }) => {
   if (direction === "asc") {
     return <ArrowUpIcon className="size-3" />;
@@ -284,12 +222,17 @@ const SortDirectionIcon = ({ direction }: { direction: SortDirection }) => {
   return null;
 };
 
+/** A head's label and the control after it, on one line. */
+const HEAD_CONTENT_CLASS = "inline-flex items-center gap-1";
+
+/** The arrow's slot, held open so a label never moves as the sort flips. */
+const SORT_ICON_SLOT_CLASS = "inline-flex w-3 shrink-0 justify-center";
+
 /**
- * The sort button's own classes inside a head. Its inline padding equals the
- * head's, and the negative margin cancels exactly that: the label lines up
- * with the cells and the button never reaches past the table's edge, where a
- * scrolling container could not reveal it. In an end-aligned (numeric) column
- * the arrow sits before the label, keeping the label flush with the figures.
+ * A sortable head's button: a quiet button whose inline padding equals the
+ * head's, pulled back by a negative margin so the label lines up with the
+ * cells and the button never reaches past the table's edge. In an
+ * end-aligned (numeric) column the arrow sits before the label.
  */
 const sortableHeadButtonClassName = (endAligned: boolean): string =>
   cn(
@@ -297,21 +240,14 @@ const sortableHeadButtonClassName = (endAligned: boolean): string =>
     endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
   );
 
-/** The arrow's slot: the same width with or without an arrow in it. */
-const SORT_ICON_SLOT_CLASS = "inline-flex w-3 shrink-0 justify-center";
-
-/** A head's label with what follows it (a filter trigger), on one line. */
-const HEAD_CONTENT_CLASS = "inline-flex items-center gap-1";
-
-/**
- * A head's label in a loading face, cut to one line as `TruncatedText` cuts
- * the loaded label (without its tooltip, which a face has no use for).
- */
+/** A head's label before its page has loaded: the cut line it sits on. */
 const TableHeadLabel = ({ children }: { children: React.ReactNode }) => (
-  <span className={TRUNCATED_TEXT_LINES_CLASS[1]}>{children}</span>
+  <span className={TRUNCATED_TEXT_LINES_CLASS[1]} data-slot="truncated-text">
+    {children}
+  </span>
 );
 
-type SortableHeadFaceProps = Omit<TableHeadProps, "onClick" | "children"> & {
+type SortableHeadFaceProps = Omit<TableHeadProps, "children" | "onClick"> & {
   children: React.ReactNode;
   sortDirection?: SortDirection;
   /** Drawn next to the label, where the head's trailing control goes. */
@@ -335,25 +271,73 @@ const SortableHeadFace = ({
     aria-sort={ariaSortOf(sortDirection)}
     numeric={numeric}
     {...props}
+    // After the spread: a wider props object could carry a handler through
+    // it, and a face is not something to click.
     onClick={undefined}
   >
     <span className={HEAD_CONTENT_CLASS}>
-      <ButtonFace
-        className={sortableHeadButtonClassName(
-          resolveTableAlign(align, numeric) === "end",
+      <span
+        aria-hidden="true"
+        className={cn(
+          buttonFaceClassName({ size: "default", variant: "muted" }),
+          sortableHeadButtonClassName(
+            resolveTableAlign(align, numeric) === "end",
+          ),
         )}
-        size="default"
-        variant="muted"
       >
         <TableHeadLabel>{children}</TableHeadLabel>
-        <span aria-hidden className={SORT_ICON_SLOT_CLASS}>
+        <span className={SORT_ICON_SLOT_CLASS}>
           <SortDirectionIcon direction={sortDirection} />
         </span>
-      </ButtonFace>
+      </span>
       {trailing}
     </span>
   </TableHead>
 );
+
+type TableSkeletonColumn = {
+  id: string;
+  bar: string;
+  align?: TableAlign | undefined;
+};
+
+const SKELETON_ROW_KEYS = [
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+  "i",
+  "j",
+  "k",
+  "l",
+];
+
+/** Rows that share the table's cell geometry and its caller's column order. */
+const TableSkeletonRows = ({
+  columns,
+  count = 5,
+  rowClassName,
+}: {
+  columns: readonly TableSkeletonColumn[];
+  /** Rows to draw, clamped to the reserved placeholder keys. */
+  count?: number | undefined;
+  rowClassName?: string | undefined;
+}) =>
+  SKELETON_ROW_KEYS.slice(0, Math.max(0, count)).map((rowKey) => (
+    <TableRow aria-hidden="true" className={rowClassName} key={rowKey}>
+      {columns.map(({ id, bar, align }) => (
+        <TableCellFace align={align} key={id}>
+          <span className="inline-flex h-8 items-center sm:h-7">
+            <Skeleton className={cn("h-3.5 max-w-full", bar)} />
+          </span>
+        </TableCellFace>
+      ))}
+    </TableRow>
+  ));
 
 export {
   HEAD_CONTENT_CLASS,
@@ -362,16 +346,16 @@ export {
   SortDirectionIcon,
   Table,
   TableBody,
+  TableCaption,
+  TableCellFace,
   TableFooter,
   TableHead,
   TableHeader,
   TableHeadLabel,
   TableRow,
-  TableShellCell,
+  TableSkeletonRows,
   ariaSortOf,
-  resolveTableAlign,
   sortableHeadButtonClassName,
-  tableCellClassName,
 };
 export type {
   SortDirection,
@@ -382,6 +366,5 @@ export type {
   TableInset,
   TableProps,
   TableScroll,
-  TableShellCellProps,
   TableTone,
 };

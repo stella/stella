@@ -2124,6 +2124,7 @@
     },
     "newChat": "Új csevegés",
     "newChatInSidePanel": "Az új csevegés elérhető az oldalsó panelen",
+    "nextSteps": "Következő lépések",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
@@ -2312,7 +2313,6 @@
     "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
-    "suggestedFollowupsLabel": "Javasolt követő kérdések",
     "suggestingTitle": "Cím javaslása…",
     "suggestionSeverity": {
       "style": "Stílus",
@@ -2323,7 +2323,6 @@
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
     },
-    "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "tableChart": {
       "bar": "Oszlop",
       "kind": "Diagram típusa",

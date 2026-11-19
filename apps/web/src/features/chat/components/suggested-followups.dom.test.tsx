@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import csMessages from "@/i18n/langs/cs.json";
 import messages from "@/i18n/langs/en.json";
 import { noopAnalytics } from "@/lib/analytics/noop";
 
@@ -12,7 +13,7 @@ const { cleanup, fireEvent, render, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
-const { SuggestedFollowupChips } = await import("./suggested-followup-chips");
+const { SuggestedFollowups } = await import("./suggested-followups");
 
 afterEach(cleanup);
 afterAll(async () => unregisterDomEnvironment());
@@ -22,7 +23,7 @@ const payloadKeys = (payload: unknown): string[] =>
     ? Object.keys(payload).toSorted()
     : [];
 
-test("reports each shown set once and the selected chip without prompt text", async () => {
+test("reports each shown set once and the chosen row without prompt text", async () => {
   const captured: unknown[] = [];
   const captureFollowupShown = mock((payload: unknown) =>
     captured.push(payload),
@@ -35,35 +36,36 @@ test("reports each shown set once and the selected chip without prompt text", as
     captureFollowupSelected,
     captureFollowupShown,
   };
-  const threadId = toChatThreadId("thread-followups");
+  const onSelect = mock((_prompt: string) => undefined);
   const secondPrompt = "Second private prompt";
   const prompts = ["First private prompt", secondPrompt];
-  const renderChips = (nextPrompts: string[]) => (
+  const renderRows = (nextPrompts: string[]) => (
     <AnalyticsContext.Provider value={analytics}>
       <IntlProvider locale="en" messages={messages}>
-        <SuggestedFollowupChips
+        <SuggestedFollowups
           analyticsSurface="chat-thread"
           messageId="message-1"
-          onSelect={() => undefined}
+          onSelect={onSelect}
           prompts={nextPrompts}
-          threadId={threadId}
+          threadId={toChatThreadId("thread-followups")}
         />
       </IntlProvider>
     </AnalyticsContext.Provider>
   );
 
-  const view = render(renderChips(prompts));
+  const view = render(renderRows(prompts));
   await waitFor(() => expect(captureFollowupShown).toHaveBeenCalledTimes(1));
-  view.rerender(renderChips(prompts));
+  view.rerender(renderRows(prompts));
   await Promise.resolve();
   expect(captureFollowupShown).toHaveBeenCalledTimes(1);
 
   fireEvent.click(view.getByRole("button", { name: secondPrompt }));
+  expect(onSelect).toHaveBeenCalledWith(secondPrompt);
   expect(captureFollowupSelected).toHaveBeenCalledWith({
     index: 1,
     source: "generated",
     surface: "chat-thread",
-    via: "chip",
+    via: "row",
   });
   // Exactly these fields: no thread, document or prompt identifies the
   // conversation a suggestion came from.
@@ -74,30 +76,47 @@ test("reports each shown set once and the selected chip without prompt text", as
   expect(JSON.stringify(captured)).not.toContain("private prompt");
 });
 
-test("keeps follow-ups on one scrolling row and preserves full labels", () => {
-  const longLabel = "A follow-up prompt long enough to truncate";
+test("shows at most three wrapping rows under a named heading", () => {
+  const prompts = ["One", "Two", "Three", "Four"];
   const view = render(
     <AnalyticsContext.Provider value={noopAnalytics}>
-      <IntlProvider locale="en" messages={messages}>
-        <SuggestedFollowupChips
+      <IntlProvider locale="cs" messages={csMessages}>
+        <SuggestedFollowups
           analyticsSurface="chat-thread"
           messageId="message-1"
           onSelect={() => undefined}
-          prompts={[longLabel, "Short"]}
-          threadId={toChatThreadId("thread-wrap")}
+          prompts={prompts}
+          threadId={toChatThreadId("thread-rows")}
         />
       </IntlProvider>
     </AnalyticsContext.Provider>,
   );
-  const group = view.getByRole("group");
-  expect(group.className).toContain("flex-nowrap");
-  expect(group.className).not.toContain("flex-wrap");
-  expect(group.closest(".overflow-x-auto")).not.toBeNull();
-  // The whole label stays in its chip and names it; a truncated label
-  // slides into view on hover or focus (suggested-actions.dom.test.tsx).
-  const label = view.getByText(longLabel);
-  expect(label.dataset["reveal"]).toBe("rest");
-  expect(view.getByRole("button", { name: longLabel }).contains(label)).toBe(
-    true,
+  const section = view.getByRole("region", {
+    name: csMessages.chat.nextSteps,
+  });
+  expect(section.textContent).toContain("Další kroky");
+  const rows = view.getAllByRole("button");
+  expect(rows.map((row) => row.textContent)).toEqual(["One", "Two", "Three"]);
+  for (const row of rows) {
+    // A row wraps like text: nothing in the list scrolls sideways.
+    expect(row.className).toContain("whitespace-normal");
+    expect(row.closest(".overflow-x-auto") === null).toBe(true);
+  }
+});
+
+test("draws nothing without suggestions", () => {
+  const view = render(
+    <AnalyticsContext.Provider value={noopAnalytics}>
+      <IntlProvider locale="en" messages={messages}>
+        <SuggestedFollowups
+          analyticsSurface="chat-thread"
+          messageId="message-1"
+          onSelect={() => undefined}
+          prompts={[]}
+          threadId={toChatThreadId("thread-empty")}
+        />
+      </IntlProvider>
+    </AnalyticsContext.Provider>,
   );
+  expect(view.container.innerHTML).toBe("");
 });

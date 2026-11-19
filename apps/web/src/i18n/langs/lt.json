@@ -2124,6 +2124,7 @@
     },
     "newChat": "Naujas pokalbis",
     "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
+    "nextSteps": "Tolesni žingsniai",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
@@ -2312,7 +2313,6 @@
     "stopping": "Stabdoma…",
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
-    "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
     "suggestingTitle": "Siūlomas pavadinimas…",
     "suggestionSeverity": {
       "style": "Stilius",
@@ -2323,7 +2323,6 @@
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
     },
-    "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "tableChart": {
       "bar": "Stulpelinė",
       "kind": "Diagramos tipas",

@@ -100,6 +100,16 @@ export const COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
+/** Permit typed collection-part projections before their grants and reader land. */
+export const COLLECTION_PART_COLUMN_GRANTS_BY_RELATION = {
+  case_law_collection_bodies: {
+    document_part: "permitted",
+    document_body_s3_key: "permitted",
+    document_body_sha256: "permitted",
+    origin: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /**
  * Expansion release: tolerate these future public census grants without
  * requiring the relation or reading it. Deploy this declaration before the
@@ -462,8 +472,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
   },
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
-  case_law_collection_bodies:
-    COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+  case_law_collection_bodies: {
+    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+  },
   case_law_decision_citation_stats: {
     decision_id: "required",
     direction: "required",
