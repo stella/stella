@@ -8,6 +8,7 @@ import {
   plainDateEpoch,
   SHORT_DATE,
 } from "@/components/billing/format-plain-date";
+import { WeekNavigatorFrame } from "@/components/billing/week-navigator.pending";
 import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -31,20 +32,23 @@ export const WeekNavigator = ({
   const week = weekOf(date);
 
   return (
-    <div className="flex items-center gap-1">
-      <Button onClick={onToday} size="sm" variant="outline">
-        {tCommon("today")}
-      </Button>
-      <Button
-        aria-label={t("previousWeek")}
-        onClick={() => onSelectDate(shiftWeeks(date, -1))}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
-      </Button>
-      {/* A steady width keeps the arrows under the pointer between weeks. */}
-      <div className="flex min-w-36 justify-center tabular-nums">
+    <WeekNavigatorFrame
+      today={
+        <Button onClick={onToday} size="sm" variant="outline">
+          {tCommon("today")}
+        </Button>
+      }
+      previous={
+        <Button
+          aria-label={t("previousWeek")}
+          onClick={() => onSelectDate(shiftWeeks(date, -1))}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
+        </Button>
+      }
+      range={
         <DatePickerPopover
           className="w-auto"
           hideClear
@@ -60,15 +64,17 @@ export const WeekNavigator = ({
           })}
           value={date}
         />
-      </div>
-      <Button
-        aria-label={t("nextWeek")}
-        onClick={() => onSelectDate(shiftWeeks(date, 1))}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
-      </Button>
-    </div>
+      }
+      next={
+        <Button
+          aria-label={t("nextWeek")}
+          onClick={() => onSelectDate(shiftWeeks(date, 1))}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
+        </Button>
+      }
+    />
   );
 };

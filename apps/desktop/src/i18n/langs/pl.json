@@ -1068,6 +1068,14 @@
       "unreadable": "Nie udało się odczytać tego folderu."
     }
   },
+  "keepAwake": {
+    "title": "Nie usypiaj",
+    "enabled": "Nie usypiaj tego komputera, gdy pracują agenci",
+    "description": "Gdy na tym komputerze pracuje agent, komputer nie przechodzi w uśpienie z powodu bezczynności, więc długie zadania działają dalej. Ekran nadal może się wyłączać. Laptop Mac i tak przejdzie w uśpienie po zamknięciu pokrywy.",
+    "onBattery": "Również na baterii",
+    "onBatteryDescription": "Gdy ta opcja jest wyłączona, komputer na baterii usypia jak zwykle, nawet gdy pracuje agent.",
+    "errorSave": "Nie udało się zapisać tego ustawienia. Spróbuj ponownie."
+  },
   "transcribe": {
     "title": "Transkrypcja nagrania",
     "retry": "Spróbuj ponownie",

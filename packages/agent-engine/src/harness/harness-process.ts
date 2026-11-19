@@ -79,6 +79,8 @@ type HarnessProcess<TId, TError> = {
   settle: (id: TId, result: Result<unknown, TError>) => boolean;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<HarnessExit>;
+  /** A request went unanswered past its deadline, which ended the process. */
+  missedDeadline: () => boolean;
   /** Ends stdin, which asks the harness to finish and exit. */
   closeInput: () => void;
   /**
@@ -121,7 +123,7 @@ export const startHarnessProcess = <TId, TError>({
     source: `pid=${String(child.pid)}`,
   });
   const pending = new Map<TId, (result: Result<unknown, TError>) => void>();
-  const state = { closed: false, terminating: false };
+  const state = { closed: false, terminating: false, missedDeadline: false };
 
   /**
    * The one way the process is ended: SIGTERM to it and everything it
@@ -171,7 +173,16 @@ export const startHarnessProcess = <TId, TError>({
       violation("The harness wrote a line that is not JSON.");
       return;
     }
-    message(json.value);
+    // A message stella cannot handle fails the turn and ends the process: a
+    // throw left here would stop the reading, and the harness would block on
+    // a full pipe with the turn waiting on it.
+    const handled = Result.try(() => {
+      message(json.value);
+    });
+    if (Result.isError(handled)) {
+      violation("Stella could not handle a message from the harness.");
+      terminate();
+    }
   };
 
   const readStdout = async () => {
@@ -237,6 +248,7 @@ export const startHarnessProcess = <TId, TError>({
           ),
         );
         // A harness that stops answering cannot be trusted with the session.
+        state.missedDeadline = true;
         terminate();
       }, timeoutMs ?? deadlines.requestMs);
       write(outgoing);
@@ -254,6 +266,7 @@ export const startHarnessProcess = <TId, TError>({
       return true;
     },
     exited,
+    missedDeadline: () => state.missedDeadline,
     closeInput: () => {
       if (!state.closed) {
         onInput(() => {

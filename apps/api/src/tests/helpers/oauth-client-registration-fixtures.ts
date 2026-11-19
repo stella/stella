@@ -382,4 +382,20 @@ export const OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES = {
     },
     error: "invalid_redirect_uri",
   },
+  ...Object.fromEntries(
+    [
+      "file:///oauth/callback",
+      "ftp://callback.example/oauth",
+      "mailto:callback@example.com",
+      "data:text/plain,callback",
+    ].map((redirectUri) => [
+      `reservedScheme:${redirectUri}`,
+      {
+        // Reserved schemes are never a native app's private-use callback.
+        client: `native client with a reserved-scheme redirect ${redirectUri}`,
+        body: { ...CURSOR_DESKTOP_BODY, redirect_uris: [redirectUri] },
+        error: "invalid_redirect_uri" as const,
+      },
+    ]),
+  ),
 } as const satisfies Record<string, OAuthClientRegistrationRejectionFixture>;

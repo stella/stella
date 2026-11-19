@@ -1068,6 +1068,14 @@
       "unreadable": "Seda kausta ei õnnestunud lugeda."
     }
   },
+  "keepAwake": {
+    "title": "Hoia ärkvel",
+    "enabled": "Hoia see arvuti ärkvel, kui agendid töötavad",
+    "description": "Kuni selles arvutis töötab agent, ei lähe arvuti jõudeoleku tõttu unerežiimi ja pikad tööd jätkuvad. Ekraan võib endiselt välja lülituda. Mac-sülearvuti läheb kaane sulgemisel siiski unerežiimi.",
+    "onBattery": "Ka akutoitel",
+    "onBatteryDescription": "Kui see on välja lülitatud, läheb arvuti akutoitel tavapäraselt unerežiimi, isegi kui agent töötab.",
+    "errorSave": "Seda seadet ei õnnestunud salvestada. Proovige uuesti."
+  },
   "transcribe": {
     "title": "Salvestise transkribeerimine",
     "retry": "Proovi uuesti",

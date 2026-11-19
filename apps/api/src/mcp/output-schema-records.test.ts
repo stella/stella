@@ -58,6 +58,6 @@ test.each(["constructor", "toString", "ordinary"])(
     expect(schema["required"]).toEqual([name]);
     expect(properties["first"]).toEqual({ type: "string" });
     expect(properties["second"]).toEqual({ type: "number" });
-    expect(schema["additionalProperties"]).toBe(false);
+    expect(schema).not.toHaveProperty("additionalProperties");
   },
 );

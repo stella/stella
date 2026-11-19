@@ -314,13 +314,18 @@ fn begin(
   }
   let language = dictation::language(app);
   let local_installed = model.is_some();
+  let mut cloud = CloudSession::new(
+    app.clone(),
+    cloud_model,
+    language.hint,
+    crate::dictation_words::words(app),
+  );
+  if destination == Destination::Cloud {
+    // Beside recording, so no request waits for the list after the release.
+    cloud.look_up_models();
+  }
   let engines = Engines {
-    cloud: CloudSession::new(
-      app.clone(),
-      cloud_model,
-      language.hint,
-      crate::dictation_words::words(app),
-    ),
+    cloud,
     worker: worker.take(),
     model,
     language: language.hint,
@@ -407,6 +412,7 @@ fn finish(
     } else {
       Some(dictation::local_model_id().to_string())
     },
+    model_list: engines.cloud.list_read(),
     tally,
   }
   .log();

@@ -431,4 +431,39 @@ describe("OAuth authorization response issuer", () => {
       }
     },
   );
+
+  test("includes the exact issuer when consent is denied after the client was disabled", async () => {
+    const client = await registerOAuthClient(undefined, "none");
+    const consentPage = await readOAuthRedirect(
+      await authorize(authorizationQuery(client.clientId)),
+    );
+    const context = await getAuth().$context;
+    await context.adapter.update({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: client.clientId }],
+      update: { disabled: true },
+    });
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("oauth2/consent"), {
+        method: "POST",
+        headers: {
+          ...requestHeaders(),
+          "content-type": "application/json",
+          cookie: browser.cookieHeader(),
+        },
+        body: JSON.stringify({
+          accept: false,
+          oauth_query: readSignedQuery(consentPage),
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const redirect = await readOAuthRedirect(response);
+    const errorPage = new URL(getAuthEndpointUrl("error"));
+    expect(redirect.origin).toBe(errorPage.origin);
+    expect(redirect.pathname).toBe(errorPage.pathname);
+    expect(redirect.searchParams.get("error")).toBe("access_denied");
+    expect(redirect.searchParams.get("iss")).toBe(issuer);
+    expect(redirect.searchParams.has("code")).toBe(false);
+  });
 });

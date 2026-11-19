@@ -44,6 +44,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/mainview/DictationInputFix.tsx",
     "src/mainview/DictationMicrophone.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
+    "src/mainview/KeepAwakeSection.tsx",
     "src/mainview/LocalSkillFoldersSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",

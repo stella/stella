@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds a stored-document constructor; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: a decision type spelled as an address is refused at this boundary; every registered adapter emits printed labels, so their output is unchanged.
 // parser-output-unchanged: Removes migration-only field exclusions after all producers migrate.
 // parser-output-unchanged: Adds nested inventory addresses without changing result construction.
@@ -1746,6 +1747,17 @@ export type SourceFieldInventory = {
   ) => readonly string[] | Promise<readonly string[]>;
 };
 
+/** A selected stored identity admitted for a bounded publisher re-read. */
+export type StoredDocumentBuildInput = {
+  stored: StoredRawReparseInput;
+  /** Full published reference already checked against the selected decision. */
+  reference: string;
+  signal: AbortSignal;
+};
+
+export type StoredDocumentBuildOutcome =
+  ReconciliationBuildOutcome | { type: "incomplete-locator"; detail: string };
+
 /**
  * Interface for court data source adapters.
  *
@@ -1755,6 +1767,10 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  /** Refetch exactly one stored publisher identity; never enumerates a listing. */
+  buildStoredDocument?: (
+    input: StoredDocumentBuildInput,
+  ) => Promise<StoredDocumentBuildOutcome>;
   documentStage: DocumentStage;
   observeDocumentStage: (
     options: Omit<DocumentStagePageOptions, "source">,
@@ -1917,6 +1933,32 @@ const thrownPageFailure = (
         cause,
       });
 
+const inspectBuiltPublisherRecords = async (
+  outcome: StoredDocumentBuildOutcome,
+  inspectRecord: (result: IngestionResult) => Promise<void>,
+) => {
+  switch (outcome.type) {
+    case "built":
+      await inspectRecord(outcome.decision);
+      if (outcome.companions !== undefined) {
+        for (const companion of outcome.companions) {
+          await inspectRecord(companion);
+        }
+      }
+      break;
+    case "built-supplement":
+      await inspectRecord(outcome.supplement.document);
+      break;
+    case "unkeyable":
+    case "detail-unavailable":
+    case "incomplete-locator":
+      break;
+    default:
+      outcome satisfies never;
+      panic("Unhandled publisher build outcome");
+  }
+};
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1948,37 +1990,20 @@ export const defineSourceAdapter = <
   };
   const inspectBuild = <
     TArgs extends unknown[],
-    TOutcome extends ReconciliationBuildOutcome,
+    TOutcome extends StoredDocumentBuildOutcome,
   >(
     operation: (...args: TArgs) => Promise<TOutcome>,
   ) =>
     scoped(async function (this: unknown, ...args: TArgs) {
       const outcome = await operation.apply(this, args);
-      switch (outcome.type) {
-        case "built":
-          await inspectRecord(outcome.decision);
-          if (outcome.companions !== undefined) {
-            for (const companion of outcome.companions) {
-              await inspectRecord(companion);
-            }
-          }
-          break;
-        case "built-supplement":
-          await inspectRecord(outcome.supplement.document);
-          break;
-        case "unkeyable":
-        case "detail-unavailable":
-          break;
-        default:
-          outcome satisfies never;
-          return panic("Unhandled publisher build outcome");
-      }
+      await inspectBuiltPublisherRecords(outcome, inspectRecord);
       return outcome;
     });
   const reconciliation = adapter.reconciliation;
   const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
   const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
   const reparseStoredRaw = adapter.reparseStoredRaw;
+  const buildStoredDocument = adapter.buildStoredDocument;
   const collectionEnrichment = adapter.collectionEnrichment;
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
@@ -1990,6 +2015,10 @@ export const defineSourceAdapter = <
     );
   // Total callback projections make a new callback require a scope decision.
   const callbacks = {
+    buildStoredDocument:
+      buildStoredDocument === undefined
+        ? undefined
+        : inspectBuild(buildStoredDocument),
     observeDocumentStage,
     getTotalCount: scoped(adapter.getTotalCount),
     reparseStoredRaw:
@@ -2038,8 +2067,11 @@ export const defineSourceAdapter = <
         observe: onDocumentObservation,
       }),
   } satisfies ScopedCallbacks<SourceAdapter>;
-  const { reparseStoredRaw: scopedReparseStoredRaw, ...requiredCallbacks } =
-    callbacks;
+  const {
+    reparseStoredRaw: scopedReparseStoredRaw,
+    buildStoredDocument: scopedStoredDocument,
+    ...requiredCallbacks
+  } = callbacks;
   const reconciliationCallbacks = {
     revisionOf: scoped(reconciliation.revisionOf),
     sliceOf: scoped(reconciliation.sliceOf),
@@ -2097,6 +2129,9 @@ export const defineSourceAdapter = <
   return {
     ...adapter,
     ...requiredCallbacks,
+    ...(scopedStoredDocument === undefined
+      ? {}
+      : { buildStoredDocument: scopedStoredDocument }),
     ...(scopedReparseStoredRaw === undefined
       ? {}
       : { reparseStoredRaw: scopedReparseStoredRaw }),

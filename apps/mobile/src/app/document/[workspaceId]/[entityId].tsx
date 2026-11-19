@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   Alert,
   Platform,
+  ScrollView,
   StyleSheet,
   useColorScheme,
   View,
@@ -12,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
+import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
@@ -36,7 +38,11 @@ import {
   readOpenedFile,
 } from "@/native/document-files";
 import type { OpenedFile } from "@/native/document-files";
-import { isOffline, readDocumentFile } from "@/state/document-file";
+import {
+  isOffline,
+  readDocumentFile,
+  readOriginalDocumentFile,
+} from "@/state/document-file";
 import type { DocumentFile } from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
@@ -46,8 +52,12 @@ type Phase =
   | { readonly status: "opening" }
   | { readonly status: "failed"; readonly failure: Failure }
   | {
+      readonly status: "dataBox";
+      readonly file: Extract<DocumentFile, { viewer: "dataBox" }>;
+    }
+  | {
       readonly status: "open";
-      readonly file: DocumentFile;
+      readonly file: Exclude<DocumentFile, { viewer: "dataBox" }>;
       readonly opened: OpenedFile;
       /** The viewer could not draw it; Quick Look may still show it. */
       readonly unrendered: boolean;
@@ -63,13 +73,6 @@ const openDocument = async ({
   workspaceId: string;
   entityId: string;
 }): Promise<Phase> => {
-  if (!canOpenFiles()) {
-    // An older iPhone build gains the viewer by updating; Android has none.
-    return {
-      status: "failed",
-      failure: Platform.OS === "android" ? "android" : "unsupported",
-    };
-  }
   const file = await readDocumentFile({ fetch, source, workspaceId, entityId });
   if (Result.isError(file)) {
     if (file.error._tag === "NoFileError") {
@@ -78,6 +81,16 @@ const openDocument = async ({
     return {
       status: "failed",
       failure: isOffline(file.error) ? "offline" : "failed",
+    };
+  }
+  if (file.value.viewer === "dataBox") {
+    return { status: "dataBox", file: file.value };
+  }
+  if (!canOpenFiles()) {
+    // An older iPhone build gains the viewer by updating; Android has none.
+    return {
+      status: "failed",
+      failure: Platform.OS === "android" ? "android" : "unsupported",
     };
   }
   const opened = await downloadDocument(file.value.url, file.value.fileName);
@@ -102,9 +115,8 @@ const UNANSWERED = new Promise<never>(() => {
 
 /**
  * One document of a matter, opened from its row. A Word document is laid out
- * by folio and a PDF drawn by pdf.js, as the web app shows them; any other
- * file opens in the system's Quick Look. The file stays on the phone only
- * while this screen is open. A retry opens it afresh.
+ * by folio, a PDF drawn by pdf.js, and a data box export shown as source
+ * text. Other files open in Quick Look. Downloaded files are temporary.
  */
 const DocumentScreen = () => {
   const { workspaceId, entityId, name } = useLocalSearchParams<{
@@ -233,7 +245,9 @@ const OpenedDocument = ({
       : null;
 
   const title =
-    phase.status === "open" ? phase.file.fileName : (name ?? t("title"));
+    phase.status === "open" || phase.status === "dataBox"
+      ? phase.file.fileName
+      : (name ?? t("title"));
 
   const body = (() => {
     if (source === null || phase.status === "opening") {
@@ -255,6 +269,18 @@ const OpenedDocument = ({
             )}
           </EmptyCard>
         </View>
+      );
+    }
+    if (phase.status === "dataBox") {
+      return (
+        <DataBoxPreview
+          file={phase.file}
+          key={phase.file.fieldId}
+          onRetry={onRetry}
+          showPreview={showPreview}
+          source={source}
+          workspaceId={workspaceId}
+        />
       );
     }
     const { file } = phase;
@@ -384,6 +410,130 @@ const OpenedDocument = ({
       />
       {body}
     </View>
+  );
+};
+
+const DataBoxPreview = ({
+  file: { fieldId, preview },
+  onRetry,
+  showPreview,
+  source,
+  workspaceId,
+}: {
+  file: Extract<DocumentFile, { viewer: "dataBox" }>;
+  onRetry: () => void;
+  showPreview: (file: OpenedFile) => Promise<void>;
+  source: AccessTokenSource;
+  workspaceId: string;
+}) => {
+  const t = useTranslations("document");
+  const [openingOriginal, setOpeningOriginal] = useState(false);
+  const originalInFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Each await can outlive the screen; read the ref afresh after every one.
+  const isMounted = () => mounted.current;
+  const openOriginal = async () => {
+    if (originalInFlight.current) {
+      return;
+    }
+    originalInFlight.current = true;
+    setOpeningOriginal(true);
+    let opened: OpenedFile | null = null;
+    try {
+      const original = await readOriginalDocumentFile({
+        fetch,
+        source,
+        workspaceId,
+        fieldId,
+      });
+      if (!isMounted()) {
+        return;
+      }
+      if (Result.isError(original)) {
+        Alert.alert(
+          t("failedTitle"),
+          t(isOffline(original.error) ? "failure.offline" : "failure.failed"),
+        );
+        return;
+      }
+      const downloaded = await downloadDocument(
+        original.value.presignedUrl,
+        original.value.fileName,
+      );
+      if (Result.isOk(downloaded)) {
+        opened = downloaded.value;
+        if (isMounted()) {
+          await showPreview(opened);
+        }
+      } else if (isMounted()) {
+        Alert.alert(
+          t("failedTitle"),
+          t(downloaded.error.offline ? "failure.offline" : "failure.failed"),
+        );
+      }
+    } finally {
+      if (opened !== null) {
+        discardOpenedFile(opened);
+      }
+      originalInFlight.current = false;
+      if (isMounted()) {
+        setOpeningOriginal(false);
+      }
+    }
+  };
+
+  const previewBody = (() => {
+    if (Result.isOk(preview)) {
+      return <Text selectable>{preview.value.text}</Text>;
+    }
+    const { error } = preview;
+    const unreadable =
+      error._tag === "ApiRequestError" &&
+      error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
+    const requestFailure = isOffline(error)
+      ? "failure.offline"
+      : "failure.failed";
+    return (
+      <EmptyCard
+        description={t(
+          unreadable ? "failure.dataBoxUnreadable" : requestFailure,
+        )}
+        title={t("failedTitle")}
+      >
+        {unreadable ? null : (
+          <Button className="mt-4" onPress={onRetry} variant="outline">
+            {t("retry")}
+          </Button>
+        )}
+      </EmptyCard>
+    );
+  })();
+
+  return (
+    <ScrollView
+      contentContainerStyle={screenStyles.content}
+      contentInsetAdjustmentBehavior="automatic"
+    >
+      {canOpenFiles() ? (
+        <Button
+          loading={openingOriginal}
+          onPress={() => {
+            void openOriginal();
+          }}
+          variant="outline"
+        >
+          {t("openOriginal")}
+        </Button>
+      ) : null}
+      {previewBody}
+    </ScrollView>
   );
 };
 

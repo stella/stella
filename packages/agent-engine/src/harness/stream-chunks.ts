@@ -89,6 +89,7 @@ const FAILURE_CODE = {
   protocol_violation: "harness.protocol_violation",
   sandbox_unavailable: "harness.sandbox_unavailable",
   retry_stalled: "harness.retry_stalled",
+  request_unanswered: "harness.request_unanswered",
   tools_unavailable: "harness.tools_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 

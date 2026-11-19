@@ -16,6 +16,8 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+
 import { organization, user } from "@/api/db/auth-schema";
 import {
   entities,
@@ -27,6 +29,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import {
   FlowStepError,
@@ -61,6 +64,10 @@ describe("loadInputDocuments", () => {
   const propertyId = createSafeId<"property">();
   const fileId = Bun.randomUUIDv7();
   const pendingEntityId = createSafeId<"entity">();
+  const secondEntityId = createSafeId<"entity">();
+  const secondVersionId = createSafeId<"entityVersion">();
+  const secondFieldId = createSafeId<"field">();
+  const secondFileId = Bun.randomUUIDv7();
   let fake: FakeS3;
 
   beforeAll(async () => {
@@ -99,16 +106,25 @@ describe("loadInputDocuments", () => {
         name: "Pending doc",
         createdBy: userId,
       },
+      {
+        id: secondEntityId,
+        workspaceId,
+        name: "Second doc",
+        createdBy: userId,
+      },
     ]);
-    await testDb.insert(entityVersions).values({
-      id: versionId,
-      entityId: extractedEntityId,
-      workspaceId,
-    });
+    await testDb.insert(entityVersions).values([
+      { id: versionId, entityId: extractedEntityId, workspaceId },
+      { id: secondVersionId, entityId: secondEntityId, workspaceId },
+    ]);
     await testDb
       .update(entities)
       .set({ currentVersionId: versionId })
       .where(eq(entities.id, extractedEntityId));
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: secondVersionId })
+      .where(eq(entities.id, secondEntityId));
     await testDb.insert(properties).values({
       id: propertyId,
       workspaceId,
@@ -147,6 +163,37 @@ describe("loadInputDocuments", () => {
       sourceFileId: fileId,
       sourceSha256Hex: "a".repeat(64),
     });
+    await testDb.insert(fields).values({
+      id: secondFieldId,
+      propertyId,
+      workspaceId,
+      entityVersionId: secondVersionId,
+      content: {
+        version: 1,
+        type: "file",
+        id: secondFileId,
+        fileName: "second.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 3,
+        encrypted: false,
+        sha256Hex: "b".repeat(64),
+        pdfFileId: null,
+      },
+    });
+    const secondText = await encryptContent(organizationId, "second marker");
+    await testDb.insert(extractedContent).values({
+      entityId: secondEntityId,
+      organizationId,
+      workspaceId,
+      ciphertext: secondText.ciphertext,
+      iv: secondText.iv,
+      charCount: 13,
+      sourceEntityVersionId: secondVersionId,
+      sourceFieldId: secondFieldId,
+      sourceFileId: secondFileId,
+      sourceSha256Hex: "b".repeat(64),
+    });
   });
 
   afterAll(async () => {
@@ -155,7 +202,7 @@ describe("loadInputDocuments", () => {
   });
 
   const scopedDb = () =>
-    asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+    asTestRaw<Parameters<typeof loadInputDocuments>[0]["scopedDb"]>(
       createScopedDb(testDb, [workspaceId], organizationId, userId),
     );
 
@@ -168,12 +215,12 @@ describe("loadInputDocuments", () => {
         })
       ).unwrap(),
     );
-    const caught = await loadInputDocuments(
-      scopedDb(),
+    const caught = await loadInputDocuments({
+      scopedDb: scopedDb(),
       organizationId,
       workspaceIds,
-      [extractedEntityId, pendingEntityId],
-    ).then(
+      entityIds: [extractedEntityId, pendingEntityId],
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -208,12 +255,12 @@ describe("loadInputDocuments", () => {
           })
         ).unwrap(),
       );
-      const caught = await loadInputDocuments(
-        scopedDb(),
+      const caught = await loadInputDocuments({
+        scopedDb: scopedDb(),
         organizationId,
         workspaceIds,
-        [extractedEntityId, pendingEntityId],
-      ).then(
+        entityIds: [extractedEntityId, pendingEntityId],
+      }).then(
         () => null,
         (error: unknown) => error,
       );
@@ -238,7 +285,9 @@ describe("loadInputDocuments", () => {
           .update(entityVersions)
           .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
           .where(eq(entityVersions.id, versionId));
-        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
           async (
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
@@ -249,12 +298,12 @@ describe("loadInputDocuments", () => {
             workspaceIds: [workspaceId],
           })
         ).unwrap();
-        const caught = await loadInputDocuments(
-          scoped,
+        const caught = await loadInputDocuments({
+          scopedDb: scoped,
           organizationId,
           workspaceIds,
-          [extractedEntityId],
-        ).then(
+          entityIds: [extractedEntityId],
+        }).then(
           () => null,
           (error: unknown) => error,
         );
@@ -273,7 +322,9 @@ describe("loadInputDocuments", () => {
       [workspaceId],
       organizationId,
       async (tx) => {
-        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
           async (
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
@@ -285,9 +336,12 @@ describe("loadInputDocuments", () => {
           })
         ).unwrap();
         expect(
-          await loadInputDocuments(scoped, organizationId, readableIds, [
-            extractedEntityId,
-          ]),
+          await loadInputDocuments({
+            scopedDb: scoped,
+            organizationId,
+            workspaceIds: readableIds,
+            entityIds: [extractedEntityId],
+          }),
         ).toEqual([{ label: "Available doc", text: "readable flow marker" }]);
       },
       userId,
@@ -297,7 +351,9 @@ describe("loadInputDocuments", () => {
       [],
       organizationId,
       async (tx) => {
-        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
           async (
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
@@ -308,12 +364,12 @@ describe("loadInputDocuments", () => {
             workspaceIds: [workspaceId],
           })
         ).unwrap();
-        const caught = await loadInputDocuments(
-          scoped,
+        const caught = await loadInputDocuments({
+          scopedDb: scoped,
           organizationId,
-          unreadableIds,
-          [extractedEntityId],
-        ).then(
+          workspaceIds: unreadableIds,
+          entityIds: [extractedEntityId],
+        }).then(
           () => null,
           (error: unknown) => error,
         );
@@ -322,6 +378,62 @@ describe("loadInputDocuments", () => {
           expect(caught.message).toContain("content is not available");
           expect(caught.message).not.toContain("readable flow marker");
         }
+      },
+      userId,
+    );
+  });
+  test("reads a ZFO input from its stored text in the order the run selected", async () => {
+    await createDryScopedQuery(testDb)(
+      [workspaceId],
+      organizationId,
+      async (tx) => {
+        // Same stored file and hash, so the text projection stays current.
+        await tx
+          .update(fields)
+          .set({
+            content: {
+              version: 1,
+              type: "file",
+              id: fileId,
+              fileName: "notice.zfo",
+              mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+              sizeBytes: 3,
+              encrypted: false,
+              sha256Hex: "a".repeat(64),
+              pdfFileId: null,
+            },
+          })
+          .where(eq(fields.id, fieldId));
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
+          async (
+            run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
+          ) => await run(tx),
+        );
+        const workspaceIds = (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap();
+        const read = async (entityIds: SafeId<"entity">[]) =>
+          await loadInputDocuments({
+            scopedDb: scoped,
+            organizationId,
+            workspaceIds,
+            entityIds,
+          });
+        expect(await read([extractedEntityId, secondEntityId])).toEqual([
+          { label: "Available doc", text: "readable flow marker" },
+          { label: "Second doc", text: "second marker" },
+        ]);
+        expect(await read([secondEntityId, extractedEntityId])).toEqual([
+          { label: "Second doc", text: "second marker" },
+          { label: "Available doc", text: "readable flow marker" },
+        ]);
+        // The stored export itself is never opened.
+        expect(fake.requests).toEqual([]);
       },
       userId,
     );

@@ -8,13 +8,10 @@ import {
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 
 import {
-  PUBLIC_LAW_SEARCH_STATE,
-  publicLawLoadMode,
-} from "@/components/public-law-table/public-law-results-state.logic";
-import {
   publicLawPageSearchValue,
   publicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-hub-path";
 import {
   createCaseLawIndexPath,
   decisionDateRange,
@@ -32,6 +29,7 @@ import {
 } from "@/features/case-law/case-law-route-pages.logic";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { prefetchDecisionFacetsAfterSearch } from "@/features/case-law/decision-filter-facets";
+import { PUBLIC_LAW_SEARCH_STATE } from "@/features/case-law/public-law-results-state.logic";
 import {
   decisionFilterValidationOptions,
   decisionsPageOptions,
@@ -49,6 +47,7 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
@@ -287,7 +286,7 @@ export const Route = createFileRoute("/law/cases/")({
       page: caseLawPageNumber(deps.page, pageSize),
       pageSize,
     });
-    const mode = publicLawLoadMode({
+    const mode = routeLoadMode({
       cause,
       hasCachedPages:
         queryClient.getQueryData(firstPageOptions.queryKey) !== undefined,
@@ -349,6 +348,7 @@ export const Route = createFileRoute("/law/cases/")({
     const path = createCaseLawIndexPath(search);
 
     return createPublicLawHead({
+      canonicalPath: publicCaseLawHubPathFor(match.search.country),
       description,
       jsonLd: createLegalCollectionJsonLd({
         t,

@@ -64,6 +64,7 @@ import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting, useDictationAvailability } from "./DictationSetting";
+import { KeepAwakeSection } from "./KeepAwakeSection";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
@@ -626,6 +627,7 @@ const AgentsPane = ({
             </SettingsSectionGroup>
           )}
         />
+        <KeepAwakeSection />
       </SettingsSections>
     </>
   );

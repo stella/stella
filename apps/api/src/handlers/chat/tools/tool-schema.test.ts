@@ -374,6 +374,10 @@ const buildFullCoverageChatTools = (
     skillMetadata: offeredSkillCatalog([
       {
         description: editableActiveSkillContext.description,
+        // Declares the skill-gated tools, so full coverage includes them.
+        metadata: {
+          "stella-required-tools": "validate_skill_package save_skill_package",
+        },
         name: editableActiveSkillContext.toolName,
         version: editableActiveSkillContext.version,
       },
@@ -1265,10 +1269,19 @@ describe("chat tool schemas", () => {
     }
   });
 
-  test("offers skill package tools to skill authors, the save behind approval", () => {
+  test("offers skill package tools only to a turn whose skill declares them, the save behind approval", () => {
+    const declaringSkill = {
+      description: "Builds skills.",
+      metadata: {
+        "stella-required-tools": "validate_skill_package save_skill_package",
+      },
+      name: "skill-builder",
+      version: null,
+    };
     const toolsFor = (
       role: "intern" | "member" | "owner",
       recordAuditEvent: typeof noopAuditRecorder | undefined,
+      skills: readonly (typeof declaringSkill)[] = [declaringSkill],
     ) =>
       getChatTools({
         workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
@@ -1298,7 +1311,13 @@ describe("chat tool schemas", () => {
         webSearchProviders: { webSearchProvider: null, urlFetcher: null },
         recordAuditEvent,
         resolveMemorySourceWorkspaceIds: () => [],
+        skillMetadata: offeredSkillCatalog(skills),
       });
+
+    // A chat whose skills declare neither keeps both out of its prompt.
+    const undeclared = toolsFor("owner", noopAuditRecorder, []);
+    expect(undeclared["validate_skill_package"]).toBeUndefined();
+    expect(undeclared["save_skill_package"]).toBeUndefined();
 
     for (const role of ["member", "owner"] as const) {
       const tools = toolsFor(role, noopAuditRecorder);

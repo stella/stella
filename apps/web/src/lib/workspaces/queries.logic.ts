@@ -1,6 +1,10 @@
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  workspacesListKey,
+  workspacesRootKey,
+} from "@/lib/workspaces/workspaces-list-keys.logic";
 
 export {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -32,12 +36,8 @@ export type WorkspaceNavigationCaller = {
 };
 
 export const workspacesKeys = {
-  all: ["workspaces"],
-  list: (activeOrganizationId: string) => [
-    ...workspacesKeys.all,
-    "list",
-    activeOrganizationId,
-  ],
+  all: workspacesRootKey(),
+  list: workspacesListKey,
   navigationAll: () => [...workspacesKeys.all, "navigation"],
   navigation: ({ organizationId, userId }: WorkspaceNavigationCaller) => [
     ...workspacesKeys.navigationAll(),

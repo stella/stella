@@ -71,6 +71,7 @@ import {
 import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
 import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
+import { chatUploadMimeType } from "@/api/handlers/chat/attachment-validation";
 import {
   chunkCarriesAnswer,
   snapshotMessageAddsAnswer,
@@ -5760,17 +5761,17 @@ export const localRunAttachmentsOf = async ({
     return Result.ok([...attachments.values()]);
   });
 
-type XlsxCacheWrite = {
+type AttachmentTextCacheWrite = {
   file: StoredUserFile;
   text: string;
 };
 
-const persistXlsxCacheWrites = async ({
+const persistAttachmentTextCacheWrites = async ({
   cacheWrites,
   safeDb,
   userId,
 }: {
-  cacheWrites: readonly XlsxCacheWrite[];
+  cacheWrites: readonly AttachmentTextCacheWrite[];
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }) => {
@@ -5822,7 +5823,7 @@ export const hydrateMessages = async ({
       }),
     );
     const hydratedMessages: ChatMessage[] = [];
-    const cacheWrites: XlsxCacheWrite[] = [];
+    const cacheWrites: AttachmentTextCacheWrite[] = [];
 
     for (const message of messages) {
       const parts: ChatMessage["parts"] = [];
@@ -5855,7 +5856,7 @@ export const hydrateMessages = async ({
           );
           // An image or PDF stays out of the run's stored messages: the agent
           // reads the copy. Text it could not extract without tools stays too.
-          if (!canHydrateFilePartAsPlainText(userFile.mimeType)) {
+          if (!canHydrateFilePartAsPlainText(chatUploadMimeType(userFile))) {
             continue;
           }
         }
@@ -5904,7 +5905,7 @@ export const hydrateMessages = async ({
             }
             default:
               hydratedPart.cache satisfies never;
-              return panic("Unsupported XLSX cache status");
+              return panic("Unsupported attachment text cache status");
           }
         }
 
@@ -5918,7 +5919,7 @@ export const hydrateMessages = async ({
     }
 
     yield* Result.await(
-      persistXlsxCacheWrites({
+      persistAttachmentTextCacheWrites({
         cacheWrites,
         safeDb,
         userId,

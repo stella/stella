@@ -24,6 +24,7 @@ import {
   startApiStandIn,
   toolResults,
 } from "../../../scripts/fake-desktop";
+import { readFakeHarnessLog } from "../../../scripts/fake-harness-peer";
 import {
   FIXTURE_SIGNED_IN,
   startFixtureSite,
@@ -290,13 +291,7 @@ const read = async (leg: HostLeg) => {
     },
   });
   const { chunks, finished } = await runChat("read");
-  const harnessLog = () => {
-    const file = path.join(root, "fake.log");
-    return (existsSync(file) ? readFileSync(file, "utf-8") : "")
-      .split("\n")
-      .filter((line) => line !== "")
-      .map((line): unknown => JSON.parse(line));
-  };
+  const harnessLog = () => readFakeHarnessLog(path.join(root, "fake.log"));
   return {
     api,
     chunks,

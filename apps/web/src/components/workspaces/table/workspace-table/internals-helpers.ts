@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { panic } from "better-result";
 
-import { getInternalColId } from "@/components/workspaces/entity-utils";
+import { getInternalColId } from "@/components/workspaces/internal-ids.logic";
 import type {
   TableColumn,
   TableHeader,
@@ -37,12 +37,29 @@ export type EndFillerInput<TRow extends TableRowData = TableTreeNode> = {
   addPropertyColumn: TableColumn<TRow> | null;
 };
 
+/**
+ * What laying a column out in the grid reads of it: its id, width and
+ * pinning. A table column has all of it; a loading view that draws the
+ * table before its column model exists passes the same reads from the
+ * view's saved layout, so both draw the grid with one set of helpers.
+ */
+export type GridColumnGeometry = Pick<
+  TableColumn,
+  "id" | "getSize" | "getIsPinned" | "getStart" | "getIsLastColumn"
+>;
+
+/** The grid's columns in order, and the add-property column after them. */
+export type GridColumnsInput = {
+  renderColumns: readonly GridColumnGeometry[];
+  addPropertyColumn: GridColumnGeometry | null;
+};
+
 // A selection-only grid uses its filler for row actions. Reserve that
 // semantic column before the add-property rail, just as the CSS grid does.
-export const getWorkspaceGridColumnMetadata = <TRow extends TableRowData>({
+export const getWorkspaceGridColumnMetadata = ({
   renderColumns,
   addPropertyColumn,
-}: EndFillerInput<TRow>) => {
+}: GridColumnsInput) => {
   const hasValueColumn = renderColumns.some(({ id }) => id !== selectColId);
   const actionsColumnCount = hasValueColumn ? 0 : 1;
   return {
@@ -82,10 +99,10 @@ export const getScrollableAncestor = (
   return null;
 };
 
-export function getWorkspaceGridTemplateColumns<TRow extends TableRowData>({
+export function getWorkspaceGridTemplateColumns({
   renderColumns,
   addPropertyColumn,
-}: EndFillerInput<TRow>) {
+}: GridColumnsInput) {
   const contentColumns = getGridTemplateColumns(renderColumns);
   if (addPropertyColumn) {
     return `${contentColumns} minmax(0, 1fr) ${addPropertyColumn.getSize()}px`;
@@ -94,15 +111,15 @@ export function getWorkspaceGridTemplateColumns<TRow extends TableRowData>({
   return `${contentColumns} minmax(0, 1fr)`;
 }
 
-export function getEndFillerGridColumn<TRow extends TableRowData>({
+export function getEndFillerGridColumn({
   renderColumns,
   addPropertyColumn,
-}: EndFillerInput<TRow>) {
+}: GridColumnsInput) {
   return `${renderColumns.length + 1} / ${addPropertyColumn ? "-2" : "-1"}`;
 }
 
-export const getGridPinningStyles = <TRow extends TableRowData>(
-  column: TableColumn<TRow>,
+export const getGridPinningStyles = (
+  column: GridColumnGeometry,
 ): CSSProperties => {
   if (column.id === addPropertyColId) {
     return {
@@ -127,9 +144,8 @@ export const getGridPinningStyles = <TRow extends TableRowData>(
   };
 };
 
-export const isPinnedBoundaryColumn = <TRow extends TableRowData>(
-  column: TableColumn<TRow>,
-) => column.getIsPinned() === "start" && column.getIsLastColumn("start");
+export const isPinnedBoundaryColumn = (column: GridColumnGeometry) =>
+  column.getIsPinned() === "start" && column.getIsLastColumn("start");
 
 export const getColumnPinningGroup = <TRow extends TableRowData>(
   column: TableColumn<TRow>,

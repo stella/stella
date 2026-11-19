@@ -161,6 +161,7 @@ export const directoryCourtAliases = (
   }
   const branchSeats = seatTexts(branch);
   aliases.push(
+    ...based.map((base) => joined(base, "pobočky", branch.genitive)),
     ...based.flatMap((base) =>
       ["pobočka", "pobočky", "pobočce", "pobočkou"].flatMap((noun) =>
         branchSeats.map((text) => joined(base, noun, text)),
