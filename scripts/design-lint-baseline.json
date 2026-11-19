@@ -138,7 +138,7 @@
     "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-contacts.page.tsx": 6,
     "apps/web/src/routes/_protected.settings/-account.desktop.pending.tsx": 1,
-    "apps/web/src/routes/_protected.settings/-account.profile.page.tsx": 4,
+    "apps/web/src/routes/_protected.settings/-account.profile.page.tsx": 2,
     "apps/web/src/routes/_protected.settings/-components/account/sessions-card.pending.tsx": 1,
     "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx": 2,
     "apps/web/src/routes/_protected.settings/-organization.members.page.tsx": 1,
