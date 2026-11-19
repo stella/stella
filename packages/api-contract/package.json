@@ -72,6 +72,7 @@
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./chat-tool-input-rows": "./src/chat-tool-input-rows.ts",
     "./chat-tool-policy": "./src/chat-tool-policy.ts",
+    "./chat-step-ledger": "./src/chat-step-ledger.ts",
     "./chat-tool-result-retention": "./src/chat-tool-result-retention.ts",
     "./visual-theme": "./src/visual-theme.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",
