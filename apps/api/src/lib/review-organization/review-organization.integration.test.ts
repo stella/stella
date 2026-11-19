@@ -1297,11 +1297,9 @@ describe("review organization reset task", () => {
     });
     // Exercise the registered counting wrapper without a feature gate.
     const task = createSchedulerTaskRegistry(
-      {
-        reapOwnerlessChatTurns: async () => {},
-        refreshCaseLawCoverage: () => undefined,
-        syncSoftLaw: () => undefined,
-      },
+      async () => {},
+      () => undefined,
+      () => undefined,
       {
         resetReviewOrganization: reset,
       },
@@ -1357,11 +1355,9 @@ describe("review organization reset task", () => {
 
     // With time billing back, the registered task completes the sample data.
     const restored = createSchedulerTaskRegistry(
-      {
-        reapOwnerlessChatTurns: async () => {},
-        refreshCaseLawCoverage: () => undefined,
-        syncSoftLaw: () => undefined,
-      },
+      async () => {},
+      () => undefined,
+      () => undefined,
       {
         resetReviewOrganization: createResetReviewOrganizationTask({
           readConfig: () => config(fixture.reviewOrgId),
@@ -1383,11 +1379,9 @@ describe("review organization reset task", () => {
 
   test("charges every registered reset the same statements, none from its detached work", async () => {
     const task = createSchedulerTaskRegistry(
-      {
-        reapOwnerlessChatTurns: async () => {},
-        refreshCaseLawCoverage: () => undefined,
-        syncSoftLaw: () => undefined,
-      },
+      async () => {},
+      () => undefined,
+      () => undefined,
       {
         resetReviewOrganization: createResetReviewOrganizationTask({
           readConfig: () => config(fixture.reviewOrgId),

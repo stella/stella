@@ -127,10 +127,10 @@ export const measureSoftLawSyncHistory = async (
     await db.execute(sql`ANALYZE soft_law_documents`);
     const adapter = fixtureAdapter(key);
     const registered =
-      createSchedulerTaskRegistry({
-        reapOwnerlessChatTurns: noopTask,
-        refreshCaseLawCoverage: noopTask,
-        syncSoftLaw: async (context) =>
+      createSchedulerTaskRegistry(
+        noopTask,
+        noopTask,
+        async (context) =>
           await createSoftLawSyncTask({
             authorities: () => [FIXTURE_AUTHORITY],
             sync: async ({ signal }) =>
@@ -145,7 +145,7 @@ export const measureSoftLawSyncHistory = async (
                   await Promise.resolve(rawSourcePayloadKey(options)),
               }),
           })(context),
-      }).get(SYNC_SOFT_LAW_TASK) ?? panic("Soft-law sync is unregistered");
+      ).get(SYNC_SOFT_LAW_TASK) ?? panic("Soft-law sync is unregistered");
     // db-await-in-loop: one measured run per independently seeded history size.
     const measured = await measureScheduledTaskReplay({
       openClient,

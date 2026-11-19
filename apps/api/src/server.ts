@@ -413,14 +413,12 @@ const startServer = async (): Promise<void> => {
     ensureDefaultJobs: ensureDefaultSchedulerJobs,
     startLoop: () =>
       startSchedulerLoop({
-        registry: createSchedulerTaskRegistry({
-          reapOwnerlessChatTurns: createReapOwnerlessChatTurnsTask(
-            reapOwnerlessChatTurnOnTx,
-          ),
-          refreshCaseLawCoverage: createCaseLawCoverageRefreshTask({
+        registry: createSchedulerTaskRegistry(
+          createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+          createCaseLawCoverageRefreshTask({
             compute: computeCaseLawCoverageAnswer,
           }),
-          syncSoftLaw: createSoftLawSyncTask({
+          createSoftLawSyncTask({
             authorities: servedRegisteredSoftLawAuthorities,
             sync: async ({ authority, signal }) =>
               await syncSoftLaw({
@@ -430,7 +428,7 @@ const startServer = async (): Promise<void> => {
                 signal,
               }),
           }),
-        }),
+        ),
       }),
     logger,
   });

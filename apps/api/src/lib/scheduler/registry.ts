@@ -370,22 +370,15 @@ type SchedulerTaskRegistryOptions = {
   dataExportMaintenance?: DataExportMaintenanceDependencies;
 };
 
-/**
- * Tasks whose work lives in a handler slice. The composition root builds them,
- * so scheduler code keeps its dependencies pointing from handlers to lib.
+/*
+ * Tasks whose work lives in a handler slice arrive as parameters: the
+ * composition root builds them, so scheduler code keeps its dependencies
+ * pointing from handlers to lib.
  */
-type InjectedSchedulerTasks = {
-  reapOwnerlessChatTurns: SchedulerTask;
-  refreshCaseLawCoverage: SchedulerTask;
-  syncSoftLaw: SchedulerTask;
-};
-
 const schedulerTasks = (
-  {
-    reapOwnerlessChatTurns,
-    refreshCaseLawCoverage,
-    syncSoftLaw,
-  }: InjectedSchedulerTasks,
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
   options: SchedulerTaskRegistryOptions = {},
 ) => ({
   ...SCHEDULER_TASKS,
@@ -406,52 +399,53 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(
-    schedulerTasks({
-      reapOwnerlessChatTurns: noopTask,
-      refreshCaseLawCoverage: noopTask,
-      syncSoftLaw: noopTask,
-    }),
-  ),
+  Object.keys(schedulerTasks(noopTask, noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
-  injected: InjectedSchedulerTasks,
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(injected, options)).map(
-      ([name, registered]) => {
-        const entry =
-          name === RESET_REVIEW_ORGANIZATION_TASK
-            ? (options.resetReviewOrganization ?? registered)
-            : registered;
-        return [
-          name,
-          async (context: SchedulerTaskContext) =>
-            runWithStatementCeiling({
-              kind: "scheduler",
-              key: name,
-              run: async () => {
-                const task = typeof entry === "function" ? entry : entry.task;
-                if (
-                  name === ERASE_HOSTED_CUSTOMERS_TASK &&
-                  options.hostedCustomerErasureDependencies !== undefined
-                ) {
-                  await runHostedCustomerErasures(
-                    context,
-                    options.hostedCustomerErasureDependencies,
-                  );
-                  return undefined;
-                }
-                const outcome = await task(context);
-                if (outcome === undefined) {
-                  return undefined;
-                }
-                return outcome;
-              },
-            }),
-        ];
-      },
-    ),
+    Object.entries(
+      schedulerTasks(
+        reapOwnerlessChatTurns,
+        refreshCaseLawCoverage,
+        syncSoftLaw,
+        options,
+      ),
+    ).map(([name, registered]) => {
+      const entry =
+        name === RESET_REVIEW_ORGANIZATION_TASK
+          ? (options.resetReviewOrganization ?? registered)
+          : registered;
+      return [
+        name,
+        async (context: SchedulerTaskContext) =>
+          runWithStatementCeiling({
+            kind: "scheduler",
+            key: name,
+            run: async () => {
+              const task = typeof entry === "function" ? entry : entry.task;
+              if (
+                name === ERASE_HOSTED_CUSTOMERS_TASK &&
+                options.hostedCustomerErasureDependencies !== undefined
+              ) {
+                await runHostedCustomerErasures(
+                  context,
+                  options.hostedCustomerErasureDependencies,
+                );
+                return undefined;
+              }
+              const outcome = await task(context);
+              if (outcome === undefined) {
+                return undefined;
+              }
+              return outcome;
+            },
+          }),
+      ];
+    }),
   );

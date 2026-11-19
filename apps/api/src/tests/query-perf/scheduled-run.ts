@@ -687,18 +687,16 @@ export const measureScheduledJobRun = async ({
   }
   const task =
     createSchedulerTaskRegistry(
-      {
-        reapOwnerlessChatTurns: noopTask,
-        refreshCaseLawCoverage: createCaseLawCoverageRefreshTask({
-          compute: computeCaseLawCoverageAnswer,
-          createRuntime: (options) =>
-            createScriptBackfillRuntime({
-              ...options,
-              readVerdict: async () => await Promise.resolve(admission),
-            }),
-        }),
-        syncSoftLaw: noopTask,
-      },
+      noopTask,
+      createCaseLawCoverageRefreshTask({
+        compute: computeCaseLawCoverageAnswer,
+        createRuntime: (options) =>
+          createScriptBackfillRuntime({
+            ...options,
+            readVerdict: async () => await Promise.resolve(admission),
+          }),
+      }),
+      noopTask,
       dataExportMaintenance === undefined ? {} : { dataExportMaintenance },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
