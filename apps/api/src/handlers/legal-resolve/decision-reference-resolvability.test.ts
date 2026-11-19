@@ -32,7 +32,7 @@ import {
 import { normalizeDecisionIdentifierValueIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { plannedIdentifiers } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
-import { decisionResolveIntent } from "@/api/lib/case-law/decision-reference-intent";
+import { decisionResolveIntent } from "@/api/handlers/legal-resolve/decision-constraints";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";

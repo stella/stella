@@ -32,6 +32,7 @@ import {
   atNamedCourt,
   type DecisionConstraints,
   decisionConstraints,
+  decisionResolveIntent,
   type DecisionResolveResponse,
   namesCourt,
   namesUnrecognizedCourt,
@@ -39,7 +40,6 @@ import {
 } from "@/api/handlers/legal-resolve/decision-constraints";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
-import { decisionResolveIntent } from "@/api/lib/case-law/decision-reference-intent";
 import {
   readDecisionReviews,
   requireDecisionReviews,
