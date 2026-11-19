@@ -61,7 +61,7 @@ export { default as indexes_case_law_court_date_published_index } from "./online
 export { default as indexes_case_law_coverage_index } from "./online-migration-entries/indexes-case-law-coverage-index";
 export { default as indexes_case_law_decision_identifiers_match_key_idx } from "./online-migration-entries/indexes-case-law-decision-identifiers-match-key-idx";
 export { default as indexes_case_law_decisions_citation_candidate_published_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-candidate-published-idx";
-export { default as indexes_case_law_decisions_citation_match_key_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-idx";
+export { default as indexes_case_law_decisions_citation_match_key_all_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-all-idx";
 export { default as indexes_case_law_decisions_citation_match_key_published_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-published-idx";
 export { default as indexes_case_law_decisions_country_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-date-published-idx";
 export { default as indexes_case_law_decisions_country_language_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-language-date-published-idx";
@@ -228,6 +228,7 @@ export { default as repairs_usage_action_type_constraint_validation } from "./on
 export { default as repairs_user_locale_constraint_validation } from "./online-migration-entries/repairs-user-locale-constraint-validation";
 export { default as replacements_account_issuer_account_id_uidx } from "./online-migration-entries/replacements-account-issuer-account-id-uidx";
 export { default as replacements_case_law_citations_polarity_null_idx } from "./online-migration-entries/replacements-case-law-citations-polarity-null-idx";
+export { default as replacements_case_law_decisions_citation_match_key_idx } from "./online-migration-entries/replacements-case-law-decisions-citation-match-key-idx";
 export { default as replacements_case_law_decisions_country_date_idx } from "./online-migration-entries/replacements-case-law-decisions-country-date-idx";
 export { default as replacements_case_law_decisions_document_pending_date_idx } from "./online-migration-entries/replacements-case-law-decisions-document-pending-date-idx";
 export { default as replacements_case_law_decisions_search_candidate_idx } from "./online-migration-entries/replacements-case-law-decisions-search-candidate-idx";
