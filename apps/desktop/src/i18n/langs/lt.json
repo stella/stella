@@ -705,6 +705,11 @@
       "description": "Iki 4 valandų trukmės diktofono failą, balso pastabą ar susitikimo įrašą paverčia tekstu.",
       "open": "Atidaryti",
       "failed": "Nepavyko atidaryti lango. Bandykite dar kartą."
+    },
+    "preview": {
+      "label": "Iki šiol padiktuotas tekstas",
+      "listening": "Klausomasi…",
+      "finishing": "Baigiama…"
     }
   },
   "shortcut": {

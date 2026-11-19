@@ -705,6 +705,11 @@
       "description": "Convertit en texte un fichier de dictaphone, un mémo vocal ou l’enregistrement d’une réunion jusqu’à 4 heures.",
       "open": "Ouvrir",
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez."
+    },
+    "preview": {
+      "label": "Ce que vous avez dicté jusqu’ici",
+      "listening": "Écoute…",
+      "finishing": "Finalisation…"
     }
   },
   "shortcut": {
