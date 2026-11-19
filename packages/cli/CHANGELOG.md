@@ -1,5 +1,31 @@
 # @stll/cli
 
+## 7.1.0
+
+### Minor Changes
+
+- [#7360](https://github.com/stella/stella/pull/7360) [`f0fd35c`](https://github.com/stella/stella/commit/f0fd35cdd1f2ea9dd4f7432b16945c944e86339f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Email an issued invoice as a secure link with `invoices sends-create`, list its sends with `invoices sends-list` and withdraw a link with `invoices sends-revoke`. Seller profiles take an `email` that receives the replies.
+
+- [#7613](https://github.com/stella/stella/pull/7613) [`a739024`](https://github.com/stella/stella/commit/a739024d926e4f530d1e397518d20d6ae87c3867) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add standalone native installation, checksum-verified self updates, and installation diagnostics. Check the server protocol and minimum CLI version before API operations, using a fresh cached contract when available.
+
+### Patch Changes
+
+- [#8854](https://github.com/stella/stella/pull/8854) [`af74f9f`](https://github.com/stella/stella/commit/af74f9f00b5503a2d90983ab006af94c7e9eced7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute `amendedBy` and `pendingChanges` show an instruction the publisher restates under several links once, naming every link in `duplicatePublisherIds`. Provision reads document `governingText`, `governingTextTruncated` and reading an annex by its number.
+
+- [#8822](https://github.com/stella/stella/pull/8822) [`02e421a`](https://github.com/stella/stella/commit/02e421ae319b02973c148ee6e18dcb084c869bab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` says which query words each decision holds, how many decisions hold each word when few hold them all, and gives a cursor that runs a phrasing again when its partial matches went unread.
+
+- [#8851](https://github.com/stella/stella/pull/8851) [`3aa0b3e`](https://github.com/stella/stella/commit/3aa0b3ec0b76d1240a5024c03071ce3d233771de) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `dictation.transcribe` describes its optional `labels` field: sent as `1` only when the client showed which models leave the organization's region or keep the audio.
+
+- [#7360](https://github.com/stella/stella/pull/7360) [`f0fd35c`](https://github.com/stella/stella/commit/f0fd35cdd1f2ea9dd4f7432b16945c944e86339f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sending invoice links requires the organization's invoice-links invitation grant and time-billing access. History and revocation remain available through normal invoice access without an invitation or personal enrolment.
+
+- [#8835](https://github.com/stella/stella/pull/8835) [`693e387`](https://github.com/stella/stella/commit/693e387fe6c57ac4075dd1aa052c78e4dae65101) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_statute_provisions` and `read_provision_history` return `governingText` beside a subdivision's text: the lead-in and closing wording of every unit it is nested in, so a letter is never read without the sentence that qualifies it.
+
+- [#8814](https://github.com/stella/stella/pull/8814) [`85406ec`](https://github.com/stella/stella/commit/85406ec1d179cca1acd00118247f5fbcb3935c8a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `resolve_case_law_decision` answers a decision it does not find with what the reconciled publisher listings say about it.
+
+- [#8803](https://github.com/stella/stella/pull/8803) [`d1159d8`](https://github.com/stella/stella/commit/d1159d8d2f578700fda1bf7c45e6126d088176bd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `save_contact` describes its registration, tax and VAT fields as a business's numbers.
+
+- [#8836](https://github.com/stella/stella/pull/8836) [`e96cbe2`](https://github.com/stella/stella/commit/e96cbe2cda938d3a4e364f899bc5ff86136c1e31) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute reads accept an annex by its number in any spelling (`priloha_3`, `příloha č. 3`), `read_statute` keeps every annex in a bounded outline, and a missing annex lists the annex anchors the consolidation carries.
+
 ## 7.0.0
 
 ### Major Changes
