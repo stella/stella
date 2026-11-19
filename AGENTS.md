@@ -344,12 +344,6 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-When adding a legal file format, search online for its specification, existing
-readers and upstream interoperability tests. Cite the upstream case alongside
-the local test. Port a compatible test or fixture with attribution, or reproduce
-the documented behavior with a synthetic fixture. Register the format in
-`packages/api-contract/src/legal-file-formats.ts` so Files and AI share it.
-
 **Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
