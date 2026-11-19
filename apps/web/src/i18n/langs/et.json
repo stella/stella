@@ -2743,6 +2743,7 @@
     "done": "Valmis",
     "doubleClickToRename": "Topeltklõpsa ümbernimetamiseks",
     "download": "Laadi alla",
+    "downloadOriginal": "Laadi originaal alla",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Teisaldamine tühistati. Üksust {itemName} ei teisaldatud.} other {Teisaldamine tühistati. {itemName} ei teisaldatud.}}",
       "droppedOn": "{count, plural, one {Üksus {itemName} asetati sihtkohale {destinationName}.} other {{itemName} asetati sihtkohale {destinationName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Postkasti toimetatud",
       "delivery": "Kättetoimetamine",
+      "deliveryEvents": "Kättetoimetamise käik",
+      "deliveryReceipt": "Kättetoimetamistõend",
       "directionUnknown": "Suund teadmata",
       "messageId": "Sõnumi ID",
       "moreContacts": "Selle andmepostkastiga on seotud veel kontakte.",
@@ -3342,6 +3345,8 @@
       "sent": "Saadetud",
       "statedInFile": "Andmepostkasti sõnum (faili andmetel)",
       "toHands": "Isiklikult: {name}",
+      "unlinkedFiles": "Ilma lingita manuste avamiseks laadige alla algne ZFO-fail.",
+      "unreadable": "Faili ei saanud lugeda andmepostkasti sõnumi ega kättetoimetamistõendina.",
       "uploaded": "Üleslaaditud andmepostkasti sõnum"
     },
     "deliveredBy": "Edastas <address>{sender}</address>",

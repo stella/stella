@@ -2743,6 +2743,7 @@
     "done": "Hecho",
     "doubleClickToRename": "Haz doble clic para renombrar",
     "download": "Descargar",
+    "downloadOriginal": "Descargar el original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimiento cancelado. {itemName} no se movió.} other {Movimiento cancelado. {itemName} no se movieron.} many {Movimiento cancelado. {itemName} no se movieron.}}",
       "droppedOn": "{count, plural, one {Se soltó {itemName} sobre {destinationName}.} other {Se soltaron {itemName} sobre {destinationName}.} many {Se soltaron {itemName} sobre {destinationName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Contacto: {name}",
       "deliveredAt": "Entregado en el buzón",
       "delivery": "Entrega",
+      "deliveryEvents": "Historial de entrega",
+      "deliveryReceipt": "Acuse de recibo",
       "directionUnknown": "Dirección desconocida",
       "messageId": "ID del mensaje",
       "moreContacts": "Hay más contactos asociados a este buzón de datos.",
@@ -3342,6 +3345,8 @@
       "sent": "Enviado",
       "statedInFile": "Mensaje de buzón de datos (según el archivo)",
       "toHands": "A la atención de {name}",
+      "unlinkedFiles": "Para abrir los archivos adjuntos que aparecen sin enlace, descargue el archivo ZFO original.",
+      "unreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "uploaded": "Mensaje de buzón de datos subido"
     },
     "deliveredBy": "Entregado por <address>{sender}</address>",

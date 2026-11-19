@@ -4,14 +4,16 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import {
   DATA_BOX_MESSAGE_LIMITS,
-  dataBoxMessageText,
+  parseDataBoxDocument,
   parseDataBoxMessage,
 } from "@/api/lib/email/correspondence/data-box/zfo";
 import {
   FIXTURE_MESSAGE,
   messageXml,
+  receiptXml,
   SEAL_COMMON_NAME,
   SEAL_SIGNED_AT,
   sealContent,
@@ -119,6 +121,13 @@ describe("parseDataBoxMessage", () => {
     });
   });
 
+  test("leaves an impossible stated delivery date unknown", async () => {
+    const message = parseDataBoxMessage(
+      await zfoFile({ deliveryTime: "2026-02-30T09:12:33+01:00" }),
+    ).unwrap();
+    expect(message.envelope.deliveredAt).toBeNull();
+  });
+
   test("files a message without files", async () => {
     const parsed = parseDataBoxMessage(await zfoFile({ files: [] }));
     expect(parsed.isOk() && parsed.value.files).toEqual([]);
@@ -144,17 +153,114 @@ describe("parseDataBoxMessage", () => {
     if (parsed.isErr()) {
       throw parsed.error;
     }
-    const text = dataBoxMessageText(parsed.value);
+    const text = dataBoxDocumentText(parsed.value);
     for (const expected of [
       FIXTURE_MESSAGE.annotation,
       "abc2def",
       "12 C 345/2026",
       "usneseni.pdf",
       "1234567890",
+      "Delivered to data box (dodáno): 2026-10-14T07:12:33.120Z",
+      "Accepted (doručeno): 2026-10-14T08:03:00.000Z",
+      "File seal: unverified",
     ]) {
       expect(text).toContain(expected);
     }
   });
+});
+
+describe("ISDS exports", () => {
+  // ISDS tFile allows inline XML. The libisds signed_sent_xml_message
+  // fixture also covers legacy fragments with multiple or zero elements.
+  // https://deb.debian.org/debian/pool/main/libi/libisds/libisds_0.10.7.orig.tar.gz
+  // https://github.com/datagov-cz/isds-adapter/blob/main/src/main/resources/wsdl/dmBaseTypes.xsd#L71-L89
+  test("reads inline XML in a sent export alongside binary attachments", async () => {
+    const fragments = [
+      {
+        fileName: "rozhodnuti.xml",
+        content: "<doc:decision>§ 1 &amp; § 2</doc:decision>",
+        expected:
+          '<doc:decision xmlns:doc="urn:test:decision">§ 1 &amp; § 2</doc:decision>',
+      },
+      {
+        fileName: "priloha.xml",
+        content: "<first/>text<second/>",
+        expected: "<first/>text<second/>",
+      },
+      { fileName: "prazdny.xml", content: "", expected: "" },
+    ];
+    const inlineFiles = fragments.map(
+      ({ fileName, content }) =>
+        `<p:dmFile dmMimeType="application/xml" dmFileDescr="${fileName}"><p:dmXMLContent xmlns:doc="urn:test:decision">${content}</p:dmXMLContent></p:dmFile>`,
+    );
+    const xml = messageXml()
+      .replace("/v20/message", "/v20/SentMessage")
+      .replace("</p:dmFiles>", () => `${inlineFiles.join("")}</p:dmFiles>`);
+    const result = parseDataBoxMessage(await sealContent(encode(xml))).unwrap();
+    expect(result.files.map(({ fileName }) => fileName)).toEqual([
+      "usneseni.pdf",
+      "pouceni.txt",
+      ...fragments.map(({ fileName }) => fileName),
+    ]);
+    expect(result.files.slice(FIXTURE_MESSAGE.files.length)).toEqual(
+      fragments.map(({ fileName, expected }) => ({
+        fileName,
+        mimeType: "application/xml",
+        bytes: encode(expected),
+      })),
+    );
+  });
+
+  test.each(["message", "SentMessage"])(
+    "reads the %s export and its attachments",
+    async (namespace) => {
+      const xml = messageXml().replace(
+        "/v20/message",
+        () => `/v20/${namespace}`,
+      );
+      const result = parseDataBoxDocument(
+        await sealContent(encode(xml)),
+      ).unwrap();
+      expect(result.kind).toBe("message");
+      expect(dataBoxDocumentText(result)).toContain("Attachment: usneseni.pdf");
+    },
+  );
+
+  test.each(["czechpoint", "czebox"])(
+    "reads a %s delivery receipt in event order",
+    async (host) => {
+      const xml = receiptXml().replaceAll(
+        "isds.czechpoint.cz",
+        () => `isds.${host}.cz`,
+      );
+      const grouped = xml.replace("</q:dmEvent><q:dmEvent>", "");
+      for (const variant of [xml, grouped]) {
+        const bytes = await sealContent(encode(variant));
+        const result = parseDataBoxDocument(bytes).unwrap();
+        expect(result).toMatchObject({
+          kind: "receipt",
+          envelope: {
+            messageId: FIXTURE_MESSAGE.messageId,
+            seal: { status: "unverified" },
+          },
+          events: [
+            {
+              occurredAt: "2026-10-14T07:12:33.120Z",
+              description: "EV5: Dodáno.",
+            },
+            {
+              occurredAt: "2026-10-14T08:03:00.000Z",
+              description: "EV11: Doručeno přihlášením oprávněné osoby.",
+            },
+          ],
+        });
+        expect(dataBoxDocumentText(result)).toContain(
+          "EV11: Doručeno přihlášením oprávněné osoby.",
+        );
+        expect(failureReason(bytes)).toBe("not_a_message");
+      }
+    },
+  );
 });
 
 describe("parseDataBoxMessage refusals", () => {

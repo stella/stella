@@ -2743,6 +2743,7 @@
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikom premenujete",
     "download": "Stiahnuť",
+    "downloadOriginal": "Stiahnuť originál",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Presun bol zrušený. Položka {itemName} nebola presunutá.} few {Presun bol zrušený. {itemName} neboli presunuté.} other {Presun bol zrušený. {itemName} nebolo presunutých.} many {Presun bol zrušený. {itemName} nebolo presunutých.}}",
       "droppedOn": "{count, plural, one {Položka {itemName} bola pustená na {destinationName}.} few {{itemName} boli pustené na {destinationName}.} other {{itemName} bolo pustených na {destinationName}.} many {{itemName} bolo pustených na {destinationName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dodané do schránky",
       "delivery": "Doručenie",
+      "deliveryEvents": "Udalosti doručovania",
+      "deliveryReceipt": "Doručenka",
       "directionUnknown": "Smer neznámy",
       "messageId": "ID správy",
       "moreContacts": "Tejto dátovej schránke zodpovedajú ďalšie kontakty.",
@@ -3342,6 +3345,8 @@
       "sent": "Odoslaná",
       "statedInFile": "Dátová správa (podľa údajov v súbore)",
       "toHands": "K rukám: {name}",
+      "unlinkedFiles": "Prílohy bez odkazu otvoríte po stiahnutí pôvodného súboru ZFO.",
+      "unreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "uploaded": "Nahraná dátová správa"
     },
     "deliveredBy": "Doručil <address>{sender}</address>",

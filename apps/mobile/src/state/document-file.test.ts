@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
@@ -12,6 +14,7 @@ import {
   fileUrlPath,
   isOffline,
   readDocumentFile,
+  readOriginalDocumentFile,
   versionsPath,
   viewerFor,
 } from "./document-file";
@@ -66,7 +69,7 @@ const history = (
   versions: {
     id: string;
     versionNumber?: number;
-    file: { fieldId: string } | null;
+    file: { fieldId: string; fileName?: string; mimeType?: string } | null;
   }[],
 ) => ({
   entityId: "entity-1",
@@ -78,10 +81,10 @@ const history = (
       version.file === null
         ? null
         : {
-            ...version.file,
             propertyId: "property-1",
             fileName: "Smlouva.docx",
             mimeType: DOCX,
+            ...version.file,
             sizeBytes: 1200,
           },
   })),
@@ -221,6 +224,77 @@ describe("reading a document's file", () => {
     expect(result.isOk() && result.value.viewer).toBe("quick-look");
     expect(calls.at(-1)).toBe(
       "/v1/files/matter-1/url/field-1?purpose=download",
+    );
+  });
+
+  const zfoVersion = (fileName: string, mimeType: string) =>
+    history("version-1", [
+      { id: "version-1", file: { fieldId: "field?1", fileName, mimeType } },
+    ]);
+
+  test.each([
+    ["Doručenka.ZFO", "application/octet-stream", "receipt"],
+    ["Datová zpráva", DATA_BOX_MESSAGE_MIME_TYPE, "message"],
+  ])(
+    "opens %s through the audited data-box preview",
+    async (fileName, mimeType, kind) => {
+      const text = "Datová schránka: 1234567\n\n  Přijato: 15:20";
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? zfoVersion(fileName, mimeType)
+            : { kind, text },
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "dataBox" && file.preview.unwrap()).toEqual({
+        kind,
+        text,
+      });
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/data-box/field%3F1",
+      ]);
+    },
+  );
+
+  test("keeps a refused preview visible and lets the user request the original", async () => {
+    const fileName = "Doručenka.zfo";
+    const { fetch, calls } = server((path) => {
+      if (path.endsWith("/versions")) {
+        return Response.json(zfoVersion(fileName, "application/octet-stream"));
+      }
+      if (path.endsWith("purpose=download")) {
+        return Response.json(
+          delivered(DATA_BOX_MESSAGE_MIME_TYPE, { fileName }),
+        );
+      }
+      return Response.json(
+        { message: "Unreadable", code: "preview_unavailable" },
+        { status: 422 },
+      );
+    });
+    const file = (await read(fetch)).unwrap();
+    expect(
+      file.viewer === "dataBox" && file.preview.isErr() && file.preview.error,
+    ).toMatchObject({
+      status: 422,
+      code: "preview_unavailable",
+    });
+    expect(calls).toHaveLength(2);
+    const original = await readOriginalDocumentFile({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field?1",
+    });
+    expect(original.unwrap()).toMatchObject({
+      fileName,
+      presignedUrl: "https://storage.example.com/file-1?signature=abc",
+    });
+    expect(calls.at(-1)).toBe(
+      "/v1/files/matter-1/url/field%3F1?purpose=download",
     );
   });
 

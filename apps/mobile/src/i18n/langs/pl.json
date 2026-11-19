@@ -524,6 +524,7 @@
     "title": "Dokument",
     "failedTitle": "Nie udało się otworzyć tego dokumentu",
     "failure": {
+      "dataBoxUnreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "offline": "Jesteś offline. Połącz się z internetem i spróbuj ponownie.",
       "noFile": "Ten dokument nie ma jeszcze pliku.",
       "failed": "Podczas otwierania coś poszło nie tak. Spróbuj ponownie za chwilę.",
@@ -531,6 +532,7 @@
       "android": "W aplikacji na Androida nie można jeszcze otwierać dokumentów."
     },
     "retry": "Spróbuj ponownie",
+    "openOriginal": "Otwórz oryginał",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",

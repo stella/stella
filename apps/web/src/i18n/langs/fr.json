@@ -2743,6 +2743,7 @@
     "done": "Terminé",
     "doubleClickToRename": "Double-cliquez pour renommer",
     "download": "Télécharger",
+    "downloadOriginal": "Télécharger l’original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Déplacement annulé. {itemName} n’a pas été déplacé.} other {Déplacement annulé. {itemName} n’ont pas été déplacés.} many {Déplacement annulé. {itemName} n’ont pas été déplacés.}}",
       "droppedOn": "{count, plural, one {{itemName} a été déposé sur {destinationName}.} other {{itemName} ont été déposés sur {destinationName}.} many {{itemName} ont été déposés sur {destinationName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Contact : {name}",
       "deliveredAt": "Remis dans la boîte",
       "delivery": "Remise",
+      "deliveryEvents": "Historique de remise",
+      "deliveryReceipt": "Accusé de réception",
       "directionUnknown": "Sens inconnu",
       "messageId": "Identifiant du message",
       "moreContacts": "D’autres contacts correspondent à cette boîte de données.",
@@ -3342,6 +3345,8 @@
       "sent": "Envoyé",
       "statedInFile": "Message de boîte de données (selon le fichier)",
       "toHands": "À l’attention de {name}",
+      "unlinkedFiles": "Pour ouvrir les pièces jointes sans lien, téléchargez le fichier ZFO d’origine.",
+      "unreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "uploaded": "Message de boîte de données importé"
     },
     "deliveredBy": "Distribué par <address>{sender}</address>",

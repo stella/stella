@@ -152,6 +152,7 @@
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
+    "./legal-file-formats": "./src/legal-file-formats.ts",
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./document-format": "./src/document-format.ts",

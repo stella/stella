@@ -16,6 +16,9 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import { sha256Hex } from "@stll/sha256/bun";
+
 import { organization, user } from "@/api/db/auth-schema";
 import {
   entities,
@@ -26,13 +29,17 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { createFileKey } from "@/api/lib/file-key";
 import {
   FlowStepError,
   loadInputDocuments,
 } from "@/api/lib/flows/flow-executor";
 import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -155,7 +162,7 @@ describe("loadInputDocuments", () => {
   });
 
   const scopedDb = () =>
-    asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+    asTestRaw<Parameters<typeof loadInputDocuments>[0]["scopedDb"]>(
       createScopedDb(testDb, [workspaceId], organizationId, userId),
     );
 
@@ -168,12 +175,13 @@ describe("loadInputDocuments", () => {
         })
       ).unwrap(),
     );
-    const caught = await loadInputDocuments(
-      scopedDb(),
+    const caught = await loadInputDocuments({
+      scopedDb: scopedDb(),
       organizationId,
       workspaceIds,
-      [extractedEntityId, pendingEntityId],
-    ).then(
+      entityIds: [extractedEntityId, pendingEntityId],
+      recordAuditEvent: auditRecorderDouble(),
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -208,12 +216,13 @@ describe("loadInputDocuments", () => {
           })
         ).unwrap(),
       );
-      const caught = await loadInputDocuments(
-        scopedDb(),
+      const caught = await loadInputDocuments({
+        scopedDb: scopedDb(),
         organizationId,
         workspaceIds,
-        [extractedEntityId, pendingEntityId],
-      ).then(
+        entityIds: [extractedEntityId, pendingEntityId],
+        recordAuditEvent: auditRecorderDouble(),
+      }).then(
         () => null,
         (error: unknown) => error,
       );
@@ -238,7 +247,9 @@ describe("loadInputDocuments", () => {
           .update(entityVersions)
           .set({ deletedAt: new Date("2026-04-30T09:00:00.000Z") })
           .where(eq(entityVersions.id, versionId));
-        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
           async (
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
@@ -249,12 +260,13 @@ describe("loadInputDocuments", () => {
             workspaceIds: [workspaceId],
           })
         ).unwrap();
-        const caught = await loadInputDocuments(
-          scoped,
+        const caught = await loadInputDocuments({
+          scopedDb: scoped,
           organizationId,
           workspaceIds,
-          [extractedEntityId],
-        ).then(
+          entityIds: [extractedEntityId],
+          recordAuditEvent: auditRecorderDouble(),
+        }).then(
           () => null,
           (error: unknown) => error,
         );
@@ -273,7 +285,9 @@ describe("loadInputDocuments", () => {
       [workspaceId],
       organizationId,
       async (tx) => {
-        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
           async (
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
@@ -285,9 +299,13 @@ describe("loadInputDocuments", () => {
           })
         ).unwrap();
         expect(
-          await loadInputDocuments(scoped, organizationId, readableIds, [
-            extractedEntityId,
-          ]),
+          await loadInputDocuments({
+            scopedDb: scoped,
+            organizationId,
+            workspaceIds: readableIds,
+            entityIds: [extractedEntityId],
+            recordAuditEvent: auditRecorderDouble(),
+          }),
         ).toEqual([{ label: "Available doc", text: "readable flow marker" }]);
       },
       userId,
@@ -297,7 +315,9 @@ describe("loadInputDocuments", () => {
       [],
       organizationId,
       async (tx) => {
-        const scoped = asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
           async (
             run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
           ) => await run(tx),
@@ -308,12 +328,13 @@ describe("loadInputDocuments", () => {
             workspaceIds: [workspaceId],
           })
         ).unwrap();
-        const caught = await loadInputDocuments(
-          scoped,
+        const caught = await loadInputDocuments({
+          scopedDb: scoped,
           organizationId,
-          unreadableIds,
-          [extractedEntityId],
-        ).then(
+          workspaceIds: unreadableIds,
+          entityIds: [extractedEntityId],
+          recordAuditEvent: auditRecorderDouble(),
+        }).then(
           () => null,
           (error: unknown) => error,
         );
@@ -322,6 +343,79 @@ describe("loadInputDocuments", () => {
           expect(caught.message).toContain("content is not available");
           expect(caught.message).not.toContain("readable flow marker");
         }
+      },
+      userId,
+    );
+  });
+  test("reads a ZFO from its exact file with embedded attachment text before or after an older extraction", async () => {
+    const bytes = await zfoFile();
+    fake.put(
+      envBase.S3_BUCKET,
+      createFileKey({
+        organizationId,
+        workspaceId,
+        fileId,
+        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+      }),
+      bytes,
+      DATA_BOX_MESSAGE_MIME_TYPE,
+    );
+    await createDryScopedQuery(testDb)(
+      [workspaceId],
+      organizationId,
+      async (tx) => {
+        await tx
+          .update(fields)
+          .set({
+            content: {
+              version: 1,
+              type: "file",
+              id: fileId,
+              fileName: "selected.ZFO",
+              mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+              sizeBytes: bytes.length,
+              encrypted: false,
+              sha256Hex: sha256Hex(bytes),
+              pdfFileId: null,
+            },
+          })
+          .where(eq(fields.id, fieldId));
+        await tx
+          .update(extractedContent)
+          .set({ sourceSha256Hex: sha256Hex(bytes) })
+          .where(eq(extractedContent.entityId, extractedEntityId));
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
+          async (
+            run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
+          ) => await run(tx),
+        );
+        const workspaceIds = (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap();
+        const read = () =>
+          loadInputDocuments({
+            scopedDb: scoped,
+            organizationId,
+            workspaceIds,
+            entityIds: [extractedEntityId],
+            recordAuditEvent: auditRecorderDouble(),
+          });
+        const assertContent = (text: string | undefined) => {
+          expect(text).toContain(FIXTURE_MESSAGE.annotation);
+          expect(text).toContain("pouceni.txt");
+          expect(text).toContain("Synthetic instructions.");
+          expect(text).not.toContain("readable flow marker");
+        };
+        assertContent((await read()).at(0)?.text);
+        await tx
+          .delete(extractedContent)
+          .where(eq(extractedContent.entityId, extractedEntityId));
+        assertContent((await read()).at(0)?.text);
       },
       userId,
     );

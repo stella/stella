@@ -2743,6 +2743,7 @@
     "done": "Gotowe",
     "doubleClickToRename": "Kliknij dwukrotnie, aby zmienić nazwę",
     "download": "Pobierz",
+    "downloadOriginal": "Pobierz oryginał",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Anulowano przenoszenie. Element {itemName} nie został przeniesiony.} few {Anulowano przenoszenie. {itemName} nie zostały przeniesione.} many {Anulowano przenoszenie. {itemName} nie zostało przeniesionych.} other {Anulowano przenoszenie. {itemName} nie zostało przeniesione.}}",
       "droppedOn": "{count, plural, one {Upuszczono element {itemName} na {destinationName}.} few {Upuszczono {itemName} na {destinationName}.} many {Upuszczono {itemName} na {destinationName}.} other {Upuszczono {itemName} na {destinationName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dostarczono do skrzynki",
       "delivery": "Doręczenie",
+      "deliveryEvents": "Przebieg doręczenia",
+      "deliveryReceipt": "Potwierdzenie doręczenia",
       "directionUnknown": "Kierunek nieznany",
       "messageId": "Identyfikator wiadomości",
       "moreContacts": "Więcej kontaktów pasuje do tej skrzynki danych.",
@@ -3342,6 +3345,8 @@
       "sent": "Wysłana",
       "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
       "toHands": "Do rąk: {name}",
+      "unlinkedFiles": "Aby otworzyć załączniki wyświetlane bez odnośnika, pobierz oryginalny plik ZFO.",
+      "unreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "uploaded": "Przesłana wiadomość ze skrzynki danych"
     },
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",

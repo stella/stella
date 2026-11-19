@@ -420,6 +420,8 @@ COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /app/runtime/fonts/CabinetGrotesk-Regular.otf
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /app/yara
+# The isolated extraction worker inherits no application environment.
+RUN ln -s /app/yara /app/runtime/workers/yara
 # Bundled template packs: the manifest is compiled into the binary, the DOCX
 # bytes are read from TEMPLATE_PACKS_CONTENT_DIR when a pack is installed.
 # Copied from the unpruned context stage. A build whose context has no content
@@ -439,7 +441,11 @@ CMD ["bun", "--no-env-file", "/app/server.js"]
 # image build instead of the first request that reaches it. The final stage
 # below re-selects the runner and forces this stage into the build by copying
 # its marker.
+FROM builder AS runtime-asset-fixtures
+RUN cd apps/api && bun -e 'import { zfoFile } from "./src/tests/fixtures/zfo"; await Bun.write("/tmp/image-smoke.zfo", await zfoFile())'
+
 FROM runner AS runtime-asset-smoke
+COPY --from=runtime-asset-fixtures /tmp/image-smoke.zfo /tmp/image-smoke.zfo
 RUN bun --no-env-file /app/image-smoke.js && touch /tmp/image-smoke-ok
 
 FROM runner

@@ -10,7 +10,6 @@ import {
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
-import { drainFanOut } from "@stll/concurrency";
 import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -42,8 +41,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transition } from "@/api/lib/db/transitions";
 import {
+  loadAgentDocumentSources,
   loadCurrentExtractedContents,
-  loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -52,6 +51,7 @@ import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -467,10 +467,10 @@ const runAiStep = async ({
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
-    ? await loadInputDocuments(
+    ? await loadInputDocuments({
         scopedDb,
         organizationId,
-        await scopedDb(async (tx) =>
+        workspaceIds: await scopedDb(async (tx) =>
           (
             await authorizedWorkspaceIds(tx, {
               organizationId,
@@ -478,8 +478,14 @@ const runAiStep = async ({
             })
           ).unwrap("The scoped workspace authorization read must succeed"),
         ),
-        run.inputEntityIds,
-      )
+        entityIds: run.inputEntityIds,
+        recordAuditEvent: flowRunAuditRecorder({
+          run,
+          organizationId,
+          actorUserId,
+        }),
+        signal,
+      })
     : [];
 
   const prompt = buildAiStepPrompt({
@@ -624,12 +630,22 @@ const readPriorAiMarkdown = async (
   return markdown;
 };
 
-export const loadInputDocuments = async (
-  scopedDb: ReturnType<typeof createRootScopedDb>,
-  organizationId: SafeId<"organization">,
-  workspaceIds: AuthorizedWorkspaceIds,
-  entityIds: SafeId<"entity">[],
-): Promise<FlowStepDocument[]> => {
+type LoadInputDocumentsOptions = {
+  scopedDb: ReturnType<typeof createRootScopedDb>;
+  organizationId: SafeId<"organization">;
+  workspaceIds: AuthorizedWorkspaceIds;
+  entityIds: SafeId<"entity">[];
+  recordAuditEvent: AuditRecorder;
+  signal?: AbortSignal;
+};
+export const loadInputDocuments = async ({
+  scopedDb,
+  organizationId,
+  workspaceIds,
+  entityIds,
+  recordAuditEvent,
+  signal,
+}: LoadInputDocumentsOptions): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
     return [];
   }
@@ -641,7 +657,10 @@ export const loadInputDocuments = async (
     }
     const missingEntities = await scopedDb((tx) =>
       tx.query.entities.findMany({
-        where: { id: { in: missingIds } },
+        where: {
+          id: { in: missingIds },
+          workspaceId: { in: [...workspaceIds] },
+        },
         columns: { name: true },
         limit: missingIds.length,
       }),
@@ -655,43 +674,57 @@ export const loadInputDocuments = async (
     });
   };
 
-  // Availability is decided from provenance alone; text is decrypted only for
-  // a complete input set, and a document that became unavailable in between
-  // gets the same refusal.
-  const sources = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedSources(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
-  );
+  // Verify the entire input set before decrypting or opening any files.
+  const options = { entityIds, organizationId, workspaceIds };
+  const sources = await scopedDb((tx) => loadAgentDocumentSources(tx, options));
   await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
-  const available = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedContents(tx, {
-        entityIds,
-        organizationId,
-        workspaceIds,
-      }),
+  const extractedIds = sources
+    .filter((source) => !source.legalFormat)
+    .map((source) => source.entityId);
+  const extracted = await scopedDb((tx) =>
+    loadCurrentExtractedContents(tx, { ...options, entityIds: extractedIds }),
   );
-  await refuseUnavailable(new Set(available.map((row) => row.entityId)));
-
-  const drained = await drainFanOut({
-    items: available,
-    signal: new AbortController().signal,
-    operation: async (row, signal) => {
-      signal.throwIfAborted();
-      return await Promise.resolve({
-        label: row.name,
-        text: row.text,
-      });
-    },
+  const byId = new Map(extracted.map((row) => [row.entityId, row]));
+  const available = sources.filter((source) => {
+    if (source.legalFormat) {
+      return true;
+    }
+    const content = byId.get(source.entityId);
+    return (
+      content !== undefined &&
+      content.currentVersionId === source.currentVersionId &&
+      content.sourceFieldId === source.sourceFieldId
+    );
   });
-  if (Result.isError(drained)) {
-    throw drained.error;
+  await refuseUnavailable(new Set(available.map((source) => source.entityId)));
+  const documents: FlowStepDocument[] = [];
+  // Each nested reader can scan and parse several files. Keep that work bounded per run.
+  for (const source of available) {
+    signal?.throwIfAborted();
+    if (source.legalFormat) {
+      const read = await LEGAL_FILE_READERS[source.legalFormat.kind]({
+        purpose: "standalone",
+        scopedDb,
+        organizationId,
+        workspaceId: source.workspaceId,
+        fieldId: source.sourceFieldId,
+        recordAuditEvent,
+      });
+      if (read.isErr()) {
+        throw new FlowStepError({
+          message: `Could not read ${source.name}: ${read.error.message}`,
+        });
+      }
+      documents.push({ label: source.name, text: read.value.text });
+      continue;
+    }
+    const content = byId.get(source.entityId);
+    if (!content) {
+      panic("Available workflow document has no extracted content");
+    }
+    documents.push({ label: source.name, text: content.text });
   }
-  return drained.value;
+  return documents;
 };
 
 /**

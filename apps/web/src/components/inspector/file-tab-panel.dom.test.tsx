@@ -1,6 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { QueryClient as QueryClientInstance } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
+import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
@@ -90,7 +93,8 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const { fileOptions } = await import("@/lib/files/queries");
+const { dataBoxPreviewOptions, fileOptions } =
+  await import("@/lib/files/queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { entityOptions } = await import("@/lib/workspaces/queries/entities");
@@ -222,10 +226,107 @@ test("PDF keeps the host registry and PDF engine inside the render budget", asyn
   expect(pdfEngineRenderCount - rendersAfterMount).toBeLessThanOrEqual(1);
 });
 
-function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
+test.each(DATA_BOX_DOCUMENT_KINDS)(
+  "opens a ZFO %s in the inspector",
+  async (kind) => {
+    const tab = {
+      ...pdfTab,
+      id: toSafeId<"field">("field-data-box"),
+      label: "Data export",
+      fileName: "export.ZFO",
+      mimeType: "application/octet-stream",
+    };
+    const party = {
+      boxId: "abc2def",
+      name: "Sender office",
+      address: null,
+      referenceNumber: null,
+      fileMark: null,
+    };
+    const envelope = {
+      messageId: "1234567890",
+      messageType: "V",
+      sender: party,
+      recipient: { ...party, boxId: "xyz9876", name: "District court" },
+      toHands: null,
+      personalDelivery: null,
+      substituteDelivery: null,
+      deliveredAt: "2026-03-01T08:00:00Z",
+      acceptedAt: "2026-03-01T10:00:00Z",
+      status: "accepted_by_login",
+      seal: {
+        status: "unverified",
+        signerName: null,
+        issuerName: null,
+        serialNumber: null,
+        signedAt: null,
+      },
+      directionBasis: "unknown",
+    } satisfies DataBoxEnvelope;
+    const mounted = renderFileTab(tab, (client) => {
+      const queryKey = dataBoxPreviewOptions({
+        fieldId: tab.id,
+        workspaceId: tab.workspaceId,
+      }).queryKey;
+      const common = {
+        annotation: "Court notice",
+        envelope,
+        text: "Court notice",
+      };
+      client.setQueryData(
+        queryKey,
+        kind === "message"
+          ? {
+              ...common,
+              kind,
+              files: [
+                { fileName: "Order.pdf", entityId: ENTITY_ID },
+                { fileName: "Exhibit.pdf", entityId: null },
+              ],
+            }
+          : {
+              ...common,
+              kind,
+              events: [
+                {
+                  occurredAt: envelope.acceptedAt,
+                  description: "Message accepted",
+                },
+              ],
+            },
+      );
+    });
+    expect(await mounted.findByText("Court notice")).toBeTruthy();
+    expect(mounted.getByText("District court")).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    if (kind === "message") {
+      expect(mounted.getByRole("button", { name: "Order.pdf" })).toBeTruthy();
+      expect(mounted.getByText("Exhibit.pdf")).toBeTruthy();
+      expect(
+        mounted.getByText(
+          bundledEnglishMessages.correspondence.dataBox.unlinkedFiles,
+        ),
+      ).toBeTruthy();
+    } else {
+      expect(
+        mounted.getByRole("heading", { name: "Delivery receipt" }),
+      ).toBeTruthy();
+      expect(mounted.getByText("Message accepted")).toBeTruthy();
+    }
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+function renderFileTab(
+  tab: typeof docxTab | typeof pdfTab,
+  seed?: (client: QueryClientInstance) => void,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
+  seed?.(queryClient);
   queryClient.setQueryData(
     fileOptions({ fieldId: tab.id, workspaceId: tab.workspaceId }).queryKey,
     {

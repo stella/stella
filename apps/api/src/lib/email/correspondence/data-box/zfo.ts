@@ -1,5 +1,5 @@
 /**
- * Reads a data-box (ISDS) message exported as a `.zfo` file: a DER CMS
+ * Reads ISDS messages and delivery receipts exported as `.zfo` files: CMS
  * SignedData whose encapsulated content is the message XML. The envelope and
  * the base64 files come from that XML; the seal's signer and signing time are
  * read as found and never verified.
@@ -9,13 +9,19 @@
 import * as asn1js from "asn1js";
 import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
-import { type Element, parseXmlDocument } from "slimdom";
+import {
+  type Element,
+  parseXmlDocument,
+  serializeToWellFormedString,
+} from "slimdom";
 import * as v from "valibot";
 
+import { apiDateTimeSchema, isApiDate } from "@stll/api-contract/api-date";
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 import {
   DATA_BOX_MESSAGE_ID_PATTERN,
   DATA_BOX_MESSAGE_STATUSES,
+  type DataBoxDeliveryEvent,
   type DataBoxParty,
   type DataBoxSeal,
   type DataBoxStatedEnvelope,
@@ -26,11 +32,19 @@ import { declareFingerprintFields } from "@stll/errors";
 
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
+import type {
+  DataBoxMessageMetadata,
+  DataBoxReceipt,
+} from "./preview-contract";
+
 const SIGNED_DATA_OID = "1.2.840.113549.1.7.2";
 const SIGNING_TIME_OID = "1.2.840.113549.1.9.5";
 const COMMON_NAME_OID = "2.5.4.3";
 const ORGANIZATION_NAME_OID = "2.5.4.10";
-const ISDS_NAMESPACE_PREFIX = "http://isds.czechpoint.cz/";
+const ISDS_NAMESPACE_PREFIXES = [
+  "http://isds.czechpoint.cz/",
+  "http://isds.czebox.cz/",
+];
 
 export const DATA_BOX_MESSAGE_LIMITS = {
   /** A `.zfo` is a matter document, so the document upload limit bounds it. */
@@ -71,17 +85,13 @@ export class DataBoxMessageParseError extends TaggedError(
 const failure = (reason: DataBoxParseFailure, message: string) =>
   Result.err(new DataBoxMessageParseError({ reason, message }));
 
-type DataBoxFile = {
-  fileName: string;
-  mimeType: string;
+type DataBoxFile = DataBoxMessageMetadata["files"][number] & {
   bytes: Uint8Array;
 };
-
-export type ParsedDataBoxMessage = {
-  annotation: string;
-  envelope: DataBoxStatedEnvelope;
+export type ParsedDataBoxMessage = Omit<DataBoxMessageMetadata, "files"> & {
   files: DataBoxFile[];
 };
+export type ParsedDataBoxDocument = ParsedDataBoxMessage | DataBoxReceipt;
 
 type SignedContent = { content: Uint8Array; seal: DataBoxSeal };
 
@@ -195,7 +205,9 @@ const unwrapSignedData = (
 
 const isIsdsElement = (element: Element, localName: string) =>
   element.localName === localName &&
-  (element.namespaceURI?.startsWith(ISDS_NAMESPACE_PREFIX) ?? false);
+  ISDS_NAMESPACE_PREFIXES.some((prefix) =>
+    element.namespaceURI?.startsWith(prefix),
+  );
 
 const child = (element: Element, localName: string) =>
   element.children.find((candidate) => isIsdsElement(candidate, localName));
@@ -239,18 +251,21 @@ const BOOLEAN_TEXT: ReadonlyMap<string, boolean> = new Map([
 const fieldBoolean = (element: Element, localName: string) =>
   BOOLEAN_TEXT.get(fieldText(element, localName)?.toLowerCase() ?? "") ?? null;
 
-// Only an explicitly zoned timestamp names an instant.
-const ZONED_TIMESTAMP =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
-
-const fieldTimestamp = (element: Element, localName: string) => {
-  const text = fieldText(element, localName);
-  if (text === null || !ZONED_TIMESTAMP.test(text)) {
+// ISDS timestamps name instants. Date alone normalizes an impossible local
+// calendar day into the following month, changing the stated delivery date.
+const readTimestamp = (text: string | null) => {
+  if (
+    !text ||
+    !v.is(apiDateTimeSchema, text) ||
+    !isApiDate(text.slice(0, 10))
+  ) {
     return null;
   }
-  const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return new Date(text).toISOString();
 };
+
+const fieldTimestamp = (element: Element, localName: string) =>
+  readTimestamp(fieldText(element, localName));
 
 const statusCodeSchema = numberFromString(
   v.pipe(
@@ -303,6 +318,32 @@ const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/u;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/u;
 const FALLBACK_MEDIA_TYPE = "application/octet-stream";
 
+const readFileBytes = (
+  entry: Element,
+): Result<Uint8Array, DataBoxMessageParseError> => {
+  const encoded = child(entry, "dmEncodedContent");
+  const inlineXml = child(entry, "dmXMLContent");
+  if (encoded !== undefined && inlineXml === undefined) {
+    const base64 = (encoded.textContent ?? "").replace(/\s+/gu, "");
+    return BASE64.test(base64) && base64.length % 4 === 0
+      ? Result.ok(new Uint8Array(Buffer.from(base64, "base64")))
+      : failure("invalid_file", "A file's content is not base64");
+  }
+  // Legacy ISDS exports carry XML fragments, including multiple or zero
+  // elements. The serialized fragment is a derivative of the signed XML.
+  if (encoded === undefined && inlineXml !== undefined) {
+    const serialized = Result.try(() =>
+      inlineXml.childNodes
+        .map((node) => serializeToWellFormedString(node))
+        .join(""),
+    );
+    if (serialized.isOk()) {
+      return Result.ok(new TextEncoder().encode(serialized.value));
+    }
+  }
+  return failure("invalid_file", "A file has no recognizable content");
+};
+
 const readFiles = (
   dm: Element,
   limits: DataBoxMessageLimits,
@@ -319,13 +360,9 @@ const readFiles = (
   }
   const files: DataBoxFile[] = [];
   for (const [index, entry] of entries.entries()) {
-    const encoded = child(entry, "dmEncodedContent");
-    if (encoded === undefined) {
-      return failure("invalid_file", "A file has no encoded content");
-    }
-    const base64 = (encoded.textContent ?? "").replace(/\s+/gu, "");
-    if (!BASE64.test(base64) || base64.length % 4 !== 0) {
-      return failure("invalid_file", "A file's content is not base64");
+    const bytes = readFileBytes(entry);
+    if (bytes.isErr()) {
+      return bytes;
     }
     const mediaType = (entry.getAttribute("dmMimeType") ?? "")
       .trim()
@@ -335,7 +372,7 @@ const readFiles = (
         boundedText(entry.getAttribute("dmFileDescr")) ??
         `attachment-${index + 1}`,
       mimeType: MEDIA_TYPE.test(mediaType) ? mediaType : FALLBACK_MEDIA_TYPE,
-      bytes: new Uint8Array(Buffer.from(base64, "base64")),
+      bytes: bytes.value,
     });
   }
   return Result.ok(files);
@@ -346,22 +383,40 @@ const MESSAGE_TYPE = /^[A-Z]$/u;
 // can only bring entity definitions this reader has no use for.
 const DOCUMENT_TYPE_DECLARATION = /<!doctype|<!entity/iu;
 
-const findMessage = (root: Element): Element | null => {
-  if (isIsdsElement(root, "dmReturnedMessage")) {
-    return root;
-  }
-  for (const element of root.children) {
-    if (isIsdsElement(element, "dmReturnedMessage")) {
-      return element;
+// The schema repeats dmEvent. Some exports group multiple time/description
+// pairs in a single dmEvent, as in the ISDS GetDeliveryInfo example.
+const readDeliveryEvents = (receipt: Element) => {
+  const events: DataBoxDeliveryEvent[] = [];
+  for (const event of child(receipt, "dmEvents")?.children ?? []) {
+    if (!isIsdsElement(event, "dmEvent")) {
+      continue;
+    }
+    let time: string | null | undefined;
+    for (const detail of event.children) {
+      if (isIsdsElement(detail, "dmEventTime")) {
+        if (time !== undefined) {
+          events.push({ occurredAt: time, description: null });
+        }
+        time = readTimestamp(boundedText(detail.textContent));
+      } else if (isIsdsElement(detail, "dmEventDescr")) {
+        events.push({
+          occurredAt: time ?? null,
+          description: boundedText(detail.textContent),
+        });
+        time = undefined;
+      }
+    }
+    if (time !== undefined) {
+      events.push({ occurredAt: time, description: null });
     }
   }
-  return null;
+  return events;
 };
 
-const readMessageXml = (
+const readDocumentXml = (
   { content, seal }: SignedContent,
   limits: DataBoxMessageLimits,
-): Result<ParsedDataBoxMessage, DataBoxMessageParseError> => {
+): Result<ParsedDataBoxDocument, DataBoxMessageParseError> => {
   const decoded = Result.try(() =>
     new TextDecoder("utf-8", { fatal: true }).decode(content),
   );
@@ -385,11 +440,23 @@ const readMessageXml = (
   if (root === null) {
     return failure("malformed_xml", "The message is not well-formed XML");
   }
-  const message = findMessage(root);
-  if (message === null) {
-    return failure("not_a_message", "The file holds no data-box message");
+  const message = isIsdsElement(root, "dmReturnedMessage")
+    ? root
+    : child(root, "dmReturnedMessage");
+  const receipt = isIsdsElement(root, "GetDeliveryInfoResponse")
+    ? child(root, "dmDelivery")
+    : undefined;
+  const record = message ?? receipt;
+  if (
+    record === undefined ||
+    (message !== undefined && receipt !== undefined)
+  ) {
+    return failure(
+      "not_a_message",
+      "The file holds no recognizable ISDS message or receipt",
+    );
   }
-  const dm = child(message, "dmDm");
+  const dm = child(record, "dmDm");
   if (dm === undefined) {
     return failure("not_a_message", "The message has no envelope");
   }
@@ -416,38 +483,49 @@ const readMessageXml = (
   ) {
     return failure("invalid_envelope", "The envelope lacks required fields");
   }
+  const messageType = boundedText(record.getAttribute("dmType"));
+  const annotation = fieldText(dm, "dmAnnotation") ?? "";
+  const envelope = {
+    messageId,
+    messageType:
+      messageType !== null && MESSAGE_TYPE.test(messageType)
+        ? messageType
+        : null,
+    sender,
+    recipient,
+    toHands: fieldText(dm, "dmToHands"),
+    personalDelivery: fieldBoolean(dm, "dmPersonalDelivery"),
+    substituteDelivery: fieldBoolean(dm, "dmAllowSubstDelivery"),
+    deliveredAt: fieldTimestamp(record, "dmDeliveryTime"),
+    acceptedAt: fieldTimestamp(record, "dmAcceptanceTime"),
+    status: fieldStatus(record),
+    seal,
+  } satisfies DataBoxStatedEnvelope;
+  if (receipt !== undefined) {
+    return Result.ok({
+      kind: "receipt",
+      annotation,
+      envelope,
+      events: readDeliveryEvents(receipt),
+    });
+  }
   const files = readFiles(dm, limits);
   if (files.isErr()) {
     return files;
   }
-  const messageType = boundedText(message.getAttribute("dmType"));
   return Result.ok({
-    annotation: fieldText(dm, "dmAnnotation") ?? "",
-    envelope: {
-      messageId,
-      messageType:
-        messageType !== null && MESSAGE_TYPE.test(messageType)
-          ? messageType
-          : null,
-      sender,
-      recipient,
-      toHands: fieldText(dm, "dmToHands"),
-      personalDelivery: fieldBoolean(dm, "dmPersonalDelivery"),
-      substituteDelivery: fieldBoolean(dm, "dmAllowSubstDelivery"),
-      deliveredAt: fieldTimestamp(message, "dmDeliveryTime"),
-      acceptedAt: fieldTimestamp(message, "dmAcceptanceTime"),
-      status: fieldStatus(message),
-      seal,
-    },
+    kind: "message",
+    annotation,
+    envelope,
     files: files.value,
   });
 };
 
-/** Reads one exported message. Never touches the network. */
-export const parseDataBoxMessage = (
+/** Reads one exported message or receipt. Never touches the network. */
+export const parseDataBoxDocument = (
   bytes: Uint8Array,
   limits: DataBoxMessageLimits = DATA_BOX_MESSAGE_LIMITS,
-): Result<ParsedDataBoxMessage, DataBoxMessageParseError> => {
+): Result<ParsedDataBoxDocument, DataBoxMessageParseError> => {
   if (bytes.byteLength > limits.maxFileBytes) {
     return failure("too_large", "The file exceeds the size limit");
   }
@@ -455,28 +533,19 @@ export const parseDataBoxMessage = (
   if (signed.isErr()) {
     return signed;
   }
-  return readMessageXml(signed.value, limits);
+  return readDocumentXml(signed.value, limits);
 };
 
-/** The searchable text of a message: its envelope and file names. */
-export const dataBoxMessageText = ({
-  annotation,
-  envelope,
-  files,
-}: ParsedDataBoxMessage): string =>
-  [
-    annotation,
-    [envelope.sender.name, envelope.sender.boxId].filter(Boolean).join(" "),
-    [envelope.recipient.name, envelope.recipient.boxId]
-      .filter(Boolean)
-      .join(" "),
-    envelope.sender.referenceNumber,
-    envelope.sender.fileMark,
-    envelope.recipient.referenceNumber,
-    envelope.recipient.fileMark,
-    envelope.toHands,
-    envelope.messageId,
-    ...files.map((file) => file.fileName),
-  ]
-    .filter((line) => line !== null && line !== "")
-    .join("\n");
+/** Only a complete message can create a correspondence record and its attachments. */
+export const parseDataBoxMessage = (
+  bytes: Uint8Array,
+  limits: DataBoxMessageLimits = DATA_BOX_MESSAGE_LIMITS,
+): Result<ParsedDataBoxMessage, DataBoxMessageParseError> => {
+  const document = parseDataBoxDocument(bytes, limits);
+  if (document.isErr()) {
+    return document;
+  }
+  return document.value.kind === "message"
+    ? Result.ok(document.value)
+    : failure("not_a_message", "The file holds a delivery receipt");
+};

@@ -2743,6 +2743,7 @@
     "done": "Gatavs",
     "doubleClickToRename": "Veiciet dubultklikšķi, lai pārdēvētu",
     "download": "Lejupielādēt",
+    "downloadOriginal": "Lejupielādēt oriģinālu",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {Pārvietošana atcelta: {itemName}.} one {Pārvietošana atcelta: {itemName}.} other {Pārvietošana atcelta: {itemName}.}}",
       "droppedOn": "{count, plural, zero {Nomešana uz {destinationName} pabeigta: {itemName}.} one {Nomešana uz {destinationName} pabeigta: {itemName}.} other {Nomešana uz {destinationName} pabeigta: {itemName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Kontakts: {name}",
       "deliveredAt": "Piegādāts pastkastē",
       "delivery": "Piegāde",
+      "deliveryEvents": "Piegādes gaita",
+      "deliveryReceipt": "Piegādes apliecinājums",
       "directionUnknown": "Virziens nezināms",
       "messageId": "Ziņas ID",
       "moreContacts": "Ar šo datu pastkasti ir saistītas vēl citas kontaktpersonas.",
@@ -3342,6 +3345,8 @@
       "sent": "Nosūtīta",
       "statedInFile": "Datu pastkastes ziņa (saskaņā ar failu)",
       "toHands": "Personīgi: {name}",
+      "unlinkedFiles": "Lai atvērtu pielikumus, kuriem nav saites, lejupielādējiet sākotnējo ZFO failu.",
+      "unreadable": "Failu neizdevās nolasīt ne kā datu pastkastes ziņojumu, ne kā piegādes apliecinājumu.",
       "uploaded": "Augšupielādēta datu pastkastes ziņa"
     },
     "deliveredBy": "Piegādāja <address>{sender}</address>",

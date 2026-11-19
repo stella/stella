@@ -524,6 +524,7 @@
     "title": "Dokuments",
     "failedTitle": "Šo dokumentu neizdevās atvērt",
     "failure": {
+      "dataBoxUnreadable": "Failu neizdevās nolasīt ne kā datu pastkastes ziņojumu, ne kā piegādes apliecinājumu.",
       "offline": "Jūs esat bezsaistē. Izveidojiet savienojumu ar internetu un mēģiniet vēlreiz.",
       "noFile": "Šim dokumentam vēl nav faila.",
       "failed": "Atverot radās kļūda. Pēc brīža mēģiniet vēlreiz.",
@@ -531,6 +532,7 @@
       "android": "Android lietotnē dokumentus vēl nevar atvērt."
     },
     "retry": "Mēģināt vēlreiz",
+    "openOriginal": "Atvērt oriģinālu",
     "preview": "Atvērt priekšskatījumu",
     "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
     "unrendered": "Šo dokumentu šeit nevar parādīt, taču sistēmas priekšskatījums, iespējams, to atvērs.",

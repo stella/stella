@@ -35,6 +35,7 @@ import {
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
 } from "./conflict-checks";
+import { dataBoxPreviewScalingScenario } from "./data-box-preview";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
@@ -132,6 +133,7 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

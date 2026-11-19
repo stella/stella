@@ -2743,6 +2743,7 @@
     "done": "Done",
     "doubleClickToRename": "Double-click to rename",
     "download": "Download",
+    "downloadOriginal": "Download original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Move cancelled. {itemName} was not moved.} other {Move cancelled. {itemName} were not moved.}}",
       "droppedOn": "{count, plural, one {Dropped {itemName} on {destinationName}.} other {Dropped {itemName} on {destinationName}.}}",
@@ -3330,6 +3331,8 @@
       "contact": "Contact: {name}",
       "deliveredAt": "Delivered to the box",
       "delivery": "Delivery terms",
+      "deliveryEvents": "Delivery events",
+      "deliveryReceipt": "Delivery receipt",
       "directionUnknown": "Direction unknown",
       "messageId": "Message ID",
       "moreContacts": "More contacts match this data box.",
@@ -3342,6 +3345,8 @@
       "sent": "Outgoing",
       "statedInFile": "Data-box message (as stated in the file)",
       "toHands": "To the attention of {name}",
+      "unlinkedFiles": "To open attachments shown without a link, download the original ZFO file.",
+      "unreadable": "This file could not be read as a data-box message or delivery receipt.",
       "uploaded": "Uploaded data-box message"
     },
     "deliveredBy": "Delivered by <address>{sender}</address>",
