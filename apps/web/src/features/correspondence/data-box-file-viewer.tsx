@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import type { DataBoxDeliveryEvent } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -14,6 +15,19 @@ import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 import { CorrespondenceAttachments } from "./correspondence-attachments";
 import { DataBoxEnvelope } from "./data-box-envelope";
+
+/** Receipt events can repeat; the nth event with the same statement keeps its key. */
+const keyedEvents = <TEvent extends DataBoxDeliveryEvent>(
+  events: readonly TEvent[],
+) => {
+  const seen = new Map<string, number>();
+  return events.map((event) => {
+    const statement = JSON.stringify([event.occurredAt, event.description]);
+    const occurrence = (seen.get(statement) ?? 0) + 1;
+    seen.set(statement, occurrence);
+    return { ...event, key: `${statement}#${occurrence}` };
+  });
+};
 
 export const DataBoxFileViewer = ({
   onDownload,
@@ -73,26 +87,24 @@ export const DataBoxFileViewer = ({
                 {t("correspondence.dataBox.deliveryEvents")}
               </h2>
               <ol className="divide-y text-sm">
-                {data.events.map(({ occurredAt, description }, ordinal) => (
-                  <li
-                    className="flex flex-wrap gap-x-3 py-2"
-                    // oxlint-disable-next-line react/no-array-index-key -- Receipt events follow immutable source order and can have identical values.
-                    key={ordinal}
-                  >
-                    {occurredAt && (
-                      <time
-                        className="text-muted-foreground"
-                        dateTime={occurredAt}
-                      >
-                        {format.dateTime(
-                          new Date(occurredAt),
-                          MEDIUM_DATE_SHORT_TIME_FORMAT,
-                        )}
-                      </time>
-                    )}
-                    {description && <bdi dir="auto">{description}</bdi>}
-                  </li>
-                ))}
+                {keyedEvents(data.events).map(
+                  ({ key, occurredAt, description }) => (
+                    <li className="flex flex-wrap gap-x-3 py-2" key={key}>
+                      {occurredAt && (
+                        <time
+                          className="text-muted-foreground"
+                          dateTime={occurredAt}
+                        >
+                          {format.dateTime(
+                            new Date(occurredAt),
+                            MEDIUM_DATE_SHORT_TIME_FORMAT,
+                          )}
+                        </time>
+                      )}
+                      {description && <bdi dir="auto">{description}</bdi>}
+                    </li>
+                  ),
+                )}
               </ol>
             </section>
           )}
