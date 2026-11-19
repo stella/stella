@@ -1,9 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { socialProviderSchema } from "@/components/auth/access-reset.logic";
-import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { redirectToSchema } from "@/lib/redirect";
 import { routeSearchSchema } from "@/route-search-params";
@@ -11,8 +9,9 @@ import {
   loadSocialLinkHint,
   NO_SOCIAL_LINK_HINT,
 } from "@/routes/auth/-components/social-link-hint";
-import { SocialRecoveryPanel } from "@/routes/auth/-components/social-recovery-panel";
-import { reportOAuthCallbackError } from "@/routes/auth/-error-report";
+
+import { AuthErrorPage } from "./-error.page";
+import { AuthErrorPending } from "./-error.pending";
 
 const searchSchema = routeSearchSchema({
   error: v.optional(v.string()),
@@ -34,27 +33,6 @@ export const Route = createFileRoute("/auth/error")({
       }),
     );
   },
-  component: AuthError,
+  component: AuthErrorPage,
+  pendingComponent: AuthErrorPending,
 });
-
-function AuthError() {
-  const t = useTranslations();
-  const search = Route.useSearch({
-    select: ({ error, linkProvider, redirectTo }) => ({
-      error,
-      linkProvider,
-      redirectTo,
-    }),
-  });
-  const session = Route.useRouteContext({
-    select: (context) => context.session,
-  });
-  const hint = Route.useLoaderData();
-  useMountEffect(() => {
-    reportOAuthCallbackError({
-      errorCode: search.error,
-      fallback: t("errors.actionFailed"),
-    });
-  });
-  return <SocialRecoveryPanel {...search} signedIn={!!session} hint={hint} />;
-}

@@ -14,13 +14,14 @@ import type { AppFrameScope } from "./-app-frame-scope";
  *   visitor (a published catalogue entry), so it renders, on the server too,
  *   before the visitor is known; also around a redirect into the member
  *   frame, which shows its target's pending view there.
- * - `none`: the route renders its own shell (sign-in, public law, …), so
+ * - `auth`: the shared sign-in header, introduction and form column.
+ * - `none`: the route renders its own shell (public law, …), so
  *   the root adds nothing.
  * - `unresolved`: the frame depends on who is visiting; read the session and
  *   ask again with `audience`.
  */
 export type AppFrame =
-  "none" | "member" | "public" | "checking" | "neutral" | "unresolved";
+  "auth" | "none" | "member" | "public" | "checking" | "neutral" | "unresolved";
 
 /** Who is visiting, as far as the frame is concerned. A member has a
  *  session and an active organization; anyone else is anonymous, and a
@@ -61,7 +62,12 @@ export const selectAppFrame = ({
   redirectScope,
 }: SelectAppFrameInput): AppFrame => {
   switch (scope) {
+    case APP_FRAME_SCOPE.auth:
+      return "auth";
     case APP_FRAME_SCOPE.none:
+      if (redirectScope === APP_FRAME_SCOPE.auth) {
+        return "auth";
+      }
       // A route that only redirects into the signed-in app (the root, which
       // sends a member to the chat) shows the member frame's skeleton around
       // its target's pending view while it runs: the frame the page lands
@@ -121,6 +127,7 @@ export const frameVisitor = (
     case "checking":
     case "neutral":
     case "unresolved":
+    case "auth":
     case "none":
       return null;
     default: {
