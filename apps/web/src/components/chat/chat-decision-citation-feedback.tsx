@@ -84,7 +84,7 @@ export const UnreadInlineCitation = ({
   originalUrl: string | null | undefined;
   passage: ReactNode;
   read: DecisionCitationRead;
-}) => {
+}): ReactNode => {
   const t = useTranslations();
   if (read.type === "source") {
     return passage;
