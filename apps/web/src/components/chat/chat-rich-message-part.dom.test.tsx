@@ -20,9 +20,13 @@ GlobalRegistrator.register({ url: `${APP_ORIGIN}/chat` });
 // handed: the sandbox that frames the app.
 await mock.module("@mcp-ui/client", () => ({
   AppRenderer: ({ sandbox }: { sandbox: { url: URL } }) => (
-    <div data-app-sandbox={sandbox.url.href} />
+    <output aria-label="App sandbox">{sandbox.url.href}</output>
   ),
 }));
+
+// The web app does not depend on the app bundles package; the stored part
+// carries this URI and the bundle endpoint answers with it.
+const CASE_LAW_RESULTS_URI = "ui://stella/case-law-results";
 
 type BundleAnswer = "ok" | "fails";
 let bundleAnswer: BundleAnswer = "ok";
@@ -37,7 +41,7 @@ globalThis.fetch = Object.assign(
     bundleRequests.push(url);
     return bundleAnswer === "ok"
       ? Response.json({
-          uri: "ui://stella/case-law-results",
+          uri: CASE_LAW_RESULTS_URI,
           html: "<!doctype html><title>Case law</title>",
         })
       : Response.json(
@@ -55,8 +59,6 @@ const { act, cleanup, render, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { buildStellaMcpAppPart } =
   await import("@stll/api-contract/stella-mcp-app");
-const { CASE_LAW_RESULTS_RESOURCE_URI } =
-  await import("@stll/mcp-apps/resource-uri");
 const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { toSafeId } = await import("@/lib/safe-id");
@@ -88,7 +90,7 @@ const built = buildStellaMcpAppPart({
   },
   toolCallId: "call_search_case_law",
   toolName: "search_case_law",
-  uri: CASE_LAW_RESULTS_RESOURCE_URI,
+  uri: CASE_LAW_RESULTS_URI,
 });
 if (Result.isError(built)) {
   panic(built.error);
@@ -122,13 +124,9 @@ describe("stella app parts in a chat thread", () => {
   test("frames a stored app when the browser API shares the page's origin", async () => {
     const { view, fingerprints } = renderPart(appPart);
 
-    const sandbox = await waitFor(() => {
-      const frame = view.container.querySelector("[data-app-sandbox]");
-      expect(frame).not.toBeNull();
-      return frame instanceof HTMLElement
-        ? (frame.dataset.appSandbox ?? "")
-        : "";
-    });
+    const sandbox = await waitFor(
+      () => view.getByLabelText("App sandbox").textContent,
+    );
     expect(new URL(sandbox).origin).toBe("https://api.example.test");
     expect(bundleRequests).toHaveLength(1);
     expect(view.container.textContent).not.toContain(
