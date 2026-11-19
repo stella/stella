@@ -222,7 +222,11 @@ const hungarianIntent = (text: string): StatuteQueryIntent | null => {
   if (act === undefined || others.length > 0) {
     return null;
   }
-  const section = HUNGARIAN_SECTION_RE.exec(text)?.[1];
+  // Compatibility-normalised with whitespace runs as one space, as the act
+  // grammar reads it, so a non-breaking space does not hide the section.
+  const section = HUNGARIAN_SECTION_RE.exec(
+    normalizeUnicode(text, "NFKC").replace(/\s+/gu, " "),
+  )?.[1];
   return {
     type: "act",
     ...hungarianTarget(act),

@@ -55,6 +55,8 @@ const ROMAN_DIGITS = [
 ] as const;
 
 const ROMAN_MAX = 3999;
+/** The highest number a numbered act's series reaches, as the readers bound it. */
+const NUMBERED_ACT_MAX = 99_999;
 
 const EARLIEST_YEAR = 1800;
 const LATEST_YEAR = 9999;
@@ -224,18 +226,29 @@ export const magyarKozlonyWorkPattern = ({
   year: number;
   collection: string | undefined;
 }): string | null => {
-  const roman = romanNumeral(number)?.toLowerCase() ?? null;
-  if (!isActYear(year) || roman === null) {
+  if (
+    !isActYear(year) ||
+    !Number.isSafeInteger(number) ||
+    number < 1 ||
+    number > NUMBERED_ACT_MAX
+  ) {
     return null;
   }
-  const law = `${String(year)}-evi-${roman}-${MAGYAR_KOZLONY_LAW_COLLECTION}`;
+  // Laws are numbered in Roman numerals, which stop at 3999; a numbered act
+  // of a higher number has no law beside it.
+  const roman = romanNumeral(number)?.toLowerCase() ?? null;
+  const law =
+    roman === null
+      ? null
+      : `${String(year)}-evi-${roman}-${MAGYAR_KOZLONY_LAW_COLLECTION}`;
   const numbered = (series: string) =>
     `${String(number)}-${String(year)}-${SIGNED_DAY_PATTERN}-${series}`;
   if (collection === undefined) {
-    return `${URN_PATTERN_PREFIX}(?:${law}|${numbered("[a-z0-9-]+")})$`;
+    const any = numbered("[a-z0-9-]+");
+    return `${URN_PATTERN_PREFIX}(?:${law === null ? any : `${law}|${any}`})$`;
   }
   if (collection === MAGYAR_KOZLONY_LAW_COLLECTION) {
-    return `${URN_PATTERN_PREFIX}${law}$`;
+    return law === null ? null : `${URN_PATTERN_PREFIX}${law}$`;
   }
   return NUMBERED_COLLECTION_RE.test(collection)
     ? `${URN_PATTERN_PREFIX}${numbered(collection)}$`
@@ -263,7 +276,7 @@ const foldCitation = (text: string): string =>
 // The patterns run on folded text, where whitespace is one space, so they
 // spell it literally: two adjacent unbounded quantifiers backtrack.
 const LAW_RE =
-  /(?<![\p{L}\p{N}])(?<year>\d{4}) ?\. ?evi (?<roman>[ivxlcdm]{1,12}) ?\. ?(?:torven|tv\.)/giu;
+  /(?<![\p{L}\p{N}])(?<year>\d{4}) ?\. ?evi (?<roman>[ivxlcdm]{1,15}) ?\. ?(?:torven|tv\.)/giu;
 
 const NUMBERED_RE = new RegExp(
   String.raw`(?<![\p{L}\p{N}/])(?<number>\d{1,5}) ?\/ ?(?<year>\d{4}) ?\.?(?: ?\( ?(?<month>[ivx]{1,4}) ?\. ?(?<day>\d{1,2}) ?\.? ?\))? ?(?<issuer>[a-z]{1,8}\.?(?:[ -][a-z]{1,8}\.?)?) (?<form>${HUNGARIAN_NUMBERED_ACT_FORMS.join("|")})`,
@@ -295,7 +308,7 @@ const readLaw = (groups: Record<string, string | undefined>) => {
 const readNumbered = (
   groups: Record<string, string | undefined>,
 ): HungarianActDesignation | null => {
-  const number = digitsOf(groups["number"], { min: 1, max: 99_999 });
+  const number = digitsOf(groups["number"], { min: 1, max: NUMBERED_ACT_MAX });
   const year = digitsOf(groups["year"], ACT_YEARS);
   const form = groups["form"]?.toLowerCase() ?? "";
   const issuer = groups["issuer"] ?? "";

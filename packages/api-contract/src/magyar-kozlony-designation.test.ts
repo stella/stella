@@ -299,3 +299,30 @@ describe("Magyar Közlöny Work patterns", () => {
     );
   });
 });
+
+describe("Magyar Közlöny numbers past the Roman numerals", () => {
+  test("a numbered act above 3999 keeps its pattern; a law cannot carry that number", () => {
+    const eli = workOf("4000/2020. (IV. 30.) Korm. rendelet") ?? "";
+    for (const collection of ["korm-rendelet", undefined]) {
+      const pattern = magyarKozlonyWorkPattern({
+        number: 4000,
+        year: 2020,
+        collection,
+      });
+      expect(new RegExp(pattern ?? "^$", "u").test(eli)).toBe(true);
+    }
+    expect(
+      magyarKozlonyWorkPattern({
+        number: 4000,
+        year: 2020,
+        collection: "torveny",
+      }),
+    ).toBeNull();
+  });
+
+  test("the longest numeral the printer writes is read back", () => {
+    expect(workOf("1990. évi MMMDCCCLXXXVIII. törvény")).toBe(
+      "urn:hu:magyar-kozlony:1990-evi-mmmdccclxxxviii-torveny",
+    );
+  });
+});

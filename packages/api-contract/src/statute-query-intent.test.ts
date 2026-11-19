@@ -631,6 +631,13 @@ describe("reading a Hungarian entry", () => {
     });
   });
 
+  test("a non-breaking space does not hide the section", () => {
+    expect(parseStatuteQuery("hun", "Ptk.\u00a06:519.\u00a0§")).toMatchObject({
+      type: "act",
+      provision: "6:519. §",
+    });
+  });
+
   test.each([
     "a polgári törvénykönyv",
     "89/2012 Sb.",
