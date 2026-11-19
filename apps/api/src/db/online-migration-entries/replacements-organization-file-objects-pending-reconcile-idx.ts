@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "replacements-organization-file-objects-pending-reconcile-idx",
   revision: 911,
+  lifecycle: "pending",
   type: "replacements",
   values: [
     {

@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-file-lifecycle-constraint-validations",
   revision: 1181,
+  lifecycle: "pending",
   type: "repairs",
   values: [...FILE_LIFECYCLE_CONSTRAINT_VALIDATIONS],
 } satisfies OnlineMigrationEntry;

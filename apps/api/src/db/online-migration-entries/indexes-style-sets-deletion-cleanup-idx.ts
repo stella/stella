@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-style-sets-deletion-cleanup-idx",
   revision: 762,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

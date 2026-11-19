@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-organization-file-objects-active-reconcile-idx",
   revision: 763,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {

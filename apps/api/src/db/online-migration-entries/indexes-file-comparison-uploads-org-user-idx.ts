@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-file-comparison-uploads-org-user-idx",
   revision: 761,
+  lifecycle: "pending",
   type: "indexes",
   values: [
     {
