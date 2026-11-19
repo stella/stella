@@ -34,6 +34,7 @@ import {
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
+import { CITATION_LEAD_IN_ATTRIBUTE } from "@/components/chat/rehype-citation-lead-in";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -129,14 +130,21 @@ type StreamdownMentionLinkProps =
      *  citation chip (a person's own message, not a model's cited source).
      *  References, mentions and citations render as chips either way. */
     externalLinks?: "citation" | "written" | undefined;
+    /** The prose just before the link (`rehypeCitationLeadIn`): an inline
+     *  decision citation drops its court badge when this names the court. */
+    [CITATION_LEAD_IN_ATTRIBUTE]?: string | undefined;
   };
 
 const ReferenceCitationLink = ({
   href,
   children,
   interactive,
+  leadIn,
   workspaceId,
-}: StreamdownMentionLinkProps & { href: string }) => {
+}: Omit<StreamdownMentionLinkProps, typeof CITATION_LEAD_IN_ATTRIBUTE> & {
+  href: string;
+  leadIn: string | undefined;
+}) => {
   const parsed = referenceFromHref(href, getPlainText(children) ?? "", {
     renderWorkspaceId: workspaceId,
   });
@@ -164,6 +172,7 @@ const ReferenceCitationLink = ({
     return (
       <ChatDecisionCitation
         decisionId={decision.locator.ref}
+        leadIn={leadIn}
         passage={children}
         paragraph={decision.paragraph ?? undefined}
         interactive={interactive}
@@ -173,6 +182,7 @@ const ReferenceCitationLink = ({
   if (decision?.locator.type === "route") {
     return (
       <ChatRouteDecisionCitation
+        leadIn={leadIn}
         params={decision.locator.params}
         passage={children}
         paragraph={decision.paragraph ?? undefined}
@@ -189,6 +199,7 @@ const ReferenceCitationLink = ({
       anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
+      leadIn={leadIn}
       linkIconSource={{ kind: "tool-source" }}
       source={source}
       workspaceId={workspaceId}
@@ -204,6 +215,7 @@ export const StreamdownMentionLink = ({
   interactive,
   workspaceId,
   externalLinks = "citation",
+  [CITATION_LEAD_IN_ATTRIBUTE]: leadIn,
   ...props
 }: StreamdownMentionLinkProps) => {
   const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
@@ -269,6 +281,7 @@ export const StreamdownMentionLink = ({
       <ReferenceCitationLink
         href={href}
         interactive={interactive}
+        leadIn={leadIn}
         workspaceId={workspaceId}
       >
         {children}
@@ -297,6 +310,7 @@ export const StreamdownMentionLink = ({
       <ExternalCitationLink
         href={href}
         interactive={interactive}
+        leadIn={leadIn}
         url={httpUrl}
         workspaceId={workspaceId ?? null}
       >
@@ -705,12 +719,14 @@ const ExternalCitationLink = ({
   url,
   workspaceId,
   interactive,
+  leadIn,
 }: {
   children: React.ReactNode;
   href: string;
   url: URL;
   workspaceId: string | null;
   interactive: boolean;
+  leadIn: string | undefined;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
   const inlineLabel = (getPlainText(children) ?? "").trim();
@@ -725,6 +741,7 @@ const ExternalCitationLink = ({
     <LegalCitationLink
       appearance="inline"
       interactive={interactive}
+      leadIn={leadIn}
       externalHref={href}
       // A link the source store does not know came from model text only.
       linkIconSource={

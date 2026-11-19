@@ -18,6 +18,7 @@ import {
   AnswerTreeIds,
   withAnswerLinkIds,
 } from "@/components/ai-elements/message-response-link-ids";
+import { rehypeCitationLeadIn } from "@/components/chat/rehype-citation-lead-in";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
 import { rehypeNumberAnswerLinks } from "@/components/chat/rehype-number-answer-links";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
@@ -63,6 +64,7 @@ export const MessageResponseImpl = memo(
       ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
       ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
       rehypeChatLinks,
+      rehypeCitationLeadIn,
       rehypeNumberAnswerLinks,
     ];
     // Streamdown's internal memo doesn't compare `rehypePlugins`, so
