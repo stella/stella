@@ -20,6 +20,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
@@ -37,6 +38,7 @@ import {
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { corpusProjectionRevisionBuildFailure } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   classifyCorpusProjectionReservationFailureTx,
@@ -57,6 +59,91 @@ const SOURCE_ID = "0198e331-e578-7000-8000-0000000000a1";
 const REVISIONS = 8;
 const READ_CONCURRENCY = 2;
 const EPOCH = 3n;
+
+test("a decision in a language its jurisdiction does not declare is persisted as blocked, naming itself and its language", async () => {
+  const reservedAt = new Date("2026-11-19T13:00:00.000Z");
+  const row = documentRow(REVISIONS + 2);
+  await db.insert(legislationDocuments).values(row);
+  await db.insert(corpusIndexProjectionStates).values({
+    family: TARGET.family,
+    generation: TARGET.generation,
+    entityId: String(row.id),
+    desiredAction: "upsert",
+    desiredEpoch: EPOCH,
+    desiredFingerprint: "b".repeat(64),
+    desiredIndexId: "legislation_v2_cze",
+    updatedAt: reservedAt,
+  });
+  const lease = (
+    await db.transaction(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+          family: TARGET.family,
+          generation: TARGET.generation,
+          scope: { type: "subjects", entityIds: [row.id] },
+          limit: 1,
+          leaseMs: 60_000,
+          testNow: reservedAt,
+          newIntentId: () =>
+            toSafeId<"corpusIndexProjectionIntent">(
+              "0198e331-e578-7000-8000-0000000003b1",
+            ),
+          newLeaseToken: () => "0198e331-e578-7000-8000-0000000003b2",
+        }),
+    )
+  ).at(0);
+  if (lease === undefined) {
+    panic("Expected the revision to be reserved");
+  }
+  const message = `case-law decision ${String(row.id)} of POL is written in "cs", a language its jurisdiction does not declare`;
+  // No retry changes a decision's language: the build failure blocks.
+  const { failure } = corpusProjectionRevisionBuildFailure(
+    lease,
+    { kind: "document_language_undeclared", message },
+    { retryDelayMs: 5000, payloadRetryLimit: 3 },
+  );
+  expect(failure.status).toBe("blocked");
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await classifyCorpusProjectionReservationFailureTx(
+          asTestRaw<Transaction>(tx),
+          {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+            failure,
+            testNow: reservedAt,
+          },
+        ),
+    ),
+  ).toBe("blocked");
+
+  const [state] = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+      lastFailureMessage: corpusIndexProjectionStates.lastFailureMessage,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, String(row.id)));
+  expect(state).toEqual({
+    workStatus: "blocked",
+    lastFailureKind: "document_language_undeclared",
+    lastFailureMessage: message,
+  });
+
+  // The other cases count this generation's states; leave it as found.
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.entityId, String(row.id)));
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, String(row.id)));
+  await db
+    .delete(legislationDocuments)
+    .where(eq(legislationDocuments.id, row.id));
+});
 
 /** Refused by `readCorpusBytesAt` on its declared length, before any request. */
 const OVERSIZE_PACKED_KEY = `pack:legal-corpus/pack.zst@0+${CORPUS_TRANSFER_MAX_BYTES + 1}#${"a".repeat(64)}`;

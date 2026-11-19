@@ -5,6 +5,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import policy from "../route-pending-component-policy.json" with { type: "json" };
+import unmarkedList from "../route-pending-component-unmarked.json" with { type: "json" };
 
 // The pending-module rule checks each `*.pending.tsx` file's own imports; it
 // trusts the pending-safe modules to stay light. This walks every such
@@ -77,11 +78,14 @@ for (const entry of policy.pendingSafeModules) {
   });
 }
 
-// The pending halves the cold-load frame draws (they mark a view with
-// `framePendingView`), so a `.logic` module or a re-export they pull in is
-// walked too, not only the allowlisted modules. Other pending views render
-// inside the providers and are not walked.
+// The pending modules the cold-load frame may draw (every one but those on
+// the unmarked list, and any that marks a view with `framePendingView`), so
+// a `.logic` module or a re-export they pull in is walked too, not only the
+// allowlisted modules. Listed modules render inside the providers and are
+// not walked.
+const UNMARKED: ReadonlySet<string> = new Set(unmarkedList);
 const isFrameModule = (file: string) =>
+  !UNMARKED.has(repoRelativePath(REPOSITORY_ROOT, file)) ||
   readFileSync(file, "utf-8").includes("framePendingView(");
 const FRAME_MODULES = [
   ...new Bun.Glob("**/*.pending.tsx").scanSync({

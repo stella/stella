@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import Base from "../layouts/Base.astro";
 import ProductMediaFrame from "./ProductMediaFrame.astro";
 import McpProofSection from "./McpProofSection.astro";
+import PublicLawHubLinks from "./PublicLawHubLinks.astro";
 import LandingFooter from "./LandingFooter.astro";
 import SetupSnippet from "./SetupSnippet.astro";
 import Prose from "./Prose.astro";
@@ -398,6 +399,8 @@ const faqJsonLd = {
       }
 
       {product.slug === "cli-mcp" && <McpProofSection />}
+
+      {product.slug === "public-data" && <PublicLawHubLinks locale={locale} />}
 
       {/* ——— FAQ ——— */}
       <section class="px-6 py-10 lg:py-12">

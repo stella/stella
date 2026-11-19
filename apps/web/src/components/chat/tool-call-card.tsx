@@ -42,6 +42,7 @@ import {
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
 import type { ChatAnswerCitations } from "@/components/chat/source-chips.logic";
+import { skillMdName } from "@/components/chat/tool-approval-summary";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   STEP_DIGEST_NOT_RECORDED_KEY,
@@ -254,6 +255,9 @@ const getToolSubtitle = ({
       return "SKILL.md";
     case "update-current-skill-resource":
       return getStringInputValue({ key: "path", part }) ?? null;
+    case "save_skill_package":
+    case "validate_skill_package":
+      return skillMdName(getStringInputValue({ key: "skillMd", part }));
     case "fetch_url": {
       const url = getStringInputValue({ key: "url", part });
       if (!url) {

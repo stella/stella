@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import postcss from "postcss";
 
 import { MCP_APPS } from "../src/manifest";
+import { withStyleSources } from "./style-sources";
 
 test("MCP styles ignore utilities in generated bundles and non-production sources", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "mcp-app-styles-"));
@@ -28,6 +29,11 @@ test("MCP styles ignore utilities in generated bundles and non-production source
       '<div className="leading-3.5" />',
     );
     writeFileSync(path.join(uiRoot, "badge.tsx"), '<div className="px-1" />');
+    // A UI module no app imports stays out of every app's stylesheet.
+    writeFileSync(
+      path.join(uiRoot, "sidebar.tsx"),
+      '<div className="mt-98" />',
+    );
 
     const tailwindPath = fileURLToPath(
       import.meta.resolve("tailwindcss/index.css"),
@@ -35,12 +41,13 @@ test("MCP styles ignore utilities in generated bundles and non-production source
       .split(path.sep)
       .join("/");
     // Resolve dependencies outside the fixture while retaining the real scan policy.
-    const input = readFileSync(
+    const scanPolicy = readFileSync(
       path.join(import.meta.dirname, "../src/shared/style.css"),
       "utf-8",
     )
       .replace('"tailwindcss"', () => JSON.stringify(tailwindPath))
       .replace('@import "@stll/ui/theme.css";', "");
+    const input = withStyleSources(scanPolicy, ["packages/ui/src/badge.tsx"]);
     writeFileSync(stylePath, input);
     const compile = async () =>
       (await postcss([tailwindcss()]).process(input, { from: stylePath })).css;
@@ -48,6 +55,7 @@ test("MCP styles ignore utilities in generated bundles and non-production source
     expect(clean).toContain(".leading-3\\.5");
     expect(clean).toContain(".px-1");
     expect(clean).not.toContain(".leading-3 {");
+    expect(clean).not.toContain(".mt-98");
 
     for (const sourceRoot of [
       path.join(appsRoot, "case-law-results"),

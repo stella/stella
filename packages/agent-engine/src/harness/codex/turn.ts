@@ -345,6 +345,8 @@ export class CodexTurnSession {
   /** Handlers for the process; messages before `begin` are held. */
   readonly handlers: AppServerHandlers = {
     notification: (method, params) => {
+      // Whatever the app-server says, pinned or not, shows it is alive.
+      this.lifecycle.heard();
       if (!isCodexNotificationMethod(method)) {
         return;
       }

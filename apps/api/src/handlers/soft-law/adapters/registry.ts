@@ -14,6 +14,8 @@ import type {
 
 import { bfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
+import { gfrAdapter, mfAdapter } from "./financnisprava";
+import { MV_PSMV_PAGE_URL, mvPsmvAdapter } from "./mv-psmv";
 import { suipAdapter } from "./suip";
 import { uoouCzAdapter } from "./uoou-cz";
 import { uoouSkAdapter } from "./uoou-sk";
@@ -90,6 +92,43 @@ export const SOFT_LAW_ADMISSIONS = {
     },
     // The site states no reuse terms beyond its copyright footer.
     reuseNotice: "https://suip.gov.cz/",
+  },
+  "cz-gfr": {
+    state: "registered",
+    adapter: gfrAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution:
+        "Generální finanční ředitelství; https://financnisprava.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-gfr"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice:
+      "https://financnisprava.gov.cz/cs/dane/legislativa-a-metodika/pokyny-d",
+  },
+  "cz-mf": {
+    state: "registered",
+    adapter: mfAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Ministerstvo financí; https://financnisprava.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-mf"]),
+    },
+    reuseNotice:
+      "https://financnisprava.gov.cz/cs/dane/legislativa-a-metodika/pokyny-mf",
+  },
+  "cz-mv-psmv": {
+    state: "registered",
+    adapter: mvPsmvAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Ministerstvo vnitra; https://mv.gov.cz",
+      // The registered row records the listing decision; a permission named
+      // in the deployment widens serving without rewriting the row.
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-mv-psmv"]),
+    },
+    // The page itself states that the závěry may be used for non-commercial purposes only.
+    reuseNotice: MV_PSMV_PAGE_URL,
   },
   "at-dsb": unverified,
   "be-apd": unverified,

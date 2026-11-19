@@ -186,6 +186,7 @@
       "save_document": "Uložit dokument",
       "save_matter": "Uložit spis",
       "save_playbook": "Uložit playbook",
+      "save_skill_package": "Uložit dovednost",
       "save_task": "Uložit úkol",
       "save_template": "Uložit vzor",
       "save_time_entry": "Uložit časový záznam",
@@ -208,6 +209,7 @@
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
+      "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
     },
     "toolResearch": {
@@ -529,6 +531,7 @@
     "title": "Dokument",
     "failedTitle": "Dokument nelze otevřít",
     "failure": {
+      "dataBoxUnreadable": "Soubor se nepodařilo přečíst jako datovou zprávu ani jako doručenku.",
       "offline": "Jste offline. Připojte se k internetu a zkuste to znovu.",
       "noFile": "Tento dokument zatím nemá soubor.",
       "failed": "Při otevírání se něco pokazilo. Zkuste to za chvíli znovu.",
@@ -536,6 +539,7 @@
       "android": "V aplikaci pro Android zatím dokumenty otevřít nelze."
     },
     "retry": "Zkusit znovu",
+    "openOriginal": "Otevřít originál",
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "unrendered": "Tento dokument zde nelze zobrazit, systémový náhled ho ale možná otevře.",

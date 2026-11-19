@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { EmptyFilter } from "drizzle-orm/relations";
 
+import { legalFileFormat } from "@stll/api-contract/document-format";
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import type { rootDb, Transaction } from "@/api/db/root";
@@ -299,6 +300,13 @@ const resolveCurrentExtractedRowsFromDatabase = async (
         ...current,
         currentVersionId: version.id,
         sourceFieldId: sourceField.id,
+        legalFormat:
+          sourceField.content.type === "file"
+            ? legalFileFormat(
+                sourceField.content.mimeType,
+                sourceField.content.fileName,
+              )
+            : undefined,
         name: entity.name,
       },
     ];
@@ -331,6 +339,96 @@ export const loadCurrentExtractedSources = async (
   (await resolveCurrentExtractedRowsFromDatabase(database, options)).map(
     ({ ciphertext, iv, ...provenance }) => provenance,
   );
+
+/** Registered legal readers can open the live source before its first text projection exists. */
+export const loadAgentDocumentSources = async (
+  database: RlsCurrentContentDb,
+  options: LoadCurrentExtractedContentsOptions,
+) => {
+  const projected = (await loadCurrentExtractedSources(database, options)).map(
+    (row) => ({
+      entityId: row.entityId,
+      name: row.name,
+      sourceFieldId: row.sourceFieldId,
+      workspaceId: row.workspaceId,
+      currentVersionId: row.currentVersionId,
+      legalFormat: row.legalFormat,
+    }),
+  );
+  const found = new Set(projected.map(({ entityId }) => entityId));
+  const missing = options.entityIds.filter((id) => !found.has(id));
+  if (!missing.length || !options.workspaceIds.length) {
+    return projected;
+  }
+  const rows = await database.query.entities.findMany({
+    where: {
+      id: { in: missing },
+      workspaceId: { in: [...options.workspaceIds] },
+    },
+    columns: { id: true, name: true, workspaceId: true },
+    with: {
+      workspace: { columns: { organizationId: true, status: true } },
+      extractedContent: {
+        columns: {
+          sourceEntityVersionId: true,
+          sourceFileId: true,
+          sourceFieldId: true,
+          sourceSha256Hex: true,
+        },
+      },
+      currentVersion: {
+        columns: { id: true, deletedAt: true },
+        with: {
+          fields: {
+            columns: { id: true, content: true },
+            limit: LIMITS.propertiesCount,
+          },
+        },
+      },
+    },
+    limit: missing.length,
+  });
+  for (const {
+    id,
+    name,
+    workspaceId,
+    workspace,
+    extractedContent: extracted,
+    currentVersion,
+  } of rows) {
+    if (
+      workspace?.organizationId !== options.organizationId ||
+      workspace.status === WORKSPACE_STATUS.deleting ||
+      !currentVersion ||
+      currentVersion.deletedAt !== null
+    ) {
+      continue;
+    }
+    const file = resolveCurrentFileSourceField({
+      currentVersionId: currentVersion.id,
+      extracted,
+      fields: currentVersion.fields,
+    });
+    if (file?.content.type !== "file") {
+      continue;
+    }
+    const format = legalFileFormat(
+      file.content.mimeType,
+      file.content.fileName,
+    );
+    if (format) {
+      projected.push({
+        entityId: id,
+        name,
+        sourceFieldId: file.id,
+        workspaceId,
+        currentVersionId: currentVersion.id,
+        legalFormat: format,
+      });
+    }
+  }
+  return projected;
+};
 
 export const loadCurrentExtractedContents = async (
   database: RlsCurrentContentDb,

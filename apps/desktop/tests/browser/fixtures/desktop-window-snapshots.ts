@@ -55,13 +55,14 @@ export const DICTATION_READY = {
 } as const satisfies DictationSnapshot;
 
 /** Dictation in Settings at its tallest: stella AI with a model whose
- *  provider keeps the audio, cleanup with both context switches, and the
- *  speech model still on this computer. */
+ *  provider keeps the audio, cleanup with both context switches, custom
+ *  words, and the speech model still on this computer. */
 export const SETTINGS_DICTATION = {
   available: true,
   cleanup: true,
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
+  customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
   destination: "cloud",
   enabled: true,
   failure: null,

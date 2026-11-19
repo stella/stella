@@ -186,6 +186,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -208,6 +209,7 @@
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
     },
     "toolResearch": {
@@ -529,6 +531,7 @@
     "title": "Documento",
     "failedTitle": "No se pudo abrir este documento",
     "failure": {
+      "dataBoxUnreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "offline": "No tiene conexión. Conéctese a internet y vuelva a intentarlo.",
       "noFile": "Este documento aún no tiene archivo.",
       "failed": "Algo salió mal al abrirlo. Vuelva a intentarlo en un momento.",
@@ -536,6 +539,7 @@
       "android": "Los documentos aún no se pueden abrir en la app para Android."
     },
     "retry": "Reintentar",
+    "openOriginal": "Abrir original",
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",

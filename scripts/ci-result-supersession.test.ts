@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
@@ -19,7 +20,7 @@ import { renderResultInputs } from "./ci-result-inputs";
 // when a newer code run superseded it, and then only as a pass-through; a
 // metadata run mirrors only a code run's evaluated success.
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 const workflow = v.parse(
   v.object({
     jobs: v.record(

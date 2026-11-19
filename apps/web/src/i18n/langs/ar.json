@@ -1233,6 +1233,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "البحث غير متاح مؤقتًا"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "ابحث برقم القضية أو معرّف ECLI للقرار، إن كان معروفًا.",
+        "message": "لم يُعثر على قرار يطابق هذا المرجع في مجموعة الأحكام تمامًا."
+      },
       "noHits": {
         "hint": "جرّب كلمات أقل أو كلمات مختلفة: المصطلحات التي يستخدمها الحكم، لا الجملة التي يُطرح بها السؤال.",
         "message": "لا شيء يطابق الكلمات التي اشترطها هذا البحث."
@@ -2121,6 +2132,7 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
@@ -2227,7 +2239,6 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
-      "harnessModels": "نماذج {harness}",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2237,7 +2248,6 @@
       "localFolderSelection": "حاسوبك · {harness} · {folder}",
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
-      "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
@@ -2325,7 +2335,6 @@
     "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
-    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
@@ -2336,7 +2345,6 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
-    "tabToAsk": "→ للسؤال: «{prompt}»",
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",
@@ -2427,6 +2435,7 @@
       "save_document": "حفظ المستند",
       "save_matter": "حفظ الملف القانوني",
       "save_playbook": "حفظ دليل المراجعة",
+      "save_skill_package": "حفظ المهارة",
       "save_task": "حفظ المهمة",
       "save_template": "حفظ القالب",
       "save_time_entry": "حفظ إدخال الوقت",
@@ -2455,6 +2464,7 @@
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "user_message": "أُرسلت أثناء عمل الوكيل",
+      "validate_skill_package": "التحقق من المهارة",
       "web_search": "البحث على الويب"
     },
     "toolCall": {
@@ -2758,6 +2768,7 @@
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
+    "downloadOriginal": "تنزيل الملف الأصلي",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",
       "droppedOn": "{count, plural, zero {تم إفلات {itemName} على {destinationName}.} one {تم إفلات {itemName} على {destinationName}.} two {تم إفلات {itemName} على {destinationName}.} few {تم إفلات {itemName} على {destinationName}.} many {تم إفلات {itemName} على {destinationName}.} other {تم إفلات {itemName} على {destinationName}.}}",
@@ -3345,6 +3356,8 @@
       "contact": "جهة الاتصال: {name}",
       "deliveredAt": "سُلّمت إلى الصندوق",
       "delivery": "التسليم",
+      "deliveryEvents": "سجلّ التسليم",
+      "deliveryReceipt": "إيصال التسليم",
       "directionUnknown": "الاتجاه غير معروف",
       "messageId": "معرّف الرسالة",
       "moreContacts": "هناك جهات اتصال أخرى مرتبطة بصندوق البيانات هذا.",
@@ -3357,6 +3370,8 @@
       "sent": "مُرسلة",
       "statedInFile": "رسالة صندوق البيانات (كما وردت في الملف)",
       "toHands": "لعناية {name}",
+      "unlinkedFiles": "لفتح المرفقات التي تظهر من دون رابط، نزّل ملف ZFO الأصلي.",
+      "unreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "uploaded": "رسالة صندوق بيانات مرفوعة"
     },
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
@@ -4059,6 +4074,12 @@
     "versionCreatedDescription": "تم إنشاء الإصدار {versionNumber}. يمكن للجميع متابعة التحرير.",
     "versionCreatedTitle": "تم إنشاء الإصدار",
     "viewOnly": "عرض فقط"
+  },
+  "guidance": {
+    "notCaseLaw": "إرشادات صادرة عن جهة تنظيمية. هذا ليس حكمًا قضائيًا.",
+    "openAtPublisher": "فتح لدى الناشر",
+    "source": "المصدر: {attribution}",
+    "textUnavailable": "نص هذا المستند غير متاح هنا. اقرأه لدى الناشر."
   },
   "guides": {
     "action": {
@@ -6328,6 +6349,7 @@
     "compareUnstructured": "إحدى الصيغتين متاحة كنص عادي فقط، لذا تتعذر المقارنة بينهما.",
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
+    "compareWithPreviousWording": "المقارنة مع الصيغة السابقة",
     "compareWithVersion": "المقارنة مع {version}",
     "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
@@ -6341,6 +6363,7 @@
       "withdrawn": "لم يعد الناشر يدرجه"
     },
     "inForceSince": "نافذ منذ {date}",
+    "inForceSinceAtLeast": "نافذ منذ {date} على الأقل",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "قرار رائد",
     "leadingDecisionsExplanation": "أول إشارة في كل قرار، مرتبة حسب حجية الاستشهاد: الاستشهادات الواردة الموزونة، مع مراعاة مرتبة المحكمة ودلالة الاستشهاد وحداثته.",
@@ -6351,6 +6374,7 @@
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
     "pendingChanges": "التعديلات المرتقبة",
     "pendingChangesIncomplete": "قد لا تتضمن بيانات الجهة الناشرة جميع التعديلات المرتقبة.",
+    "provisionAbsentVersions": "{count, plural, zero {غير واردة في هذه الصيغ من القانون} one {غير واردة في هذه الصيغة من القانون} two {غير واردة في هاتين الصيغتين من القانون} few {غير واردة في هذه الصيغ الـ# من القانون} many {غير واردة في هذه الصيغ الـ# من القانون} other {غير واردة في هذه الصيغ الـ# من القانون}}",
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
@@ -6361,7 +6385,14 @@
     "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "provisionRunAlsoFrom": "وأيضًا اعتبارًا من {date}",
+    "provisionRunShowVersions": "عرض صيغ القانون للفترة {range}",
+    "provisionRunUnchanged": "{count, plural, zero {دون تغيير في # صيغة من صيغ القانون} one {دون تغيير في صيغة واحدة من صيغ القانون} two {دون تغيير في صيغتين من صيغ القانون} few {دون تغيير في # صيغ من صيغ القانون} many {دون تغيير في # صيغة من صيغ القانون} other {دون تغيير في # صيغة من صيغ القانون}}",
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
+    "provisionVersionsAll": "جميع صيغ القانون",
+    "provisionWordingAdded": "مادة جديدة",
+    "provisionWordingChanged": "معدَّلة",
+    "provisionWordingEarliest": "أقدم صيغة متاحة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchLabel": "البحث في التشريعات",

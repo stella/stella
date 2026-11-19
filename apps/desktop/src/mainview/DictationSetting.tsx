@@ -35,6 +35,7 @@ import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import {
@@ -68,6 +69,9 @@ export type DictationSnapshot = {
   cloudAvailable: boolean;
   /** The stella AI model the user picked; null: the region's default. */
   cloudModel: string | null;
+  /** The speaker's custom words, kept on this computer for the dictation
+   *  account. */
+  customWords: string[];
   /** Where speech is transcribed: always this computer while stella AI is
    *  not available. */
   destination: DictationDestinationValue;
@@ -120,6 +124,11 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
+
+/** Custom words reach stella AI transcription and AI cleanup only; with
+ *  neither they change nothing, so they are hidden. */
+const customWordsHaveEffect = (snapshot: DictationSnapshot): boolean =>
+  snapshot.cleanup || snapshot.destination === "cloud";
 
 /** Orders the snapshots the native side answers with. Each read or change
  *  takes a ticket as it starts; an answer is shown only when no answer to a
@@ -328,6 +337,9 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
     await change("dictation_set_cloud_model", { modelId });
   };
 
+  const setCustomWords = async (words: string[]) =>
+    await change("dictation_set_custom_words", { words });
+
   const download = async () => {
     await change("dictation_download_model");
   };
@@ -479,6 +491,12 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
               />
             )}
           </SettingsGroup>
+          {customWordsHaveEffect(snapshot) && (
+            <DictationCustomWords
+              onChange={setCustomWords}
+              words={snapshot.customWords}
+            />
+          )}
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
@@ -505,7 +523,47 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           )}
         </>
       )}
+      <TranscribeRecordingGroup />
     </div>
+  );
+};
+
+/** Where a recording on disk is transcribed: its own window, offered
+ *  wherever dictation is, whether or not the shortcut is on. */
+const TranscribeRecordingGroup = () => {
+  const t = useTranslations("dictation.transcribeRecording");
+  const [openFailed, setOpenFailed] = useState(false);
+  const open = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("transcribe_open"),
+    );
+    setOpenFailed(Result.isError(result));
+  };
+  return (
+    <SettingsGroup>
+      <SettingsRow
+        description={t("description")}
+        id="dictation-transcribe-recording"
+        title={t("title")}
+      >
+        <Button
+          onClick={() => {
+            void open();
+          }}
+          variant="outline"
+        >
+          {t("open")}
+        </Button>
+      </SettingsRow>
+      {openFailed ? (
+        <li
+          className="text-destructive-foreground px-4 pb-3 text-xs"
+          role="alert"
+        >
+          {t("failed")}
+        </li>
+      ) : null}
+    </SettingsGroup>
   );
 };
 

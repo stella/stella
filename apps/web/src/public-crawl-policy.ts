@@ -1,3 +1,5 @@
+import { createServerOnlyFn } from "@tanstack/react-start";
+
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
@@ -99,13 +101,22 @@ const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
     (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
   );
 
+/**
+ * The catalogue's tool slugs. Only the server lists tool pages (robots.txt,
+ * the tools sitemap and a document's cache headers); the browser asks only
+ * about law pages, so the catalogue stays out of the startup bundle.
+ */
+const catalogueToolSlugs = createServerOnlyFn((): readonly string[] =>
+  loadCatalogue().map(({ slug }) => slug),
+);
+
 export const publicToolCrawlPaths = (
   toolsBasePath: PublicCrawlOptions["toolsBasePath"],
 ): readonly `/${string}`[] => [
   toolsBasePath,
   `${toolsBasePath}/contribute`,
-  ...loadCatalogue().map(
-    ({ slug }): `/${string}` => `${toolsBasePath}/${slug}`,
+  ...catalogueToolSlugs().map(
+    (slug): `/${string}` => `${toolsBasePath}/${slug}`,
   ),
 ];
 
@@ -169,4 +180,48 @@ export const isPublicLawPathIndexable = (
     publicLawCrawlAllowed,
     publicToolsCrawlAllowed: false,
     toolsBasePath: "/tools",
+  });
+
+const CRAWL_URL_BASE = "https://crawl.invalid";
+
+/**
+ * Whether a URL carries a query delimiter before its fragment. A bare
+ * trailing `?` leaves `URL.search` empty, yet robots.txt's `?` rule matches
+ * it, so the delimiter itself decides.
+ */
+export const hasPublicLawQuery = (href: string): boolean =>
+  (href.split("#", 1).at(0) ?? "").includes("?");
+
+/**
+ * The same answer for a whole URL a page is served at. A query string makes
+ * any law page a search, filter or paging variant of a query-free page, so it
+ * is never indexable: robots.txt blocks it (see `publicCrawlRobotsLines`) and
+ * its head says `noindex`, pointing at the hub it varies.
+ */
+export const isPublicLawUrlIndexable = (
+  href: string,
+  publicLawCrawlAllowed: boolean,
+): boolean => {
+  const url = new URL(href, CRAWL_URL_BASE);
+  return (
+    !hasPublicLawQuery(href) &&
+    isPublicLawPathIndexable(url.pathname, publicLawCrawlAllowed)
+  );
+};
+
+/**
+ * robots.txt's path rules for the rules `createPublicCrawlRules` built. A law
+ * subtree allows its query-free URLs only: the `Disallow: <subtree>/*?` line
+ * is longer than the subtree's `Allow`, so it wins under longest-match
+ * precedence.
+ */
+export const publicCrawlRobotsLines = (
+  rules: readonly PublicCrawlRule[],
+): string[] =>
+  rules.flatMap(({ path, scope }) => {
+    if (scope === "exact") {
+      return [`Allow: ${path}$`];
+    }
+    const queryRule = path.startsWith("/law/") ? [`Disallow: ${path}/*?`] : [];
+    return [...queryRule, `Allow: ${path}/`, `Allow: ${path}$`];
   });

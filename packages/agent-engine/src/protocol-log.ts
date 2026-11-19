@@ -422,6 +422,12 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
       "auto",
     ]),
   },
+  set_model: { model: OPAQUE },
+  apply_flag_settings: {
+    settings: object({
+      effortLevel: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
+    }),
+  },
   stop_task: { task_id: IDENTIFIER },
 };
 
@@ -572,6 +578,17 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
   conversation_reset: shape({}),
   active_goal: shape({}),
   keep_alive: shape({}),
+  command_lifecycle: shape({
+    command_uuid: IDENTIFIER,
+    state: vocabulary([
+      "queued",
+      "started",
+      "completed",
+      "cancelled",
+      "discarded",
+      "refused",
+    ]),
+  }),
 };
 
 // The CLI writes every type it knows; `items.ts` decides what each means.

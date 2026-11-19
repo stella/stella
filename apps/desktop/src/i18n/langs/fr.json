@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Nécessite une attention",
     "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon",
-    "reconnectAccount": "Se reconnecter à stella web…"
+    "reconnectAccount": "Se reconnecter à stella web…",
+    "transcribeRecording": "Transcrire un enregistrement…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
@@ -653,10 +654,22 @@
     },
     "language": {
       "title": "Langue de dictée",
-      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur.",
+      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur. S’il y en a plusieurs, chaque mot est reconnu dans la langue où vous le prononcez.",
       "automatic": "Automatique",
       "automaticWith": "Automatique ({languages})",
       "noResults": "Aucune langue trouvée"
+    },
+    "customWords": {
+      "group": "Mots personnalisés",
+      "title": "Mots et noms que stella doit écrire correctement",
+      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Le modèle vocal de cet ordinateur ne les utilise pas.",
+      "count": "{count, number} sur {limit, number}",
+      "input": "Ajouter un mot ou un nom",
+      "add": "Ajouter",
+      "remove": "Retirer {word}",
+      "duplicate": "Ce mot figure déjà dans la liste.",
+      "full": "La liste contient au plus {limit, number} mots. Retirez-en un pour en ajouter un autre.",
+      "failed": "La liste n’a pas pu être enregistrée. Réessayez."
     },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
     "speechModel": "Modèle vocal",
@@ -686,7 +699,18 @@
       "passwordField": "Un champ de mot de passe est actif : la dictée n'a été ni conservée ni saisie.",
       "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle."
     },
-    "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers."
+    "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers.",
+    "transcribeRecording": {
+      "title": "Transcrire un enregistrement",
+      "description": "Convertit en texte un fichier de dictaphone, un mémo vocal ou l’enregistrement d’une réunion jusqu’à 4 heures.",
+      "open": "Ouvrir",
+      "failed": "Impossible d’ouvrir la fenêtre. Réessayez."
+    },
+    "preview": {
+      "label": "Ce que vous avez dicté jusqu’ici",
+      "listening": "Écoute…",
+      "finishing": "Finalisation…"
+    }
   },
   "shortcut": {
     "title": "Raccourci du presse-papiers",
@@ -963,6 +987,94 @@
       "network_folder": "Ce dossier se trouve sur un partage réseau. Liez un dossier du disque de cet ordinateur.",
       "protected": "Ce dossier contient les données de stella ou un dossier de compétences : l'agent ne peut donc pas y travailler.",
       "unreadable": "Ce dossier n'a pas pu être lu."
+    }
+  },
+  "keepAwake": {
+    "title": "Maintenir éveillé",
+    "enabled": "Maintenir cet ordinateur éveillé pendant que les agents travaillent",
+    "description": "Tant qu'un agent travaille sur cet ordinateur, celui-ci ne se met pas en veille par inactivité, pour que les longues tâches continuent. L'écran peut toujours s'éteindre. Un Mac portable se met tout de même en veille quand vous fermez son écran.",
+    "onBattery": "Aussi sur batterie",
+    "onBatteryDescription": "Si cette option est désactivée, l'ordinateur se met en veille comme d'habitude sur batterie, même pendant qu'un agent travaille.",
+    "errorSave": "Impossible d'enregistrer ce réglage. Réessayez."
+  },
+  "transcribe": {
+    "title": "Transcrire un enregistrement",
+    "retry": "Réessayer",
+    "drop": {
+      "title": "Déposez un enregistrement ici",
+      "release": "Relâchez pour transcrire",
+      "description": "Fichiers de dictaphone, mémos vocaux, messages vocaux, enregistrements de réunion ou le son d’une vidéo.",
+      "choose": "Choisir un fichier",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR et vidéo MP4 ou MOV. Jusqu’à 4 heures.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR et vidéo MP4 ou MOV. Jusqu’à 4 heures."
+    },
+    "destination": {
+      "title": "Transcrire avec",
+      "thisComputer": "Cet ordinateur",
+      "cloud": "stella AI",
+      "localDescription": "L’enregistrement reste sur cet ordinateur.",
+      "cloudDescription": "Le son est envoyé à stella et au fournisseur du modèle choisi dans les paramètres de Dictée pour être transcrit. stella ne le conserve pas.",
+      "cloudDescriptionModel": "Le son est envoyé à stella et au fournisseur de {model} pour être transcrit. stella ne le conserve pas.",
+      "localMissing": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, pour transcrire sur cet ordinateur.",
+      "localMissingCloud": "Téléchargez le modèle vocal dans Paramètres, sous Dictée, ou transcrivez avec stella AI.",
+      "retainsData": "{provider} conserve le son et la transcription de tout ce qui est envoyé à ce modèle. Ne transcrivez pas avec lui d’enregistrements confidentiels ou de clients, ou choisissez un autre modèle dans Paramètres, sous Dictée.",
+      "modelFailed": "Le modèle de stella AI n’a pas pu être lu : stella AI ne peut pas transcrire pour le moment. Réessayez ou transcrivez sur cet ordinateur."
+    },
+    "matter": {
+      "title": "Dossier",
+      "description": "Ses noms et numéros de dossier s’écrivent correctement, et vous pouvez y enregistrer le texte.",
+      "none": "Aucun",
+      "search": "Rechercher des dossiers",
+      "clearSearch": "Effacer la recherche",
+      "searching": "Recherche…",
+      "noMatters": "Aucun dossier trouvé",
+      "failed": "Impossible de charger les dossiers. Réessayez."
+    },
+    "note": "Fichiers DSS et DS2 des dictaphones Philips ou Olympus : enregistrez-les d’abord en WAV dans SpeechExec ou ODMS.",
+    "refused": {
+      "unsupported": "stella ne peut pas lire {name}. Choisissez un enregistrement dans l’un des formats ci-dessus.",
+      "tooLong": "{name} dure plus de 4 heures. Divisez-le d’abord en enregistrements plus courts.",
+      "unreadable": "Impossible de lire {name}. Le fichier est peut-être endommagé ; exportez-le à nouveau et réessayez."
+    },
+    "kept": {
+      "ready": "{name} est prêt. Vérifiez ci-dessus comment il sera transcrit, puis lancez.",
+      "start": "Lancer la transcription"
+    },
+    "failure": {
+      "start": "Impossible de lancer la transcription. Réessayez.",
+      "load": "Cette fenêtre n’a pas pu se charger. Réessayez.",
+      "modelMissing": "Le modèle vocal n’est pas sur cet ordinateur. Téléchargez-le dans Paramètres, sous Dictée.",
+      "thisComputer": "Le modèle vocal de cet ordinateur n’a pas pu transcrire une partie de l’enregistrement. Le texte obtenu jusqu’ici est conservé.",
+      "cloud": "stella AI n’a pas pu transcrire une partie de l’enregistrement. Le texte obtenu jusqu’ici est conservé ; réessayez plus tard.",
+      "unreadable": "L’enregistrement n’a pas pu être lu jusqu’au bout. Le texte obtenu jusqu’ici est conservé.",
+      "tooLong": "L’enregistrement dure plus de 4 heures. Le texte obtenu jusqu’ici est conservé."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Cet ordinateur",
+      "cloud": "stella AI, {model}",
+      "matter": "dossier {name}",
+      "copy": "Copier",
+      "copied": "Copié",
+      "saveAs": "Enregistrer sous",
+      "saveWithTimestamps": "Texte avec horodatage (.txt)",
+      "saveWithoutTimestamps": "Texte sans horodatage (.txt)",
+      "saveToMatter": "Enregistrer dans le dossier",
+      "savingToMatter": "Enregistrement…",
+      "savedToMatter": "Enregistré dans {matter} sous {fileName}.",
+      "saveToMatterFailed": "Impossible d’enregistrer la transcription dans le dossier. Réessayez.",
+      "saveFailed": "Impossible de copier ou d’enregistrer la transcription. Réessayez.",
+      "noSpeech": "Aucune parole n’a été trouvée dans cet enregistrement.",
+      "fileName": "{title} - transcription.txt",
+      "documentTitle": "{title} - transcription"
+    },
+    "progress": {
+      "running": "Transcription : {done, number} sur {total, number} min",
+      "runningUnknown": "Transcription : {done, number} min jusqu’ici",
+      "stop": "Arrêter",
+      "stopped": "Arrêté après {done, number} min. Le texte obtenu jusqu’ici est conservé.",
+      "done": "{total, number} min transcrites.",
+      "another": "Transcrire un autre enregistrement"
     }
   }
 }

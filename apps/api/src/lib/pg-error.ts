@@ -5,6 +5,7 @@ import {
   shadowGradeFields,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { isRecord } from "@/api/lib/type-guards";
 
 // The driver codes are owned by the failure grader, which reads them for every
 // sink; they are re-exported here for the retry and control-flow callers.
@@ -94,6 +95,44 @@ export const PG_ERROR = {
   /** A value outran a fixed limit of the build, such as a `tsvector` over 1 MiB. */
   PROGRAM_LIMIT_EXCEEDED: "54000",
 } as const;
+
+/**
+ * True when a statement lost a lock wait: it gave up on its `lock_timeout`
+ * (55P03), or PostgreSQL chose it as a deadlock's victim (40P01). Either way
+ * its transaction rolled back whole and another transaction held the lock,
+ * so running the same work again later is safe. The one owner of that
+ * question for every pass that retries such a wait.
+ */
+export const isLockWaitRefusal = (error: unknown): boolean =>
+  isPgError(error, PG_ERROR.LOCK_NOT_AVAILABLE) ||
+  isPgError(error, PG_ERROR.DEADLOCK_DETECTED);
+
+/** How deep `lockWaitRelation` follows `.cause`; a failed query wraps once or twice. */
+const LOCK_WAIT_CAUSE_DEPTH = 6;
+/** PostgreSQL's context line for a row-lock wait: `while locking tuple (0,1) in relation "x"`. */
+const LOCK_WAIT_RELATION = /\bin relation "([^"]+)"/u;
+
+/**
+ * The relation a lost row-lock wait waited on, read from the context line
+ * PostgreSQL attaches to it (the driver's `where`), or null when the error
+ * names none (a relation-level lock, or an error that is not a lock wait).
+ */
+export const lockWaitRelation = (error: unknown): string | null => {
+  let current = error;
+  for (let depth = 0; depth < LOCK_WAIT_CAUSE_DEPTH; depth += 1) {
+    if (!isRecord(current)) {
+      return null;
+    }
+    const where = current["where"];
+    const relation =
+      typeof where === "string" ? LOCK_WAIT_RELATION.exec(where)?.[1] : null;
+    if (relation !== undefined && relation !== null) {
+      return relation;
+    }
+    current = current["cause"];
+  }
+  return null;
+};
 
 /**
  * Extract safe, structured fields from a Postgres driver error anywhere in an

@@ -98,7 +98,7 @@ const SCRIPT_READ_AREA = {
   update_organization_settings: "other",
   update_reader_annotation: "other",
   upload_document_version: "other",
-  verify_quote: "other",
+  verify_quote: "caseLaw",
   write_capability: "other",
 } as const satisfies Record<StellaMcpToolName, ScriptReadArea>;
 

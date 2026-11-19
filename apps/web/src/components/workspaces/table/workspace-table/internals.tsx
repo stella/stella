@@ -1,11 +1,21 @@
 import type { CSSProperties } from "react";
 
-import type {
-  TableColumn,
-  TableRowData,
-} from "@/components/workspaces/table/types";
+import { cn } from "@stll/ui/utils";
+
+import {
+  WorkspaceGridCell,
+  WorkspaceGridFillerCell,
+} from "@/components/workspaces/table/workspace-grid";
 import type { ColumnDropEdge } from "@/components/workspaces/table/workspace-grid-order";
-import { isPinnedBoundaryColumn } from "@/components/workspaces/table/workspace-table/internals-helpers";
+import {
+  getEndFillerGridColumn,
+  getWorkspaceGridColumnMetadata,
+  isPinnedBoundaryColumn,
+} from "@/components/workspaces/table/workspace-table/internals-helpers";
+import type {
+  GridColumnGeometry,
+  GridColumnsInput,
+} from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 
 export const TABLE_ROW_ESTIMATE_PX = TOOLBAR_ROW_HEIGHT_PX;
@@ -28,13 +38,11 @@ export type ExpandedTableCell = {
   columnId: string;
 };
 
-type PinnedBoundaryProps<TRow extends TableRowData> = {
-  column: TableColumn<TRow>;
+type PinnedBoundaryProps = {
+  column: GridColumnGeometry;
 };
 
-export const PinnedBoundary = <TRow extends TableRowData>({
-  column,
-}: PinnedBoundaryProps<TRow>) => {
+export const PinnedBoundary = ({ column }: PinnedBoundaryProps) => {
   if (!isPinnedBoundaryColumn(column)) {
     return null;
   }
@@ -44,5 +52,45 @@ export const PinnedBoundary = <TRow extends TableRowData>({
       aria-hidden="true"
       className="bg-border pointer-events-none absolute inset-y-0 end-0 z-40 w-px"
     />
+  );
+};
+
+type RowEndFillerCellProps = GridColumnsInput & {
+  actions?: React.ReactNode;
+  selected: boolean;
+};
+
+export const RowEndFillerCell = ({
+  renderColumns,
+  addPropertyColumn,
+  actions: fallbackActions,
+  selected,
+}: RowEndFillerCellProps) => {
+  const { actionsColumnIndex } = getWorkspaceGridColumnMetadata({
+    renderColumns,
+    addPropertyColumn,
+  });
+  const actions =
+    actionsColumnIndex === undefined ? undefined : fallbackActions;
+  const Cell =
+    actions === undefined ? WorkspaceGridFillerCell : WorkspaceGridCell;
+  return (
+    <Cell
+      aria-colindex={actions === undefined ? undefined : actionsColumnIndex}
+      aria-hidden={actions === undefined ? true : undefined}
+      className={cn(
+        "flex items-center justify-end p-0",
+        addPropertyColumn && "border-e-0",
+      )}
+      data-state={selected ? "selected" : undefined}
+      style={{
+        gridColumn: getEndFillerGridColumn({
+          renderColumns,
+          addPropertyColumn,
+        }),
+      }}
+    >
+      {actions}
+    </Cell>
   );
 };

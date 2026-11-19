@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { createTestState } from "@stll/test-state";
@@ -76,7 +77,7 @@ describe("MCP server instructions", () => {
           process.exit(0);
         `,
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: process.env,
       stdout: "pipe",
       stderr: "pipe",

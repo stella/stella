@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -61,7 +63,7 @@ describe("stored user file keys", () => {
 
 describe("user file thumbnail key ownership", () => {
   test("modules derive persisted thumbnail ids through the owner helper", async () => {
-    const apiRoot = new URL("../..", import.meta.url).pathname;
+    const apiRoot = fileURLToPath(new URL("../..", import.meta.url));
     const violations: string[] = [];
     const thumbnailKeyCall =
       /createUserFileKey\s*\(\s*\{[\s\S]{0,400}?fileId\s*:\s*[^,\n]*thumbnailFileId/gu;
@@ -73,7 +75,7 @@ describe("user file thumbnail key ownership", () => {
       if (relativePath === "src/lib/file-key.ts") {
         continue;
       }
-      const source = await Bun.file(`${apiRoot}/${relativePath}`).text();
+      const source = await Bun.file(path.join(apiRoot, relativePath)).text();
       if (thumbnailKeyCall.test(source)) {
         violations.push(relativePath);
       }

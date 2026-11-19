@@ -186,6 +186,7 @@
       "save_document": "Išsaugoti dokumentą",
       "save_matter": "Išsaugoti bylą",
       "save_playbook": "Išsaugoti peržiūros vadovą",
+      "save_skill_package": "Išsaugoti įgūdį",
       "save_task": "Išsaugoti užduotį",
       "save_template": "Išsaugoti šabloną",
       "save_time_entry": "Išsaugoti laiko įrašą",
@@ -208,6 +209,7 @@
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
+      "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
     "toolResearch": {
@@ -529,6 +531,7 @@
     "title": "Dokumentas",
     "failedTitle": "Nepavyko atidaryti šio dokumento",
     "failure": {
+      "dataBoxUnreadable": "Failo nepavyko perskaityti nei kaip duomenų dėžutės pranešimo, nei kaip pristatymo patvirtinimo.",
       "offline": "Esate neprisijungę. Prisijunkite prie interneto ir bandykite dar kartą.",
       "noFile": "Šis dokumentas dar neturi failo.",
       "failed": "Atidarant kažkas nepavyko. Po akimirkos bandykite dar kartą.",
@@ -536,6 +539,7 @@
       "android": "Android programėlėje dokumentų dar negalima atidaryti."
     },
     "retry": "Bandyti dar kartą",
+    "openOriginal": "Atidaryti originalą",
     "preview": "Atidaryti peržiūrą",
     "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",

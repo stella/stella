@@ -27,23 +27,26 @@ type ToFileTabArgs = {
 
 type FileTabOfArgs = Omit<ToFileTabArgs, "fields"> & {
   content: Extract<FileTabSourceField["content"], { type: "file" }>;
-  field: FileTabSourceField;
+  fieldId: string;
+  propertyId?: string | undefined;
 };
 
-const fileTabOf = ({
+export const fileTabOf = ({
   content,
   entityId,
-  field,
+  fieldId,
+  propertyId,
   label,
   workspaceId,
 }: FileTabOfArgs): Omit<FileTab, "type"> => ({
-  id: field.id,
+  id: fieldId,
   entityId,
   label,
   fileName: content.fileName,
   mimeType: content.mimeType,
   pdfFileId: content.pdfFileId,
-  propertyId: field.propertyId,
+  encrypted: content.encrypted,
+  propertyId,
   workspaceId,
 });
 
@@ -63,7 +66,8 @@ export const toFileTab = ({
     return fileTabOf({
       content: field.content,
       entityId,
-      field,
+      fieldId: field.id,
+      propertyId: field.propertyId,
       label,
       workspaceId,
     });
@@ -97,7 +101,8 @@ export const toRequestedFileTab = ({
       return fileTabOf({
         content: field.content,
         entityId,
-        field,
+        fieldId: field.id,
+        propertyId: field.propertyId,
         label,
         workspaceId,
       });
@@ -133,7 +138,7 @@ const toInspectorOpenTarget = (
       workspaceId,
     };
   }
-  const fileTab = toFileTab({
+  const fileTab = toRequestedFileTab({
     entityId: entity.entityId,
     fields: definedFields(entity),
     label,

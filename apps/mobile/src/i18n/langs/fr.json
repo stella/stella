@@ -186,6 +186,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
@@ -208,6 +209,7 @@
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
+      "validate_skill_package": "Vérifier la compétence",
       "web_search": "Recherche web"
     },
     "toolResearch": {
@@ -529,6 +531,7 @@
     "title": "Document",
     "failedTitle": "Ce document n’a pas pu être ouvert",
     "failure": {
+      "dataBoxUnreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "offline": "Vous êtes hors ligne. Connectez-vous à Internet et réessayez.",
       "noFile": "Ce document n’a pas encore de fichier.",
       "failed": "Une erreur s’est produite à l’ouverture. Réessayez dans un instant.",
@@ -536,6 +539,7 @@
       "android": "Les documents ne peuvent pas encore être ouverts dans l’app Android."
     },
     "retry": "Réessayer",
+    "openOriginal": "Ouvrir l’original",
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",

@@ -2770,6 +2770,13 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "fingerprint": "407e4d501ce68a61e6bf3f0ac68790ebd670d562be8c84c7a05e00f799315756",
+    "count": 1,
+    "reason": "The legislation bootstrap page reads the same rows in the same order; its source row lock is key share instead of share, so it no longer waits on plain updates of a source row.",
+    "holder": "stella_ingestion"
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "481a28265925f09abab434e08f025ca514464412db224685a0adc44dc44b49ca",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
@@ -2777,23 +2784,16 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
-    "fingerprint": "8e1a540ef8067fc290af7147295d63cce2d7e8d13bc54e3b8f77c0da715a8c33",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
-    "fingerprint": "a8fdcbb49ebf048380f683cbc48c7f10d964f34bea0853cfbd6ee5b1e732860e",
-    "count": 1,
-    "reason": "Existing case-law bootstrap page transaction; the page now also reads vacated jurisdictions and provision keys inside it, which changes its source fingerprint without changing the acquisition, its order or the count.",
-    "holder": "stella_ingestion"
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
     "fingerprint": "b924e87fe6905459305c9094d680008f46d1631564c38d0e511352c19c262d8e",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner.",
+    "holder": "stella_ingestion"
+  },
+  {
+    "file": "apps/api/src/lib/legal-search/corpus-index-projection-bootstrap.ts",
+    "fingerprint": "e7063e7452fcafa11f8d75a08ac9463b97a9198583e4da12a9baa9ac0213f261",
+    "count": 1,
+    "reason": "The case-law bootstrap page reads the same rows in the same order; its source row lock is key share instead of share, so it no longer waits on plain updates of a source row.",
     "holder": "stella_ingestion"
   },
   {

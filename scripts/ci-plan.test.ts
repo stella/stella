@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
@@ -3433,7 +3434,7 @@ test("no workflow string that embeds an expression exceeds GitHub's expression l
     }
   };
   for (const file of new Bun.Glob("*.{yml,yaml}").scanSync(
-    directory.pathname,
+    fileURLToPath(directory),
   )) {
     visit(
       Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
@@ -3690,11 +3691,12 @@ test("required checks retain PR and merge-group coverage", async () => {
   });
   const directory = new URL("../.github/workflows/", import.meta.url);
   const workflows = await Promise.all(
-    [...new Bun.Glob("*.yml").scanSync(directory.pathname)].map(async (file) =>
-      v.parse(
-        workflowSchema,
-        Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
-      ),
+    [...new Bun.Glob("*.yml").scanSync(fileURLToPath(directory))].map(
+      async (file) =>
+        v.parse(
+          workflowSchema,
+          Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
+        ),
     ),
   );
   // Each required check is defined by exactly one workflow, wherever it lives.
@@ -6750,6 +6752,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
           step.run?.includes(file) ||
           (unlisted.has(file) &&
             step.run?.includes("bun scripts/run-unlisted-script-tests.ts") &&
+            !step.run.includes("--check-declarations") &&
             step.run.includes("--depth") === depthTests.has(file))
         ) {
           const existing = owners.get(file) ?? [];

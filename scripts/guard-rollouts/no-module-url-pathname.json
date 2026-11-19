@@ -1,0 +1,21 @@
+{
+  "id": "no-module-url-pathname",
+  "rules": ["no-module-url-pathname/no-module-url-pathname"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-26T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-module-url-pathname/no-module-url-pathname",
+    "apps",
+    "packages",
+    "scripts",
+    ".oxlint-plugins"
+  ]
+}

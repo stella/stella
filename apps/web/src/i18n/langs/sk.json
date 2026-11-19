@@ -1233,6 +1233,13 @@
       "treatment": "Neskoršia judikatúra"
     },
     "analyzing": "Analyzujem...",
+    "browse": {
+      "courtDescription": "{court} ({country}): rozhodnutia vo verejnej právnej databáze stelly podľa roka a mesiaca.",
+      "courts": "Súdy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: súdne rozhodnutia vo verejnej právnej databáze stelly podľa súdu, roka a mesiaca.",
+      "periodDescription": "{court} ({country}), {period}: rozhodnutia vo verejnej právnej databáze stelly."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Vyhľadávanie je dočasne nedostupné"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ak poznáte spisovú značku alebo ECLI rozhodnutia, vyhľadajte ho podľa nich.",
+        "message": "Pre túto citáciu zbierky sa nenašlo presne zodpovedajúce rozhodnutie."
+      },
       "noHits": {
         "hint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
         "message": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá."
@@ -2121,6 +2132,7 @@
     },
     "newChat": "Nový chat",
     "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
+    "nextSteps": "Ďalšie kroky",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
@@ -2227,7 +2239,6 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
-      "harnessModels": "Modely {harness}",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
@@ -2237,7 +2248,6 @@
       "localFolderSelection": "Váš počítač · {harness} · {folder}",
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
-      "modelDefault": "Predvolený (odporúčaný)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a skontrolujte agenta {harness} v časti Nastavenia › Všeobecné › Predplatné AI.",
       "stepsInstall": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a v časti Nastavenia › Všeobecné zvoľte pri agentovi {harness} Nainštalovať.",
@@ -2325,7 +2335,6 @@
     "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
-    "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
     "suggestingTitle": "Navrhujem názov…",
     "suggestionSeverity": {
       "style": "Štýl",
@@ -2336,7 +2345,6 @@
       "accepted": "Použité",
       "rejected": "Odmietnuté"
     },
-    "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "tableChart": {
       "bar": "Stĺpcový",
       "kind": "Typ grafu",
@@ -2427,6 +2435,7 @@
       "save_document": "Uložiť dokument",
       "save_matter": "Uložiť spis",
       "save_playbook": "Uložiť playbook",
+      "save_skill_package": "Uložiť zručnosť",
       "save_task": "Uložiť úlohu",
       "save_template": "Uložiť vzor",
       "save_time_entry": "Uložiť časový záznam",
@@ -2455,6 +2464,7 @@
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
       "user_message": "Odoslané počas práce agenta",
+      "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
@@ -2758,6 +2768,7 @@
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikom premenujete",
     "download": "Stiahnuť",
+    "downloadOriginal": "Stiahnuť originál",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Presun bol zrušený. Položka {itemName} nebola presunutá.} few {Presun bol zrušený. {itemName} neboli presunuté.} other {Presun bol zrušený. {itemName} nebolo presunutých.} many {Presun bol zrušený. {itemName} nebolo presunutých.}}",
       "droppedOn": "{count, plural, one {Položka {itemName} bola pustená na {destinationName}.} few {{itemName} boli pustené na {destinationName}.} other {{itemName} bolo pustených na {destinationName}.} many {{itemName} bolo pustených na {destinationName}.}}",
@@ -3345,6 +3356,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dodané do schránky",
       "delivery": "Doručenie",
+      "deliveryEvents": "Udalosti doručovania",
+      "deliveryReceipt": "Doručenka",
       "directionUnknown": "Smer neznámy",
       "messageId": "ID správy",
       "moreContacts": "Tejto dátovej schránke zodpovedajú ďalšie kontakty.",
@@ -3357,6 +3370,8 @@
       "sent": "Odoslaná",
       "statedInFile": "Dátová správa (podľa údajov v súbore)",
       "toHands": "K rukám: {name}",
+      "unlinkedFiles": "Prílohy bez odkazu otvoríte po stiahnutí pôvodného súboru ZFO.",
+      "unreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "uploaded": "Nahraná dátová správa"
     },
     "deliveredBy": "Doručil <address>{sender}</address>",
@@ -4059,6 +4074,12 @@
     "versionCreatedDescription": "Bola vytvorená verzia {versionNumber}. Všetci môžu pokračovať v úpravách.",
     "versionCreatedTitle": "Verzia vytvorená",
     "viewOnly": "Len na čítanie"
+  },
+  "guidance": {
+    "notCaseLaw": "Metodický dokument vydaný regulátorom. Nejde o súdne rozhodnutie.",
+    "openAtPublisher": "Otvoriť u vydavateľa",
+    "source": "Zdroj: {attribution}",
+    "textUnavailable": "Text tohto dokumentu tu nie je k dispozícii. Prečítajte si ho u vydavateľa."
   },
   "guides": {
     "action": {
@@ -6328,6 +6349,7 @@
     "compareUnstructured": "Jedna z verzií je dostupná len ako obyčajný text, preto ich nemožno porovnať.",
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
+    "compareWithPreviousWording": "Porovnať s predchádzajúcim znením",
     "compareWithVersion": "Porovnať so znením {version}",
     "currentWording": "Aktuálne znenie",
     "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
@@ -6341,6 +6363,7 @@
       "withdrawn": "Vydavateľ už neuvádza"
     },
     "inForceSince": "Účinné od {date}",
+    "inForceSinceAtLeast": "Účinné najneskôr od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Kľúčové rozhodnutie",
     "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
@@ -6351,6 +6374,7 @@
     "outlineJumpPlaceholder": "§ 10 alebo názov",
     "pendingChanges": "Nadchádzajúce novely",
     "pendingChangesIncomplete": "Údaje vydavateľa nemusia zahŕňať všetky nadchádzajúce novely.",
+    "provisionAbsentVersions": "{count, plural, one {V tomto znení zákona nie je} few {Nie je v týchto # zneniach zákona} many {Nie je v týchto # zneniach zákona} other {Nie je v týchto # zneniach zákona}}",
     "provisionAskContextPrompt": "\n\nPasáže, ktoré toto ustanovenie aplikujú v najvplyvnejších rozhodnutiach:\n{passages}\n\nPomocou nástrojov pre judikatúru si môžeš prečítať ktorékoľvek z týchto rozhodnutí celé alebo vyhľadať ďalšie rozhodnutia, ktoré ustanovenie citujú.",
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
@@ -6361,7 +6385,14 @@
     "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionRunAlsoFrom": "aj od {date}",
+    "provisionRunShowVersions": "Zobraziť znenia zákona za obdobie {range}",
+    "provisionRunUnchanged": "{count, plural, one {# znenie zákona bez zmeny} few {# znenia zákona bez zmeny} many {# znenia zákona bez zmeny} other {# znení zákona bez zmeny}}",
     "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
+    "provisionVersionsAll": "Všetky znenia zákona",
+    "provisionWordingAdded": "Nové ustanovenie",
+    "provisionWordingChanged": "Zmenené",
+    "provisionWordingEarliest": "Najstaršie dostupné znenie",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchLabel": "Hľadať v právnych predpisoch",

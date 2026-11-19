@@ -31,12 +31,26 @@ pub use hold_key_edges::{HoldEdge, HoldKey};
 #[cfg(target_os = "macos")]
 mod hold_key;
 #[cfg(target_os = "macos")]
-pub use hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
+pub use hold_key::{
+  HoldKeyListener, HoldKeyUnsupported, globe_key_usage, listen_for_hold_key,
+};
 
 #[cfg(target_os = "windows")]
 mod windows_hold_key;
 #[cfg(target_os = "windows")]
 pub use windows_hold_key::{HoldKeyListener, HoldKeyUnsupported, listen_for_hold_key};
+
+#[cfg(target_os = "macos")]
+mod idle_sleep;
+#[cfg(target_os = "macos")]
+pub use idle_sleep::{IdleSleepAssertion, on_battery_power, prevent_idle_sleep};
+
+#[cfg(target_os = "windows")]
+mod windows_idle_sleep;
+#[cfg(target_os = "windows")]
+pub use windows_idle_sleep::{
+  IdleSleepAssertion, on_battery_power, prevent_idle_sleep,
+};
 
 #[cfg(target_os = "macos")]
 mod managed_preferences;
@@ -89,6 +103,25 @@ pub use process_identity::parent_process_id;
 #[cfg(target_os = "windows")]
 pub use process_identity::{create_owner_only_pipe, named_pipe_client_process_id};
 
+/// Why the operating system could not decode a recording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemAudioError {
+  /// No decoder on this computer reads the file.
+  Unsupported,
+  /// The file stopped decoding partway, or reported an impossible format.
+  Unreadable,
+}
+
+#[cfg(target_os = "macos")]
+mod system_audio;
+#[cfg(target_os = "macos")]
+pub use system_audio::SystemAudioReader;
+
+#[cfg(target_os = "windows")]
+mod system_audio_windows;
+#[cfg(target_os = "windows")]
+pub use system_audio_windows::SystemAudioReader;
+
 #[cfg(target_os = "windows")]
 mod windows_password_field;
 #[cfg(target_os = "windows")]
@@ -110,4 +143,5 @@ mod park;
 pub use park::{
   disable_occlusion_detection, is_panel_presented, park_window,
   prepare_transient_overlay, present_activating_window, present_key_panel,
+  present_passive_overlay,
 };
