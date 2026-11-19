@@ -3,10 +3,7 @@ import { asc, inArray, lte, sql } from "drizzle-orm";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { keptTranscriptDeletions } from "@/api/db/schema";
-import {
-  withAggregateTransaction,
-  withSkipLockedBatch,
-} from "@/api/lib/db/aggregate-lock";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   elevenLabsKeepsTranscripts,
@@ -23,13 +20,10 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 export const DELETE_KEPT_TRANSCRIPTS_TASK =
   "dictation.deleteKeptTranscripts" as const;
 
-/** Rows one run claims: a minutely job deletes up to 72,000 a day, far
+/** Rows one run takes: a minutely job deletes up to 72,000 a day, far
  *  beyond what the request's own deletes leave behind. */
 const BATCH_SIZE = 50;
 const PROVIDER_CONCURRENCY = 10;
-/** A claimed row waits this long before another run may try it, so a run
- *  that dies mid-batch leaves it retryable. */
-const CLAIM_LEASE_MS = 10 * 60 * 1000;
 /** Retries back off from one minute, doubling up to an hour. */
 const MAX_BACKOFF_MINUTES = 60;
 /** From this many failed attempts on, every further failure is reported. */
@@ -55,43 +49,27 @@ const productionDependencies = (): KeptTranscriptDeletionDependencies => ({
 });
 
 /**
- * Leases due rows: the lease commits with the row locks, and attempts count
- * only settled outcomes, so an interrupted run leaves its rows retryable
- * once the lease lapses.
+ * Reads the due rows, unlocked. The scheduler runs this job on one replica
+ * at a time, and a provider delete is idempotent (a transcript already gone
+ * counts as deleted), so a row the request's own delete settles meanwhile,
+ * or one a run that died left behind, is simply tried again. Attempts count
+ * only settled outcomes.
  */
-const claimDueTranscripts = async (db: SchedulerTaskContext["db"]) =>
-  await withSkipLockedBatch({
-    database: db,
-    limit: BATCH_SIZE,
-    select: (tx) =>
-      tx
-        .select({ transcriptionId: keptTranscriptDeletions.transcriptionId })
-        .from(keptTranscriptDeletions)
-        .where(lte(keptTranscriptDeletions.nextAttemptAt, sql`now()`))
-        .$dynamic(),
-    run: async (tx, rows) => {
-      if (rows.length === 0) {
-        return [];
-      }
-      // audit: skip - Leases provider ids queued for deletion; no member data changes.
-      return await tx
-        .update(keptTranscriptDeletions)
-        .set({
-          nextAttemptAt: sql`now() + (${CLAIM_LEASE_MS} * interval '1 millisecond')`,
-        })
-        .where(
-          inArray(
-            keptTranscriptDeletions.transcriptionId,
-            rows.map(({ transcriptionId }) => transcriptionId),
-          ),
-        )
-        .returning({
+const readDueTranscripts = async (db: SchedulerTaskContext["db"]) =>
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await tx
+        .select({
           transcriptionId: keptTranscriptDeletions.transcriptionId,
           environment: keptTranscriptDeletions.environment,
           attempts: keptTranscriptDeletions.attempts,
-        });
-    },
-  });
+        })
+        .from(keptTranscriptDeletions)
+        .where(lte(keptTranscriptDeletions.nextAttemptAt, sql`now()`))
+        .orderBy(asc(keptTranscriptDeletions.nextAttemptAt))
+        .limit(BATCH_SIZE),
+  );
 
 type Failure = { transcriptionId: string; attempts: number; code: string };
 
@@ -138,18 +116,18 @@ const settleOutcomes = async (
   });
 };
 
-/** Deletes one claimed batch at the provider and settles it. */
+/** Deletes one batch of due transcripts at the provider and settles it. */
 const deleteDueBatch = async (
   { db, logger, signal }: SchedulerTaskContext,
   deployment: ElevenLabsDeployment,
   dependencies: KeptTranscriptDeletionDependencies,
 ) => {
-  const claimed = await claimDueTranscripts(db);
-  if (claimed.length === 0 || signal.aborted) {
+  const due = await readDueTranscripts(db);
+  if (due.length === 0 || signal.aborted) {
     return;
   }
   const outcomes = await mapWithConcurrency({
-    items: claimed,
+    items: due,
     limit: PROVIDER_CONCURRENCY,
     operation: async (row) => ({
       row,
