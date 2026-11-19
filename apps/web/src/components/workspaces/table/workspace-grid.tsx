@@ -11,6 +11,16 @@ const WORKSPACE_TABLE_COLUMNS_VAR = "var(--workspace-table-columns)";
  */
 export const WORKSPACE_TABLE_SCROLL_SLOT = "workspace-table-scroll";
 
+/** A standalone table's box in its page: the body's height. */
+export const WORKSPACE_TABLE_FRAME_CLASS = "relative h-full flex-1";
+
+/** A standalone table's scroller: rows and columns scroll together. */
+export const WORKSPACE_TABLE_SCROLL_CLASS =
+  "scrollbar-subtle h-full overflow-auto";
+
+/** The grid itself: header rows over body rows, at the table's type size. */
+export const WORKSPACE_TABLE_GRID_CLASS = "relative flex flex-col text-sm";
+
 export const WorkspaceGridRow = ({
   className,
   style,

@@ -15,7 +15,11 @@ import { hasViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 
-import { ViewChromeRowFace } from "./-$viewId.route.pending";
+import {
+  ViewBodySlot,
+  ViewChromeRowFace,
+  ViewShellFace,
+} from "./-$viewId.route.pending";
 
 const routeApi = getRouteApi("/_protected/workspaces/$workspaceId/$viewId");
 
@@ -106,38 +110,36 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" ref={paneRef}>
-      <ViewChromeRow
-        activeViewId={activeView.id}
-        toolbar={
-          hasViewToolbar(activeView) ? (
-            <ViewToolbar
-              paneRef={paneRef}
-              view={activeView}
-              workspaceId={workspaceId}
-            />
-          ) : null
-        }
-        workspaceId={workspaceId}
-      />
-      <div
-        className="flex min-h-0 flex-1 flex-col"
-        {...guideAnchor(
-          GUIDE_ANCHORS.tabularReviewTable,
-          activeView.layout.type === "table",
-        )}
-      >
-        <div
-          className="flex-1 overflow-auto"
-          {...guideAnchor(
-            GUIDE_ANCHORS.documentsList,
-            activeView.layout.type === "table",
-          )}
-        >
-          <Outlet />
-        </div>
-      </div>
-    </div>
+    <ViewShellFace
+      bodyProps={guideAnchor(
+        GUIDE_ANCHORS.tabularReviewTable,
+        activeView.layout.type === "table",
+      )}
+      chrome={
+        <ViewChromeRow
+          activeViewId={activeView.id}
+          toolbar={
+            hasViewToolbar(activeView) ? (
+              <ViewToolbar
+                paneRef={paneRef}
+                view={activeView}
+                workspaceId={workspaceId}
+              />
+            ) : null
+          }
+          workspaceId={workspaceId}
+        />
+      }
+      paneRef={paneRef}
+      scrollProps={guideAnchor(
+        GUIDE_ANCHORS.documentsList,
+        activeView.layout.type === "table",
+      )}
+    >
+      <ViewBodySlot>
+        <Outlet />
+      </ViewBodySlot>
+    </ViewShellFace>
   );
 }
 
