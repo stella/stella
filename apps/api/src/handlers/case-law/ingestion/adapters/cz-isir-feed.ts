@@ -512,9 +512,9 @@ export const czIsirDecisionAction = (
     : { type: "decision", documentId: action.documentId };
 };
 
-/** The proceeding an action belongs to: its court and its file. */
+/** The proceeding an action belongs to: its court, where stated, and its file. */
 export type CzIsirProceeding = {
-  readonly courtCode: string;
+  readonly courtCode: string | null;
   readonly fileMark: string;
 };
 
@@ -525,15 +525,44 @@ export const czIsirStruckOffProceedings = (
   const seen = new Map<string, CzIsirProceeding>();
   for (const action of actions) {
     if (
-      (action.eventType === CZ_ISIR_STRIKE_OFF_EVENT ||
-        action.note.struckOffOn !== null) &&
-      action.courtCode !== null
+      action.eventType === CZ_ISIR_STRIKE_OFF_EVENT ||
+      action.note.struckOffOn !== null
     ) {
-      seen.set(`${action.courtCode}\u0000${action.fileMark}`, {
+      seen.set(`${action.courtCode ?? ""}\u0000${action.fileMark}`, {
         courtCode: action.courtCode,
         fileMark: action.fileMark,
       });
     }
   }
   return [...seen.values()];
+};
+
+const proceedingKey = (courtCode: string, fileMark: string) =>
+  `${courtCode}\u0000${fileMark}`;
+
+/**
+ * Whether an action belongs to a proceeding its page strikes off. Where the
+ * feed omits the court on either side, the file mark alone cannot tell two
+ * courts' files apart, so the action is held back with the struck-off file.
+ */
+export const czIsirStruckOffOnPage = (
+  actions: readonly CzIsirAction[],
+): ((action: CzIsirAction) => boolean) => {
+  const struckOff = czIsirStruckOffProceedings(actions);
+  const keyed = new Set(
+    struckOff.flatMap(({ courtCode, fileMark }) =>
+      courtCode === null ? [] : [proceedingKey(courtCode, fileMark)],
+    ),
+  );
+  const marks = new Set(struckOff.map(({ fileMark }) => fileMark));
+  const unkeyedMarks = new Set(
+    struckOff.flatMap(({ courtCode, fileMark }) =>
+      courtCode === null ? [fileMark] : [],
+    ),
+  );
+  return ({ courtCode, fileMark }) =>
+    courtCode === null
+      ? marks.has(fileMark)
+      : keyed.has(proceedingKey(courtCode, fileMark)) ||
+        unkeyedMarks.has(fileMark);
 };

@@ -5,10 +5,12 @@ import {
   CZ_ISIR_ACTION_SKIP,
   CZ_ISIR_DECISION_SCOPE,
   CZ_ISIR_LAST_ID_REQUEST,
+  type CzIsirAction,
   czIsirActionsRequest,
   czIsirDecisionAction,
   czIsirDocumentIdOf,
   czIsirDocumentUrl,
+  czIsirStruckOffOnPage,
   czIsirStruckOffProceedings,
   readCzIsirActionPage,
   readCzIsirLastId,
@@ -167,6 +169,67 @@ describe("czIsirStruckOffProceedings", () => {
     expect(czIsirStruckOffProceedings((await fixturePage()).actions)).toEqual([
       { courtCode: "KSSCEUL", fileMark: "INS 25896/2020" },
     ]);
+  });
+});
+
+describe("czIsirStruckOffOnPage", () => {
+  const action = (
+    id: number,
+    eventType: number,
+    courtCode: string | null,
+    fileMark: string,
+  ): CzIsirAction => ({
+    id,
+    createdAt: null,
+    publishedAt: null,
+    documentId: null,
+    fileMark,
+    courtCode,
+    eventType,
+    eventDescription: null,
+    section: null,
+    sectionNumber: null,
+    note: {
+      sideDocument: false,
+      sideEvent: false,
+      fileState: null,
+      finalOn: null,
+      cancelledAt: null,
+      correctedPublicationOn: null,
+      struckOffOn: null,
+    },
+  });
+  const STRIKE_OFF = 636;
+  const DECISION = 373;
+
+  test("holds back a decision of a struck-off file by court and file", () => {
+    const isStruckOff = czIsirStruckOffOnPage([
+      action(1, STRIKE_OFF, "MSPHAAB", "INS 10782/2023"),
+    ]);
+    expect(isStruckOff(action(2, DECISION, "MSPHAAB", "INS 10782/2023"))).toBe(
+      true,
+    );
+    expect(isStruckOff(action(3, DECISION, "KSSCEUL", "INS 10782/2023"))).toBe(
+      false,
+    );
+  });
+
+  test("holds back a file mark either side states without its court", () => {
+    expect(
+      czIsirStruckOffOnPage([
+        action(1, STRIKE_OFF, "MSPHAAB", "INS 10782/2023"),
+      ])(action(2, DECISION, null, "INS 10782/2023")),
+    ).toBe(true);
+    expect(
+      czIsirStruckOffOnPage([action(1, STRIKE_OFF, null, "INS 10782/2023")])(
+        action(2, DECISION, "MSPHAAB", "INS 10782/2023"),
+      ),
+    ).toBe(true);
+    expect(
+      czIsirStruckOffOnPage([action(1, STRIKE_OFF, null, "INS 1/2023")])(
+        action(2, DECISION, "MSPHAAB", "INS 10782/2023"),
+      ),
+    ).toBe(false);
   });
 });
 

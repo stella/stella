@@ -222,12 +222,57 @@ describe("readCzIsirDocumentParagraphs", () => {
     }
   });
 
+  test("keeps a line that cites another file, and drops nothing of the text", async () => {
+    const decision = await czIsirDecisionParagraphs("65350048");
+    const cited = { text: "KSUL 74 INS 12709/2022", bold: false };
+    const paragraphs = await readCzIsirDocumentParagraphs(
+      await typesetCzIsirDocument([
+        ...decision.slice(0, 4),
+        cited,
+        ...decision.slice(4),
+      ]),
+    );
+    expect(
+      Result.isOk(paragraphs) &&
+        paragraphs.value.some(({ text }) => text === cited.text),
+    ).toBe(true);
+  });
+
   test("a PDF with nothing on its text layer is a scan", async () => {
     const pdf = PDF.create();
     pdf.addPage({ size: "a4" });
     expect(await readCzIsirDocumentParagraphs(await pdf.save())).toEqual(
       Result.err("no-text-layer"),
     );
+  });
+});
+
+describe("reconciliation", () => {
+  test("a stored action whose document id is not one is unkeyable, and nothing is requested", async () => {
+    const requested = await serve(await documents());
+    const outcome = await czIsirAdapter.reconciliation?.buildDecision({
+      id: 65_000_401,
+      createdAt: null,
+      publishedAt: null,
+      documentId: "../65350048",
+      fileMark: "INS 10782/2023",
+      courtCode: "MSPHAAB",
+      eventType: 373,
+      eventDescription: null,
+      section: "B",
+      sectionNumber: 24,
+      note: {
+        sideDocument: false,
+        sideEvent: false,
+        fileState: null,
+        finalOn: null,
+        cancelledAt: null,
+        correctedPublicationOn: null,
+        struckOffOn: null,
+      },
+    });
+    expect(outcome).toEqual({ type: "unkeyable" });
+    expect(requested).toEqual([]);
   });
 });
 
