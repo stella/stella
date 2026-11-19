@@ -19,12 +19,15 @@ export const ToolsPageShell = ({ children }: { children: ReactNode }) => (
       <h1 className="text-foreground text-xl font-semibold">
         <PendingText barClassName="w-16" id="knowledge.sections.tools.title" />
       </h1>
-      <p className="text-muted-foreground text-sm">
+      {/* A div, not a p: the bar PendingText draws before intl mounts is a
+          block, which a paragraph cannot hold, so the parser would split it
+          and the page would not hydrate. */}
+      <div className="text-muted-foreground text-sm">
         <PendingText
           barClassName="w-80 max-w-full"
           id="knowledge.sections.tools.description"
         />
-      </p>
+      </div>
     </div>
     {children}
   </div>
