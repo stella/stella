@@ -345,6 +345,18 @@ test.each(["legacy", "superseded", "fresh-html"])(
       ).bytes(),
     );
     const retainedHeadnote = "Retained publisher headnote.";
+    const retainedParts = {
+      document: "old document",
+      text: "wrong old body ".repeat(100),
+      "extended-chamber-pdf-base64": "invalid old PDF",
+      "superseded-document": "earliest document",
+      "superseded-document-1": "earlier document",
+      "superseded-text": "earliest body",
+      "superseded-extended-chamber-pdf-base64": "earliest PDF",
+      "extended-chamber-registry": "earlier registry response",
+      "fetched-detail": "earlier fetched detail",
+      "superseded-fetched-detail": "earliest fetched detail",
+    };
     const retainedDetail = `<div data-field-id="citace"><span class="det-textval">č. 123/2008 Sb. NSS</span></div><div data-field-id="pravnivetaupravena"><span class="det-textval">${retainedHeadnote}</span></div>`;
     const freshDetail = `<div data-field-id="citace"><span class="det-textval">č. 999/2020 Sb. NSS</span></div><div data-field-id="pravnivetaupravena"><span class="det-textval">Wrong portal headnote.</span></div>${new TextDecoder().decode(detail)}`;
     expect(parseCzNssDetailMetadata(freshDetail).legalSentence).toContain(
@@ -408,9 +420,7 @@ test.each(["legacy", "superseded", "fresh-html"])(
             retainedKind === "legacy"
               ? "N/A"
               : encodeSourceRawEnvelope({
-                  document: "old document",
-                  text: "wrong old body ".repeat(100),
-                  "extended-chamber-pdf-base64": "invalid old PDF",
+                  ...retainedParts,
                   detail: retainedDetail,
                 }),
           ),
@@ -468,11 +478,14 @@ test.each(["legacy", "superseded", "fresh-html"])(
       if (retainedKind === "legacy") {
         expect(parts?.["retained-input"]).toBe("N/A");
       } else {
-        expect(parts?.["superseded-extended-chamber-pdf-base64"]).toBe(
+        expect(parts?.["superseded-extended-chamber-pdf-base64-1"]).toBe(
           "invalid old PDF",
         );
         expect(parts?.["text"] ?? "").not.toContain("wrong old body");
-        expect(parts?.["superseded-text"]).toContain("wrong old body");
+        expect(parts?.["superseded-text-1"]).toContain("wrong old body");
+        for (const value of Object.values(retainedParts)) {
+          expect(Object.values(parts ?? {})).toContain(value);
+        }
       }
       if (retainedKind === "fresh-html") {
         expect(parts?.["extended-chamber-pdf-base64"]).toBeUndefined();

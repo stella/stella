@@ -3244,20 +3244,7 @@ const buildCzNssStoredDocument = async ({
   const parts = decodeSourceRawEnvelope(retained) ?? {
     "retained-input": retained,
   };
-  // Retain superseded bytes without letting their reader precedence select
-  // an older PDF or text representation over the freshly verified document.
-  const retainedParts = Object.fromEntries(
-    Object.entries(parts).map(([key, value]) => [
-      key === CZ_NSS_RAW_PART.DOCUMENT ||
-      key === CZ_NSS_RAW_PART.TEXT ||
-      key === CZ_NSS_RAW_PART.PDF
-        ? `superseded-${key}`
-        : key,
-      value,
-    ]),
-  );
-  const raw = encodeSourceRawEnvelope({
-    ...retainedParts,
+  const refreshedParts = {
     ...(content.sourceRaw === undefined
       ? {}
       : { [CZ_NSS_RAW_PART.DOCUMENT]: content.sourceRaw }),
@@ -3265,9 +3252,33 @@ const buildCzNssStoredDocument = async ({
       ? {}
       : { [CZ_NSS_RAW_PART.TEXT]: content.fallbackText }),
     ...content.recovery,
-    // The portal detail may identify another sheet. Its response is evidence,
-    // but body recovery must not replace retained publisher metadata with it.
+    // A portal detail can name another sheet; retain it without replacing metadata.
     ...(detailRead.html === null ? {} : { "fetched-detail": detailRead.html }),
+  };
+  // Retain superseded bytes without letting their reader precedence select
+  // an older PDF or text representation over the freshly verified document.
+  const retainedParts = new Map(Object.entries(parts));
+  for (const key of new Set([
+    CZ_NSS_RAW_PART.DOCUMENT,
+    CZ_NSS_RAW_PART.TEXT,
+    CZ_NSS_RAW_PART.PDF,
+    ...Object.keys(refreshedParts),
+  ])) {
+    const value = retainedParts.get(key);
+    if (value === undefined) {
+      continue;
+    }
+    let archiveKey = `superseded-${key}`;
+    let suffix = 1;
+    while (retainedParts.has(archiveKey)) {
+      archiveKey = `superseded-${key}-${suffix++}`;
+    }
+    retainedParts.set(archiveKey, value);
+    retainedParts.delete(key);
+  }
+  const raw = encodeSourceRawEnvelope({
+    ...Object.fromEntries(retainedParts),
+    ...refreshedParts,
   });
   const parsed = await reparseStoredRaw({
     ...stored,
