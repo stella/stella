@@ -19,7 +19,7 @@ import { escapeLike } from "@/api/lib/escape-like";
 export const ACT_NUMBER_PATTERN = /^([0-9]{1,5})\/([0-9]{4})$/u;
 
 /** An ELI collection segment: `sb`, `zz`, `sm`. */
-export const ELI_COLLECTION_RE = /^[a-z0-9]{1,8}$/u;
+const ELI_COLLECTION_RE = /^[a-z0-9]{1,8}$/u;
 
 /** What a list may filter an act number by: an ELI collection or a Magyar Közlöny series. */
 export const ACT_COLLECTION_PATTERN = new RegExp(
