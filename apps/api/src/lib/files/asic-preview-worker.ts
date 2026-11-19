@@ -2,7 +2,7 @@ import { Result, type UnhandledException } from "better-result";
 import type { InferOutput } from "valibot";
 
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
-import { ASIC_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
+import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
 
 import type {
   FileScanFailedError,

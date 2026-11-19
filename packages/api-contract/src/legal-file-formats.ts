@@ -1,3 +1,5 @@
+import { ASIC_FILE_FORMATS } from "./asic-file-formats";
+
 export const DATA_BOX_FILE_FORMAT = {
   kind: "dataBox",
   mimeAliases: [],
@@ -16,28 +18,7 @@ export const CADES_FILE_FORMAT = {
   mimeAliases: ["application/x-pkcs7-mime"],
 } as const;
 
-export const ASIC_E_FILE_FORMAT = {
-  kind: "asicE",
-  auditFormat: "asic-e",
-  label: "ASiC-E",
-  extensions: [".asice", ".sce", ".bdoc"],
-  mimeType: "application/vnd.etsi.asic-e+zip",
-  mimeAliases: [],
-} as const;
-
-export const ASIC_S_FILE_FORMAT = {
-  kind: "asicS",
-  auditFormat: "asic-s",
-  label: "ASiC-S",
-  extensions: [".asics", ".scs"],
-  mimeType: "application/vnd.etsi.asic-s+zip",
-  mimeAliases: [],
-} as const;
-
-export const ASIC_FILE_FORMATS = [
-  ASIC_E_FILE_FORMAT,
-  ASIC_S_FILE_FORMAT,
-] as const;
+export const [ASIC_E_FILE_FORMAT, ASIC_S_FILE_FORMAT] = ASIC_FILE_FORMATS;
 
 export const ASIC_FILE_KINDS = ASIC_FILE_FORMATS.map(({ kind }) => kind);
 

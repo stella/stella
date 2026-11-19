@@ -1,4 +1,4 @@
-import { ASIC_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
+import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
 
 import {
   type ScanMediaType,
