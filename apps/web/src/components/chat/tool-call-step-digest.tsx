@@ -3,7 +3,8 @@ import { useTranslations } from "use-intl";
 
 import type { ChatStepFilter } from "@stll/api-contract/chat-step-ledger";
 import { BidiText } from "@stll/ui/bidi-text";
-import { CircleOffIcon, FileTextIcon, SearchIcon } from "@stll/ui/icons";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
+import { CircleOffIcon, SearchIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -17,6 +18,7 @@ import type {
 } from "@/components/chat/tool-call-step-digest.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 /**
  * An opened step as a person reads it: what it searched, with its filters,
@@ -234,29 +236,26 @@ const StepRefLabel = ({ row }: { row: StepDigestRow }) => {
   switch (ref.type) {
     case "decision": {
       const date = formatDate(ref.decisionDate);
-      const courtShortCode =
-        source?.caseLaw?.courtShortCode ?? ref.courtAbbreviation ?? ref.court;
-      // The citation chip's anatomy: court, case number and date; the
-      // decision's one line follows it, quiet.
+      // The citation chip's anatomy: the court's identity badge, then the
+      // case number and date; the decision's one line follows it, quiet.
       const label = (
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span
-            aria-label={ref.court}
-            className="bg-muted shrink-0 rounded-sm px-1 font-medium"
-          >
-            {courtShortCode}
-          </span>
-          <TruncatedText
-            className="font-medium"
-            render={<BidiText as="span" />}
-          >
-            {ref.caseNumber}
-            {date === null ? "" : ` · ${date}`}
-          </TruncatedText>
-        </span>
+        <TruncatedText className="font-medium" render={<BidiText as="span" />}>
+          {ref.caseNumber}
+          {date === null ? "" : ` · ${date}`}
+        </TruncatedText>
       );
       return (
         <>
+          <DocumentIdentityBadge
+            identity={{
+              kind: "decision",
+              courtAbbreviation:
+                source?.caseLaw?.courtShortCode ?? ref.courtAbbreviation,
+              courtTier: source?.caseLaw?.tier,
+            }}
+            size="inline"
+            title={ref.court}
+          />
           {source === null ? (
             label
           ) : (
@@ -285,6 +284,10 @@ const StepRefLabel = ({ row }: { row: StepDigestRow }) => {
       const validFrom = formatDate(ref.validFrom);
       return (
         <>
+          <DocumentIdentityBadge
+            identity={statuteDocumentIdentity(ref.eli)}
+            size="inline"
+          />
           {source === null ? (
             <BidiText as="span" className="font-medium">
               {ref.label}
@@ -312,10 +315,7 @@ const StepRefLabel = ({ row }: { row: StepDigestRow }) => {
       return (
         <span className="text-foreground flex min-w-0 items-center gap-1.5">
           {ref.type === "document" ? (
-            <FileTextIcon
-              aria-hidden="true"
-              className="text-muted-foreground size-3.5 shrink-0"
-            />
+            <DocumentIdentityBadge identity={{ kind: "unknown" }} />
           ) : (
             <MatterIcon
               className="text-muted-foreground size-3.5 shrink-0"
