@@ -116,6 +116,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (seededEntityIds.length > 0) {
     await testDb
+      .update(entities)
+      .set({ currentVersionId: null })
+      .where(inArray(entities.id, seededEntityIds));
+    await testDb
       .delete(fields)
       .where(
         inArray(

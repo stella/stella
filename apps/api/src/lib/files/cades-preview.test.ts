@@ -28,7 +28,7 @@ describe("CAdES file reading", () => {
     const bytes = await pdf.save();
     const name = "filing.pdf.p7m.p7m";
     const signed = signedFile(
-      await wrapP7m(await wrapP7m(bytes), { signers: ["issuer", "ski"] }),
+      await wrapP7m(await wrapP7m(bytes), { signers: ["issuer", "issuer"] }),
       name,
     );
 
