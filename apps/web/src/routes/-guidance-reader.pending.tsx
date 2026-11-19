@@ -9,7 +9,9 @@ import { framePendingView } from "@/routes/-pending-view.logic";
  * The guidance reader's one layout, drawn by both phases: the notice that
  * this is not a court decision over the document's header, its text and its
  * source footer. The page fills the slots with the document; the pending
- * phase with lines of the same type size.
+ * phase with lines of the same type size. The pending lines are `div`s, not
+ * `p`s: a bar is a block, and the HTML parser closes a paragraph at a block,
+ * so the server's paint would no longer match the tree the client hydrates.
  */
 export const GuidanceReaderShell = ({
   header,
@@ -21,9 +23,9 @@ export const GuidanceReaderShell = ({
   footer: ReactNode;
 }) => (
   <article className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
-    <p className="text-muted-foreground text-sm">
+    <div className="text-muted-foreground text-sm">
       <PendingText barClassName="w-80" id="guidance.notCaseLaw" />
-    </p>
+    </div>
     <header className="flex flex-col gap-1">{header}</header>
     {body}
     <footer className="text-muted-foreground flex flex-col gap-1 border-t pt-4 text-xs">
@@ -43,15 +45,15 @@ const GUIDANCE_PARAGRAPH_LINES_PENDING = [
 /** The issuer line, the title and the reference, at the header's type sizes. */
 const GuidanceHeaderPending = () => (
   <>
-    <p className="text-sm">
+    <div className="text-sm">
       <FaceLabelPending className="w-48" />
-    </p>
+    </div>
     <h1 className="text-xl font-semibold">
       <FaceLabelPending className="w-3/4" />
     </h1>
-    <p className="text-sm">
+    <div className="text-sm">
       <FaceLabelPending className="w-32" />
-    </p>
+    </div>
   </>
 );
 
@@ -62,9 +64,9 @@ const GuidanceTextPending = () => (
     className="flex flex-col gap-3 text-sm leading-relaxed"
   >
     {GUIDANCE_PARAGRAPH_LINES_PENDING.map((line) => (
-      <p className="flex" key={line.key}>
+      <div className="flex" key={line.key}>
         <FaceLabelPending className={line.width} />
-      </p>
+      </div>
     ))}
   </div>
 );
@@ -74,9 +76,9 @@ const GuidanceReaderPendingView = () => (
     header={<GuidanceHeaderPending />}
     body={<GuidanceTextPending />}
     footer={
-      <p>
+      <div>
         <FaceLabelPending className="w-56" />
-      </p>
+      </div>
     }
   />
 );
