@@ -19,6 +19,7 @@ import {
   balanceTestFiles,
   changedDeclarations,
   decodeTraceString,
+  discoverScriptTests,
   gitInvocation,
   parseScriptTestArguments,
   planScriptTestRun,
@@ -28,6 +29,7 @@ import {
   SCRIPT_TEST_MODES,
   SCRIPT_TEST_TRACE_FILTER,
   SCRIPT_TEST_TRACE_SYSCALLS,
+  scriptTestDeclarationError,
   selectAffectedScriptTests,
   selectScriptTests,
   tracedAllowance,
@@ -183,6 +185,13 @@ describe("parseScriptTestArguments", () => {
     });
   });
 
+  test("accepts a standalone declaration census", () => {
+    expect(parseScriptTestArguments(["--check-declarations"])).toEqual({
+      type: "valid",
+      mode: SCRIPT_TEST_MODES.checkDeclarations,
+    });
+  });
+
   test("accepts the declaration verification mode with depth", () => {
     expect(
       parseScriptTestArguments(["--depth", "--verify-declarations"]),
@@ -200,6 +209,7 @@ describe("parseScriptTestArguments", () => {
       ["--verify-declarations", "--verify-declarations"],
       "--verify-declarations may be supplied once",
     ],
+    [["--check-declarations", "--depth"], "unknown argument"],
     [["--unknown"], "unknown argument"],
     [["--timeout"], "requires a positive integer"],
     [["--timeout", "0"], "requires a positive integer"],
@@ -279,6 +289,10 @@ describe("script test impact selection", () => {
     return root;
   };
 
+  const subjectExemption = {
+    "scripts/subject.test.ts": "Only reads its import closure",
+  };
+
   test("selects changed subjects, transitive imports, declared data, and new tests", () => {
     const root = makeFixture();
     const tests = ["scripts/subject.test.ts", "scripts/reader.test.ts"];
@@ -290,6 +304,7 @@ describe("script test impact selection", () => {
           changed: ["scripts/subject.ts"],
           root,
           inputs,
+          exemptions: subjectExemption,
         }).files,
       ).toEqual(["scripts/subject.test.ts"]);
       expect(
@@ -298,6 +313,7 @@ describe("script test impact selection", () => {
           changed: ["scripts/transitive.ts"],
           root,
           inputs,
+          exemptions: subjectExemption,
         }).files,
       ).toEqual(["scripts/subject.test.ts"]);
       expect(
@@ -306,6 +322,7 @@ describe("script test impact selection", () => {
           changed: ["data/value.txt"],
           root,
           inputs,
+          exemptions: subjectExemption,
         }).files,
       ).toEqual(["scripts/reader.test.ts"]);
       expect(
@@ -314,6 +331,7 @@ describe("script test impact selection", () => {
           changed: ["scripts/reader.test.ts"],
           root,
           inputs,
+          exemptions: subjectExemption,
         }).files,
       ).toEqual(["scripts/reader.test.ts"]);
     } finally {
@@ -334,8 +352,13 @@ describe("script test impact selection", () => {
         "scripts/run-unlisted-script-tests.ts",
       ]) {
         expect(
-          selectAffectedScriptTests({ tests, changed: [changed], root, inputs })
-            .files,
+          selectAffectedScriptTests({
+            tests,
+            changed: [changed],
+            root,
+            inputs,
+            exemptions: subjectExemption,
+          }).files,
         ).toEqual(tests);
       }
     } finally {
@@ -365,6 +388,10 @@ describe("script test impact selection", () => {
           changed: [SCAN_PRELOAD_PATH],
           root,
           inputs: { "scripts/reader.test.ts": ["data/**"] },
+          exemptions: {
+            ...subjectExemption,
+            "scripts/preload.test.ts": "Only reads its import closure",
+          },
         }),
       ).toEqual({ files: ["scripts/preload.test.ts"], skipped: 2 });
     } finally {
@@ -389,6 +416,7 @@ describe("script test impact selection", () => {
           changed,
           root,
           inputs,
+          exemptions: subjectExemption,
           declarationChanges: new Set(["scripts/reader.test.ts"]),
         }),
       ).toEqual({ files: ["scripts/reader.test.ts"], skipped: 1 });
@@ -398,6 +426,7 @@ describe("script test impact selection", () => {
           changed,
           root,
           inputs,
+          exemptions: subjectExemption,
           declarationChanges: "all",
         }),
       ).toEqual({
@@ -410,17 +439,52 @@ describe("script test impact selection", () => {
     }
   });
 
-  test("fails the census for a reader without declared data inputs", () => {
+  test("undeclared tests run even when their files and inputs are unchanged", () => {
     const root = makeFixture();
     try {
-      expect(() =>
-        selectAffectedScriptTests({
-          tests: ["scripts/reader.test.ts"],
-          changed: [],
-          root,
-          inputs: {},
+      const shellTest = "scripts/new.test.sh";
+      writeFileSync(path.join(root, shellTest), "#!/usr/bin/env bash\n");
+      const tests = discoverScriptTests(root).toSorted();
+      const inputs = { "scripts/subject.test.ts": ["scripts/subject.ts"] };
+      for (const changed of [[], ["docs/unrelated.md"]]) {
+        expect(
+          selectAffectedScriptTests({ tests, root, inputs, changed }),
+        ).toEqual({
+          files: [shellTest, "scripts/reader.test.ts"],
+          skipped: 1,
+        });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the declaration census reports the JSON entries for missing tests", () => {
+    const root = makeFixture();
+    try {
+      const shellTest = "scripts/new.test.sh";
+      writeFileSync(path.join(root, shellTest), "#!/usr/bin/env bash\n");
+      const tests = discoverScriptTests(root);
+      const declarations = {
+        inputs: {},
+        noTrackedInputs: subjectExemption,
+      };
+      expect(scriptTestDeclarationError(tests, declarations)).toBe(
+        [
+          'Script tests with undeclared inputs. Add these entries to "inputs" in scripts/script-test-inputs.json:',
+          '  "scripts/new.test.sh": ["**"],',
+          '  "scripts/reader.test.ts": ["**"],',
+        ].join("\n"),
+      );
+      expect(
+        scriptTestDeclarationError(tests, {
+          inputs: {
+            [shellTest]: ["**"],
+            "scripts/reader.test.ts": ["data/**"],
+          },
+          noTrackedInputs: subjectExemption,
         }),
-      ).toThrow("undeclared data inputs");
+      ).toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -456,13 +520,15 @@ describe("script test impact selection", () => {
       "scripts/subject.test.ts",
       "scripts/generated.test.ts",
     ]);
+    const inputs = { "scripts/generated.test.ts": ["data/**"] };
     try {
       expect(() =>
         selectAffectedScriptTests({
           tests,
           changed: [],
           root,
-          inputs: {},
+          inputs,
+          exemptions: subjectExemption,
           tracked,
         }),
       ).toThrow("unresolved or generated imports");
@@ -476,7 +542,8 @@ describe("script test impact selection", () => {
           tests,
           changed: [],
           root,
-          inputs: {},
+          inputs,
+          exemptions: subjectExemption,
           tracked,
         }),
       ).toThrow("unresolved or generated imports");
@@ -486,6 +553,7 @@ describe("script test impact selection", () => {
           changed: ["docs/unrelated.md"],
           root,
           inputs: { "scripts/generated.test.ts": ["**"] },
+          exemptions: subjectExemption,
           tracked,
         }).files,
       ).toEqual(["scripts/generated.test.ts"]);
@@ -1483,10 +1551,10 @@ describe("declaration verification", () => {
 
 describe("repository script test census", () => {
   // timeout: the census parses every unlisted test's full repository import closure.
-  test("every discoverable test has a resolvable closure and declared readers", () => {
+  test("unlisted tests have a resolvable closure or global inputs", () => {
     const root = path.resolve(import.meta.dir, "..");
     const tests = unlistedTests(
-      [...new Bun.Glob("scripts/**/*.test.{ts,sh}").scanSync({ cwd: root })],
+      discoverScriptTests(root),
       readCiCheckCommandText(root),
     );
     const selection = selectAffectedScriptTests({
