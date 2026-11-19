@@ -155,7 +155,7 @@ describe("a ranked plan with no language to stem under", () => {
   const planFor = (
     text: string,
     jurisdiction: string | undefined,
-    language: string | undefined = undefined,
+    language?: string,
   ) => {
     const shaped = shapeOf({ text, jurisdiction });
     const shape =
