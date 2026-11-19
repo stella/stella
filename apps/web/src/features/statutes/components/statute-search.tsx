@@ -4,6 +4,7 @@ import {
   publicLawAskScope,
   PublicLawSearch,
 } from "@/components/public-law-search";
+import { useStatuteSearchWords } from "@/features/statutes/components/statute-search.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteCountryName } from "@/lib/statutes/statute-route";
 
@@ -32,6 +33,7 @@ export const StatuteSearch = ({
 }: StatuteSearchProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const { placeholder, searchLabel } = useStatuteSearchWords();
 
   return (
     <PublicLawSearch
@@ -45,9 +47,9 @@ export const StatuteSearch = ({
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
-      placeholder={t("statutes.searchPlaceholder")}
+      placeholder={placeholder}
       query={query}
-      searchLabel={t("statutes.searchLabel")}
+      searchLabel={searchLabel}
     />
   );
 };

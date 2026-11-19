@@ -2,6 +2,10 @@ import { Temporal } from "@stll/time";
 
 const DAYS_PER_WEEK = 7;
 
+/** Today in the person's own zone, YYYY-MM-DD; it also bounds the week's activity. */
+export const todayIn = (timezoneId: string) =>
+  Temporal.Now.plainDateISO(timezoneId).toString();
+
 export type Week = {
   /** Monday of the week, YYYY-MM-DD. */
   start: string;

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import {
   keepPreviousData,
@@ -308,6 +308,7 @@ export const ChatHistoryPage = ({
         ) : null}
         {threadsView.type === "items" && pinnedThreadsView.type === "items" ? (
           <ChatHistoryResults
+            accessibleMatterCount={matters?.workspaces.length}
             hasFilter={hasChatHistoryFilter(search)}
             items={listChatHistoryItems(
               mergeGroupedChatThreadPages(threadsView.items.pages),
@@ -383,6 +384,8 @@ function matterOption(
 }
 
 type ChatHistoryResultsProps = {
+  /** How many matters the reader can open; unknown while their list loads. */
+  accessibleMatterCount: number | undefined;
   hasFilter: boolean;
   items: ChatHistoryItem[];
   onClearFilters: () => void;
@@ -392,6 +395,7 @@ type ChatHistoryResultsProps = {
 };
 
 function ChatHistoryResults({
+  accessibleMatterCount,
   hasFilter,
   items,
   onClearFilters,
@@ -438,6 +442,7 @@ function ChatHistoryResults({
           <List>
             {pinnedItems.map((thread) => (
               <ChatHistoryRow
+                accessibleMatterCount={accessibleMatterCount}
                 key={thread.id}
                 onDelete={() => onDelete(thread)}
                 thread={thread}
@@ -456,6 +461,7 @@ function ChatHistoryResults({
           <List>
             {group.items.map((thread) => (
               <ChatHistoryRow
+                accessibleMatterCount={accessibleMatterCount}
                 key={thread.id}
                 onDelete={() => onDelete(thread)}
                 thread={thread}
@@ -469,6 +475,7 @@ function ChatHistoryResults({
 }
 
 type ChatHistoryRowProps = {
+  accessibleMatterCount: number | undefined;
   onDelete: () => void;
   thread: ChatHistoryItem;
 };
@@ -481,7 +488,11 @@ type ChatHistoryRowProps = {
  * there is room they take the date's place on hover or focus. Right-click
  * opens the same actions.
  */
-function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
+function ChatHistoryRow({
+  accessibleMatterCount,
+  onDelete,
+  thread,
+}: ChatHistoryRowProps) {
   const t = useTranslations();
   const setReadState = useSetChatThreadReadState();
   const setPinState = useSetChatThreadPinState();
@@ -495,13 +506,22 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
     ? ""
     : thread.title;
   const updatedAt = new Date(thread.updatedAt);
+  // The link spans the row, so its tooltip sits under the chips it explains
+  // rather than at the middle of the row.
+  const contextLineRef = useRef<HTMLSpanElement>(null);
   const contextLine = (
-    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 overflow-hidden text-xs font-normal whitespace-nowrap">
+    <span
+      className="text-muted-foreground flex min-w-0 items-center gap-1.5 overflow-hidden text-xs font-normal whitespace-nowrap"
+      ref={contextLineRef}
+    >
       <ChatThreadOriginPrefix origin={thread.origin} />
       {decision === null ? null : (
         <ChatThreadDecisionLabel decision={decision} />
       )}
-      <ThreadContextLine context={thread.context} />
+      <ThreadContextLine
+        accessibleMatterCount={accessibleMatterCount}
+        context={thread.context}
+      />
     </span>
   );
   const revealClass =
@@ -571,11 +591,17 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
           }) => (
             <>
               <Tooltip
+                align="start"
+                anchor={contextLineRef}
                 content={
                   hasContext ? (
-                    <ThreadContextTooltip context={thread.context} />
+                    <ThreadContextTooltip
+                      accessibleMatterCount={accessibleMatterCount}
+                      context={thread.context}
+                    />
                   ) : null
                 }
+                side="bottom"
                 render={
                   <Link
                     className="focus-visible:ring-ring flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden rounded-md text-start outline-none focus-visible:ring-2"

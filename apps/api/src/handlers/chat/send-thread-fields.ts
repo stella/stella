@@ -110,6 +110,59 @@ const sameSkill = (
 ): boolean =>
   left?.skillName === right?.skillName && left?.skillId === right?.skillId;
 
+/** Logged once for a send whose carried context its thread does not run with. */
+export const CHAT_SEND_CONTEXT_IGNORED_EVENT = "chat.send.context_ignored";
+
+/**
+ * The fields a thread that holds a message keeps whatever a send carries. A
+ * send still applies its pins to such a thread itself, and its data scope only
+ * ever widens, so neither can be ignored.
+ */
+export type IgnoredSendThreadField = Extract<
+  keyof SendThreadFields,
+  "activeSkill" | "subjectDecisionId"
+>;
+
+/** What a send carries for the fields its thread may run without. */
+type IgnorableSendRequest = Pick<
+  SendThreadFieldsRequest,
+  IgnoredSendThreadField
+>;
+
+/** Per field, whether the send carried a value its thread runs without. */
+const IGNORED_WHEN = {
+  activeSkill: (request, resolved) =>
+    request.activeSkill !== undefined &&
+    !sameSkill(request.activeSkill, resolved.activeSkill),
+  subjectDecisionId: (request, resolved) =>
+    request.subjectDecisionId !== null &&
+    request.subjectDecisionId !== resolved.subjectDecisionId,
+} as const satisfies Record<
+  IgnoredSendThreadField,
+  (request: IgnorableSendRequest, resolved: SendThreadFields) => boolean
+>;
+
+const IGNORABLE_SEND_THREAD_FIELDS = Object.keys(IGNORED_WHEN).filter(
+  (field): field is IgnoredSendThreadField =>
+    Object.hasOwn(IGNORED_WHEN, field),
+);
+
+/**
+ * The fields a send carried that its thread does not run with, by name: what
+ * `resolveSendThreadFields` resolved differs from what the send asked for.
+ * Empty for a send that creates or adopts its thread.
+ */
+export const ignoredSendThreadFields = ({
+  request,
+  resolved,
+}: {
+  request: IgnorableSendRequest;
+  resolved: SendThreadFields;
+}): IgnoredSendThreadField[] =>
+  IGNORABLE_SEND_THREAD_FIELDS.filter((field) =>
+    IGNORED_WHEN[field](request, resolved),
+  );
+
 /** Whether adopting `next` changes anything `stored` holds. */
 export const sendThreadFieldsChanged = (
   stored: SendThreadFields,
