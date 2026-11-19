@@ -5,11 +5,12 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { pageTitle } from "@/lib/page-title";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
 
 import { timeReportOptions } from "./_protected.time_.report/-components/report-query";
-import { reportSearchSchema } from "./_protected.time_.report/-components/report-search";
+import { reportSearchSchema } from "./_protected.time_.report/-components/report-search.logic";
 import { resolveReportSearch } from "./_protected.time_.report/-components/report.logic";
 import { TimeReportPage } from "./_protected.time_.report/-components/report.page";
 import { TimeReportPending } from "./_protected.time_.report/-components/report.pending";
@@ -46,15 +47,21 @@ export const Route = createFileRoute("/_protected/time_/report")({
       redirect({ to: "/workspaces", throw: true });
     }
   },
-  loader: async ({ context, deps }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      timeReportOptions(
-        context.user.activeOrganizationId,
-        context.user.id,
-        resolveReportSearch(deps, todayIn(context.user.timezoneId)).filter,
-      ),
+  loader: async ({ cause, context, deps }) => {
+    const options = timeReportOptions(
+      context.user.activeOrganizationId,
+      context.user.id,
+      resolveReportSearch(deps, todayIn(context.user.timezoneId)).filter,
     );
+    if (
+      routeLoadMode({
+        cause,
+        hasCachedPages:
+          context.queryClient.getQueryData(options.queryKey) !== undefined,
+      }) === "await"
+    ) {
+      await ensureRouteQueryData(context.queryClient, options);
+    }
   },
   head: () => ({ meta: [{ title: pageTitle("billing.timeReport.title") }] }),
   pendingComponent: TimeReportPending,

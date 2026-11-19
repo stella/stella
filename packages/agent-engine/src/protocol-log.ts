@@ -422,6 +422,12 @@ const CLAUDE_CONTROL_REQUEST_FIELDS: Readonly<
       "auto",
     ]),
   },
+  set_model: { model: OPAQUE },
+  apply_flag_settings: {
+    settings: object({
+      effortLevel: vocabulary(DESKTOP_RUNNER_REASONING_EFFORTS),
+    }),
+  },
   stop_task: { task_id: IDENTIFIER },
 };
 

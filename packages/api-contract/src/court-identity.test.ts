@@ -1,6 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { foldCourtText } from "./court-citation-aliases";
+import { courtCitationGrammarOf } from "./court-citation-directory";
 import {
   directoryCourtById,
   directoryCourtIdentities,
@@ -63,6 +65,8 @@ const PRINTED_SPELLINGS: Readonly<
     KSULLI: [
       "Krajský soud v Ústí nad Labem – pobočka v Liberci",
       "Krajský soud v Ústí nad Labem, pobočka Liberec",
+      "Krajského soudu v Ústí nad Labem – pobočky Liberce",
+      "Krajský soud v Ústí nad Labem – pobočky Liberce",
     ],
     KSBRJI: [
       "Krajský soud v Brně – pobočka v Jihlavě",
@@ -154,4 +158,49 @@ describe("a printed court name is read onto its directory court", () => {
     ).toBe("KSHKPA");
     expect(idOf("CZE", "Okresní soud v Pardubicích")).toBe("OSPU");
   });
+});
+
+const czechGrammar =
+  courtCitationGrammarOf("CZE") ?? panic("Missing Czech court grammar");
+const branchForms = czechGrammar.courts.flatMap(
+  ({ id, head, seat, branch }) => {
+    if (branch === undefined) {
+      return [];
+    }
+    if (id === undefined || seat?.prepositional === undefined) {
+      return panic("Incomplete branch directory");
+    }
+    const forms =
+      czechGrammar.heads[head]?.forms ?? panic("Missing court head");
+    const { preposition, form: seatForm } = seat.prepositional;
+    return forms.map((form) => ({
+      id,
+      printed: `${form} ${preposition} ${seatForm} – pobočky ${branch.genitive}`,
+      unknownBranch: `${form} ${preposition} ${seatForm} – pobočky Neznámova`,
+    }));
+  },
+);
+
+test.each(branchForms)(
+  "an inflected Czech branch reads as its directory identity: $printed",
+  ({ id, printed }) => {
+    expect(idOf("CZE", printed)).toBe(id);
+  },
+);
+
+test.each(branchForms)(
+  "an unknown inflected branch cannot become its parent: $unknownBranch",
+  ({ unknownBranch }) => {
+    expect(readPrintedCourt("CZE", unknownBranch)).toEqual({ type: "unknown" });
+  },
+);
+
+test("every registered Czech branch contributes its inflected forms", () => {
+  expect(new Set(branchForms.map(({ id }) => id))).toEqual(
+    new Set(
+      czechGrammar.courts
+        .filter(({ branch }) => branch !== undefined)
+        .map(({ id }) => id ?? panic("A registered Czech branch has no id")),
+    ),
+  );
 });

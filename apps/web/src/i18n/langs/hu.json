@@ -1233,6 +1233,13 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
+    "browse": {
+      "courtDescription": "{court} ({country}): határozatok a stella nyilvános jogi adatbázisában, év és hónap szerint.",
+      "courts": "Bíróságok",
+      "days": "Napok",
+      "jurisdictionDescription": "{country}: bírósági határozatok a stella nyilvános jogi adatbázisában, bíróság, év és hónap szerint.",
+      "periodDescription": "{court} ({country}), {period}: határozatok a stella nyilvános jogi adatbázisában."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -2124,6 +2131,7 @@
     },
     "newChat": "Új csevegés",
     "newChatInSidePanel": "Az új csevegés elérhető az oldalsó panelen",
+    "nextSteps": "Következő lépések",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
@@ -2312,7 +2320,6 @@
     "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
-    "suggestedFollowupsLabel": "Javasolt követő kérdések",
     "suggestingTitle": "Cím javaslása…",
     "suggestionSeverity": {
       "style": "Stílus",
@@ -2323,7 +2330,6 @@
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
     },
-    "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "tableChart": {
       "bar": "Oszlop",
       "kind": "Diagram típusa",
@@ -2747,6 +2753,7 @@
     "done": "Kész",
     "doubleClickToRename": "Kattintson duplán az átnevezéshez",
     "download": "Letöltés",
+    "downloadOriginal": "Eredeti fájl letöltése",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.} other {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.}}",
       "droppedOn": "{count, plural, one {A(z) {itemName} a(z) {destinationName} elemre lett ejtve.} other {A(z) {itemName} a(z) {destinationName} elemre lett ejtve.}}",
@@ -3334,6 +3341,8 @@
       "contact": "Kapcsolat: {name}",
       "deliveredAt": "Kézbesítve a fiókba",
       "delivery": "Kézbesítés",
+      "deliveryEvents": "Kézbesítési események",
+      "deliveryReceipt": "Kézbesítési igazolás",
       "directionUnknown": "Ismeretlen irány",
       "messageId": "Üzenetazonosító",
       "moreContacts": "További kapcsolattartók tartoznak ehhez az adatfiókhoz.",
@@ -3346,6 +3355,8 @@
       "sent": "Elküldve",
       "statedInFile": "Adatfiók-üzenet (a fájl szerint)",
       "toHands": "{name} kezéhez",
+      "unlinkedFiles": "A hivatkozás nélkül megjelenő mellékletek megnyitásához töltse le az eredeti ZFO-fájlt.",
+      "unreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "uploaded": "Feltöltött adatfiók-üzenet"
     },
     "deliveredBy": "Kézbesítette: <address>{sender}</address>",

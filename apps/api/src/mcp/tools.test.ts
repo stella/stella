@@ -943,6 +943,7 @@ type MockMcpTransaction = {
   selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
+      findMany: () => Promise<unknown[]>;
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
         createdAt: Date;
         kind: string;
@@ -1090,6 +1091,7 @@ const createScopedDb = (
         await callback({
           query: {
             entities: {
+              findMany: async () => [],
               findFirst: async ({ where }: MockEntityFindFirstInput = {}) => {
                 if (!currentDocument) {
                   return null;

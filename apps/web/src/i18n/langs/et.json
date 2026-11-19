@@ -1233,6 +1233,13 @@
       "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
+    "browse": {
+      "courtDescription": "{court} ({country}): lahendid stella avalikus õigusandmebaasis aasta ja kuu kaupa.",
+      "courts": "Kohtud",
+      "days": "Päevad",
+      "jurisdictionDescription": "{country}: kohtulahendid stella avalikus õigusandmebaasis kohtu, aasta ja kuu kaupa.",
+      "periodDescription": "{court} ({country}), {period}: lahendid stella avalikus õigusandmebaasis."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -2124,6 +2131,7 @@
     },
     "newChat": "Uus vestlus",
     "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
+    "nextSteps": "Järgmised sammud",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -2312,7 +2320,6 @@
     "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
-    "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
     "suggestingTitle": "Pealkirja pakkumine…",
     "suggestionSeverity": {
       "style": "Stiil",
@@ -2323,7 +2330,6 @@
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
     },
-    "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "tableChart": {
       "bar": "Tulpdiagramm",
       "kind": "Diagrammi tüüp",
@@ -2747,6 +2753,7 @@
     "done": "Valmis",
     "doubleClickToRename": "Topeltklõpsa ümbernimetamiseks",
     "download": "Laadi alla",
+    "downloadOriginal": "Laadi originaal alla",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Teisaldamine tühistati. Üksust {itemName} ei teisaldatud.} other {Teisaldamine tühistati. {itemName} ei teisaldatud.}}",
       "droppedOn": "{count, plural, one {Üksus {itemName} asetati sihtkohale {destinationName}.} other {{itemName} asetati sihtkohale {destinationName}.}}",
@@ -3334,6 +3341,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Postkasti toimetatud",
       "delivery": "Kättetoimetamine",
+      "deliveryEvents": "Kättetoimetamise käik",
+      "deliveryReceipt": "Kättetoimetamistõend",
       "directionUnknown": "Suund teadmata",
       "messageId": "Sõnumi ID",
       "moreContacts": "Selle andmepostkastiga on seotud veel kontakte.",
@@ -3346,6 +3355,8 @@
       "sent": "Saadetud",
       "statedInFile": "Andmepostkasti sõnum (faili andmetel)",
       "toHands": "Isiklikult: {name}",
+      "unlinkedFiles": "Ilma lingita manuste avamiseks laadige alla algne ZFO-fail.",
+      "unreadable": "Faili ei saanud lugeda andmepostkasti sõnumi ega kättetoimetamistõendina.",
       "uploaded": "Üleslaaditud andmepostkasti sõnum"
     },
     "deliveredBy": "Edastas <address>{sender}</address>",

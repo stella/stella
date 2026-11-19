@@ -985,7 +985,7 @@ const openTurn = async (
     await client.kill();
     return prompt;
   }
-  const held = heldProcess(options, cli, client, skills);
+  const held = heldProcess(options, input, { cli, client, skills });
   sendTurn({
     session,
     client,
@@ -1036,18 +1036,60 @@ const removePlugin = async (
  * What a CLI process holds for every turn it hosts: the skill plugin it was
  * started with, removed once the process is gone.
  */
-type HeldProcess = { skills: SkillPlugin | null; gone: Promise<void> };
+type HeldProcess = {
+  skills: SkillPlugin | null;
+  gone: Promise<void>;
+  /** What the process runs at, switched in place by later turns. */
+  settings: HeldSettings;
+};
+
+/**
+ * What a turn sets that a kept process can switch: the model and effort by
+ * control request, and the approval mode's permission mode. `launch` is what
+ * the approval mode fixes at the CLI's start (its sandbox and pre-allowed
+ * tools); a turn whose mode starts the CLI otherwise needs a new process.
+ */
+type HeldSettings = {
+  model: string;
+  effort: string | null;
+  launch: string;
+};
+
+const heldSettings = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  skills: SkillPlugin | null,
+): HeldSettings => ({
+  model: input.model,
+  effort: input.reasoningEffort,
+  launch: JSON.stringify([
+    settingsArgs(options, input, skills),
+    allowedToolsArgs({
+      approvals: input.policy.approvals,
+      browserServerName: input.browser?.serverName ?? null,
+      serverName: input.mcp.serverName,
+    }),
+  ]),
+});
 
 const HELD = new WeakMap<ClaudeProcess, HeldProcess>();
 
 const heldProcess = (
   options: ClaudeCodeHarnessAdapterOptions,
-  cli: ClaudeProcess,
-  client: ClaudeCliClient,
-  skills: SkillPlugin | null,
+  input: HarnessTurnInput,
+  {
+    cli,
+    client,
+    skills,
+  }: {
+    cli: ClaudeProcess;
+    client: ClaudeCliClient;
+    skills: SkillPlugin | null;
+  },
 ): HeldProcess => {
   const held = {
     skills,
+    settings: heldSettings(options, input, skills),
     gone: (async () => {
       await client.exited;
       if (skills !== null) {
@@ -1121,19 +1163,43 @@ const continueTurn = async (
     });
   }
   const client = cli.client;
-  // A kept process may have left the mode it started in (an approved plan
-  // switches to Ask's mode): every turn starts in its own mode, or in a
-  // fresh process when the CLI will not switch.
-  const reset = await client.request("set_permission_mode", {
-    mode: PERMISSION_MODE[input.policy.approvals],
-  });
-  if (Result.isError(reset)) {
+  const relaunch = async () => {
     await settlesWithin(cli.stopAll(client), options.gracePeriodMs);
     await client.kill();
     return startTurn(options, {
       ...input,
       continuation: { type: "resume", sessionId: live.sessionId },
     });
+  };
+  // The turn runs at its own model, effort and mode, switched here so the
+  // work the process holds goes on; what the CLI fixed at its start, or a
+  // switch it refuses, needs a new process.
+  const wanted = heldSettings(options, input, held.skills);
+  if (wanted.launch !== held.settings.launch) {
+    return relaunch();
+  }
+  if (wanted.model !== held.settings.model) {
+    const switched = await client.request("set_model", { model: wanted.model });
+    if (Result.isError(switched)) {
+      return relaunch();
+    }
+  }
+  if (wanted.effort !== held.settings.effort) {
+    const switched = await client.request("apply_flag_settings", {
+      settings: { effortLevel: wanted.effort },
+    });
+    if (Result.isError(switched)) {
+      return relaunch();
+    }
+  }
+  held.settings = wanted;
+  // A kept process may have left the mode it started in (an approved plan
+  // switches to Ask's mode): every turn starts in its own mode.
+  const reset = await client.request("set_permission_mode", {
+    mode: PERMISSION_MODE[input.policy.approvals],
+  });
+  if (Result.isError(reset)) {
+    return relaunch();
   }
   const session = turnSession(options, input, cli, live.sessionId);
   session.attach(client);

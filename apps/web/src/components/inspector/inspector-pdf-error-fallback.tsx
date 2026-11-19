@@ -59,7 +59,9 @@ export const ConversionRefusalFallback = ({
 /** The file has nothing to show, which no retry changes; it still downloads. */
 export const FilePreviewUnavailable = ({
   onDownload,
+  message,
 }: {
+  message?: string;
   onDownload?: (() => void) | undefined;
 }) => {
   const t = useTranslations();
@@ -68,7 +70,7 @@ export const FilePreviewUnavailable = ({
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <FileIcon className="text-foreground-disabled size-8" />
       <p className="text-muted-foreground text-sm">
-        {t("search.previewUnavailable")}
+        {message ?? t("search.previewUnavailable")}
       </p>
       {onDownload === undefined ? null : (
         <Button onClick={onDownload} size="sm" variant="outline">

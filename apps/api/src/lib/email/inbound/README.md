@@ -165,7 +165,7 @@ A `.zfo` file, a Czech data-box (ISDS) message exported as a CMS SignedData
 over the message XML, takes the same path and files a `data_box` record.
 
 - `parseDataBoxMessage` (`src/lib/email/correspondence/data-box/zfo.ts`) reads the envelope and the
-  base64 files without network access. The file is bounded by the document
+  base64 and inline XML attachments without network access. The file is bounded by the document
   upload limit and its files by the correspondence attachment limit; a
   document type declaration is refused, so no entity is expanded or fetched.
   The system's seal is recorded as found (signer, issuer, serial number,
@@ -205,6 +205,14 @@ over the message XML, takes the same path and files a `data_box` record.
   attachment ordinals, including when the initial source was deleted.
 - The detail read lists the organization's contacts whose data boxes include
   the sender or recipient box ID. Matching only reads contacts.
+
+Files can also open a message before filing finishes, or a standalone ISDS delivery
+receipt. Both use `parseDataBoxDocument` on the selected version. The preview
+shows the seal information stated in the source and offers the original download.
+A filed attachment opens from the preview only while its current bytes match
+the corresponding member of that export. AI readers use the same labeled
+envelope and receipt events. Readers that need embedded text scan each member
+before extraction.
 
 ## Local development
 

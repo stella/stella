@@ -1283,6 +1283,7 @@
       "FolderPlusIcon",
       "FolderSyncIcon",
       "FolderTreeIcon",
+      "FollowUpIcon",
       "FunctionSquareIcon",
       "GanttChartIcon",
       "GaugeIcon",
@@ -1878,6 +1879,17 @@
       "TableRow"
     ],
     "./table-chart": ["TableChart"],
+    "./table-shell": [
+      "Table",
+      "TableBody",
+      "TableCaption",
+      "TableCellFace",
+      "TableFooter",
+      "TableHead",
+      "TableHeader",
+      "TableRow",
+      "TableSkeletonRows"
+    ],
     "./tabs": [
       "Tabs",
       "TabsContent",
@@ -2146,6 +2158,7 @@
     "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
       "csv",
+      "dataBox",
       "excel",
       "markdown",
       "openDocumentSheet",
@@ -2291,6 +2304,8 @@
     "Table.scroll": ["parent", "self"],
     "TableCell.align": ["center", "end", "start"],
     "TableCell.tone": ["default", "muted"],
+    "TableCellFace.align": ["center", "end", "start"],
+    "TableCellFace.tone": ["default", "muted"],
     "TableChart.kind": ["bar", "line", "pie", "scatter"],
     "TableChart.xMode": ["category", "numeric"],
     "TableHead.align": ["center", "end", "start"],

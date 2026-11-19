@@ -246,6 +246,11 @@ export const API_OAUTH_ROUTES = {
     exportName: "readFileEndpoint",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/data-box/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/data-box.ts",
+    uncataloged: "upload_mechanics",
+  },
   "POST /v1/entities/:workspaceId/upload-version": {
     scope: "stella:documents_write",
     handler: "apps/api/src/handlers/entities/versions/upload.ts",

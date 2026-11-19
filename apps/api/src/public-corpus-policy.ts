@@ -24,6 +24,8 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /law/sitemap/shards": "sitemap",
   "GET /law/sitemap/statutes/shard": "sitemap",
   "GET /case/coverage": "browse",
+  "GET /case/browse/courts": "browse",
+  "GET /case/browse/calendar": "browse",
   // Adding facets to listing requires updating this classifier and its guard.
   "GET /case/decisions": "browse",
   "GET /case/decisions/facets": "aggregate",

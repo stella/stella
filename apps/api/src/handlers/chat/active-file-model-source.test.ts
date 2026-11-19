@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
   PDF_MIME_TYPE,
@@ -38,6 +40,23 @@ describe("active-file model source", () => {
       });
     }
   });
+
+  test.each([DATA_BOX_FILE_FORMAT.mimeType, "application/octet-stream"])(
+    "reads a data-box file from the original storage key for %s",
+    (mimeType) => {
+      expect(
+        getActiveFileSourceForModel({
+          ...fileContent(mimeType),
+          fileName: "archiv.ZFO",
+          pdfFileId: "019864b8-48d0-7f37-94d5-948e3bcf3f45",
+        }),
+      ).toMatchObject({
+        type: "extracted-text",
+        mimeType,
+        fileName: "archiv.ZFO",
+      });
+    },
+  );
 
   test("preserves PDF and derivative fallbacks", () => {
     expect(getActiveFileSourceForModel(fileContent(PDF_MIME_TYPE))).toEqual({

@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+} from "@stll/api-contract";
+import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 import { createTestState } from "@stll/test-state";
@@ -31,6 +35,7 @@ import {
   PDF_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
@@ -315,54 +320,119 @@ describe("chat attachment hydration", () => {
     },
   );
 
-  test("persists XLSX text at upload and hydrates it without rereading the workbook", async () => {
-    const values = mock(
-      async (_row: { extractedText: string | null }) => undefined,
-    );
-    const testTx = asTestRaw<Transaction>({
-      insert: mock(() => ({ values })),
-    });
-    const safeDb: SafeDb = async (callback) =>
-      await Result.tryPromise(async () => await callback(testTx));
-    const bytes = new Uint8Array(
-      await Bun.file(
-        new URL("../../lib/search/__fixtures__/schedule.xlsx", import.meta.url),
-      ).arrayBuffer(),
-    );
+  test.each([
+    {
+      fileName: "schedule.xlsx",
+      mimeType: XLSX_MIME_TYPE,
+      bytes: async () =>
+        await Bun.file(
+          new URL(
+            "../../lib/search/__fixtures__/schedule.xlsx",
+            import.meta.url,
+          ),
+        ).arrayBuffer(),
+      fragments: ["Acme s.r.o."],
+    },
+    {
+      fileName: "zprava.ZFO",
+      mimeType: "application/octet-stream",
+      bytes: zfoFile,
+      fragments: [
+        FIXTURE_MESSAGE.annotation,
+        "dodáno",
+        "doručeno",
+        "unverified",
+        "pouceni.txt",
+        "Synthetic instructions.",
+      ],
+    },
+  ])(
+    "persists and hydrates $fileName as readable text without fetching it again",
+    async ({ fileName, mimeType, bytes, fragments }) => {
+      const values = mock(
+        async (_row: { extractedText: string | null }) => undefined,
+      );
+      const testTx = asTestRaw<Transaction>({
+        insert: mock(() => ({ values })),
+      });
+      const safeDb: SafeDb = async (callback) =>
+        await Result.tryPromise(async () => await callback(testTx));
+      const uploadResult = await uploadUserFile({
+        dependencies: uploadDependencies,
+        file: {
+          bytes: new Uint8Array(await bytes()),
+          fileName,
+          mimeType,
+        },
+        organizationId,
+        recordAuditEvent: mock(async () => undefined),
+        safeDb,
+        threadId: toSafeId<"chatThread">(
+          "11111111-1111-4111-8111-111111111112",
+        ),
+        userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+        workspaceId,
+      });
 
-    const uploadResult = await uploadUserFile({
+      expect(Result.isOk(uploadResult)).toBe(true);
+      const extractedText = values.mock.calls.at(0)?.at(0)?.extractedText;
+      if (typeof extractedText !== "string") {
+        throw new TypeError("Expected upload to persist extracted text");
+      }
+      for (const fragment of fragments) {
+        expect(extractedText).toContain(fragment);
+      }
+
+      const hydrateResult = await hydrateFilePart({
+        extractedText,
+        fileName,
+        mimeType,
+        sendMode: CHAT_SEND_MODE.rawOverride,
+        s3Key: testFileKey(ATTACHMENT_KEY),
+      });
+
+      expect(Result.isOk(hydrateResult)).toBe(true);
+      expect(hydrateResult.unwrap()).toMatchObject({
+        type: "anonymizable",
+        part: { type: "text", content: expect.stringContaining(extractedText) },
+      });
+      expect(requestKeys("GET")).toEqual([]);
+    },
+  );
+
+  test("rejects a standalone envelope when an embedded document fails its upload scan", async () => {
+    const bytes = new Uint8Array(
+      await zfoFile({
+        files: [
+          {
+            name: "notice.pdf",
+            mimeType: PDF_MIME_TYPE,
+            content: new TextEncoder().encode(
+              "A text-only document incorrectly labelled PDF.",
+            ),
+          },
+        ],
+      }),
+    );
+    const result = await uploadUserFile({
       dependencies: uploadDependencies,
       file: {
         bytes,
-        fileName: "schedule.xlsx",
-        mimeType: XLSX_MIME_TYPE,
+        fileName: "notice.zfo",
+        mimeType: DATA_BOX_FILE_FORMAT.mimeType,
       },
       organizationId,
+      workspaceId,
+      safeDb: async () => panic("Rejected uploads do not write a chat file"),
       recordAuditEvent: mock(async () => undefined),
-      safeDb,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
       userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
-      workspaceId,
     });
-
-    expect(Result.isOk(uploadResult)).toBe(true);
-    const extractedText = values.mock.calls.at(0)?.at(0)?.extractedText;
-    if (typeof extractedText !== "string") {
-      throw new TypeError("Expected upload to persist extracted XLSX text");
-    }
-    expect(extractedText).toContain("Acme s.r.o.");
-
-    const hydrateResult = await hydrateFilePart({
-      extractedText,
-      fileName: "schedule.xlsx",
-      mimeType: XLSX_MIME_TYPE,
-      sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: testFileKey(ATTACHMENT_KEY),
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 422,
+      code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
     });
-
-    expect(Result.isOk(hydrateResult)).toBe(true);
-    // The cached text answered the hydration: the workbook was never fetched.
-    expect(requestKeys("GET")).toEqual([]);
+    expect(requestKeys("PUT")).toEqual([]);
   });
 
   test("cleans up already uploaded files when a later attachment fails", async () => {
