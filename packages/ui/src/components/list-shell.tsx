@@ -63,6 +63,18 @@ const ListGroupTitle = ({
   </h2>
 );
 
+/** The group's one quiet line under its title. */
+const ListGroupDescription = ({
+  className,
+  ...props
+}: React.ComponentProps<"p">) => (
+  <p
+    className={cn("text-muted-foreground text-xs text-pretty", className)}
+    data-slot="list-group-description"
+    {...props}
+  />
+);
+
 /**
  * The surface. Depth comes from a ring plus a soft shadow, not a frame.
  *
@@ -161,6 +173,7 @@ const ListGroupTitlePending = () => (
 export {
   List,
   ListGroup,
+  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,

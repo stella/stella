@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import { MatterOptionLabel } from "@/components/matter-option-label";
@@ -23,6 +22,13 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { MemoryCreateForm } from "@/routes/_protected.settings/-components/account/memory/memory-create-form";
 import { canManageMatterMemory } from "@/routes/_protected.settings/-components/account/memory/memory-panel.logic";
+import {
+  MEMORY_CARDS_CLASS,
+  MEMORY_LIST_CLASS,
+  MEMORY_TAB_CONTENT_CLASS,
+  MEMORY_TABS,
+  MemoryCardsPending,
+} from "@/routes/_protected.settings/-components/account/memory/memory-panel.pending";
 import { MemoryRow } from "@/routes/_protected.settings/-components/account/memory/memory-row";
 import { SuggestionsQueue } from "@/routes/_protected.settings/-components/account/memory/suggestions-queue";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
@@ -32,7 +38,7 @@ import type {
 } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
-type MemoryTab = "mine" | "firm" | "matter";
+type MemoryTab = (typeof MEMORY_TABS)[number]["key"];
 type MemoryView = "active" | "stale" | "archived";
 
 const TAB_TO_SCOPE = {
@@ -42,17 +48,19 @@ const TAB_TO_SCOPE = {
 } as const satisfies Record<MemoryTab, MemoryScope>;
 
 export const MemoryPanel = () => {
-  const t = useTranslations("memory");
-  const [tab, setTab] = useState<MemoryTab>("mine");
+  const t = useTranslations();
+  const [tab, setTab] = useState<MemoryTab>(MEMORY_TABS[0].key);
   const canManageFirmMemory = usePermissions({ firmMemory: ["create"] });
   const canManageWorkspaceMemory = usePermissions({ workspace: ["update"] });
 
   return (
     <Tabs onValueChange={setTab} value={tab}>
       <TabsList>
-        <TabsTab value="mine">{t("tabs.mine")}</TabsTab>
-        <TabsTab value="firm">{t("tabs.firm")}</TabsTab>
-        <TabsTab value="matter">{t("tabs.matter")}</TabsTab>
+        {MEMORY_TABS.map((entry) => (
+          <TabsTab key={entry.key} value={entry.key}>
+            {t(entry.labelKey)}
+          </TabsTab>
+        ))}
       </TabsList>
 
       <TabsPanel value="mine">
@@ -78,7 +86,7 @@ const MineMemories = () => {
   const activeOrganizationId = useActiveOrganizationId();
 
   return (
-    <div className="flex flex-col gap-6 pt-4">
+    <div className={MEMORY_TAB_CONTENT_CLASS}>
       <SuggestionsQueue scope="user" />
       <MemoryCreateForm scope="user" />
       <MemoryList
@@ -98,7 +106,7 @@ const FirmMemories = ({ canManage }: FirmMemoriesProps) => {
   const activeOrganizationId = useActiveOrganizationId();
 
   return (
-    <div className="flex flex-col gap-6 pt-4">
+    <div className={MEMORY_TAB_CONTENT_CLASS}>
       {canManage ? <MemoryCreateForm scope="organization" /> : null}
       <MemoryList
         scope={TAB_TO_SCOPE.firm}
@@ -159,7 +167,7 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
   }
 
   return (
-    <div className="flex flex-col gap-6 pt-4">
+    <div className={MEMORY_TAB_CONTENT_CLASS}>
       <Field>
         <FieldLabel htmlFor="memory-matter-picker">
           {commonT("matter")}
@@ -266,7 +274,7 @@ const MemoryList = ({
   const items = data ? data.pages.flatMap((page) => page.items) : [];
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={MEMORY_LIST_CLASS}>
       <div className="flex gap-2">
         <Button
           aria-pressed={view === "active"}
@@ -335,7 +343,7 @@ const MemoryListBody = ({
   const commonT = useTranslations("common");
 
   if (isPending) {
-    return <MemoryListSkeleton />;
+    return <MemoryCardsPending />;
   }
   if (isError) {
     return (
@@ -353,7 +361,7 @@ const MemoryListBody = ({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={MEMORY_CARDS_CLASS}>
       {items.map((memory) => (
         <MemoryRow
           key={memory.id}
@@ -378,11 +386,3 @@ const MemoryListBody = ({
     </div>
   );
 };
-
-const MemoryListSkeleton = () => (
-  <div className="flex flex-col gap-2">
-    {[0, 1, 2].map((index) => (
-      <Skeleton key={index} className="h-16 w-full" />
-    ))}
-  </div>
-);

@@ -20,11 +20,6 @@ import {
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import {
   List,
-  ListGroup,
-  ListGroupDescription,
-  ListGroupHeader,
-  ListGroupHeading,
-  ListGroupTitle,
   ListItem,
   ListItemActions,
   ListItemContent,
@@ -46,6 +41,10 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
+import {
+  SignInMethodsGroup,
+  SignInMethodsRowsPending,
+} from "@/routes/_protected.settings/-components/account/sign-in-methods.pending";
 
 type SelectedAccount = { id: string; provider: string };
 const CONFIRMATION_CODE_LENGTH = 6;
@@ -151,20 +150,21 @@ export const SignInMethods = () => {
     capabilitiesView.type === "items" &&
     capabilitiesView.refetchError === undefined;
 
+  const loading =
+    accountsView.type === "pending" || capabilitiesView.type === "pending";
+
   return (
-    <ListGroup>
-      <ListGroupHeader>
-        <ListGroupHeading>
-          <ListGroupTitle>
-            {t("settings.account.signInMethods.title")}
-          </ListGroupTitle>
-          <ListGroupDescription>
-            {t("settings.account.signInMethods.description")}
-          </ListGroupDescription>
-        </ListGroupHeading>
-      </ListGroupHeader>
-      <QueryViewFeedback view={accountsView} />
-      <QueryViewFeedback view={capabilitiesView} />
+    <SignInMethodsGroup>
+      {/* While either read loads, the rows' placeholders hold their place;
+          only a failed read speaks. */}
+      {loading ? (
+        <SignInMethodsRowsPending />
+      ) : (
+        <>
+          <QueryViewFeedback view={accountsView} />
+          <QueryViewFeedback view={capabilitiesView} />
+        </>
+      )}
       {dataReady && (
         <List>
           {capabilitiesView.items.emailOtp && (
@@ -324,6 +324,6 @@ export const SignInMethods = () => {
           </DialogFooter>
         </DialogPopup>
       </Dialog>
-    </ListGroup>
+    </SignInMethodsGroup>
   );
 };

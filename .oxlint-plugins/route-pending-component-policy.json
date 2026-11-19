@@ -5,6 +5,7 @@
     "@stll/ui/composer-tokens",
     "@stll/ui/control-face",
     "@stll/ui/directional-icon",
+    "@stll/ui/frame",
     "@stll/ui/icons",
     "@stll/ui/landing-shell",
     "@stll/ui/list-shell",

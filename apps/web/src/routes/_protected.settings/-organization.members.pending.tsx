@@ -21,7 +21,7 @@ import {
 } from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import {
   InvitationsSkeletonRows,
   InvitationsTableHeader,
