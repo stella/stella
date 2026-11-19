@@ -72,10 +72,7 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import {
-  createTestHandlerContext,
-  NO_DB,
-} from "@/api/tests/helpers/handler-context";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
@@ -1033,7 +1030,7 @@ describe("data-box file preview", () => {
           user: { id: ids.userA1 },
           audit: recorderA(),
           scopedDb: scopedDbA(),
-          safeDb: NO_DB,
+          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
           params: { workspaceId: ids.wsA1, fieldId: file.fieldId },
         }),
       );
