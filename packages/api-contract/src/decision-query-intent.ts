@@ -4,6 +4,10 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
+  caseNumberKeysMatch,
+  caseNumberMatchKey,
+} from "./case-number-match-key";
+import {
   canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
   foldDecisionIdentifierInput,
@@ -565,11 +569,13 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
     case "docket":
     case "ecli":
     case "reference": {
-      // A docket is keyed by the grammar that read it; an ECLI belongs to no
-      // docket grammar, so it is compared unscoped. A stored reference is
-      // compared with case, spacing and punctuation folded, at least as
-      // loosely as every per-type key its lookup read rows by, so a row the
-      // lookup found for an equivalent spelling is never dropped here.
+      // A docket is keyed by the grammar that read it, its year in either
+      // printed form (`caseNumberMatchKey`), as the lookup read its rows; an
+      // ECLI belongs to no docket grammar, so it is compared unscoped. A
+      // stored reference is compared with case, spacing and punctuation
+      // folded, at least as loosely as every per-type key its lookup read
+      // rows by, so a row the lookup found for an equivalent spelling is
+      // never dropped here.
       const grammar =
         identifier.kind === "docket"
           ? DECISION_DOCKET_GRAMMARS[identifier.jurisdiction]
@@ -577,7 +583,7 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
       const keyOf = (value: string): string =>
         identifier.kind === "reference"
           ? structuredCitationKey(value)
-          : decisionIdentifierComparisonKey(value, grammar);
+          : caseNumberMatchKey(decisionIdentifierComparisonKey(value, grammar));
       const wanted = keyOf(identifier.value);
       return hits.filter(
         (hit) =>
@@ -803,7 +809,10 @@ const fileReferenceOf = (
   { familyCanonical, grammar }: SheetReadingContext,
 ): DecisionDocketReference | null => {
   const reference = readDecisionDocketReference(docket, { grammar });
-  return reference?.family.canonical === familyCanonical ? reference : null;
+  return reference !== null &&
+    caseNumberKeysMatch(reference.family.canonical, familyCanonical)
+    ? reference
+    : null;
 };
 
 const SHEET_READINGS = {
