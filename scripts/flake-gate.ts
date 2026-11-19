@@ -477,6 +477,19 @@ const recordFailure = (
   };
 };
 
+/** Bun's summary of a clean run that skipped tests and ran none. */
+const skipsEveryBunTest = (outcome: FlakeProcessOutcome) => {
+  if (outcome.type === "timeout" || outcome.status !== 0) {
+    return false;
+  }
+  const output = `${outcome.stdout}\n${outcome.stderr}`;
+  return (
+    /^\s*0 pass$/mu.test(output) &&
+    /^\s*0 fail$/mu.test(output) &&
+    /^\s*[1-9]\d* skip$/mu.test(output)
+  );
+};
+
 export const runOnce = async ({
   target,
   seed,
@@ -487,18 +500,28 @@ export const runOnce = async ({
   switch (target.runner) {
     case "bun":
     case "api":
-    case "web":
+    case "web": {
       // Fresh invocations reset setup and shuffle the entire file for each trial.
+      const outcome = await runFlakeProcess({
+        command: trialCommand(target, seed),
+        cwd: target.cwd,
+        env: target.env,
+        deadline,
+      });
+      // As with Rust's ignored tests, a file whose every test is skipped on
+      // this runner (its prerequisites are absent) has nothing to repeat.
+      if (skipsEveryBunTest(outcome)) {
+        return {
+          type: "no-tests",
+          reason: "not gated (every test is skipped on this runner)",
+        };
+      }
       return executionOutcome({
         runner: target.runner,
-        outcome: await runFlakeProcess({
-          command: trialCommand(target, seed),
-          cwd: target.cwd,
-          env: target.env,
-          deadline,
-        }),
+        outcome,
         onFailureOutput,
       });
+    }
     case "rust": {
       const listing = createRustTestListing(target.module);
       const discovery = await runFlakeProcess({
