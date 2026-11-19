@@ -104,6 +104,7 @@ const sourceLeaseStepFailed = failureSink({
 export type FailureLedgerWrite =
   | { type: "written" }
   | { type: "unreplayable" }
+  | { type: "ownership-unavailable" }
   | { type: "timeout"; error: TimeoutError }
   | { type: "transient"; count: number }
   | { type: "rejected" };
@@ -131,7 +132,21 @@ export const recordIngestionFailures = async ({
     catch: (cause) => cause,
   });
   if (Result.isOk(logged)) {
-    return logged.value;
+    const written = logged.value;
+    if (Result.isOk(written)) {
+      return written.value;
+    }
+    const { reason } = written.error;
+    switch (reason) {
+      case "owner-unavailable":
+        return { type: "ownership-unavailable" };
+      case "capture":
+      case "unaddressable":
+        return { type: "unreplayable" };
+      default:
+        reason satisfies never;
+        return panic("Unhandled failure-evidence refusal");
+    }
   }
   const { error } = logged;
   observeFailure(error, {
@@ -657,12 +672,22 @@ export const applyDecisionBatch = async (
     });
   }
   if (failureLedger.type !== "written") {
-    // Not recorded, so not a settled rejection either.
+    // A rejection settles only once its replay input is certified.
     for (const index of tally.ledgerIndexes) {
-      tally.settlements[index] = {
-        type: "unsettled",
-        reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE,
-      };
+      const settlement =
+        tally.settlements.at(index) ??
+        panic("Failure ledger index has no settlement");
+      // The original transient failure remains the retry cause for an unbacked reservation.
+      if (
+        failureLedger.type !== "ownership-unavailable" ||
+        settlement.type !== "unsettled" ||
+        settlement.reason !== CASE_LAW_BATCH_FAILURE.TRANSIENT
+      ) {
+        tally.settlements[index] = {
+          type: "unsettled",
+          reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE,
+        };
+      }
     }
   }
   return {

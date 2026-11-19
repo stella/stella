@@ -984,6 +984,7 @@ describe("runIngestionPipeline — failure records", () => {
             }
             return Object.assign(Promise.resolve([]), {
               onConflictDoNothing: async () => [],
+              onConflictDoUpdate: async () => [],
             });
           },
         }),

@@ -31,7 +31,10 @@ import {
   CASE_LAW_CORPUS_DEPENDENCIES,
   CASE_LAW_JUDGE_DEPENDENCIES,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
-import { parkIngestionFailureTx } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
+import {
+  IngestionFailureEvidenceError,
+  parkIngestionFailureTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import { attachToHeldDecision } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -580,7 +583,7 @@ const processDecisionFromInput = async (
     statedEcliIdentity,
     heldDecisionAttachment,
   } = await resolveSourceContract(options.sourceId);
-  return await processDecisionAttempt({
+  const attempted = await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
     retention,
@@ -593,6 +596,18 @@ const processDecisionFromInput = async (
     corpus,
     judges,
   });
+  if (
+    Result.isError(attempted) &&
+    attempted.error instanceof IngestionFailureEvidenceError &&
+    attempted.error.reason === "owner-unavailable"
+  ) {
+    return Result.ok({
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+    });
+  }
+  return attempted;
 };
 
 export const processDecision = async (

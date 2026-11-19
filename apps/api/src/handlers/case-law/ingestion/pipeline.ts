@@ -158,6 +158,8 @@ const failureLedgerHaltReason = (write: FailureLedgerWrite): string | null => {
       return null;
     case "unreplayable":
       return "Failure record has no replayable identity or input; cursor held for retry";
+    case "ownership-unavailable":
+      return "Failure record ownership unavailable; cursor held for retry";
     case "rejected":
       return "Failure record was not written; cursor held for retry";
     case "timeout":
