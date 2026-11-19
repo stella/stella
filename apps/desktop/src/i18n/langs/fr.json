@@ -658,10 +658,22 @@
     },
     "language": {
       "title": "Langue de dictée",
-      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur.",
+      "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur. S’il y en a plusieurs, chaque mot est reconnu dans la langue où vous le prononcez.",
       "automatic": "Automatique",
       "automaticWith": "Automatique ({languages})",
       "noResults": "Aucune langue trouvée"
+    },
+    "customWords": {
+      "group": "Mots personnalisés",
+      "title": "Mots et noms que stella doit écrire correctement",
+      "description": "Par exemple des noms de clients, ou des termes anglais que vous employez en parlant une autre langue. Ils sont conservés sur cet ordinateur pour ce compte et envoyés uniquement avec votre dictée, à la transcription par stella AI et à la correction par IA. Le modèle vocal de cet ordinateur ne les utilise pas.",
+      "count": "{count, number} sur {limit, number}",
+      "input": "Ajouter un mot ou un nom",
+      "add": "Ajouter",
+      "remove": "Retirer {word}",
+      "duplicate": "Ce mot figure déjà dans la liste.",
+      "full": "La liste contient au plus {limit, number} mots. Retirez-en un pour en ajouter un autre.",
+      "failed": "La liste n’a pas pu être enregistrée. Réessayez."
     },
     "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
     "speechModel": "Modèle vocal",

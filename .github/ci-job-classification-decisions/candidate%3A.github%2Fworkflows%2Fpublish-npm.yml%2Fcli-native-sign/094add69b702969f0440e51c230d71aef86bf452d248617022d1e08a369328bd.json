@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Applies platform signing and verification to built standalone CLI artifacts before publication.",
+  "reviewedDigest": "094add69b702969f0440e51c230d71aef86bf452d248617022d1e08a369328bd"
+}

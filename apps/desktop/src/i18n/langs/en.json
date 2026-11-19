@@ -658,10 +658,22 @@
     },
     "language": {
       "title": "Dictation language",
-      "description": "Automatic uses this computer’s display and keyboard languages.",
+      "description": "Automatic uses this computer’s display and keyboard languages. With more than one, each word is recognized in the language you speak it in.",
       "automatic": "Automatic",
       "automaticWith": "Automatic ({languages})",
       "noResults": "No languages found"
+    },
+    "customWords": {
+      "group": "Custom words",
+      "title": "Words and names stella should spell correctly",
+      "description": "Such as client names, or English terms you use while speaking another language. They are kept on this computer for this account and sent only with your dictation, to stella AI transcription and to AI cleanup. The speech model on this computer does not use them.",
+      "count": "{count, number} of {limit, number}",
+      "input": "Add a word or name",
+      "add": "Add",
+      "remove": "Remove {word}",
+      "duplicate": "This word is already in the list.",
+      "full": "The list holds up to {limit, number} words. Remove one to add another.",
+      "failed": "The list could not be saved. Try again."
     },
     "modelNeeded": "The speech model runs on this computer.",
     "speechModel": "Speech model",

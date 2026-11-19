@@ -658,10 +658,22 @@
     },
     "language": {
       "title": "Diktiersprache",
-      "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers.",
+      "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers. Sind es mehrere, wird jedes Wort in der Sprache erkannt, in der Sie es sprechen.",
       "automatic": "Automatisch",
       "automaticWith": "Automatisch ({languages})",
       "noResults": "Keine Sprachen gefunden"
+    },
+    "customWords": {
+      "group": "Eigene Wörter",
+      "title": "Wörter und Namen, die stella richtig schreiben soll",
+      "description": "Etwa Namen von Mandanten oder englische Begriffe, die Sie in einer anderen Sprache verwenden. Sie werden auf diesem Computer für dieses Konto gespeichert und nur mit Ihrem Diktat gesendet, an die Umwandlung mit stella AI und an die Überarbeitung mit KI. Das Sprachmodell auf diesem Computer verwendet sie nicht.",
+      "count": "{count, number} von {limit, number}",
+      "input": "Wort oder Namen hinzufügen",
+      "add": "Hinzufügen",
+      "remove": "{word} entfernen",
+      "duplicate": "Dieses Wort steht schon in der Liste.",
+      "full": "Die Liste fasst höchstens {limit, number} Wörter. Entfernen Sie eines, um ein weiteres hinzuzufügen.",
+      "failed": "Die Liste konnte nicht gespeichert werden. Versuchen Sie es erneut."
     },
     "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
     "speechModel": "Sprachmodell",

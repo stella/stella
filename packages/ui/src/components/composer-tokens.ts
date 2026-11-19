@@ -96,3 +96,15 @@ export const COMPOSER_SEND_BUTTON_CLASS =
  */
 export const COMPOSER_PICKER_TRIGGER_CLASS =
   "text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs";
+
+/**
+ * The slim status row under a composer box (`ComposerStatusRow`), with a
+ * middle slot: three columns whose sides share the remaining width, so the
+ * middle stays centred. A loading view draws the row from the same class.
+ */
+export const COMPOSER_STATUS_ROW_CENTERED_CLASS =
+  "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs";
+
+/** The status row without a middle slot: a start cluster and an end slot. */
+export const COMPOSER_STATUS_ROW_CLASS =
+  "text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs";

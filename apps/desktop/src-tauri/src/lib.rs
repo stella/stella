@@ -56,6 +56,8 @@ mod dictation_live;
 mod dictation_microphone;
 mod dictation_notice;
 mod dictation_pauses;
+mod dictation_trace;
+mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
