@@ -2338,6 +2338,31 @@
               },
               "maxItems": 14
             },
+            "bodySource": {
+              "type": "object",
+              "properties": {
+                "textSource": {
+                  "enum": ["host", "collection"],
+                  "type": "string"
+                },
+                "source": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "sourceUrl": {
+                  "type": "string",
+                  "format": "uri",
+                  "maxLength": 8192
+                },
+                "retrievedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "maxLength": 32
+                }
+              },
+              "required": ["textSource"],
+              "additionalProperties": false
+            },
             "decisionId": {
               "type": "string"
             },
@@ -2495,6 +2520,31 @@
                 "additionalProperties": true
               },
               "maxItems": 14
+            },
+            "bodySource": {
+              "type": "object",
+              "properties": {
+                "textSource": {
+                  "enum": ["host", "collection"],
+                  "type": "string"
+                },
+                "source": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "sourceUrl": {
+                  "type": "string",
+                  "format": "uri",
+                  "maxLength": 8192
+                },
+                "retrievedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "maxLength": 32
+                }
+              },
+              "required": ["textSource"],
+              "additionalProperties": false
             },
             "decisionId": {
               "type": "string"
