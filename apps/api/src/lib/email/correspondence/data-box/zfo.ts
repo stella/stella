@@ -50,6 +50,8 @@ export const DATA_BOX_MESSAGE_LIMITS = {
   /** A `.zfo` is a matter document, so the document upload limit bounds it. */
   maxFileBytes: FILE_SIZE_LIMIT_BYTES.document,
   maxFiles: CORRESPONDENCE_MAX_ATTACHMENTS,
+  /** Delivery events in one receipt; a real receipt lists a handful. */
+  maxEvents: 100,
   /** Markup count, a cheap bound on the element tree a parse may build. */
   maxMarkup: 20_000,
   maxFieldCharacters: 4096,
@@ -67,6 +69,7 @@ const DATA_BOX_PARSE_FAILURES = [
   "not_a_message",
   "invalid_envelope",
   "too_many_files",
+  "too_many_events",
   "invalid_file",
 ] as const;
 type DataBoxParseFailure = (typeof DATA_BOX_PARSE_FAILURES)[number];
@@ -385,9 +388,22 @@ const DOCUMENT_TYPE_DECLARATION = /<!doctype|<!entity/iu;
 
 // The schema repeats dmEvent. Some exports group multiple time/description
 // pairs in a single dmEvent, as in the ISDS GetDeliveryInfo example.
-const readDeliveryEvents = (receipt: Element) => {
+const readDeliveryEvents = (
+  receipt: Element,
+  limits: DataBoxMessageLimits,
+): Result<DataBoxDeliveryEvent[], DataBoxMessageParseError> => {
   const events: DataBoxDeliveryEvent[] = [];
-  for (const event of child(receipt, "dmEvents")?.children ?? []) {
+  // An event with neither a readable time nor a description states nothing.
+  const record = (occurredAt: string | null, description: string | null) => {
+    if (occurredAt !== null || description !== null) {
+      events.push({ occurredAt, description });
+    }
+  };
+  const container = child(receipt, "dmEvents");
+  if (container === undefined) {
+    return Result.ok(events);
+  }
+  for (const event of container.children) {
     if (!isIsdsElement(event, "dmEvent")) {
       continue;
     }
@@ -395,22 +411,25 @@ const readDeliveryEvents = (receipt: Element) => {
     for (const detail of event.children) {
       if (isIsdsElement(detail, "dmEventTime")) {
         if (time !== undefined) {
-          events.push({ occurredAt: time, description: null });
+          record(time, null);
         }
         time = readTimestamp(boundedText(detail.textContent));
       } else if (isIsdsElement(detail, "dmEventDescr")) {
-        events.push({
-          occurredAt: time ?? null,
-          description: boundedText(detail.textContent),
-        });
+        record(time ?? null, boundedText(detail.textContent));
         time = undefined;
+      }
+      // Every reader of the receipt holds all its events, so their count stays bounded.
+      if (events.length > limits.maxEvents) {
+        return failure("too_many_events", "The receipt has too many events");
       }
     }
     if (time !== undefined) {
-      events.push({ occurredAt: time, description: null });
+      record(time, null);
     }
   }
-  return events;
+  return events.length > limits.maxEvents
+    ? failure("too_many_events", "The receipt has too many events")
+    : Result.ok(events);
 };
 
 const readDocumentXml = (
@@ -502,11 +521,15 @@ const readDocumentXml = (
     seal,
   } satisfies DataBoxStatedEnvelope;
   if (receipt !== undefined) {
+    const events = readDeliveryEvents(receipt, limits);
+    if (events.isErr()) {
+      return events;
+    }
     return Result.ok({
       kind: "receipt",
       annotation,
       envelope,
-      events: readDeliveryEvents(receipt),
+      events: events.value,
     });
   }
   const files = readFiles(dm, limits);

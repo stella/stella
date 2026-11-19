@@ -261,9 +261,54 @@ describe("ISDS exports", () => {
       }
     },
   );
+
+  test("omits a receipt event that states neither a readable time nor a description", async () => {
+    const xml = receiptXml().replace(
+      "<q:dmEvents>",
+      "<q:dmEvents><q:dmEvent><q:dmEventTime>not a time</q:dmEventTime><q:dmEventTime>2026-10-14 07:00</q:dmEventTime></q:dmEvent><q:dmEvent><q:dmEventDescr> </q:dmEventDescr></q:dmEvent>",
+    );
+    const result = parseDataBoxDocument(
+      await sealContent(encode(xml)),
+    ).unwrap();
+    expect(result.kind === "receipt" ? result.events : null).toEqual([
+      { occurredAt: "2026-10-14T07:12:33.120Z", description: "EV5: Dodáno." },
+      {
+        occurredAt: "2026-10-14T08:03:00.000Z",
+        description: "EV11: Doručeno přihlášením oprávněné osoby.",
+      },
+    ]);
+    expect(dataBoxDocumentText(result)).not.toMatch(/Delivery event: *$/mu);
+  });
 });
 
 describe("parseDataBoxMessage refusals", () => {
+  test("bounds the delivery events a receipt may list", async () => {
+    const events = (count: number) =>
+      receiptXml().replace(
+        /<q:dmEvents>.*<\/q:dmEvents>/u,
+        () =>
+          `<q:dmEvents>${"<q:dmEvent><q:dmEventDescr>EV0</q:dmEventDescr></q:dmEvent>".repeat(count)}</q:dmEvents>`,
+      );
+    const read = async (count: number) => {
+      const parsed = parseDataBoxDocument(
+        await sealContent(encode(events(count))),
+      );
+      return parsed.isErr() ? parsed.error.reason : parsed.value.kind;
+    };
+    expect(await read(DATA_BOX_MESSAGE_LIMITS.maxEvents)).toBe("receipt");
+    expect(await read(DATA_BOX_MESSAGE_LIMITS.maxEvents + 1)).toBe(
+      "too_many_events",
+    );
+    // A single dmEvent may group pairs; the bound holds inside it too.
+    const grouped = receiptXml().replace(
+      /<q:dmEvents>.*<\/q:dmEvents>/u,
+      () =>
+        `<q:dmEvents><q:dmEvent>${"<q:dmEventDescr>EV0</q:dmEventDescr>".repeat(DATA_BOX_MESSAGE_LIMITS.maxEvents + 1)}</q:dmEvent></q:dmEvents>`,
+    );
+    const parsed = parseDataBoxDocument(await sealContent(encode(grouped)));
+    expect(parsed.isErr() ? parsed.error.reason : null).toBe("too_many_events");
+  });
+
   test("refuses bytes that are not DER", () => {
     expect(failureReason(encode("not a signed file"))).toBe("not_signed_data");
     expect(failureReason(new Uint8Array())).toBe("not_signed_data");
