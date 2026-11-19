@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 
+import type { RouteComponent } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -27,6 +28,7 @@ import {
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { useIntlMounted } from "@/components/pending-text";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
@@ -55,17 +57,23 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // and the page body. Cookie preferences and the request locale already exist
 // during SSR, so the pending frame uses the same geometry and nav labels. It
 // also tracks the viewport and the saved inspector tabs, so it resizes with
-// the frame it stands in for.
+// the frame it stands in for. `body` is the leaf route's own pending view
+// (`useLeafPendingView`), so the page that loads replaces placeholders
+// already sitting where its content will; a route without one gets the
+// generic column.
 export function ProtectedPendingSkeleton({
+  body,
   content,
   inspectorScope,
 }: {
+  body?: RouteComponent | undefined;
   content?: ReactElement | undefined;
   inspectorScope?: InspectorStorageScope;
 }) {
   if (inspectorScope !== undefined) {
     return (
       <ProtectedPendingSkeletonContent
+        body={body}
         content={content}
         inspectorScope={inspectorScope}
       />
@@ -75,6 +83,7 @@ export function ProtectedPendingSkeleton({
     <ProtectedPendingInspectorScopeContext.Consumer>
       {(contextScope) => (
         <ProtectedPendingSkeletonContent
+          body={body}
           content={content}
           inspectorScope={contextScope}
         />
@@ -83,14 +92,74 @@ export function ProtectedPendingSkeleton({
   );
 }
 
+function PendingPageBody({ body: Body }: { body: RouteComponent | undefined }) {
+  if (Body === undefined) {
+    return (
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
+        <Skeleton className="h-7 w-1/3" />
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
+    );
+  }
+  // Inert: the page's own pending tree may hold its real links and headings,
+  // and nothing in a placeholder frame takes focus or a click.
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" inert>
+      <Body />
+    </div>
+  );
+}
+
+const NavItemLabel = ({
+  labelKey,
+}: {
+  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+}) => {
+  const t = useTranslations();
+  return t(labelKey);
+};
+
+function NavItemText({
+  intlMounted,
+  labelKey,
+  sidebarOpen,
+}: {
+  intlMounted: boolean;
+  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+  sidebarOpen: boolean;
+}) {
+  if (!intlMounted) {
+    // Painted before the app's intl (the server's cold-load frame): the
+    // label's line, its text arriving with intl.
+    return sidebarOpen ? <Skeleton className="h-3 w-20" /> : null;
+  }
+  if (sidebarOpen) {
+    return (
+      <TruncatedText className="text-sm" hint={false}>
+        <NavItemLabel labelKey={labelKey} />
+      </TruncatedText>
+    );
+  }
+  return (
+    <span className="sr-only">
+      <NavItemLabel labelKey={labelKey} />
+    </span>
+  );
+}
+
 function ProtectedPendingSkeletonContent({
+  body,
   content,
   inspectorScope,
 }: {
+  body: RouteComponent | undefined;
   content: ReactElement | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
-  const t = useTranslations();
+  const intlMounted = useIntlMounted();
   const { prefs } = usePresentationPrefs();
   const viewportWidth = useViewportWidth();
   // The restore policy the authenticated frame applies, on the stored tabs:
@@ -154,13 +223,11 @@ function ProtectedPendingSkeletonContent({
           {STATIC_NAV_ITEMS.map((item) => (
             <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
               <item.icon className="text-muted-foreground size-4 shrink-0" />
-              {sidebarOpen ? (
-                <TruncatedText className="text-sm" hint={false}>
-                  {t(item.labelKey)}
-                </TruncatedText>
-              ) : (
-                <span className="sr-only">{t(item.labelKey)}</span>
-              )}
+              <NavItemText
+                intlMounted={intlMounted}
+                labelKey={item.labelKey}
+                sidebarOpen={sidebarOpen}
+              />
             </div>
           ))}
         </div>
@@ -206,13 +273,7 @@ function ProtectedPendingSkeletonContent({
           <Skeleton className="h-4 w-40" />
         </div>
         {content === undefined ? (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
-            <Skeleton className="h-7 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-          </div>
+          <PendingPageBody body={body} />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{content}</div>
         )}

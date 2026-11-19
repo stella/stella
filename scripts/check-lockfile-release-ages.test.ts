@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   checkLockfileReleaseAges,
@@ -6,6 +8,7 @@ import {
   governingBunfigPath,
   type LockfileInput,
   readLockfilePins,
+  readReleaseAgePolicy,
 } from "./check-lockfile-release-ages";
 import {
   CRATES_IO_SOURCE,
@@ -605,6 +608,22 @@ describe("new Cargo.lock pins against the release-age quarantine", () => {
     );
     expect(governingBunfigPath("apps/desktop/src-tauri/Cargo.lock")).toBe(
       "bunfig.toml",
+    );
+  });
+
+  test("Cargo's own resolve-time cooldown matches the root bunfig.toml", () => {
+    const root = path.resolve(import.meta.dir, "..");
+    const read = (file: string) => readFileSync(path.join(root, file), "utf-8");
+    const policy = readReleaseAgePolicy("bunfig.toml", read("bunfig.toml"));
+    const cargo = Bun.TOML.parse(read(".cargo/config.toml")) as {
+      registry?: { "global-min-publish-age"?: unknown };
+    };
+    const age = cargo.registry?.["global-min-publish-age"];
+    const match = typeof age === "string" ? /^(\d+) days$/u.exec(age) : null;
+    expect(match).not.toBeNull();
+    expect(policy).toBeDefined();
+    expect(Number(match?.[1]) * 24 * 60 * 60).toBe(
+      policy?.minimumReleaseAgeSeconds ?? Number.NaN,
     );
   });
 
