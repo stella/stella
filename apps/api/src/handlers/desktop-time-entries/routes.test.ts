@@ -84,9 +84,11 @@ const exercise = async ({
   missingMatter,
   picker,
   candidates,
+  dictation = false,
   color = "--option-emerald",
 }: {
   hidden?: "activity-timeline" | "time-billing";
+  dictation?: boolean;
   denied?: boolean;
   extra?: Record<string, unknown>;
   missingMatter?: boolean;
@@ -223,17 +225,14 @@ const exercise = async ({
     ),
   );
   testState.setConfig("FEATURE_TIME_BILLING", true);
+  const member = {
+    type: "member",
+    organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+    email: "desktop@example.test",
+  } as const;
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "activity-timeline":
-      hidden === "activity-timeline"
-        ? []
-        : [
-            {
-              type: "member",
-              organizationId: toSafeId<"organization">(ORGANIZATION_ID),
-              email: "desktop@example.test",
-            },
-          ],
+    "activity-timeline": hidden === "activity-timeline" ? [] : [member],
+    ...(dictation ? { "desktop-dictation": [member] } : {}),
   });
   let url = `http://localhost/v1/desktop/time-entries/${WORKSPACE_ID}`;
   if (picker) {
@@ -309,6 +308,41 @@ test("unknown activity fields and other session-only fields are rejected", async
     expect(result.status).toBe(422);
     expect(result.inserted).toEqual([]);
   }
+});
+
+test("a member who dictates finds matters to file a recording under, without time entries", async () => {
+  const filing = await exercise({
+    hidden: "activity-timeline",
+    dictation: true,
+    picker: true,
+  });
+  expect(filing.status).toBe(200);
+  expect(filing.body).toEqual({
+    matters: [
+      {
+        id: WORKSPACE_ID,
+        name: "Matter",
+        reference: "M-1",
+        color: "--option-emerald",
+      },
+    ],
+  });
+  expect(
+    (await exercise({ hidden: "activity-timeline", picker: true })).status,
+  ).toBe(403);
+  // Dictation opens the search only: time entries still need their feature.
+  expect(
+    (await exercise({ hidden: "activity-timeline", dictation: true })).status,
+  ).toBe(403);
+  expect(
+    (
+      await exercise({
+        hidden: "activity-timeline",
+        dictation: true,
+        candidates: true,
+      })
+    ).status,
+  ).toBe(403);
 });
 
 test("picker preserves stored and fallback matter colors in its display projection", async () => {

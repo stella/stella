@@ -306,6 +306,15 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bun scripts/check-cli-contract-changeset.ts --base "$CHECK_BASE_REF"
 
+  - name: MCP released surface compatibility
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
+    timeout-minutes: 15
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Reads the latest stable GitHub release and compares its advertised MCP schemas against the current tree."
+      GH_TOKEN: ${{ github.token }}
+    run: bun run check:mcp-surface-compat
+
   - name: SQL performance suppression summary
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
     env:

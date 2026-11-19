@@ -1,7 +1,9 @@
 import { Glob } from "bun";
 import { expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SOURCE_ROOT = new URL("../../", import.meta.url).pathname;
+const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 const locations = async (pattern: RegExp): Promise<string[]> => {
   const failures: string[] = [];
@@ -12,7 +14,7 @@ const locations = async (pattern: RegExp): Promise<string[]> => {
     if (relative.endsWith(".test.ts")) {
       continue;
     }
-    const source = await Bun.file(`${SOURCE_ROOT}/${relative}`).text();
+    const source = await Bun.file(path.join(SOURCE_ROOT, relative)).text();
     if (pattern.test(source)) {
       failures.push(relative);
     }

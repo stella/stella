@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Reikia dėmesio",
     "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis",
-    "reconnectAccount": "Iš naujo prisijungti prie stella web…"
+    "reconnectAccount": "Iš naujo prisijungti prie stella web…",
+    "transcribeRecording": "Transkribuoti įrašą…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
@@ -653,10 +654,22 @@
     },
     "language": {
       "title": "Diktavimo kalba",
-      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas.",
+      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas. Jei jų kelios, kiekvienas žodis atpažįstamas ta kalba, kuria jį ištariate.",
       "automatic": "Automatiškai",
       "automaticWith": "Automatiškai ({languages})",
       "noResults": "Kalbų nerasta"
+    },
+    "customWords": {
+      "group": "Savi žodžiai",
+      "title": "Žodžiai ir vardai, kuriuos stella turi rašyti teisingai",
+      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Šio kompiuterio kalbos modelis jų nenaudoja.",
+      "count": "{count, number} iš {limit, number}",
+      "input": "Pridėti žodį ar vardą",
+      "add": "Pridėti",
+      "remove": "Pašalinti {word}",
+      "duplicate": "Šis žodis jau yra sąraše.",
+      "full": "Sąraše telpa daugiausia {limit, number} žodžių. Norėdami pridėti kitą, vieną pašalinkite.",
+      "failed": "Sąrašo išsaugoti nepavyko. Bandykite dar kartą."
     },
     "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
     "speechModel": "Kalbos modelis",
@@ -686,7 +699,13 @@
       "passwordField": "Pasirinktas slaptažodžio laukas, todėl diktuotas tekstas nebuvo išsaugotas ar įvestas.",
       "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį."
     },
-    "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje."
+    "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje.",
+    "transcribeRecording": {
+      "title": "Įrašo transkribavimas",
+      "description": "Iki 4 valandų trukmės diktofono failą, balso pastabą ar susitikimo įrašą paverčia tekstu.",
+      "open": "Atidaryti",
+      "failed": "Nepavyko atidaryti lango. Bandykite dar kartą."
+    }
   },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",
@@ -963,6 +982,86 @@
       "network_folder": "Šis aplankas yra tinklo bendrinimo vietoje. Susiekite aplanką iš šio kompiuterio disko.",
       "protected": "Šiame aplanke yra pačios stella duomenys arba įgūdžių aplankas, todėl agentas jame dirbti negali.",
       "unreadable": "Nepavyko perskaityti šio aplanko."
+    }
+  },
+  "transcribe": {
+    "title": "Įrašo transkribavimas",
+    "retry": "Bandyti dar kartą",
+    "drop": {
+      "title": "Nuvilkite įrašą čia",
+      "release": "Atleiskite, kad transkribuotumėte",
+      "description": "Diktofono failai, balso pastabos, balso žinutės, susitikimų įrašai arba vaizdo įrašo garsas.",
+      "choose": "Pasirinkti failą",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR ir MP4 arba MOV vaizdo įrašai. Iki 4 valandų.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR ir MP4 arba MOV vaizdo įrašai. Iki 4 valandų."
+    },
+    "destination": {
+      "title": "Transkribuoti naudojant",
+      "thisComputer": "Šį kompiuterį",
+      "cloud": "stella AI",
+      "localDescription": "Įrašas lieka šiame kompiuteryje.",
+      "cloudDescription": "Garsas transkribuoti siunčiamas stellai ir diktavimo nustatymuose pasirinkto modelio teikėjui. stella jo nesaugo.",
+      "cloudDescriptionModel": "Garsas transkribuoti siunčiamas stellai ir modelio {model} teikėjui. stella jo nesaugo.",
+      "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
+      "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella AI.",
+      "retainsData": "{provider} saugo visų šiam modeliui siunčiamų įrašų garsą ir transkripciją. Netranskribuokite juo konfidencialių ar klientų įrašų arba pasirinkite kitą modelį skiltyje Nustatymai, Diktavimas.",
+      "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje."
+    },
+    "matter": {
+      "title": "Byla",
+      "description": "Jos vardai ir bylų numeriai parašomi teisingai, o tekstą galite išsaugoti joje.",
+      "none": "Nėra",
+      "search": "Ieškoti bylų",
+      "clearSearch": "Išvalyti paiešką",
+      "searching": "Ieškoma…",
+      "noMatters": "Bylų nerasta",
+      "failed": "Nepavyko įkelti bylų. Bandykite dar kartą."
+    },
+    "note": "Philips arba Olympus diktofonų DSS ir DS2 failus pirmiausia išsaugokite WAV formatu programoje SpeechExec arba ODMS.",
+    "refused": {
+      "unsupported": "stella negali perskaityti {name}. Pasirinkite įrašą vienu iš aukščiau nurodytų formatų.",
+      "tooLong": "{name} ilgesnis nei 4 valandos. Pirmiausia padalykite jį į trumpesnius įrašus.",
+      "unreadable": "Nepavyko perskaityti {name}. Failas gali būti sugadintas; eksportuokite jį dar kartą ir bandykite iš naujo."
+    },
+    "kept": {
+      "ready": "{name} paruoštas. Patikrinkite aukščiau, kaip jis bus transkribuotas, tada pradėkite.",
+      "start": "Pradėti transkribuoti"
+    },
+    "failure": {
+      "start": "Nepavyko pradėti transkribavimo. Bandykite dar kartą.",
+      "load": "Šio lango nepavyko įkelti. Bandykite dar kartą.",
+      "modelMissing": "Kalbos modelio šiame kompiuteryje nėra. Atsisiųskite jį skiltyje Nustatymai, Diktavimas.",
+      "thisComputer": "Šio kompiuterio kalbos modelis nepajėgė transkribuoti dalies įrašo. Iki šiol gautas tekstas išlieka.",
+      "cloud": "stella AI nepajėgė transkribuoti dalies įrašo. Iki šiol gautas tekstas išlieka; bandykite vėliau.",
+      "unreadable": "Įrašo nepavyko perskaityti iki galo. Iki šiol gautas tekstas išlieka.",
+      "tooLong": "Įrašas ilgesnis nei 4 valandos. Iki šiol gautas tekstas išlieka."
+    },
+    "result": {
+      "minutes": "{minutes, number} min.",
+      "thisComputer": "Šis kompiuteris",
+      "cloud": "stella AI, {model}",
+      "matter": "byla {name}",
+      "copy": "Kopijuoti",
+      "copied": "Nukopijuota",
+      "saveAs": "Išsaugoti kaip",
+      "saveWithTimestamps": "Tekstas su laiko žymomis (.txt)",
+      "saveWithoutTimestamps": "Tekstas be laiko žymų (.txt)",
+      "saveToMatter": "Išsaugoti byloje",
+      "savingToMatter": "Išsaugoma…",
+      "savedToMatter": "Išsaugota byloje {matter} kaip {fileName}.",
+      "saveToMatterFailed": "Nepavyko išsaugoti transkripcijos byloje. Bandykite dar kartą.",
+      "saveFailed": "Nepavyko nukopijuoti ar išsaugoti transkripcijos. Bandykite dar kartą.",
+      "noSpeech": "Šiame įraše kalbos nerasta.",
+      "fileName": "{title} – transkripcija.txt",
+      "documentTitle": "{title} – transkripcija"
+    },
+    "progress": {
+      "running": "Transkribuojama {done, number} iš {total, number} min.",
+      "runningUnknown": "Transkribuojama: kol kas {done, number} min.",
+      "stop": "Sustabdyti",
+      "stopped": "Sustabdyta po {done, number} min. Iki šiol gautas tekstas išlieka.",
+      "done": "Transkribuota {total, number} min.",
+      "another": "Transkribuoti kitą įrašą"
     }
   }
 }

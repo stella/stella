@@ -440,6 +440,9 @@ export const ENUM_COLUMN_ROLES = {
   justifications: {
     entity_feature_gate: ATTRIBUTE,
   },
+  kept_transcript_deletions: {
+    environment: ATTRIBUTE,
+  },
   legal_graph_edges: {
     confidence: ATTRIBUTE,
     entity_feature_gate: ATTRIBUTE,

@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Figyelmet igényel",
     "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése",
-    "reconnectAccount": "Újracsatlakozás a stella webhez…"
+    "reconnectAccount": "Újracsatlakozás a stella webhez…",
+    "transcribeRecording": "Felvétel átírása…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: a változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
@@ -653,10 +654,22 @@
     },
     "language": {
       "title": "Diktálás nyelve",
-      "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja.",
+      "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja. Ha több ilyen van, minden szót azon a nyelven ismer fel, amelyen kimondja.",
       "automatic": "Automatikus",
       "automaticWith": "Automatikus ({languages})",
       "noResults": "Nem található nyelv"
+    },
+    "customWords": {
+      "group": "Saját szavak",
+      "title": "Szavak és nevek, amelyeket a stella helyesen írjon",
+      "description": "Például ügyfelek nevei vagy angol kifejezések, amelyeket más nyelven beszélve használ. Ezen a számítógépen tárolódnak ehhez a fiókhoz, és csak a diktálással együtt kerülnek elküldésre: a stella AI átíráshoz és az AI-jal végzett javításhoz. A számítógép beszédmodellje nem használja őket.",
+      "count": "{count, number} / {limit, number}",
+      "input": "Szó vagy név hozzáadása",
+      "add": "Hozzáadás",
+      "remove": "{word} eltávolítása",
+      "duplicate": "Ez a szó már szerepel a listán.",
+      "full": "A lista legfeljebb {limit, number} szót tartalmazhat. Újabb hozzáadásához távolítson el egyet.",
+      "failed": "A listát nem sikerült menteni. Próbálja újra."
     },
     "modelNeeded": "A beszédmodell ezen a számítógépen fut.",
     "speechModel": "Beszédmodell",
@@ -686,7 +699,13 @@
       "passwordField": "Jelszómező van kijelölve, ezért a diktálás nem lett megőrizve vagy beírva.",
       "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
     },
-    "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben."
+    "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben.",
+    "transcribeRecording": {
+      "title": "Felvétel átírása",
+      "description": "Legfeljebb 4 órás diktafonfájlt, hangjegyzetet vagy értekezlet-felvételt alakít szöveggé.",
+      "open": "Megnyitás",
+      "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra."
+    }
   },
   "shortcut": {
     "title": "Vágólap-billentyűparancs",
@@ -963,6 +982,86 @@
       "network_folder": "Ez a mappa hálózati megosztáson van. A számítógép saját lemezén lévő mappát csatoljon.",
       "protected": "Ez a mappa a stella saját adatait vagy egy készségmappát tartalmaz, ezért az ügynök nem dolgozhat benne.",
       "unreadable": "Ezt a mappát nem sikerült beolvasni."
+    }
+  },
+  "transcribe": {
+    "title": "Felvétel átírása",
+    "retry": "Újra",
+    "drop": {
+      "title": "Húzza ide a felvételt",
+      "release": "Engedje el az átíráshoz",
+      "description": "Diktafonfájlok, hangjegyzetek, hangüzenetek, értekezletek felvételei vagy egy videó hangja.",
+      "choose": "Fájl kiválasztása",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR, valamint MP4 vagy MOV videó. Legfeljebb 4 óra.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR, valamint MP4 vagy MOV videó. Legfeljebb 4 óra."
+    },
+    "destination": {
+      "title": "Átírás ezzel",
+      "thisComputer": "Ez a számítógép",
+      "cloud": "stella AI",
+      "localDescription": "A felvétel ezen a számítógépen marad.",
+      "cloudDescription": "A hangot átírásra elküldjük a stellának és a Diktálás beállításaiban kiválasztott modell szolgáltatójának. A stella nem tárolja.",
+      "cloudDescriptionModel": "A hangot átírásra elküldjük a stellának és a(z) {model} modell szolgáltatójának. A stella nem tárolja.",
+      "localMissing": "Ha ezen a számítógépen szeretne átírni, töltse le a beszédmodellt a Beállítások Diktálás részében.",
+      "localMissingCloud": "Töltse le a beszédmodellt a Beállítások Diktálás részében, vagy írjon át a stella AI-jal.",
+      "retainsData": "A(z) {provider} megőrzi minden ennek a modellnek küldött felvétel hangját és átiratát. Ne írjon át vele bizalmas vagy ügyfélfelvételeket, vagy válasszon másik modellt a Beállítások Diktálás részében.",
+      "modelFailed": "A stella AI modelljét nem sikerült beolvasni, ezért a stella AI most nem tud átírni. Próbálja újra, vagy írja át ezen a számítógépen."
+    },
+    "matter": {
+      "title": "Ügy",
+      "description": "A nevek és ügyszámok helyesen íródnak le belőle, és a szöveget az ügybe mentheti.",
+      "none": "Nincs",
+      "search": "Ügyek keresése",
+      "clearSearch": "Keresés törlése",
+      "searching": "Keresés…",
+      "noMatters": "Nincs találat",
+      "failed": "Az ügyeket nem sikerült betölteni. Próbálja újra."
+    },
+    "note": "Philips vagy Olympus diktafonok DSS és DS2 fájljai: előbb mentse őket WAV formátumba a SpeechExec vagy az ODMS programban.",
+    "refused": {
+      "unsupported": "A stella nem tudja beolvasni ezt a fájlt: {name}. Válasszon egy felvételt a fent felsorolt formátumok egyikében.",
+      "tooLong": "{name} hosszabb 4 óránál. Előbb ossza rövidebb felvételekre.",
+      "unreadable": "{name} nem olvasható be. Lehet, hogy sérült; exportálja újra, és próbálja meg még egyszer."
+    },
+    "kept": {
+      "ready": "{name} készen áll. Ellenőrizze fent, hogyan lesz átírva, majd kezdje el.",
+      "start": "Átírás indítása"
+    },
+    "failure": {
+      "start": "Az átírást nem sikerült elindítani. Próbálja újra.",
+      "load": "Az ablakot nem sikerült betölteni. Próbálja újra.",
+      "modelMissing": "A beszédmodell nincs ezen a számítógépen. Töltse le a Beállítások Diktálás részében.",
+      "thisComputer": "A számítógépen lévő beszédmodell nem tudta átírni a felvétel egy részét. Az eddigi szöveg megmarad.",
+      "cloud": "A stella AI nem tudta átírni a felvétel egy részét. Az eddigi szöveg megmarad; próbálja újra később.",
+      "unreadable": "A felvételt nem sikerült végig beolvasni. Az eddigi szöveg megmarad.",
+      "tooLong": "A felvétel hosszabb 4 óránál. Az eddigi szöveg megmarad."
+    },
+    "result": {
+      "minutes": "{minutes, number} perc",
+      "thisComputer": "Ez a számítógép",
+      "cloud": "stella AI, {model}",
+      "matter": "ügy: {name}",
+      "copy": "Másolás",
+      "copied": "Másolva",
+      "saveAs": "Mentés másként",
+      "saveWithTimestamps": "Szöveg időbélyegekkel (.txt)",
+      "saveWithoutTimestamps": "Szöveg időbélyegek nélkül (.txt)",
+      "saveToMatter": "Mentés az ügybe",
+      "savingToMatter": "Mentés…",
+      "savedToMatter": "Elmentve ide: {matter}, ezen a néven: {fileName}.",
+      "saveToMatterFailed": "Az átiratot nem sikerült az ügybe menteni. Próbálja újra.",
+      "saveFailed": "Az átiratot nem sikerült másolni vagy menteni. Próbálja újra.",
+      "noSpeech": "Ebben a felvételben nem található beszéd.",
+      "fileName": "{title} – átirat.txt",
+      "documentTitle": "{title} – átirat"
+    },
+    "progress": {
+      "running": "Átírás: {done, number} / {total, number} perc",
+      "runningUnknown": "Átírás: eddig {done, number} perc",
+      "stop": "Leállítás",
+      "stopped": "Leállítva {done, number} perc után. Az eddigi szöveg megmarad.",
+      "done": "{total, number} perc átírva.",
+      "another": "Másik felvétel átírása"
     }
   }
 }

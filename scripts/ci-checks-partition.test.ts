@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { createContext, runInContext } from "node:vm";
 import * as v from "valibot";
@@ -171,7 +172,7 @@ const removalSchema = v.array(
 );
 const workflowPath = ".github/workflows/ci.yml";
 const removalsPath = "scripts/ci-checks-removed.json";
-const repository = new URL("../", import.meta.url).pathname;
+const repository = fileURLToPath(new URL("../", import.meta.url));
 const processBudgetEnvSchema = v.optional(v.record(v.string(), v.unknown()));
 const processBudgetWorkflowSchema = v.looseObject({
   env: processBudgetEnvSchema,

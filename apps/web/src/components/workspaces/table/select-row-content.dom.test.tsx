@@ -3,6 +3,7 @@ import type React from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   TEXT_ABSENCE_REASON,
@@ -76,7 +77,7 @@ afterAll(async () => {
 // the selection/row boundary rather than relying on a maintained fixture list.
 const selectionHosts: string[] = [];
 for await (const path of new Bun.Glob("**/*.tsx").scan({
-  cwd: new URL("../../../", import.meta.url).pathname,
+  cwd: fileURLToPath(new URL("../../../", import.meta.url)),
 })) {
   if (path.endsWith(".test.tsx")) {
     continue;

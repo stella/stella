@@ -40,6 +40,7 @@ use crate::{
   dictation_context::{self, Sharing},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
@@ -52,6 +53,7 @@ const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 /// `local` (this computer, the default) or `cloud` (stella AI).
 const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// The stella AI transcription model the user picked; absent: the default.
+/// A recording transcribed with stella AI uses it too.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
 /// Off unless the user turned it on: cleanup also gets the window title.
 const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
@@ -76,6 +78,14 @@ const MODEL_URL: &str = "https://huggingface.co/handy-computer/parakeet-ultra-gg
 const MODEL_BYTES: u64 = 740_363_168;
 const MODEL_SHA256: &str =
   "007a59761e9258779f189df396b50d12b83bb5b79e66df4b955c230d2f2a0a59";
+/// The speech model's name in the local log: its file name without the
+/// extension.
+pub fn local_model_id() -> &'static str {
+  MODEL_FILE_NAME
+    .strip_suffix(".gguf")
+    .unwrap_or(MODEL_FILE_NAME)
+}
+
 /// Enough progress events to look alive, few enough to stay cheap.
 const PROGRESS_STEP_BYTES: u64 = MODEL_BYTES / 100;
 
@@ -164,6 +174,9 @@ pub struct DictationSnapshot {
   /// user paused it or the organization turned it off.
   keeps_in_history: bool,
   language: LanguageSnapshot,
+  /// The speaker's custom words, kept on this computer for the dictation
+  /// account.
+  custom_words: Vec<String>,
   /// Whether the server enables stella AI transcription for this account;
   /// without it the window offers no choice of destination.
   cloud_available: bool,
@@ -295,6 +308,7 @@ impl DictationState {
       text_before_cursor_available: dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
       keeps_in_history,
       language: LanguageSnapshot::new(&inner.language, inferred),
+      custom_words: Vec::new(),
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
@@ -370,7 +384,7 @@ const fn stored_switch(enabled: bool) -> &'static str {
 }
 
 /// A build that can run the model, for an account the server enabled.
-fn available(app: &AppHandle) -> bool {
+pub(crate) fn available(app: &AppHandle) -> bool {
   SUPPORTED
     && app
       .state::<FeatureGates>()
@@ -423,7 +437,7 @@ fn valid_model_id(model_id: &str) -> bool {
 }
 
 /// Whether the server enables stella AI transcription alongside dictation.
-fn cloud_available(app: &AppHandle) -> bool {
+pub(crate) fn cloud_available(app: &AppHandle) -> bool {
   available(app) && dictation_cloud::enabled(app)
 }
 
@@ -468,6 +482,11 @@ pub fn adopt_cloud_model(app: &AppHandle, model_id: &str) -> Result<(), String> 
 /// The server's stella AI decision changed: windows read the new snapshot.
 pub fn apply_cloud_gate(app: &AppHandle) {
   change(app, |_inner| ());
+}
+
+/// The key dictation listens for.
+pub fn hold_key(app: &AppHandle) -> HoldChoice {
+  app.state::<DictationState>().update(|inner| inner.hold_key)
 }
 
 /// Whether a finished dictation goes through AI cleanup before it is typed.
@@ -719,12 +738,16 @@ fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
   } else {
     Vec::new()
   };
-  state.snapshot(
+  let mut snapshot = state.snapshot(
     available,
     cloud_available(app),
     inferred,
     crate::clipboard::keeps_dictations(app),
-  )
+  );
+  if available {
+    snapshot.custom_words = dictation_words::words(app);
+  }
+  snapshot
 }
 
 #[tauri::command]
@@ -845,6 +868,23 @@ pub fn dictation_set_language(
     choice.stored(),
     |inner| inner.language = choice,
   )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The speaker's custom words for the dictation account, replacing the
+/// list stored before; refused whole when a word or the list is beyond what
+/// stella AI accepts.
+#[tauri::command]
+pub fn dictation_set_custom_words(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  words: Vec<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  dictation_words::store(&app, &words)?;
+  publish(&app);
   Ok(read_snapshot(&app, &state))
 }
 

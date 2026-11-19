@@ -53,6 +53,9 @@ const PURE_AUTOFIX = {
   "online-unique-index-names":
     "apps/api/scripts/generate-online-unique-index-names.ts",
   "schema-index": "apps/api/scripts/generate-schema-index.ts",
+  // Walks the MCP apps' committed imports through workspace sources and
+  // rewrites only the stylesheet's sources block.
+  "mcp-app-style-sources": "packages/mcp-apps/scripts/style-sources.ts",
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
   "transition-triggers": "apps/api/scripts/generate-transition-triggers.ts",

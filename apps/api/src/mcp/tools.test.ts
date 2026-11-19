@@ -376,6 +376,7 @@ const CITING_DECISION_ID = "00000000-0000-4000-8000-0000000d0002";
 /** A consolidated statute and an older consolidation of the same work. */
 const STATUTE_ID = "00000000-0000-4000-8000-000000021001";
 const STATUTE_PRIOR_ID = "00000000-0000-4000-8000-000000021002";
+const STATUTE_UNREADABLE_ID = "00000000-0000-4000-8000-000000021009";
 const STATUTE_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2012/89";
 const STATUTE_TITLE = "89/2012 Sb., obcansky zakonik";
 const PROVISION_ANCHOR = "par_1729";
@@ -6946,6 +6947,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
           governingText: [],
@@ -6958,11 +6961,26 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
           governingText: [],
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
+        },
+        {
+          // A consolidation whose structure could not be read: the reader
+          // lists it without text, the agent-facing history leaves it out.
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
+          allowsDerivedAi: true,
+          status: "unavailable",
+          documentId: STATUTE_UNREADABLE_ID,
+          versionValidFrom: "2010-01-01",
+          versionValidTo: "2012-03-21",
           ...EFFECTIVE_LABEL,
         },
       ],
@@ -7040,6 +7058,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_ID,
           text: "\u00a7 1729 as amended",
           governingText: [],
@@ -7054,6 +7074,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: false,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_PRIOR_ID,
           text: "\u00a7 1729 as enacted",
           governingText: [],
@@ -7124,6 +7146,8 @@ describe("OpenAI-compatible MCP tools", () => {
           slug: "89-2012-sb-obcansky-zakonik",
           sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           allowsDerivedAi: true,
+          status: "found",
+          wordingChange: "changed",
           documentId: STATUTE_PRIOR_ID,
           text,
           governingText: [],
@@ -7336,6 +7360,44 @@ describe("OpenAI-compatible MCP tools", () => {
         await resultIds(["loajalita jednatel", "jednatel loajalita"]),
       ).toEqual(http);
     });
+
+    test.each([
+      ["score", "partial_matches_ranked", "partial_matches_appended"],
+      ["all_words_first", "partial_matches_appended", "partial_matches_ranked"],
+    ] as const)(
+      "a %s page tells its partial matches by where it put them",
+      async (hitOrder, told, never) => {
+        searchDecisionsHandlerMock.mockResolvedValue(
+          pageIn(hitOrder, [
+            { id: "partial-high", match: "some_terms" },
+            { id: "full", match: "all_terms" },
+          ]),
+        );
+        const payload = parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              queries: ["loajalita jednatel", "jednatel loajalita"],
+              limit: 10,
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        );
+        const codes =
+          isRecord(payload) && Array.isArray(payload["searches"])
+            ? payload["searches"].flatMap((search: unknown) =>
+                isRecord(search) && Array.isArray(search["warnings"])
+                  ? search["warnings"].flatMap((warning: unknown) =>
+                      isRecord(warning) ? [warning["code"]] : [],
+                    )
+                  : [],
+              )
+            : [];
+        expect(codes).toContain(told);
+        expect(codes).not.toContain(never);
+      },
+    );
   });
 
   describe("search_case_law warns about a long phrasing that came back short", () => {

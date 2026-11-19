@@ -202,12 +202,13 @@ export const MatterCombobox = ({
               )
             }
           </ComboboxList>
-          <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+          {/* While the matters load the list is empty but not "no
+              results": the field keeps its height and says so in place. */}
+          <ComboboxEmpty>
+            {isPending ? t("common.loading") : t("common.noResults")}
+          </ComboboxEmpty>
         </ComboboxPopup>
       </Combobox>
-      {isPending && (
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      )}
       {error !== null && (
         <div className="flex items-center justify-between gap-2 text-sm">
           <span className="text-destructive">{t("errors.actionFailed")}</span>

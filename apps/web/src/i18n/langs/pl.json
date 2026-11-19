@@ -1494,6 +1494,10 @@
       "title": "Wyszukiwanie jest tymczasowo niedostępne"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Wyszukaj orzeczenie po sygnaturze akt lub ECLI, jeśli je znasz.",
+        "message": "Nie znaleziono orzeczenia odpowiadającego dokładnie temu oznaczeniu w zbiorze."
+      },
       "noHits": {
         "hint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
         "message": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie."
@@ -6310,6 +6314,7 @@
     "compareUnstructured": "Jedna z wersji jest dostępna tylko jako zwykły tekst, więc nie można ich porównać.",
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
+    "compareWithPreviousWording": "Porównaj z poprzednim brzmieniem",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
     "currentWording": "Aktualne brzmienie",
     "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
@@ -6323,6 +6328,7 @@
       "withdrawn": "Wydawca już go nie publikuje"
     },
     "inForceSince": "Obowiązuje od {date}",
+    "inForceSinceAtLeast": "Obowiązuje co najmniej od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Orzeczenie wiodące",
     "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",
@@ -6333,6 +6339,7 @@
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
     "pendingChanges": "Nadchodzące nowelizacje",
     "pendingChangesIncomplete": "Dane wydawcy mogą nie obejmować wszystkich nadchodzących nowelizacji.",
+    "provisionAbsentVersions": "{count, plural, one {Brak w tej wersji ustawy} few {Brak w tych # wersjach ustawy} many {Brak w tych # wersjach ustawy} other {Brak w tych # wersji ustawy}}",
     "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
     "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
@@ -6343,7 +6350,14 @@
     "provisionPartTextUnavailable": "Treść {provisionLabel} jest niedostępna",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "provisionRunAlsoFrom": "także od {date}",
+    "provisionRunShowVersions": "Pokaż wersje ustawy z okresu {range}",
+    "provisionRunUnchanged": "{count, plural, one {bez zmian w # wersji ustawy} few {bez zmian w # wersjach ustawy} many {bez zmian w # wersjach ustawy} other {bez zmian w # wersji ustawy}}",
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
+    "provisionVersionsAll": "Wszystkie wersje ustawy",
+    "provisionWordingAdded": "Nowy przepis",
+    "provisionWordingChanged": "Zmieniono",
+    "provisionWordingEarliest": "Najstarsza dostępna wersja",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
     "searchLabel": "Szukaj w aktach prawnych",

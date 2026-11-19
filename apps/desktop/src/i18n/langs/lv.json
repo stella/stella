@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Nepieciešama uzmanība",
     "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
-    "reconnectAccount": "Atkārtoti savienot ar stella web…"
+    "reconnectAccount": "Atkārtoti savienot ar stella web…",
+    "transcribeRecording": "Transkribēt ierakstu…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
@@ -653,10 +654,22 @@
     },
     "language": {
       "title": "Diktēšanas valoda",
-      "description": "Automātiski izmanto šī datora displeja un tastatūru valodas.",
+      "description": "Automātiski izmanto šī datora displeja un tastatūru valodas. Ja to ir vairākas, katrs vārds tiek atpazīts tajā valodā, kurā to izrunājat.",
       "automatic": "Automātiski",
       "automaticWith": "Automātiski ({languages})",
       "noResults": "Valodas netika atrastas"
+    },
+    "customWords": {
+      "group": "Savi vārdi",
+      "title": "Vārdi un nosaukumi, kas stella jāraksta pareizi",
+      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Šī datora runas modelis tos neizmanto.",
+      "count": "{count, number} no {limit, number}",
+      "input": "Pievienot vārdu vai nosaukumu",
+      "add": "Pievienot",
+      "remove": "Noņemt {word}",
+      "duplicate": "Šis vārds jau ir sarakstā.",
+      "full": "Sarakstā var būt ne vairāk kā {limit, number} vārdi. Lai pievienotu citu, noņemiet kādu.",
+      "failed": "Sarakstu neizdevās saglabāt. Mēģiniet vēlreiz."
     },
     "modelNeeded": "Runas modelis darbojas šajā datorā.",
     "speechModel": "Runas modelis",
@@ -686,7 +699,13 @@
       "passwordField": "Ir atlasīts paroles lauks, tāpēc diktētais netika saglabāts vai ievadīts.",
       "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
     },
-    "failureKeptInHistory": "Teksts ir starpliktuves vēsturē."
+    "failureKeptInHistory": "Teksts ir starpliktuves vēsturē.",
+    "transcribeRecording": {
+      "title": "Ieraksta transkribēšana",
+      "description": "Līdz 4 stundām garu diktofona failu, balss piezīmi vai sanāksmes ierakstu pārvērš tekstā.",
+      "open": "Atvērt",
+      "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz."
+    }
   },
   "shortcut": {
     "title": "Starpliktuves īsinājumtaustiņš",
@@ -963,6 +982,86 @@
       "network_folder": "Šī mape atrodas tīkla koplietojumā. Saistiet mapi šī datora diskā.",
       "protected": "Šajā mapē ir pašas stella dati vai prasmju mape, tāpēc aģents tajā nevar strādāt.",
       "unreadable": "Šo mapi neizdevās nolasīt."
+    }
+  },
+  "transcribe": {
+    "title": "Ieraksta transkribēšana",
+    "retry": "Mēģināt vēlreiz",
+    "drop": {
+      "title": "Velciet ierakstu šeit",
+      "release": "Atlaidiet, lai transkribētu",
+      "description": "Diktofona faili, balss piezīmes, balss ziņas, sanāksmju ieraksti vai video skaņa.",
+      "choose": "Izvēlēties failu",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR un MP4 vai MOV video. Līdz 4 stundām.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR un MP4 vai MOV video. Līdz 4 stundām."
+    },
+    "destination": {
+      "title": "Transkribēt ar",
+      "thisComputer": "Šo datoru",
+      "cloud": "stella AI",
+      "localDescription": "Ieraksts paliek šajā datorā.",
+      "cloudDescription": "Skaņa transkribēšanai tiek nosūtīta stella un diktēšanas iestatījumos izvēlētā modeļa nodrošinātājam. stella to neglabā.",
+      "cloudDescriptionModel": "Skaņa transkribēšanai tiek nosūtīta stella un modeļa {model} nodrošinātājam. stella to neglabā.",
+      "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
+      "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
+      "retainsData": "{provider} glabā visu šim modelim nosūtīto ierakstu skaņu un transkripciju. Netranskribējiet ar to konfidenciālus vai klientu ierakstus vai izvēlieties citu modeli sadaļā Iestatījumi, Diktēšana.",
+      "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
+    },
+    "matter": {
+      "title": "Lieta",
+      "description": "Tās vārdi un lietu numuri tiek uzrakstīti pareizi, un tekstu varat saglabāt tajā.",
+      "none": "Nav",
+      "search": "Meklēt lietas",
+      "clearSearch": "Notīrīt meklēšanu",
+      "searching": "Meklē…",
+      "noMatters": "Lietas nav atrastas",
+      "failed": "Neizdevās ielādēt lietas. Mēģiniet vēlreiz."
+    },
+    "note": "Philips vai Olympus diktofonu DSS un DS2 failus vispirms saglabājiet WAV formātā programmā SpeechExec vai ODMS.",
+    "refused": {
+      "unsupported": "stella nevar nolasīt {name}. Izvēlieties ierakstu kādā no iepriekš minētajiem formātiem.",
+      "tooLong": "{name} ir garāks par 4 stundām. Vispirms sadaliet to īsākos ierakstos.",
+      "unreadable": "Neizdevās nolasīt {name}. Fails var būt bojāts; eksportējiet to vēlreiz un mēģiniet vēl reizi."
+    },
+    "kept": {
+      "ready": "{name} ir gatavs. Augstāk pārbaudiet, kā tas tiks transkribēts, un tad sāciet.",
+      "start": "Sākt transkribēšanu"
+    },
+    "failure": {
+      "start": "Neizdevās sākt transkribēšanu. Mēģiniet vēlreiz.",
+      "load": "Šo logu neizdevās ielādēt. Mēģiniet vēlreiz.",
+      "modelMissing": "Runas modeļa šajā datorā nav. Lejupielādējiet to sadaļā Iestatījumi, Diktēšana.",
+      "thisComputer": "Šī datora runas modelis nespēja transkribēt daļu ieraksta. Līdz šim iegūtais teksts paliek.",
+      "cloud": "stella AI nespēja transkribēt daļu ieraksta. Līdz šim iegūtais teksts paliek; mēģiniet vēlāk.",
+      "unreadable": "Ierakstu neizdevās nolasīt līdz galam. Līdz šim iegūtais teksts paliek.",
+      "tooLong": "Ieraksts ir garāks par 4 stundām. Līdz šim iegūtais teksts paliek."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Šis dators",
+      "cloud": "stella AI, {model}",
+      "matter": "lieta {name}",
+      "copy": "Kopēt",
+      "copied": "Nokopēts",
+      "saveAs": "Saglabāt kā",
+      "saveWithTimestamps": "Teksts ar laika zīmogiem (.txt)",
+      "saveWithoutTimestamps": "Teksts bez laika zīmogiem (.txt)",
+      "saveToMatter": "Saglabāt lietā",
+      "savingToMatter": "Saglabā…",
+      "savedToMatter": "Saglabāts lietā {matter} kā {fileName}.",
+      "saveToMatterFailed": "Neizdevās saglabāt transkripciju lietā. Mēģiniet vēlreiz.",
+      "saveFailed": "Neizdevās nokopēt vai saglabāt transkripciju. Mēģiniet vēlreiz.",
+      "noSpeech": "Šajā ierakstā runa netika atrasta.",
+      "fileName": "{title} – transkripcija.txt",
+      "documentTitle": "{title} – transkripcija"
+    },
+    "progress": {
+      "running": "Transkribē {done, number} no {total, number} min",
+      "runningUnknown": "Transkribē: līdz šim {done, number} min",
+      "stop": "Apturēt",
+      "stopped": "Apturēts pēc {done, number} min. Līdz šim iegūtais teksts paliek.",
+      "done": "Transkribētas {total, number} min.",
+      "another": "Transkribēt citu ierakstu"
     }
   }
 }
