@@ -1785,7 +1785,8 @@ const documentContentWindow = ({
 
 type LegalContentWindowOptions = {
   context: AuthorizedMcpRequestContext;
-  currentDocument: CurrentDocument;
+  currentDocument: Omit<CurrentDocument, "kind"> &
+    Pick<ReadContentProjection, "kind">;
   cursor: string | undefined;
   entityId: SafeId<"entity">;
   fileField: CurrentDocument["currentVersion"]["fields"][number] | null;
