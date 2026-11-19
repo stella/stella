@@ -442,7 +442,7 @@
     "apps/api/src/handlers/legislation/boe/search.ts": 2,
     "apps/api/src/handlers/legislation/boe/text-block/get.ts": 1,
     "apps/api/src/handlers/legislation/borme/summary/get.ts": 1,
-    "apps/api/src/handlers/legislation/list.ts": 2,
+    "apps/api/src/handlers/legislation/list.ts": 1,
     "apps/api/src/handlers/legislation/sitemap.ts": 2,
     "apps/api/src/handlers/mcp-connectors/oauth-callback.ts": 2,
     "apps/api/src/handlers/me/verify-delete.ts": 1,
