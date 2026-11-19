@@ -1,12 +1,15 @@
 import { panic } from "better-result";
 
+import { isEntityKind } from "@stll/api-contract";
 import { isCodeToolName } from "@stll/api-contract/chat-code-step";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 import { readChatStepLedger } from "@stll/api-contract/chat-step-ledger";
 import type {
   ChatStepCall,
   ChatStepFilter,
   ChatStepLedger,
   ChatStepRef,
+  ChatStepRefTarget,
 } from "@stll/api-contract/chat-step-ledger";
 
 import {
@@ -30,8 +33,20 @@ export type StepDigestRow = {
   ref: ChatStepRef;
   /** The source a citation opens it through; null when it opens nowhere. */
   source: ExternalSourceEntry | null;
+  /**
+   * A matter document or matter as the chat reference it opens as, from
+   * the binding its message keeps for its chat ref; null for a public item
+   * (it opens through `source`) or a ref the message does not bind.
+   */
+  reference: StepMatterReference | null;
   cited: boolean;
 };
+
+/** A found matter item as chat opens it: a document or a matter. */
+export type StepMatterReference = Extract<
+  ChatReference,
+  { type: "entity" | "matter" }
+>;
 
 export type StepDigestCall = {
   key: string;
@@ -65,6 +80,12 @@ export type StepDigest = {
   recorded: boolean;
 };
 
+/** A message's ref bindings, by chat ref. */
+export type ChatStepRefTargets = ReadonlyMap<string, ChatStepRefTarget>;
+
+/** For a step outside any stored message: no ref opens anything. */
+export const NO_STEP_REF_TARGETS: ChatStepRefTargets = new Map();
+
 /** The parts of a call a digest reads; its input and output are untrusted. */
 type StepToolPart = { input: unknown; name: string; output: unknown };
 
@@ -78,10 +99,45 @@ const refKey = (ref: ChatStepRef): string => {
       return `decision:${ref.decisionId}`;
     case "statute":
       return `statute:${ref.eli}#${ref.anchor ?? ""}@${ref.validFrom ?? ""}`;
+    // A chat ref names one item in its thread, however many share a title.
     case "document":
-      return `document:${ref.title}`;
+      return `document:${ref.ref}`;
     case "matter":
-      return `matter:${ref.title}`;
+      return `matter:${ref.ref}`;
+    default:
+      ref satisfies never;
+      return panic("Unhandled step ledger item");
+  }
+};
+
+/** Where a found matter item opens, by the binding of its chat ref. */
+const matterReference = (
+  ref: ChatStepRef,
+  targets: ChatStepRefTargets,
+): StepMatterReference | null => {
+  switch (ref.type) {
+    case "decision":
+    case "statute":
+      return null;
+    case "document": {
+      const target = targets.get(ref.ref);
+      return target?.type === "document"
+        ? {
+            type: "entity",
+            entityId: target.entityId,
+            matterId: target.matterId,
+            label: ref.title,
+            entityKind: isEntityKind(ref.kind) ? ref.kind : null,
+            mimeType: null,
+          }
+        : null;
+    }
+    case "matter": {
+      const target = targets.get(ref.ref);
+      return target?.type === "matter"
+        ? { type: "matter", matterId: target.matterId, label: ref.title }
+        : null;
+    }
     default:
       ref satisfies never;
       return panic("Unhandled step ledger item");
@@ -91,6 +147,7 @@ const refKey = (ref: ChatStepRef): string => {
 const digestRows = (
   refs: readonly ChatStepRef[],
   citations: ChatAnswerCitations,
+  targets: ChatStepRefTargets,
 ): StepDigestRow[] =>
   refs.map((ref) => {
     const source = stepRefSource(ref);
@@ -98,6 +155,7 @@ const digestRows = (
       key: refKey(ref),
       ref,
       source,
+      reference: matterReference(ref, targets),
       cited: source !== null && sourceIsCited(source, citations),
     };
   });
@@ -171,10 +229,13 @@ export const stepDigestOf = ({
   citations,
   failed,
   part,
+  refTargets,
 }: {
   citations: ChatAnswerCitations;
   failed: boolean;
   part: StepToolPart;
+  /** The step's message's ref bindings (`readChatStepRefTargets`). */
+  refTargets: ChatStepRefTargets;
 }): StepDigest | null => {
   const ledger = stepLedgerOf(part);
   if (ledger !== null) {
@@ -184,7 +245,7 @@ export const stepDigestOf = ({
       queries: call.queries,
       filters: call.filters,
       outcome: call.outcome,
-      rows: digestRows(call.found, citations),
+      rows: digestRows(call.found, citations, refTargets),
       omitted: call.foundOmitted,
     }));
     return {
@@ -218,7 +279,7 @@ export const stepDigestOf = ({
       queries,
       filters: [],
       outcome: failed ? "error" : "ok",
-      rows: digestRows(refs, citations),
+      rows: digestRows(refs, citations, refTargets),
       omitted: 0,
     },
   ];

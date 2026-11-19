@@ -304,6 +304,28 @@ const ReferenceChipView = ({
 };
 
 /**
+ * Whether the viewer may open a document or matter reference now, read from
+ * the same authorized reads a chip's facts come from: the entity read of its
+ * matter, and the viewer's own matter list. For a list that names items the
+ * viewer may since have lost (what a chat step found), which offers only
+ * what they can still open and names the rest by the text they already saw.
+ */
+export const useReferenceAvailability = (
+  reference: Extract<ChatReference, { type: "entity" | "matter" }>,
+): LiveFact<unknown>["status"] => {
+  const facts = useReferenceFacts(reference);
+  switch (reference.type) {
+    case "entity":
+      return facts.entity.status;
+    case "matter":
+      return facts.matter.status;
+    default:
+      reference satisfies never;
+      return panic(`Unhandled reference: ${String(reference)}`);
+  }
+};
+
+/**
  * What clicking a reference does, for a control that lists references in its
  * own shell (the open chat's file list) and must open them as a chip does.
  */

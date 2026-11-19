@@ -8,6 +8,7 @@ import {
   CHAT_STEP_LEDGER_KEY,
   type ChatStepLedger,
   type ChatStepRef,
+  readChatStepRefTargets,
 } from "@stll/api-contract/chat-step-ledger";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { createTestState } from "@stll/test-state";
@@ -563,3 +564,152 @@ const DECISION = {
     summary: absentText,
   },
 } satisfies PublicCaseLawDecision;
+
+const MATTER_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
+const READABLE_DOCUMENT_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
+const UNREADABLE_DOCUMENT_ID = "0a1c0de0-0000-5000-8000-000000000003";
+
+const MATTER_LEDGER = {
+  calls: [
+    {
+      tool: "search_across_matters",
+      queries: ["limitation of liability cap"],
+      filters: [],
+      outcome: "ok",
+      found: [
+        {
+          type: "document",
+          ref: "ent_1",
+          title: "Supplier_Agreement.docx",
+          kind: "document",
+        },
+        {
+          type: "document",
+          ref: "ent_2",
+          title: "Side_Letter_Northstar.docx",
+          kind: "document",
+        },
+        {
+          type: "document",
+          ref: "ent_3",
+          title: "Unbound_Note.docx",
+          kind: "document",
+        },
+      ],
+      foundOmitted: 0,
+    },
+  ],
+  callsOmitted: 0,
+} satisfies ChatStepLedger;
+
+// What the stored message binds: `ent_1` and `ent_2`, never `ent_3`.
+const MATTER_REF_TARGETS = readChatStepRefTargets({
+  version: 2,
+  refs: [
+    {
+      ref: "ent_1",
+      kind: "entity",
+      entity: { type: "entity", id: READABLE_DOCUMENT_ID },
+      workspace: { type: "workspace", id: MATTER_ID },
+    },
+    {
+      ref: "ent_2",
+      kind: "entity",
+      entity: { type: "entity", id: UNREADABLE_DOCUMENT_ID },
+      workspace: { type: "workspace", id: MATTER_ID },
+    },
+  ],
+  entities: [],
+  unresolvedInputs: [],
+  workspaceScope: [],
+});
+
+const SUPPLIER_AGREEMENT = {
+  id: READABLE_DOCUMENT_ID,
+  name: "Supplier_Agreement.docx",
+  kind: "document",
+  fields: [
+    {
+      id: "field-file",
+      propertyId: "property-file",
+      content: {
+        type: "file",
+        fileName: "Supplier_Agreement.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        pdfFileId: null,
+      },
+    },
+  ],
+};
+
+/** The viewer's entity reads: one document they may read, a refusal for any
+ *  other. */
+const entityReads = (requests: string[]) =>
+  Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const pathname = new URL(new Request(input, init).url).pathname;
+      requests.push(pathname);
+      return pathname.endsWith(`/entity/${READABLE_DOCUMENT_ID}`)
+        ? Response.json(SUPPLIER_AGREEMENT)
+        : Response.json({ message: "Not found" }, { status: 404 });
+    },
+    { preconnect: () => undefined },
+  );
+
+const renderMatterStep = async () =>
+  await renderCard({
+    card: (
+      <ToolCallCard
+        activeOrganizationId="test-org"
+        failureOutcome="recovered"
+        part={codeStep(MATTER_LEDGER)}
+        stepRefTargets={MATTER_REF_TARGETS}
+      />
+    ),
+  });
+
+describe("a found matter document", () => {
+  test("opens in the side panel as a mention in chat does, when the viewer may read it", async () => {
+    globalThis.fetch = entityReads([]);
+    await renderMatterStep();
+    await openStep();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Supplier_Agreement/u }),
+    );
+    await waitFor(() => {
+      expect(
+        useInspectorTabsStore
+          .getState()
+          .tabs.flatMap((tab) =>
+            tab.type === "file" ? [[tab.workspaceId, tab.entityId]] : [],
+          ),
+      ).toEqual([[MATTER_ID, READABLE_DOCUMENT_ID]]);
+    });
+  });
+
+  test("one the viewer may not read, or its message never bound, stays the title it was and opens nothing", async () => {
+    const requests: string[] = [];
+    globalThis.fetch = entityReads(requests);
+    await renderMatterStep();
+    await openStep();
+    await screen.findByRole("button", { name: /Supplier_Agreement/u });
+    await waitFor(() => {
+      expect(requests).toContain(
+        `/v1/entities/${MATTER_ID}/entity/${UNREADABLE_DOCUMENT_ID}`,
+      );
+    });
+
+    for (const title of ["Side_Letter_Northstar.docx", "Unbound_Note.docx"]) {
+      expect(screen.getByText(title).closest("button, a")).toBeNull();
+    }
+    // Only bound refs are read, and each by its own matter's entity read.
+    expect(requests.toSorted()).toEqual(
+      [
+        `/v1/entities/${MATTER_ID}/entity/${READABLE_DOCUMENT_ID}`,
+        `/v1/entities/${MATTER_ID}/entity/${UNREADABLE_DOCUMENT_ID}`,
+      ].toSorted(),
+    );
+  });
+});
