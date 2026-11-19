@@ -158,7 +158,7 @@ export const paragraphsOf = (pieces: readonly PieceText[]): Paragraph[] => {
   const paragraphs: Paragraph[] = [];
   let current: { startMs: number; texts: string[] } | null = null;
   let breakNext = true;
-  for (const piece of pieces.toSorted(
+  for (const piece of [...pieces].sort(
     (left, right) => left.index - right.index,
   )) {
     const text = piece.text.trim();

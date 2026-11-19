@@ -996,7 +996,8 @@ impl LocalWorkers {
 }
 
 fn kill_child(child: &SharedChild) {
-  if let Err(error) = child.lock().unwrap_or_else(PoisonError::into_inner).kill() {
+  let killed = child.lock().unwrap_or_else(PoisonError::into_inner).kill();
+  if let Err(error) = killed {
     tracing::debug!(%error, "recording worker already gone");
   }
 }
@@ -1060,12 +1061,12 @@ impl LocalWorker {
 impl Drop for LocalWorker {
   fn drop(&mut self) {
     kill_child(&self.child);
-    if let Err(error) = self
+    let reaped = self
       .child
       .lock()
       .unwrap_or_else(PoisonError::into_inner)
-      .wait()
-    {
+      .wait();
+    if let Err(error) = reaped {
       tracing::debug!(%error, "recording worker could not be reaped");
     }
   }
@@ -1257,40 +1258,7 @@ pub async fn transcribe_save_to_matter(
     .take(MAX_TITLE_CHARS)
     .collect::<String>();
   let body = SaveToMatterRequest { title, ..request };
-  let account = crate::dictation_cleanup::dictation_account(&app).await?;
-  let client =
-    crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
-      redirect: reqwest::redirect::Policy::none(),
-      timeout: Some(Duration::from_secs(60)),
-    })
-    .map_err(crate::logging::request_cause_logged(SAVE_FAILURE))?;
-  let request = crate::http_client::device_proof_request(
-    client
-      .post(format!(
-        "{}{}",
-        account.api_base_url,
-        dictation_cloud::transcripts_path()
-      ))
-      .json(&body),
-    &account.device_key,
-    Some(&account.credential.key),
-    None,
-  )?;
-  drop(account);
-  let response = request
-    .send()
-    .await
-    .map_err(crate::logging::request_cause_logged(SAVE_FAILURE))?;
-  if !response.status().is_success() {
-    return Err(SAVE_FAILURE.to_string());
-  }
-  let bytes = response
-    .bytes()
-    .await
-    .map_err(crate::logging::request_cause_logged(SAVE_FAILURE))?;
-  if bytes.len() > 64 * 1024 {
-    return Err(SAVE_FAILURE.to_string());
-  }
+  let bytes = dictation_cloud::save_transcript(&app, &body, SAVE_FAILURE).await?;
   serde_json::from_slice(&bytes).map_err(|_error| SAVE_FAILURE.to_string())
 }
 

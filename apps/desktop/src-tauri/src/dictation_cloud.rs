@@ -593,9 +593,7 @@ impl CloudSession {
 /// region's default where none is stored or the stored one is gone. It
 /// names the account it was read for, which every piece is sent for.
 pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
-  let account = cloud_account(app).await?;
-  let namespace = account.local_data_namespace();
-  let offered = models_for(account).await?;
+  let (namespace, offered) = namespaced_models(cloud_account(app).await?).await?;
   let (_, stored) = dictation::destination(app);
   let choice =
     choose_model(stored.as_deref(), &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
@@ -649,6 +647,55 @@ pub(crate) enum PieceFailure {
   AccountChanged,
   /// stella AI did not transcribe it; trying again may.
   Failed(String),
+}
+
+/// The longest reply a saved transcript sends back.
+const MAX_SAVED_REPLY_BYTES: usize = 64 * 1024;
+
+/// Saves a transcribed recording to a matter for the dictation account,
+/// whose lease is held until the reply has been read. Returns the reply.
+pub(crate) async fn save_transcript(
+  app: &AppHandle,
+  body: &impl Serialize,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
+  let account = dictation_account(app).await?;
+  let client = DesktopHttpClient::new(HttpClientOptions {
+    redirect: reqwest::redirect::Policy::none(),
+    timeout: Some(Duration::from_secs(60)),
+  })
+  .map_err(request_cause_logged(failure))?;
+  let response = save_request(&account, &client, body)?
+    .send()
+    .await
+    .map_err(request_cause_logged(failure))?;
+  if !response.status().is_success() {
+    return Err(failure.to_string());
+  }
+  let bytes = response
+    .bytes()
+    .await
+    .map_err(request_cause_logged(failure))?;
+  drop(account);
+  if bytes.len() > MAX_SAVED_REPLY_BYTES {
+    return Err(failure.to_string());
+  }
+  Ok(bytes.to_vec())
+}
+
+fn save_request(
+  account: &AccountRequest,
+  client: &DesktopHttpClient,
+  body: &impl Serialize,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  crate::http_client::device_proof_request(
+    client
+      .post(format!("{}{}", account.api_base_url, transcripts_path()))
+      .json(body),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )
 }
 
 /// One piece of a recording, already 16 kHz WAV, transcribed by stella AI,
@@ -721,6 +768,14 @@ impl CloudModels {
 
 pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
   models_for(cloud_account(app).await?).await
+}
+
+/// The account's models, with the namespace that names the account.
+async fn namespaced_models(
+  account: AccountRequest,
+) -> Result<(String, CloudModels), String> {
+  let namespace = account.local_data_namespace();
+  models_for(account).await.map(|models| (namespace, models))
 }
 
 async fn models_for(account: AccountRequest) -> Result<CloudModels, String> {
