@@ -55,8 +55,9 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
       });
 
       if (error) {
-        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-        throw toAuthClientError(error);
+        const failure = toAuthClientError(error);
+        notifyUserError(failure, t("errors.actionFailed"));
+        return readQueryResult(Result.err(failure));
       }
 
       const { error: setActiveError } = await authClient.organization.setActive(
@@ -66,11 +67,9 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
       );
 
       if (setActiveError) {
-        notifyUserError(
-          toAuthClientError(setActiveError),
-          t("errors.actionFailed"),
-        );
-        throw toAuthClientError(setActiveError);
+        const failure = toAuthClientError(setActiveError);
+        notifyUserError(failure, t("errors.actionFailed"));
+        return readQueryResult(Result.err(failure));
       }
 
       const refreshed = await Result.tryPromise({
@@ -98,8 +97,9 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
       });
 
       if (error) {
-        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-        throw toAuthClientError(error);
+        const failure = toAuthClientError(error);
+        notifyUserError(failure, t("errors.actionFailed"));
+        return readQueryResult(Result.err(failure));
       }
 
       setIsDeclined(true);

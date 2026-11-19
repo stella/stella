@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
-import { HandoffShell } from "@/routes/auth/-handoff.pending";
+import { HandoffShell } from "./handoff-confirmation-shell.pending";
 
 type HandoffConfirmationPanelProps = {
   email: string;

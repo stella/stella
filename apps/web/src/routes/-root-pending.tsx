@@ -7,13 +7,13 @@ import {
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { selectAppFrame } from "@/routes/-app-frame.logic";
+import { AuthFrameShell } from "@/routes/-auth-frame.pending";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 import {
   leafRedirectFrameScope,
   PendingViewOf,
   useLeafPendingView,
 } from "@/routes/-route-pending-view";
-import { AuthFrameShell } from "@/routes/auth/-auth-frame.pending";
 
 /**
  * The root's pending view: what a cold load paints before the app mounts,

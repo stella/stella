@@ -16,5 +16,5 @@ export const OTPEmailText = ({
   id: "auth.weSentCodeTo" | "auth.resendCode";
 }) => {
   const t = useTranslations();
-  return t.rich(id, { email: renderEmail, emailAddress: email });
+  return <>{t.rich(id, { email: renderEmail, emailAddress: email })}</>;
 };

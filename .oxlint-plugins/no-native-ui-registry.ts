@@ -256,6 +256,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "input-otp": native("InputOTP from @stll/ui/input-otp", {
     attributes: [{ name: "autoComplete", values: ["one-time-code"] }],
   }),
+  "input-otp-face": noNative("presentational one-time code group and slots"),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
   kbd: noNative(
@@ -632,6 +633,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "input-otp": webOnly(
     "the app signs in through the browser, not a code field",
   ),
+  "input-otp-face": webOnly("the app opens the web sign-in flow in a browser"),
   inspector: webOnly(
     "the web's docked inspector; a phone shows details on their own screen",
   ),

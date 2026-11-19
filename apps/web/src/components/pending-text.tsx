@@ -34,7 +34,6 @@ type PendingTextKey =
   | "auth.handoffTitle"
   | "auth.headline"
   | "auth.invitation.title"
-  | "auth.orSignInWithEmail"
   | "auth.professionalUse.title"
   | "auth.professionalUseStatement"
   | "auth.reauthenticationRequired"

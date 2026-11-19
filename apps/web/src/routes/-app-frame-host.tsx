@@ -22,15 +22,15 @@ import {
   visitorChanged,
 } from "@/routes/-app-frame.logic";
 import type { AppFrameAudience } from "@/routes/-app-frame.logic";
+import {
+  AuthFrameShell,
+  AuthPickersPending,
+} from "@/routes/-auth-frame.pending";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 import {
   useLeafPendingView,
   useLeafRedirectFrameScope,
 } from "@/routes/-route-pending-view";
-import {
-  AuthFrameShell,
-  AuthPickersPending,
-} from "@/routes/auth/-auth-frame.pending";
 
 // The signed-in frame (sidebar, inspector, chat and their registrations) loads
 // only once a member is known, so sign-in and pages for visitors never
@@ -48,7 +48,7 @@ const LazyKnowledgePublicFrame = lazy(async () => {
 });
 
 const AuthFramePickers = lazy(async () => {
-  const module = await import("@/routes/auth/-auth-frame-pickers");
+  const module = await import("@/routes/-auth-frame-pickers");
   return { default: module.AuthFramePickers };
 });
 

@@ -49,6 +49,7 @@ export function TwoFactorPage() {
             });
 
       if (error) {
+        const failure = toAuthClientError(error);
         if (input.mode === "totp") {
           setTotp("");
         } else {
@@ -61,9 +62,9 @@ export function TwoFactorPage() {
           } else if (error.code === "INVALID_BACKUP_CODE") {
             message = t("auth.twoFactor.invalidBackupCode");
           }
-          notifyUserError(toAuthClientError(error), message);
+          notifyUserError(failure, message);
         }
-        throw toAuthClientError(error);
+        return readQueryResult(Result.err(failure));
       }
 
       // The redirect target's `beforeLoad` (see routes/auth/two-factor.tsx)

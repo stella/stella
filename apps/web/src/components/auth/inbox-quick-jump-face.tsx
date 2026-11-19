@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -90,7 +90,7 @@ export const InboxQuickJumpLayout = ({
   renderProvider,
 }: {
   email: string;
-  renderProvider: (provider: Provider, icon: ReactNode) => ReactNode;
+  renderProvider: (provider: Provider, icon: ReactNode) => ReactElement;
 }) => (
   <div className="flex flex-wrap justify-center gap-1">
     {getProvidersForEmail(email).map((provider) =>

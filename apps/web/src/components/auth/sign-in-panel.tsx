@@ -56,11 +56,11 @@ import { SIGN_IN_MODE } from "./sign-in-mode";
 import type { SignInMode } from "./sign-in-mode";
 import {
   SIGN_IN_CREDENTIAL_INPUT_SIZE,
+  SignInEmailDivider,
   SignInHeading,
   SignInMethodSwitch,
   SignInPanelPending,
   SignInPanelShell,
-  SignInSocialGroup,
 } from "./sign-in-panel-face.pending";
 import {
   initialPasswordEntry,
@@ -122,11 +122,16 @@ const SignInOptionsPanel = ({
   className,
   entryMethod,
   redirectTo,
-  showHeading = true,
+  heading,
+  feedback,
   mode = SIGN_IN_MODE.signIn,
   onOtpSent,
   authCapabilities,
-}: SignInPanelProps & { authCapabilities: AuthCapabilities }) => {
+}: SignInPanelProps & {
+  authCapabilities: AuthCapabilities;
+  heading: ReactNode;
+  feedback: ReactNode;
+}) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
@@ -147,7 +152,6 @@ const SignInOptionsPanel = ({
     showMicrosoft,
     showApple,
     showSocialProviders,
-    hasAboveEmailOptions,
   } = signInOptions;
   const lastUsed = resolveLastUsedSignInMethod({
     stored: readLastUsedLoginMethod(),
@@ -156,6 +160,11 @@ const SignInOptionsPanel = ({
   const [passwordEntry, setPasswordEntry] = useState(() =>
     initialPasswordEntry({ entryMethod, options: signInOptions }),
   );
+  const hasCredentialOption =
+    showBootstrap ||
+    showLocalPassword ||
+    showEmailOtp ||
+    passwordEntry.type === "open";
   const openPasswordEntry = (email: string) =>
     setPasswordEntry({ type: "open", email });
 
@@ -211,97 +220,95 @@ const SignInOptionsPanel = ({
   return (
     <SignInPanelShell
       className={className}
-      heading={
-        showHeading && (
-          <SignInHeading
-            title={t("auth.signIn")}
-            invitation={
-              isAcceptInvitationRedirect(redirectTo)
-                ? t("auth.signInBeforeInvitation")
-                : undefined
-            }
+      heading={heading}
+      feedback={feedback}
+      social={{
+        google: showGoogle && (
+          <SocialButton
+            disabled={socialLoading !== null}
+            icon={<GoogleIcon />}
+            label={t("auth.continueWithGoogle")}
+            lastUsed={lastUsed}
+            method={SIGN_IN_METHOD.google}
+            loading={socialLoading === "google"}
+            onClick={() => {
+              handleSocialSignIn("google").catch((error: unknown) => {
+                setSocialLoading(null);
+                analytics.captureError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  {
+                    fingerprintKey: "SignInOptionsPanel:failure",
+                    scope: {
+                      type: "handler",
+                      handlerId: "SignInOptionsPanel:failure",
+                    },
+                  },
+                );
+              });
+            }}
           />
-        )
-      }
-      social={
-        showSocialProviders && (
-          <SignInSocialGroup>
-            {showGoogle && (
-              <SocialButton
-                disabled={socialLoading !== null}
-                icon={<GoogleIcon />}
-                label={t("auth.continueWithGoogle")}
-                lastUsed={lastUsed}
-                method={SIGN_IN_METHOD.google}
-                loading={socialLoading === "google"}
-                onClick={() => {
-                  handleSocialSignIn("google").catch((error: unknown) => {
-                    setSocialLoading(null);
-                    analytics.captureError(
-                      error instanceof Error ? error : new Error(String(error)),
-                      {
-                        fingerprintKey: "SignInOptionsPanel:failure",
-                        scope: {
-                          type: "handler",
-                          handlerId: "SignInOptionsPanel:failure",
-                        },
-                      },
-                    );
-                  });
-                }}
-              />
-            )}
-            {showMicrosoft && (
-              <SocialButton
-                disabled={socialLoading !== null}
-                icon={<MicrosoftIcon />}
-                label={t("auth.continueWithMicrosoft")}
-                lastUsed={lastUsed}
-                method={SIGN_IN_METHOD.microsoft}
-                loading={socialLoading === "microsoft"}
-                onClick={() => {
-                  handleSocialSignIn("microsoft").catch((error: unknown) => {
-                    setSocialLoading(null);
-                    analytics.captureError(
-                      error instanceof Error ? error : new Error(String(error)),
-                      {
-                        fingerprintKey: "SignInOptionsPanel:failure-2",
-                        scope: {
-                          type: "handler",
-                          handlerId: "SignInOptionsPanel:failure-2",
-                        },
-                      },
-                    );
-                  });
-                }}
-              />
-            )}
-            {showApple && (
-              <SocialButton
-                disabled={socialLoading !== null}
-                icon={<AppleIcon />}
-                label={t("auth.continueWithApple")}
-                lastUsed={lastUsed}
-                method={SIGN_IN_METHOD.apple}
-                loading={socialLoading === "apple"}
-                onClick={() => {
-                  handleSocialSignIn("apple").catch((error: unknown) => {
-                    setSocialLoading(null);
-                    analytics.captureError(
-                      error instanceof Error ? error : new Error(String(error)),
-                      {
-                        fingerprintKey: "SignInOptionsPanel:failure-3",
-                        scope: {
-                          type: "handler",
-                          handlerId: "SignInOptionsPanel:failure-3",
-                        },
-                      },
-                    );
-                  });
-                }}
-              />
-            )}
-          </SignInSocialGroup>
+        ),
+        microsoft: showMicrosoft && (
+          <SocialButton
+            disabled={socialLoading !== null}
+            icon={<MicrosoftIcon />}
+            label={t("auth.continueWithMicrosoft")}
+            lastUsed={lastUsed}
+            method={SIGN_IN_METHOD.microsoft}
+            loading={socialLoading === "microsoft"}
+            onClick={() => {
+              handleSocialSignIn("microsoft").catch((error: unknown) => {
+                setSocialLoading(null);
+                analytics.captureError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  {
+                    fingerprintKey: "SignInOptionsPanel:failure-2",
+                    scope: {
+                      type: "handler",
+                      handlerId: "SignInOptionsPanel:failure-2",
+                    },
+                  },
+                );
+              });
+            }}
+          />
+        ),
+        apple: showApple && (
+          <SocialButton
+            disabled={socialLoading !== null}
+            icon={<AppleIcon />}
+            label={t("auth.continueWithApple")}
+            lastUsed={lastUsed}
+            method={SIGN_IN_METHOD.apple}
+            loading={socialLoading === "apple"}
+            onClick={() => {
+              handleSocialSignIn("apple").catch((error: unknown) => {
+                setSocialLoading(null);
+                analytics.captureError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  {
+                    fingerprintKey: "SignInOptionsPanel:failure-3",
+                    scope: {
+                      type: "handler",
+                      handlerId: "SignInOptionsPanel:failure-3",
+                    },
+                  },
+                );
+              });
+            }}
+          />
+        ),
+      }}
+      beforeCredentials={
+        hasCredentialOption && (
+          <SignInEmailDivider>
+            {showBootstrap
+              ? t("auth.createFirstAccount")
+              : !showLocalPassword &&
+                showEmailOtp &&
+                showSocialProviders &&
+                t("auth.orSignInWithEmail")}
+          </SignInEmailDivider>
         )
       }
       bootstrap={
@@ -324,8 +331,8 @@ const SignInOptionsPanel = ({
         )
       }
       separator={
-        showEmailOtp &&
-        hasAboveEmailOptions && (
+        showLocalPassword &&
+        showEmailOtp && (
           <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
         )
       }
@@ -551,73 +558,70 @@ const BootstrapSignUpForm = ({
   }));
 
   return (
-    <div className="flex flex-col gap-3">
-      <TextSeparator>{t("auth.createFirstAccount")}</TextSeparator>
-      <Form
-        dirty={dirty}
-        onDiscard={() => form.reset()}
-        errors={formErrors}
-        onSubmit={(e) => {
-          e.preventDefault();
-          detached(form.handleSubmit(), "sign-in-panel.submit");
-        }}
+    <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
+      errors={formErrors}
+      onSubmit={(e) => {
+        e.preventDefault();
+        detached(form.handleSubmit(), "sign-in-panel.submit");
+      }}
+    >
+      <form.Field name="email">
+        {(field) => (
+          <EmailCredentialField
+            autoFocus={!hasSocialProviders}
+            field={field}
+            lastUsed={false}
+          />
+        )}
+      </form.Field>
+      <form.Field name="password">
+        {(field) => (
+          <SecretCredentialField
+            autoComplete="new-password"
+            autoFocus={false}
+            field={field}
+            placeholder={t("auth.password")}
+          />
+        )}
+      </form.Field>
+      <form.Field name="bootstrapToken">
+        {(field) => (
+          <SecretCredentialField
+            autoComplete="one-time-code"
+            autoFocus={false}
+            field={field}
+            placeholder={t("auth.bootstrapToken")}
+          />
+        )}
+      </form.Field>
+      <form.Subscribe
+        selector={(s) => ({
+          isSubmitting: s.isSubmitting,
+          canSubmit: s.canSubmit,
+          email: s.values.email,
+          password: s.values.password,
+          bootstrapToken: s.values.bootstrapToken,
+        })}
       >
-        <form.Field name="email">
-          {(field) => (
-            <EmailCredentialField
-              autoFocus={!hasSocialProviders}
-              field={field}
-              lastUsed={false}
-            />
-          )}
-        </form.Field>
-        <form.Field name="password">
-          {(field) => (
-            <SecretCredentialField
-              autoComplete="new-password"
-              autoFocus={false}
-              field={field}
-              placeholder={t("auth.password")}
-            />
-          )}
-        </form.Field>
-        <form.Field name="bootstrapToken">
-          {(field) => (
-            <SecretCredentialField
-              autoComplete="one-time-code"
-              autoFocus={false}
-              field={field}
-              placeholder={t("auth.bootstrapToken")}
-            />
-          )}
-        </form.Field>
-        <form.Subscribe
-          selector={(s) => ({
-            isSubmitting: s.isSubmitting,
-            canSubmit: s.canSubmit,
-            email: s.values.email,
-            password: s.values.password,
-            bootstrapToken: s.values.bootstrapToken,
-          })}
-        >
-          {({ isSubmitting, canSubmit, email, password, bootstrapToken }) => (
-            <Button
-              className="w-full"
-              disabled={
-                !canSubmit ||
-                email.trim().length === 0 ||
-                password.trim().length === 0 ||
-                bootstrapToken.trim().length === 0
-              }
-              loading={isSubmitting}
-              type="submit"
-            >
-              {t("auth.createFirstAccount")}
-            </Button>
-          )}
-        </form.Subscribe>
-      </Form>
-    </div>
+        {({ isSubmitting, canSubmit, email, password, bootstrapToken }) => (
+          <Button
+            className="w-full"
+            disabled={
+              !canSubmit ||
+              email.trim().length === 0 ||
+              password.trim().length === 0 ||
+              bootstrapToken.trim().length === 0
+            }
+            loading={isSubmitting}
+            type="submit"
+          >
+            {t("auth.createFirstAccount")}
+          </Button>
+        )}
+      </form.Subscribe>
+    </Form>
   );
 };
 
@@ -782,13 +786,22 @@ export const SignInPanel = (props: SignInPanelProps) => {
   if (capabilitiesView.type !== "items") {
     return <QueryViewFeedback view={capabilitiesView} />;
   }
+  const heading = (props.showHeading ?? true) && (
+    <SignInHeading
+      title={t("auth.signIn")}
+      invitation={
+        isAcceptInvitationRedirect(props.redirectTo)
+          ? t("auth.signInBeforeInvitation")
+          : undefined
+      }
+    />
+  );
   return (
-    <>
-      <QueryViewFeedback view={capabilitiesView} />
-      <SignInOptionsPanel
-        {...props}
-        authCapabilities={capabilitiesView.items}
-      />
-    </>
+    <SignInOptionsPanel
+      {...props}
+      authCapabilities={capabilitiesView.items}
+      heading={heading}
+      feedback={<QueryViewFeedback view={capabilitiesView} />}
+    />
   );
 };

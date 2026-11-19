@@ -1,30 +1,10 @@
-import type { ReactNode } from "react";
-
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
 
+import { HandoffShell } from "@/components/auth/handoff-confirmation-shell.pending";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
 
-export const HandoffShell = ({
-  title,
-  account,
-  confirm,
-  cancel,
-}: {
-  title: ReactNode;
-  account: ReactNode;
-  confirm: ReactNode;
-  cancel: ReactNode;
-}) => (
-  <div className="flex w-full max-w-md flex-col gap-4">
-    <h1 className="text-xl font-semibold">{title}</h1>
-    <p>{account}</p>
-    <div className="flex flex-wrap gap-2">
-      {confirm}
-      {cancel}
-    </div>
-  </div>
-);
+export { HandoffShell };
 
 export const HandoffPending = framePendingView(() => (
   <HandoffShell

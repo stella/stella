@@ -7,7 +7,7 @@ import { cn } from "@stll/ui/utils";
 import { PendingText } from "@/components/pending-text";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 
-import { socialProviderFlags } from "./sign-in-deployment.logic";
+import { configuredSocialProviders } from "./sign-in-deployment.logic";
 import { SIGN_IN_ENTRY_METHOD } from "./sign-in-panel.logic";
 import type { SignInEntryMethod } from "./sign-in-panel.logic";
 
@@ -16,32 +16,64 @@ export const SIGN_IN_CREDENTIAL_INPUT_SIZE = "lg";
 export const SignInPanelShell = ({
   heading,
   social,
+  beforeCredentials,
   bootstrap,
   credentials,
   separator,
   alternate,
   terms,
   professionalUse,
+  feedback,
   className,
 }: {
   heading?: ReactNode;
-  social?: ReactNode;
+  social:
+    "pending" | Record<(typeof configuredSocialProviders)[number], ReactNode>;
+  beforeCredentials?: ReactNode;
   bootstrap?: ReactNode;
   credentials?: ReactNode;
   separator?: ReactNode;
   alternate?: ReactNode;
-  terms: ReactNode;
+  terms?: ReactNode;
+  feedback?: ReactNode;
   professionalUse?: ReactNode;
   className?: string | undefined;
 }) => (
   <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
     {heading}
-    {social}
+    {configuredSocialProviders.length > 0 && (
+      <div className="flex flex-col gap-3">
+        {configuredSocialProviders.map((provider) => (
+          <div
+            className="min-h-11"
+            data-auth-provider={provider}
+            key={provider}
+          >
+            {social === "pending" ? (
+              <ButtonFace
+                className="w-full"
+                size="lg"
+                layout="wrap"
+                variant="outline"
+              >
+                <FaceLabelPending className="w-40" />
+              </ButtonFace>
+            ) : (
+              social[provider]
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+    {beforeCredentials}
     {bootstrap}
     {credentials}
     {separator}
     {alternate}
-    <p className="text-foreground-muted text-xs">{terms}</p>
+    {feedback}
+    {terms !== undefined && (
+      <p className="text-foreground-muted text-xs">{terms}</p>
+    )}
     {professionalUse !== undefined && professionalUse !== null && (
       <p className="text-foreground-muted text-xs">{professionalUse}</p>
     )}
@@ -65,8 +97,13 @@ export const SignInHeading = ({
   </div>
 );
 
-export const SignInSocialGroup = ({ children }: { children: ReactNode }) => (
-  <div className="flex flex-col gap-3">{children}</div>
+// The bootstrap form has a 12px gap after its divider; other layouts use the panel gap.
+export const SignInEmailDivider = ({ children }: { children?: ReactNode }) => (
+  <div
+    className={cn("min-h-4", configuredSocialProviders.length === 0 && "-mb-5")}
+  >
+    {children && <TextSeparator>{children}</TextSeparator>}
+  </div>
 );
 
 export const SignInMethodSwitch = ({ children }: { children: ReactNode }) => (
@@ -100,16 +137,12 @@ export const SignInPanelPending = ({
   redirectTo?: string;
   showHeading?: boolean;
 }) => {
-  // The API decides which methods can sign in. Before it responds, the build
-  // flags and a requested password step only determine which space to reserve.
-  const socialProviders = Object.entries(socialProviderFlags).filter(
-    ([, enabled]) => enabled,
-  );
   const password = entryMethod === SIGN_IN_ENTRY_METHOD.password;
 
   return (
     <SignInPanelShell
       className={className}
+      social="pending"
       heading={
         showHeading && (
           <SignInHeading
@@ -125,29 +158,12 @@ export const SignInPanelPending = ({
           />
         )
       }
-      social={
-        socialProviders.length > 0 && (
-          <SignInSocialGroup>
-            {socialProviders.map(([provider]) => (
-              <ButtonFace
-                className="w-full"
-                key={provider}
-                layout="wrap"
-                size="lg"
-                variant="outline"
-              >
-                <FaceLabelPending className="w-40" />
-              </ButtonFace>
-            ))}
-          </SignInSocialGroup>
-        )
-      }
-      separator={
-        socialProviders.length > 0 && (
-          <TextSeparator>
-            <PendingText id="auth.orSignInWithEmail" barClassName="w-28" />
-          </TextSeparator>
-        )
+      beforeCredentials={
+        <SignInEmailDivider>
+          {configuredSocialProviders.length > 0 && (
+            <FaceLabelPending className="w-28" />
+          )}
+        </SignInEmailDivider>
       }
       alternate={
         <>
