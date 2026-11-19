@@ -81,6 +81,16 @@ export const entityReferenceHref = ({
     },
   });
 
+/** The durable href of a case-law decision, as an answer's text carries it. */
+export const decisionReferenceHref = (decisionId: string): string =>
+  toChatResourceHref({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    resource: resourceRef({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      id: toSafeId<"caseLawDecision">(decisionId),
+    }),
+  });
+
 // --- Composer mention attrs ---------------------------------------------------
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -191,13 +201,7 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
         }),
       });
     case "decision":
-      return toChatResourceHref({
-        type: RESOURCE_TYPE.CASE_LAW_DECISION,
-        resource: resourceRef({
-          type: RESOURCE_TYPE.CASE_LAW_DECISION,
-          id: toSafeId<"caseLawDecision">(id),
-        }),
-      });
+      return decisionReferenceHref(id);
     case "entity": {
       const sourceWorkspaceId = readString(attrs, "sourceWorkspaceId");
       return sourceWorkspaceId === null

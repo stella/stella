@@ -433,6 +433,14 @@
       "scripts/check-workflow-shells*.ts",
       "scripts/workflow-steps.ts"
     ],
+    "Patched dependencies apply": [
+      "package.json",
+      "bun.lock",
+      "patches/**",
+      "scripts/bun-lock-text.ts",
+      "scripts/check-patched-dependencies*.ts",
+      "scripts/unpatched-dependency-copies.json"
+    ],
     "Test release-channel script": ["VERSION"],
     "Test web container platform boundary": [
       "apps/web/Dockerfile",
