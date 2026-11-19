@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { reusableResultRun } from "../packages/scripts/src/prepared-generated-sources";
@@ -190,7 +191,6 @@ test.skipIf(process.platform === "win32")(
         gh,
         `#!${process.execPath}
 import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 const args = process.argv.slice(2);
 const mode = readFileSync(${JSON.stringify(path.join(root, "proof-mode"))}, "utf-8");
 if (mode === "api-failure") process.exit(1);
