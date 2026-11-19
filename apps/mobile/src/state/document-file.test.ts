@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { InferOutput } from "valibot";
 
+import type { asicPreviewSchema } from "@stll/api-contract/asic";
 import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
@@ -324,7 +326,7 @@ describe("reading a document's file", () => {
             text: "The first page",
           },
         ],
-      };
+      } satisfies InferOutput<typeof asicPreviewSchema>;
       const { fetch, calls } = server((path) =>
         Response.json(
           path.endsWith("/versions")

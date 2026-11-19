@@ -233,7 +233,12 @@ export const readDocumentFile = async ({
           path: `/v1/files/${encodeURIComponent(workspaceId)}/asic/${encodeURIComponent(fieldId)}`,
           schema: asicPreviewSchema,
         });
-        return Result.ok({ viewer: "asic", fileName, fieldId, preview });
+        return Result.ok({
+          viewer: "asic",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies AsicDocumentFile);
       }
       case "cades": {
         const preview = await requestApi({
