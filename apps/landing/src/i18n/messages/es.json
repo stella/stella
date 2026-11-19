@@ -777,6 +777,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Explorar la base jurídica pública",
       "capabilities": "Funcionalidades",
       "exploreMore": "Sigue explorando",
       "faq": "Preguntas frecuentes",
