@@ -4,7 +4,11 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
-import { resolveDataBoxMessageMimeType } from "@stll/api-contract/data-box";
+import {
+  type DataBoxDeliveryEvent,
+  type DataBoxEnvelope,
+  resolveDataBoxMessageMimeType,
+} from "@stll/api-contract/data-box";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -43,6 +47,26 @@ type ReadDataBoxFileOptions = {
   purpose?: "preview" | "agent" | "standalone";
 };
 
+/** One read of a data-box file: its envelope as stated, and its source text. */
+type DataBoxFileRead =
+  | {
+      readonly kind: "receipt";
+      readonly annotation: string;
+      readonly envelope: DataBoxEnvelope;
+      readonly events: readonly DataBoxDeliveryEvent[];
+      readonly text: string;
+    }
+  | {
+      readonly kind: "message";
+      readonly annotation: string;
+      readonly envelope: DataBoxEnvelope;
+      readonly text: string;
+      readonly files: readonly {
+        fileName: string;
+        entityId: SafeId<"entity"> | null;
+      }[];
+    };
+
 const missingFile = () =>
   Result.err(
     new HandlerError({
@@ -73,6 +97,9 @@ type FiledAttachmentOptions = {
   >;
 };
 
+/** One source files one record of at most this many members, each normally with one file. */
+const FILED_ATTACHMENT_ROW_CAP = 2 * CORRESPONDENCE_MAX_ATTACHMENTS;
+
 const readFiledAttachments = async ({
   tx,
   sourceEntityId,
@@ -81,32 +108,13 @@ const readFiledAttachments = async ({
 }: FiledAttachmentOptions) => {
   // An entity link opens its current file. Multiple candidates or an edited file
   // cannot identify the bytes this envelope contained.
-  const currentFiles = tx
-    .select({
-      hash: sql<string | null>`${fields.content}->>'sha256Hex'`.as(
-        "member_hash",
-      ),
-      encrypted: sql<boolean>`(${fields.content}->>'encrypted')::boolean`.as(
-        "member_encrypted",
-      ),
-    })
-    .from(fields)
-    .where(
-      and(
-        eq(fields.workspaceId, workspaceId),
-        eq(fields.entityVersionId, entityVersions.id),
-        sql`${fields.content}->>'type' = 'file'`,
-      ),
-    )
-    .limit(2)
-    .as("current_member_files");
   // Registration is per entity. The payload hash binds these ordinals to the selected version.
   const links = await tx
     .select({
       ordinal: correspondenceAttachments.ordinal,
       entityId: correspondenceAttachments.entityId,
-      hash: currentFiles.hash,
-      encrypted: currentFiles.encrypted,
+      hash: sql<string | null>`${fields.content}->>'sha256Hex'`,
+      encrypted: sql<boolean>`(${fields.content}->>'encrypted')::boolean`,
     })
     .from(correspondenceSources)
     .innerJoin(
@@ -138,7 +146,14 @@ const readFiledAttachments = async ({
         isNull(entityVersions.deletedAt),
       ),
     )
-    .innerJoinLateral(currentFiles, sql`true`)
+    .innerJoin(
+      fields,
+      and(
+        eq(fields.workspaceId, workspaceId),
+        eq(fields.entityVersionId, entityVersions.id),
+        sql`${fields.content}->>'type' = 'file'`,
+      ),
+    )
     .where(
       and(
         eq(correspondenceSources.entityId, sourceEntityId),
@@ -147,7 +162,11 @@ const readFiledAttachments = async ({
         eq(correspondence.contentHash, message.contentHash),
       ),
     )
-    .limit(2 * CORRESPONDENCE_MAX_ATTACHMENTS);
+    .limit(FILED_ATTACHMENT_ROW_CAP + 1);
+  // More rows than two files per member cannot name one file per ordinal.
+  if (links.length > FILED_ATTACHMENT_ROW_CAP) {
+    return new Map<number, SafeId<"entity">>();
+  }
   const unique = new Map<number, SafeId<"entity">>();
   const seen = new Set<number>();
   for (const { ordinal, entityId, hash, encrypted } of links) {
@@ -168,7 +187,7 @@ export const readDataBoxFile = async ({
   fieldId,
   recordAuditEvent,
   purpose = "preview",
-}: ReadDataBoxFileOptions) => {
+}: ReadDataBoxFileOptions): Promise<Result<DataBoxFileRead, HandlerError>> => {
   const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   if (row?.content.type !== "file") {
     return missingFile();
