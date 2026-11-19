@@ -179,7 +179,12 @@ const HISTORY = {
 const renderMenu = ({
   locale = "en",
   messages = en,
-}: { locale?: string; messages?: typeof en } = {}) => {
+  versions = VERSIONS,
+}: {
+  locale?: string;
+  messages?: typeof en;
+  versions?: readonly PublicStatuteVersion[];
+} = {}) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -204,7 +209,7 @@ const renderMenu = ({
             onVersionChange={(documentId) => {
               opened.push(documentId);
             }}
-            versions={VERSIONS}
+            versions={versions}
           />
         </FormattingProvider>
       </IntlProvider>
@@ -315,12 +320,37 @@ test("the switch restores every version of the act, one row each", () => {
   ).toBeNull();
 });
 
+test("an in-force version of the act shows its change counts once", () => {
+  const changed = VERSIONS.map((entry) =>
+    entry.id === V_2026.id
+      ? {
+          ...entry,
+          changes: {
+            provisions: { changed: 2, added: 1, removed: 0 },
+            words: { inserted: 40, deleted: 12 },
+          },
+        }
+      : entry,
+  );
+  const { view } = renderMenu({ versions: changed });
+  openMenu(view);
+  fireEvent.click(view.getByText(en.statutes.provisionVersionsAll));
+
+  const inForce = view
+    .getAllByRole("listitem")
+    .find((row) => row.textContent?.startsWith("Jan 1, 2026"));
+  expect(inForce).toBeDefined();
+  expect(
+    inForce?.querySelectorAll('[data-slot="statute-version-changes"]'),
+  ).toHaveLength(1);
+});
+
 test("the Czech menu counts the versions with the right plural and names the change", () => {
   const { view } = renderMenu({ locale: "cs", messages: cs });
   const list = openMenu(view);
   const rows = rowTexts(list);
 
-  expect(rows.at(1)).toContain("beze změny v průběhu 3 znění zákona");
+  expect(rows.at(1)).toContain("3 znění zákona beze změny");
   expect(rows.at(1)).toContain("Změněno");
   expect(rows.at(-1)).toContain("Není v těchto 2 zněních zákona");
 });

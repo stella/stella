@@ -260,12 +260,6 @@ export const StatuteVersionList = ({
                       )}
                     >
                       {rowLabel}
-                      {version.changes === null ? null : (
-                        <StatuteVersionChanges
-                          changes={version.changes}
-                          className="mt-0.5"
-                        />
-                      )}
                     </span>
                   )}
                   {version.changes === null ? null : (
