@@ -75,6 +75,9 @@ const nestingParent = (key: string, name: string): string | undefined => {
   }
   const segments = key.slice(0, -(name.length + 1)).split("/");
   const last = segments.at(-1);
+  if (last === undefined || last.length === 0) {
+    return undefined;
+  }
   const scope = segments.at(-2);
   return scope?.startsWith("@") ? `${scope}/${last}` : last;
 };
@@ -287,8 +290,11 @@ const checkUnpatchedCopies = ({
         continue;
       }
       const parent = nestingParent(entry.key, name);
-      const declaration = `${parent} > ${name}@${entry.version}`;
-      if (parent !== undefined && declared.has(declaration)) {
+      const declaration =
+        parent === undefined
+          ? undefined
+          : `${parent} > ${name}@${entry.version}`;
+      if (declaration !== undefined && declared.has(declaration)) {
         usedDeclarations.add(declaration);
         continue;
       }
@@ -360,20 +366,29 @@ export const checkPatchedDependencies = (
 
 const main = () => {
   const root = path.resolve(import.meta.dir, "..");
-  const read = (file: string) => {
+  const unreadable: string[] = [];
+  const read = (file: string): string | undefined => {
     try {
       return readFileSync(path.join(root, file), "utf-8");
     } catch (error) {
-      console.error(`${file} cannot be read: ${String(error)}`);
-      process.exit(1);
+      unreadable.push(`${file} cannot be read: ${String(error)}`);
+      return undefined;
     }
   };
-  const errors = checkPatchedDependencies({
-    manifestText: read("package.json"),
-    lockText: read("bun.lock"),
-    unpatchedCopiesText: read(UNPATCHED_COPIES_FILE),
-    patchFileExists: (file) => existsSync(path.join(root, file)),
-  });
+  const manifestText = read("package.json");
+  const lockText = read("bun.lock");
+  const unpatchedCopiesText = read(UNPATCHED_COPIES_FILE);
+  const errors =
+    manifestText === undefined ||
+    lockText === undefined ||
+    unpatchedCopiesText === undefined
+      ? unreadable
+      : checkPatchedDependencies({
+          manifestText,
+          lockText,
+          unpatchedCopiesText,
+          patchFileExists: (file) => existsSync(path.join(root, file)),
+        });
   if (errors.length > 0) {
     console.error(errors.join("\n"));
     process.exit(1);
