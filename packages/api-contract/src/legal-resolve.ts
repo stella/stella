@@ -33,17 +33,6 @@ const legalResolveDecisionTextSchema = v.variant("status", [
   v.strictObject({ status: v.literal("unavailable") }),
 ]);
 
-/**
- * One block of a resolved provision's bounded preview: the publisher's block
- * id, the anchor it sits under and its plain text. The provision preview
- * reader bounds how many blocks and how much text a preview carries.
- */
-const legalResolveProvisionBlockSchema = v.strictObject({
-  id: v.string(),
-  anchorId: v.string(),
-  text: v.string(),
-});
-
 const legalResolveDecisionAlternateSchema = v.strictObject({
   decisionId: v.string(),
   language: v.string(),
@@ -78,7 +67,7 @@ const legalResolveDocumentSchema = v.variant("kind", [
       to: v.nullable(v.string()),
     }),
     versionStatus: v.picklist(["current", "outdated"]),
-    blocks: v.array(legalResolveProvisionBlockSchema),
+    blocks: v.array(v.unknown()),
   }),
 ]);
 

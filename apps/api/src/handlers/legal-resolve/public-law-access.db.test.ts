@@ -119,7 +119,7 @@ const provision = {
     readerUrl: "/law/fixture",
     inForce: { from: null, to: null },
     versionStatus: "current",
-    blocks: [{ id: "p-1", anchorId: "par_1", text: "Public provision text" }],
+    blocks: [{ text: "Public provision text" }],
   },
 } as const satisfies LegalResolveResponse;
 

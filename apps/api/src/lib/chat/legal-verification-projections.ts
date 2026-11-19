@@ -8,12 +8,13 @@ import {
   projectionBranch,
   publicUrl,
 } from "./projection-fields";
+import { unenumeratedJsonList } from "./projection-schema";
 
 // --- resolve_case_law_decision / resolve_law_citation -------------------------
 // Both tools answer the shared legal resolve envelope. The projection spreads
 // the contract's own branches and annotates only the public corpus handles
-// (decision and statute document ids, block ids and anchors) and the reader
-// links, which embed those ids; every other field is the contract's schema.
+// (decision and statute document ids) and the reader links, which embed
+// those ids; every other field is the contract's schema.
 
 const [resolved, notFound, ambiguous, incomplete, countryUnavailable] =
   legalResolveResponseSchema.options;
@@ -63,13 +64,9 @@ const provision = v.strictObject({
   ...provisionDocument.entries,
   documentId: passthroughId(),
   readerUrl: publicUrl(),
-  blocks: v.array(
-    v.strictObject({
-      ...provisionDocument.entries.blocks.item.entries,
-      id: passthroughId(),
-      anchorId: passthroughId(),
-    }),
-  ),
+  // The contract leaves the preview blocks opaque; the provision preview
+  // reader bounds them (32 blocks of `{ id, anchorId, text }`).
+  blocks: unenumeratedJsonList(),
 });
 
 const coverage = v.optional(
