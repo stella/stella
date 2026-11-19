@@ -341,6 +341,15 @@ const SCHEMA_DATA_KEYWORDS = new Set([
 ]);
 
 /**
+ * Keywords whose subschema does not widen the result when it widens: `not`
+ * rejects what its subschema matches, and `if` picks which branch applies.
+ * Opening either would narrow the schema around it (`not: { examples }`
+ * rejects every value), so their subschemas stay exact. An exact `not`
+ * already admits every value it does not name.
+ */
+const EXACT_SUBSCHEMA_KEYWORDS = new Set(["if", "not"]);
+
+/**
  * An advertised output schema tolerates what a later deploy may add. A client
  * keeps the `tools/list` it fetched for its whole session and validates every
  * result against that copy; a stateless connection is never told the list
@@ -372,7 +381,7 @@ const tolerateOutputWidening = (
       if (key === "examples" && isUnknownArray(schema["enum"])) {
         return [];
       }
-      if (SCHEMA_DATA_KEYWORDS.has(key)) {
+      if (SCHEMA_DATA_KEYWORDS.has(key) || EXACT_SUBSCHEMA_KEYWORDS.has(key)) {
         return [[key, value]];
       }
       if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {

@@ -14,6 +14,7 @@ import {
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { deriveMcpOutputSchema } from "@/api/mcp/valibot-tool-definition";
 import { compileClientWireSchema } from "@/api/tests/helpers/wire-json-schema";
 
 // The validator the official client compiles each advertised output schema
@@ -64,9 +65,33 @@ const closedSearchListing = () => {
   return compileClientWireSchema(clientValidator, closed);
 };
 
+/** Keywords whose value maps names to schemas rather than being a schema. */
+const SCHEMA_MAPS = new Set([
+  "$defs",
+  "definitions",
+  "patternProperties",
+  "properties",
+]);
+
+/**
+ * Keywords whose value is data, or a subschema whose closed list rejects
+ * nothing a later deploy adds: an exact `not` admits every value it does not
+ * name, and `if` only picks a branch.
+ */
+const NOT_CLOSING = new Set([
+  "const",
+  "default",
+  "examples",
+  "if",
+  "not",
+  "required",
+]);
+
 /**
  * JSON pointers of every schema node that rejects a key or a value it does
- * not name: a closed object or a closed value list.
+ * not name: a closed object or a closed value list. A schema map is walked by
+ * value, so a property named `enum` or `required` is a property, not the
+ * keyword.
  */
 const closedNodePaths = (schema: unknown, path = ""): string[] => {
   if (Array.isArray(schema)) {
@@ -84,12 +109,77 @@ const closedNodePaths = (schema: unknown, path = ""): string[] => {
     if (key === "enum") {
       return [`${path}/enum`];
     }
-    if (key === "required" || key === "examples") {
+    if (NOT_CLOSING.has(key)) {
       return [];
+    }
+    if (SCHEMA_MAPS.has(key) && isRecord(value)) {
+      return Object.entries(value).flatMap(([name, nested]) =>
+        closedNodePaths(nested, `${path}/${key}/${name}`),
+      );
     }
     return closedNodePaths(value, `${path}/${key}`);
   });
 };
+
+describe("the closed-node census", () => {
+  test("reads a property named like a keyword as a property", () => {
+    expect(
+      closedNodePaths({
+        type: "object",
+        properties: {
+          enum: { type: "string" },
+          required: { type: "array", items: { type: "string" } },
+          examples: { type: "object", properties: {} },
+        },
+        required: ["enum"],
+      }),
+    ).toEqual([]);
+  });
+
+  test("finds a closed schema under a property named like a data keyword", () => {
+    expect(
+      closedNodePaths({
+        type: "object",
+        properties: {
+          required: { type: "object", additionalProperties: false },
+          examples: { type: "string", enum: ["a"] },
+        },
+      }),
+    ).toEqual([
+      "/properties/required/additionalProperties",
+      "/properties/examples/enum",
+    ]);
+  });
+
+  test("does not count an exact negated value list as closed", () => {
+    expect(
+      closedNodePaths({
+        type: "object",
+        properties: { value: { type: "string", not: { enum: ["blocked"] } } },
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("advertised output schemas keep a negated value list exact", () => {
+  test.each([
+    ["notValue", v.pipe(v.string(), v.notValue("blocked"))],
+    ["notValues", v.pipe(v.string(), v.notValues(["blocked", "banned"]))],
+  ] as const)(
+    "a field restricted with %s accepts every value the server accepts",
+    (_name, field) => {
+      const source = v.object({ value: field });
+      const advertised = deriveMcpOutputSchema(source);
+      const client = compileClientWireSchema(clientValidator, advertised);
+
+      expect(v.safeParse(source, { value: "allowed" }).success).toBe(true);
+      expect(client({ value: "allowed" }).valid).toBe(true);
+      expect(v.safeParse(source, { value: "blocked" }).success).toBe(false);
+      expect(client({ value: "blocked" }).valid).toBe(false);
+      expect(closedNodePaths(advertised)).toEqual([]);
+    },
+  );
+});
 
 describe("advertised output schemas survive a deploy that widens a result", () => {
   test.each(Object.entries(LATER_RESULTS))(
