@@ -34,7 +34,7 @@ import {
 } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
-import { CITATION_LEAD_IN_ATTRIBUTE } from "@/components/chat/rehype-citation-lead-in";
+import type { CITATION_LEAD_IN_ATTRIBUTE } from "@/components/chat/rehype-citation-lead-in";
 import { activateSourceCitation } from "@/components/chat/source-citation-navigation";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -215,7 +215,9 @@ export const StreamdownMentionLink = ({
   interactive,
   workspaceId,
   externalLinks = "citation",
-  [CITATION_LEAD_IN_ATTRIBUTE]: leadIn,
+  // A literal key: the React Compiler cannot lower a computed key in a
+  // destructuring pattern. The props type keys it by the shared constant.
+  "data-lead-in": leadIn,
   ...props
 }: StreamdownMentionLinkProps) => {
   const emailCitation = useVerifiedEmailCitationTarget(href ?? "", workspaceId);
