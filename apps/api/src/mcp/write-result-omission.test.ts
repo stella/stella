@@ -76,22 +76,24 @@ describe("omitted write results", () => {
       expect(advertised["type"]).toBe("object");
       expect(accepts({ entityId: "entity_1", updated: true })).toBe(true);
       expect(accepts({ ...MCP_OMITTED_WRITE_RESULT })).toBe(true);
-      // Neither half of the contract is loosened: the tool's required fields,
-      // the complete omission marker, its pinned values and the closed root all
-      // still hold.
+      // Neither half of the contract loses its shape: the tool's required
+      // fields, the complete omission marker and every value's type still
+      // hold. A key or a value a later deploy adds is admitted, so a session
+      // listed before that deploy keeps accepting results.
       expect(accepts({ updated: true })).toBe(false);
       expect(accepts({ applied: true })).toBe(false);
-      expect(accepts({ ...MCP_OMITTED_WRITE_RESULT, applied: false })).toBe(
+      expect(accepts({ ...MCP_OMITTED_WRITE_RESULT, applied: "yes" })).toBe(
         false,
       );
+      expect(accepts({ ...MCP_OMITTED_WRITE_RESULT, reason: 1 })).toBe(false);
       expect(accepts({ ...MCP_OMITTED_WRITE_RESULT, reason: "other" })).toBe(
-        false,
+        true,
       );
-      expect(accepts({ ...MCP_OMITTED_WRITE_RESULT, unexpected: 1 })).toBe(
-        false,
+      expect(accepts({ ...MCP_OMITTED_WRITE_RESULT, addedLater: 1 })).toBe(
+        true,
       );
       expect(accepts({ entityId: "entity_1", updated: "yes" })).toBe(false);
-      expect(accepts({ entityId: "entity_1", unexpected: 1 })).toBe(false);
+      expect(accepts({ entityId: "entity_1", addedLater: 1 })).toBe(true);
       expect(
         accepts({ entityId: "entity_1", details: { payload: { count: 1 } } }),
       ).toBe(true);
@@ -134,12 +136,13 @@ describe("omitted write results", () => {
       ).toBe(false);
       expect(validate({ root: { label: "root" } }).valid).toBe(false);
       expect(
-        validate({ root: { label: "root", children: [], extra: true } }).valid,
-      ).toBe(false);
+        validate({ root: { label: "root", children: [], addedLater: true } })
+          .valid,
+      ).toBe(true);
       expect(validate({ applied: true }).valid).toBe(false);
-      expect(validate({ ...MCP_OMITTED_WRITE_RESULT, extra: true }).valid).toBe(
-        false,
-      );
+      expect(
+        validate({ ...MCP_OMITTED_WRITE_RESULT, addedLater: true }).valid,
+      ).toBe(true);
     },
   );
 

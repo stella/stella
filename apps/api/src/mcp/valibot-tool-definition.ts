@@ -321,13 +321,83 @@ export const deriveMcpOutputSchema = (
   if (!acceptsObject) {
     return panic("A native MCP tool output schema must accept an object root");
   }
-  return compaction === "equivalent"
-    ? nullableAsTypeArray(projected)
-    : projected;
+  return tolerateOutputWidening(
+    compaction === "equivalent" ? nullableAsTypeArray(projected) : projected,
+  );
 };
 
 const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Keywords whose value is data rather than a schema, so a nested keyword
+ * inside them is never rewritten.
+ */
+const SCHEMA_DATA_KEYWORDS = new Set([
+  "const",
+  "default",
+  "examples",
+  "required",
+]);
+
+/**
+ * An advertised output schema tolerates what a later deploy may add. A client
+ * keeps the `tools/list` it fetched for its whole session and validates every
+ * result against that copy; a stateless connection is never told the list
+ * changed. A closed object or a closed value list would turn each field or
+ * value a deploy adds into a rejection of every call from every session listed
+ * before it. So an object admits keys it does not declare, and a value list is
+ * published as `examples`: the values known today, documented rather than
+ * enforced. The executable Valibot source stays exact: dispatch parses each
+ * result through it and strips and reports a key it does not declare, and
+ * rejects a value outside its list, so a client never receives either.
+ */
+const tolerateOutputWidening = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(schema).flatMap(([key, value]): [string, unknown][] => {
+      if (key === "additionalProperties" && value === false) {
+        return [];
+      }
+      if (key === "enum" && isUnknownArray(value)) {
+        const known: unknown = schema["examples"];
+        return [
+          [
+            "examples",
+            isUnknownArray(known) ? [...new Set([...known, ...value])] : value,
+          ],
+        ];
+      }
+      if (key === "examples" && isUnknownArray(schema["enum"])) {
+        return [];
+      }
+      if (SCHEMA_DATA_KEYWORDS.has(key)) {
+        return [[key, value]];
+      }
+      if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
+        return [
+          [
+            key,
+            Object.fromEntries(
+              Object.entries(value).map(([name, nested]): [string, unknown] => [
+                name,
+                tolerateOutputWideningIn(nested),
+              ]),
+            ),
+          ],
+        ];
+      }
+      return [[key, tolerateOutputWideningIn(value)]];
+    }),
+  );
+
+const tolerateOutputWideningIn = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((nested: unknown) => tolerateOutputWideningIn(nested));
+  }
+  return isSchemaRecord(value) ? tolerateOutputWidening(value) : value;
+};
 
 /**
  * Keywords whose value maps names to schemas rather than being a schema. The
