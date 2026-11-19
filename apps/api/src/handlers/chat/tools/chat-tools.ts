@@ -1182,6 +1182,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     userId,
   });
   // Unified business-registry tool: register once with a dynamic
