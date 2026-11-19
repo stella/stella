@@ -2,8 +2,9 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const script = new URL("release-rc-number.sh", import.meta.url).pathname;
+const script = fileURLToPath(new URL("release-rc-number.sh", import.meta.url));
 const withTags = (check: (root: string, sha: string) => void) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-rc-number-"));
   const git = (...args: string[]) => {

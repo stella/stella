@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
 /**
  * One-off script: inserts {{placeholder}} tags into the SPA DOCX
@@ -10,13 +11,16 @@ import { panic } from "better-result";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { printError } from "@stll/errors";
 
-const INPUT = new URL("../lib/docx/fixtures/spa-template.docx", import.meta.url)
-  .pathname;
+const INPUT = fileURLToPath(
+  new URL("../lib/docx/fixtures/spa-template.docx", import.meta.url),
+);
 
-const OUTPUT = new URL(
-  "../lib/docx/fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const OUTPUT = fileURLToPath(
+  new URL(
+    "../lib/docx/fixtures/spa-template-with-placeholders.docx",
+    import.meta.url,
+  ),
+);
 
 /**
  * Replacements: [search text, placeholder tag].

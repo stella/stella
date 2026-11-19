@@ -76,7 +76,9 @@ if (import.meta.main) {
   if (args.includes("--check")) {
     await checkRouteTreeDeterminism(srcRoot, generateRouteTree);
   } else if (
-    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+    !hasPreparedGeneratedSources(
+      fileURLToPath(new URL("../../../", import.meta.url)),
+    )
   ) {
     await generateRouteTree(output);
   } else {

@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Needs attention",
     "sessionOpeningInOffice": "Opening in Office",
     "sessionSavingDraft": "Saving draft",
-    "reconnectAccount": "Reconnect to stella web…"
+    "reconnectAccount": "Reconnect to stella web…",
+    "transcribeRecording": "Transcribe a recording…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: Changes stay local and will retry automatically",
@@ -686,7 +687,13 @@
       "passwordField": "A password field has focus, so the dictation was not kept or typed.",
       "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
     },
-    "failureKeptInHistory": "The text is in clipboard history."
+    "failureKeptInHistory": "The text is in clipboard history.",
+    "transcribeRecording": {
+      "title": "Transcribe a recording",
+      "description": "Turn a dictaphone file, voice memo or meeting recording of up to 4 hours into text.",
+      "open": "Open",
+      "failed": "The window could not be opened. Try again."
+    }
   },
   "shortcut": {
     "title": "Clipboard shortcut",
@@ -963,6 +970,86 @@
       "network_folder": "This folder is on a network share. Link a folder on this computer's own disk.",
       "protected": "This folder holds stella's own data or a skill folder, so the agent cannot work in it.",
       "unreadable": "This folder could not be read."
+    }
+  },
+  "transcribe": {
+    "title": "Transcribe a recording",
+    "retry": "Try again",
+    "drop": {
+      "title": "Drop a recording here",
+      "release": "Release to transcribe",
+      "description": "Dictaphone files, voice memos, voice messages, meeting recordings or a video’s sound.",
+      "choose": "Choose a file",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR, and MP4 or MOV video. Up to 4 hours.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR, and MP4 or MOV video. Up to 4 hours."
+    },
+    "destination": {
+      "title": "Transcribe with",
+      "thisComputer": "This computer",
+      "cloud": "stella AI",
+      "localDescription": "The recording stays on this computer.",
+      "cloudDescription": "The audio is sent to stella and to the provider of the model chosen in Dictation settings for transcription. stella does not store it.",
+      "cloudDescriptionModel": "The audio is sent to stella and to the provider of {model} for transcription. stella does not store it.",
+      "localMissing": "Download the speech model in Settings, under Dictation, to transcribe on this computer.",
+      "localMissingCloud": "Download the speech model in Settings, under Dictation, or transcribe with stella AI.",
+      "retainsData": "{provider} keeps the audio and transcript of everything sent to this model. Don’t transcribe confidential or client recordings with it, or choose another model in Settings, under Dictation.",
+      "modelFailed": "The stella AI model could not be read, so stella AI cannot transcribe right now. Try again, or transcribe on this computer."
+    },
+    "matter": {
+      "title": "Matter",
+      "description": "Its names and case numbers are spelled right, and you can save the text to it.",
+      "none": "None",
+      "search": "Search matters",
+      "clearSearch": "Clear search",
+      "searching": "Searching…",
+      "noMatters": "No matters found",
+      "failed": "Matters could not be loaded. Try again."
+    },
+    "note": "DSS and DS2 files from Philips or Olympus recorders: save them as WAV in SpeechExec or ODMS first.",
+    "refused": {
+      "unsupported": "stella cannot read {name}. Choose a recording in one of the formats above.",
+      "tooLong": "{name} is longer than 4 hours. Split it into shorter recordings first.",
+      "unreadable": "{name} could not be read. It may be damaged; export it again and try once more."
+    },
+    "kept": {
+      "ready": "{name} is ready. Check how it will be transcribed above, then start.",
+      "start": "Start transcribing"
+    },
+    "failure": {
+      "start": "The transcription could not start. Try again.",
+      "load": "This window could not load. Try again.",
+      "modelMissing": "The speech model is not on this computer. Download it in Settings, under Dictation.",
+      "thisComputer": "The speech model on this computer could not transcribe part of the recording. The text so far is kept.",
+      "cloud": "stella AI could not transcribe part of the recording. The text so far is kept; try again later.",
+      "unreadable": "The recording could not be read to the end. The text so far is kept.",
+      "tooLong": "The recording is longer than 4 hours. The text so far is kept."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "This computer",
+      "cloud": "stella AI, {model}",
+      "matter": "matter {name}",
+      "copy": "Copy",
+      "copied": "Copied",
+      "saveAs": "Save as",
+      "saveWithTimestamps": "Text with timestamps (.txt)",
+      "saveWithoutTimestamps": "Text without timestamps (.txt)",
+      "saveToMatter": "Save to matter",
+      "savingToMatter": "Saving…",
+      "savedToMatter": "Saved to {matter} as {fileName}.",
+      "saveToMatterFailed": "The transcript could not be saved to the matter. Try again.",
+      "saveFailed": "The transcript could not be copied or saved. Try again.",
+      "noSpeech": "No speech was found in this recording.",
+      "fileName": "{title} transcript.txt",
+      "documentTitle": "{title} transcript"
+    },
+    "progress": {
+      "running": "Transcribing {done, number} of {total, number} min",
+      "runningUnknown": "Transcribing: {done, number} min so far",
+      "stop": "Stop",
+      "stopped": "Stopped after {done, number} min. The text so far is kept.",
+      "done": "Transcribed {total, number} min.",
+      "another": "Transcribe another recording"
     }
   }
 }

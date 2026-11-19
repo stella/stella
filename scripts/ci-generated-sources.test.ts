@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { CI_GENERATED_DIRECTORIES } from "../packages/scripts/src/generated-files";
@@ -988,7 +989,9 @@ const unpreparedSourceStarts = (file: string, source: LooseWorkflow) =>
 
 test("every job that serves the web app from source runs the generated-source registry first", () => {
   const directory = new URL("../.github/workflows/", import.meta.url);
-  const workflows = [...new Bun.Glob("*.yml").scanSync(directory.pathname)]
+  const workflows = [
+    ...new Bun.Glob("*.yml").scanSync(fileURLToPath(directory)),
+  ]
     .toSorted()
     .map((file) => ({
       file,

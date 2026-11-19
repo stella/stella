@@ -413,10 +413,11 @@ test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
       compilerPath,
       `
 import { appendFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 appendFileSync("compiler-projects", process.argv.at(-1) + "\\n");
 const result = Bun.spawnSync([
   process.execPath,
-  new URL("./tsc-native-real.ts", import.meta.url).pathname,
+  fileURLToPath(new URL("./tsc-native-real.ts", import.meta.url)),
   ...process.argv.slice(2),
 ], { stdout: "inherit", stderr: "inherit" });
 process.exit(result.exitCode);

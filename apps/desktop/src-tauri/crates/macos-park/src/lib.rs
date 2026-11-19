@@ -89,6 +89,25 @@ pub use process_identity::parent_process_id;
 #[cfg(target_os = "windows")]
 pub use process_identity::{create_owner_only_pipe, named_pipe_client_process_id};
 
+/// Why the operating system could not decode a recording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemAudioError {
+  /// No decoder on this computer reads the file.
+  Unsupported,
+  /// The file stopped decoding partway, or reported an impossible format.
+  Unreadable,
+}
+
+#[cfg(target_os = "macos")]
+mod system_audio;
+#[cfg(target_os = "macos")]
+pub use system_audio::SystemAudioReader;
+
+#[cfg(target_os = "windows")]
+mod system_audio_windows;
+#[cfg(target_os = "windows")]
+pub use system_audio_windows::SystemAudioReader;
+
 #[cfg(target_os = "windows")]
 mod windows_password_field;
 #[cfg(target_os = "windows")]

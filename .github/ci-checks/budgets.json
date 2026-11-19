@@ -365,6 +365,11 @@
       "p99Seconds": 0,
       "peakRssMiB": 47
     },
+    "MCP released surface compatibility": {
+      "minutes": 15,
+      "samples": 0,
+      "peakRssMiB": 4096
+    },
     "SQL performance suppression summary": {
       "minutes": 5,
       "samples": 19,
