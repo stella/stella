@@ -6,8 +6,6 @@ import fc from "fast-check";
 import { propertySeed } from "@stll/property-testing";
 
 import {
-  caseNumberKeyAmongSql,
-  caseNumberKeysMatchSql,
   caseNumberMatchKey,
   caseNumberMatchKeySql,
 } from "@/api/lib/case-law/case-number-match-key";
@@ -17,8 +15,8 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
  * The match key is derived in two runtimes: `caseNumberMatchKey` in
- * TypeScript and `caseNumberMatchKeySql` in every query that compares keys
- * and in the expression indexes that serve them. They are proved equal here
+ * TypeScript and `caseNumberMatchKeySql` in the expression indexes on the
+ * key columns and the comparisons that will read them. They are proved equal here
  * against a real PostgreSQL, over the shapes that sit on the boundary of the
  * year tail and a sample of keys drawn around it.
  * `case-number-match-key-indexes.db.test.ts` holds the indexes built on it to
@@ -132,23 +130,4 @@ test("the SQL rendering and caseNumberMatchKey agree on sampled keys", async () 
   for (const { key, folded } of rows) {
     expect([key, folded]).toEqual([key, caseNumberMatchKey(key)]);
   }
-});
-
-test("the comparison fragments read either year form as one case", async () => {
-  const result = await db.execute(sql`
-    SELECT ${caseNumberKeysMatchSql(sql`${"c-679/2018"}::varchar`, sql`${"c-679/18"}::varchar`)} AS "printings",
-           ${caseNumberKeysMatchSql(sql`${"c-679/2018"}::varchar`, sql`${"c-697/18"}::varchar`)} AS "cases",
-           ${caseNumberKeysMatchSql(sql`${null}::varchar`, sql`${"c-679/18"}::varchar`)} AS "absent",
-           ${caseNumberKeyAmongSql(sql`${"ivús452/11"}::varchar`, ["ivús452/2011"])} AS "among",
-           ${caseNumberKeyAmongSql(sql`${"4as/2018"}::varchar`, ["4as/19", "4as/18-1", "4as/2018"])} AS "amongMany"
-  `);
-  expect(executedRows(result)).toEqual([
-    {
-      printings: true,
-      cases: false,
-      absent: null,
-      among: true,
-      amongMany: true,
-    },
-  ]);
 });
