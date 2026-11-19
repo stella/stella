@@ -13883,8 +13883,23 @@ const OUTPUT_CHECK_PENDING: readonly string[] = [
   "write_capability",
 ];
 
-// Runs last: Bun runs a file's tests in the order they are declared.
+/**
+ * Set when the census test below runs, so a name filter that leaves it out
+ * leaves the census out too.
+ */
+let outputCensusRequested = false;
+
+// Tests may run in any order (a seeded shuffle runs them out of order), so
+// the census test only asks for the census, which is read once every test of
+// the file has run.
 test("every tool with an output schema has a success read against it here", () => {
+  outputCensusRequested = true;
+});
+
+afterAll(() => {
+  if (!outputCensusRequested) {
+    return;
+  }
   const advertised = new Set(
     MCP_MODES.flatMap((mode) =>
       listStaticMcpToolDefinitions(mode)
