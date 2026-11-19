@@ -1,10 +1,15 @@
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { decisionReferenceHref } from "@/components/references/reference.logic";
 
 // One finished turn that uses every block an answer is built from: a title the
 // model should not have written, section headings, nested bullet and numbered
 // lists, a table, a quotation and an inline decision citation. Typography
 // changes are judged against this answer; the cited decision is a seeded one,
 // so the chip resolves on a seeded stack.
+const CITED_DECISION_HREF = decisionReferenceHref(
+  "a1220b81-31c2-53c8-8eb1-3c0b61bf7658",
+);
+
 export const CHAT_ANSWER_TYPOGRAPHY_CASSETTE = [
   {
     createdAt: new Date("2026-11-18T09:12:04.000Z"),
@@ -35,8 +40,7 @@ export const CHAT_ANSWER_TYPOGRAPHY_CASSETTE = [
           "",
           "## Kdy může pronajímatel vypovědět",
           "",
-          // oxlint-disable-next-line no-raw-resource-uri/no-raw-resource-uri -- an answer as a model writes it; the decision link is what this fixture renders
-          "Soudy posuzují pozdní platby podle jejich četnosti a výše dluhu. Shodně to vykládá Nejvyšší soud v rozsudku [22 Cdo 102/2018](#stella-decision=a1220b81-31c2-53c8-8eb1-3c0b61bf7658), podle kterého rozhoduje celkový obraz platební kázně, ne jedna opožděná platba.",
+          `Soudy posuzují pozdní platby podle jejich četnosti a výše dluhu. Shodně to vykládá Nejvyšší soud v rozsudku [22 Cdo 102/2018](${CITED_DECISION_HREF}), podle kterého rozhoduje celkový obraz platební kázně, ne jedna opožděná platba.`,
           "",
           "- **Hrubé porušení povinnosti:**",
           "  - dluh na nájemném ve výši alespoň trojnásobku měsíčního nájemného,",
