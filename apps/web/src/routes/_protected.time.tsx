@@ -1,9 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { parsePlainDate, Temporal } from "@stll/time";
+import { parsePlainDate } from "@stll/time";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { todayIn } from "@/components/billing/work-week.logic";
 import { MyWeek, myWeekQueries } from "@/features/my-week/my-week";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
@@ -16,10 +17,6 @@ import {
 } from "@/lib/react-query";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
-
-/** Today in the person's own zone, which also bounds the week's activity. */
-const todayIn = (timezoneId: string) =>
-  Temporal.Now.plainDateISO(timezoneId).toString();
 
 export const Route = createFileRoute("/_protected/time")({
   staticData: {

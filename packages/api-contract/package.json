@@ -190,6 +190,7 @@
     "./safe-id": "./src/safe-id.ts",
     "./uuid": "./src/uuid.ts",
     "./public-country-capability": "./src/public-country-capability.ts",
+    "./public-country-legal-day": "./src/public-country-legal-day.ts",
     "./search": "./src/search.ts",
     "./template-fill-headers": "./src/template-fill-headers.ts",
     "./time-entry-report": "./src/time-entry-report.ts",

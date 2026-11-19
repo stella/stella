@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.15.0
+
+### Minor Changes
+
+- [#8829](https://github.com/stella/stella/pull/8829) [`f2d9c52`](https://github.com/stella/stella/commit/f2d9c5236e757123bc254e2783d60414c6b7db91) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.2 Astra and GPT-6.2 Sol. The offered model id types and option lists change with them, so code that matches them exhaustively has to handle the new ids.
+
 ## 0.14.0
 
 ### Minor Changes

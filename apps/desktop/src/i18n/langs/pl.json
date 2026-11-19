@@ -683,6 +683,7 @@
       "focusChanged": "Przełączono na inną aplikację, zanim tekst był gotowy, więc nic nie zostało wpisane. Spróbuj ponownie.",
       "focusUnconfirmed": "stella nie mogła potwierdzić, która aplikacja jest aktywna, więc nic nie zostało wpisane. Spróbuj ponownie.",
       "shortcutHeld": "Puść klawisze skrótu, aby można było wpisać tekst. Nic nie zostało wpisane; spróbuj ponownie.",
+      "passwordField": "Aktywne jest pole hasła, więc dyktowany tekst nie został zachowany ani wpisany.",
       "cloudTranscription": "stella AI nie przetworzyła tego dyktowania, a modelu mowy nie ma na tym komputerze. Spróbuj ponownie albo w „Przetwarzaj za pomocą” wybierz „Ten komputer” i pobierz model."
     },
     "failureKeptInHistory": "Tekst jest w historii schowka."

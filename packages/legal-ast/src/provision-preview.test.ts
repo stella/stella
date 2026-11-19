@@ -7,6 +7,10 @@ import {
   section5Text,
   section5Unfiled,
 } from "./fixtures/cz-435-2004-section-5.js";
+import {
+  section9Blocks,
+  section9Closing,
+} from "./fixtures/hu-mk-2026-493-section-9.js";
 import { section15LetterBPoint1Blocks } from "./fixtures/sk-595-2003-section-15.js";
 import {
   blocksNestedUnder,
@@ -19,6 +23,7 @@ import {
 } from "./provision-preview.js";
 import {
   E_SBIRKA_ANCHORS,
+  MAGYAR_KOZLONY_ANCHORS,
   SLOV_LEX_ANCHORS,
   statuteAnchorNesting,
   US_CODE_ANCHORS,
@@ -53,6 +58,7 @@ const readIn = (scheme: StatuteAnchorScheme) => (blocks: readonly Block[]) => ({
 });
 const czech = readIn(E_SBIRKA_ANCHORS);
 const slovak = readIn(SLOV_LEX_ANCHORS);
+const hungarian = readIn(MAGYAR_KOZLONY_ANCHORS);
 const us = readIn(US_CODE_ANCHORS);
 
 const blocks: Block[] = [
@@ -486,5 +492,63 @@ describe("the wording that governs a cited letter", () => {
         citedAnchorId: "par_5",
       }),
     ).toEqual([]);
+  });
+});
+
+describe("a Hungarian provision read in the gazette's anchors", () => {
+  const statute = hungarian(section9Blocks);
+  const anchorsOf = (found: readonly Block[] | null) =>
+    found?.map(({ anchorId }) => anchorId) ?? null;
+  const read = (provisionAnchorId: string, citedAnchorId: string) => ({
+    text: anchorsOf(
+      provisionPreviewBlocks(statute, { provisionAnchorId, citedAnchorId }),
+    ),
+    governing: governingWording(statute, {
+      provisionAnchorId,
+      citedAnchorId,
+    }).map(({ block, position }) => [position, block.plainText]),
+  });
+
+  test("a section owns its points and the word that closes them, up to the next section", () => {
+    expect(anchorsOf(provisionBlocks(statute, "sz_9"))).toEqual([
+      "sz_9",
+      "sz_9-pont_a",
+      "sz_9-pont_b",
+      "sz_9-szoveg_1",
+    ]);
+    expect(anchorsOf(provisionBlocks(statute, "sz_10"))).toEqual([
+      "sz_10",
+      "sz_10-bek_1",
+      "sz_10-bek_2",
+      "sz_10-bek_3",
+      "sz_10-bek_4",
+    ]);
+  });
+
+  test("a point is read alone, with the closing word its section files after the points", () => {
+    for (const point of ["sz_9-pont_a", "sz_9-pont_b"]) {
+      expect(read("sz_9", point)).toEqual({
+        text: [point],
+        governing: [["closing", section9Closing]],
+      });
+    }
+  });
+
+  test("a subsection is filed under its section and reads as itself", () => {
+    expect(enclosingHeadingAnchor(statute, "sz_10-bek_2")).toBe("sz_10");
+    expect(read("sz_10", "sz_10-bek_2")).toEqual({
+      text: ["sz_10-bek_2"],
+      governing: [],
+    });
+  });
+
+  test("an annex is found by its Hungarian number and owns what is filed under it", () => {
+    for (const spelling of ["1. melléklet", "melléklet 1", "mell_1"]) {
+      expect(anchorsOf(provisionBlocks(statute, spelling))).toEqual([
+        "mell_1",
+        "mell_1-szoveg_1",
+      ]);
+    }
+    expect(provisionBlocks(statute, "2. melléklet")).toBeNull();
   });
 });

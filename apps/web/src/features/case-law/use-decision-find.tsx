@@ -13,6 +13,7 @@ import { usePublicLawFind } from "@/components/public-law-table/use-public-law-f
 import type { PublicLawFind } from "@/components/public-law-table/use-public-law-find";
 import type { TableFindColumnRow } from "@/components/workspaces/table/table-find-bar";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import { DECISION_COLUMN_ICONS } from "@/features/case-law/components/decision-table.pending";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import {
   DECISION_COLUMN_IDS,
@@ -27,7 +28,6 @@ import {
   isFindableDecisionColumn,
   isFindableQuestionColumn,
 } from "@/features/case-law/decision-find.logic";
-import { DECISION_COLUMN_ICONS } from "@/features/case-law/decision-table-columns";
 import {
   NO_QUESTION_COLUMNS,
   questionColumnId,

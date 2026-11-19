@@ -15,7 +15,10 @@
 //      initial chunks (see STARTUP_KINDS).
 //   4. No extra cold-load hop: the chunk holding a route's page is one of the
 //      route's manifest preloads, so the document links it at once instead
-//      of the browser discovering it after the route chunk ran.
+//      of the browser discovering it after the route chunk ran. An import()
+//      counts wherever the route's code issues it: the route file, its split
+//      component, and every app module the component reaches statically (its
+//      page module and what that imports).
 //
 // Gates 3 and 4 share a shrink-only ledger: a listed offender passes, a new
 // one fails, and a listed one that stopped offending fails until its line is
@@ -62,6 +65,11 @@ export type StartupGraph = {
    * declarations its route's `component` refers to.
    */
   routeComponentBytes: ReadonlyMap<string, number>;
+  /**
+   * App module id to the app modules it imports statically, type-only
+   * imports left out.
+   */
+  moduleImports: ReadonlyMap<string, readonly string[]>;
 };
 
 // --- Module classification ---------------------------------------------------
@@ -265,14 +273,47 @@ const pageModuleIn = (
     .toSorted(byCodeUnit)
     .find((id) => isSplitComponentModule(id, routeFile) || isPageModule(id));
 
+/**
+ * The modules whose `import()` is the route's own: the route file and its
+ * split modules, and every module its split component reaches through static
+ * imports, which holds the page module and everything the page imports.
+ */
+export const routeModules = (
+  graph: StartupGraph,
+  route: Pick<StartupRoute, "filePath">,
+): Set<string> => {
+  const owned = new Set<string>();
+  const pending: string[] = [];
+  for (const chunk of graph.chunks.values()) {
+    for (const id of chunk.modules.keys()) {
+      if (modulePath(id) === route.filePath && !owned.has(id)) {
+        owned.add(id);
+        if (isSplitComponentModule(id, route.filePath)) {
+          pending.push(id);
+        }
+      }
+    }
+  }
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    for (const imported of graph.moduleImports.get(id) ?? []) {
+      if (!owned.has(imported)) {
+        owned.add(imported);
+        pending.push(imported);
+      }
+    }
+  }
+  return owned;
+};
+
 export const coldLoadHops = (graph: StartupGraph): ColdLoadHop[] => {
   const hops: ColdLoadHop[] = [];
   for (const route of graph.routes) {
     const preloaded = new Set(route.preloads);
     const seen = new Set<string>();
+    const owned = routeModules(graph, route);
     for (const chunk of graph.chunks.values()) {
       for (const { target, importer } of chunk.dynamicImports) {
-        if (importer === undefined || modulePath(importer) !== route.filePath) {
+        if (importer === undefined || !owned.has(importer)) {
           continue;
         }
         for (const late of lateChunks(graph, target, preloaded)) {
