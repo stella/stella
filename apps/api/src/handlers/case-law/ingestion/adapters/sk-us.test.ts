@@ -200,7 +200,7 @@ const CHAMBER_RESOLUTION = {
 
 /** The identity the same record has when listed without its document id. */
 const quarantineIdentityOf = (doc: Parameters<typeof skUsListingIdentity>[0]) =>
-  skUsListingIdentity({ ...doc, documentId: undefined });
+  skUsListingIdentity({ ...doc, documentId: null });
 
 /** The DMS lists metadata rows with no downloadable document behind them. */
 const WITHOUT_DOCUMENT_ID = {
@@ -722,14 +722,16 @@ describe("sk-us row without a usable document id", () => {
 
     const built = await buildSkUsDecision(registryOnly);
 
-    expect(built.type).toBe("built");
-    const decision = built.type === "built" ? built.decision : undefined;
-    expect(decision?.caseNumberIsPlaceholder).toBe(true);
-    expect(decision?.caseNumber).toBe(decision?.sourceDocumentId);
-    expect(skUsListingIdentity(registryOnly)).toEqual({
-      type: "document",
-      sourceDocumentId: decision?.sourceDocumentId,
-    });
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+    const { caseNumber, caseNumberIsPlaceholder, sourceDocumentId } =
+      built.decision;
+    expect(caseNumberIsPlaceholder).toBe(true);
+    expect(String(caseNumber)).toBe(String(sourceDocumentId));
+    expect(listingIdentityKey(skUsListingIdentity(registryOnly))).toBe(
+      `document:${String(sourceDocumentId)}`,
+    );
   });
 
   test("the reconciliation builds a parked one and holds it without a document", async () => {
