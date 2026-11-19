@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { foldToAscii, normalizeUnicode, slugify } from "@stll/text-normalize";
 
 /**
@@ -178,17 +179,24 @@ const NUMBERED_RE = new RegExp(
 
 const EARLIEST_YEAR = 1800;
 const LATEST_YEAR = 9999;
+const ACT_YEARS = { min: EARLIEST_YEAR, max: LATEST_YEAR };
 
-const isActYear = (year: number) =>
-  Number.isSafeInteger(year) && year >= EARLIEST_YEAR && year <= LATEST_YEAR;
+/** A whole number written in digits, read through the shared token reader. */
+const digitsOf = (
+  text: string | undefined,
+  bounds: { min: number; max: number },
+): number | null =>
+  text === undefined
+    ? null
+    : parseIntegerToken(text, { sign: "unsigned", ...bounds }).unwrapOr(null);
 
 const isNumberedForm = (form: string): form is HungarianNumberedActForm =>
   HUNGARIAN_NUMBERED_ACT_FORMS.some((candidate) => candidate === form);
 
 const readLaw = (groups: Record<string, string | undefined>) => {
-  const year = Number(groups["year"]);
+  const year = digitsOf(groups["year"], ACT_YEARS);
   const number = parseRomanNumeral(groups["roman"] ?? "");
-  return isActYear(year) && number !== null
+  return year !== null && number !== null
     ? ({ kind: "law", year, number } as const)
     : null;
 };
@@ -196,16 +204,11 @@ const readLaw = (groups: Record<string, string | undefined>) => {
 const readNumbered = (
   groups: Record<string, string | undefined>,
 ): HungarianActDesignation | null => {
-  const number = Number(groups["number"]);
-  const year = Number(groups["year"]);
+  const number = digitsOf(groups["number"], { min: 1, max: 99_999 });
+  const year = digitsOf(groups["year"], ACT_YEARS);
   const form = groups["form"]?.toLowerCase() ?? "";
   const issuer = groups["issuer"] ?? "";
-  if (
-    !Number.isSafeInteger(number) ||
-    number < 1 ||
-    !isActYear(year) ||
-    !isNumberedForm(form)
-  ) {
+  if (number === null || year === null || !isNumberedForm(form)) {
     return null;
   }
   const monthText = groups["month"];
@@ -213,8 +216,8 @@ const readNumbered = (
   let signed: { month: number; day: number } | null = null;
   if (monthText !== undefined && dayText !== undefined) {
     const month = parseRomanNumeral(monthText);
-    const day = Number(dayText);
-    if (month === null || month > 12 || day < 1 || day > 31) {
+    const day = digitsOf(dayText, { min: 1, max: 31 });
+    if (month === null || month > 12 || day === null) {
       return null;
     }
     signed = { month, day };
@@ -396,12 +399,13 @@ export const readHungarianLawParts = ({
   }
   const writtenYear = year.trim();
   const writtenNumber = number.trim().replace(/\.$/u, "");
-  const parsedYear = YEAR_RE.test(writtenYear) ? Number(writtenYear) : null;
+  const parsedYear = YEAR_RE.test(writtenYear)
+    ? digitsOf(writtenYear, ACT_YEARS)
+    : null;
   const parsedNumber = ARABIC_RE.test(writtenNumber)
-    ? Number(writtenNumber)
+    ? digitsOf(writtenNumber, { min: 1, max: ROMAN_MAX })
     : parseRomanNumeral(writtenNumber);
   return parsedYear !== null &&
-    isActYear(parsedYear) &&
     parsedNumber !== null &&
     romanNumeral(parsedNumber) !== null
     ? { kind: "law", year: parsedYear, number: parsedNumber }
