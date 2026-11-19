@@ -1422,7 +1422,7 @@ export const caseLawDecisionIdentifiers = p.pgTable(
     independentClaims: p
       .varchar("independent_claims", { length: 32 })
       .array()
-      .$type<DecisionIdentifierClaim[]>()
+      .$type<DecisionIdentifierClaim>()
       .notNull()
       .default([DECISION_IDENTIFIER_CLAIM.UNVERIFIED]),
     createdAt: timestamptz("created_at").defaultNow().notNull(),

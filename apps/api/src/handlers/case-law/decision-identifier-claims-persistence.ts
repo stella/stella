@@ -13,7 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 
-export type ClaimedDecisionIdentifier = {
+type ClaimedDecisionIdentifier = {
   type: DecisionIdentifierType;
   value: string;
   normalizedValue: string;

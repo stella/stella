@@ -18,6 +18,7 @@ import {
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
+import { refreshHostDecisionIdentifiersTx } from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
@@ -50,7 +51,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
-import { refreshHostDecisionIdentifiersTx } from "@/api/lib/case-law/decision-identifier-claims-persistence";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {
   decisionFallbackState,

@@ -20,13 +20,13 @@ import {
   type CitationGraphTransaction,
   runCitationGraphTransaction,
 } from "@/api/handlers/case-law/citation-graph-transaction";
-import { createSafeId } from "@/api/lib/branded-types";
-import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
 import {
   declareDecisionIdentifiersTx,
   refreshHostDecisionIdentifiersTx,
   withdrawAttachmentIdentifiersTx,
-} from "@/api/lib/case-law/decision-identifier-claims-persistence";
+} from "@/api/handlers/case-law/decision-identifier-claims-persistence";
+import { createSafeId } from "@/api/lib/branded-types";
+import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   createIngestionRoleScopedDb,
