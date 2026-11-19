@@ -13,7 +13,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 
 /** Mirrors `CHANGED_EVENT` in `dictation_preview.rs`; payload-free. */
-export const PREVIEW_CHANGED_EVENT = "dictation-preview-changed";
+const PREVIEW_CHANGED_EVENT = "dictation-preview-changed";
 
 type PreviewStage = "hidden" | "listening" | "finishing";
 type PreviewAnchor = "top" | "bottom";
