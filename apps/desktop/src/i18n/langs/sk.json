@@ -1011,6 +1011,10 @@
       "tooLong": "Nahrávka {name} je dlhšia ako 4 hodiny. Najprv ju rozdeľte na kratšie.",
       "unreadable": "Súbor {name} sa nepodarilo prečítať. Môže byť poškodený; exportujte ho znova a skúste to ešte raz."
     },
+    "kept": {
+      "ready": "{name} je pripravený. Skontrolujte vyššie, ako sa prepíše, a potom začnite.",
+      "start": "Začať prepisovať"
+    },
     "failure": {
       "start": "Prepis sa nepodarilo spustiť. Skúste to znova.",
       "load": "Okno sa nepodarilo načítať. Skúste to znova.",

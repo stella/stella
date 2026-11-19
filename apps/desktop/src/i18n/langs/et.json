@@ -1011,6 +1011,10 @@
       "tooLong": "{name} on pikem kui 4 tundi. Jagage see esmalt lühemateks salvestisteks.",
       "unreadable": "Faili {name} ei õnnestunud lugeda. See võib olla kahjustatud; eksportige see uuesti ja proovige veel kord."
     },
+    "kept": {
+      "ready": "{name} on valmis. Kontrollige ülalt, kuidas see transkribeeritakse, ja alustage siis.",
+      "start": "Alusta transkribeerimist"
+    },
     "failure": {
       "start": "Transkribeerimist ei õnnestunud alustada. Proovige uuesti.",
       "load": "Seda akent ei õnnestunud laadida. Proovige uuesti.",

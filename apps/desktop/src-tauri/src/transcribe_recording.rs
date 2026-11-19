@@ -127,9 +127,20 @@ pub struct StartRequest {
   matter_id: Option<String>,
   /// The chosen file the window announced.
   selection: u64,
-  /// The stella AI model the window showed, with its warning where its
-  /// provider keeps the audio.
-  model_id: Option<String>,
+  /// The ticket of the stella AI model the window showed, with its warning
+  /// where its provider keeps the audio.
+  model_ticket: Option<u64>,
+}
+
+/// The stella AI model as the window shows it, with the ticket a start
+/// names it back by: native code keeps what the ticket stands for, model
+/// and account both, so the webview never holds the account.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShownModel {
+  #[serde(flatten)]
+  model: RecordingModel,
+  ticket: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -213,9 +224,35 @@ struct Inner {
   /// The window shows a transcript of `file` until the user asks for
   /// another; a newly chosen file does not replace it meanwhile.
   holds_result: bool,
+  /// The stella AI model the window was last shown, under its ticket.
+  shown_model: Option<(u64, RecordingModel)>,
 }
 
 impl Inner {
+  /// A cloud start goes only to the model, and for the account, the window
+  /// was last shown under `ticket`; anything else is shown again first.
+  fn acknowledged(
+    &self,
+    ticket: Option<u64>,
+    current: &RecordingModel,
+  ) -> Result<(), String> {
+    let shown = self
+      .shown_model
+      .as_ref()
+      .filter(|(shown, _)| Some(*shown) == ticket)
+      .map(|(_, model)| model)
+      .ok_or_else(|| {
+        "the stella AI model shown is out of date; check it again".to_string()
+      })?;
+    if shown.id != current.id {
+      return Err("the stella AI model changed; check it again".to_string());
+    }
+    if shown.account != current.account {
+      return Err("the stella AI account changed; check the model again".to_string());
+    }
+    Ok(())
+  }
+
   fn refuse_change(&self) -> Result<(), String> {
     if self.job.is_some() {
       return Err("a recording is being transcribed".to_string());
@@ -269,6 +306,7 @@ impl Inner {
 pub struct TranscribeState {
   inner: Mutex<Inner>,
   next_job: AtomicU64,
+  next_ticket: AtomicU64,
 }
 
 impl TranscribeState {
@@ -462,6 +500,7 @@ pub(crate) fn dropped(app: &AppHandle, paths: &[PathBuf]) {
 pub(crate) fn window_closed(app: &AppHandle) {
   let job = app.state::<TranscribeState>().update(|inner| {
     inner.clear();
+    inner.shown_model = None;
     inner.job.take()
   });
   if let Some(job) = job {
@@ -499,18 +538,22 @@ pub fn transcribe_get_snapshot(
 }
 
 /// The stella AI model a recording goes to, as the window shows it before
-/// a file can be chosen for it; a start names it back.
+/// a file can be chosen for it; a start names it back by its ticket.
 #[tauri::command]
 pub async fn transcribe_get_model(
   app: AppHandle,
   window: Window,
-) -> Result<RecordingModel, String> {
+) -> Result<ShownModel, String> {
   require_window(&window)?;
   require_available(&app)?;
   if !dictation::cloud_available(&app) {
     return Err("stella AI transcription is not available".to_string());
   }
-  dictation_cloud::recording_model(&app).await
+  let model = dictation_cloud::recording_model(&app).await?;
+  let state = app.state::<TranscribeState>();
+  let ticket = state.next_ticket.fetch_add(1, Ordering::SeqCst) + 1;
+  state.update(|inner| inner.shown_model = Some((ticket, model.clone())));
+  Ok(ShownModel { model, ticket })
 }
 
 /// Opens the native picker; `None` when the user closes it.
@@ -578,11 +621,11 @@ pub async fn transcribe_start(
         return Err("stella AI transcription is not available".to_string());
       }
       let model = dictation_cloud::recording_model(&app).await?;
-      // The recording goes only to the model, and its warning, the window
-      // showed; a model changed since then is shown again first.
-      if request.model_id.as_deref() != Some(model.id.as_str()) {
-        return Err("the stella AI model changed; check it again".to_string());
-      }
+      // The recording goes only to the model, its warning and the account
+      // the window showed; anything changed since then is shown again first.
+      app
+        .state::<TranscribeState>()
+        .update(|inner| inner.acknowledged(request.model_ticket, &model))?;
       Some(model)
     }
     Destination::Local => None,
@@ -1320,6 +1363,71 @@ mod tests {
     assert!(inner.commit_choice(newer, Some(chosen(newer))));
     assert!(inner.startable(announced).is_err());
     assert!(inner.startable(newer).is_ok());
+  }
+
+  fn recording_model(id: &str, account: &str) -> RecordingModel {
+    RecordingModel {
+      id: id.to_string(),
+      display_name: "Scribe v3".to_string(),
+      provider: Some("ElevenLabs".to_string()),
+      retains_data: true,
+      account: account.to_string(),
+    }
+  }
+
+  #[test]
+  fn a_cloud_start_refuses_an_account_changed_after_the_model_was_shown() {
+    // The window reads the model for one account…
+    let inner = Inner {
+      shown_model: Some((1, recording_model("scribe", "account-a"))),
+      ..Inner::default()
+    };
+    assert!(
+      inner
+        .acknowledged(Some(1), &recording_model("scribe", "account-a"))
+        .is_ok()
+    );
+    // …and the dictation account is relinked before the start: same model,
+    // another account.
+    assert!(
+      inner
+        .acknowledged(Some(1), &recording_model("scribe", "account-b"))
+        .is_err()
+    );
+    assert!(
+      inner
+        .acknowledged(Some(1), &recording_model("chirp", "account-a"))
+        .is_err()
+    );
+    // A ticket the window was not last shown, or none, is no acknowledgement.
+    assert!(
+      inner
+        .acknowledged(Some(2), &recording_model("scribe", "account-a"))
+        .is_err()
+    );
+    assert!(
+      inner
+        .acknowledged(None, &recording_model("scribe", "account-a"))
+        .is_err()
+    );
+  }
+
+  #[test]
+  fn the_window_names_a_shown_model_by_its_ticket_and_never_sees_the_account() {
+    let shown = ShownModel {
+      model: recording_model("scribe", "account-a"),
+      ticket: 7,
+    };
+    assert_eq!(
+      serde_json::to_value(&shown).unwrap(),
+      serde_json::json!({
+        "id": "scribe",
+        "displayName": "Scribe v3",
+        "provider": "ElevenLabs",
+        "retainsData": true,
+        "ticket": 7
+      })
+    );
   }
 
   #[test]

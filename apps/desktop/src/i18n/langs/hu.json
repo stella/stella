@@ -1011,6 +1011,10 @@
       "tooLong": "{name} hosszabb 4 óránál. Előbb ossza rövidebb felvételekre.",
       "unreadable": "{name} nem olvasható be. Lehet, hogy sérült; exportálja újra, és próbálja meg még egyszer."
     },
+    "kept": {
+      "ready": "{name} készen áll. Ellenőrizze fent, hogyan lesz átírva, majd kezdje el.",
+      "start": "Átírás indítása"
+    },
     "failure": {
       "start": "Az átírást nem sikerült elindítani. Próbálja újra.",
       "load": "Az ablakot nem sikerült betölteni. Próbálja újra.",

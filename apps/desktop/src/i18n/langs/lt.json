@@ -1011,6 +1011,10 @@
       "tooLong": "{name} ilgesnis nei 4 valandos. Pirmiausia padalykite jį į trumpesnius įrašus.",
       "unreadable": "Nepavyko perskaityti {name}. Failas gali būti sugadintas; eksportuokite jį dar kartą ir bandykite iš naujo."
     },
+    "kept": {
+      "ready": "{name} paruoštas. Patikrinkite aukščiau, kaip jis bus transkribuotas, tada pradėkite.",
+      "start": "Pradėti transkribuoti"
+    },
     "failure": {
       "start": "Nepavyko pradėti transkribavimo. Bandykite dar kartą.",
       "load": "Šio lango nepavyko įkelti. Bandykite dar kartą.",

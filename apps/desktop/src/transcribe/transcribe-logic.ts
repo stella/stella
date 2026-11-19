@@ -41,6 +41,10 @@ export type RecordingModel = {
   retainsData: boolean;
 };
 
+/** The model as the window shows it, with the ticket a start names it
+ *  back by: native code knows the model and account the ticket stands for. */
+export type ShownModel = RecordingModel & { ticket: number };
+
 export type Started = { job: number; model: RecordingModel | null };
 
 export type PieceText = {
@@ -120,6 +124,33 @@ export const isRecordingModel = (value: unknown): value is RecordingModel =>
   typeof value["displayName"] === "string" &&
   (value["provider"] === null || typeof value["provider"] === "string") &&
   typeof value["retainsData"] === "boolean";
+
+export const isShownModel = (value: unknown): value is ShownModel =>
+  isRecord(value) &&
+  isRecordingModel(value) &&
+  typeof value["ticket"] === "number";
+
+type ReadyChoice = Extract<FileChoice, { status: "ready" }>;
+
+/**
+ * What follows a start native code refused. On this computer the newest
+ * file announced meanwhile starts at once. With stella AI the model is read
+ * again first, so a file is kept, the newest announced or else the refused
+ * one, and starts only when the user asks, once the model and any warning
+ * about it are shown again.
+ */
+export const afterRefusedStart = ({
+  destination,
+  refused,
+  waiting,
+}: {
+  destination: TranscribeDestination;
+  refused: ReadyChoice;
+  waiting: ReadyChoice | null;
+}): { startNow: ReadyChoice | null; keep: ReadyChoice | null } =>
+  destination === "local"
+    ? { startNow: waiting, keep: null }
+    : { startNow: null, keep: waiting ?? refused };
 
 export const isPieceText = (value: unknown): value is PieceText =>
   isRecord(value) &&

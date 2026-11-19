@@ -1011,6 +1011,10 @@
       "tooLong": "{name} ist länger als 4 Stunden. Teilen Sie die Aufnahme zuerst in kürzere auf.",
       "unreadable": "{name} konnte nicht gelesen werden. Die Datei ist möglicherweise beschädigt; exportieren Sie sie erneut und versuchen Sie es noch einmal."
     },
+    "kept": {
+      "ready": "{name} ist bereit. Prüfen Sie oben, wie es transkribiert wird, und starten Sie dann.",
+      "start": "Transkription starten"
+    },
     "failure": {
       "start": "Die Transkription konnte nicht gestartet werden. Versuchen Sie es erneut.",
       "load": "Dieses Fenster konnte nicht geladen werden. Versuchen Sie es erneut.",

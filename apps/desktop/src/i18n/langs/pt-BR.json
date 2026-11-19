@@ -1011,6 +1011,10 @@
       "tooLong": "{name} tem mais de 4 horas. Divida-a primeiro em gravações mais curtas.",
       "unreadable": "Não foi possível ler {name}. O arquivo pode estar danificado; exporte-o de novo e tente outra vez."
     },
+    "kept": {
+      "ready": "{name} está pronto. Confira acima como será transcrito e então comece.",
+      "start": "Começar a transcrever"
+    },
     "failure": {
       "start": "Não foi possível iniciar a transcrição. Tente novamente.",
       "load": "Não foi possível carregar esta janela. Tente novamente.",

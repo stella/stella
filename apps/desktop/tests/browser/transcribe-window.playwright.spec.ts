@@ -25,6 +25,9 @@ type Variant = {
   snapshotFails?: boolean;
   /** The stella AI model cannot be read. */
   modelFails?: boolean;
+  /** Native code refuses the first start: the model the window showed is
+   *  out of date. */
+  firstStartRefused?: boolean;
 };
 
 /** The page flag that keeps snapshot reads failing. */
@@ -45,10 +48,16 @@ const open = async (
     unhandled: "rejectAsUnexpected",
     arg: { matter: MATTER, variant, failsFlag: SNAPSHOT_FAILS },
     handlers: (
-      { matter, variant: { snapshotFails, modelFails }, failsFlag },
+      {
+        matter,
+        variant: { snapshotFails, modelFails, firstStartRefused },
+        failsFlag,
+      },
       ipc,
     ) => {
       Reflect.set(window, failsFlag, snapshotFails === true);
+      let modelReads = 0;
+      let starts = 0;
       return {
         account_record_use: () => null,
         desktop_report_error: () => null,
@@ -75,6 +84,7 @@ const open = async (
             displayName: "Scribe v3",
             provider: "ElevenLabs",
             retainsData: false,
+            ticket: (modelReads += 1),
           };
         },
         transcribe_clear_file: () => null,
@@ -89,15 +99,29 @@ const open = async (
           });
           return null;
         },
-        transcribe_start: () => ({
-          job: 1,
-          model: {
-            id: "elevenlabs-direct/scribe-v3",
-            displayName: "Scribe v3",
-            provider: "ElevenLabs",
-            retainsData: false,
-          },
-        }),
+        transcribe_start: ({ request }) => {
+          starts += 1;
+          if (firstStartRefused === true && starts === 1) {
+            throw new Error("the stella AI model shown is out of date");
+          }
+          // A start names the model the window was last shown.
+          const ticket =
+            typeof request === "object" && request !== null
+              ? Reflect.get(request, "modelTicket")
+              : undefined;
+          if (ticket !== modelReads) {
+            throw new Error("the stella AI model shown is out of date");
+          }
+          return {
+            job: 1,
+            model: {
+              id: "elevenlabs-direct/scribe-v3",
+              displayName: "Scribe v3",
+              provider: "ElevenLabs",
+              retainsData: false,
+            },
+          };
+        },
       };
     },
   });
@@ -215,4 +239,30 @@ test("stella AI takes no file until its model is read", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: en.transcribe.drop.choose }),
   ).toBeEnabled();
+});
+
+test("a stella AI file a start refused waits until the model is shown again", async ({
+  page,
+}) => {
+  await open(page, "light", { firstStartRefused: true });
+  const t = en.transcribe;
+  await page.getByRole("button", { name: t.drop.choose }).click();
+  const start = page.getByRole("button", { name: t.kept.start });
+  await expect(
+    page.getByText(
+      t.kept.ready.replace("{name}", "Memo to file 2026-11-14.m4a"),
+    ),
+  ).toBeVisible();
+  // The model is read again, and shown, before the file can start.
+  await expect(
+    page.getByText(
+      t.destination.cloudDescriptionModel.replace("{model}", "Scribe v3"),
+    ),
+  ).toBeVisible();
+  await expect(start).toBeEnabled();
+  await start.click();
+  await expect(
+    page.getByRole("button", { name: t.result.saveAs }),
+  ).toBeVisible();
+  expect(await unexpectedTauriCalls(page)).toEqual([]);
 });

@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  afterRefusedStart,
   formatTimestamp,
   isFileChoice,
   isFinished,
   isPieceText,
   isRecordingModel,
+  isShownModel,
   isTranscribeSnapshot,
   paragraphsOf,
   progressShare,
@@ -144,6 +146,15 @@ describe("what native code sends", () => {
       }),
     ).toBe(true);
     expect(isRecordingModel({ id: "m", displayName: "M" })).toBe(false);
+    const shown = {
+      id: "elevenlabs-direct/scribe-v3",
+      displayName: "Scribe v3",
+      provider: "ElevenLabs",
+      retainsData: false,
+    };
+    expect(isShownModel({ ...shown, ticket: 3 })).toBe(true);
+    // A start names the shown model back by its ticket.
+    expect(isShownModel(shown)).toBe(false);
     expect(
       isFileChoice({ status: "refused", name: "a.ds2", reason: "dictaphone" }),
     ).toBe(true);
@@ -169,5 +180,52 @@ describe("what native code sends", () => {
     );
     expect(isFinished({ outcome: "failed", job: 1, failure: "x" })).toBe(false);
     expect(isFinished({ outcome: "stopped" })).toBe(false);
+  });
+});
+
+describe("a start native code refused", () => {
+  const file = (selection: number, name: string) =>
+    ({
+      status: "ready",
+      selection,
+      name,
+      format: "M4A",
+      durationMs: null,
+    }) as const;
+  const first = file(1, "Hearing.m4a");
+  const second = file(2, "Memo.m4a");
+
+  test("with stella AI, a file announced meanwhile is kept for the user to start", () => {
+    expect(
+      afterRefusedStart({
+        destination: "cloud",
+        refused: first,
+        waiting: second,
+      }),
+    ).toEqual({ startNow: null, keep: second });
+    expect(
+      afterRefusedStart({
+        destination: "cloud",
+        refused: first,
+        waiting: null,
+      }),
+    ).toEqual({ startNow: null, keep: first });
+  });
+
+  test("on this computer, the newest file announced starts at once", () => {
+    expect(
+      afterRefusedStart({
+        destination: "local",
+        refused: first,
+        waiting: second,
+      }),
+    ).toEqual({ startNow: second, keep: null });
+    expect(
+      afterRefusedStart({
+        destination: "local",
+        refused: first,
+        waiting: null,
+      }),
+    ).toEqual({ startNow: null, keep: null });
   });
 });

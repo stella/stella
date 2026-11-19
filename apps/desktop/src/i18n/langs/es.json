@@ -1011,6 +1011,10 @@
       "tooLong": "{name} dura más de 4 horas. Divídela primero en grabaciones más cortas.",
       "unreadable": "No se pudo leer {name}. Puede estar dañado; expórtalo de nuevo e inténtalo otra vez."
     },
+    "kept": {
+      "ready": "{name} está listo. Compruebe arriba cómo se transcribirá y luego empiece.",
+      "start": "Empezar a transcribir"
+    },
     "failure": {
       "start": "No se pudo iniciar la transcripción. Inténtalo de nuevo.",
       "load": "No se pudo cargar esta ventana. Inténtelo de nuevo.",

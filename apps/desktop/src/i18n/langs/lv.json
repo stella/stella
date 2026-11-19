@@ -1011,6 +1011,10 @@
       "tooLong": "{name} ir garāks par 4 stundām. Vispirms sadaliet to īsākos ierakstos.",
       "unreadable": "Neizdevās nolasīt {name}. Fails var būt bojāts; eksportējiet to vēlreiz un mēģiniet vēl reizi."
     },
+    "kept": {
+      "ready": "{name} ir gatavs. Augstāk pārbaudiet, kā tas tiks transkribēts, un tad sāciet.",
+      "start": "Sākt transkribēšanu"
+    },
     "failure": {
       "start": "Neizdevās sākt transkribēšanu. Mēģiniet vēlreiz.",
       "load": "Šo logu neizdevās ielādēt. Mēģiniet vēlreiz.",

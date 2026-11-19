@@ -29,11 +29,12 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
+  afterRefusedStart,
   formatTimestamp,
   isFileChoice,
   isFinished,
   isPieceText,
-  isRecordingModel,
+  isShownModel,
   isTranscribeSnapshot,
   paragraphsOf,
   progressShare,
@@ -50,6 +51,7 @@ import type {
   PieceText,
   RecordingModel,
   RefusedReason,
+  ShownModel,
   Started,
   TranscribeDestination,
   TranscribeFailure,
@@ -85,6 +87,10 @@ const TranscribeApp = () => {
   const [matter, setMatter] = useState<DesktopMatter | null>(null);
   const [refused, setRefused] = useState<RefusedFile | null>(null);
   const [startFailed, setStartFailed] = useState(false);
+  // A file that waits for the user to start it with stella AI, once the
+  // model it goes to, and any warning about it, is shown again.
+  const [kept, setKept] = useState<ReadyFile | null>(null);
+  const startFile = useRef<((file: ReadyFile) => Promise<void>) | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [pieces, setPieces] = useState<PieceText[]>([]);
   const [finished, setFinished] = useState<Finished[]>([]);
@@ -153,7 +159,7 @@ const TranscribeApp = () => {
         return;
       }
       const next: ModelState =
-        Result.isOk(result) && isRecordingModel(result.value)
+        Result.isOk(result) && isShownModel(result.value)
           ? { status: "ready", model: result.value }
           : { status: "failed" };
       options.current.model = next;
@@ -187,8 +193,17 @@ const TranscribeApp = () => {
       }
       const chosen = { ...options.current };
       setRefused(null);
+      setKept(null);
       const usable = usableFor(chosen);
-      setStartFailed(!usable);
+      // A file for stella AI before its model is shown waits for the user.
+      const awaitsModel =
+        !usable &&
+        chosen.destination === "cloud" &&
+        chosen.snapshot?.cloudAvailable === true;
+      setStartFailed(!usable && !awaitsModel);
+      if (awaitsModel) {
+        setKept(file);
+      }
       if (!usable) {
         return;
       }
@@ -199,9 +214,9 @@ const TranscribeApp = () => {
             destination: chosen.destination,
             matterId: chosen.matter?.id ?? null,
             selection: file.selection,
-            modelId:
+            modelTicket:
               chosen.destination === "cloud" && chosen.model.status === "ready"
-                ? chosen.model.model.id
+                ? chosen.model.model.ticket
                 : null,
           },
         }),
@@ -211,13 +226,19 @@ const TranscribeApp = () => {
       waiting = null;
       if (Result.isError(result)) {
         setStartFailed(true);
-        // The model may have changed since the window read it: read it
-        // again, so its warning shows before another file is started.
+        // The model or its account may have changed since the window read
+        // it: read it again, so its warning shows before a file is started.
         if (chosen.destination === "cloud") {
           reloadModel();
         }
-        if (next !== null) {
-          void start(next);
+        const { startNow, keep } = afterRefusedStart({
+          destination: chosen.destination,
+          refused: file,
+          waiting: next,
+        });
+        setKept(keep);
+        if (startNow !== null) {
+          void start(startNow);
         }
         return;
       }
@@ -228,6 +249,7 @@ const TranscribeApp = () => {
         matter: chosen.matter,
       });
     };
+    startFile.current = start;
     const onError = () =>
       report(DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed);
     const stopFile = subscribeDesktopEvent<unknown>({
@@ -264,6 +286,7 @@ const TranscribeApp = () => {
       onError,
     });
     return () => {
+      startFile.current = null;
       stopFile();
       stopPiece();
       stopFinished();
@@ -286,8 +309,12 @@ const TranscribeApp = () => {
     return (
       <ChooseScreen
         destination={destination}
+        kept={kept}
         matter={matter}
         model={model}
+        onStartKept={(file) => {
+          void startFile.current?.(file);
+        }}
         onDestinationChange={chooseDestination}
         onMatterChange={chooseMatter}
         onRetryModel={reloadModel}
@@ -320,7 +347,7 @@ type RefusedFile = Extract<FileChoice, { status: "refused" }>;
 /** The stella AI model, as far as the window has read it. */
 type ModelState =
   | { status: "loading" }
-  | { status: "ready"; model: RecordingModel }
+  | { status: "ready"; model: ShownModel }
   | { status: "failed" };
 
 const MODEL_LOADING: ModelState = { status: "loading" };
@@ -428,6 +455,8 @@ const ChooseScreen = ({
   onMatterChange,
   model,
   onRetryModel,
+  kept,
+  onStartKept,
   refused,
   startFailed,
 }: {
@@ -438,6 +467,8 @@ const ChooseScreen = ({
   onMatterChange: (matter: DesktopMatter | null) => void;
   model: ModelState;
   onRetryModel: () => void;
+  kept: ReadyFile | null;
+  onStartKept: (file: ReadyFile) => void;
   refused: RefusedFile | null;
   startFailed: boolean;
 }) => {
@@ -517,6 +548,23 @@ const ChooseScreen = ({
             >
               {t(REFUSED_MESSAGES[refused.reason], { name: refused.name })}
             </p>
+          )}
+          {kept === null ? null : (
+            <div className="flex max-w-md flex-col items-center gap-2">
+              <p className="text-foreground-strong-muted text-xs text-pretty">
+                {t("kept.ready", { name: kept.name })}
+              </p>
+              <Button
+                disabled={!usable}
+                onClick={() => {
+                  onStartKept(kept);
+                }}
+                size="sm"
+                variant="outline"
+              >
+                {t("kept.start")}
+              </Button>
+            </div>
           )}
           {startFailed || chooseFailed ? (
             <p className="text-destructive max-w-md text-xs" role="alert">

@@ -1011,6 +1011,10 @@
       "tooLong": "Nagranie {name} trwa dłużej niż 4 godziny. Najpierw podziel je na krótsze.",
       "unreadable": "Nie udało się odczytać pliku {name}. Może być uszkodzony; wyeksportuj go ponownie i spróbuj jeszcze raz."
     },
+    "kept": {
+      "ready": "{name} jest gotowy. Sprawdź powyżej, jak zostanie transkrybowany, a potem zacznij.",
+      "start": "Rozpocznij transkrypcję"
+    },
     "failure": {
       "start": "Nie udało się rozpocząć transkrypcji. Spróbuj ponownie.",
       "load": "Nie udało się wczytać tego okna. Spróbuj ponownie.",

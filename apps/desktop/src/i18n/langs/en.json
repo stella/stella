@@ -1011,6 +1011,10 @@
       "tooLong": "{name} is longer than 4 hours. Split it into shorter recordings first.",
       "unreadable": "{name} could not be read. It may be damaged; export it again and try once more."
     },
+    "kept": {
+      "ready": "{name} is ready. Check how it will be transcribed above, then start.",
+      "start": "Start transcribing"
+    },
     "failure": {
       "start": "The transcription could not start. Try again.",
       "load": "This window could not load. Try again.",

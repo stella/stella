@@ -1011,6 +1011,10 @@
       "tooLong": "Nahrávka {name} je delší než 4 hodiny. Nejprve ji rozdělte na kratší.",
       "unreadable": "Soubor {name} se nepodařilo přečíst. Může být poškozený; vyexportujte ho znovu a zkuste to ještě jednou."
     },
+    "kept": {
+      "ready": "{name} je připraven. Zkontrolujte výše, jak se přepíše, a pak začněte.",
+      "start": "Začít přepisovat"
+    },
     "failure": {
       "start": "Přepis se nepodařilo spustit. Zkuste to znovu.",
       "load": "Okno se nepodařilo načíst. Zkuste to znovu.",
