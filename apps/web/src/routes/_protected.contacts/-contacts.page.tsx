@@ -856,40 +856,45 @@ const CreateContactDialog = ({
     }
 
     setIsAresLoading(true);
-    try {
-      const response = await api.contacts["business-registries"].get({
-        query: { registry: "ares", q: ico },
-      });
-      const data = unwrapApiResponse(response);
-
-      const hit = data.type === "lookup" ? data.hit : null;
-
-      if (!hit) {
-        notifyUserProblem(t("contacts.create.aresNotFound"));
-        return;
-      }
-
-      form.setFieldValue("registrationNumber", hit.id);
-      form.setFieldValue("organizationName", hit.name);
-      form.setFieldValue("displayName", hit.name);
-      setAresBillingAddress(toBillingAddress(hit.address));
-
-      stellaToast.add({
-        title: t("contacts.create.aresApplied"),
-        type: "success",
-      });
-    } catch (error) {
-      getAnalytics().captureError(error, {
+    const lookup = await Result.tryPromise({
+      try: async () =>
+        unwrapApiResponse(
+          await api.contacts["business-registries"].get({
+            query: { registry: "ares", q: ico },
+          }),
+        ),
+      catch: (cause) => cause,
+    });
+    setIsAresLoading(false);
+    if (lookup.isErr()) {
+      getAnalytics().captureError(lookup.error, {
         fingerprintKey: "CreateContactDialog.handleAresLookup:failure",
         scope: {
           type: "handler",
           handlerId: "CreateContactDialog.handleAresLookup:failure",
         },
       });
-      notifyUserError(error, t("errors.actionFailed"));
-    } finally {
-      setIsAresLoading(false);
+      notifyUserError(lookup.error, t("errors.actionFailed"));
+      return;
     }
+    const data = lookup.value;
+
+    const hit = data.type === "lookup" ? data.hit : null;
+
+    if (!hit) {
+      notifyUserProblem(t("contacts.create.aresNotFound"));
+      return;
+    }
+
+    form.setFieldValue("registrationNumber", hit.id);
+    form.setFieldValue("organizationName", hit.name);
+    form.setFieldValue("displayName", hit.name);
+    setAresBillingAddress(toBillingAddress(hit.address));
+
+    stellaToast.add({
+      title: t("contacts.create.aresApplied"),
+      type: "success",
+    });
   };
 
   return (
