@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { CASE_LAW_BROWSE_PAGE_SIZE } from "@stll/api-contract/case-law-browse-hubs";
 
 import type { CaseLawBrowseListing } from "@/features/case-law/browse-path";
-import { caseLawBrowseDateRange } from "@/features/case-law/browse-path";
+import { caseLawBrowseDateRange } from "@/features/case-law/browse-path-parse";
 import { api } from "@/lib/api";
 import {
   PUBLIC_LAW_READ_TIMEOUT_MS,

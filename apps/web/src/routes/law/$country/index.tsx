@@ -37,6 +37,9 @@ const missing: () => never = () => {
  * search, `noindex` with this page as its canonical.
  */
 export const Route = createFileRoute("/law/$country/")({
+  // The loader and its reads load with the route, not at startup: only the
+  // head (and the pending view) stay in the route tree every visit pays for.
+  codeSplitGroupings: [["loader"], ["component"]],
   loader: async ({ context: { queryClient }, params }) => {
     const scope = publicCaseLawPageCountryFromParam(params.country);
     if (scope === null || toCaseLawCountryParam(scope) !== params.country) {

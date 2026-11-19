@@ -3,11 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { CASE_LAW_BROWSE_MAX_PAGES } from "@stll/api-contract/case-law-browse-hubs";
 
 import {
-  caseLawBrowseDateRange,
   type CaseLawBrowseTarget,
   createCaseLawBrowsePath,
-  parseCaseLawBrowseSplat,
 } from "./browse-path";
+import {
+  caseLawBrowseDateRange,
+  parseCaseLawBrowseSplat,
+} from "./browse-path-parse";
 
 const court = "nejvyssi-soud";
 
