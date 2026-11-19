@@ -35,8 +35,9 @@
  * still standing after a birth trigger, or a detected name's word still in
  * the text rejects the document.
  */
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type {
   NativeCallerDetection,
   NativePipelineEntity,
@@ -225,17 +226,25 @@ const nameStems = (entities: readonly NativePipelineEntity[]): Set<string> => {
  * number or a residence, as a party block states one (`Pavel Vomáčka,
  * narozený 21. 5. 1980`, `dlužnice: Jana Nová, nar. …, bytem …`).
  */
-const MARKED_NATURAL_PERSON =
-  /(?<name>(?:\p{Lu}[\p{L}'’-]*\.?\s+){0,4}\p{Lu}[\p{L}'’-]+),?\s+(?:narozen[áéýo]?\b|nar\.|r\. ?č\.|datum narození|bytem\b|trvale bytem\b|místem podnikání\b)/gu;
+const NATURAL_PERSON_MARK =
+  /,?\s(?:narozen[áéýo]?\b|nar\.|r\. ?č\.|datum narození|bytem\b|trvale bytem\b|místem podnikání\b)/gu;
+
+/** At most this many capitalised words before a mark name the person. */
+const MARKED_NAME_WORDS = 5;
 
 /** The name words of every natural person the text marks as one. */
 const markedNameStems = (text: string): Set<string> => {
   const stems = new Set<string>();
-  for (const match of text.matchAll(MARKED_NATURAL_PERSON)) {
-    for (const [word] of (match.groups?.["name"] ?? "").matchAll(WORD)) {
+  for (const mark of text.matchAll(NATURAL_PERSON_MARK)) {
+    // The capitalised words standing right before the mark, nearest first.
+    const before = text.slice(0, mark.index).split(/\s/u).toReversed();
+    for (const word of before.slice(0, MARKED_NAME_WORDS)) {
+      if (!isCapitalised(word)) {
+        break;
+      }
       const folded = fold(word).replaceAll(".", "");
       if (!TITLES.has(folded) && folded.length >= MIN_STEM) {
-        stems.add(stemOf(word));
+        stems.add(stemOf(word.replaceAll(/[^\p{L}'’-]/gu, "")));
       }
     }
   }
@@ -320,6 +329,17 @@ const birthDateSpans = (text: string) =>
     const start = match.index + trigger.length;
     return [{ start, end: start + date.length }];
   });
+
+/**
+ * A run of digits as its number. Every caller has matched the text against a
+ * bounded digit pattern first, so a failed parse is an impossible state.
+ */
+const integerOf = (digits: string): number => {
+  const parsed = parseIntegerToken(digits, { sign: "unsigned" });
+  return Result.isOk(parsed)
+    ? parsed.value
+    : panic(`validated digits did not parse: ${digits}`);
+};
 
 const failure = (reason: CzIsirAnonymizationFailure, message: string) =>
   Result.err(new CzIsirAnonymizationError({ reason, message }));
@@ -503,7 +523,7 @@ export const anonymizeCzIsirParagraphs = (
     // A marker inside a span the pipeline replaced goes with that span; a
     // marker that survives must still be the one it was, in order.
     const markers = [...swept.matchAll(MARKER_PATTERN)].map((match) =>
-      Number(match[1]),
+      integerOf(match[1] ?? ""),
     );
     if (
       markers.some(
@@ -519,7 +539,7 @@ export const anonymizeCzIsirParagraphs = (
     }
     const restored = swept.replaceAll(
       MARKER_PATTERN,
-      (_, index: string) => dockets[Number(index)] ?? "",
+      (_, index: string) => dockets[integerOf(index)] ?? "",
     );
     // The checks read the text outside placeholders and dockets only.
     const residue = restored

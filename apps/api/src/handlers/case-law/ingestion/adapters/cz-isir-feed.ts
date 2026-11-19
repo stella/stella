@@ -23,12 +23,13 @@
 import { panic, Result, TaggedError } from "better-result";
 import { SaxesParser } from "saxes";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 /** The feed's SOAP endpoint. */
 export const CZ_ISIR_FEED_URL =
   "https://isir.justice.cz:8443/isir_public_ws/IsirWsPublicService";
 
 /** The document servlet the feed's `dokumentUrl` values point at. */
-export const CZ_ISIR_DOCUMENT_URL =
+const CZ_ISIR_DOCUMENT_URL =
   "https://isir.justice.cz:8443/isir_public_ws/doc/Document";
 
 const TYPES_NAMESPACE = "http://isirpublicws.cca.cz/types/";
@@ -63,7 +64,7 @@ export const CZ_ISIR_LAST_ID_REQUEST = envelope(
  * decisions, the decision on jurisdiction, and the incidental-dispute
  * (oddíl C) decisions of the high court.
  */
-export const CZ_ISIR_APPELLATE_DECISION_EVENTS: ReadonlySet<number> = new Set([
+const CZ_ISIR_APPELLATE_DECISION_EVENTS: ReadonlySet<number> = new Set([
   // Rozhodnutí o odvolání: potvrzeno, změněno, zrušeno a vráceno, zastavení
   // řízení, odmítnuto, jinak; zrušeno a zastaveno.
   373, 374, 375, 376, 377, 378, 629,
@@ -74,7 +75,7 @@ export const CZ_ISIR_APPELLATE_DECISION_EVENTS: ReadonlySet<number> = new Set([
 ]);
 
 /** The event that makes a debtor's data inaccessible (§ 425 insolvenčního zákona). */
-export const CZ_ISIR_STRIKE_OFF_EVENT = 636;
+const CZ_ISIR_STRIKE_OFF_EVENT = 636;
 
 const YES = "T";
 
@@ -102,7 +103,7 @@ export type CzIsirAction = {
 };
 
 /** The event fields of an action's note; no person or address field is read. */
-export type CzIsirActionNote = {
+type CzIsirActionNote = {
   readonly sideDocument: boolean;
   readonly sideEvent: boolean;
   readonly fileState: string | null;
@@ -252,7 +253,7 @@ const EMPTY_NOTE: CzIsirActionNote & { courtCode: string | null } = {
 };
 
 /** The event fields of a note; its person and address records are skipped. */
-export const readCzIsirNote = (
+const readCzIsirNote = (
   note: string,
 ): Result<
   CzIsirActionNote & { courtCode: string | null },
@@ -309,7 +310,8 @@ const integerOrNull = (text: string | undefined): number | null => {
   if (text === undefined || !/^-?[0-9]{1,15}$/u.test(text)) {
     return null;
   }
-  return Number(text);
+  const parsed = parseIntegerToken(text);
+  return Result.isOk(parsed) ? parsed.value : null;
 };
 
 const textOrNull = (text: string | undefined): string | null =>
@@ -339,14 +341,14 @@ export const readCzIsirActionPage = (
   const raw: Map<string, string>[] = [];
   let current: Map<string, string> | null = null;
   const status: FeedStatus = { stav: null, kodChyby: null };
-  let fault = false;
+  const seen = { fault: false };
   const walked = walkXml(xml, {
     open: (name) => {
       if (name === "data") {
         current = new Map();
       }
       if (name === "Fault") {
-        fault = true;
+        seen.fault = true;
       }
     },
     close: (name) => {
@@ -371,7 +373,7 @@ export const readCzIsirActionPage = (
   if (Result.isError(walked)) {
     return Result.err(walked.error);
   }
-  if (fault) {
+  if (seen.fault) {
     return Result.err(
       new CzIsirFeedParseError({ message: "The feed answered a SOAP fault" }),
     );
@@ -425,12 +427,12 @@ export const readCzIsirActionPage = (
 export const readCzIsirLastId = (
   xml: string,
 ): Result<number, CzIsirFeedParseError> => {
-  let lastId: number | null = null;
+  const read: { lastId: number | null } = { lastId: null };
   const status: FeedStatus = { stav: null, kodChyby: null };
   const walked = walkXml(xml, {
     leaf: (name, text, ancestors) => {
       if (name === "cisloPosledniId") {
-        lastId = integerOrNull(text);
+        read.lastId = integerOrNull(text);
       }
       if (ancestors.at(-1) === "status" && name === "stav") {
         status.stav = text;
@@ -447,11 +449,11 @@ export const readCzIsirLastId = (
   if (failed !== null) {
     return Result.err(failed);
   }
-  return lastId === null
+  return read.lastId === null
     ? Result.err(
         new CzIsirFeedParseError({ message: "The feed stated no last id" }),
       )
-    : Result.ok(lastId);
+    : Result.ok(read.lastId);
 };
 
 /** Which decisions a walk reads. */

@@ -34,7 +34,7 @@ const PARSER_FIXTURES = new URL(
 const FONTS = new URL("../../lib/files/pdf-signing/fonts/", import.meta.url);
 
 /** The recorded decisions, by fixture name, and the document ids the feed page gives them. */
-export const CZ_ISIR_DECISION_FIXTURES = {
+const CZ_ISIR_DECISION_FIXTURES = {
   "65350048": "cz-isir-3-vsph-1361-2023",
   "81161847": "cz-isir-103-vsph-257-2026",
 } as const;

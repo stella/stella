@@ -26,6 +26,7 @@
  */
 import { panic, Result, TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 import { declareFingerprintFields } from "@stll/errors";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -71,7 +72,7 @@ export type CzIsirParseFailure =
   (typeof CZ_ISIR_PARSE_FAILURE)[keyof typeof CZ_ISIR_PARSE_FAILURE];
 
 /** The identity a decision states about itself. */
-export type CzIsirDecisionIdentity = {
+type CzIsirDecisionIdentity = {
   readonly instance: CzIsirInstance;
   /** `3 VSPH 1361/2023`, `38 INS 1234/2011`, `24 ICm 2849/2023`. */
   readonly caseNumber: string;
@@ -183,6 +184,17 @@ const isoDate = (year: number, month: number, day: number): string | null =>
     .map((date) => date.toString())
     .unwrapOr(null);
 
+/**
+ * A run of digits as its number. Every caller has matched the text against a
+ * bounded digit pattern first, so a failed parse is an impossible state.
+ */
+const integerOf = (digits: string): number => {
+  const parsed = parseIntegerToken(digits, { sign: "unsigned" });
+  return Result.isOk(parsed)
+    ? parsed.value
+    : panic(`validated digits did not parse: ${digits}`);
+};
+
 const givenOn = (paragraph: string): string | null => {
   const groups = GIVEN_ON.exec(paragraph.trim())?.groups;
   if (groups === undefined) {
@@ -191,13 +203,17 @@ const givenOn = (paragraph: string): string | null => {
   const monthText = groups["month"] ?? "";
   let month: number | undefined;
   if (monthText.endsWith(".")) {
-    month = Number(monthText.slice(0, -1));
+    month = integerOf(monthText.slice(0, -1));
   } else if (isMonthName(monthText)) {
     month = MONTHS[monthText];
   }
   return month === undefined
     ? null
-    : isoDate(Number(groups["year"]), month, Number(groups["day"]));
+    : isoDate(
+        integerOf(groups["year"] ?? ""),
+        month,
+        integerOf(groups["day"] ?? ""),
+      );
 };
 
 /** A heading: a short paragraph the publisher set wholly in bold. */
@@ -208,6 +224,12 @@ const isHeading = ({ text, bold }: CzIsirParagraph): boolean =>
 
 /** The paragraphs before the first heading after the header: where dockets stand. */
 const HEADER_PARAGRAPHS = 4;
+
+type DocketGroups = Readonly<Record<string, string | undefined>>;
+
+/** A group the docket pattern always captures. */
+const part = (groups: DocketGroups, name: string): string =>
+  groups[name] ?? panic(`A matched docket lacks its ${name}`);
 
 const failure = (reason: CzIsirParseFailure, message: string) =>
   Result.err(new CzIsirParseError({ reason, message }));
@@ -250,7 +272,7 @@ const readIdentity = (
   const decisionDate = paragraphs
     .map(({ text }) => givenOn(text))
     .findLast((date) => date !== null);
-  if (decisionDate === undefined || decisionDate === null) {
+  if (decisionDate === undefined) {
     return failure(
       CZ_ISIR_PARSE_FAILURE.NO_DECISION_DATE,
       `Document ${documentId} states no date it was given`,
@@ -259,10 +281,10 @@ const readIdentity = (
   const insolvencyFile =
     file === undefined
       ? undefined
-      : `${file["court"]} ${file["senate"]} INS ${file["number"]}/${file["year"]}`;
+      : `${part(file, "court")} ${part(file, "senate")} INS ${part(file, "number")}/${part(file, "year")}`;
 
   if (highCourt !== undefined) {
-    const code = highCourt["court"] ?? "";
+    const code = part(highCourt, "court");
     if (!isHighCourt(code)) {
       return failure(
         CZ_ISIR_PARSE_FAILURE.UNKNOWN_COURT,
@@ -273,7 +295,7 @@ const readIdentity = (
     const sheet = highCourt["sheet"];
     return Result.ok({
       instance: CZ_ISIR_INSTANCE.APPELLATE,
-      caseNumber: `${highCourt["senate"]} ${code} ${highCourt["number"]}/${highCourt["year"]}`,
+      caseNumber: `${part(highCourt, "senate")} ${code} ${part(highCourt, "number")}/${part(highCourt, "year")}`,
       sheetNumber: section === undefined ? sheet : undefined,
       filePosition:
         section === undefined || sheet === undefined
@@ -286,13 +308,13 @@ const readIdentity = (
     });
   }
   // An insolvency court's own decision: its file, or its incidental dispute.
-  const courtCode = file?.["court"];
-  if (courtCode === undefined) {
+  if (file === undefined) {
     return failure(
       CZ_ISIR_PARSE_FAILURE.NO_DOCKET,
       `Document ${documentId} states no docket`,
     );
   }
+  const courtCode = part(file, "court");
   if (!isRegisteredCourt(courtCode)) {
     return failure(
       CZ_ISIR_PARSE_FAILURE.UNKNOWN_COURT,
@@ -303,7 +325,7 @@ const readIdentity = (
   if (dispute !== undefined) {
     return Result.ok({
       instance: CZ_ISIR_INSTANCE.INSOLVENCY_COURT,
-      caseNumber: `${dispute["senate"]} ICm ${dispute["number"]}/${dispute["year"]}`,
+      caseNumber: `${part(dispute, "senate")} ICm ${part(dispute, "number")}/${part(dispute, "year")}`,
       sheetNumber: dispute["sheet"],
       filePosition: undefined,
       court,
@@ -312,11 +334,11 @@ const readIdentity = (
       insolvencyFile,
     });
   }
-  const section = file?.["section"];
-  const sheet = file?.["sheet"];
+  const section = file["section"];
+  const sheet = file["sheet"];
   return Result.ok({
     instance: CZ_ISIR_INSTANCE.INSOLVENCY_COURT,
-    caseNumber: `${file?.["senate"]} INS ${file?.["number"]}/${file?.["year"]}`,
+    caseNumber: `${part(file, "senate")} INS ${part(file, "number")}/${part(file, "year")}`,
     sheetNumber: undefined,
     filePosition:
       section === undefined || sheet === undefined

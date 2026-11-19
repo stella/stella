@@ -92,7 +92,7 @@ describe("czIsirFetchPage", () => {
       sourceUrl:
         "https://isir.justice.cz:8443/isir_public_ws/doc/Document?idDokument=65350048",
     });
-    expect(decision?.metadata?.[CZ_ISIR_METADATA_KEY]).toMatchObject({
+    expect(decision?.metadata[CZ_ISIR_METADATA_KEY]).toMatchObject({
       documentId: "65350048",
       actionId: 65_000_689,
       courtCode: "MSPHAAB",
@@ -176,7 +176,7 @@ describe("czIsirFetchPage", () => {
     });
     expect(replayed?.type).toBe("parsed");
     if (replayed?.type === "parsed") {
-      expect(replayed.result.caseNumber).toBe("3 VSPH 1361/2023");
+      expect(String(replayed.result.caseNumber)).toBe("3 VSPH 1361/2023");
       expect(String(replayed.result.fulltext)).toBe(String(decision?.fulltext));
     }
   });

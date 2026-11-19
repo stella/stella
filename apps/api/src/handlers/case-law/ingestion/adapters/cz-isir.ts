@@ -1,4 +1,3 @@
-import { PDF } from "@libpdf/core";
 /**
  * Court decisions published in the Czech insolvency register
  * (insolvenční rejstřík, isir.justice.cz).
@@ -63,9 +62,11 @@ import { PDF } from "@libpdf/core";
  * the end of the feed the cursor stays where it is, so a later cycle reads
  * only the actions published since.
  */
+import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { createPipeline } from "@stll/anonymize";
 import { Temporal } from "@stll/time";
 
@@ -320,8 +321,6 @@ const readActions = async (
 export const CZ_ISIR_UNBUILT = {
   /** The register no longer serves the document (struck off, or withdrawn). */
   WITHDRAWN: "withdrawn",
-  /** The register refused this document. */
-  REFUSED: "refused",
   /** The proceeding is struck off on the same page. */
   STRUCK_OFF: "struck-off",
   /** A PDF portfolio: the register's bundle of side documents. */
@@ -355,8 +354,8 @@ export type CzIsirDecisionRead =
  * spravedlnosti, ou=Insolvenční rejstřík, serialNumber=…`): the register's,
  * not the court's.
  */
-const SIGNATURE_STAMP_OPENS = /^cn=ISIR,/u;
-const SIGNATURE_STAMP_CLOSES = /^serialNumber=/u;
+const SIGNATURE_STAMP_OPENS = "cn=ISIR,";
+const SIGNATURE_STAMP_CLOSES = "serialNumber=";
 
 /**
  * A line of dockets alone: the decision's own header on its first page
@@ -365,8 +364,28 @@ const SIGNATURE_STAMP_CLOSES = /^serialNumber=/u;
  * page (`2 MSPH 60 INS 10782/2023 3 VSPH 1361/2023`). Nothing a court writes
  * in its text is a line of dockets and numbers alone.
  */
-const DOCKET_LINE =
-  /^(?:č\. ?j\.\s+)?(?:\d{1,3}\s+)?(?:\(?(?:(?:K|M)S[A-Z]{2}\s+)?\d{1,4}\s+(?:INS|ICm|VSPH|VSOL)\s+\d{1,7}\/\d{4}(?:\s*-\s*(?:[A-Z]{1,3}\s*-\s*)?\d{1,5})?\)?\s*){1,3}(?:\s+\d{1,3})?$/u;
+const DOCKET_LINE_DOCKET =
+  /^\(?(?:[KM]S[A-Z]{2} )?\d{1,4} (?:INS|ICm|VSPH|VSOL) \d{1,7}\/\d{4}(?:-(?:[A-Z]{1,3}-)?\d{1,5})?\)?$/u;
+const PAGE_NUMBER = /^\d{1,3}$/u;
+
+/** Whether a printed line is dockets and page numbers alone. */
+const isDocketLine = (text: string): boolean => {
+  // One token per docket: its parts joined, its sheet's dash closed up.
+  const tokens = text
+    .replaceAll(/ ?- ?/gu, "-")
+    .replace(/^č\. ?j\. /u, "")
+    .replaceAll(/([KM]S[A-Z]{2}) (\d)/gu, "$1\u00a0$2")
+    .replaceAll(/(\d) (INS|ICm|VSPH|VSOL) (\d)/gu, "$1\u00a0$2\u00a0$3")
+    .split(" ")
+    .map((token) => token.replaceAll("\u00a0", " "));
+  const dockets = tokens.filter((token) => DOCKET_LINE_DOCKET.test(token));
+  return (
+    dockets.length > 0 &&
+    tokens.every(
+      (token) => DOCKET_LINE_DOCKET.test(token) || PAGE_NUMBER.test(token),
+    )
+  );
+};
 
 const lineText = (line: PdfLine): string =>
   line.type === "blank" ? "" : line.runs.map(({ text }) => text).join("");
@@ -383,7 +402,7 @@ const withoutRegisterFurniture = (lines: readonly PdfLine[]): PdfLine[] => {
   let pastHeader = false;
   for (const line of lines) {
     const text = lineText(line).trim();
-    if (SIGNATURE_STAMP_OPENS.test(text)) {
+    if (text.startsWith(SIGNATURE_STAMP_OPENS)) {
       inStamp = true;
     }
     if (inStamp) {
@@ -391,13 +410,13 @@ const withoutRegisterFurniture = (lines: readonly PdfLine[]): PdfLine[] => {
       if (stampEnds) {
         inStamp = false;
         stampEnds = false;
-      } else if (SIGNATURE_STAMP_CLOSES.test(text)) {
+      } else if (text.startsWith(SIGNATURE_STAMP_CLOSES)) {
         stampEnds = !/[=]\s*\S/u.test(text);
         inStamp = stampEnds;
       }
       continue;
     }
-    if (line.type !== "blank" && DOCKET_LINE.test(text)) {
+    if (line.type !== "blank" && isDocketLine(text.replaceAll(/\s+/gu, " "))) {
       if (pastHeader) {
         continue;
       }
@@ -592,7 +611,6 @@ export const readCzIsirDecision = async ({
     case "absent":
       return Result.ok({ type: "unbuilt", reason: CZ_ISIR_UNBUILT.WITHDRAWN });
     case "refused":
-      return Result.ok({ type: "unbuilt", reason: CZ_ISIR_UNBUILT.REFUSED });
     case "unavailable":
       return Result.err(
         unreadPublisherError({
@@ -741,7 +759,10 @@ export const czIsirFetchPage = async (
 const SLICE_IDS = 100_000;
 const PAGE_IDS = CZ_ISIR_FEED_PAGE_SIZE;
 const PAGES_PER_SLICE = SLICE_IDS / PAGE_IDS;
-const SLICE = /^\d{1,7}$/u;
+const SLICE = /^\d{5}$/u;
+
+/** Slices are zero-padded so their order as text is their order as blocks. */
+const sliceName = (index: number): string => String(index).padStart(5, "0");
 
 /**
  * The feed states no date for an id, so the tip is estimated from a
@@ -752,9 +773,20 @@ const SLICE = /^\d{1,7}$/u;
 const MEASURED_TIP = { id: 81_548_356, on: "2026-11-19" } as const;
 const ACTIONS_PER_DAY = 16_400;
 
+/**
+ * A run of digits as its number. Every caller has matched the text against a
+ * bounded digit pattern first, so a failed parse is an impossible state.
+ */
+const integerOf = (digits: string): number => {
+  const parsed = parseIntegerToken(digits, { sign: "unsigned" });
+  return Result.isOk(parsed)
+    ? parsed.value
+    : panic(`validated digits did not parse: ${digits}`);
+};
+
 const sliceIndexOf = (slice: string): number =>
   SLICE.test(slice)
-    ? Number(slice)
+    ? integerOf(slice)
     : panic(`cz-isir slice is not an action block: ${slice}`);
 
 const sliceOf = (now: Date): string => {
@@ -764,17 +796,17 @@ const sliceOf = (now: Date): string => {
       .toPlainDate(),
   ).days;
   const id = Math.max(0, MEASURED_TIP.id + days * ACTIONS_PER_DAY);
-  return String(Math.floor(id / SLICE_IDS));
+  return sliceName(Math.floor(id / SLICE_IDS));
 };
 
 const nextSlice = (slice: string): string | null => {
   const next = sliceIndexOf(slice) + 1;
-  return next > sliceIndexOf(sliceOf(new Date())) ? null : String(next);
+  return next > sliceIndexOf(sliceOf(new Date())) ? null : sliceName(next);
 };
 
 const previousSlice = (slice: string): string | null => {
   const previous = sliceIndexOf(slice) - 1;
-  return previous < 0 ? null : String(previous);
+  return previous < 0 ? null : sliceName(previous);
 };
 
 const listSlicePage = async ({
@@ -891,6 +923,10 @@ const SOURCE_FIELDS = [
   "poznamka",
 ] as const;
 
+type CzIsirPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const actionField = (path: string): SourceFieldDisposition => ({
   disposition: "stored",
   target: { type: "metadata", key: CZ_ISIR_METADATA_KEY, path: [path] },
@@ -921,7 +957,7 @@ const CZ_ISIR_SOURCE_FIELDS = {
     pointer: "cz-isir-feed.ts NOTE_FIELDS",
   }),
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof CzIsirPublisherRecord,
   SourceFieldDisposition
 >;
 
@@ -987,7 +1023,7 @@ export const czIsirAdapter = defineSourceAdapter({
       isStoredAction(payload)
         ? { documentId: payload.documentId, eventType: payload.eventType }
         : null,
-    firstSlice: "0",
+    firstSlice: sliceName(0),
     sliceOf,
     nextSlice,
     previousSlice,

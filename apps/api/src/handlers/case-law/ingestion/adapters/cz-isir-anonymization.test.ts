@@ -97,7 +97,7 @@ describe("anonymizeCzIsirParagraphs", () => {
       header?.text ?? "",
     )?.groups?.["placeholder"];
     expect(debtor).toBeDefined();
-    expect(reasons?.text).toContain(`dlužníka ${debtor}`);
+    expect(reasons?.text).toContain(`dlužníka ${String(debtor)}`);
   });
 
   test("keeps the paragraphs and their emphasis", () => {
