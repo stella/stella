@@ -106,6 +106,10 @@ pub enum Line {
 pub enum GlobeKey {
   /// Never changed: the system default applies.
   Unset,
+  #[cfg_attr(
+    not(target_os = "macos"),
+    allow(dead_code, reason = "only a Mac reads the globe key setting")
+  )]
   Value(i64),
 }
 
