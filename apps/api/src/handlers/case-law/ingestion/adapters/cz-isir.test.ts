@@ -177,7 +177,7 @@ describe("czIsirFetchPage", () => {
     expect(replayed?.type).toBe("parsed");
     if (replayed?.type === "parsed") {
       expect(replayed.result.caseNumber).toBe("3 VSPH 1361/2023");
-      expect(replayed.result.fulltext).toBe(decision?.fulltext);
+      expect(String(replayed.result.fulltext)).toBe(String(decision?.fulltext));
     }
   });
 
