@@ -1,3 +1,4 @@
+// parser-output-unchanged: Collection part validation and immutable payload encoding retain source extraction and document AST contents.
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
