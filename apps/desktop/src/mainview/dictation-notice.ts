@@ -6,13 +6,13 @@
 import type { DesktopPlatform } from "../shared/shortcut-keys";
 
 /** `microphone`: nothing could be heard; `nothingHeard`: sound, no words. */
-export type DictationNoticeKind = "microphone" | "nothingHeard";
+type DictationNoticeKind = "microphone" | "nothingHeard";
 
 /**
  * `request` asks the OS for the microphone, `openSettings` opens its privacy
  * page, `openSound` opens the sound input settings.
  */
-export type DictationNoticeFix = "openSettings" | "openSound" | "request";
+type DictationNoticeFix = "openSettings" | "openSound" | "request";
 
 export type DictationNoticeSnapshot = {
   fix: DictationNoticeFix | null;
@@ -51,7 +51,7 @@ export const isDictationNoticeSnapshot = (
 };
 
 /** Message keys under `dictation.notice`. */
-export type DictationNoticeCopy = {
+type DictationNoticeCopy = {
   title: "nothingTitle" | "title";
   body: "allowBody" | "checkBodyMac" | "checkBodyPc" | "nothingBody";
   /** The action button's key, or null where there is nothing to open. */
