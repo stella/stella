@@ -1,3 +1,5 @@
+import { useEffect, useEffectEvent } from "react";
+
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -15,21 +17,33 @@ import { useUiColors } from "@/theme";
  * the cross to drop the recording. The text goes to `onText`, which adds it
  * to the field; while recording it says how long it has listened, and when
  * a dictation gives no text it says why. Dictation as set up in Settings,
- * with the matter's names when the field belongs to one.
+ * with the matter's names when the field belongs to one. `onBusyChange`
+ * hears when a dictation starts recording and when it has settled, so the
+ * form can hold its submit until the text has landed: a form that closes
+ * mid-dictation drops the recording.
  */
 export const DictateButton = ({
   disabled = false,
   matterId,
+  onBusyChange,
   onText,
 }: {
   disabled?: boolean;
   matterId?: string | undefined;
+  onBusyChange?: ((busy: boolean) => void) | undefined;
   onText: (text: string) => void;
 }) => {
   const t = useTranslations("chat");
   const ui = useUiColors();
   const dictation = useDictation(onText, { matterId });
   const status = useDictationStatus(dictation);
+  const busy = dictation.phase !== "idle";
+  const reportBusy = useEffectEvent((value: boolean) => {
+    onBusyChange?.(value);
+  });
+  useEffect(() => {
+    reportBusy(busy);
+  }, [busy]);
 
   return (
     <View className="flex-row items-center justify-end gap-2">

@@ -596,7 +596,7 @@
     "dictationModelRetainsData": "Saugo jūsų garsą",
     "dictationModelRetainsWarning": "Šis modelis veikia paskyroje be nulinio duomenų saugojimo. {provider} pagal savo sąlygas, už stella kontrolės ribų, saugo visko, ką padiktuojate, garsą ir nuorašą. Nediktuokite juo konfidencialios informacijos ar klientų duomenų.",
     "dictationModelHint": "Modelis, kuris jūsų diktavimą paverčia tekstu. stella garso nesaugo.",
-    "dictationModelsUnavailable": "Nepavyko įkelti modelių. Diktuojant naudojamas numatytasis modelis.",
+    "dictationModelsUnavailable": "Nepavyko įkelti modelių. Diktuojant naudojamas jūsų pasirinktas modelis arba numatytasis, jei serveris jo nebesiūlo.",
     "dictationCleanup": "Taisyti su DI",
     "dictationCleanupHint": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“. Tik tekstas, ne garsas, per stella siunčiamas jūsų organizacijos DI paslaugų teikėjui; stella jo nesaugo."
   },

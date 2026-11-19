@@ -596,7 +596,7 @@
     "dictationModelRetainsData": "Säilitab teie heli",
     "dictationModelRetainsWarning": "See mudel töötab kontol, millel puudub andmete nullsäilitus. {provider} talletab kõige dikteeritu heli ja transkriptsiooni oma tingimustel, väljaspool stella kontrolli. Ärge dikteerige sellega konfidentsiaalset teavet ega kliendiandmeid.",
     "dictationModelHint": "Mudel, mis muudab dikteeritu tekstiks. stella heli ei talleta.",
-    "dictationModelsUnavailable": "Mudeleid ei õnnestunud laadida. Dikteerimine kasutab vaikimisi mudelit.",
+    "dictationModelsUnavailable": "Mudeleid ei õnnestunud laadida. Dikteerimine kasutab valitud mudelit või vaikimisi mudelit, kui server seda enam ei paku.",
     "dictationCleanup": "Paranda tehisintellektiga",
     "dictationCleanupHint": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“. Ainult tekst, mitte heli, läheb stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale; stella seda ei talleta."
   },

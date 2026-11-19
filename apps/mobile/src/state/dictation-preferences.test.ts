@@ -8,6 +8,7 @@ import {
   DEFAULT_DICTATION_PREFERENCES,
   forgetDictationPreferences,
   readDictationPreferences,
+  shownModel,
   writeDictationPreferences,
 } from "./dictation-preferences";
 import type { AccountStore } from "./recent-searches";
@@ -90,5 +91,22 @@ describe("dictation preferences", () => {
     expect(chosenModelId(picked, [{ id: "m" }])).toBe("m");
     expect(chosenModelId(picked, [{ id: "other" }])).toBeUndefined();
     expect(chosenModelId(DEFAULT_DICTATION_PREFERENCES, null)).toBeUndefined();
+  });
+
+  test("settings show the model a dictation sends, even when the list cannot be read", () => {
+    const picked = { modelId: "m", cleanup: false };
+    expect(shownModel(picked, [{ id: "m" }])).toEqual({
+      selected: "m",
+      unlisted: false,
+    });
+    expect(shownModel(picked, [{ id: "other" }])).toEqual({
+      selected: null,
+      unlisted: false,
+    });
+    expect(shownModel(picked, null)).toEqual({ selected: "m", unlisted: true });
+    expect(shownModel(DEFAULT_DICTATION_PREFERENCES, null)).toEqual({
+      selected: null,
+      unlisted: false,
+    });
   });
 });

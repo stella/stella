@@ -77,6 +77,8 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     return new Set(session === undefined ? [] : [session.userId]);
   });
   const [failure, setFailure] = useState<WriteFailure | null>(null);
+  // Adding waits for a dictation to land in the name: closing the form drops it.
+  const [dictating, setDictating] = useState(false);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
@@ -85,10 +87,11 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     }
     return result;
   });
-  const ready = name.trim() !== "" && matterId !== null && !adding;
+  const ready =
+    name.trim() !== "" && matterId !== null && !adding && !dictating;
 
   const add = () => {
-    if (matterId === null) {
+    if (matterId === null || dictating) {
       return;
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
@@ -165,6 +168,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         />
         <DictateButton
           matterId={matterId ?? undefined}
+          onBusyChange={setDictating}
           onText={(dictated) => {
             setName((typed) => appendDictation(typed, dictated));
           }}

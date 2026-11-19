@@ -17,6 +17,7 @@ import { readDictationModels } from "@/state/dictation";
 import {
   DEFAULT_DICTATION_PREFERENCES,
   readDictationPreferences,
+  shownModel,
   writeDictationPreferences,
 } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
@@ -105,10 +106,12 @@ const DictationChoices = ({
   const offered = use(models);
   const list = offered.isOk() ? offered.value.models : [];
   // A picked model the server stopped offering counts as the default, as a
-  // dictation then uses it.
-  const selected = list.some(({ id }) => id === preferences.modelId)
-    ? preferences.modelId
-    : null;
+  // dictation then uses it. While the list cannot be read, the picked model
+  // is still what a dictation sends, so it keeps its row, named by its id.
+  const { selected, unlisted } = shownModel(
+    preferences,
+    offered.isOk() ? list : null,
+  );
   // The provider of the picked model keeps what is dictated: said in full,
   // as where it is picked on the computer.
   const retaining = list.find(
@@ -144,6 +147,9 @@ const DictationChoices = ({
         ...(model.retainsData === true ? [t("dictationModelRetainsData")] : []),
       ],
     })),
+    ...(unlisted && selected !== null
+      ? [{ id: selected, title: selected, notes: [] }]
+      : []),
   ];
 
   return (

@@ -596,7 +596,7 @@
     "dictationModelRetainsData": "Uchováva váš zvuk",
     "dictationModelRetainsWarning": "Tento model beží na účte bez nulového uchovávania údajov. {provider} ukladá zvuk aj prepis všetkého, čo nadiktujete, podľa vlastných podmienok a mimo kontroly stella. Nediktujte s ním dôverné ani klientske informácie.",
     "dictationModelHint": "Model, ktorý z diktátu urobí text. stella zvuk neukladá.",
-    "dictationModelsUnavailable": "Modely sa nepodarilo načítať. Diktovanie použije predvolený model.",
+    "dictationModelsUnavailable": "Modely sa nepodarilo načítať. Diktovanie použije model, ktorý ste vybrali, alebo predvolený, ak ho server už neponúka.",
     "dictationCleanup": "Upraviť pomocou AI",
     "dictationCleanupHint": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“. Len text, nie zvuk, ide cez stella k poskytovateľovi AI vašej organizácie; stella ho neukladá."
   },

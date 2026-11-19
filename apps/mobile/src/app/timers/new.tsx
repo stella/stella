@@ -44,6 +44,9 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const [matterId, setMatterId] = useState<string | null>(null);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [starting, startStarting] = useTransition();
+  // Starting waits for a dictation to land in the description: closing the
+  // form drops it.
+  const [dictating, setDictating] = useState(false);
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
@@ -53,6 +56,9 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   });
 
   const start = () => {
+    if (dictating) {
+      return;
+    }
     startStarting(async () => {
       setFailure(null);
       const started = await startTimer({
@@ -90,7 +96,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
           ],
           unstable_headerRightItems: () => [
             {
-              disabled: starting,
+              disabled: starting || dictating,
               label: t("start"),
               onPress: start,
               type: "button",
@@ -114,6 +120,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         />
         <DictateButton
           matterId={matterId ?? undefined}
+          onBusyChange={setDictating}
           onText={(dictated) => {
             setDescription((typed) => appendDictation(typed, dictated));
           }}

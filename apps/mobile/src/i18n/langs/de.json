@@ -596,7 +596,7 @@
     "dictationModelRetainsData": "Speichert deine Aufnahmen",
     "dictationModelRetainsWarning": "Dieses Modell läuft über ein Konto ohne Zero Data Retention. {provider} speichert Audio und Transkript von allem, was du diktierst, nach eigenen Bedingungen und außerhalb der Kontrolle von stella. Diktiere damit keine vertraulichen Informationen oder Mandantendaten.",
     "dictationModelHint": "Das Modell, das aus deinem Diktat Text macht. stella speichert das Audio nicht.",
-    "dictationModelsUnavailable": "Die Modelle konnten nicht geladen werden. Diktieren nutzt das Standardmodell.",
+    "dictationModelsUnavailable": "Die Modelle konnten nicht geladen werden. Diktieren nutzt das gewählte Modell oder das Standardmodell, wenn der Server das gewählte nicht mehr anbietet.",
     "dictationCleanup": "Mit KI überarbeiten",
     "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter deiner Organisation; stella speichert ihn nicht."
   },

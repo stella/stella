@@ -596,7 +596,7 @@
     "dictationModelRetainsData": "Conserva tu audio",
     "dictationModelRetainsWarning": "Este modelo funciona con una cuenta sin retención cero de datos. {provider} guarda el audio y la transcripción de todo lo que dictas según sus propias condiciones, fuera del control de stella. No dictes con él información confidencial ni datos de clientes.",
     "dictationModelHint": "El modelo que convierte lo que dictas en texto. stella no guarda el audio.",
-    "dictationModelsUnavailable": "No se pudieron cargar los modelos. El dictado usa el modelo predeterminado.",
+    "dictationModelsUnavailable": "No se pudieron cargar los modelos. El dictado usa el modelo que elegiste, o el predeterminado si el servidor ya no lo ofrece.",
     "dictationCleanup": "Corregir con IA",
     "dictationCleanupHint": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea». Solo el texto, no el audio, pasa por stella al proveedor de IA de tu organización; stella no lo guarda."
   },

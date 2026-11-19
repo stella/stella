@@ -67,6 +67,24 @@ export const chosenModelId = (
     ? preferences.modelId
     : undefined;
 
+/**
+ * The model Settings shows as picked: the one a dictation names. `offered`
+ * is the server's list, null when it could not be read; the picked model is
+ * then still sent with every dictation, so it stays shown as picked, and
+ * `unlisted` says the list has no row for it.
+ */
+export const shownModel = (
+  preferences: DictationPreferences,
+  offered: readonly { readonly id: string }[] | null,
+): { readonly selected: string | null; readonly unlisted: boolean } => {
+  const selected = chosenModelId(preferences, offered) ?? null;
+  return {
+    selected,
+    unlisted:
+      selected !== null && !(offered ?? []).some(({ id }) => id === selected),
+  };
+};
+
 /** Deletes the ending session's dictation choices from the device. */
 export const forgetDictationPreferences =
   (store: AccountStore): BeforeSessionEnd =>

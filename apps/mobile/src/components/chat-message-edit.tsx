@@ -91,6 +91,10 @@ const ChatMessageEdit = ({
   const [problem, setProblem] = useState<LocalFilesUndoProblem | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [sending, setSending] = useState(false);
+  // Sending waits for a dictation to land in the draft: an accepted edit
+  // closes the form, which drops it. Dictation cannot start once sending, so
+  // the draft sent is the one with the dictated text.
+  const [dictating, setDictating] = useState(false);
   const [notice, setNotice] = useState<EditNotice>();
   // Read by the follow, which outlives a render: the form may close meanwhile.
   const open = useRef(true);
@@ -152,7 +156,7 @@ const ChatMessageEdit = ({
 
   const choice = editFilesChoice({ read, checked: undoFiles, problem });
   const draft: EditDraft = { text, kept };
-  const canSend = hasEditContent(draft) && !busy && !sending;
+  const canSend = hasEditContent(draft) && !busy && !sending && !dictating;
 
   /** Asks the computer to undo the files and follows it while the form is open. */
   const undoFilesFirst = async () =>
@@ -253,6 +257,7 @@ const ChatMessageEdit = ({
       <DictateButton
         disabled={sending}
         matterId={matterId}
+        onBusyChange={setDictating}
         onText={(dictated) => {
           setText((typed) => appendDictation(typed, dictated));
         }}

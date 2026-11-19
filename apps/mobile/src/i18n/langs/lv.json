@@ -596,7 +596,7 @@
     "dictationModelRetainsData": "Saglabā jūsu audio",
     "dictationModelRetainsWarning": "Šis modelis darbojas kontā bez nulles datu glabāšanas. {provider} saskaņā ar saviem noteikumiem, ārpus stella kontroles, glabā visa diktētā audio un transkripciju. Nediktējiet ar to konfidenciālu informāciju vai klientu datus.",
     "dictationModelHint": "Modelis, kas jūsu diktēto pārvērš tekstā. stella audio neglabā.",
-    "dictationModelsUnavailable": "Modeļus neizdevās ielādēt. Diktēšana izmanto noklusējuma modeli.",
+    "dictationModelsUnavailable": "Modeļus neizdevās ielādēt. Diktēšana izmanto jūsu izvēlēto modeli vai noklusējuma modeli, ja serveris to vairs nepiedāvā.",
     "dictationCleanup": "Labot ar MI",
     "dictationCleanupHint": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”. Tikai teksts, nevis audio, caur stella nonāk pie jūsu organizācijas MI pakalpojumu sniedzēja; stella to neglabā."
   },
