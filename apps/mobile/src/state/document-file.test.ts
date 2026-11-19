@@ -306,7 +306,48 @@ describe("reading a document's file", () => {
     },
   );
 
+  test.each([".ASICE", ".sce", ".bdoc", ".asics", ".scs"])(
+    "reads an ASiC archive with the %s extension through the preview",
+    async (extension) => {
+      const fileName = `appendices${extension}`;
+      const preview = {
+        members: [
+          {
+            fileName: "submission.pdf",
+            status: "readable",
+            text: "The enclosed submission",
+          },
+          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "notes.txt",
+            status: "truncated",
+            text: "The first page",
+          },
+        ],
+      };
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "asic" && file.preview.unwrap()).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/asic/field%3F1",
+      ]);
+    },
+  );
+
   test.each([
+    {
+      viewer: "asic",
+      fileName: "Detached.asice",
+      mimeType: "application/vnd.etsi.asic-e+zip",
+    },
     {
       viewer: "dataBox",
       fileName: "Doručenka.zfo",

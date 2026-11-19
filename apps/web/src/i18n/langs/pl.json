@@ -6251,6 +6251,7 @@
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "previewTruncated": "Pełny tekst nie jest dostępny w tym podglądzie.",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
     "unverified": "Podpisy nie zostały zweryfikowane."

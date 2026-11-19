@@ -6251,6 +6251,7 @@
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
     "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."

@@ -6251,6 +6251,7 @@
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "pdfUnavailable": "The PDF preview is unavailable.",
+    "previewTruncated": "The full text is unavailable in this preview.",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."

@@ -151,7 +151,7 @@ type ExtractFileTextResultOptions = {
 };
 
 export const extractFileTextResult = async (
-  { bytes: buffer, mimeType }: ScannedFile,
+  { bytes: buffer, mimeType, fileName }: ScannedFile,
   {
     maxChars = LIMITS.extractedContentMaxChars,
     includeContainerAttachments = false,
@@ -159,7 +159,9 @@ export const extractFileTextResult = async (
     timeoutMs = LIMITS.extractionTimeoutMs,
   }: ExtractFileTextResultOptions = {},
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const normalizedMimeType = normalizeMimeType(mimeType);
+  const normalizedMimeType =
+    legalFileFormat(mimeType, fileName)?.mimeType ??
+    normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);
   }

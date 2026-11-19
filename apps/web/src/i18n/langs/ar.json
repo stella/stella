@@ -6251,6 +6251,7 @@
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة.",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."

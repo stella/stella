@@ -56,7 +56,7 @@ export const loadLegalFileSource = async (
     recordAuditEvent,
     purpose = "preview",
   }: LegalFileReadOptions,
-  kind: LegalFileFormatKind,
+  acceptedKinds: readonly LegalFileFormatKind[],
 ) => {
   const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   if (row?.content.type !== "file") {
@@ -64,7 +64,7 @@ export const loadLegalFileSource = async (
   }
   const { content, entityId } = row;
   const format = legalFileFormat(content.mimeType, content.fileName);
-  if (content.encrypted || format?.kind !== kind) {
+  if (content.encrypted || !format || !acceptedKinds.includes(format.kind)) {
     return Result.err(
       new HandlerError({
         status: 422,
@@ -128,7 +128,6 @@ export const loadLegalFileSource = async (
     });
   return Result.ok({
     source,
-    fileName: content.fileName,
     mimeType: format.mimeType,
     entityId,
     deliver,

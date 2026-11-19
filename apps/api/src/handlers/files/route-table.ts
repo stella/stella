@@ -1,3 +1,4 @@
+import asicPreviewEndpoint from "@/api/handlers/files/asic";
 import {
   cadesContentEndpoint,
   cadesPreviewEndpoint,
@@ -23,6 +24,7 @@ import { routes } from "@/api/http/route";
 export const filesRoute = routes(
   {
     "/url/:fieldId": { GET: readFileEndpoint },
+    "/asic/:fieldId": { GET: asicPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/cades/:fieldId/content": { GET: cadesContentEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },

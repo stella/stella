@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import { legalFileFormat } from "@stll/api-contract/document-format";
@@ -116,7 +117,15 @@ type CadesDocumentFile = {
   readonly preview: Result<v.InferOutput<typeof cadesPreviewSchema>, ApiError>;
 };
 
-export type LegalDocumentFile = DataBoxDocumentFile | CadesDocumentFile;
+type AsicDocumentFile = {
+  readonly viewer: "asic";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<v.InferOutput<typeof asicPreviewSchema>, ApiError>;
+};
+
+export type LegalDocumentFile =
+  AsicDocumentFile | CadesDocumentFile | DataBoxDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
 
@@ -216,6 +225,16 @@ export const readDocumentFile = async ({
     const { fieldId, fileName, mimeType } = file;
     const kind = legalFileFormat(mimeType, fileName)?.kind;
     switch (kind) {
+      case "asicE":
+      case "asicS": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/asic/${encodeURIComponent(fieldId)}`,
+          schema: asicPreviewSchema,
+        });
+        return Result.ok({ viewer: "asic", fileName, fieldId, preview });
+      }
       case "cades": {
         const preview = await requestApi({
           fetch,

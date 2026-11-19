@@ -605,6 +605,7 @@
   "signedFile": {
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "previewTruncated": "Le texte intégral n’est pas disponible dans cet aperçu.",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."

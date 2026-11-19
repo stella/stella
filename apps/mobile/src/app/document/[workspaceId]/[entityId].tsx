@@ -83,7 +83,11 @@ const openDocument = async ({
       failure: isOffline(file.error) ? "offline" : "failed",
     };
   }
-  if (file.value.viewer === "dataBox" || file.value.viewer === "cades") {
+  if (
+    file.value.viewer === "asic" ||
+    file.value.viewer === "cades" ||
+    file.value.viewer === "dataBox"
+  ) {
     return { status: "legalPreview", file: file.value };
   }
   if (!canOpenFiles()) {
@@ -428,7 +432,7 @@ const LegalFilePreview = ({
 }) => {
   const t = useTranslations("document");
   const signedFile = useTranslations("signedFile");
-  const { fieldId, preview } = file;
+  const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
   const mounted = useRef(true);
@@ -492,8 +496,8 @@ const LegalFilePreview = ({
   };
 
   const previewBody = (() => {
-    if (file.viewer === "cades" && Result.isOk(file.preview)) {
-      const { fileName, layers, text } = file.preview.value;
+    if (viewer === "cades" && Result.isOk(preview)) {
+      const { fileName, layers, text } = preview.value;
       return (
         <>
           <Text accessibilityRole="header" selectable variant="headline">
@@ -523,6 +527,33 @@ const LegalFilePreview = ({
       );
     }
     if (preview.status === "ok") {
+      if (viewer === "asic") {
+        return (
+          <>
+            <Text variant="caption">{signedFile("unverified")}</Text>
+            {preview.value.members.map(({ fileName, status, text }) => (
+              <View key={fileName}>
+                <Text accessibilityRole="header" selectable variant="label">
+                  {fileName}
+                </Text>
+                {status !== "unavailable" && text.trim() ? (
+                  <Text selectable>{text}</Text>
+                ) : null}
+                {status === "truncated" && (
+                  <Text variant="caption">
+                    {signedFile("previewTruncated")}
+                  </Text>
+                )}
+                {status === "unavailable" && (
+                  <Text variant="caption">
+                    {signedFile("noReadableContent")}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </>
+        );
+      }
       return <Text selectable>{preview.value.text}</Text>;
     }
     const { error } = preview;
@@ -533,9 +564,9 @@ const LegalFilePreview = ({
       ? "failure.offline"
       : "failure.failed";
     const unreadableMessage =
-      file.viewer === "cades"
-        ? signedFile("unreadable")
-        : t("failure.dataBoxUnreadable");
+      viewer === "dataBox"
+        ? t("failure.dataBoxUnreadable")
+        : signedFile("unreadable");
     return (
       <EmptyCard
         description={unreadable ? unreadableMessage : t(requestFailure)}
