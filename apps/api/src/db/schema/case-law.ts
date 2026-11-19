@@ -96,6 +96,11 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import {
+  DECISION_IDENTIFIER_CLAIM,
+  DECISION_IDENTIFIER_CLAIMS,
+  type DecisionIdentifierClaim,
+} from "@/api/lib/case-law/decision-identifier-claims";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
 import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-failure-identity";
@@ -1413,6 +1418,13 @@ export const caseLawDecisionIdentifiers = p.pgTable(
      * A refresh re-derives observed identifiers and keeps declared ones.
      */
     declaredAt: timestamptz("declared_at"),
+    /** Ingestion-only independent support; attachment claims live on their publisher posts. */
+    independentClaims: p
+      .varchar("independent_claims", { length: 32 })
+      .array()
+      .$type<DecisionIdentifierClaim[]>()
+      .notNull()
+      .default([DECISION_IDENTIFIER_CLAIM.UNVERIFIED]),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1438,6 +1450,13 @@ export const caseLawDecisionIdentifiers = p.pgTable(
     p.check(
       "case_law_decision_identifiers_type_values",
       sql`${t.type} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_identifiers_independent_claims",
+      sql`${t.independentClaims} <@ ARRAY[${sql.join(
+        DECISION_IDENTIFIER_CLAIMS.map((value) => sql`${value}`),
+        sql`, `,
+      )}]::varchar[] AND cardinality(${t.independentClaims}) <= ${DECISION_IDENTIFIER_CLAIMS.length}`,
     ),
     p.check(
       "case_law_decision_identifiers_value_non_empty",

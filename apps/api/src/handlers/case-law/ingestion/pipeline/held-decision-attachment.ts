@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -17,6 +17,10 @@ import {
   caseLawHeldDecisionAttachments,
   caseLawSources,
 } from "@/api/db/schema";
+import {
+  type CitationGraphTransaction,
+  runCitationGraphTransaction,
+} from "@/api/handlers/case-law/citation-graph-transaction";
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   lockSourceIdentitiesTx,
@@ -34,6 +38,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+import {
+  declareDecisionIdentifiersTx,
+  withdrawAttachmentIdentifiersTx,
+} from "@/api/lib/case-law/decision-identifier-claims-persistence";
 import { ecliPublisherSpellings } from "@/api/lib/case-law/ecli-spellings";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
@@ -733,7 +741,7 @@ type AttachmentWrite =
  * attach to.
  */
 const writeAttachmentTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   {
     sourceId,
     sourceDocumentId,
@@ -834,56 +842,15 @@ const writeAttachmentTx = async (
       setWhere: write.setWhere,
     });
 
-  // An identifier this record no longer states leaves the host, unless the
-  // host derives it itself or another record still declares it.
-  if (withdrawn.length > 0) {
-    // audit: skip — background case-law ingestion; public case-law data
-    await tx.delete(caseLawDecisionIdentifiers).where(
-      and(
-        eq(caseLawDecisionIdentifiers.decisionId, host.id),
-        isNotNull(caseLawDecisionIdentifiers.declaredAt),
-        sql`(${caseLawDecisionIdentifiers.type}, ${caseLawDecisionIdentifiers.normalizedValue}) IN (
-          SELECT withdrawn.type, withdrawn."normalizedValue"
-          FROM jsonb_to_recordset(${JSON.stringify(withdrawn)}::text::jsonb)
-            AS withdrawn(type text, "normalizedValue" text))`,
-        sql`NOT EXISTS (SELECT 1 FROM ${caseLawHeldDecisionAttachments} other
-          WHERE other.host_decision_id = ${host.id}
-            AND other.host_withdrawn_at IS NULL
-            AND NOT (other.source_id = ${sourceId} AND other.source_document_id = ${sourceDocumentId})
-            AND other.declared_identifiers @> jsonb_build_array(jsonb_build_object(
-              'type', ${caseLawDecisionIdentifiers.type},
-              'normalizedValue', ${caseLawDecisionIdentifiers.normalizedValue})))`,
-      ),
-    );
-  }
-  if (declared.length > 0) {
-    // A declared identifier survives every refresh of the host. One the
-    // host already derives keeps its spelling and is declared as well, so
-    // the host ceasing to state it does not take it away from this record.
-    const declareWrite = replayWrite(caseLawDecisionIdentifiers, {
-      declaredAt: sql`coalesce(${caseLawDecisionIdentifiers.declaredAt}, excluded.declared_at)`,
-    });
-    // audit: skip — background case-law ingestion; public case-law data
-    await tx
-      .insert(caseLawDecisionIdentifiers)
-      .values(
-        declared.map(({ type, value, normalizedValue }) => ({
-          decisionId: host.id,
-          type,
-          value,
-          normalizedValue,
-          declaredAt: observedAt,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: [
-          caseLawDecisionIdentifiers.decisionId,
-          caseLawDecisionIdentifiers.type,
-          caseLawDecisionIdentifiers.normalizedValue,
-        ],
-        ...declareWrite,
-      });
-  }
+  await withdrawAttachmentIdentifiersTx(tx, {
+    decisionId: host.id,
+    identifiers: withdrawn,
+  });
+  await declareDecisionIdentifiersTx(tx, {
+    decisionId: host.id,
+    identifiers: declared,
+    claim: { type: "attachment", observedAt },
+  });
   // The search document is built from the host's identifiers.
   if (projectionLock !== null && (added.length > 0 || withdrawn.length > 0)) {
     await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
@@ -985,7 +952,8 @@ export const attachToHeldDecision = async (
   const rawKey = raw.value ?? null;
 
   signal?.throwIfAborted();
-  const written = await scopedDb(
+  const written = await runCitationGraphTransaction(
+    scopedDb,
     async (tx) =>
       await writeAttachmentTx(tx, {
         ...planOptions,
