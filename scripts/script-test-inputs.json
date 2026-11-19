@@ -31,6 +31,7 @@
     "scripts/check-instruction-references.test.ts": ["**"],
     "scripts/check-marketing-content.test.ts": ["**"],
     "scripts/check-mcp-generated-tracking.test.ts": ["**"],
+    "scripts/check-mcp-surface-compat.test.ts": ["**"],
     "scripts/check-merge-group-hold.test.ts": ["**"],
     "scripts/check-migration-baseline.test.ts": ["**"],
     "scripts/check-migrations.test.ts": ["**"],
