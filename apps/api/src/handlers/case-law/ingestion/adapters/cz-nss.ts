@@ -3265,16 +3265,15 @@ const buildCzNssStoredDocument = async ({
     ...Object.keys(refreshedParts),
   ])) {
     const value = retainedParts.get(key);
-    if (value === undefined) {
-      continue;
+    if (value !== undefined) {
+      let archiveKey = `superseded-${key}`;
+      let suffix = 1;
+      while (retainedParts.has(archiveKey)) {
+        archiveKey = `superseded-${key}-${suffix++}`;
+      }
+      retainedParts.set(archiveKey, value);
+      retainedParts.delete(key);
     }
-    let archiveKey = `superseded-${key}`;
-    let suffix = 1;
-    while (retainedParts.has(archiveKey)) {
-      archiveKey = `superseded-${key}-${suffix++}`;
-    }
-    retainedParts.set(archiveKey, value);
-    retainedParts.delete(key);
   }
   const raw = encodeSourceRawEnvelope({
     ...Object.fromEntries(retainedParts),
