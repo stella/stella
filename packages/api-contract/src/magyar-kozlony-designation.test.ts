@@ -179,7 +179,7 @@ describe("Hungarian act citations", () => {
       form: fc.constantFrom(...FORMS),
     });
     assertProperty(
-      "magyar-kozlony-designation.spellings-name-printed-work",
+      "any spelling of a printed designation names the Work it prints",
       fc.property(
         fc.oneof(law, numbered),
         fc.boolean(),
