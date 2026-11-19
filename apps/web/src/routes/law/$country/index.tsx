@@ -1,6 +1,5 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
 
 import {
   caseLawBrowseCourtSegment,
@@ -12,7 +11,6 @@ import {
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { caseLawBrowseCourtsOptions } from "@/features/case-law/queries/browse-hubs";
-import { useFormatter } from "@/i18n/formatting-context";
 import { getFormatter, getTranslator } from "@/i18n/i18n-store";
 import { caseLawCountryName } from "@/lib/case-law-route";
 import { pageTitleLiteral } from "@/lib/page-title";
@@ -22,13 +20,9 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
-import {
-  CaseLawBrowseLink,
-  PublicLawHubItem,
-  PublicLawHubLayout,
-  PublicLawHubSection,
-} from "@/routes/law/-components/public-law-hub";
+
+import { JurisdictionHubPage } from "./-index.page";
+import { JurisdictionHubPending } from "./-index.pending";
 
 /** Answers the route's not-found page; never returns. */
 const missing: () => never = () => {
@@ -94,52 +88,6 @@ export const Route = createFileRoute("/law/$country/")({
       type: "website",
     });
   },
-  component: JurisdictionHub,
+  component: JurisdictionHubPage,
+  pendingComponent: JurisdictionHubPending,
 });
-
-function JurisdictionHub() {
-  const t = useTranslations();
-  const format = useFormatter();
-  const { courts, scope } = Route.useLoaderData();
-  const countryParam = toCaseLawCountryParam(scope);
-  const country = caseLawCountryName(format, scope);
-  const statuteCountry = countryParam;
-
-  return (
-    <PublicLawHubLayout
-      description={t("caseLaw.browse.jurisdictionDescription", { country })}
-      title={t("chat.mention.corpus.caseLaw", { country })}
-    >
-      <p className="flex flex-wrap gap-x-4 text-sm">
-        <Link
-          className="underline underline-offset-2"
-          search={{ country: countryParam }}
-          to="/law"
-        >
-          {t("lawHome.searchLabel")}
-        </Link>
-        {isPublicStatutePageCountry(statuteCountry) ? (
-          <Link
-            className="underline underline-offset-2"
-            params={{ country: statuteCountry }}
-            to="/law/$country/statutes"
-          >
-            {t("statutes.title")}
-          </Link>
-        ) : null}
-      </p>
-      <PublicLawHubSection heading={t("caseLaw.browse.courts")}>
-        {courts.map(({ name, segment }) => (
-          <PublicLawHubItem key={segment}>
-            <CaseLawBrowseLink
-              countryParam={countryParam}
-              target={{ level: "court", court: segment }}
-            >
-              {name}
-            </CaseLawBrowseLink>
-          </PublicLawHubItem>
-        ))}
-      </PublicLawHubSection>
-    </PublicLawHubLayout>
-  );
-}

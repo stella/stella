@@ -9,8 +9,10 @@ const { cleanup, render, waitFor } = await import("@testing-library/react");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
-const { CaseLawBrowseLink, CaseLawBrowsePager, PublicLawHubLayout } =
+const { CaseLawBrowseLink, CaseLawBrowsePager } =
   await import("./public-law-hub");
+const { PublicLawHubHeader, PublicLawHubLayout } =
+  await import("./public-law-hub.pending");
 
 const COURT_LABEL = "court";
 const YEAR_LABEL = "year";
@@ -29,7 +31,9 @@ const renderHrefs = async (children: React.ReactNode) => {
   const rootRoute = router.createRootRoute({
     component: () => (
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <PublicLawHubLayout description="d" title="t">
+        <PublicLawHubLayout
+          header={<PublicLawHubHeader description="d" title="t" />}
+        >
           {children}
         </PublicLawHubLayout>
       </IntlProvider>

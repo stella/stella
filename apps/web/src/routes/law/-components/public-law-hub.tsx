@@ -3,8 +3,6 @@ import type { PropsWithChildren, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { ScrollArea } from "@stll/ui/scroll-area";
-
 import type { CaseLawBrowseTarget } from "@/features/case-law/browse-path";
 import { createCaseLawBrowsePath } from "@/features/case-law/browse-path";
 
@@ -16,30 +14,6 @@ import { createCaseLawBrowsePath } from "@/features/case-law/browse-path";
 
 const LINK_CLASS =
   "hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm underline-offset-2 hover:underline focus-visible:ring-2";
-
-export const PublicLawHubLayout = ({
-  children,
-  crumbs,
-  description,
-  title,
-}: PropsWithChildren<{
-  crumbs?: ReactNode;
-  description: string;
-  title: string;
-}>) => (
-  <main className="flex min-h-0 flex-1 flex-col">
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-3 sm:p-6">
-        {crumbs}
-        <header className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold wrap-break-word">{title}</h1>
-          <p className="text-muted-foreground text-sm">{description}</p>
-        </header>
-        {children}
-      </div>
-    </ScrollArea>
-  </main>
-);
 
 export const PublicLawHubSection = ({
   children,
