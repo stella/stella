@@ -86,6 +86,24 @@ type MvConclusion = {
   fragment: string;
 };
 
+/**
+ * The bold label before a link, back to the previous line break. The page
+ * splits some labels across several `<strong>` elements (`146/2015 `, `-`).
+ */
+const labelOf = ($: CheerioAPI, anchor: Cheerio<AnyNode>) => {
+  const parts: string[] = [];
+  for (const sibling of anchor.parent().prevAll().toArray()) {
+    const node = $(sibling);
+    if (node.is("br")) {
+      break;
+    }
+    if (node.is("strong")) {
+      parts.unshift(node.text());
+    }
+  }
+  return compact(parts.join("")).replace(/[\s–-]+$/u, "");
+};
+
 /** One list item: a závěr, any dodatek, and the note they share. */
 const parseMvPsmvItem = ($: CheerioAPI, item: Cheerio<AnyNode>, year: string) =>
   Result.gen(function* () {
@@ -94,7 +112,7 @@ const parseMvPsmvItem = ($: CheerioAPI, item: Cheerio<AnyNode>, year: string) =>
     const conclusions: MvConclusion[] = [];
     for (const link of item.find("a.internal-link[href]").toArray()) {
       const anchor = $(link);
-      const label = compact(anchor.parent().prevAll("strong").first().text());
+      const label = labelOf($, anchor);
       const number = NUMBER.exec(label);
       const addendum = ADDENDUM.exec(label);
       const own = number ? `${number[1] ?? ""}/${number[2] ?? ""}` : null;

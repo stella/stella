@@ -225,10 +225,10 @@ test("the older series reads its status line as validity and keeps it out of the
     ),
   ).toMatchObject({ rejection: { tag: "invalid_document" } });
   for (const entry of documents(listed.entries)) {
-    expect(entry.metadata.statedReference).toMatchObject({
-      state: "stated",
-      value: expect.stringMatching(/^D-\d+$/u),
-    });
+    const reference = entry.metadata.statedReference;
+    expect(reference.state === "stated" ? reference.value : "").toMatch(
+      /^D-\d+$/u,
+    );
     expect(
       softLawIdentityKey("cz-gfr", entry.metadata, {
         extractionQuality: "text_layer",
