@@ -486,23 +486,23 @@ const resolveDecisionBody = async ({
     readTombstones,
   });
   const storedAst = astRead.payload;
-  let astIsUsable = hasUsableAst(storedAst);
+  const hostAstIsUsable = hasUsableAst(storedAst);
   let sections =
-    astIsUsable && astProjection === "wire"
+    hostAstIsUsable && astProjection === "wire"
       ? await payloadReaders.readSections(storedAst)
       : null;
   // Block text a reader can rebuild from the `inlines` beside it does
   // not travel: ingestion derives every `plainText` with
   // `projectPlainText`, and `parseDocumentAst` refills them on arrival.
   let documentAst =
-    astIsUsable && astProjection === "wire"
+    hostAstIsUsable && astProjection === "wire"
       ? omitDerivablePlainText(storedAst)
       : storedAst;
 
   // Only fetch fulltext if no usable documentAst (fallback).
   let fulltext: string | null = null;
   let corpusPayloadUnavailable = astRead.unavailable;
-  if (!astIsUsable) {
+  if (!hostAstIsUsable) {
     const textRead = await resolveFulltext({
       textS3Key: decision.textS3Key,
       contentHash: decision.contentHash,
@@ -517,7 +517,7 @@ const resolveDecisionBody = async ({
   let bodySource: DecisionBodySource = { textSource: "host" };
   let collectionDigest: string | null = null;
   let hostSectionsPresent = false;
-  if (!astIsUsable && !fulltext && decision.redactedAt === null) {
+  if (!hostAstIsUsable && !fulltext && decision.redactedAt === null) {
     const readRowSections = async () => {
       const [row] = await tx
         .select({ sections: publishedCaseLawDecisions.sections })
@@ -581,7 +581,6 @@ const resolveDecisionBody = async ({
         case "present": {
           bodySource = collection.bodySource;
           fulltext = collection.fulltext;
-          astIsUsable = true;
           documentAst =
             astProjection === "wire"
               ? omitDerivablePlainText(collection.documentAst)
@@ -602,12 +601,11 @@ const resolveDecisionBody = async ({
     sections,
     fulltext,
     bodySource,
-    astIsUsable,
+    hasReadableDocument:
+      hostAstIsUsable || Boolean(fulltext) || hostSectionsPresent,
     corpusPayloadUnavailable,
-    hostSectionsPresent,
     projectionDigest: collectionDigest ?? astRead.projectionDigest,
     documentAstSource: astRead.source,
-    collectionBodyPresent: collectionDigest !== null,
   };
 };
 
@@ -713,12 +711,10 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       sections,
       fulltext,
       bodySource,
-      astIsUsable,
+      hasReadableDocument,
       corpusPayloadUnavailable,
-      hostSectionsPresent,
       projectionDigest,
       documentAstSource,
-      collectionBodyPresent,
     } = await resolveDecisionBody({
       tx,
       decision,
@@ -738,8 +734,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const { documentPending, documentReadFailed, documentUnavailable } =
       decision.redactedAt === null
         ? await resolveDocumentState({
-            hasReadableDocument:
-              astIsUsable || Boolean(fulltext) || hostSectionsPresent,
+            hasReadableDocument,
             corpusPayloadUnavailable,
             documentUrl: decision.documentUrl,
             corpusServed:
@@ -768,8 +763,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     return {
       ...decisionTextCompletionReasons({ type: "eligible" }),
       documentPending,
-      hasDocument:
-        decision.hasDocument || collectionBodyPresent || hostSectionsPresent,
+      hasDocument: decision.hasDocument || hasReadableDocument,
       documentReadFailed,
       documentUnavailable,
       id: decision.id,
