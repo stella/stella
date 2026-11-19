@@ -1442,6 +1442,7 @@
       "subsection": "ods. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Zbierkový text: <link>{source}</link>. Získané {date}.",
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Informácie o veci",

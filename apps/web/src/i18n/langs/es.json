@@ -1442,6 +1442,7 @@
       "subsection": "apdo. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Texto de la colección: <link>{source}</link>. Recuperado el {date}.",
       "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
       "headMatter": "Información del caso",

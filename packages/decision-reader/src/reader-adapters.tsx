@@ -21,6 +21,11 @@ export type ReaderMessages = Record<ReaderMessageKey, string> & {
     source: string,
     link: (children: ReactNode) => ReactNode,
   ) => ReactNode;
+  collectionSourceAttribution: (
+    source: string,
+    date: string,
+    link: (children: ReactNode) => ReactNode,
+  ) => ReactNode;
   dissentByline: (names: readonly string[]) => ReactNode;
   provisionPartTextUnavailable: (provisionLabel: string) => string;
   provisionEffectiveFrom: (date: string) => string;

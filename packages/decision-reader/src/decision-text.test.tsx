@@ -98,6 +98,7 @@ const decision = {
   judges: [],
   language: "cs",
   sourceAttributionUrl: "https://court.example/decision",
+  bodySource: { textSource: "host" },
   textFields: {
     abstract: absent,
     headnote: absent,
@@ -1184,4 +1185,45 @@ test("a margin card's ranges are the cited words of its paragraph", () => {
     ["p-9", [["provision-90", "§ 90"]]],
     ["p-9", [["provision-91", "§ 91"]]],
   ]);
+});
+
+test("collection body attribution names its publisher and retrieval date outside quoted text", () => {
+  const collected = {
+    ...decision,
+    bodySource: {
+      textSource: "collection",
+      sourceUrl: "https://sbirka.nsoud.cz/sbirka/123/",
+      retrievedAt: "2026-10-09T12:00:00.000Z",
+      source: {
+        id: "01900000-0000-7000-8000-000000000001",
+        name: "Official collection",
+        adapterKey: "cz-ns-sbirka",
+        allowsDerivedAi: true,
+      },
+    },
+  } satisfies ReaderDecision;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: ast.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    unresolvedCitationAnchors: [],
+    citationAnchors: [],
+    provisionAnchors: [],
+  });
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={collected}
+      decisionId={collected.id}
+      isHydrated
+      placements={placements}
+    />,
+  );
+  const footer = markup.slice(markup.indexOf("<footer"));
+  expect(footer).toContain('href="https://sbirka.nsoud.cz/sbirka/123/"');
+  expect(footer).toContain("Retrieved");
+  expect(footer).toContain("2026");
+  expect(footer).not.toContain("court.example");
+  expect(footer).toContain('data-reader-chrome=""');
+  expect(footer).not.toContain("data-anchor");
 });

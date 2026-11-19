@@ -13,6 +13,8 @@ export const readerMessages = (hostLocale: string | undefined) => {
   const t = createTranslator({
     locale: formattingLocale,
     messages: {
+      collectionSourceAttribution:
+        messages["caseLaw.reader.collectionSourceAttribution"],
       sourceAttribution: messages["caseLaw.reader.sourceAttribution"],
       dissentByline: messages["caseLaw.viewer.dissentByline"],
       provisionEffectiveFrom: messages["statutes.provisionEffectiveFrom"],
@@ -22,6 +24,8 @@ export const readerMessages = (hostLocale: string | undefined) => {
   });
   return {
     ...messages,
+    collectionSourceAttribution: (source, date, link): ReactNode =>
+      t.rich("collectionSourceAttribution", { source, date, link }),
     sourceAttribution: (source, link): ReactNode =>
       t.rich("sourceAttribution", { source, link }),
     dissentByline: (names): ReactNode =>

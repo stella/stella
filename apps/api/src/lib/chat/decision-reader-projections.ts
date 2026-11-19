@@ -11,8 +11,11 @@ import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-s
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
+import { decisionBodySourceProjection } from "./decision-body-source-projection";
+
 const readerMetadataSchema = v.strictObject({
   extractionWarnings: extractionWarningsSchema,
+  bodySource: v.optional(decisionBodySourceProjection),
   decisionId: v.string(),
   caseNumber: v.string(),
   caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),

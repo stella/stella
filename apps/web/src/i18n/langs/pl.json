@@ -1442,6 +1442,7 @@
       "subsection": "ust. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Tekst ze zbioru: <link>{source}</link>. Pobrano {date}.",
       "documentUpdated": "Dokument został zaktualizowany.",
       "expandProvisions": "Rozwiń przepisy",
       "headMatter": "Informacje o sprawie",

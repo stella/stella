@@ -1442,6 +1442,7 @@
       "subsection": "par. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Texto da coletânea: <link>{source}</link>. Obtido em {date}.",
       "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
       "headMatter": "Informações do processo",

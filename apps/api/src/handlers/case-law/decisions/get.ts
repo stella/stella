@@ -2,6 +2,7 @@ import { panic, Result, UnhandledException } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { DecisionBodySource } from "@stll/api-contract/case-law-body-source";
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import { caseLawSourceLanguagesOf } from "@stll/api-contract/case-law-source-languages";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -9,6 +10,7 @@ import {
   hasUsableAst,
   omitDerivablePlainText,
 } from "@stll/legal-ast/document-ast";
+import { projectionDigest as digestAst } from "@stll/legal-ast/projection-digest";
 
 import {
   caseLawDecisionIdentifiers,
@@ -69,6 +71,7 @@ import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
   readCorpusPayloadOrFallback,
+  readCorpusSections,
   readCorpusText,
   storedCorpusValidationFailure,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -89,6 +92,8 @@ import {
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+
+import { readCollectionBody } from "./collection-body";
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
@@ -373,6 +378,7 @@ export const decisionRecordQuery = (
       hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions),
       astS3Key: publishedCaseLawDecisions.astS3Key,
       textS3Key: publishedCaseLawDecisions.textS3Key,
+      normalizedS3Key: publishedCaseLawDecisions.normalizedS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
       redactedAt: publishedCaseLawDecisions.redactedAt,
       source: {
@@ -452,6 +458,156 @@ const readOwnReviews = async ({ decisionId, ...read }: ReadOwnReviewsOptions) =>
     await readDecisionReviewsWithin({ ...read, decisionIds: [decisionId] }),
     decisionId,
   );
+
+type ResolveDecisionBodyOptions = {
+  tx: CaseLawPublicReadTransaction;
+  decision: NonNullable<Awaited<ReturnType<typeof readDecisionRecord>>>;
+  decisionId: SafeId<"caseLawDecision">;
+  astProjection: "wire" | "internal";
+  readTombstones: CorpusTombstoneReader;
+};
+
+/** One selection owner for API, MCP and human readers; host payloads win. */
+const resolveDecisionBody = async ({
+  tx,
+  decision,
+  decisionId,
+  astProjection,
+  readTombstones,
+}: ResolveDecisionBodyOptions) => {
+  const payloadReaders = decisionPayloadReaders(tx, decision);
+  const astRead = await resolveAst({
+    astS3Key: decision.astS3Key,
+    contentHash: decision.contentHash,
+    pgAst: null,
+    readPgAst: payloadReaders.readAst,
+    decisionId,
+    readTombstones,
+  });
+  const storedAst = astRead.payload;
+  let astIsUsable = hasUsableAst(storedAst);
+  let sections =
+    astIsUsable && astProjection === "wire"
+      ? await payloadReaders.readSections(storedAst)
+      : null;
+  // Block text a reader can rebuild from the `inlines` beside it does
+  // not travel: ingestion derives every `plainText` with
+  // `projectPlainText`, and `parseDocumentAst` refills them on arrival.
+  let documentAst =
+    astIsUsable && astProjection === "wire"
+      ? omitDerivablePlainText(storedAst)
+      : storedAst;
+
+  // Only fetch fulltext if no usable documentAst (fallback).
+  let fulltext: string | null = null;
+  let corpusPayloadUnavailable = astRead.unavailable;
+  if (!astIsUsable) {
+    const textRead = await resolveFulltext({
+      textS3Key: decision.textS3Key,
+      contentHash: decision.contentHash,
+      decisionId,
+      tx,
+      readTombstones,
+    });
+    fulltext = textRead.payload;
+    corpusPayloadUnavailable = corpusPayloadUnavailable || textRead.unavailable;
+  }
+
+  let bodySource: DecisionBodySource = { textSource: "host" };
+  let collectionDigest: string | null = null;
+  let hostSectionsPresent = false;
+  if (
+    !astIsUsable &&
+    !fulltext &&
+    !corpusPayloadUnavailable &&
+    decision.redactedAt === null
+  ) {
+    const hostSections = await containPayloadUnavailable(async () => {
+      if (
+        corpusReadEnabled() &&
+        decision.normalizedS3Key !== null &&
+        decision.contentHash !== null
+      ) {
+        return await readCorpusPayloadOrFallback({
+          documentId: decisionId,
+          key: decision.normalizedS3Key,
+          step: "readDecision.corpusSections",
+          read: async () =>
+            await readCorpusSections(
+              decision.normalizedS3Key ??
+                panic("Normalized key narrowed before read"),
+              { readTombstones },
+            ),
+          fallback: async () => null,
+        });
+      }
+      const [row] = await tx
+        .select({ sections: publishedCaseLawDecisions.sections })
+        .from(publishedCaseLawDecisions)
+        .where(eq(publishedCaseLawDecisions.id, decisionId))
+        .limit(1);
+      return row?.sections ?? null;
+    }, decisionId);
+    corpusPayloadUnavailable = hostSections.unavailable;
+    hostSectionsPresent = (hostSections.payload?.length ?? 0) > 0;
+    const sectionsText = hostSections.payload
+      ?.map((section) => section.text)
+      .join("\n\n")
+      .trim();
+    if (sectionsText) {
+      fulltext = sectionsText;
+    }
+    if (!fulltext && !hostSectionsPresent && !corpusPayloadUnavailable) {
+      const collection = await readCollectionBody({
+        tx,
+        decisionId,
+        identity: {
+          caseNumber: decision.caseNumber,
+          ecli: decision.ecli ?? undefined,
+          court: decision.court,
+          decisionDate: decision.decisionDate ?? undefined,
+          decisionType: decision.decisionType ?? undefined,
+        },
+      });
+      switch (collection.status) {
+        case "absent":
+        case "empty":
+          break;
+        case "unavailable":
+          corpusPayloadUnavailable = true;
+          break;
+        case "present": {
+          bodySource = collection.bodySource;
+          fulltext = collection.fulltext;
+          astIsUsable = true;
+          documentAst =
+            astProjection === "wire"
+              ? omitDerivablePlainText(collection.documentAst)
+              : collection.documentAst;
+          sections = null;
+          collectionDigest = await digestAst(collection.documentAst);
+          break;
+        }
+        default:
+          collection satisfies never;
+          panic("Unhandled collection body read");
+      }
+    }
+  }
+
+  return {
+    documentAst,
+    sections,
+    fulltext,
+    bodySource,
+    astIsUsable,
+    corpusPayloadUnavailable,
+    hostSectionsPresent,
+    projectionDigest: collectionDigest ?? astRead.projectionDigest,
+    documentAstSource: astRead.source,
+    collectionBodyPresent: collectionDigest !== null,
+  };
+};
 
 export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
@@ -550,44 +706,24 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       ),
       corpusTombstoneReaderForTx(tx),
     );
-    const payloadReaders = decisionPayloadReaders(tx, decision);
-    const astRead = await resolveAst({
-      astS3Key: decision.astS3Key,
-      contentHash: decision.contentHash,
-      pgAst: null,
-      readPgAst: payloadReaders.readAst,
+    const {
+      documentAst,
+      sections,
+      fulltext,
+      bodySource,
+      astIsUsable,
+      corpusPayloadUnavailable,
+      hostSectionsPresent,
+      projectionDigest,
+      documentAstSource,
+      collectionBodyPresent,
+    } = await resolveDecisionBody({
+      tx,
+      decision,
       decisionId,
+      astProjection,
       readTombstones,
     });
-    const storedAst = astRead.payload;
-    const astIsUsable = hasUsableAst(storedAst);
-    const sections =
-      astIsUsable && astProjection === "wire"
-        ? await payloadReaders.readSections(storedAst)
-        : null;
-    // Block text a reader can rebuild from the `inlines` beside it does
-    // not travel: ingestion derives every `plainText` with
-    // `projectPlainText`, and `parseDocumentAst` refills them on arrival.
-    const documentAst =
-      astIsUsable && astProjection === "wire"
-        ? omitDerivablePlainText(storedAst)
-        : storedAst;
-
-    // Only fetch fulltext if no usable documentAst (fallback).
-    let fulltext: string | null = null;
-    let corpusPayloadUnavailable = astRead.unavailable;
-    if (!astIsUsable) {
-      const textRead = await resolveFulltext({
-        textS3Key: decision.textS3Key,
-        contentHash: decision.contentHash,
-        decisionId,
-        tx,
-        readTombstones,
-      });
-      fulltext = textRead.payload;
-      corpusPayloadUnavailable =
-        corpusPayloadUnavailable || textRead.unavailable;
-    }
 
     // Nothing readable resolved, and there is a document to fetch. Which
     // of the two that is decides everything downstream: a decision nobody
@@ -600,7 +736,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const { documentPending, documentReadFailed, documentUnavailable } =
       decision.redactedAt === null
         ? await resolveDocumentState({
-            hasReadableDocument: astIsUsable || Boolean(fulltext),
+            hasReadableDocument:
+              astIsUsable || Boolean(fulltext) || hostSectionsPresent,
             corpusPayloadUnavailable,
             documentUrl: decision.documentUrl,
             corpusServed:
@@ -629,7 +766,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     return {
       ...decisionTextCompletionReasons({ type: "eligible" }),
       documentPending,
-      hasDocument: decision.hasDocument,
+      hasDocument:
+        decision.hasDocument || collectionBodyPresent || hostSectionsPresent,
       documentReadFailed,
       documentUnavailable,
       id: decision.id,
@@ -653,11 +791,12 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationCount: decision.citationCount,
       appealReviews: reviews,
       documentAst,
+      bodySource,
       extractionWarnings: decision.extractionWarnings,
       sections,
-      projectionDigest:
-        decision.redactedAt === null ? astRead.projectionDigest : null,
-      documentAstSource: decision.redactedAt === null ? astRead.source : null,
+      projectionDigest: decision.redactedAt === null ? projectionDigest : null,
+      documentAstSource:
+        decision.redactedAt === null ? documentAstSource : null,
       sourceUrl: decision.sourceUrl,
       // Where this decision's data is freely available, resolved once here:
       // the reader ends every decision with it, and some courts require the

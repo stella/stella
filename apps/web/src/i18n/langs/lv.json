@@ -1442,6 +1442,7 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
+      "collectionSourceAttribution": "Krājuma teksts: <link>{source}</link>. Iegūts {date}.",
       "documentUpdated": "Dokuments ir atjaunināts.",
       "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Informācija par lietu",

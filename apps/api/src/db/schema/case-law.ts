@@ -2089,6 +2089,63 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
   ],
 );
 
+/** Only exact, live official collection attachments admitted by a visible host. */
+export const caseLawCollectionBodies = p
+  .pgView("case_law_collection_bodies", {
+    hostDecisionId: safeUuid<"caseLawDecision">("host_decision_id").notNull(),
+    collectionSourceId: safeUuid<"caseLawSource">(
+      "collection_source_id",
+    ).notNull(),
+    collectionDocumentId: p
+      .varchar("collection_document_id", { length: 256 })
+      .notNull(),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    retrievedAt: timestamptz("retrieved_at").notNull(),
+    detailRawS3Key: p.varchar("detail_raw_s3_key", { length: 512 }),
+    detailRawContentType: p.varchar("detail_raw_content_type", { length: 128 }),
+  })
+  .with({ securityBarrier: true }).as(sql`
+  SELECT host.id AS host_decision_id,
+    attachment.source_id AS collection_source_id,
+    attachment.source_document_id AS collection_document_id,
+    attachment.source_url,
+    attachment.observed_at AS retrieved_at,
+    CASE WHEN attachment.source_raw_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
+    attachment.source_raw_content_type AS detail_raw_content_type
+  FROM case_law_held_decision_attachments AS attachment
+  JOIN case_law_published_decisions AS host
+    ON host.id = attachment.host_decision_id
+  JOIN case_law_sources AS host_source ON host_source.id = host.source_id
+  JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
+  WHERE attachment.host_withdrawn_at IS NULL
+    AND collection_source.adapter_key = 'cz-ns-sbirka'
+    AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
+    AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
+  UNION ALL
+  SELECT host.id AS host_decision_id,
+    attachment.source_id AS collection_source_id,
+    attachment.source_document_id AS collection_document_id,
+    attachment.source_url,
+    attachment.observed_at AS retrieved_at,
+    CASE WHEN attachment.source_raw_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
+    attachment.source_raw_content_type AS detail_raw_content_type
+  FROM case_law_held_decision_attachments AS attachment
+  JOIN case_law_decision_aliases AS alias
+    ON alias.retired_decision_id = attachment.host_decision_id
+  JOIN case_law_published_decisions AS host
+    ON host.id = alias.canonical_decision_id
+  JOIN case_law_sources AS host_source ON host_source.id = host.source_id
+  JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
+  WHERE attachment.host_withdrawn_at IS NULL
+    AND collection_source.adapter_key = 'cz-ns-sbirka'
+    AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
+    AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
+`);
+
 /**
  * Exact corpus-object keys reserved before an external PUT. This deliberately
  * has no foreign key: a redaction or source deletion must not remove the

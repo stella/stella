@@ -1442,6 +1442,7 @@
       "subsection": "({value}) bekezdés"
     },
     "reader": {
+      "collectionSourceAttribution": "A gyűjtemény szövege: <link>{source}</link>. Lekérve: {date}.",
       "documentUpdated": "A dokumentum frissült.",
       "expandProvisions": "Rendelkezések kibontása",
       "headMatter": "Az ügy adatai",

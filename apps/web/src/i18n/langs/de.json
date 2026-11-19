@@ -1442,6 +1442,7 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Sammlungstext: <link>{source}</link>. Abgerufen am {date}.",
       "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Angaben zum Verfahren",

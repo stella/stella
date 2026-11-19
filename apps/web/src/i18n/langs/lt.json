@@ -1442,6 +1442,7 @@
       "subsection": "{value} d."
     },
     "reader": {
+      "collectionSourceAttribution": "Rinkinio tekstas: <link>{source}</link>. Gauta {date}.",
       "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Bylos informacija",

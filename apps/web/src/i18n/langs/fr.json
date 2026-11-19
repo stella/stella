@@ -1442,6 +1442,7 @@
       "subsection": "al. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Texte du recueil : <link>{source}</link>. Consulté le {date}.",
       "documentUpdated": "Le document a été mis à jour.",
       "expandProvisions": "Développer les dispositions",
       "headMatter": "Informations sur l’affaire",

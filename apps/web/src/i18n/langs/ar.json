@@ -1442,6 +1442,7 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "نص المجموعة: <link>{source}</link>. تم الاسترجاع في {date}.",
       "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "معلومات القضية",

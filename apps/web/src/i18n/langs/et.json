@@ -1442,6 +1442,7 @@
       "subsection": "lg {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Kogumiku tekst: <link>{source}</link>. Hangitud {date}.",
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Kohtuasja andmed",

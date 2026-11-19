@@ -153,7 +153,15 @@ const attributionLabel = (href: string): string =>
  * `data-reader-chrome` keeps it out of a quotation taken from the last
  * paragraph. Find matches come from the search pieces, which it is not in.
  */
-const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
+const DecisionSourceAttribution = ({
+  decision,
+}: {
+  decision: ReaderDecision;
+}) => {
+  const url =
+    decision.bodySource?.textSource === "collection"
+      ? decision.bodySource.sourceUrl
+      : decision.sourceAttributionUrl;
   const messages = useReaderMessages();
   const href = sanitizeHref(url);
 
@@ -161,21 +169,31 @@ const DecisionSourceAttribution = ({ url }: { url: string | null }) => {
     return null;
   }
 
+  const link = (chunks: ReactNode) => (
+    <a
+      className="hover:text-foreground underline underline-offset-2"
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <BidiText>{chunks}</BidiText>
+    </a>
+  );
+  const attribution =
+    decision.bodySource?.textSource === "collection"
+      ? messages.collectionSourceAttribution(
+          attributionLabel(href),
+          messages.formatValidityDate(decision.bodySource.retrievedAt) ??
+            decision.bodySource.retrievedAt,
+          link,
+        )
+      : messages.sourceAttribution(attributionLabel(href), link);
   return (
     <footer
       className="reader-chrome text-muted-foreground border-border/50 mt-10 border-t pt-3 text-[calc(0.6875rem*var(--reader-text-scale))] leading-snug"
       data-reader-chrome=""
     >
-      {messages.sourceAttribution(attributionLabel(href), (chunks) => (
-        <a
-          className="hover:text-foreground underline underline-offset-2"
-          href={sanitizeHref(href)}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <BidiText>{chunks}</BidiText>
-        </a>
-      ))}
+      {attribution}
     </footer>
   );
 };
@@ -1426,7 +1444,9 @@ export const DecisionText = ({
   return (
     <SourceLinkPolicyProvider
       urls={[
-        decision.sourceAttributionUrl,
+        decision.bodySource?.textSource === "collection"
+          ? decision.bodySource.sourceUrl
+          : decision.sourceAttributionUrl,
         ast?.source.webUrl,
         ast?.source.printUrl,
       ]}
@@ -1436,7 +1456,7 @@ export const DecisionText = ({
         {trailingNotes.map(([anchorId, note]) => (
           <Fragment key={anchorId}>{note}</Fragment>
         ))}
-        <DecisionSourceAttribution url={decision.sourceAttributionUrl} />
+        <DecisionSourceAttribution decision={decision} />
       </div>
     </SourceLinkPolicyProvider>
   );

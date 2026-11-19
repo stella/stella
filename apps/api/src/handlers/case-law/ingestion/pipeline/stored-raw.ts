@@ -26,13 +26,16 @@ const STORED_RAW_READ_TIMEOUT_MS = 30_000;
  * supplement is parked for another attempt rather than stored as if its
  * judgment had no payload.
  */
-export const readStoredRawFromS3: StoredRawResultReader = async (key) => {
+export const readStoredRawFromS3 = async (
+  key: string,
+  maxBytes = LIMITS.corpusPayloadMaxDecompressedBytes,
+): ReturnType<StoredRawResultReader> => {
   const read = await Result.tryPromise({
     try: async () =>
       await readS3ObjectBounded({
         bucket: envBase.S3_BUCKET,
         key,
-        maxBytes: LIMITS.corpusPayloadMaxDecompressedBytes,
+        maxBytes,
         signal: AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
       }),
     catch: (cause) => cause,

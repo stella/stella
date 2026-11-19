@@ -1442,6 +1442,7 @@
       "subsection": "para. {value}"
     },
     "reader": {
+      "collectionSourceAttribution": "Collection text: <link>{source}</link>. Retrieved {date}.",
       "documentUpdated": "The document was updated.",
       "expandProvisions": "Expand provisions",
       "headMatter": "Case information",

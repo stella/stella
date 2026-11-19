@@ -1138,6 +1138,7 @@
   "caseLaw.provision.point": "point {value}",
   "caseLaw.provision.sentence": "sentence {value}",
   "caseLaw.provision.subsection": "para. {value}",
+  "caseLaw.reader.collectionSourceAttribution": "Collection text: <link>{source}</link>. Retrieved {date}.",
   "caseLaw.reader.documentUpdated": "The document was updated.",
   "caseLaw.reader.expandProvisions": "Expand provisions",
   "caseLaw.reader.headMatter": "Case information",
