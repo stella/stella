@@ -65,7 +65,14 @@ export const TYPED_ABSENCE_DEBT = {
   "cz-uohs": [],
   "br-tjdft": [],
   "cz-ns-sbirka": [],
-  "cz-isir": [],
+  "cz-isir": [
+    {
+      field: "ecli",
+      condition: "always",
+      reason:
+        "The register's documents state no ECLI; the courts' own databases assign it.",
+    },
+  ],
   "br-tst": [],
   "us-courtlistener": unclassified,
 } as const satisfies Record<

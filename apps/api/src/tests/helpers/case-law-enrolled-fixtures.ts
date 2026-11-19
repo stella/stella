@@ -3316,6 +3316,16 @@ export const czNsSbirkaFixture = (): EnrolledAdapterFixture => ({
  * paragraphs (`tests/helpers/cz-isir-fixture.ts`).
  */
 export const czIsirFixture = (): EnrolledAdapterFixture => ({
+  // Action 65000689 of the feed page, as the feed states it.
+  rawFieldValues: {
+    id: 65_000_689,
+    datumZverejneniUdalosti: "2024-02-28T13:59:00.000+01:00",
+    spisovaZnacka: "INS 10782/2023",
+    typUdalosti: 373,
+    popisUdalosti: "Rozhodnutí o odvolání - potvrzeno",
+    oddil: "B",
+    cisloVOddilu: 24,
+  },
   buildDecision: buildCzIsirFixtureDecision,
 });
 

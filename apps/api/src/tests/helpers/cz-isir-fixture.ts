@@ -149,7 +149,14 @@ export const czIsirTransport = async (
 ): Promise<typeof fetch> => {
   const feed = await Bun.file(FEED).text();
   return asFetchMock(async (input, init) => {
-    const url = String(input);
+    let url: string;
+    if (typeof input === "string") {
+      url = input;
+    } else if (input instanceof URL) {
+      url = input.href;
+    } else {
+      url = input.url;
+    }
     requested.push(`${init?.method ?? "GET"} ${url}`);
     if (url === CZ_ISIR_FEED_URL) {
       return await Promise.resolve(
