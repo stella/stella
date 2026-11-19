@@ -26,10 +26,7 @@ import {
   type LegislationExpressionClassification,
   typedLegislationClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
-import {
-  documentMorphologyLanguage,
-  requireCaseLawDocumentStemLanguage,
-} from "@/api/lib/legal-search/morphology/corpus-language";
+import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
@@ -275,11 +272,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
     corpusIndexStemFields(manifest) === null
       ? {}
       : {
-          morphology: morphologyKey(
-            input.family === "case_law"
-              ? requireCaseLawDocumentStemLanguage(input)
-              : documentMorphologyLanguage(input.language),
-          ),
+          morphology: morphologyKey(documentMorphologyLanguage(input.language)),
         };
   const common = {
     contract: "corpus-index-projection-v1",

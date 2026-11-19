@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
 import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
@@ -795,11 +796,29 @@ test("a language its jurisdiction does not declare is refused, not indexed unrea
   expect(() => openingTextStem("xxx", "cs", "Smlouva.")).toThrow(
     "Case-law document of an undeclared jurisdiction: xxx",
   );
-  // Declared, with or without a stemmer.
+  // Declared, with or without a stemmer, including a Slovak decision written
+  // in Czech before 1993.
   expect(openingTextStem("eu", "mt", "Il-kuntratt.")).toBeUndefined();
   expect(openingTextStem("usa", "en", "The contracts were void.")).toBe(
     "the contract were void",
   );
+  expect(openingTextStem("svk", "cs", "Smlouvy byly neplatné.")).toBe(
+    openingTextStem("cze", "cs", "Smlouvy byly neplatné."),
+  );
+});
+
+test("the public builder answers an undeclared language as its typed error, for the revision build to block", () => {
+  const built = buildCorpusProjectionDocuments({
+    family: "case_law",
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+    input: { ...CASE_LAW_INPUT, jurisdiction: "pol", language: "cs" },
+    payload: { text: "Umowa jest nieważna.", ast: null },
+    revision: REVISION,
+  });
+  expect(built.isErr()).toBe(true);
+  const error = built.isErr() ? built.error : null;
+  expect(CaseLawDocumentLanguageUndeclaredError.is(error)).toBe(true);
+  expect(error).toMatchObject({ jurisdiction: "POL", language: "cs" });
 });
 
 test("the summary stem is written to the opening passage only", () => {
