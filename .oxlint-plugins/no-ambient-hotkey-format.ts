@@ -7,13 +7,7 @@ const HOTKEY_MODULES = new Set([
   "@tanstack/react-hotkeys",
 ]);
 
-// useFormatForDisplay() formats with the provider's platform, detected in the
-// browser, so it is as ambient as detectPlatform().
-const AMBIENT_EXPORTS = new Set([
-  "detectPlatform",
-  "formatForDisplay",
-  "useFormatForDisplay",
-]);
+const AMBIENT_EXPORTS = new Set(["detectPlatform", "formatForDisplay"]);
 
 const ALLOWED_FILES = [
   "apps/web/src/lib/hotkeys.ts",

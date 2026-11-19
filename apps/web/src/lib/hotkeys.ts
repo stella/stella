@@ -1,10 +1,6 @@
-// The core package's formatter: @tanstack/react-hotkeys re-exports it as a
-// deprecated alias that points components at useFormatForDisplay(), which
-// reads the provider's ambient platform. This module formats outside React
-// with the hydration-safe platform its callers pass, as upstream prescribes.
-import { formatForDisplay } from "@tanstack/hotkeys";
 import {
   detectPlatform,
+  formatForDisplay,
   getHotkeyManager,
   matchesKeyboardEvent,
 } from "@tanstack/react-hotkeys";
