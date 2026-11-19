@@ -326,7 +326,7 @@ const createApp = (initialEntry = "/knowledge/templates") => {
     <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
       <QueryClientProvider client={queryClient}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <PendingTextIntlScope>
+          <PendingTextIntlScope formattingLocale="en">
             <FormattingProvider locale="en" timeZone="UTC">
               <HotkeysProvider>
                 <ThemeProvider>
