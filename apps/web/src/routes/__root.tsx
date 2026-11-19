@@ -23,7 +23,6 @@ import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-re
 import {
   DefaultErrorComponent,
   DefaultNotFoundComponent,
-  DefaultPendingComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -65,6 +64,7 @@ import { AppFrameHost } from "@/routes/-app-frame-host";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
+import { RootPendingComponent } from "@/routes/-root-pending";
 import "@/styles/app.css";
 import "@/styles/print.css";
 
@@ -122,7 +122,7 @@ export const Route = createRootRouteWithContext<{
         toolsBasePath: publicToolsBasePath(),
       },
     }),
-  pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
+  pendingComponent: RootPendingComponent,
   errorComponent: RootErrorComponent,
   notFoundComponent: RootNotFoundComponent,
 });
