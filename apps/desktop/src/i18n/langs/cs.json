@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Jazyk diktování",
-      "description": "Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače.",
+      "description": "Automaticky se použijí jazyky zobrazení a klávesnic tohoto počítače. Je-li jich víc, každé slovo se rozpozná v jazyce, ve kterém ho vyslovíte.",
       "automatic": "Automaticky",
       "automaticWith": "Automaticky ({languages})",
       "noResults": "Žádné jazyky nenalezeny"
+    },
+    "customWords": {
+      "group": "Vlastní slova",
+      "title": "Slova a jména, která má stella psát správně",
+      "description": "Například jména klientů nebo anglické výrazy, které používáte v češtině. Ukládají se v tomto počítači pro tento účet a odesílají se jen s diktátem, k převodu přes stella AI a k úpravě pomocí AI. Model řeči v tomto počítači je nepoužívá.",
+      "count": "{count, number} z {limit, number}",
+      "input": "Přidat slovo nebo jméno",
+      "add": "Přidat",
+      "remove": "Odebrat {word}",
+      "duplicate": "Toto slovo už v seznamu je.",
+      "full": "Seznam pojme nejvýše {limit, number} slov. Chcete-li přidat další, nějaké odeberte.",
+      "failed": "Seznam se nepodařilo uložit. Zkuste to znovu."
     },
     "modelNeeded": "Řečový model běží na tomto počítači.",
     "speechModel": "Model řeči",

@@ -3,10 +3,12 @@
 //! never the audio, and only while the server enables dictation for that same
 //! account. With it goes the kind of app the text is for and, when the
 //! speaker shares them, the window title and the text before the cursor
-//! (`dictation_context`), which set the register and are never typed. The answer is a list of typed segments; any failure, timeout, or
-//! malformed or implausible answer leaves the raw transcript, so cleanup never
-//! blocks or loses a dictation. Neither the transcript nor the answer is
-//! logged or stored.
+//! (`dictation_context`), which set the register and are never typed, and the
+//! speaker's custom words (`dictation_words`) as the spellings to use. The
+//! answer is a list of typed segments; any failure, timeout, or malformed or
+//! implausible answer leaves the raw transcript, so cleanup never blocks or
+//! loses a dictation. Neither the transcript, the custom words nor the answer
+//! is logged or stored.
 
 #![cfg_attr(
   not(dictation),
@@ -134,6 +136,10 @@ struct CleanupRequest<'a> {
   /// Where the text goes: the kind of app, and the window title and the
   /// text before the cursor when the speaker shares them.
   context: &'a CleanupContext,
+  /// The speaker's custom words; absent when there are none, as an older
+  /// API expects.
+  #[serde(skip_serializing_if = "<[_]>::is_empty")]
+  vocabulary: &'a [String],
 }
 
 #[derive(Deserialize)]
@@ -407,31 +413,66 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
   Ok(CLIENT.get_or_init(|| client))
 }
 
-async fn send(
+/// What cleanup asks for besides the transcript.
+struct Asked<'a> {
+  locale: Option<&'a str>,
+  languages: &'a [&'a str],
+  vocabulary: &'a [String],
+  context: &'a CleanupContext,
+}
+
+async fn post(
   account: &AccountRequest,
   transcript: &str,
-  locale: Option<&str>,
-  languages: &[&str],
-  context: &CleanupContext,
-) -> Result<Vec<Segment>, String> {
-  let languages = &languages[..languages.len().min(contract().max_languages)];
-  let request = crate::http_client::device_proof_request(
+  asked: &Asked<'_>,
+) -> Result<reqwest::Response, String> {
+  let languages =
+    &asked.languages[..asked.languages.len().min(contract().max_languages)];
+  crate::http_client::device_proof_request(
     client()?
       .post(format!("{}{}", account.api_base_url, contract().path))
       .json(&CleanupRequest {
         transcript,
-        locale,
+        locale: asked.locale,
         languages,
-        context,
+        context: asked.context,
+        vocabulary: asked.vocabulary,
       }),
     &account.device_key,
     Some(&account.credential.key),
     None,
-  )?;
-  let mut response = request
-    .send()
-    .await
-    .map_err(request_cause_logged(FAILURE))?;
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE))
+}
+
+/// An API from before custom words refuses a request that carries them as
+/// invalid; asked again without them, it still cleans up.
+fn retry_without_vocabulary(
+  status: reqwest::StatusCode,
+  vocabulary: &[String],
+) -> bool {
+  status == reqwest::StatusCode::UNPROCESSABLE_ENTITY && !vocabulary.is_empty()
+}
+
+async fn send(
+  account: &AccountRequest,
+  transcript: &str,
+  asked: &Asked<'_>,
+) -> Result<Vec<Segment>, String> {
+  let mut response = post(account, transcript, asked).await?;
+  if retry_without_vocabulary(response.status(), asked.vocabulary) {
+    response = post(
+      account,
+      transcript,
+      &Asked {
+        vocabulary: &[],
+        ..*asked
+      },
+    )
+    .await?;
+  }
   if !response.status().is_success() {
     return Err(format!(
       "dictation cleanup was refused: {}",
@@ -475,15 +516,19 @@ async fn request(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
+  vocabulary: &[String],
   context: &CleanupContext,
 ) -> Result<Vec<Segment>, String> {
   let account = dictation_account(app).await?;
   let segments = send(
     &account,
     transcript,
-    locale_hint(crate::i18n::active_locale()),
-    languages,
-    context,
+    &Asked {
+      locale: locale_hint(crate::i18n::active_locale()),
+      languages,
+      vocabulary,
+      context,
+    },
   )
   .await;
   drop(account);
@@ -516,12 +561,16 @@ pub fn clean_up(
   app: &AppHandle,
   transcript: &str,
   languages: &[&str],
+  vocabulary: &[String],
   context: &CleanupContext,
 ) -> Option<Vec<Segment>> {
   if transcript.chars().count() > contract().max_transcript_length {
     return None;
   }
-  match bounded(TIMEOUT, request(app, transcript, languages, context)) {
+  match bounded(
+    TIMEOUT,
+    request(app, transcript, languages, vocabulary, context),
+  ) {
     Some(Ok(segments)) => Some(segments),
     Some(Err(error)) => {
       tracing::info!(%error, "dictation cleanup skipped; typing the transcript");
@@ -877,21 +926,62 @@ mod tests {
       window_title: Some("Kupní smlouva.docx".to_string()),
       text_before_cursor: None,
     };
+    let asked = Asked {
+      locale: Some("cs"),
+      languages: &["cs", "en"],
+      vocabulary: &[],
+      context: &context,
+    };
     let good = AccountRequest::fixture(linked(base.clone(), "stella_dr_good")).await;
     assert_eq!(
-      send(&good, "tučně 42", Some("cs"), &["cs", "en"], &context)
-        .await
-        .unwrap(),
+      send(&good, "tučně 42", &asked).await.unwrap(),
       parse_segments(FIXTURE.as_bytes()).unwrap()
     );
     drop(good);
     let bad = AccountRequest::fixture(linked(base, "stella_dr_bad")).await;
-    assert!(
-      send(&bad, "tučně 42", Some("cs"), &["cs", "en"], &context)
-        .await
-        .is_err()
-    );
+    assert!(send(&bad, "tučně 42", &asked).await.is_err());
     drop(bad);
     server.abort();
+  }
+
+  #[test]
+  fn custom_words_are_a_field_of_their_own_and_absent_when_there_are_none() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Email,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let words = vec!["custom terms list".to_string()];
+    let body = |vocabulary: &[String]| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "tam jsem list",
+        locale: None,
+        languages: &["cs", "en"],
+        context: &context,
+        vocabulary,
+      })
+      .unwrap()
+    };
+    assert_eq!(
+      body(&words)["vocabulary"],
+      serde_json::json!(["custom terms list"])
+    );
+    assert!(body(&[]).get("vocabulary").is_none());
+  }
+
+  #[test]
+  fn only_a_refused_request_with_custom_words_is_asked_again_without_them() {
+    let words = vec!["custom terms list".to_string()];
+    let invalid = reqwest::StatusCode::UNPROCESSABLE_ENTITY;
+    assert!(retry_without_vocabulary(invalid, &words));
+    assert!(!retry_without_vocabulary(invalid, &[]));
+    for status in [
+      reqwest::StatusCode::OK,
+      reqwest::StatusCode::FORBIDDEN,
+      reqwest::StatusCode::TOO_MANY_REQUESTS,
+      reqwest::StatusCode::BAD_GATEWAY,
+    ] {
+      assert!(!retry_without_vocabulary(status, &words), "{status}");
+    }
   }
 }
