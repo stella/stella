@@ -1,5 +1,23 @@
 # @stll/ui
 
+## 0.76.0
+
+### Minor Changes
+
+- [#8956](https://github.com/stella/stella/pull/8956) [`86022ca`](https://github.com/stella/stella/commit/86022ca85d6a2d92a262628f29d720d5a0e1eb03) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an inline skeleton for use inside text and controls. Support shared layout and size options on button and input faces, and expose the shared one-time-code group and slot face through `@stll/ui/input-otp-face`.
+
+- [#8930](https://github.com/stella/stella/pull/8930) [`f8831e4`](https://github.com/stella/stella/commit/f8831e47629b27bdcaf4041f19b8196b6d30dab5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/control-face` draws the faces of controls for a loading view, from the classes the real controls are built from: `ButtonFace` (and `buttonFaceClassName` for a face a caller restyles), `InputFace`, `SplitButtonFace` and `FaceLabelPending`, a bar where a control's label waits on data. The button's size and variant classes move to `button-classes.ts`, which `Button` builds its variants from, and the split button's part classes are shared the same way. `@stll/ui/list-shell` holds the grouped list's group, header, title and surface with no popup, so a pending view can import it; `@stll/ui/list` re-exports them. It adds `ListItemSkeleton`, a row's placeholder at `ListItem` geometry, and `ListGroupTitlePending`. The composer tokens add `COMPOSER_STATUS_ROW_CENTERED_CLASS` and `COMPOSER_STATUS_ROW_CLASS`, which `ComposerStatusRow` renders from.
+
+- [#8905](https://github.com/stella/stella/pull/8905) [`3d7121a`](https://github.com/stella/stella/commit/3d7121a5dfe6b34b74729dea7157b33f0a5d171a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `CourtBadge` and `DocumentIdentityBadge` take `size="prose"` for a badge inside running text: it uses the text's own face with tabular numbers instead of the monospaced face badges keep in columns.
+
+- [#8906](https://github.com/stella/stella/pull/8906) [`b261ece`](https://github.com/stella/stella/commit/b261ece00959cc1349dec67471de4b46e2009fec) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` adds `FollowUpIcon`, the arrow that leads a suggested next question under an answer.
+
+- [#8869](https://github.com/stella/stella/pull/8869) [`6709183`](https://github.com/stella/stella/commit/67091834bf8af1291247c7be3f5540d311167ead) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/landing-shell` holds the landing's layout and sections without the row text, so a pending view can import it cheaply; `@stll/ui/landing` re-exports it. It adds pending pieces on the landing's own geometry: `LandingRowsPending` (placeholder rows on a `LandingItemText` row's lines, optionally announced as a busy region), `LandingSectionHeadingPending` and `LandingBoxPending` (the hero box, built from the composer tokens).
+
+- [#8958](https://github.com/stella/stella/pull/8958) [`1f24eba`](https://github.com/stella/stella/commit/1f24eba240c916800932ff33c288521f32b539e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/table-shell` for rendering table headers, cells, and skeleton rows before interactive controls mount. The existing table entry point continues to expose sortable headers and truncated cells.
+
+- [#8934](https://github.com/stella/stella/pull/8934) [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a ZFO document mark for Czech data-box files.
+
 ## 0.75.0
 
 ### Minor Changes
