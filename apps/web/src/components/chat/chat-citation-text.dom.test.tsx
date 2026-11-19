@@ -131,7 +131,7 @@ const mount = (children: ReactNode) => {
 /** Renders one answer the way a settled chat answer renders, anchors included. */
 const renderAnswer = async (
   markdown: string,
-  ready: { selector: string; count: number } | undefined = undefined,
+  ready?: { selector: string; count: number },
 ) => {
   const message = {
     id: "answer",
@@ -318,7 +318,7 @@ describe("a provision citation in parentheses", () => {
         "[data-src-offsets]",
       )) {
         const offsets = anchored.dataset["srcOffsets"]?.split(",") ?? [];
-        expect(offsets).toHaveLength((anchored.textContent ?? "").length + 1);
+        expect(offsets).toHaveLength(anchored.textContent.length + 1);
       }
     });
   }
