@@ -28,7 +28,6 @@ import {
 } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
 import { publicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
-import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
   PublicLawResultsToolbar,
@@ -80,6 +79,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
+import type { RouteState } from "@/routes/-route-pending-view";
 import {
   PublicLawQueryFeedback,
   PublicLawResultsBoundary,
@@ -112,7 +112,7 @@ const FILTER_KIND_LABEL_KEYS = {
 } as const satisfies Record<StatuteFilterKey, TranslationKey>;
 
 /** The page renders only once the router has the route's data. */
-const ROUTE_STATE: PublicLawRouteState = "loaded";
+const ROUTE_STATE: RouteState = "loaded";
 
 export function PublicStatutesIndex() {
   const country = routeApi.useParams({

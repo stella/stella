@@ -1,11 +1,5 @@
 {
-  "startupPageCode": [
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/law/index.tsx?tsr-shared=1",
-      "reason": "LawHomePending and LawHome share LawHomeGreeting."
-    }
-  ],
+  "startupPageCode": [],
   "coldLoadHops": [
     {
       "route": "/knowledge/playbooks",

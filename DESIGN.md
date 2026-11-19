@@ -382,6 +382,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `KanbanVirtualCell` `footerPlacement`: `end`, `sticky-start`
 - `Kbd` `variant`: `cap`, `plain`
 - `Label` `variant`: `choice`, `choice-card`, `default`, `muted`
+- `LandingBoxPending` `box`: `composer`, `search`
 - `LandingItemText` `iconTone`: `matter`, `muted`
 - `LandingRowIcon` `tone`: `matter`, `muted`
 - `ListItemDescription` `variant`: `code`, `paragraph`, `text`
