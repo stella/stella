@@ -621,8 +621,9 @@ describe("new Cargo.lock pins against the release-age quarantine", () => {
     const age = cargo.registry?.["global-min-publish-age"];
     const match = typeof age === "string" ? /^(\d+) days$/u.exec(age) : null;
     expect(match).not.toBeNull();
+    expect(policy).toBeDefined();
     expect(Number(match?.[1]) * 24 * 60 * 60).toBe(
-      policy?.minimumReleaseAgeSeconds,
+      policy?.minimumReleaseAgeSeconds ?? Number.NaN,
     );
   });
 
