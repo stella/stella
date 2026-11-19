@@ -54,6 +54,7 @@ mod dictation_input;
 mod dictation_language;
 mod dictation_live;
 mod dictation_pauses;
+mod dictation_trace;
 mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;

@@ -39,7 +39,8 @@ use std::{
 };
 
 use objc2_core_foundation::{
-  CFMachPort, CFRetained, CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
+  CFMachPort, CFNumber, CFPreferencesCopyAppValue, CFRetained, CFRunLoop, CFString,
+  kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
 };
 use objc2_core_graphics::{
   CGEvent, CGEventField, CGEventFlags, CGEventMask, CGEventSource,
@@ -251,6 +252,18 @@ pub fn listen_for_hold_key(
     })
     .map_err(|_spawn_failed| HoldKeyUnsupported)?;
   Ok(HoldKeyListener { stop })
+}
+
+/// The system's own setting for the globe (fn) key, `AppleFnUsageType` in
+/// `com.apple.HIToolbox`, as stored: `None` while it was never changed. The
+/// tap only listens, so the system still acts on the key as this setting
+/// says when it is released.
+pub fn globe_key_usage() -> Option<i64> {
+  let value = CFPreferencesCopyAppValue(
+    &CFString::from_static_str("AppleFnUsageType"),
+    &CFString::from_static_str("com.apple.HIToolbox"),
+  )?;
+  value.downcast::<CFNumber>().ok()?.as_i64()
 }
 
 /// What the tap callback reads. Owned by the listener thread, which is the
