@@ -12234,6 +12234,97 @@
         }
       ]
     },
+    "./table-shell": {
+      "type": "module",
+      "file": "./src/components/table-shell.d.ts",
+      "exports": [
+        {
+          "name": "Table",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableAlign",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableBody",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableCaption",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableCellFace",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableDensity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableFooter",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableHead",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableHeadProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableHeader",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableHeaderProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableInset",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableRow",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableScroll",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableSkeletonRows",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TableTone",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
     "./tabs": {
       "type": "module",
       "file": "./src/components/tabs.d.ts",
@@ -12926,9 +13017,11 @@
     "./src/components/switch.native.d.ts": "import type { SwitchProps as PlatformSwitchProps } from \"react-native\";\nimport type { SwitchContract } from \"./switch.shared\";\ntype SwitchProps = Omit<PlatformSwitchProps, \"disabled\" | \"onValueChange\" | \"value\" | keyof SwitchContract> & SwitchContract;\nexport declare const Switch: ({ checked, defaultChecked, disabled, onCheckedChange, ...props }: SwitchProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/switch.shared.d.ts": "export type SwitchContract = {\n    checked?: boolean;\n    defaultChecked?: boolean;\n    disabled?: boolean;\n    onCheckedChange?: (checked: boolean) => void;\n};\n",
     "./src/components/switch.d.ts": "import type * as React from \"react\";\nimport { Switch as SwitchPrimitive } from \"@base-ui/react/switch\";\ntype SwitchSize = \"default\" | \"sm\";\ntype SwitchProps = SwitchPrimitive.Root.Props & {\n    size?: SwitchSize | undefined;\n};\ndeclare const Switch: ({ className, size, ...props }: SwitchProps) => React.JSX.Element;\ndeclare const SwitchField: ({ className, description, label, size, ...props }: SwitchProps & {\n    description?: React.ReactNode;\n    label: React.ReactNode;\n}) => React.JSX.Element;\nexport { Switch, SwitchField };\nexport type { SwitchProps, SwitchSize };\n",
+    "./src/components/table-cell.d.ts": "import type * as React from \"react\";\ntype TableAlign = \"center\" | \"end\" | \"start\";\ntype TableTone = \"default\" | \"muted\";\ndeclare const TABLE_ALIGN_CLASS: {\n    readonly center: \"text-center\";\n    readonly end: \"text-end\";\n    readonly start: \"text-start\";\n};\ndeclare const resolveTableAlign: (align: TableAlign | undefined, numeric: boolean) => TableAlign | undefined;\ntype TableCellFaceProps = Omit<React.ComponentProps<\"td\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    flush?: boolean;\n    numeric?: boolean | undefined;\n    tone?: TableTone | undefined;\n};\ntype TableCellStyleProps = Pick<TableCellFaceProps, \"align\" | \"className\" | \"flush\" | \"numeric\" | \"tone\">;\ndeclare const tableCellClassName: ({ align, className, flush, numeric, tone, }: TableCellStyleProps) => string;\ndeclare const TableCellFace: ({ align, className, flush, numeric, tone, ...props }: TableCellFaceProps) => React.JSX.Element;\nexport { TableCellFace, resolveTableAlign, tableCellClassName, TABLE_ALIGN_CLASS, };\nexport type { TableAlign, TableCellFaceProps, TableTone };\n",
     "./src/components/table-chart.d.ts": "export type TableChartKind = \"bar\" | \"line\" | \"pie\" | \"scatter\";\nexport type TableChartPoint = {\n    label: string;\n    series?: string;\n    x: number;\n    y: number;\n};\nexport type TableChartProps = {\n    formatNumber: (value: number) => string;\n    kind: TableChartKind;\n    points: readonly TableChartPoint[];\n    summary: string;\n    title: string;\n    xLabel?: string | undefined;\n    xMode?: \"category\" | \"numeric\";\n    yLabel?: string | undefined;\n};\nexport declare const TableChart: ({ kind, points, title, summary, xLabel, yLabel, xMode, formatNumber, }: TableChartProps) => import(\"react\").JSX.Element;\n",
     "./src/components/table-layout.d.ts": "export declare const TABLE_FIRST_LINE: {\n    readonly control: {\n        readonly content: \"min-h-7\";\n        readonly slot: \"h-7\";\n    };\n    readonly text: {\n        readonly content: \"min-h-5\";\n        readonly slot: \"h-5\";\n    };\n};\nexport type TableFirstLine = keyof typeof TABLE_FIRST_LINE;\n",
-    "./src/components/table.d.ts": "import type * as React from \"react\";\ntype TableInset = \"card\" | \"default\";\ntype TableScroll = \"parent\" | \"self\";\ntype TableDensity = \"compact\" | \"default\";\ntype TableProps = React.ComponentProps<\"table\"> & {\n    density?: TableDensity;\n    inset?: TableInset;\n    scroll?: TableScroll;\n};\ndeclare const Table: ({ className, density, inset, scroll, ...props }: TableProps) => React.JSX.Element;\ntype TableHeaderProps = React.ComponentProps<\"thead\"> & {\n    sticky?: boolean;\n    surface?: \"muted\" | \"plain\";\n};\ndeclare const TableHeader: ({ className, surface, sticky, ...props }: TableHeaderProps) => React.JSX.Element;\ndeclare const TableBody: ({ className, ...props }: React.ComponentProps<\"tbody\">) => React.JSX.Element;\ndeclare const TableFooter: ({ className, ...props }: React.ComponentProps<\"tfoot\">) => React.JSX.Element;\ntype TableTone = \"default\" | \"muted\";\ndeclare const TableRow: ({ className, tone, ...props }: React.ComponentProps<\"tr\"> & {\n    tone?: TableTone | undefined;\n}) => React.JSX.Element;\ntype TableAlign = \"center\" | \"end\" | \"start\";\ntype TableHeadProps = Omit<React.ComponentProps<\"th\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    numeric?: boolean | undefined;\n};\ndeclare const TableHead: ({ className, align, numeric, ...props }: TableHeadProps) => React.JSX.Element;\ntype TableCellProps = Omit<React.ComponentProps<\"td\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    flush?: boolean;\n    numeric?: boolean | undefined;\n    tone?: TableTone | undefined;\n    truncate?: boolean;\n};\ndeclare const TableCell: ({ className, align, tone, numeric, truncate, flush, children, ...props }: TableCellProps) => React.JSX.Element;\ntype SortDirection = \"asc\" | \"desc\" | null;\ntype SortableHeadProps = Omit<TableHeadProps, \"onClick\"> & {\n    onSort: () => void;\n    sortDirection?: SortDirection;\n    trailing?: React.ReactNode;\n};\ndeclare const SortableHead: ({ children, sortDirection, onSort, trailing, className, align, numeric, ...props }: SortableHeadProps) => React.JSX.Element;\ndeclare const TableCaption: ({ className, ...props }: React.ComponentProps<\"caption\">) => React.JSX.Element;\nexport { TABLE_FIRST_LINE } from \"./table-layout\";\nexport type { TableFirstLine } from \"./table-layout\";\nexport { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption, SortableHead, };\nexport type { SortDirection, TableAlign, TableDensity, TableHeadProps, TableCellProps, TableHeaderProps, TableInset, TableProps, TableScroll, TableTone, };\n",
+    "./src/components/table-shell.d.ts": "import type * as React from \"react\";\nimport { TableCellFace } from \"./table-cell\";\nimport type { TableAlign, TableTone } from \"./table-cell\";\ntype TableInset = \"card\" | \"default\";\ntype TableScroll = \"parent\" | \"self\";\ntype TableDensity = \"compact\" | \"default\";\ntype TableProps = React.ComponentProps<\"table\"> & {\n    density?: TableDensity;\n    inset?: TableInset;\n    scroll?: TableScroll;\n};\ndeclare const Table: ({ className, density, inset, scroll, ...props }: TableProps) => React.JSX.Element;\ntype TableHeaderProps = React.ComponentProps<\"thead\"> & {\n    sticky?: boolean;\n    surface?: \"muted\" | \"plain\";\n};\ndeclare const TableHeader: ({ className, surface, sticky, ...props }: TableHeaderProps) => React.JSX.Element;\ndeclare const TableBody: ({ className, ...props }: React.ComponentProps<\"tbody\">) => React.JSX.Element;\ndeclare const TableFooter: ({ className, ...props }: React.ComponentProps<\"tfoot\">) => React.JSX.Element;\ndeclare const TableRow: ({ className, tone, ...props }: React.ComponentProps<\"tr\"> & {\n    tone?: TableTone | undefined;\n}) => React.JSX.Element;\ntype TableHeadProps = Omit<React.ComponentProps<\"th\">, \"align\"> & {\n    align?: TableAlign | undefined;\n    numeric?: boolean | undefined;\n};\ndeclare const TableHead: ({ className, align, numeric, ...props }: TableHeadProps) => React.JSX.Element;\ndeclare const TableCaption: ({ className, ...props }: React.ComponentProps<\"caption\">) => React.JSX.Element;\ntype TableSkeletonColumn = {\n    align?: TableAlign | undefined;\n    bar: string;\n    id: string;\n};\ndeclare const TableSkeletonRows: ({ columns, count, rowClassName, }: {\n    columns: readonly TableSkeletonColumn[];\n    count?: number | undefined;\n    rowClassName?: string | undefined;\n}) => React.JSX.Element[];\nexport { Table, TableBody, TableCaption, TableCellFace, TableFooter, TableHead, TableHeader, TableRow, TableSkeletonRows, };\nexport type { TableAlign, TableDensity, TableHeadProps, TableHeaderProps, TableInset, TableProps, TableScroll, TableTone, };\n",
+    "./src/components/table.d.ts": "import type * as React from \"react\";\nimport type { TableCellFaceProps } from \"./table-cell\";\nimport type { TableHeadProps } from \"./table-shell\";\ntype TableCellProps = TableCellFaceProps & {\n    truncate?: boolean;\n};\ndeclare const TableCell: ({ className, align, tone, numeric, truncate, flush, children, ...props }: TableCellProps) => React.JSX.Element;\ntype SortDirection = \"asc\" | \"desc\" | null;\ntype SortableHeadProps = Omit<TableHeadProps, \"onClick\"> & {\n    onSort: () => void;\n    sortDirection?: SortDirection;\n    trailing?: React.ReactNode;\n};\ndeclare const SortableHead: ({ children, sortDirection, onSort, trailing, className, align, numeric, ...props }: SortableHeadProps) => React.JSX.Element;\nexport { TABLE_FIRST_LINE } from \"./table-layout\";\nexport type { TableFirstLine } from \"./table-layout\";\nexport { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCaption, } from \"./table-shell\";\nexport type { TableAlign, TableDensity, TableHeadProps, TableHeaderProps, TableInset, TableProps, TableScroll, TableTone, } from \"./table-shell\";\nexport { TableCell, SortableHead };\nexport type { SortDirection, TableCellProps };\n",
     "./src/components/tabs.d.ts": "import { Tabs as TabsPrimitive } from \"@base-ui/react/tabs\";\ntype TabsVariant = \"default\" | \"underline\";\ndeclare const Tabs: ({ className, ...props }: TabsPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const TabsList: ({ variant, className, children, ref, ...props }: TabsPrimitive.List.Props & {\n    variant?: TabsVariant;\n}) => import(\"react\").JSX.Element;\ndeclare const TabsTab: ({ className, ...props }: TabsPrimitive.Tab.Props) => import(\"react\").JSX.Element;\ndeclare const TabsPanel: ({ className, ...props }: TabsPrimitive.Panel.Props) => import(\"react\").JSX.Element;\nexport { Tabs, TabsList, TabsTab, TabsTab as TabsTrigger, TabsPanel, TabsPanel as TabsContent, };\n",
     "./src/components/text.native.d.ts": "import type { TextProps } from \"react-native\";\nimport { type TextContract, type TextFace } from \"./text.shared\";\nexport declare const sansFontFamily: (weight: TextFace[\"weight\"]) => string;\nexport declare const textFontFamily: (variant: TextContract[\"variant\"]) => string;\nexport declare const Text: ({ className, style, variant, ...props }: Omit<TextProps, keyof TextContract> & TextContract & {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport type { TextVariant } from \"./text.shared\";\n",
     "./src/components/text.shared.d.ts": "import type { ReactNode } from \"react\";\nexport declare const TEXT_VARIANT_CLASS_NAMES: {\n    readonly badge: \"text-[10px] uppercase tracking-[1px] text-muted-foreground\";\n    readonly body: \"text-base\";\n    readonly button: \"text-base\";\n    readonly caption: \"text-sm text-muted-foreground\";\n    readonly display: \"text-[32px] leading-[37px] tracking-tight\";\n    readonly error: \"text-sm text-destructive-foreground\";\n    readonly headline: \"text-lg\";\n    readonly label: \"text-sm\";\n    readonly link: \"text-sm text-muted-foreground underline\";\n    readonly rowTitle: \"text-base\";\n    readonly section: \"text-xs uppercase text-muted-foreground\";\n    readonly title: \"text-2xl\";\n};\nexport type TextVariant = keyof typeof TEXT_VARIANT_CLASS_NAMES;\nexport type TextFace = {\n    readonly weight: \"bold\" | \"light\" | \"medium\" | \"regular\" | \"semibold\";\n};\nexport declare const TEXT_VARIANT_FACES: {\n    readonly badge: TextFace;\n    readonly body: TextFace;\n    readonly button: TextFace;\n    readonly caption: TextFace;\n    readonly display: TextFace;\n    readonly error: TextFace;\n    readonly headline: TextFace;\n    readonly label: TextFace;\n    readonly link: TextFace;\n    readonly rowTitle: TextFace;\n    readonly section: TextFace;\n    readonly title: TextFace;\n};\nexport type TextContract = {\n    children?: ReactNode;\n    variant?: TextVariant;\n};\n",

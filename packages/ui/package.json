@@ -182,6 +182,7 @@
       "default": "./src/components/stella-wordmark.tsx"
     },
     "./table": "./src/components/table.tsx",
+    "./table-shell": "./src/components/table-shell.tsx",
     "./table-chart": "./src/components/table-chart.tsx",
     "./tabs": "./src/components/tabs.tsx",
     "./textarea": {

@@ -1,8 +1,13 @@
+import type {
+  TimeEntryReportBucket,
+  TimeEntryReportGroupBy,
+} from "@stll/api-contract/time-entry-report";
+
 import type { TranslationKey } from "@/i18n/types";
 
-export const REPORT_LABELS = {
-  title: "billing.timeReport.title",
-  period: "billing.timeReport.period",
+import type { ReportPeriod } from "./report.logic";
+
+const REPORT_AXIS_LABELS = {
   week: "workspaces.views.calendar.week",
   month: "workspaces.views.calendar.month",
   custom: "search.timeFilterCustom",
@@ -10,6 +15,15 @@ export const REPORT_LABELS = {
   member: "organization.roles.member",
   matter: "common.matter",
   client: "workspaces.parties.client",
+} as const satisfies Record<
+  ReportPeriod | TimeEntryReportBucket | TimeEntryReportGroupBy,
+  TranslationKey
+>;
+
+export const REPORT_LABELS = {
+  title: "billing.timeReport.title",
+  period: "billing.timeReport.period",
+  ...REPORT_AXIS_LABELS,
   rows: "bilingualTranslate.rows.title",
   columns: "common.columns",
   from: "search.dateFrom",
@@ -31,4 +45,4 @@ export const REPORT_LABELS = {
   exportCsv: "workspaces.views.exportCsv",
   expand: "billing.timeReport.expand",
   collapse: "billing.timeReport.collapse",
-} as const satisfies Record<string, TranslationKey>;
+} as const;
