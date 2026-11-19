@@ -199,7 +199,7 @@ test("the chat title is the trail's current page, in the foreground colour every
       "Expected the chat title inside the current page crumb",
     );
   }
-  expect(page.dataset.slot).toBe("breadcrumb-page");
+  expect(page.dataset["slot"]).toBe("breadcrumb-page");
   expect(page.className.split(" ").includes("text-foreground")).toBe(true);
   expect(unexpected).toEqual([]);
 });
