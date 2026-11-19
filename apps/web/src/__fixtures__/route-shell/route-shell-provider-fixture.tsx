@@ -742,6 +742,7 @@ const loadFixtureRuntime = async (
     invoiceId: "00000000-0000-4000-8000-000000000007",
     tableId: "00000000-0000-4000-8000-000000000008",
     threadId: "00000000-0000-4000-8000-000000000009",
+    guidanceId: "00000000-0000-4000-8000-00000000000a",
     packId: "general-legal",
     templateId: "nda",
     code: "abcdmnp239",

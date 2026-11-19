@@ -600,29 +600,98 @@ describe("planCorpusDocumentWrite", () => {
     };
   };
 
-  test("refuses every payload shape that carries no document", () => {
+  test("classifies payloads by document content independently of AST metadata", () => {
     const texts = [null, ""];
     const sectionShapes = [null, []];
-    const astShapes = [EMPTY_AST, null];
+    const emptyEnvelope = {
+      version: 1,
+      source: {
+        system: "synthetic",
+        documentId,
+        webUrl: "",
+        printUrl: "",
+      },
+      metadata: {
+        caseNumber: "1 A 1/2026",
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [],
+    } satisfies DocumentAst;
+    // A decision-specific envelope is outside the constant empty hash set.
+    expect(
+      EMPTY_CORPUS_CONTENT_HASHES.includes(
+        corpusContentHash({ text: null, sections: null, ast: emptyEnvelope }),
+      ),
+    ).toBe(false);
+    const astShapes = [EMPTY_AST, null, emptyEnvelope];
     for (const text of texts) {
       for (const sections of sectionShapes) {
         for (const ast of astShapes) {
-          expect(
-            planCorpusDocumentWrite({
-              documentId,
-              jurisdiction,
-              text,
-              sections,
-              ast,
-              stored: null,
-            }),
-          ).toEqual({
-            type: "skipped-empty",
-            written: null,
-            contentHash: corpusContentHash({ text, sections, ast }),
-          });
+          const contentHash = corpusContentHash({ text, sections, ast });
+          const recorded = {
+            ...corpusKeys({ documentId, jurisdiction, contentHash }),
+            contentHash,
+          };
+          for (const stored of [null, recorded]) {
+            expect(
+              planCorpusDocumentWrite({
+                documentId,
+                jurisdiction,
+                text,
+                sections,
+                ast,
+                stored,
+              }),
+            ).toEqual({ type: "skipped-empty", written: null, contentHash });
+          }
         }
       }
+    }
+    const readablePayloads = [
+      { text: "Publisher headnote.", sections: null, ast: emptyEnvelope },
+      {
+        text: null,
+        sections: [
+          {
+            index: 0,
+            type: "header",
+            title: null,
+            text: "Publisher headnote.",
+          },
+        ],
+        ast: emptyEnvelope,
+      },
+      {
+        text: null,
+        sections: null,
+        ast: {
+          ...emptyEnvelope,
+          blocks: [
+            {
+              id: "p1",
+              anchorId: "p1",
+              type: "paragraph",
+              inlines: [{ type: "text", text: "Decision body." }],
+              plainText: "Decision body.",
+            },
+          ],
+        },
+      },
+    ] satisfies CorpusPayload[];
+    for (const payload of readablePayloads) {
+      expect(
+        planCorpusDocumentWrite({
+          documentId,
+          jurisdiction,
+          ...payload,
+          stored: null,
+        }).type,
+      ).toBe("put");
     }
   });
 

@@ -705,6 +705,11 @@
       "description": "Muudab kuni 4 tunni pikkuse diktofonifaili, häälmärkme või koosoleku salvestise tekstiks.",
       "open": "Ava",
       "failed": "Akent ei õnnestunud avada. Proovige uuesti."
+    },
+    "preview": {
+      "label": "Seni dikteeritud tekst",
+      "listening": "Kuulan…",
+      "finishing": "Lõpetan…"
     }
   },
   "shortcut": {

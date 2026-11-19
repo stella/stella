@@ -35,7 +35,10 @@ import { panic, Result, TaggedError } from "better-result";
  * `seed` advances the generation's seeding pass (`corpus-index-route-seeding.ts`)
  * by bounded pages under the database-load brake, resuming from the cursor
  * the database stores, and stops when every route is seeded or the page
- * budget is spent.
+ * budget is spent. A page that loses a lock wait (a writer holds a row it
+ * reads past the page's lock timeout) rolled back whole; the run backs off
+ * and walks it again, and stops as busy only once locks stayed refused past
+ * its patience. `retire`'s history cleanup does the same.
  *
  * `prove` keeps the route proofs a flip reads current
  * (`corpus-index-route-proof-runner.ts`): it walks every route of the named
@@ -59,7 +62,12 @@ import { panic, Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
 import { parseArgs } from "node:util";
 
-import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+import {
+  BackfillLockWaitError,
+  type BackfillWaitRecord,
+  logBackfillWait,
+  runBackfillPass,
+} from "@stll/db-load-gate/backfill-pass";
 import { decideStart } from "@stll/db-load-gate/health";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
@@ -265,7 +273,8 @@ evidence, 14 busy (a fence or read timed out; nothing changed), 1 refused.
 Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
 the database-load brake (after 15 minutes of waiting), 7 next row held by a
-writer, 8 a route appeared after the pass began, 1 refused.
+writer, or locks refused past 15 minutes, 8 a route appeared after the pass
+began, 1 refused.
 Exit codes (prove): 0 every route of every proven generation current, 5 hours
 spent with a route not current, 6 paused by the database-load brake, 7 locks
 refused past 15 minutes (a flip holds the projection fence), 8 a route set
@@ -274,7 +283,8 @@ repeatedly, 1 refused.
 Exit codes (retire): 0 retired and cleaned up, or with --defer-cleanup retired
 with its history left for a later run (or, dry run, nothing refuses it), 6 paused by the database-load brake (run it again to resume), 10
 registry, 11 a flip within the keep window, 12 a jurisdiction pointer, 13 a
-runner holds leases, 14 busy (nothing changed), 15 engine, 1 refused.
+runner holds leases, 14 busy (nothing changed, or the cleanup's locks
+refused past 15 minutes: run it again to resume), 15 engine, 1 refused.
 `;
 
 /** The retire receipt's reason column holds this many characters. */
@@ -1001,12 +1011,39 @@ type SeedingBrake = {
   createRuntime: typeof createScriptBackfillRuntime;
   /** How long a run waits on the brake before it stops with `braked`. */
   maxWaitMs: number;
+  /** How long pages may keep losing lock waits in a row before it stops as busy. */
+  maxLockWaitMs: number;
 };
 
 const SEEDING_BRAKE: SeedingBrake = {
   createRuntime: createScriptBackfillRuntime,
   maxWaitMs: 15 * 60_000,
+  maxLockWaitMs: 15 * 60_000,
 };
+
+/**
+ * The page pass's wait log, plus one operator line per lost lock wait, so a
+ * run that waits on a writer says so before it either goes on or stops.
+ */
+const pageWaitLog =
+  (write: (line: string) => void) => (record: BackfillWaitRecord) => {
+    logBackfillWait(record);
+    if (record.reason === "lock_wait" && record.action === "wait") {
+      write(
+        `a page waits on a lock${lockedRelation(record.relation)} held by a writer; walking it again in ${String(Math.ceil(record.sleepMs / 1000))} s`,
+      );
+    }
+  };
+
+const lockedRelation = (relation: string | null) =>
+  relation === null ? "" : ` on ${relation}`;
+
+/** The line a page pass ends with when locks stayed refused past its patience. */
+const lockWaitStopLine = (
+  error: BackfillLockWaitError,
+  maxLockWaitMs: number,
+) =>
+  `a lock${lockedRelation(error.relation)} stayed held by a writer past ${String(Math.round(maxLockWaitMs / 60_000))} minutes; nothing of the refused page was written; rerun to resume`;
 
 type ProofTransaction = IngestionTransactionRunner<Transaction>;
 
@@ -1642,7 +1679,10 @@ const SEED_EXIT = {
   budgetSpent: 5,
   /** The database-load brake paused the run; rerun later. */
   braked: 6,
-  /** A writer holds the next row; rerun once it commits. */
+  /**
+   * A writer holds the next row, or a lock a page needs stayed held past the
+   * run's patience; rerun once it commits.
+   */
   busy: 7,
   /** A route appeared after the pass began; rerun to walk a new pass. */
   routeAppeared: 8,
@@ -1744,7 +1784,10 @@ const runSeed = async (
       last: null,
     };
     const startedAt = Temporal.Now.instant().epochMilliseconds;
-    const ran: { paused: boolean } = { paused: false };
+    const ran: { paused: boolean; lockWait: BackfillLockWaitError | null } = {
+      paused: false,
+      lockWait: null,
+    };
     try {
       const pass = await runBackfillPass({
         step: async () =>
@@ -1779,13 +1822,23 @@ const runSeed = async (
         // A run that waits on the brake this long stops, so a wrapper sees
         // `braked` instead of a run that never returns.
         maxWaitMs: seedingBrake.maxWaitMs,
+        maxLockWaitMs: seedingBrake.maxLockWaitMs,
+        log: pageWaitLog(write),
       });
       if (pass.isErr()) {
-        throw pass.error;
+        if (!(pass.error instanceof BackfillLockWaitError)) {
+          throw pass.error;
+        }
+        ran.lockWait = pass.error;
+      } else {
+        ran.paused = pass.value.status === "paused";
       }
-      ran.paused = pass.value.status === "paused";
     } finally {
       await runtime.close();
+    }
+    if (ran.lockWait !== null) {
+      write(lockWaitStopLine(ran.lockWait, seedingBrake.maxLockWaitMs));
+      return Result.ok(SEED_EXIT.busy);
     }
     const outcome = progress.last;
     const seedings = await withAggregateTransaction(
@@ -2127,7 +2180,10 @@ const purgeRetiredHistory = async (
       db: rootDb,
     });
     const deleted = { pages: 0, states: 0, intents: 0 };
-    const ran: { paused: boolean } = { paused: false };
+    const ran: { paused: boolean; lockWait: BackfillLockWaitError | null } = {
+      paused: false,
+      lockWait: null,
+    };
     try {
       const pass = await runBackfillPass({
         step: async () =>
@@ -2157,11 +2213,17 @@ const purgeRetiredHistory = async (
         },
         sleep: Bun.sleep,
         maxWaitMs: seedingBrake.maxWaitMs,
+        maxLockWaitMs: seedingBrake.maxLockWaitMs,
+        log: pageWaitLog(write),
       });
       if (pass.isErr()) {
-        throw pass.error;
+        if (!(pass.error instanceof BackfillLockWaitError)) {
+          throw pass.error;
+        }
+        ran.lockWait = pass.error;
+      } else {
+        ran.paused = pass.value.status === "paused";
       }
-      ran.paused = pass.value.status === "paused";
     } finally {
       await runtime.close();
       await withAggregateTransaction(
@@ -2178,6 +2240,12 @@ const purgeRetiredHistory = async (
       `deleted this run: ${String(deleted.states)} projection states, ${String(deleted.intents)} revisions in ${String(deleted.pages)} pages`,
     );
     write(await retireHistoryLine(context, target, "left"));
+    if (ran.lockWait !== null) {
+      writeError(
+        `busy: ${lockWaitStopLine(ran.lockWait, seedingBrake.maxLockWaitMs)}`,
+      );
+      return Result.ok(RETIRE_EXIT.busy);
+    }
     if (ran.paused) {
       writeError(
         "paused: the database-load brake held the cleanup; run retire again to resume",

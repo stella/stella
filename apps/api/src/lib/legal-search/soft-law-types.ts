@@ -81,7 +81,8 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "retryable",
 ] as const;
 type SoftLawAuthorityDefinition = {
-  domain: "data-protection" | "competition" | "labour";
+  domain:
+    "data-protection" | "competition" | "labour" | "tax" | "administrative";
   jurisdiction: string;
   name: string;
 };
@@ -96,6 +97,21 @@ export const SOFT_LAW_AUTHORITIES = {
     domain: "labour",
     jurisdiction: "CZE",
     name: "Státní úřad inspekce práce",
+  },
+  "cz-gfr": {
+    domain: "tax",
+    jurisdiction: "CZE",
+    name: "Generální finanční ředitelství",
+  },
+  "cz-mf": {
+    domain: "tax",
+    jurisdiction: "CZE",
+    name: "Ministerstvo financí",
+  },
+  "cz-mv-psmv": {
+    domain: "administrative",
+    jurisdiction: "CZE",
+    name: "Poradní sbor ministra vnitra ke správnímu řádu a správnímu trestání",
   },
   "eu-edpb": {
     domain: "data-protection",

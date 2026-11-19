@@ -54,14 +54,12 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,

@@ -8,7 +8,8 @@ import entry6 from "./dataExports.maintain.fiveMinute";
 import entry7 from "./dictation.deleteKeptTranscripts.minute";
 import entry8 from "./legislation.backfillExpressionIds.fiveMinute";
 import entry9 from "./requests.sweepReceipts.hourly";
-import entry10 from "./usage.eraseHostedCustomers.minute";
+import entry10 from "./softLaw.sync.daily";
+import entry11 from "./usage.eraseHostedCustomers.minute";
 
 export default {
   "caseLaw.backfillProvisionState.minutely": entry0,
@@ -21,5 +22,6 @@ export default {
   "dictation.deleteKeptTranscripts.minute": entry7,
   "legislation.backfillExpressionIds.fiveMinute": entry8,
   "requests.sweepReceipts.hourly": entry9,
-  "usage.eraseHostedCustomers.minute": entry10,
+  "softLaw.sync.daily": entry10,
+  "usage.eraseHostedCustomers.minute": entry11,
 } as const;

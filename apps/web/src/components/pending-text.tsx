@@ -54,6 +54,7 @@ export type PendingTextKey =
   | "common.stale"
   | "common.timeBilling"
   | "common.workflows"
+  | "guidance.notCaseLaw"
   | "knowledge.sections.workflows.description"
   | "lawHome.prompt"
   | "lawHome.recent"
