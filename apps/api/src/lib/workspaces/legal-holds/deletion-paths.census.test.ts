@@ -143,10 +143,6 @@ const EXCEPTIONS = new Map([
     "Deletes generated account-export archives, not the retained matter sources from which they were generated.",
   ],
   [
-    "handlers/style-sets/delete.ts",
-    "Style package object deletion delegates to the guarded organization-file deletion owner.",
-  ],
-  [
     "handlers/style-sets/storage.ts",
     "Style package rollback and replacement delegate to the guarded organization-file deletion owner.",
   ],
