@@ -144,7 +144,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
         }) = active.take()
         {
           dictation::set_phase(app, Phase::Transcribing);
-          capture.log_hold(app, &mut trace);
+          trace.release();
           let mut moved = None;
           let outcome = match finish(
             app,
@@ -180,12 +180,40 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
   }
 }
 
+/// Logs the hold: how long, how much audio, how many stretches were cut
+/// while the key was down, and on fn what the system itself does with that
+/// key.
+fn log_hold(
+  app: &AppHandle,
+  held: Duration,
+  frames: usize,
+  rate: u32,
+  stretches: usize,
+) {
+  let globe_key = (dictation::hold_key(app) == HoldChoice::Fn).then(globe_key);
+  Line::Hold {
+    duration: held,
+    audio: Duration::from_secs_f64(frames as f64 / f64::from(rate.max(1))),
+    stretches,
+    globe_key,
+  }
+  .log();
+}
+
 /// Discards a dictation in progress and logs it as cancelled.
 fn cancel(app: &AppHandle, active: Active, worker: &mut Option<Worker>) {
   let Active {
     capture, mut trace, ..
   } = active;
-  capture.log_hold(app, &mut trace);
+  let held = trace.release();
+  let frames = capture.recorded + capture.recorder.waiting_frames();
+  log_hold(
+    app,
+    held,
+    frames,
+    capture.recorder.rate,
+    capture.live.sent(),
+  );
   capture.cancel(worker);
   dictation::set_phase(app, Phase::Idle);
   end(&trace, Outcome::Cancelled, None);
@@ -218,26 +246,6 @@ impl Capture {
     for stretch in self.segmenter.push(&mono) {
       self.live.send(stretch);
     }
-  }
-
-  /// Marks the release and logs the hold: how long, how much audio, how
-  /// many stretches were cut meanwhile, and on fn what the system itself
-  /// does with that key.
-  fn log_hold(&self, app: &AppHandle, trace: &mut Trace) {
-    let duration = trace.release();
-    let globe_key = (dictation::hold_key(app) == HoldChoice::Fn).then(globe_key);
-    // Audio still waiting on the tape counts too: it is transcribed with
-    // the rest once recording stops.
-    let frames = self.recorded + self.recorder.waiting_frames();
-    Line::Hold {
-      duration,
-      audio: Duration::from_secs_f64(
-        frames as f64 / f64::from(self.recorder.rate.max(1)),
-      ),
-      stretches: self.live.sent(),
-      globe_key,
-    }
-    .log();
   }
 
   /// Discards the dictation, texts in progress included; the worker stays
@@ -310,13 +318,25 @@ fn finish(
     mut segmenter,
     mut live,
     language,
-    ..
+    recorded,
   } = capture;
   let channels = recorder.channels;
+  let rate = recorder.rate;
+  let stretches = live.sent();
+  let held = trace.held();
   let Some(last) = recorder.finish() else {
+    log_hold(app, held, recorded, rate, stretches);
     discard(live, worker);
     return Err(Failure::Microphone.into());
   };
+  // Counted once the stream stopped, so the last frames it delivered count.
+  log_hold(
+    app,
+    held,
+    recorded + last.len() / channels.max(1),
+    rate,
+    stretches,
+  );
   for stretch in segmenter.push(&to_mono(&last, channels)) {
     live.send(stretch);
   }

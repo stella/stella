@@ -270,6 +270,13 @@ impl Trace {
     now.duration_since(self.pressed)
   }
 
+  /// How long the key was down; zero before the release.
+  pub fn held(&self) -> Duration {
+    self.released.map_or(Duration::ZERO, |released| {
+      released.duration_since(self.pressed)
+    })
+  }
+
   /// Since the release, or since the press before one.
   pub fn since_release(&self) -> Duration {
     self.released.unwrap_or(self.pressed).elapsed()
