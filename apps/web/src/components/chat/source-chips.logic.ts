@@ -670,7 +670,7 @@ export type ChatAnswerCitations = {
  * The citations an answer's text makes. `sources` lets a decision link that
  * names its publisher's page resolve to the stella decision it is.
  */
-export const chatAnswerCitations = ({
+const chatAnswerCitations = ({
   appOrigins,
   parts,
   sources,

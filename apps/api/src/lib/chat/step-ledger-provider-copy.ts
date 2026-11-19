@@ -27,22 +27,19 @@ const withoutLedgerContent = (content: string): string => {
  * `messages` with every tool result read without its step ledger. Returns
  * the same array when no result carries one.
  */
-export const stepLedgerFreeProviderMessages = (
+const stepLedgerFreeProviderMessages = (
   messages: readonly ModelMessage[],
 ): readonly ModelMessage[] => {
-  let changed = false;
   const copy = messages.map((message) => {
     if (message.role !== "tool" || typeof message.content !== "string") {
       return message;
     }
     const content = withoutLedgerContent(message.content);
-    if (content === message.content) {
-      return message;
-    }
-    changed = true;
-    return { ...message, content };
+    return content === message.content ? message : { ...message, content };
   });
-  return changed ? copy : messages;
+  return copy.some((message, index) => message !== messages[index])
+    ? copy
+    : messages;
 };
 
 /**

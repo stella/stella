@@ -367,19 +367,30 @@ const withStepLedger = ({
   };
 };
 
+/**
+ * `base`'s verdict on `value`. The SDK parses a tool result synchronously, so
+ * code mode's validator is synchronous; a promise would be a broken SDK.
+ */
+const validateNow = (
+  base: StandardSchemaV1,
+  value: unknown,
+): StandardSchemaV1.Result<unknown> => {
+  const parsed = base["~standard"].validate(value);
+  return parsed instanceof Promise
+    ? panic("code mode's result validator is synchronous")
+    : parsed;
+};
+
 /** `base`, accepting a valid step ledger beside the fields it reads. */
 const withStepLedgerResult = (base: StandardSchemaV1): StandardSchemaV1 => ({
   "~standard": {
     ...base["~standard"],
-    validate: (value) => {
+    validate: (value): StandardSchemaV1.Result<unknown> => {
       if (!isRecord(value) || !Object.hasOwn(value, CHAT_STEP_LEDGER_KEY)) {
-        return base["~standard"].validate(value);
+        return validateNow(base, value);
       }
       const { [CHAT_STEP_LEDGER_KEY]: ledger, ...result } = value;
-      const parsed = base["~standard"].validate(result);
-      if (parsed instanceof Promise) {
-        return panic("code mode's result validator is synchronous");
-      }
+      const parsed = validateNow(base, result);
       const parsedLedger = v.safeParse(chatStepLedgerSchema, ledger);
       if (parsed.issues !== undefined || !parsedLedger.success) {
         return (

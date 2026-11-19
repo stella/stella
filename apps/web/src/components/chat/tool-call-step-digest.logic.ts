@@ -69,7 +69,7 @@ export type StepDigest = {
 type StepToolPart = { input: unknown; name: string; output: unknown };
 
 /** The ledger a step carries, for a code step; null for any other step. */
-export const stepLedgerOf = (part: StepToolPart): ChatStepLedger | null =>
+const stepLedgerOf = (part: StepToolPart): ChatStepLedger | null =>
   isCodeToolName(part.name) ? readChatStepLedger(part.output) : null;
 
 const refKey = (ref: ChatStepRef): string => {

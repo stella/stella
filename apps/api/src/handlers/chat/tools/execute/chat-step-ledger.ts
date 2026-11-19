@@ -28,7 +28,7 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 /** What one registry read answered: its normalized arguments and payload. */
-export type ChatStepReadAnswer = {
+type ChatStepReadAnswer = {
   args: Record<string, unknown>;
   data: unknown;
 };
@@ -39,7 +39,7 @@ export type ChatStepCallSink = {
 };
 
 /** A sink that keeps nothing, for reads outside a recorded step. */
-export const DISCARDING_STEP_CALL_SINK: ChatStepCallSink = {
+const DISCARDING_STEP_CALL_SINK: ChatStepCallSink = {
   answered: () => undefined,
 };
 
@@ -332,8 +332,7 @@ const readFilters = (args: Record<string, unknown>): ChatStepFilter[] =>
   ).slice(0, CHAT_STEP_LEDGER_LIMITS.filtersPerCall);
 
 const isInScope = (item: FoundItem, scope: StepRefScope | undefined) =>
-  item.matterId === null ||
-  (scope !== undefined && scope.workspaceIds.has(item.matterId));
+  item.matterId === null || scope?.workspaceIds.has(item.matterId) === true;
 
 const STEP_REF_READER_BY_TOOL: ReadonlyMap<string, StepRefReader | null> =
   new Map(Object.entries(STEP_REF_READERS));
@@ -420,14 +419,18 @@ export const runRecordedStepCall = async <T>({
       answer = value;
     },
   };
-  try {
-    const value = await currentStepCall.run(sink, run);
-    recorder.record({ tool, callArgs, answer, outcome: "ok" });
-    return value;
-  } catch (error) {
-    recorder.record({ tool, callArgs, answer: undefined, outcome: "error" });
-    throw error;
-  }
+  // The read's own settlement decides its entry; the rejection is handed on
+  // to the script untouched.
+  return await currentStepCall.run(sink, run).then(
+    (value) => {
+      recorder.record({ tool, callArgs, answer, outcome: "ok" });
+      return value;
+    },
+    (error: unknown) => {
+      recorder.record({ tool, callArgs, answer: undefined, outcome: "error" });
+      throw error;
+    },
+  );
 };
 
 /** The sink of the read on this async path, or one that keeps nothing. */

@@ -1,5 +1,5 @@
 import { EventType, maxIterations } from "@tanstack/ai";
-import type { ModelMessage } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -89,11 +89,13 @@ const STORED_ASSISTANT_ID = toSafeId<"chatMessage">(
 
 /** The tool results one model call was handed, parsed. */
 const toolResultsOf = (messages: readonly ModelMessage[]): unknown[] =>
-  messages.flatMap((message) =>
-    message.role === "tool" && typeof message.content === "string"
-      ? [JSON.parse(message.content)]
-      : [],
-  );
+  messages.flatMap((message): unknown[] => {
+    if (message.role !== "tool" || typeof message.content !== "string") {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(message.content);
+    return [parsed];
+  });
 
 /**
  * The stream as the run produced it, keeping each tool result it carried:
@@ -101,14 +103,16 @@ const toolResultsOf = (messages: readonly ModelMessage[]): unknown[] =>
  *
  * @yields Every chunk of `source`, unchanged.
  */
-const tapToolResults = async function* <TChunk extends { type: string }>(
+const tapToolResults = async function* <TChunk extends StreamChunk>(
   source: AsyncIterable<TChunk>,
   results: unknown[],
 ): AsyncIterable<TChunk> {
   for await (const chunk of source) {
-    if (chunk.type === EventType.TOOL_CALL_RESULT && "content" in chunk) {
+    if (chunk.type === EventType.TOOL_CALL_RESULT) {
       const { content } = chunk;
-      results.push(typeof content === "string" ? JSON.parse(content) : content);
+      const parsed: unknown =
+        typeof content === "string" ? JSON.parse(content) : content;
+      results.push(parsed);
     }
     yield chunk;
   }
@@ -328,7 +332,7 @@ describe("a code step's ledger", () => {
         fc.constantFrom("undefined", "null", "[r, r]", "{ r }"),
       );
       await assertProperty(
-        "a code step's ledger does not depend on what the script returns",
+        "does not depend on what the script returns",
         fc.asyncProperty(returnedArb, async (returned) => {
           expect(await ledgerOf(returned)).toEqual(reference);
         }),
