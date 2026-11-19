@@ -11,6 +11,7 @@ import { createPipeline } from "@stll/anonymize";
 
 import {
   anonymizeCzIsirParagraphs,
+  createCzIsirAnonymizer,
   CZ_ISIR_ANONYMIZATION_FAILURE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-anonymization";
 import type { CzIsirParagraph } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
@@ -42,6 +43,43 @@ const DECISION: CzIsirParagraph[] = [
   paragraph("Praha 22. února 2024"),
   paragraph("JUDr. Karel Vzorný v. r. předseda senátu"),
 ];
+
+/**
+ * The real pipeline's detection, with the redaction scripted per masked
+ * paragraph (`[redacted text, placeholder → original]`); a paragraph with
+ * no script comes back unchanged, as from a redactor that missed everything.
+ */
+const scripted = (
+  script: Record<string, [string, Record<string, string>]> = {},
+) => ({
+  redactText: (text: string) => pipeline.redactText(text),
+  redactTextWithCallerDetections: (text: string) => {
+    const [redactedText, originals] = script[text] ?? [text, {}];
+    return {
+      ...pipeline.redactText(""),
+      redaction: {
+        redactedText,
+        redactionMap: new Map(Object.entries(originals)),
+        operatorMap: new Map(),
+        entityCount: 0,
+      },
+    };
+  },
+});
+
+const texts = (
+  redactor: ReturnType<typeof scripted>,
+  ...lines: string[]
+): string[] => {
+  const result = anonymizeCzIsirParagraphs(
+    redactor,
+    lines.map((line) => paragraph(line)),
+  );
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  return result.value.map(({ text }) => text);
+};
 
 const anonymised = () => {
   const result = anonymizeCzIsirParagraphs(pipeline, DECISION);
@@ -109,23 +147,113 @@ describe("anonymizeCzIsirParagraphs", () => {
   });
 
   test("fails closed where a birth number survives the pipeline", () => {
-    const leaky = {
-      redactText: (text: string) => pipeline.redactText(text),
-      redactTextWithCallerDetections: (text: string) => ({
-        ...pipeline.redactText(""),
-        redaction: {
-          redactedText: text,
-          redactionMap: new Map<string, string>(),
-          operatorMap: new Map(),
-          entityCount: 0,
-        },
-      }),
-    };
-    const result = anonymizeCzIsirParagraphs(leaky, [
-      paragraph("Dlužník, r. č. 750403/1234, podal návrh."),
+    for (const text of [
+      "Dlužník, r. č. 750403/1234, podal návrh.",
+      "Dlužník, r. č. 7504031234, podal návrh.",
+      "Dlužník, rodné číslo: 7504031234, podal návrh.",
+    ]) {
+      const result = anonymizeCzIsirParagraphs(scripted(), [paragraph(text)]);
+      expect(Result.isError(result) && result.error.reason).toBe(
+        CZ_ISIR_ANONYMIZATION_FAILURE.BIRTH_NUMBER_LEFT,
+      );
+    }
+  });
+
+  test("replaces an ISO birth date and keeps an ISO date of anything else", () => {
+    expect(
+      texts(
+        scripted(),
+        "dlužník narozený 1975-04-03 podal dne 2023-11-06 návrh.",
+      ),
+    ).toEqual([
+      "dlužník narozený [DATE_OF_BIRTH_1] podal dne 2023-11-06 návrh.",
+    ]);
+  });
+
+  test("replaces a birth date that opens the paragraph after its trigger", () => {
+    expect(
+      texts(scripted(), "dlužník, narozený", "3. 4. 1975, podal návrh."),
+    ).toEqual(["dlužník, narozený", "[DATE_OF_BIRTH_1], podal návrh."]);
+  });
+
+  test("sweeps a short name word wherever it stands alone", () => {
+    const out = texts(
+      scripted(),
+      "dlužník Jan Novák, narozený 3. 4. 1975, podal návrh.",
+      "Jan to doložil.",
+    ).join("\n");
+    expect(out).not.toContain("Jan");
+    expect(out).not.toContain("Novák");
+  });
+
+  test("fails closed where a residence the pipeline missed still stands", () => {
+    const result = anonymizeCzIsirParagraphs(scripted(), [
+      paragraph(
+        "dlužník, adresou trvalého pobytu Vzorová 12, Vzorov, podal návrh.",
+      ),
     ]);
     expect(Result.isError(result) && result.error.reason).toBe(
-      CZ_ISIR_ANONYMIZATION_FAILURE.BIRTH_NUMBER_LEFT,
+      CZ_ISIR_ANONYMIZATION_FAILURE.RESIDENCE_LEFT,
     );
+  });
+
+  test("keeps two people of one surname apart, and a bare surname from both", () => {
+    const out = texts(
+      scripted({
+        "Martin Novák a Marek Novák podali odvolání.": [
+          "[PERSON_1] a [PERSON_2] podali odvolání.",
+          { "[PERSON_1]": "Martin Novák", "[PERSON_2]": "Marek Novák" },
+        ],
+        "Martina Nováka zastupuje advokát.": [
+          "[PERSON_1] zastupuje advokát.",
+          { "[PERSON_1]": "Martina Nováka" },
+        ],
+        "Novák nesouhlasí.": [
+          "[PERSON_1] nesouhlasí.",
+          { "[PERSON_1]": "Novák" },
+        ],
+      }),
+      "Martin Novák a Marek Novák podali odvolání.",
+      "Martina Nováka zastupuje advokát.",
+      "Novák nesouhlasí.",
+    );
+    expect(out).toEqual([
+      "[PERSON_1] a [PERSON_2] podali odvolání.",
+      "[PERSON_1] zastupuje advokát.",
+      "[PERSON_3] nesouhlasí.",
+    ]);
+  });
+
+  test("fails closed where a replaced span takes a docket with it", () => {
+    const result = anonymizeCzIsirParagraphs(
+      scripted({
+        "Pavel ⟦D0⟧ podal odvolání.": [
+          "[PERSON_1] podal odvolání.",
+          { "[PERSON_1]": "Pavel ⟦D0⟧" },
+        ],
+      }),
+      [paragraph("Pavel MSPH 60 INS 10782/2023 podal odvolání.")],
+    );
+    expect(Result.isError(result) && result.error.reason).toBe(
+      CZ_ISIR_ANONYMIZATION_FAILURE.STRUCTURE_LOST,
+    );
+  });
+});
+
+describe("createCzIsirAnonymizer", () => {
+  test("prepares again after a failed preparation", async () => {
+    let calls = 0;
+    const anonymizer = createCzIsirAnonymizer(async () => {
+      calls += 1;
+      if (calls === 1) {
+        throw new Error("not ready");
+      }
+      return scripted();
+    });
+    const [failed] = await Promise.allSettled([anonymizer.load()]);
+    expect(failed?.status).toBe("rejected");
+    await anonymizer.load();
+    await anonymizer.load();
+    expect(calls).toBe(2);
   });
 });

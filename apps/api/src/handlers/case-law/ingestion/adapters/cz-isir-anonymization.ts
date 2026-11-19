@@ -109,12 +109,33 @@ const DOCKET =
 const MARKER = (index: number) => `⟦D${index}⟧`;
 const MARKER_PATTERN = /⟦D(\d+)⟧/gu;
 
-/** A date after a birth trigger: `narozený 21. 5. 1980`, `nar. 1. ledna 1990`. */
-const BIRTH_DATE =
-  /(?<trigger>\b(?:narozen[áéýo]?|nar\.|datum narození:?|r\. ?č\.:?)\s*)(?<date>\d{1,2}\. ?\d{1,2}\. ?\d{4}|\d{1,2}\. ?\p{Ll}+ \d{4})/giu;
+const BIRTH_TRIGGER = String.raw`\b(?:narozen[áéýo]?|nar\.|datum narození:?|r\. ?č\.:?)`;
+/** `21. 5. 1980`, `1. ledna 1990`, `1980-05-21`. */
+const DATE_VALUE = String.raw`\d{1,2}\. ?\d{1,2}\. ?\d{4}|\d{1,2}\. ?\p{Ll}+ \d{4}|\d{4}-\d{2}-\d{2}`;
 
-/** Czech and Slovak birth numbers: `900101/2020`, `9001012020`. */
+/** A date after a birth trigger: `narozený 21. 5. 1980`, `nar. 1. ledna 1990`. */
+const BIRTH_DATE = new RegExp(
+  `(?<trigger>${BIRTH_TRIGGER}\\s*)(?<date>${DATE_VALUE})`,
+  "giu",
+);
+
+/**
+ * A paragraph that ends on a birth trigger, and the date that opens the next
+ * one: a line break or an indent splits `narozený` from its date.
+ */
+const ENDS_ON_BIRTH_TRIGGER = new RegExp(`${BIRTH_TRIGGER}\\s*$`, "iu");
+const LEADING_DATE = new RegExp(`^(?<date>${DATE_VALUE})`, "iu");
+
+/** Czech and Slovak birth numbers with their slash: `900101/2020`. */
 const BIRTH_NUMBER = /(?<![\d/])\d{6} ?\/ ?\d{3,4}(?![\d/])/u;
+
+/**
+ * A birth number without its slash, after the label that names it (`r. č.
+ * 9001012020`, `rodné číslo: 9001012020`); unlabelled, ten digits are as
+ * likely an account or a file number.
+ */
+const LABELLED_BIRTH_NUMBER =
+  /(?:\br\. ?č\.|\brodn\p{Ll}* čísl\p{Ll}*|\bRČ)\s*:?\s*\d{6} ?\d{3,4}(?!\d)/iu;
 
 const WORD = /\p{L}[\p{L}'’-]*/gu;
 const PLACEHOLDER = /\[[A-Z_]+_\d+\]/gu;
@@ -139,12 +160,16 @@ const TITLES: ReadonlySet<string> = new Set([
   "mba",
   "dis",
   "arch",
+  "dr",
   "ll",
   "m",
 ]);
 
 /** Name words shorter than this match only exactly; shorter stems over-reach. */
 const MIN_STEM = 4;
+
+/** A detected name word this long is swept: `Jan` too, though only exactly. */
+const MIN_NAME_WORD = 2;
 
 /**
  * Czech case endings stripped off a name word to reach its stem, longest
@@ -211,7 +236,7 @@ const nameStems = (entities: readonly NativePipelineEntity[]): Set<string> => {
       if (
         isCapitalised(word) &&
         !TITLES.has(folded) &&
-        folded.length >= MIN_STEM
+        folded.length >= MIN_NAME_WORD
       ) {
         stems.add(stemOf(word));
       }
@@ -243,7 +268,7 @@ const markedNameStems = (text: string): Set<string> => {
         break;
       }
       const folded = fold(word).replaceAll(".", "");
-      if (!TITLES.has(folded) && folded.length >= MIN_STEM) {
+      if (!TITLES.has(folded) && folded.length >= MIN_NAME_WORD) {
         stems.add(stemOf(word.replaceAll(/[^\p{L}'’-]/gu, "")));
       }
     }
@@ -264,7 +289,7 @@ const introducedNameStems = (text: string): Set<string> => {
   for (const match of text.matchAll(INTRODUCED_PERSON)) {
     for (const [word] of (match.groups?.["name"] ?? "").matchAll(WORD)) {
       const folded = fold(word).replaceAll(".", "");
-      if (!TITLES.has(folded) && folded.length >= MIN_STEM) {
+      if (!TITLES.has(folded) && folded.length >= MIN_NAME_WORD) {
         stems.add(stemOf(word));
       }
     }
@@ -278,8 +303,12 @@ const introducedNameStems = (text: string): Set<string> => {
  * pipeline's address detector reads most; a residence is what a natural
  * person's address is, so it is never left to the detector alone.
  */
-const RESIDENCE =
-  /\b(?<trigger>(?:trvale )?bytem|místem podnikání|s místem podnikání|adresou trvalého pobytu)\s+(?<address>[^;()]{1,160}?\b\d{3} ?\d{2}\s+\p{Lu}[\p{L}.-]*(?:\s+(?:nad|pod|u|v|na|ve)\s+\p{Lu}[\p{L}.-]*|\s+\d{1,2}|\s+-\s+\p{Lu}[\p{L}.-]*)*)/gu;
+const RESIDENCE_TRIGGER =
+  "(?:trvale )?bytem|místem podnikání|s místem podnikání|adresou trvalého pobytu";
+const RESIDENCE = new RegExp(
+  String.raw`\b(?<trigger>${RESIDENCE_TRIGGER})\s+(?<address>[^;()]{1,160}?\b\d{3} ?\d{2}\s+\p{Lu}[\p{L}.-]*(?:\s+(?:nad|pod|u|v|na|ve)\s+\p{Lu}[\p{L}.-]*|\s+\d{1,2}|\s+-\s+\p{Lu}[\p{L}.-]*)*)`,
+  "gu",
+);
 
 const residenceSpans = (text: string) =>
   [...text.matchAll(RESIDENCE)].flatMap((match) => {
@@ -292,8 +321,14 @@ const residenceSpans = (text: string) =>
     return [{ start, end: start + address.length }];
   });
 
-/** A residence trigger still followed by text rather than a placeholder. */
-const RESIDENCE_LEFT = /\b(?:trvale )?bytem\s+(?!\[[A-Z_]+_\d+\])\p{Lu}/u;
+/**
+ * A residence trigger still followed by a name rather than a placeholder:
+ * an address the pipeline missed and {@link RESIDENCE} could not bound.
+ */
+const RESIDENCE_LEFT = new RegExp(
+  String.raw`\b(?:${RESIDENCE_TRIGGER})\s+(?!\[[A-Z_]+_\d+\])\p{Lu}`,
+  "u",
+);
 
 /** Capitalised words of `text` whose stem is a detected name's. */
 const nameWordSpans = (
@@ -367,52 +402,89 @@ const DATE_OF_BIRTH_PLACEHOLDER_LABEL = "DATE_OF_BIRTH";
  */
 const createPlaceholderAllocator = () => {
   const byKey = new Map<string, string>();
-  const byStem = new Map<string, string>();
+  /** Every person placeholder a name word's stem has stood for. */
+  const byStem = new Map<string, Set<string>>();
+  /** The people of one surname stem: their first name's stem, and placeholder. */
+  const bySurname = new Map<string, { given: string; placeholder: string }[]>();
   const counts = new Map<string, number>();
   const fresh = (label: string): string => {
     const next = (counts.get(label) ?? 0) + 1;
     counts.set(label, next);
     return `[${label}_${next}]`;
   };
-  /**
-   * A person by surname and the first letters of a first name: Czech
-   * declension changes both (`Pavel Vomáčka`, `Pavla Vomáčky`), the
-   * surname's stem and the first name's opening survive it, and two people
-   * of one family keep two placeholders.
-   */
+  const remember = (words: readonly string[], placeholder: string) => {
+    for (const word of words) {
+      const stem = stemOf(word);
+      const known = byStem.get(stem) ?? new Set<string>();
+      known.add(placeholder);
+      byStem.set(stem, known);
+    }
+  };
   const personWords = (original: string): string[] =>
     [...original.matchAll(WORD)].flatMap(([word]) => {
       const folded = fold(word).replaceAll(".", "");
       return isCapitalised(word) && !TITLES.has(folded) ? [word] : [];
     });
+  /**
+   * One first name in two case forms (`Jan`, `Janem`; `Pavel`, `Pavla`):
+   * equal stems, or one stem and a case ending. `Martin` and `Marek` differ.
+   */
+  const sameGivenName = (a: string, b: string): boolean => {
+    const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+    return (
+      shorter === longer ||
+      (longer.startsWith(shorter) &&
+        CASE_ENDINGS.some((ending) => ending === longer.slice(shorter.length)))
+    );
+  };
+  /**
+   * A person by surname and first name: Czech declension changes both
+   * (`Pavel Vomáčka`, `Pavla Vomáčky`), their stems survive it, and two
+   * people of one family keep two placeholders. A mention that could be
+   * either of two people gets a placeholder of its own.
+   */
+  const person = (original: string): string => {
+    const words = personWords(original);
+    const surname = words.at(-1);
+    const given = words.length > 1 ? words[0] : undefined;
+    if (surname === undefined) {
+      return fresh(PERSON_PLACEHOLDER_LABEL);
+    }
+    if (given === undefined) {
+      const known = byStem.get(stemOf(surname));
+      if (known === undefined) {
+        const placeholder = fresh(PERSON_PLACEHOLDER_LABEL);
+        remember(words, placeholder);
+        return placeholder;
+      }
+      const [only] = known;
+      return known.size === 1 && only !== undefined
+        ? only
+        : fresh(PERSON_PLACEHOLDER_LABEL);
+    }
+    const surnameStem = stemOf(surname);
+    const givenStem = stemOf(given);
+    const people = bySurname.get(surnameStem) ?? [];
+    const matches = people.filter((known) =>
+      sameGivenName(known.given, givenStem),
+    );
+    const [match] = matches;
+    if (matches.length > 1) {
+      return fresh(PERSON_PLACEHOLDER_LABEL);
+    }
+    const placeholder = match?.placeholder ?? fresh(PERSON_PLACEHOLDER_LABEL);
+    if (match === undefined) {
+      people.push({ given: givenStem, placeholder });
+      bySurname.set(surnameStem, people);
+    }
+    remember(words, placeholder);
+    return placeholder;
+  };
   return {
     /** The document's placeholder for what the pipeline replaced. */
     of: (label: string, original: string): string => {
       if (label === PERSON_PLACEHOLDER_LABEL) {
-        const words = personWords(original);
-        const surname = words.at(-1);
-        if (surname === undefined) {
-          return fresh(label);
-        }
-        const surnameStem = stemOf(surname);
-        if (words.length === 1) {
-          const known = byStem.get(surnameStem);
-          if (known !== undefined) {
-            return known;
-          }
-        }
-        const key =
-          words.length === 1
-            ? `${label}\u0000${surnameStem}`
-            : `${label}\u0000${fold(words[0] ?? "").slice(0, 3)}\u0000${surnameStem}`;
-        const placeholder = byKey.get(key) ?? fresh(label);
-        byKey.set(key, placeholder);
-        for (const word of words) {
-          if (!byStem.has(stemOf(word))) {
-            byStem.set(stemOf(word), placeholder);
-          }
-        }
-        return placeholder;
+        return person(original);
       }
       const key = `${label}\u0000${fold(original.replaceAll(/\s+/gu, " "))}`;
       const known = byKey.get(key);
@@ -468,8 +540,20 @@ export const anonymizeCzIsirParagraphs = (
   const placeholders = createPlaceholderAllocator();
   const out: CzIsirParagraph[] = [];
   for (const [position, { text, dockets }] of masked.entries()) {
+    const afterBirthTrigger = ENDS_ON_BIRTH_TRIGGER.test(
+      masked[position - 1]?.text ?? "",
+    );
+    const leadingBirthDate = afterBirthTrigger
+      ? LEADING_DATE.exec(text)?.groups?.["date"]
+      : undefined;
+    const birthDates = [
+      ...(leadingBirthDate === undefined
+        ? []
+        : [{ start: 0, end: leadingBirthDate.length }]),
+      ...birthDateSpans(text),
+    ];
     const detections = [
-      ...birthDateSpans(text).map((span, index) =>
+      ...birthDates.map((span, index) =>
         detection(span, DATE_OF_BIRTH_LABEL, index),
       ),
       ...nameWordSpans(text, stems).map((span, index) =>
@@ -494,7 +578,13 @@ export const anonymizeCzIsirParagraphs = (
     // A residence or a birth date inside a span the pipeline kept whole (an
     // organisation it read too widely) is still standing verbatim; it is
     // replaced here, outside the pipeline, and so is a name word.
-    const kept = renumbered
+    const kept = (
+      afterBirthTrigger
+        ? renumbered.replace(LEADING_DATE, (born) =>
+            placeholders.of(DATE_OF_BIRTH_PLACEHOLDER_LABEL, born),
+          )
+        : renumbered
+    )
       .replaceAll(RESIDENCE, (whole: string, ...rest: unknown[]) => {
         const groups = rest.at(-1);
         const address =
@@ -520,17 +610,14 @@ export const anonymizeCzIsirParagraphs = (
         ? placeholders.of(PERSON_PLACEHOLDER_LABEL, word)
         : word,
     );
-    // A marker inside a span the pipeline replaced goes with that span; a
-    // marker that survives must still be the one it was, in order.
+    // Every docket must come back, once and in order: a marker a replaced
+    // span took with it would drop the docket from the decision.
     const markers = [...swept.matchAll(MARKER_PATTERN)].map((match) =>
       integerOf(match[1] ?? ""),
     );
     if (
-      markers.some(
-        (index, at) =>
-          index >= dockets.length ||
-          (at > 0 && index <= (markers[at - 1] ?? -1)),
-      )
+      markers.length !== dockets.length ||
+      markers.some((index, at) => index !== at)
     ) {
       return failure(
         CZ_ISIR_ANONYMIZATION_FAILURE.STRUCTURE_LOST,
@@ -545,13 +632,16 @@ export const anonymizeCzIsirParagraphs = (
     const residue = restored
       .replaceAll(PLACEHOLDER, " ")
       .replaceAll(DOCKET, " ");
-    if (BIRTH_NUMBER.test(residue)) {
+    if (BIRTH_NUMBER.test(residue) || LABELLED_BIRTH_NUMBER.test(residue)) {
       return failure(
         CZ_ISIR_ANONYMIZATION_FAILURE.BIRTH_NUMBER_LEFT,
         "A birth number survived anonymisation",
       );
     }
-    if (birthDateSpans(residue).length > 0) {
+    if (
+      birthDateSpans(residue).length > 0 ||
+      (afterBirthTrigger && LEADING_DATE.test(residue.trimStart()))
+    ) {
       return failure(
         CZ_ISIR_ANONYMIZATION_FAILURE.BIRTH_DATE_LEFT,
         "A date of birth survived anonymisation",
@@ -591,7 +681,14 @@ export const createCzIsirAnonymizer = (
   return {
     load: async () => {
       prepared ??= prepare();
-      const pipeline = await prepared;
+      const attempt = prepared;
+      // A failed preparation is not kept: the next load prepares again.
+      const pipeline = await attempt.catch((error: unknown) => {
+        if (prepared === attempt) {
+          prepared = null;
+        }
+        throw error;
+      });
       return {
         anonymize: (paragraphs) =>
           anonymizeCzIsirParagraphs(pipeline, paragraphs),
