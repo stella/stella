@@ -518,6 +518,21 @@ const withoutQuery = (id: string): string => {
   return query === -1 ? id : id.slice(0, query);
 };
 
+/** Each app module's static specifiers, read from its original source. */
+const appModuleSpecifiers = (
+  ids: readonly string[],
+  contents: readonly (string | null)[] | undefined,
+): Map<string, string[]> => {
+  const specifiers = new Map<string, string[]>();
+  for (const [index, id] of ids.entries()) {
+    const content = contents?.[index];
+    if (typeof content === "string" && id.startsWith(APP_SOURCE_PREFIX)) {
+      specifiers.set(id, staticSpecifiers(withoutQuery(id), content));
+    }
+  }
+  return specifiers;
+};
+
 /** Resolves each module's specifiers to the build's module ids. */
 export const resolveModuleImports = (
   specifiers: ReadonlyMap<string, readonly string[]>,
@@ -658,13 +673,7 @@ const readChunk = (
       routeComponentBytes.set(id, (routeComponentBytes.get(id) ?? 0) + bytes);
     }
   }
-  const moduleSpecifiers = new Map<string, string[]>();
-  for (const [index, id] of ids.entries()) {
-    const content = map.sourcesContent?.[index];
-    if (typeof content === "string" && id.startsWith(APP_SOURCE_PREFIX)) {
-      moduleSpecifiers.set(id, staticSpecifiers(withoutQuery(id), content));
-    }
-  }
+  const moduleSpecifiers = appModuleSpecifiers(ids, map.sourcesContent);
   const dynamicImports: BuiltChunk["dynamicImports"][number][] = [];
   if (attribution !== undefined && hasDynamicImport) {
     const starts = lineStarts(code);
