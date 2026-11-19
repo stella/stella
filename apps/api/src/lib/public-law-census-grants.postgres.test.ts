@@ -6,6 +6,7 @@ import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-d
 import type { PublicLawDatabaseRolePermissions } from "@/api/lib/public-law-read-db";
 import {
   CENSUS_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
   LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
 } from "@/api/lib/public-law-relations";
@@ -17,6 +18,7 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
   test.each(
     Object.entries({
       ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+      ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
       ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
     }),
   )(

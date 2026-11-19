@@ -18,7 +18,7 @@ const measureHostedErasureRun = async (
 ) => {
   const now = new Date("2026-10-29T00:00:00Z");
   const task =
-    createSchedulerTaskRegistry(noopTask, noopTask, {
+    createSchedulerTaskRegistry(noopTask, noopTask, noopTask, {
       hostedCustomerErasureDependencies: {
         credentials: { apiKey: "fixture", baseUrl: "https://provider.test" },
         provider: "polar",

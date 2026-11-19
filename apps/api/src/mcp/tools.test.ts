@@ -7360,6 +7360,44 @@ describe("OpenAI-compatible MCP tools", () => {
         await resultIds(["loajalita jednatel", "jednatel loajalita"]),
       ).toEqual(http);
     });
+
+    test.each([
+      ["score", "partial_matches_ranked", "partial_matches_appended"],
+      ["all_words_first", "partial_matches_appended", "partial_matches_ranked"],
+    ] as const)(
+      "a %s page tells its partial matches by where it put them",
+      async (hitOrder, told, never) => {
+        searchDecisionsHandlerMock.mockResolvedValue(
+          pageIn(hitOrder, [
+            { id: "partial-high", match: "some_terms" },
+            { id: "full", match: "all_terms" },
+          ]),
+        );
+        const payload = parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              queries: ["loajalita jednatel", "jednatel loajalita"],
+              limit: 10,
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        );
+        const codes =
+          isRecord(payload) && Array.isArray(payload["searches"])
+            ? payload["searches"].flatMap((search: unknown) =>
+                isRecord(search) && Array.isArray(search["warnings"])
+                  ? search["warnings"].flatMap((warning: unknown) =>
+                      isRecord(warning) ? [warning["code"]] : [],
+                    )
+                  : [],
+              )
+            : [];
+        expect(codes).toContain(told);
+        expect(codes).not.toContain(never);
+      },
+    );
   });
 
   describe("search_case_law warns about a long phrasing that came back short", () => {

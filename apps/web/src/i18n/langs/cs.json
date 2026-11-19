@@ -1494,6 +1494,10 @@
       "title": "Vyhledávání je dočasně nedostupné"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Pokud znáte spisovou značku nebo ECLI rozhodnutí, vyhledejte je podle nich.",
+        "message": "Pro tuto citaci sbírky nebylo nalezeno přesně odpovídající rozhodnutí."
+      },
       "noHits": {
         "hint": "Zkuste méně slov nebo jiná: výrazy, které by použilo rozhodnutí, ne větu, kterou se otázka pokládá.",
         "message": "Slovům, která hledání vyžadovalo, nic neodpovídá."
@@ -2226,7 +2230,6 @@
       "chipLabel": "Kde běží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Běží v cloudu. Funguje odkudkoli.",
-      "harnessModels": "Modely {harness}",
       "hintCheck": "Zkontrolujte ho ve stella desktop",
       "hintInstall": "Nainstalujte ho ve stella desktop",
       "hintOffline": "Otevřete stella desktop ve svém počítači",
@@ -2236,7 +2239,6 @@
       "localFolderSelection": "Váš počítač · {harness} · {folder}",
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
-      "modelDefault": "Výchozí (doporučeno)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
@@ -2412,6 +2414,7 @@
       "save_document": "Uložit dokument",
       "save_matter": "Uložit spis",
       "save_playbook": "Uložit playbook",
+      "save_skill_package": "Uložit dovednost",
       "save_task": "Uložit úkol",
       "save_template": "Uložit vzor",
       "save_time_entry": "Uložit časový záznam",
@@ -2440,6 +2443,7 @@
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
       "user_message": "Odesláno během práce agenta",
+      "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
@@ -4044,6 +4048,12 @@
     "versionCreatedDescription": "Byla vytvořena verze {versionNumber}. Všichni mohou pokračovat v úpravách.",
     "versionCreatedTitle": "Verze vytvořena",
     "viewOnly": "Jen ke čtení"
+  },
+  "guidance": {
+    "notCaseLaw": "Metodický dokument vydaný regulátorem. Nejde o soudní rozhodnutí.",
+    "openAtPublisher": "Otevřít u vydavatele",
+    "source": "Zdroj: {attribution}",
+    "textUnavailable": "Text tohoto dokumentu zde není k dispozici. Přečtěte si ho u vydavatele."
   },
   "guides": {
     "action": {

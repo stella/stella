@@ -1494,6 +1494,10 @@
       "title": "A keresés átmenetileg nem érhető el"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ha ismert, keressen a határozat ügyszáma vagy ECLI-azonosítója alapján.",
+        "message": "Nem található a gyűjteményi hivatkozásnak pontosan megfelelő határozat."
+      },
       "noHits": {
         "hint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
         "message": "Semmi nem felel meg a keresés által megkívánt szavaknak."
@@ -2226,7 +2230,6 @@
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
-      "harnessModels": "{harness}-modellek",
       "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
@@ -2236,7 +2239,6 @@
       "localFolderSelection": "Az Ön számítógépe · {harness} · {folder}",
       "localPlace": "Az Ön számítógépe, {harness}",
       "localSelection": "Az Ön számítógépe · {harness}",
-      "modelDefault": "Alapértelmezett (ajánlott)",
       "placeState": "{place}. {state}",
       "stepsCheck": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános › AI-előfizetések részen ellenőrizze ezt az ügynököt: {harness}.",
       "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
@@ -2412,6 +2414,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -2440,6 +2443,7 @@
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "user_message": "Az ügynök munkája közben elküldve",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -4044,6 +4048,12 @@
     "versionCreatedDescription": "A(z) {versionNumber}. verzió létrejött. Mindenki folytathatja a szerkesztést.",
     "versionCreatedTitle": "Verzió létrehozva",
     "viewOnly": "Csak megtekintés"
+  },
+  "guidance": {
+    "notCaseLaw": "Szabályozó hatóság által kiadott iránymutatás. Ez nem bírósági határozat.",
+    "openAtPublisher": "Megnyitás a kiadónál",
+    "source": "Forrás: {attribution}",
+    "textUnavailable": "A dokumentum szövege itt nem érhető el. Olvassa el a kiadónál."
   },
   "guides": {
     "action": {

@@ -1494,6 +1494,10 @@
       "title": "البحث غير متاح مؤقتًا"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "ابحث برقم القضية أو معرّف ECLI للقرار، إن كان معروفًا.",
+        "message": "لم يُعثر على قرار يطابق هذا المرجع في مجموعة الأحكام تمامًا."
+      },
       "noHits": {
         "hint": "جرّب كلمات أقل أو كلمات مختلفة: المصطلحات التي يستخدمها الحكم، لا الجملة التي يُطرح بها السؤال.",
         "message": "لا شيء يطابق الكلمات التي اشترطها هذا البحث."
@@ -2226,7 +2230,6 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
-      "harnessModels": "نماذج {harness}",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2236,7 +2239,6 @@
       "localFolderSelection": "حاسوبك · {harness} · {folder}",
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
-      "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
@@ -2412,6 +2414,7 @@
       "save_document": "حفظ المستند",
       "save_matter": "حفظ الملف القانوني",
       "save_playbook": "حفظ دليل المراجعة",
+      "save_skill_package": "حفظ المهارة",
       "save_task": "حفظ المهمة",
       "save_template": "حفظ القالب",
       "save_time_entry": "حفظ إدخال الوقت",
@@ -2440,6 +2443,7 @@
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "user_message": "أُرسلت أثناء عمل الوكيل",
+      "validate_skill_package": "التحقق من المهارة",
       "web_search": "البحث على الويب"
     },
     "toolCall": {
@@ -4044,6 +4048,12 @@
     "versionCreatedDescription": "تم إنشاء الإصدار {versionNumber}. يمكن للجميع متابعة التحرير.",
     "versionCreatedTitle": "تم إنشاء الإصدار",
     "viewOnly": "عرض فقط"
+  },
+  "guidance": {
+    "notCaseLaw": "إرشادات صادرة عن جهة تنظيمية. هذا ليس حكمًا قضائيًا.",
+    "openAtPublisher": "فتح لدى الناشر",
+    "source": "المصدر: {attribution}",
+    "textUnavailable": "نص هذا المستند غير متاح هنا. اقرأه لدى الناشر."
   },
   "guides": {
     "action": {

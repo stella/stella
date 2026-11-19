@@ -1,5 +1,7 @@
 import { panic, TaggedError } from "better-result";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
 import { isCaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { PROVISION_KEYS_FIELD } from "@/api/lib/legal-search/corpus-index-config";
@@ -23,6 +25,7 @@ import type {
   CorpusStemming,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  caseLawDocumentStemLanguages,
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
@@ -263,10 +266,30 @@ type CaseLawCorpusQueryFieldsOptions = {
   language: string | undefined;
 };
 
+type CaseLawDocumentStems = {
+  /** Sorted, at least one. */
+  languages: readonly [MorphologyLanguage, ...MorphologyLanguage[]];
+  /** The headnote's stem field. */
+  headnoteField: string;
+};
+
 export type CaseLawCorpusQueryFields = {
   surfaceFields: readonly string[];
   keywordFields: readonly string[];
   stemming: CorpusStemming | null;
+  /**
+   * The stemmers the searched documents' stems were written with, for the
+   * fields that hold each document's stems in its own language (the
+   * decision-level terms, the headnote stems); null where the generation
+   * writes no stems or no searched document's language has a stemmer.
+   *
+   * Not {@link stemming}'s one language: that answers which language the
+   * reader writes in, and a search spanning several (unscoped, or the
+   * European index without a language filter) has none, yet its documents
+   * were each stemmed under their own. Asking those fields only for the typed
+   * form would miss every inflection.
+   */
+  documentStems: CaseLawDocumentStems | null;
   legacyStemming?: CorpusLegacyStemming | undefined;
   /**
    * The words a query in this language may stop requiring, or null where it
@@ -318,6 +341,46 @@ export const caseLawQueryLanguage = ({
     ? corpusMorphologyLanguage(jurisdiction)
     : documentMorphologyLanguage(language);
 
+/**
+ * The stemmers the documents a case-law read reaches were projected under.
+ *
+ * A language filter names the documents' language, so it answers alone (and
+ * a language with no stemmer answers none). Otherwise the documents are those
+ * of the read's jurisdiction, or of every jurisdiction the generation holds,
+ * each in the languages its jurisdiction declares: the same declaration the
+ * projection refuses an undeclared language against, so the two sides cannot
+ * drift.
+ */
+const caseLawReadDocumentStemLanguages = ({
+  generation,
+  jurisdiction,
+  language,
+}: CaseLawCorpusQueryFieldsOptions): readonly MorphologyLanguage[] => {
+  if (language !== undefined) {
+    const stem = documentMorphologyLanguage(language);
+    return stem === null ? [] : [stem];
+  }
+  if (jurisdiction !== undefined) {
+    return caseLawDocumentStemLanguages([jurisdiction]);
+  }
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  return caseLawDocumentStemLanguages(
+    CASE_LAW_JURISDICTIONS.filter((held) =>
+      corpusIndexManifestCoversJurisdiction(manifest, held),
+    ),
+  );
+};
+
+const caseLawDocumentStems = (
+  languages: readonly MorphologyLanguage[],
+  headnoteField: string,
+): CaseLawDocumentStems | null => {
+  const [first, ...rest] = languages;
+  return first === undefined
+    ? null
+    : { languages: [first, ...rest], headnoteField };
+};
+
 export const caseLawCorpusQueryFields = ({
   generation,
   jurisdiction,
@@ -340,6 +403,17 @@ export const caseLawCorpusQueryFields = ({
     surfaceFields: searchableFields,
     keywordFields,
     functionWords: functionWordsFor(stemLanguage),
+    documentStems:
+      stemFields === null
+        ? null
+        : caseLawDocumentStems(
+            caseLawReadDocumentStemLanguages({
+              generation,
+              jurisdiction,
+              language,
+            }),
+            stemFields.publisherSummary,
+          ),
     stemming:
       stemFields === null || stemLanguage === null
         ? null

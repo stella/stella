@@ -1,7 +1,8 @@
 diff --git a/dist/node.d.mts b/dist/node.d.mts
+index 6664e7041a3ca70a29d614516e4cdd86f8b3a22c..b0360ed1ae669e509649dcc74b0541c80d15fce6 100644
 --- a/dist/node.d.mts
 +++ b/dist/node.d.mts
-@@ -4,8 +4,9 @@ import { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
+@@ -3,8 +3,9 @@ import { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
   * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
   * connection pinning.
   *
@@ -14,12 +15,13 @@ diff --git a/dist/node.d.mts b/dist/node.d.mts
   * the caller and are never followed.
   */
 diff --git a/dist/node.mjs b/dist/node.mjs
+index 949d571e2595981a099f086becdabec71de2d1f8..7f5ca5c7ba3c00ca2a2120aef7ce5ce6efbfc7a3 100644
 --- a/dist/node.mjs
 +++ b/dist/node.mjs
 @@ -4,6 +4,7 @@ import { request } from "node:https";
  import { isIP } from "node:net";
  import { Readable } from "node:stream";
- //#region src/node.ts
+ // src/node.ts
 +const CONNECT_TIMEOUT_MS = 1000;
  const BODY_FORBIDDEN_RESPONSE_STATUSES = /* @__PURE__ */ new Set([
  	204,
@@ -164,4 +166,4 @@ diff --git a/dist/node.mjs b/dist/node.mjs
 +		attempt();
  	});
  };
- //#endregion
+ export { fetchClientMetadataResource };

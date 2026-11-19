@@ -1494,6 +1494,10 @@
       "title": "Wyszukiwanie jest tymczasowo niedostępne"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Wyszukaj orzeczenie po sygnaturze akt lub ECLI, jeśli je znasz.",
+        "message": "Nie znaleziono orzeczenia odpowiadającego dokładnie temu oznaczeniu w zbiorze."
+      },
       "noHits": {
         "hint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
         "message": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie."
@@ -2226,7 +2230,6 @@
       "chipLabel": "Gdzie działa: {place}",
       "cloud": "Chmura",
       "cloudDescription": "Działa w chmurze. Dostępne z każdego miejsca.",
-      "harnessModels": "Modele {harness}",
       "hintCheck": "Sprawdź go w stella desktop",
       "hintInstall": "Zainstaluj go w stella desktop",
       "hintOffline": "Otwórz stella desktop na swoim komputerze",
@@ -2236,7 +2239,6 @@
       "localFolderSelection": "Twój komputer · {harness} · {folder}",
       "localPlace": "Twój komputer, {harness}",
       "localSelection": "Twój komputer · {harness}",
-      "modelDefault": "Domyślny (zalecany)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i sprawdź agenta {harness} w sekcji Ustawienia › Ogólne › Subskrypcje AI.",
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
@@ -2412,6 +2414,7 @@
       "save_document": "Zapisz dokument",
       "save_matter": "Zapisz sprawę",
       "save_playbook": "Zapisz playbook",
+      "save_skill_package": "Zapisz umiejętność",
       "save_task": "Zapisz zadanie",
       "save_template": "Zapisz szablon",
       "save_time_entry": "Zapisz wpis czasu",
@@ -2440,6 +2443,7 @@
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
       "user_message": "Wysłano podczas pracy agenta",
+      "validate_skill_package": "Sprawdź umiejętność",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -4044,6 +4048,12 @@
     "versionCreatedDescription": "Utworzono wersję {versionNumber}. Wszyscy mogą kontynuować edycję.",
     "versionCreatedTitle": "Wersja utworzona",
     "viewOnly": "Tylko do odczytu"
+  },
+  "guidance": {
+    "notCaseLaw": "Wytyczne wydane przez organ regulacyjny. To nie jest orzeczenie sądu.",
+    "openAtPublisher": "Otwórz u wydawcy",
+    "source": "Źródło: {attribution}",
+    "textUnavailable": "Tekst tego dokumentu nie jest tu dostępny. Przeczytaj go u wydawcy."
   },
   "guides": {
     "action": {
