@@ -156,7 +156,7 @@ const SECTION_CITATION_PATTERN =
   /§{1,2}\s?\d+\p{L}{0,2}(?:\s+\p{L}{1,5}\.\s?\d+\p{L}?)*(?:\s+\p{L}{1,4}\.){0,4}/u;
 // The first phrasing a search was given: `query: "…"` or `queries: ["…"`.
 const QUERY_PATTERN =
-  /\bquer(?:y|ies)\s*:\s*\[?\s*(?:"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)')/u;
+  /\bquer(?:y|ies)\s*:\s*(?:\[\s*)?(?:"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)')/u;
 // Every single- or double-quoted string in the script.
 const STRING_LITERAL_PATTERN = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'/gu;
 const MAX_TOPIC_LENGTH = 56;
