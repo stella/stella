@@ -436,6 +436,12 @@ updates:
       - dependency-name: "@tanstack/react-hotkeys"
         versions:
           - ">0.23.1"
+      # turbo 2.11.11 re-runs cached API typecheck tasks whose inputs did not
+      # change (packages/scripts/src/api-typecheck-cache.test.ts). Remove this
+      # when a release keeps those cache hits.
+      - dependency-name: "turbo"
+        versions:
+          - ">2.11.10"
     commit-message:
       prefix: "chore"
     reviewers:

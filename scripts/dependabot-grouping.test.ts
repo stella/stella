@@ -133,6 +133,11 @@ const ignorePolicies = {
       "0.25 deprecates the platform-taking formatForDisplay re-export; migration is a separate change.",
     type: "documented_policy",
   },
+  turbo: {
+    reason:
+      "2.11.11 re-runs cached API typecheck tasks whose inputs did not change.",
+    type: "documented_policy",
+  },
   "prosemirror-inputrules": {
     reason:
       "1.6.0 imports prosemirror-model without declaring it; the isolated linker cannot resolve it.",
