@@ -84,7 +84,7 @@ export type CarriedSendContext = Partial<
   Pick<ChatSendRequest, ChatSendActiveField | "contextMatterIds">
 >;
 
-export const FIRST_SEND_ORG_AI_CONFIG = {
+const FIRST_SEND_ORG_AI_CONFIG = {
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
   overrideModels: {
     chat: { provider: "openai", modelId: "gpt-5.4-mini" },
@@ -151,7 +151,7 @@ const outcomeOf = (answer: unknown): HandlerOutcome => {
 const RUN = Bun.randomUUIDv7().slice(-12);
 
 /** The seeded installed skill a send can name by id. */
-export const INSTALLED_SKILL = {
+const INSTALLED_SKILL = {
   slug: `first-send-review-${RUN}`,
   body: `Apply the first-send review methodology ${RUN}.`,
 };
