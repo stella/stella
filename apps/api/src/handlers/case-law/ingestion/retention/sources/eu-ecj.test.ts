@@ -1,5 +1,6 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { load } from "@stll/html";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -37,11 +38,11 @@ const SHELLS = new Set([
 /** Every recorded manifestation and portal page the adapter's tests read. */
 const RECORDED = [
   ...Array.from(
-    new Glob("*.html.gz").scanSync(PARSER_FIXTURES.pathname),
+    new Glob("*.html.gz").scanSync(fileURLToPath(PARSER_FIXTURES)),
     (name) => ({ name, url: new URL(name, PARSER_FIXTURES) }),
   ),
   ...Array.from(
-    new Glob("eu-ecj-*.html{,.gz}").scanSync(ADAPTER_FIXTURES.pathname),
+    new Glob("eu-ecj-*.html{,.gz}").scanSync(fileURLToPath(ADAPTER_FIXTURES)),
     (name) => ({ name, url: new URL(name, ADAPTER_FIXTURES) }),
   ),
 ]

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { createTestState } from "@stll/test-state";
@@ -60,7 +62,7 @@ const loopbackAddressOf = (scope: string, keys: readonly string[]): string => {
 
 describe("public corpus search request budget", () => {
   test("public search counter scopes belong only to the class policy helper", async () => {
-    const sourceRoot = new URL("../../", import.meta.url).pathname;
+    const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
     const violations: string[] = [];
     for await (const path of new Bun.Glob("**/*.ts").scan(sourceRoot)) {
       if (
@@ -69,7 +71,7 @@ describe("public corpus search request budget", () => {
       ) {
         continue;
       }
-      const source = await Bun.file(`${sourceRoot}${path}`).text();
+      const source = await Bun.file(nodePath.join(sourceRoot, path)).text();
       if (/["'`]public[-\w]*search(?::[^"'`]*)?["'`]/u.test(source)) {
         violations.push(path);
       }

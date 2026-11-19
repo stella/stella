@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const toolchain = readFileSync(
   new URL("../rust-toolchain.toml", import.meta.url),
@@ -30,7 +31,10 @@ const buildWithCompiler = (metadata: string, overrideMetadata?: string) => {
       );
     }
     return Bun.spawnSync(
-      ["bash", new URL("../scripts/build-wasm.sh", import.meta.url).pathname],
+      [
+        "bash",
+        fileURLToPath(new URL("../scripts/build-wasm.sh", import.meta.url)),
+      ],
       {
         env: {
           ...process.env,

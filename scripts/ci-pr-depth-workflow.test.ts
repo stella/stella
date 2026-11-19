@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
@@ -594,8 +595,9 @@ test("the hourly workflow never cancels a running check", () => {
   expect(concurrency.group).toContain("github.ref");
 });
 
-const statusScript = new URL("main-pr-depth-status.sh", import.meta.url)
-  .pathname;
+const statusScript = fileURLToPath(
+  new URL("main-pr-depth-status.sh", import.meta.url),
+);
 const statusSha = "b".repeat(40);
 type WorkflowRun = {
   id: number;

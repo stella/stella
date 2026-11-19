@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
+import { fileURLToPath } from "node:url";
 
 import { createTestState } from "@stll/test-state";
 
@@ -520,7 +521,7 @@ if (!databaseUrl || !enabled) {
             } else process.exitCode = 1;
           `,
           ],
-          cwd: new URL("../../", import.meta.url).pathname,
+          cwd: fileURLToPath(new URL("../../", import.meta.url)),
           env: {
             ...process.env,
             CONTENT_ENCRYPTION_KEY:
