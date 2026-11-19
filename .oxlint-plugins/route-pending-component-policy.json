@@ -1,0 +1,36 @@
+{
+  "$comment": "What a route's pending half (*.pending.tsx) may import, besides other *.pending modules, *.logic modules and type-only imports. Pending halves ship in the entry chunk, so each entry here must stay small and context-free; __tests__/route-pending-component-closure.test.ts walks every entry's import closure and fails on closureBanned.",
+  "pendingSafeModules": [
+    "react",
+    "@stll/ui/icons",
+    "@stll/ui/landing-shell",
+    "@stll/ui/stella-mark",
+    "@stll/ui/utils",
+    "@/components/pending-text"
+  ],
+  "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
+  "pendingSafeNamedImports": {
+    "@tanstack/react-router": ["useParams", "useSearch"]
+  },
+  "$syncCacheReadersComment": "Synchronous reads of data already in the query cache, by export name from any module, so a pending view can show the controls the loaded page will (no fetch, no subscription).",
+  "syncCacheReaders": ["cachedRoleGrants"],
+  "closureBanned": [
+    "menu",
+    "alert-dialog",
+    "dialog",
+    "popover",
+    "@tanstack/react-query",
+    "@/lib/api",
+    "form",
+    "table-core",
+    "@tanstack/react-table",
+    "@atlaskit/pragmatic-",
+    "@dnd-kit",
+    "@tiptap",
+    "prosemirror",
+    "@stll/folio",
+    "chat-runtime",
+    "@ai-sdk",
+    "editor"
+  ]
+}

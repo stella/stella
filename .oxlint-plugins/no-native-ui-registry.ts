@@ -263,6 +263,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   ),
   label: native("Label from @stll/ui/label", { elements: ["label"] }),
   landing: noNative("landing page sections"),
+  "landing-shell": noNative("the landing layout and its pending pieces"),
   "layout-tokens": notComponent("inspector layout tokens"),
   list: noNative(
     "grouped settings rows; a plain <ul> or <ol> is ordinary markup",
@@ -635,6 +636,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "React Native has no label element; Text names the control above it",
   ),
   landing: webOnly("marketing sections for the website"),
+  "landing-shell": webOnly("the landing layout of the web home screens"),
   list: webOnly(
     'the app\'s lists are FlatList rows of Button size="row" divided by Separator',
   ),

@@ -27,7 +27,6 @@ import {
   queryAnsweredByRows,
   rowsAnswerRequestedSearch,
 } from "@/components/public-law-table/public-law-results-state.logic";
-import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
   PublicLawResultsToolbar,
@@ -130,6 +129,7 @@ import {
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { queryView, queryViewError } from "@/lib/query-view.logic";
+import type { RouteState } from "@/routes/-route-pending-view";
 import {
   PublicLawListFailure,
   PublicLawResultsBoundary,
@@ -151,7 +151,7 @@ import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 const routeApi = getRouteApi("/law/cases/");
 
 /** The page renders only once the router has the route's data. */
-const ROUTE_STATE: PublicLawRouteState = "loaded";
+const ROUTE_STATE: RouteState = "loaded";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const NO_SHOWN_QUESTIONS: readonly string[] = [];
