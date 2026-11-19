@@ -11,9 +11,23 @@ import {
 } from "expo-audio";
 import type { RecordingOptions, RecordingStatus } from "expo-audio";
 import { File } from "expo-file-system";
+import { useLocale } from "use-intl";
 
+import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import { DICTATION_MAX_SECONDS, transcribeRecording } from "@/state/dictation";
+import { deviceAccountStore } from "@/native/account-store";
+import type { ApiError } from "@/state/api-request";
+import {
+  cleanUpDictation,
+  DICTATION_MAX_SECONDS,
+  readMatterVocabulary,
+  transcribeRecording,
+} from "@/state/dictation";
+import {
+  chosenModelId,
+  DEFAULT_DICTATION_PREFERENCES,
+  readDictationPreferences,
+} from "@/state/dictation-preferences";
 
 /**
  * Speech for transcription, not music: one channel at 16 kHz, which is what
@@ -68,8 +82,19 @@ const discardRecording = (uri: string): boolean =>
  * ends gives the microphone back and deletes the recording, and a failure
  * on the way shows as the `failed` notice.
  */
-export const useDictation = (onText: (text: string) => void) => {
+export const useDictation = (
+  onText: (text: string) => void,
+  {
+    matterId,
+  }: {
+    /** The matter the text is for: its names are what the model expects. */
+    readonly matterId?: string | undefined;
+  } = {},
+) => {
   const { state } = useSession();
+  const locale = useLocale();
+  // One matter's names, read once per matter while the composer is open.
+  const vocabulary = useRef<{ matterId: string; terms: string[] }>(undefined);
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [notice, setNotice] = useState<DictationNotice>();
   // What a stop means, read when the recorder reports it: a recording that
@@ -87,10 +112,13 @@ export const useDictation = (onText: (text: string) => void) => {
       return;
     }
     setPhase("transcribing");
-    const result = await transcribeRecording({
-      fetch,
+    const terms = matterId === undefined ? [] : await matterTerms(matterId);
+    const result = await dictatedText({
       source: state.source,
       audio: new File(uri),
+      matterId,
+      vocabulary: terms,
+      locale,
     });
     if (result.isErr()) {
       setNotice("failed");
@@ -101,6 +129,26 @@ export const useDictation = (onText: (text: string) => void) => {
       return;
     }
     onText(result.value);
+  };
+
+  /** The matter's names for the model, none when they cannot be read. */
+  const matterTerms = async (id: string): Promise<string[]> => {
+    if (state.status !== "signed-in") {
+      return [];
+    }
+    if (vocabulary.current?.matterId === id) {
+      return vocabulary.current.terms;
+    }
+    const read = await readMatterVocabulary({
+      fetch,
+      source: state.source,
+      matterId: id,
+    });
+    const terms = read.unwrapOr([]);
+    if (read.isOk()) {
+      vocabulary.current = { matterId: id, terms };
+    }
+    return terms;
   };
 
   const settle = async (status: RecordingStatus) => {
@@ -239,4 +287,65 @@ export const useDictation = (onText: (text: string) => void) => {
       setNotice(undefined);
     },
   };
+};
+
+/**
+ * One recording's text, as the person set dictation up on this phone: with
+ * the model they picked, falling back to the server's default when the
+ * server no longer offers it, and tidied by stella AI when they turned that
+ * on. Cleanup only tidies: when it fails, the words as heard come back.
+ */
+const dictatedText = async ({
+  source,
+  audio,
+  matterId,
+  vocabulary,
+  locale,
+}: {
+  readonly source: AccessTokenSource;
+  readonly audio: File;
+  readonly matterId: string | undefined;
+  readonly vocabulary: readonly string[];
+  readonly locale: string;
+}): Promise<Result<string, ApiError>> => {
+  const session = source.session();
+  // A choice the phone cannot read is no choice: the server's default.
+  const preferences =
+    session === undefined
+      ? DEFAULT_DICTATION_PREFERENCES
+      : await readDictationPreferences(deviceAccountStore, session).catch(
+          () => DEFAULT_DICTATION_PREFERENCES,
+        );
+  const choice = {
+    modelId: chosenModelId(preferences, null),
+    matterId,
+    vocabulary,
+  };
+  const first = await transcribeRecording({ fetch, source, audio, choice });
+  // A model the server no longer offers: the recording still counts, with
+  // the model the server offers by default.
+  const transcribed =
+    first.isErr() &&
+    choice.modelId !== undefined &&
+    first.error._tag === "ApiRequestError" &&
+    first.error.status === 503
+      ? await transcribeRecording({
+          fetch,
+          source,
+          audio,
+          choice: { ...choice, modelId: undefined },
+        })
+      : first;
+  if (transcribed.isErr() || transcribed.value === "" || !preferences.cleanup) {
+    return transcribed;
+  }
+  const cleaned = await cleanUpDictation({
+    fetch,
+    source,
+    transcript: transcribed.value,
+    locale,
+  });
+  return Result.ok(
+    cleaned.isOk() && cleaned.value !== "" ? cleaned.value : transcribed.value,
+  );
 };
