@@ -316,7 +316,7 @@ const readDesktopMatter = async (
 /** Terms as a transcription takes them: each once whatever its case, the
  *  first spelling kept, short enough for a hint, in order, at most the
  *  contract's number. */
-export const transcriptionTerms = (terms: Iterable<string>): string[] => {
+const transcriptionTerms = (terms: Iterable<string>): string[] => {
   const kept = new Map<string, string>();
   for (const term of terms) {
     const trimmed = term.trim();
@@ -346,7 +346,8 @@ export const matterTerms = (
 export const desktopChunkVocabulary = (
   own: readonly string[] | undefined,
   matter: readonly string[],
-): string[] => transcriptionTerms([...(own ?? []), ...matter]);
+): string[] =>
+  transcriptionTerms(own === undefined ? matter : [...own, ...matter]);
 
 /** Vocabulary goes only to a model that reads it; another would refuse the
  *  request or ignore the terms. A request without a model gets none. */
@@ -511,7 +512,10 @@ export const createDesktopDictationTranscribeEndpoint = ({
                   ...caller,
                   body: withVocabulary(
                     body,
-                    desktopChunkVocabulary(ownWords, matter?.vocabulary ?? []),
+                    desktopChunkVocabulary(
+                      ownWords,
+                      matter === null ? [] : matter.vocabulary,
+                    ),
                   ),
                   request,
                   modelAdmission,
