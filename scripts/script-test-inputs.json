@@ -296,6 +296,7 @@
     "scripts/marketing-capture-wait.test.ts": ["**"],
     "scripts/marketing-screenshot-verdict.test.ts": ["**"],
     "scripts/marketing-screenshots-publish.test.ts": ["**"],
+    "scripts/mcp-schema-compat.test.ts": [],
     "scripts/merge-hold-census.test.ts": ["**"],
     "scripts/merge-web-assets.test.ts": ["**"],
     "scripts/migration-catalog.test.ts": ["**"],
