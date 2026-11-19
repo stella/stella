@@ -728,7 +728,9 @@ test("a language with no stemmer writes no stem field at all", () => {
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
     input: {
       ...CASE_LAW_INPUT,
-      // Snowball ships no Bulgarian algorithm, so its text goes unstemmed.
+      // Snowball ships no Bulgarian algorithm, so a Bulgarian judgment of the
+      // European index goes unstemmed.
+      jurisdiction: "eu",
       language: "bg",
       metadata: { legalSentence: "Договорът за наем." },
     },
@@ -782,6 +784,22 @@ test("a European decision stems with the language it is written in", () => {
   expect(
     openingTextStem("eu", "de", "Die Verträge der Gerichte wurden gekündigt."),
   ).toBe("die vertrag der gericht wurd gekundigt");
+});
+
+test("a language its jurisdiction does not declare is refused, not indexed unreachable", () => {
+  // The read side asks a Czech index for Czech stems only, so English stems
+  // written there would be stems no query asks for.
+  expect(() =>
+    openingTextStem("cze", "en", "The contracts were void."),
+  ).toThrow("Case-law document of CZE in an undeclared language: en");
+  expect(() => openingTextStem("xxx", "cs", "Smlouva.")).toThrow(
+    "Case-law document of an undeclared jurisdiction: xxx",
+  );
+  // Declared, with or without a stemmer.
+  expect(openingTextStem("eu", "mt", "Il-kuntratt.")).toBeUndefined();
+  expect(openingTextStem("usa", "en", "The contracts were void.")).toBe(
+    "the contract were void",
+  );
 });
 
 test("the summary stem is written to the opening passage only", () => {

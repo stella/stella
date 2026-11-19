@@ -61,7 +61,6 @@ const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v11;
 const GENERATION = MANIFEST.generation;
 const INDEX_ID = `case_law_v11_ranked_${createSafeId<"corpusIndexProjectionIntent">().replaceAll("-", "")}`;
-const ROUTED_INDEX_ID = corpusIndexId(GENERATION, "CZE");
 const ENGINE_TIMEOUT_MS = 120_000;
 const FINGERPRINT = "a".repeat(64);
 const engine = getCorpusIndexClient("q09");
@@ -79,16 +78,27 @@ type Fixture = {
   caseNumber: string;
   revision: SafeId<"corpusIndexProjectionIntent">;
   text: string;
+  jurisdiction: "CZE" | "EU";
+  language: "cs" | "en";
+  court: string;
 };
+
+const CZECH_ORIGIN = {
+  jurisdiction: "CZE",
+  language: "cs",
+  court: "Nejvyšší soud",
+} as const satisfies Pick<Fixture, "jurisdiction" | "language" | "court">;
 
 const fixture = (
   caseNumber: string,
   sentences: readonly string[],
+  origin: Pick<Fixture, "jurisdiction" | "language" | "court"> = CZECH_ORIGIN,
 ): Fixture => ({
   id: createSafeId<"caseLawDecision">(),
   caseNumber,
   revision: createSafeId<"corpusIndexProjectionIntent">(),
   text: sentences.map((sentence) => `${sentence} ${FILLER}`).join("\n\n"),
+  ...origin,
 });
 
 const FIXTURES = {
@@ -105,27 +115,56 @@ const FIXTURES = {
   ]),
   /** None of the words. */
   unrelated: fixture("27 Cdo 3/2026", ["Nájemní vztah skončil výpovědí."]),
+  /**
+   * An English judgment of the European index: the inflected word a reader
+   * types ("abandoning") is held only as its stem, and only in the body.
+   */
+  abandoned: fixture(
+    "C-1/26",
+    ["The applicant abandoned the action before the hearing."],
+    { jurisdiction: "EU", language: "en", court: "Court of Justice" },
+  ),
 } as const satisfies Record<string, Fixture>;
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
 
-const search = async (strict: boolean) => {
-  const { indexGroup } = corpusIndexGroupContractForJurisdiction(
-    MANIFEST,
-    "CZE",
+const search = async (
+  strict: boolean,
+  {
+    country = "CZE",
+    query = QUESTION,
+    language,
+  }: {
+    country?: "CZE" | "EU" | undefined;
+    query?: string;
+    language?: string;
+  } = {},
+) => {
+  const groups = new Set(
+    (["CZE", "EU"] as const).map(
+      (jurisdiction) =>
+        corpusIndexGroupContractForJurisdiction(MANIFEST, jurisdiction)
+          .indexGroup,
+    ),
   );
   const resolution = corpusIndexReadTarget({
     manifest: MANIFEST,
-    jurisdiction: "CZE",
-    attestedGroups: new Set([indexGroup]),
-    enrolledGroups: new Set([indexGroup]),
+    jurisdiction: country,
+    attestedGroups: groups,
+    enrolledGroups: groups,
   });
   if (resolution.type !== "ready") {
-    return panic("Expected the Czech corpus group to be ready");
+    return panic("Expected the corpus groups to be ready");
   }
   const result = await searchCorpusIndexDecisions({
-    body: { country: "CZE", query: QUESTION, strict, limit: 10 },
+    body: {
+      ...(country === undefined ? {} : { country }),
+      ...(language === undefined ? {} : { language }),
+      query,
+      strict,
+      limit: 10,
+    },
     caseLawDb,
     observer: "unobserved",
     dependencies: {
@@ -198,9 +237,9 @@ describe.skipIf(!runEngineTests)(
           id: entry.id,
           sourceId,
           caseNumber: entry.caseNumber,
-          court: "Nejvyšší soud",
-          country: "CZE",
-          language: "cs",
+          court: entry.court,
+          country: entry.jurisdiction,
+          language: entry.language,
           contentHash: "ranked",
         })),
       );
@@ -225,8 +264,8 @@ describe.skipIf(!runEngineTests)(
             family: "case_law",
             documentId: entry.id,
             sourceId,
-            jurisdiction: "CZE",
-            language: "cs",
+            jurisdiction: entry.jurisdiction,
+            language: entry.language,
             documentType: null,
             contentHash: "ranked",
             redistributionEligible: true,
@@ -238,7 +277,7 @@ describe.skipIf(!runEngineTests)(
             vacatedFrom: null,
             caseNumber: entry.caseNumber,
             identifiers: [],
-            court: "Nejvyšší soud",
+            court: entry.court,
             courtId: null,
             decisionDate: null,
             ecli: null,
@@ -263,7 +302,7 @@ describe.skipIf(!runEngineTests)(
           entityId: entry.id,
           epoch: 1n,
           fingerprint: FINGERPRINT,
-          indexId: ROUTED_INDEX_ID,
+          indexId: corpusIndexId(GENERATION, entry.jurisdiction),
           appendStartedAt: appliedAt,
           appendCommittedAt: appliedAt,
           expectedDocumentCount: documents.filter(
@@ -281,12 +320,12 @@ describe.skipIf(!runEngineTests)(
           desiredAction: "upsert" as const,
           desiredEpoch: 1n,
           desiredFingerprint: FINGERPRINT,
-          desiredIndexId: ROUTED_INDEX_ID,
+          desiredIndexId: corpusIndexId(GENERATION, entry.jurisdiction),
           appliedAction: "upsert" as const,
           appliedEpoch: 1n,
           appliedRevision: entry.revision,
           appliedFingerprint: FINGERPRINT,
-          appliedIndexId: ROUTED_INDEX_ID,
+          appliedIndexId: corpusIndexId(GENERATION, entry.jurisdiction),
           appliedAt,
         })),
       );
@@ -373,6 +412,37 @@ describe.skipIf(!runEngineTests)(
         expect(result.hits).toEqual([]);
         expect(pageEnd(result)).toBe(SEARCH_PAGE_END.COMPLETE);
         expect(result.warnings.map(({ code }) => code)).toContain("no_hits");
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    // A word the body holds only inflected, asked with and without a language
+    // the reader is taken to write in. The decision field holds each
+    // document's stems in its own language, so each read asks for the stems
+    // of every language its documents were written in.
+    // timeout: each case is two real engine searches plus PGlite reads.
+    test.each([
+      ["a Czech search", "CZE", undefined, "loajality", "tenOfEleven"],
+      ["an unscoped search", undefined, undefined, "loajality", "tenOfEleven"],
+      ["an unscoped search", undefined, undefined, "abandoning", "abandoned"],
+      ["a European search", "EU", undefined, "abandoning", "abandoned"],
+      ["a European English search", "EU", "en", "abandoning", "abandoned"],
+    ] as const)(
+      "%s finds the body-only inflection of %s",
+      async (_name, country, language, query, expected) => {
+        for (const strict of [false, true]) {
+          const result = await search(strict, {
+            country,
+            query,
+            ...(language === undefined ? {} : { language }),
+          });
+          const hit = result.hits.find(
+            ({ decisionId }) => decisionId === FIXTURES[expected].id,
+          );
+          expect(hit?.matchedTerms).toEqual([query]);
+          expect(hit?.missingTerms).toEqual([]);
+          expect(hit?.match).toBe("all_terms");
+        }
       },
       ENGINE_TIMEOUT_MS,
     );

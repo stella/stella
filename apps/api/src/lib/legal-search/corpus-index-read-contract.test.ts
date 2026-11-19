@@ -96,6 +96,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: [],
     functionWords: FUNCTION_WORDS.cs,
+    documentStems: { languages: ["cs"], headnoteField: "headnote_stem" },
     stemming: {
       language: "cs",
       fields: ["text_stem", "headnote_stem"],
@@ -112,6 +113,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: ["keywords"],
     functionWords: FUNCTION_WORDS.cs,
+    documentStems: { languages: ["cs"], headnoteField: "headnote_stem" },
     stemming: {
       language: "cs",
       fields: ["text_stem", "headnote_stem"],
@@ -158,6 +160,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: [],
     keywordFields: [],
     functionWords: FUNCTION_WORDS.cs,
+    documentStems: null,
     stemming: null,
   });
   // The European index carries 24 languages under one jurisdiction, so the
@@ -178,6 +181,42 @@ test("extra fields and stemming both need a generation that maps them", () => {
       language: undefined,
     }).stemming,
   ).toBeNull();
+});
+
+test("the documents' stemmers answer for every read, with or without a language", () => {
+  const stemsOf = (
+    jurisdiction: string | undefined,
+    language: string | undefined,
+    generation = "case_law_v11",
+  ) =>
+    caseLawCorpusQueryFields({ generation, jurisdiction, language })
+      .documentStems;
+
+  expect(stemsOf("CZE", undefined)).toEqual({
+    languages: ["cs"],
+    headnoteField: "headnote_stem",
+  });
+  // The European index holds a document per language, each stemmed under its
+  // own: every EU language a stemmer covers, and none it does not.
+  const eu = stemsOf("EU", undefined)?.languages ?? [];
+  expect(eu).toContain("en");
+  expect(eu).toContain("cs");
+  expect(eu).toContain("fr");
+  expect(eu).not.toContain("bg");
+  // Unscoped: every jurisdiction the generation holds, hence the European
+  // languages and every single-language corpus.
+  const unscoped = stemsOf(undefined, undefined)?.languages ?? [];
+  for (const language of ["cs", "sk", "pl", "hu", "en", "de", "pt"]) {
+    expect(unscoped).toContain(language);
+  }
+  expect(unscoped).toEqual(unscoped.toSorted());
+  // A language filter names the documents' language and answers alone.
+  expect(stemsOf("EU", "cs")?.languages).toEqual(["cs"]);
+  expect(stemsOf(undefined, "en")?.languages).toEqual(["en"]);
+  // A filtered language no stemmer covers: its documents hold surface terms.
+  expect(stemsOf("EU", "bg")).toBeNull();
+  // A generation that writes no stems asks for none.
+  expect(stemsOf(undefined, undefined, "case_law_v5")).toBeNull();
 });
 
 test("the language filter, not the jurisdiction, decides how words stem", () => {

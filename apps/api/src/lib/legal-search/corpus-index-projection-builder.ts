@@ -51,7 +51,7 @@ import {
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import { requireCaseLawDocumentStemLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -476,11 +476,13 @@ export const buildCaseLawProjection = ({
     metadata: input.metadata,
   });
   // Stems come from the decision's own language, not its jurisdiction: an
-  // index group spans several countries and a court may publish in more than
-  // one language. A language with no stemmer writes no stem fields at all,
-  // rather than a copy of the surface text under a stem name.
+  // index group spans several countries and the European index holds 24
+  // languages. The language must be one its jurisdiction declares, because
+  // the read side asks each jurisdiction's documents in those languages only.
+  // A language with no stemmer writes no stem fields at all, rather than a
+  // copy of the surface text under a stem name.
   const stemFields = corpusIndexStemFields(manifest);
-  const stemLanguage = documentMorphologyLanguage(input.language);
+  const stemLanguage = requireCaseLawDocumentStemLanguage(input);
   const stemmed =
     stemFields === null || stemLanguage === null
       ? null
