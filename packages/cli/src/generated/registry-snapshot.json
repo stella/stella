@@ -4466,7 +4466,10 @@
             },
             "blocks": {
               "type": "array",
-              "items": {}
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
             }
           },
           "required": ["kind", "country", "readerUrl"],
@@ -4841,7 +4844,10 @@
             },
             "blocks": {
               "type": "array",
-              "items": {}
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
             }
           },
           "required": ["kind", "country", "readerUrl"],
