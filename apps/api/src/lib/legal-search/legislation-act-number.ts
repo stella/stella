@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   MAGYAR_KOZLONY_WORK_URN_PREFIX,
   magyarKozlonyWorkPattern,
@@ -58,11 +59,20 @@ export const actNumberCondition = ({
   const form = statuteWorkIdentifierForm(country);
   switch (form.type) {
     case "magyar_kozlony": {
-      const pattern = magyarKozlonyWorkPattern({
-        number: Number(ordinal),
-        year: Number(year),
-        collection,
-      });
+      const actNumber = parseIntegerToken(ordinal, {
+        sign: "unsigned",
+      }).unwrapOr(null);
+      const actYear = parseIntegerToken(year, { sign: "unsigned" }).unwrapOr(
+        null,
+      );
+      const pattern =
+        actNumber === null || actYear === null
+          ? null
+          : magyarKozlonyWorkPattern({
+              number: actNumber,
+              year: actYear,
+              collection,
+            });
       return pattern === null
         ? null
         : sql`(
