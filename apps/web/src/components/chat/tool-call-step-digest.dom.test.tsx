@@ -680,11 +680,10 @@ describe("a found matter document", () => {
     );
     await waitFor(() => {
       expect(
-        useInspectorTabsStore
-          .getState()
-          .tabs.flatMap((tab) =>
-            tab.type === "file" ? [[tab.workspaceId, tab.entityId]] : [],
-          ),
+        useInspectorTabsStore.getState().tabs.flatMap((tab) =>
+          // A file opens in the file tab (`FileTab`, typed "pdf").
+          tab.type === "pdf" ? [[tab.workspaceId, tab.entityId]] : [],
+        ),
       ).toEqual([[MATTER_ID, READABLE_DOCUMENT_ID]]);
     });
   });
