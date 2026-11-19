@@ -810,14 +810,14 @@ test.each(Object.values(DECISION_IDENTIFIER_TYPES))(
       case "country_unavailable":
       case "incomplete_identifier":
       case "not_found":
-        panic(
+        return panic(
           `Stored identifier did not resolve to its owner: ${result.status}`,
         );
-        break;
       default:
         result satisfies never;
-        panic("Unexpected resolution status");
+        return panic("Unexpected resolution status");
     }
+    return undefined;
   },
   DB_TEST_TIMEOUT_MS,
 );
