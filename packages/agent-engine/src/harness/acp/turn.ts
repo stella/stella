@@ -329,12 +329,15 @@ export class AcpTurnSession {
         this.steerWith(input);
       },
       interrupt: async () => {
-        await this.lifecycle.interrupt(async (client) => {
+        // ACP's cancel is a notification: nothing answers it but the prompt,
+        // whose answer the lifecycle waits for.
+        // oxlint-disable-next-line typescript/promise-function-async -- sync notify, returns a resolved promise
+        await this.lifecycle.interrupt((client) => {
           this.cancelPermissions();
           if (this.sessionId !== null) {
             client.notify("session/cancel", { sessionId: this.sessionId });
           }
-          return true;
+          return Promise.resolve(true);
         });
       },
     });

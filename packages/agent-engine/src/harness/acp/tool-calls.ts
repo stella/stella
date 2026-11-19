@@ -252,7 +252,7 @@ export const harnessToolCall = (
     });
   }
   const tool = call.title.trim() === "" ? (call.kind ?? "tool") : call.title;
-  switch (call.kind) {
+  switch (call.kind ?? "other") {
     case "execute": {
       const command =
         stringField(call.rawInput, COMMAND_KEYS) ?? unquoted(call.title);
@@ -316,6 +316,7 @@ export const harnessToolCall = (
         input: { tool, detail: { kind: "fetch" as const, url } },
       });
     }
+    // A kind stella shows only by name (think, switch_mode, other).
     default:
       return nativeToolCall(call.id, {
         name: HARNESS_TOOL_NAMES.nativeTool,
