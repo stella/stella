@@ -363,7 +363,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `csv`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
+- `DocumentMark` `kind`: `csv`, `dataBox`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
