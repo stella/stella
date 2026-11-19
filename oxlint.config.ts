@@ -3703,12 +3703,10 @@ const config = defineConfig({
       rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
     },
     {
-      // Tests of browser bundles run in Bun, where import.meta.url is a file:
-      // URL; suites that run in a real browser stay out of scope.
-      files: browserBundleFiles.flatMap((glob) => [
-        glob.replace("*.{ts,tsx}", "*.test.{ts,tsx}"),
-        glob.replace("**/*.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}"),
-      ]),
+      // Tests, browser bundle tests included, run in Bun, where
+      // import.meta.url is a file: URL; suites that run in a real browser
+      // stay out of scope.
+      files: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"],
       excludeFiles: ["**/*.browser.test.{ts,tsx}"],
       rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
     },
