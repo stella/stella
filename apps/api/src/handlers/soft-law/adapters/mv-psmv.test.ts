@@ -69,9 +69,9 @@ const publisher = async () => {
     return url === ZAVER_190 ? pdf : undefined;
   });
 };
-const walk = async (fetch: SoftLawFetch) => {
+const walk = async (fetch: SoftLawFetch, start: string | null = null) => {
   const entries: SoftLawEntry[] = [];
-  let cursor: string | null = null;
+  let cursor = start;
   do {
     const page = (
       await mvPsmvAdapter.discover({ cursor, signal: signal(), fetch })

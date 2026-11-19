@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import * as v from "valibot";
 
 import { load } from "@stll/html";
 import type { Cheerio, CheerioAPI } from "@stll/html";
@@ -30,7 +29,12 @@ import {
   type SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
-import { listingOnlyCoverage, selectorSourceFields } from "./listing-only";
+import {
+  listingOnlyCoverage,
+  parseListingOffsetCursor,
+  resumeListingOffset,
+  selectorSourceFields,
+} from "./listing-only";
 import { publisherHtmlText } from "./publisher-html-text";
 import { publisherUrl as sharedPublisherUrl } from "./publisher-url";
 
@@ -52,16 +56,6 @@ const ADDENDUM = /^Dodatek k závěru č\.\s*(\d{1,4}\/(?:19|20)\d{2})$/u;
 const YEAR = /^(?:19|20)\d{2}$/u;
 /** A page of entries; a full-text page then holds up to fifty PDFs of under a megabyte. */
 const DISCOVERY_BATCH_LIMIT = 50;
-/** `<offset>:<listing digest>`; the digest ties the offset to the listing order it counts. */
-const cursorSchema = v.strictTuple([
-  v.pipe(
-    v.string(),
-    v.regex(/^(?:0|[1-9]\d*)$/u),
-    v.toNumber(),
-    v.safeInteger(),
-  ),
-  v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
-]);
 
 const invalid = (message: string) =>
   Result.err(new SoftLawIngestionError({ message }));
@@ -101,7 +95,10 @@ const labelOf = ($: CheerioAPI, anchor: Cheerio<AnyNode>) => {
       parts.unshift(node.text());
     }
   }
-  return compact(parts.join("")).replace(/[\s–-]+$/u, "");
+  const label = compact(parts.join(""));
+  return label.endsWith("-") || label.endsWith("–")
+    ? label.slice(0, -1).trimEnd()
+    : label;
 };
 
 /** One list item: a závěr, any dodatek, and the note they share. */
@@ -345,10 +342,7 @@ export const mvPsmvAdapter = {
   },
   discover: async ({ cursor, fetch: read }) =>
     await Result.gen(async function* () {
-      const position = v.safeParse(
-        v.nullable(cursorSchema),
-        cursor?.split(":") ?? null,
-      );
+      const position = parseListingOffsetCursor(cursor);
       if (!position.success) {
         return yield* invalid("Invalid MV závěry discovery cursor");
       }
@@ -360,13 +354,7 @@ export const mvPsmvAdapter = {
       const digest = sha256Hex(
         JSON.stringify(listing.map((conclusion) => conclusion.url)),
       );
-      // A changed listing shifts the rows an offset counts; restart the walk
-      // so no závěr moves past the checkpoint unseen.
-      const [checkpointOffset, checkpointDigest] = position.output ?? [
-        0,
-        digest,
-      ];
-      const offset = checkpointDigest === digest ? checkpointOffset : 0;
+      const offset = resumeListingOffset(position.output, digest);
       const batch = listing.slice(offset, offset + DISCOVERY_BATCH_LIMIT);
       const next = offset + batch.length;
       return Result.ok({

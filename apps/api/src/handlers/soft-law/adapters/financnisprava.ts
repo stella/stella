@@ -97,10 +97,10 @@ const isoDate = (match: RegExpExecArray | null) => {
     return null;
   }
   const [, day = "", month = "", year = ""] = match;
+  // An ISO string is parsed strictly: 31. 2. is refused, never moved.
   return Result.try(() =>
     Temporal.PlainDate.from(
-      { year: Number(year), month: Number(month), day: Number(day) },
-      { overflow: "reject" },
+      `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`,
     ),
   ).unwrapOr(null);
 };
@@ -573,12 +573,9 @@ const SOURCE_SURFACE_DISPOSITIONS = {
   SourceSurfaceDisposition
 >;
 
-const financniSpravaAdapter = <const Series extends FinancniSpravaSeries>(
-  series: Series,
-) =>
+/** Everything but the key: each series names its own literal authority. */
+const financniSpravaAdapter = (series: FinancniSpravaSeries) =>
   ({
-    key: series.key,
-    authority: series.key,
     access: {
       publisherGate: "financnisprava-cz",
       userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
@@ -597,7 +594,7 @@ const financniSpravaAdapter = <const Series extends FinancniSpravaSeries>(
       part: "index",
     }),
     sourceSurfaces: { surfaces: SOURCE_SURFACE_DISPOSITIONS },
-  }) as const satisfies SoftLawSourceAdapter;
+  }) as const satisfies Omit<SoftLawSourceAdapter, "key" | "authority">;
 
 export const GFR_SERIES = {
   key: "cz-gfr",
@@ -613,5 +610,13 @@ export const MF_SERIES = {
   sourceKind: "Pokyny MF",
 } as const satisfies FinancniSpravaSeries;
 
-export const gfrAdapter = financniSpravaAdapter(GFR_SERIES);
-export const mfAdapter = financniSpravaAdapter(MF_SERIES);
+export const gfrAdapter = {
+  ...financniSpravaAdapter(GFR_SERIES),
+  key: GFR_SERIES.key,
+  authority: GFR_SERIES.key,
+} as const satisfies SoftLawSourceAdapter;
+export const mfAdapter = {
+  ...financniSpravaAdapter(MF_SERIES),
+  key: MF_SERIES.key,
+  authority: MF_SERIES.key,
+} as const satisfies SoftLawSourceAdapter;

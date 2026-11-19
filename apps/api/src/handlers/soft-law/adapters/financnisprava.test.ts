@@ -329,14 +329,17 @@ test("a pokyn is read from its captured row and its PDF", async () => {
   expect(
     softLawIdentityKey("cz-gfr", document.metadata, document).unwrap(),
   ).toContain("gfř-d-72");
+  const captured = entry.sourceRaw?.at(0) ?? panic("The row is captured");
   const tampered = {
     ...entry,
-    sourceRaw: entry.sourceRaw?.map((part) => ({
-      ...part,
-      contentBase64: Buffer.from('<div class="b-teaser"></div>').toString(
-        "base64",
-      ),
-    })),
+    sourceRaw: [
+      {
+        ...captured,
+        contentBase64: Buffer.from('<div class="b-teaser"></div>').toString(
+          "base64",
+        ),
+      },
+    ],
   };
   expect(
     (
