@@ -141,4 +141,9 @@ test("the root pending paints the member frame around the page's view", async ()
     view.container.querySelector('[data-slot="inspector-pending-dock"]'),
   ).not.toBeNull();
   expect(view.getByRole("status").getAttribute("aria-busy")).toBe("true");
+  // No text in a locale: the client hydrates this paint before it restores
+  // the account's locale, so the frame's labels are bars here.
+  expect(
+    view.container.querySelector('[data-slot="pending-sidebar"]')?.textContent,
+  ).toBe("");
 });

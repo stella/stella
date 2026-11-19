@@ -4,7 +4,6 @@ import {
   DefaultPendingComponent,
   PENDING_STATUS_PROPS,
 } from "@/components/route-components";
-import { I18nProvider } from "@/i18n/provider";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { selectAppFrame } from "@/routes/-app-frame.logic";
@@ -38,11 +37,11 @@ export function RootPendingComponent() {
   }
   return (
     // The layout `RootApp` gives the frame host, and the one announced busy
-    // region; the frame skeleton inside is decoration.
+    // region; the frame skeleton inside is decoration. No intl here: the
+    // client hydrates this paint before it restores the account's locale, so
+    // its labels are bars until the frame host's skeleton takes over.
     <div {...PENDING_STATUS_PROPS} className="flex h-dvh w-full flex-col">
-      <I18nProvider>
-        <ProtectedPendingSkeleton body={leafPendingView} />
-      </I18nProvider>
+      <ProtectedPendingSkeleton body={leafPendingView} />
     </div>
   );
 }

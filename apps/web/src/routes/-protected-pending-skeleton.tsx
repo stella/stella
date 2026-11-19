@@ -28,6 +28,7 @@ import {
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { useIntlMounted } from "@/components/pending-text";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
@@ -112,6 +113,43 @@ function PendingPageBody({ body: Body }: { body: RouteComponent | undefined }) {
   );
 }
 
+const NavItemLabel = ({
+  labelKey,
+}: {
+  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+}) => {
+  const t = useTranslations();
+  return t(labelKey);
+};
+
+function NavItemText({
+  intlMounted,
+  labelKey,
+  sidebarOpen,
+}: {
+  intlMounted: boolean;
+  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+  sidebarOpen: boolean;
+}) {
+  if (!intlMounted) {
+    // Painted before the app's intl (the server's cold-load frame): the
+    // label's line, its text arriving with intl.
+    return sidebarOpen ? <Skeleton className="h-3 w-20" /> : null;
+  }
+  if (sidebarOpen) {
+    return (
+      <TruncatedText className="text-sm" hint={false}>
+        <NavItemLabel labelKey={labelKey} />
+      </TruncatedText>
+    );
+  }
+  return (
+    <span className="sr-only">
+      <NavItemLabel labelKey={labelKey} />
+    </span>
+  );
+}
+
 function ProtectedPendingSkeletonContent({
   body,
   content,
@@ -121,7 +159,7 @@ function ProtectedPendingSkeletonContent({
   content: ReactElement | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
-  const t = useTranslations();
+  const intlMounted = useIntlMounted();
   const { prefs } = usePresentationPrefs();
   const viewportWidth = useViewportWidth();
   // The restore policy the authenticated frame applies, on the stored tabs:
@@ -185,13 +223,11 @@ function ProtectedPendingSkeletonContent({
           {STATIC_NAV_ITEMS.map((item) => (
             <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
               <item.icon className="text-muted-foreground size-4 shrink-0" />
-              {sidebarOpen ? (
-                <TruncatedText className="text-sm" hint={false}>
-                  {t(item.labelKey)}
-                </TruncatedText>
-              ) : (
-                <span className="sr-only">{t(item.labelKey)}</span>
-              )}
+              <NavItemText
+                intlMounted={intlMounted}
+                labelKey={item.labelKey}
+                sidebarOpen={sidebarOpen}
+              />
             </div>
           ))}
         </div>

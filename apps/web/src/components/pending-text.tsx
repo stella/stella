@@ -11,6 +11,12 @@ import { cn } from "@stll/ui/utils";
 // call `useTranslations` itself.
 const PendingIntlContext = createContext(false);
 
+/**
+ * Whether the app's intl is mounted above, for a label `PendingText` cannot
+ * name (a frame's nav label): render its text only then.
+ */
+export const useIntlMounted = (): boolean => use(PendingIntlContext);
+
 /** Marks the subtree where the app's intl provider has its messages. */
 export const PendingTextIntlScope = ({ children }: PropsWithChildren) => (
   <PendingIntlContext value>{children}</PendingIntlContext>
