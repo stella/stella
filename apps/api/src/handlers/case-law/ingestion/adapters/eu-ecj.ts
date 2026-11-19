@@ -3243,8 +3243,14 @@ const listEuEcjSourceFields = (parts: SourceRawParts): readonly string[] => {
  */
 type EcjCrawlPosition = { date: string; after: string | undefined };
 
-/** `YYYY-MM-DD`, or `YYYY-MM-DD:<variant key>` once part of the date is settled. */
-const ECJ_CRAWL_CURSOR = /^(?<date>\d{4}-\d{2}-\d{2})(?::(?<after>\S+))?$/u;
+/**
+ * `YYYY-MM-DD`, or `YYYY-MM-DD:<CELEX>:<Cellar language code>` once part of
+ * the date is settled. The key half is the shape {@link ecjVariantKey} emits
+ * and no other: a key that sorts before or after every real one would settle
+ * the whole date unread, or none of it.
+ */
+const ECJ_CRAWL_CURSOR =
+  /^(?<date>\d{4}-\d{2}-\d{2})(?::(?<after>[0-9A-Z()]+:[A-Z]{3}))?$/u;
 
 /** The position a stored cursor names, or `undefined` when it names none. */
 export const parseEcjCrawlCursor = (
@@ -3252,7 +3258,15 @@ export const parseEcjCrawlCursor = (
 ): EcjCrawlPosition | undefined => {
   const groups = ECJ_CRAWL_CURSOR.exec(cursor)?.groups;
   const date = groups?.["date"];
-  return date === undefined ? undefined : { date, after: groups?.["after"] };
+  if (date === undefined) {
+    return undefined;
+  }
+  // The shape alone admits `2024-02-30`, which the listing would be asked for
+  // as written and the date arithmetic would read as another day.
+  const isCalendarDate = Result.try(() =>
+    Temporal.PlainDate.from(date, { overflow: "reject" }),
+  ).isOk();
+  return isCalendarDate ? { date, after: groups?.["after"] } : undefined;
 };
 
 const encodeEcjCrawlCursor = ({ date, after }: EcjCrawlPosition): string =>
@@ -3263,12 +3277,27 @@ const encodeEcjCrawlCursor = ({ date, after }: EcjCrawlPosition): string =>
  * the two terms the listing groups a variant by, so no two variants of a date
  * share one.
  */
-const ecjVariantKey = (binding: SparqlResult): string => {
-  const language = binding.language.value;
-  const code = language.startsWith(CELLAR_LANGUAGE_PREFIX)
-    ? language.slice(CELLAR_LANGUAGE_PREFIX.length)
-    : language;
-  return `${binding.celex.value}:${code}`;
+const ecjVariantKey = (binding: SparqlResult): string =>
+  `${binding.celex.value}:${binding.language.value.slice(CELLAR_LANGUAGE_PREFIX.length)}`;
+
+/**
+ * Whether the walk can name a variant in its cursor: a CELEX this adapter
+ * can key and a language it builds. A variant in a language it does not build
+ * yields nothing either way; one with any other CELEX is reported, because a
+ * cursor naming it could not be read back.
+ */
+const isWalkableVariant = (binding: SparqlResult): boolean => {
+  if (toEcjLanguage(binding.language.value) === undefined) {
+    return false;
+  }
+  if (isValidCelex(binding.celex.value)) {
+    return true;
+  }
+  logger.warn("case_law.ingestion.cjeu_unkeyable_celex", {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
+    celex: binding.celex.value,
+  });
+  return false;
 };
 
 /** Code-unit order, so the walk cannot depend on the runtime's collation. */
@@ -3300,7 +3329,7 @@ const pendingEcjVariants = (
     .flatMap((variant): EcjPendingVariant[] => {
       // SAFETY: Map.groupBy groups are non-empty.
       const first = variant[0];
-      if (first === undefined) {
+      if (first === undefined || !isWalkableVariant(first)) {
         return [];
       }
       const key = ecjVariantKey(first);
@@ -3309,6 +3338,28 @@ const pendingEcjVariants = (
         : [];
     })
     .toSorted((left, right) => compareVariantKeys(left.key, right.key));
+
+/**
+ * A case-law CELEX names its court in the first letter of its document
+ * descriptor (`62023CJ0100`, `62023TO0005`), with the letters the ECLI uses.
+ */
+const CELEX_COURT_CODE = /^6\d{4}(?<code>[A-Z])[A-Z]/u;
+
+/**
+ * The court a listing names on its own: its ECLI, else its CELEX.
+ *
+ * A complete build reads the court the notice states when the ECLI names
+ * none; a listing-only row has no notice, and the CELEX is the one other term
+ * the listing states it in. The complete build replaces the row either way.
+ */
+const ecjListedCourt = (binding: SparqlResult): string | undefined => {
+  const fromEcli = courtFromEcli(binding.ecli.value);
+  if (fromEcli !== undefined) {
+    return fromEcli;
+  }
+  const code = CELEX_COURT_CODE.exec(binding.celex.value)?.groups?.["code"];
+  return code === undefined ? undefined : COURT_BY_ECLI_CODE[code];
+};
 
 /**
  * The row a listed variant stands for when its documents could not be read:
@@ -3321,7 +3372,7 @@ const ecjListingOnlyRow = (
   const celex = binding.celex.value;
   const ecli = binding.ecli.value;
   const lang = toEcjLanguage(binding.language.value);
-  const court = courtFromEcli(ecli);
+  const court = ecjListedCourt(binding);
   if (lang === undefined || court === undefined) {
     return undefined;
   }
@@ -3333,6 +3384,7 @@ const ecjListingOnlyRow = (
   const decisionDate = binding.date.value;
   const decisionType = ecjDecisionType(binding);
   const listing = JSON.stringify(binding);
+  const parts = { [RAW_PART.LISTING]: listing };
   const sourceUrl = eurLexSourceUrl(lang, celex);
   return {
     ...plainTextIngestionResult(
@@ -3348,19 +3400,24 @@ const ecjListingOnlyRow = (
         decisionDate,
         decisionType,
         sourceUrl,
-        metadata: checkedDecisionMetadata({
-          celex,
-          ecli,
-          decisionDate,
-          decisionType,
-        }),
+        // What the listing states, projected as a complete build projects it.
+        metadata: checkedDecisionMetadata(
+          {
+            ...ecjPublisherMetadata(parts, undefined).metadata,
+            celex,
+            ecli,
+            decisionDate,
+            decisionType,
+          },
+          { type: "stored", schema: EU_ECJ_METADATA_URL_SCHEMA },
+        ),
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: hashContent(
           `${celex}|${ecli}|${decisionDate}|${language}|listing:${listing}`,
         ),
         parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
         documentAst: EMPTY_AST,
-        sourceRaw: encodeSourceRawEnvelope({ [RAW_PART.LISTING]: listing }),
+        sourceRaw: encodeSourceRawEnvelope(parts),
         sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       },
       EU_ECJ_METADATA_URL_SCHEMA,
@@ -3493,6 +3550,15 @@ const crawlEcjVariants = async ({
       return crawled(false, [unread]);
     }
     const built = attempted.value;
+    if (
+      built.type === "built" &&
+      built.value === undefined &&
+      budgetSpent(signal)
+    ) {
+      // A build the budget cut short can come back empty without having
+      // tried every manifestation, which is not the variant yielding nothing.
+      return crawled(false);
+    }
     if (built.type === "item_build_failed") {
       itemBuildFailures++;
       decisions.push(built.decision);
@@ -3742,6 +3808,10 @@ export const euEcjAdapter = defineSourceAdapter({
     tipWindowDays: ECJ_TIP_WINDOW_SLICES,
     listSlicePage: listEcjSlicePage,
     buildDecision: buildEcjVariant,
+    // Every row this source stores whole carries its document; the listing-only
+    // row the crawl stores for a variant its hold gave up on is a failed read,
+    // and counting it held would keep the walk from ever reading it again.
+    heldRequiresDetail: true,
   },
 
   /**

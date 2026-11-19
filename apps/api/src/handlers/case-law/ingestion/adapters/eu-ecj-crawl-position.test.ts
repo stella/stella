@@ -1,6 +1,14 @@
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import {
   euEcjAdapter,
@@ -11,6 +19,7 @@ import {
   decodeSourceRawEnvelope,
   type SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
+import { logger } from "@/api/lib/observability/logger";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -87,7 +96,10 @@ type DocumentAnswer = (
  * is its own rather than the listing's; no branch notice; and each variant's
  * document, unless `answer` says otherwise.
  */
-const installCellar = (answer?: DocumentAnswer) => {
+const installCellar = (
+  answer?: DocumentAnswer,
+  listed: readonly Variant[] = variants,
+) => {
   const documentFetches: string[] = [];
   testFetchState.set(
     asFetchMock((input, init) => {
@@ -96,7 +108,7 @@ const installCellar = (answer?: DocumentAnswer) => {
         return Promise.resolve(
           Response.json({
             results: {
-              bindings: variants.map(({ binding }) => binding).toReversed(),
+              bindings: listed.map(({ binding }) => binding).toReversed(),
             },
           }),
         );
@@ -104,7 +116,7 @@ const installCellar = (answer?: DocumentAnswer) => {
       if (url.includes("/resource/celex/")) {
         return Promise.resolve(new Response("Not found", { status: 404 }));
       }
-      const variant = variants.find(
+      const variant = listed.find(
         ({ manifestationId }) => url === `${CELLAR}${manifestationId}`,
       );
       if (variant === undefined) {
@@ -161,6 +173,7 @@ describe("eu-ecj crawl position within a date", () => {
   });
 
   afterEach(() => {
+    mock.restore();
     testFetchState.restore();
     Bun.sleep = originalSleep;
   });
@@ -302,10 +315,125 @@ describe("eu-ecj crawl position within a date", () => {
     expect(next.decisions.at(0)?.sourceDocumentId).toBe(ordered[failing + 1]);
   });
 
+  test("a variant whose build the budget interrupts after a rejected manifestation stays pending", async () => {
+    const budget = new AbortController();
+    const ordered = allIds.toSorted();
+    const cutAt = 3;
+    installCellar((variant) =>
+      variant.sourceDocumentId === ordered[cutAt]
+        ? Promise.resolve(new Response("Forbidden", { status: 403 }))
+        : undefined,
+    );
+    // The budget runs out right after the publisher refuses the manifestation,
+    // so the build comes back empty without having finished.
+    spyOn(logger, "warn").mockImplementation((message) => {
+      if (message === "case_law.ingestion.manifestation_rejected") {
+        budget.abort(
+          new DOMException("The operation timed out.", "TimeoutError"),
+        );
+      }
+    });
+
+    const cut = await fetchPage(DATE, budget.signal);
+
+    expect(
+      cut.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(ordered.slice(0, cutAt));
+    expect(parseEcjCrawlCursor(cut.nextCursor ?? "")?.after).toBe(
+      ordered[cutAt - 1]?.replace(/:en$/u, ":ENG").replace(/:fr$/u, ":FRA"),
+    );
+    installCellar();
+    const next = await fetchPage(cut.nextCursor ?? "");
+    expect(next.decisions.at(0)?.sourceDocumentId).toBe(ordered[cutAt]);
+  });
+
+  test("an unserved variant whose ECLI names no known court is still carried as unread", async () => {
+    const ordered = allIds.toSorted();
+    const failingId = ordered[0];
+    const listed = variants.map((variant): Variant =>
+      variant.sourceDocumentId === failingId
+        ? {
+            ...variant,
+            binding: {
+              ...variant.binding,
+              ecli: { type: "literal", value: "ECLI:EU:X:2024:1" },
+            },
+          }
+        : variant,
+    );
+    installCellar(
+      (variant) =>
+        variant.sourceDocumentId === failingId
+          ? Promise.resolve(new Response("Unavailable", { status: 503 }))
+          : undefined,
+      listed,
+    );
+
+    const page = await fetchPage(DATE);
+
+    expect(page.decisions).toHaveLength(0);
+    expect(page.unreadItems?.at(0)?.listing).toMatchObject({
+      sourceDocumentId: failingId,
+      court: "Court of Justice",
+      isListingOnly: true,
+    });
+    expect(parseEcjCrawlCursor(page.nextCursor ?? "")).toMatchObject({
+      date: DATE,
+    });
+  });
+
+  test("an unread row projects the listing's metadata as a complete build does", async () => {
+    const ordered = allIds.toSorted();
+    const failingId = ordered[0];
+    installCellar((variant) =>
+      variant.sourceDocumentId === failingId
+        ? Promise.resolve(new Response("Unavailable", { status: 500 }))
+        : undefined,
+    );
+    const unread = (await fetchPage(DATE)).unreadItems?.at(0)?.listing;
+    installCellar();
+    const built = (await fetchPage(DATE)).decisions.find(
+      ({ sourceDocumentId }) => sourceDocumentId === failingId,
+    );
+
+    const listingKeys = [
+      "manifestationType",
+      "manifestationUri",
+      "languageUri",
+      "cdmType",
+    ];
+    const listed = (metadata: Record<string, unknown> | undefined) =>
+      Object.fromEntries(
+        listingKeys.map((key) => [key, metadata?.[key]] as const),
+      );
+    expect(listed(built?.metadata)).toMatchObject({
+      manifestationType: "xhtml",
+    });
+    expect(listed(unread?.metadata)).toEqual(listed(built?.metadata));
+  });
+
+  test("reconciliation does not count a listing-only row as held", () => {
+    expect(euEcjAdapter.reconciliation.heldRequiresDetail).toBe(true);
+  });
+
   test("a cursor that names no position is refused before the publisher is asked", async () => {
     const { documentFetches } = installCellar();
 
-    for (const cursor of ["2024-1-18", "", "2024-01-18:", "yesterday"]) {
+    expect(parseEcjCrawlCursor("2024-02-29:62023CJ0100(01):ENG")).toEqual({
+      date: "2024-02-29",
+      after: "62023CJ0100(01):ENG",
+    });
+    for (const cursor of [
+      "2024-1-18",
+      "",
+      "2024-01-18:",
+      "yesterday",
+      "2024-02-30",
+      "2023-02-29:62023CJ0100:ENG",
+      "2024-01-18:Z",
+      "2024-01-18:62023CJ0100",
+      "2024-01-18:62023CJ0100:english",
+    ]) {
       const result = await euEcjAdapter.fetchPage(cursor, {});
       expect(Result.isError(result)).toBe(true);
     }
