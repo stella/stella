@@ -556,7 +556,11 @@ export const buildCzIsirDecision = ({
       sourceUrl,
       documentUrl: sourceUrl,
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      metadata: checkedDecisionMetadata({ [CZ_ISIR_METADATA_KEY]: metadata }),
+      metadata: checkedDecisionMetadata({
+        [CZ_ISIR_METADATA_KEY]: metadata,
+        // The register's documents state no ECLI.
+        ecliAvailability: { status: "not_published" },
+      }),
       rawHash: sourceFingerprint({ sourceRaw }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_ISIR],
       documentAst,
