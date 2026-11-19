@@ -193,6 +193,42 @@ pub fn end(app: &AppHandle) {
   apply(app, Preview::end);
 }
 
+/// Whether the panel is on screen now.
+pub fn showing(app: &AppHandle) -> bool {
+  app
+    .try_state::<PreviewState>()
+    .is_some_and(|state| state.update(|preview| preview.visible()))
+}
+
+/// Paces the password-field check between transcription results: every
+/// [`PASSWORD_CHECK_TICKS`] ticks of the recording loop while the panel
+/// shows, and never while it is hidden, since reading focus waits on the
+/// main thread.
+#[derive(Debug, Default)]
+pub struct PasswordWatch {
+  ticks: u32,
+}
+
+/// At the recording loop's 100 ms tick, a check every 300 ms.
+const PASSWORD_CHECK_TICKS: u32 = 3;
+
+impl PasswordWatch {
+  /// Called once per tick; whether to check now.
+  pub fn due(&mut self, showing: bool) -> bool {
+    if !showing {
+      self.ticks = 0;
+      return false;
+    }
+    self.ticks += 1;
+    if self.ticks >= PASSWORD_CHECK_TICKS {
+      self.ticks = 0;
+      true
+    } else {
+      false
+    }
+  }
+}
+
 #[tauri::command]
 pub fn dictation_preview_get_snapshot(
   state: State<'_, PreviewState>,
@@ -303,10 +339,12 @@ fn present(window: &tauri::WebviewWindow) {
 /// The window cannot take focus, so showing it leaves focus where it is.
 #[cfg(not(target_os = "macos"))]
 fn present(window: &tauri::WebviewWindow) {
-  crate::logging::best_effort(
-    window.set_ignore_cursor_events(true),
-    "dictation preview could not let clicks through",
-  );
+  // A panel that would catch clicks meant for the app underneath stays
+  // hidden.
+  if window.set_ignore_cursor_events(true).is_err() {
+    tracing::warn!("dictation preview could not let clicks through");
+    return;
+  }
   crate::logging::best_effort(window.show(), "dictation preview could not be shown");
 }
 
@@ -405,6 +443,33 @@ mod tests {
     preview.start();
     assert!(preview.text("next"));
     assert!(preview.visible());
+  }
+
+  #[test]
+  fn a_password_field_seen_between_results_hides_the_panel_for_good() {
+    let mut preview = Preview::default();
+    let mut watch = PasswordWatch::default();
+    preview.start();
+    preview.text("dear sir");
+    // No new result arrives; the watch checks while the panel shows.
+    let checks = (0..6).filter(|_| watch.due(preview.visible())).count();
+    assert_eq!(checks, 2);
+    assert!(preview.block());
+    assert!(!preview.visible());
+    // Hidden, the watch stops asking, and later text stays hidden.
+    assert!(!(0..10).any(|_| watch.due(preview.visible())));
+    assert!(!preview.text("dear sir, my password"));
+    assert!(!preview.visible());
+  }
+
+  #[test]
+  fn the_watch_starts_over_each_time_the_panel_appears() {
+    let mut watch = PasswordWatch::default();
+    assert!(!watch.due(true));
+    assert!(!watch.due(false));
+    assert!(!watch.due(true));
+    assert!(!watch.due(true));
+    assert!(watch.due(true));
   }
 
   #[test]

@@ -83,6 +83,11 @@ const DictationPreviewApp = () => {
       onError: () => {
         reportPreviewFailure("invokeFailed");
       },
+      // Read again once the listener is live: a change emitted before then
+      // is in the snapshot.
+      onSubscribed: () => {
+        void refresh();
+      },
     });
     void refresh();
     return () => {

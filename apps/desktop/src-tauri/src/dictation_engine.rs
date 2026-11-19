@@ -71,6 +71,8 @@ struct Active {
   focus: Option<FocusTarget>,
   context: CleanupContext,
   trace: Trace,
+  /// How often the panel checks for a password field between results.
+  password_watch: dictation_preview::PasswordWatch,
 }
 
 /// What a dictation that did not fail came to.
@@ -121,6 +123,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
                 focus,
                 context,
                 trace,
+                password_watch: dictation_preview::PasswordWatch::default(),
               });
             }
             Err(failure) => {
@@ -176,7 +179,16 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
         }
       }
       Err(RecvTimeoutError::Timeout) => match active.as_mut() {
-        Some(active) => active.capture.listen(),
+        Some(active) => {
+          active.capture.listen();
+          // Between transcription results too: a password field that takes
+          // focus while the panel shows hides it at once.
+          if active.password_watch.due(dictation_preview::showing(app))
+            && focused_on_password(app, active.focus.as_ref())
+          {
+            dictation_preview::block(app);
+          }
+        }
         None => worker = None,
       },
       Err(RecvTimeoutError::Disconnected) => break,
@@ -529,12 +541,21 @@ impl Transcribe for Engines {
 
   fn preview(&mut self, text: &str) {
     let PreviewFeed { app, focus } = &self.preview;
-    if !text.is_empty() && dictation_focus::in_password_field(focus.as_ref()) {
+    if !text.is_empty() && focused_on_password(app, focus.as_ref()) {
       dictation_preview::block(app);
     } else {
       dictation_preview::text(app, text);
     }
   }
+}
+
+/// Whether a password field has focus now, wherever focus went since the
+/// press. When focus cannot be read now, the app pressed in is asked
+/// instead: the panel is hidden whenever either says so, and shown only
+/// when neither can tell, as typing is.
+fn focused_on_password(app: &AppHandle, pressed: Option<&FocusTarget>) -> bool {
+  let now = dictation_focus::current(app);
+  dictation_focus::in_password_field(now.as_ref().or(pressed))
 }
 
 fn transcribe(
