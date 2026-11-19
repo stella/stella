@@ -1,4 +1,5 @@
 import type { APIRequestContext, Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
@@ -24,6 +25,7 @@ import { expect } from "./test";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
 
 const createdContactSchema = v.object({ id: v.string() });
+const createdSkillSchema = v.object({ id: v.string() });
 
 const sessionSchema = v.object({
   user: v.object({ id: v.string() }),
@@ -34,6 +36,7 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
   const workspace = await createTestWorkspace(request, "dock-geometry");
   let contactId: string | undefined;
   let templateId: string | undefined;
+  let skillId: string | undefined;
   try {
     const contact = v.parse(
       createdContactSchema,
@@ -67,6 +70,17 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
       name: "Dock geometry fixture",
     });
     templateId = template.id;
+    // An organization skill, so its editor's page hosts the dock.
+    const skill = v.parse(
+      createdSkillSchema,
+      await apiPut(request, "/skills", {
+        scope: "private",
+        name: `Dock geometry ${randomUUID().slice(0, 8)}`,
+        description: "Dock geometry fixture",
+        body: "Fixture instructions.",
+      }),
+    );
+    skillId = skill.id;
     const response = await request.get(
       `${E2E_API_ORIGIN}/api/auth/get-session`,
     );
@@ -89,10 +103,14 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
       document,
       contactId: contact.id,
       templateId: template.id,
+      skillId: skill.id,
       session,
       fileTab,
     };
   } catch (error) {
+    if (skillId !== undefined) {
+      await apiDelete(request, `/skills/${skillId}`);
+    }
     if (templateId !== undefined) {
       await apiDelete(request, `/templates/${templateId}`);
     }
@@ -109,6 +127,7 @@ export const deleteDockedChatWorld = async (
   request: APIRequestContext,
   world: DockedChatWorld,
 ) => {
+  await apiDelete(request, `/skills/${world.skillId}`);
   await apiDelete(request, `/templates/${world.templateId}`);
   await apiDelete(request, `/contacts/${world.contactId}`);
   await deleteTestWorkspace(request, world.workspace.id);

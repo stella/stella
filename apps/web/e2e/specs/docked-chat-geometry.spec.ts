@@ -71,6 +71,7 @@ const routePath = (host: DockedChatHost, world: DockedChatWorld): string => {
     packId: "general-legal",
     templateId: "mutual-nda",
     entry: "contract-review-anthropic",
+    skillId: world.skillId,
   };
   return host.template.replaceAll(/\$([A-Za-z]+)/gu, (_, parameter: string) => {
     const value = values[parameter];
