@@ -25,7 +25,6 @@ import {
   ChartPieIcon,
   ChartScatterIcon,
 } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { TableChart } from "@stll/ui/table-chart";
 import { Toggle } from "@stll/ui/toggle";
@@ -222,11 +221,7 @@ const ChartableAnswerTable = ({
             tooltip={toggleLabel}
             variant="ghost"
           >
-            {loading ? (
-              <Loader size="sm" variant="decorative" />
-            ) : (
-              <ChartNoAxesColumnIcon aria-hidden="true" />
-            )}
+            <ChartNoAxesColumnIcon aria-hidden="true" />
           </Toggle>
           {chart && (
             <div role="group" aria-label={t("chat.tableChart.kind")}>
