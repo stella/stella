@@ -4,7 +4,6 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
-import { RouteDocumentTitle } from "@/components/route-document-title";
 import { guidanceDocumentOptions } from "@/lib/guidance/queries";
 
 import { GuidanceReaderShell } from "./-guidance-reader.pending";
@@ -27,71 +26,68 @@ export function GuidanceReaderPage() {
   );
   const publisherUrl = guidance.publisherUrl;
   return (
-    <>
-      <RouteDocumentTitle routeId={routeApi.id} title={guidance.title} />
-      <GuidanceReaderShell
-        header={
-          <>
+    <GuidanceReaderShell
+      header={
+        <>
+          <p className="text-muted-foreground text-sm">
+            {[guidance.issuer.name, guidance.sourceKind ?? guidance.kind]
+              .filter((part) => part !== "")
+              .join(" · ")}
+          </p>
+          <h1 className="text-xl font-semibold text-balance">
+            {guidance.title}
+          </h1>
+          {guidance.reference !== null && (
             <p className="text-muted-foreground text-sm">
-              {[guidance.issuer.name, guidance.sourceKind ?? guidance.kind]
-                .filter((part) => part !== "")
-                .join(" · ")}
+              {guidance.reference}
             </p>
-            <h1 className="text-xl font-semibold text-balance">
-              {guidance.title}
-            </h1>
-            {guidance.reference !== null && (
-              <p className="text-muted-foreground text-sm">
-                {guidance.reference}
-              </p>
-            )}
-            {guidance.issuedOn !== null && (
-              <p className="text-muted-foreground text-sm">
-                <time dateTime={guidance.issuedOn}>{guidance.issuedOn}</time>
-              </p>
-            )}
-          </>
-        }
-        body={
-          guidance.text === null ? (
+          )}
+          {guidance.issuedOn !== null && (
             <p className="text-muted-foreground text-sm">
-              {t("guidance.textUnavailable")}
+              <time dateTime={guidance.issuedOn}>{guidance.issuedOn}</time>
             </p>
-          ) : (
-            <div className="flex flex-col gap-3 text-sm leading-relaxed">
-              {paragraphsOf(guidance.text).map((paragraph, index) => (
-                // Paragraphs of one immutable version never reorder.
-                // oxlint-disable-next-line react/no-array-index-key -- the list is static for this document version
-                <p key={index} className="whitespace-pre-line">
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          )
-        }
-        footer={
-          <>
-            <p>
-              {t("guidance.source", {
-                attribution: guidance.attribution.text,
-              })}
-            </p>
-            {guidance.attribution.conditions.map((condition) => (
-              <p key={condition}>{condition}</p>
+          )}
+        </>
+      }
+      body={
+        guidance.text === null ? (
+          <p className="text-muted-foreground text-sm">
+            {t("guidance.textUnavailable")}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3 text-sm leading-relaxed">
+            {paragraphsOf(guidance.text).map((paragraph, index) => (
+              // Paragraphs of one immutable version never reorder.
+              // oxlint-disable-next-line react/no-array-index-key -- the list is static for this document version
+              <p key={index} className="whitespace-pre-line">
+                {paragraph}
+              </p>
             ))}
-            {publisherUrl !== null && (
-              <a
-                className="underline"
-                href={sanitizeHref(publisherUrl)}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                {t("guidance.openAtPublisher")}
-              </a>
-            )}
-          </>
-        }
-      />
-    </>
+          </div>
+        )
+      }
+      footer={
+        <>
+          <p>
+            {t("guidance.source", {
+              attribution: guidance.attribution.text,
+            })}
+          </p>
+          {guidance.attribution.conditions.map((condition) => (
+            <p key={condition}>{condition}</p>
+          ))}
+          {publisherUrl !== null && (
+            <a
+              className="underline"
+              href={sanitizeHref(publisherUrl)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {t("guidance.openAtPublisher")}
+            </a>
+          )}
+        </>
+      }
+    />
   );
 }
