@@ -51,20 +51,20 @@ afterAll(async () => {
 const memberSafeDb = (): SafeDb =>
   asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
 
-const handlerContext = <T>(fields: object) =>
-  createTestHandlerContext<T>({
-    scopedDb: NO_DB,
-    audit: auditRecorderDouble(),
-    memberRole: sessionMemberRole("member"),
-    session: { activeOrganizationId: ids.orgA },
-    user: { id: ids.userA1 },
-    safeDb: memberSafeDb(),
-    ...fields,
-  });
+/** What every call here runs as: one member of the fixture organization. */
+const memberContext = () => ({
+  scopedDb: NO_DB,
+  audit: auditRecorderDouble(),
+  memberRole: sessionMemberRole("member"),
+  session: { activeOrganizationId: ids.orgA },
+  user: { id: ids.userA1 },
+  safeDb: memberSafeDb(),
+});
 
 const upload = async (file: File) =>
   await uploadSkill.handler(
-    handlerContext<Parameters<typeof uploadSkill.handler>[0]>({
+    createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
+      ...memberContext(),
       body: { scope: "private", file },
     }),
   );
@@ -214,7 +214,10 @@ describe("skill package size", () => {
     await recordFile({ sizeBytes: remaining - 2, skillId });
 
     const result = await createSkillResource.handler(
-      handlerContext<Parameters<typeof createSkillResource.handler>[0]>({
+      createTestHandlerContext<
+        Parameters<typeof createSkillResource.handler>[0]
+      >({
+        ...memberContext(),
         body: { content: "abc", path: "references/over.md" },
         params: { skillId },
       }),
