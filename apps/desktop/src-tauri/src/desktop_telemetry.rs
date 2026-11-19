@@ -30,6 +30,7 @@ pub enum DesktopTelemetryWindow {
   SelfHostConnectDialog,
   Activity,
   Onboarding,
+  Transcribe,
 }
 
 impl DesktopTelemetryWindow {
@@ -42,6 +43,7 @@ impl DesktopTelemetryWindow {
       Self::SelfHostConnectDialog => "selfHostConnectDialog",
       Self::Activity => "activity",
       Self::Onboarding => "onboarding",
+      Self::Transcribe => "transcribe",
     }
   }
 }
@@ -668,6 +670,11 @@ impl DesktopTelemetry {
       crate::accessibility_guide::GUIDE_WINDOW_LABEL => {
         report.window = DesktopTelemetryWindow::Onboarding;
       }
+      // A transcript is a client's words; a report never carries them.
+      crate::transcribe_recording::TRANSCRIBE_WINDOW_LABEL => {
+        report.window = DesktopTelemetryWindow::Transcribe;
+        report.detail = None;
+      }
       _ => {}
     }
     self.capture_event(DesktopErrorEvent {
@@ -991,7 +998,8 @@ pub fn desktop_report_timing(
       | DesktopTelemetryWindow::TakeoverDialog
       | DesktopTelemetryWindow::SelfHostConnectDialog
       | DesktopTelemetryWindow::Activity
-      | DesktopTelemetryWindow::Onboarding,
+      | DesktopTelemetryWindow::Onboarding
+      | DesktopTelemetryWindow::Transcribe,
       _,
     ) => None,
   };

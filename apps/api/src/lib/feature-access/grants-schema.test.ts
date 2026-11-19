@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { createFeatureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
@@ -117,7 +118,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
       ],
     ]),
   );
-  const envPath = new URL("../../env.ts", import.meta.url).pathname;
+  const envPath = fileURLToPath(new URL("../../env.ts", import.meta.url));
   const child = Bun.spawnSync(
     [
       process.execPath,
@@ -168,7 +169,7 @@ test("feature grants boot logs only the discarded count and exposes known grants
 
 for (const raw of ["not-json", "null", '{"unknown-feature":{}}']) {
   test(`feature grants boot rejects malformed configuration ${raw}`, () => {
-    const envPath = new URL("../../env.ts", import.meta.url).pathname;
+    const envPath = fileURLToPath(new URL("../../env.ts", import.meta.url));
     const child = Bun.spawnSync(
       [process.execPath, "-e", `await import(${JSON.stringify(envPath)});`],
       {

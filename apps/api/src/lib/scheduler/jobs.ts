@@ -14,6 +14,10 @@ import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-a
 import type { AggregateIdentities } from "@/api/lib/db/aggregate-lock-entries/identities.gen";
 import type { ScheduledJobReads } from "@/api/lib/db/read-budgets";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  elevenLabsKeepsTranscripts,
+  readElevenLabsDeployment,
+} from "@/api/lib/dictation/elevenlabs-deployment";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
@@ -78,6 +82,7 @@ import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-cu
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
+import { DELETE_KEPT_TRANSCRIPTS_TASK } from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -749,6 +754,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: ERASE_HOSTED_CUSTOMERS_TASK,
     reads: { budget: "scheduled.usage.eraseHostedCustomers" },
     enabled: env.HOSTED_USAGE_PROVIDER === "polar",
+  },
+  {
+    description:
+      "Delete transcripts ElevenLabs kept for dictation without zero retention",
+    id: "dictation.deleteKeptTranscripts.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: DELETE_KEPT_TRANSCRIPTS_TASK,
+    reads: { budget: "scheduled.dictation.deleteKeptTranscripts" },
+    enabled: elevenLabsKeepsTranscripts(readElevenLabsDeployment()),
   },
   {
     description: "Delete expired action cost observations",

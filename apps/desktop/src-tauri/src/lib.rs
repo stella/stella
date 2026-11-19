@@ -54,6 +54,7 @@ mod dictation_input;
 mod dictation_language;
 mod dictation_live;
 mod dictation_pauses;
+mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -100,6 +101,8 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_recording;
+mod transcribe_window;
 mod tray;
 mod types;
 mod updater;
@@ -230,6 +233,7 @@ pub fn run() {
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
+    .manage(transcribe_recording::TranscribeState::default())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -408,6 +412,9 @@ pub fn run() {
               }
               tray::MenuAction::OpenActivity => {
                 activity_window::show(&handle);
+              }
+              tray::MenuAction::OpenTranscribe => {
+                transcribe_window::show(&handle);
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {

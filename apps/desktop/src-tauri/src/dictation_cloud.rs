@@ -1,8 +1,9 @@
 //! Optional transcription by stella AI. Only when the server enables cloud
 //! dictation for the linked account and the user chose it does the captured
 //! audio leave this computer: it goes, as WAV chunks the API's limits admit,
-//! to that account, with a model its region offers and the dictation
-//! language. Audio and text are never logged or stored here.
+//! to that account, with a model its region offers, the dictation language
+//! and, for a model that reads vocabulary, the speaker's custom words.
+//! Audio, text and custom words are never logged or stored here.
 //!
 //! Each stretch of speech is uploaded as soon as the speaker pauses, through
 //! one [`CloudSession`] per dictation. The choice is read again before every
@@ -66,13 +67,32 @@ struct Contract {
   /// version shows only with a warning.
   models_retention_query: String,
   transcribe_path: String,
+  /// Where a recording's transcript is filed in a matter.
+  transcripts_path: String,
   max_audio_bytes: usize,
   max_audio_seconds: usize,
+  /// How many custom words one chunk may carry, and how long each may be in
+  /// UTF-16 code units.
+  max_vocabulary_terms: usize,
+  max_vocabulary_term_length: usize,
 }
 
 const CONTRACT: &str = include_str!(
   "../../../../packages/api-contract/src/desktop-dictation-transcription.json"
 );
+
+/// How many custom words the API takes, and how long each may be.
+pub(crate) fn vocabulary_limits() -> crate::dictation_words::Limits {
+  crate::dictation_words::Limits {
+    words: contract().max_vocabulary_terms,
+    length: contract().max_vocabulary_term_length,
+  }
+}
+
+/// Where a recording's transcript is filed in a matter.
+pub(crate) fn transcripts_path() -> &'static str {
+  &contract().transcripts_path
+}
 
 fn contract() -> &'static Contract {
   static PARSED: OnceLock<Contract> = OnceLock::new();
@@ -331,25 +351,51 @@ struct Transcript {
   text: String,
 }
 
+/// Where a chunk goes besides its audio: the model, the language, the
+/// speaker's custom words for a model that reads them and, for a recording
+/// filed under a matter, that matter, whose names the API adds to the
+/// vocabulary. A recording's piece also names itself, the same on every
+/// attempt, so a retried piece is counted once.
+struct ChunkRequest<'a> {
+  model_id: Option<&'a str>,
+  language: Option<&'a str>,
+  /// Empty: no vocabulary field, as an older API expects.
+  vocabulary: &'a [String],
+  matter_id: Option<&'a str>,
+  piece_id: Option<&'a str>,
+  timeout: Duration,
+}
+
 async fn send_chunk(
   account: &AccountRequest,
   wav: Vec<u8>,
-  model_id: Option<&str>,
-  language: Option<&str>,
+  chunk: ChunkRequest<'_>,
 ) -> Result<String, String> {
   let file = reqwest::multipart::Part::bytes(wav)
     .file_name("dictation.wav")
     .mime_str("audio/wav")
     .map_err(request_cause_logged(FAILURE))?;
   let mut form = reqwest::multipart::Form::new().part("file", file);
-  if let Some(model_id) = model_id {
+  if let Some(model_id) = chunk.model_id {
     form = form.text("modelId", model_id.to_string());
   }
-  if let Some(language) = language {
+  if let Some(language) = chunk.language {
     form = form.text("language", language.to_string());
   }
+  if !chunk.vocabulary.is_empty() {
+    // Never logged: the words are the speaker's own.
+    let vocabulary =
+      serde_json::to_string(chunk.vocabulary).map_err(|_error| FAILURE.to_string())?;
+    form = form.text("vocabulary", vocabulary);
+  }
+  if let Some(matter_id) = chunk.matter_id {
+    form = form.text("matterId", matter_id.to_string());
+  }
+  if let Some(piece_id) = chunk.piece_id {
+    form = form.text("pieceId", piece_id.to_string());
+  }
   let response = crate::http_client::device_proof_request(
-    client(CHUNK_TIMEOUT)?
+    client(chunk.timeout)?
       .post(format!(
         "{}{}",
         account.api_base_url,
@@ -471,8 +517,16 @@ pub struct CloudSession {
   app: AppHandle,
   stored_model: Option<String>,
   language: Option<&'static str>,
-  model_id: Option<String>,
+  /// The speaker's custom words, sent only if the chosen model reads them.
+  vocabulary: Vec<String>,
+  model: Option<ChosenModel>,
   budget: Duration,
+}
+
+/// The model a dictation uses, and whether it reads vocabulary.
+struct ChosenModel {
+  id: String,
+  takes_vocabulary: bool,
 }
 
 impl CloudSession {
@@ -480,12 +534,14 @@ impl CloudSession {
     app: AppHandle,
     stored_model: Option<String>,
     language: Option<&'static str>,
+    vocabulary: Vec<String>,
   ) -> Self {
     Self {
       app,
       stored_model,
       language,
-      model_id: None,
+      vocabulary,
+      model: None,
       budget: DEADLINE,
     }
   }
@@ -518,9 +574,9 @@ impl CloudSession {
 
   /// The stored model while the region still offers it, otherwise the
   /// region's default, which then replaces the stored one.
-  async fn model(&mut self) -> Result<String, String> {
-    if let Some(model_id) = &self.model_id {
-      return Ok(model_id.clone());
+  async fn model(&mut self) -> Result<(String, bool), String> {
+    if let Some(model) = &self.model {
+      return Ok((model.id.clone(), model.takes_vocabulary));
     }
     let offered = models(&self.app).await?;
     let choice = choose_model(self.stored_model.as_deref(), &offered)
@@ -528,14 +584,19 @@ impl CloudSession {
     if choice.replaces_stored {
       dictation::adopt_cloud_model(&self.app, &choice.model_id)?;
     }
-    self.model_id = Some(choice.model_id.clone());
-    Ok(choice.model_id)
+    let takes_vocabulary = offered.takes_vocabulary(&choice.model_id);
+    self.model = Some(ChosenModel {
+      id: choice.model_id.clone(),
+      takes_vocabulary,
+    });
+    Ok((choice.model_id, takes_vocabulary))
   }
 
   async fn send(&mut self, pieces: Vec<Vec<u8>>) -> Result<String, String> {
-    let model_id = self.model().await?;
+    let (model_id, takes_vocabulary) = self.model().await?;
     let app = &self.app;
     let language = self.language;
+    let vocabulary = chunk_vocabulary(takes_vocabulary, &self.vocabulary);
     upload(
       pieces,
       DEADLINE,
@@ -544,7 +605,19 @@ impl CloudSession {
         let model_id = model_id.clone();
         async move {
           let account = cloud_account(app).await?;
-          let text = send_chunk(&account, piece, Some(&model_id), language).await;
+          let text = send_chunk(
+            &account,
+            piece,
+            ChunkRequest {
+              model_id: Some(&model_id),
+              language,
+              vocabulary,
+              matter_id: None,
+              piece_id: None,
+              timeout: CHUNK_TIMEOUT,
+            },
+          )
+          .await;
           drop(account);
           text
         }
@@ -552,6 +625,160 @@ impl CloudSession {
     )
     .await
   }
+}
+
+/// The custom words a chunk carries: none for a model that does not read
+/// vocabulary, or from an API too old to say which models do.
+fn chunk_vocabulary(takes_vocabulary: bool, words: &[String]) -> &[String] {
+  if takes_vocabulary { words } else { &[] }
+}
+
+/// The model a recording is transcribed with: the one dictation uses, the
+/// region's default where none is stored or the stored one is gone. It
+/// names the account it was read for, which every piece is sent for.
+pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
+  let (namespace, offered) = namespaced_models(cloud_account(app).await?).await?;
+  let (_, stored) = dictation::destination(app);
+  let choice =
+    choose_model(stored.as_deref(), &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
+  if choice.replaces_stored {
+    dictation::adopt_cloud_model(app, &choice.model_id)?;
+  }
+  let model = offered
+    .models
+    .iter()
+    .find(|model| model.id == choice.model_id)
+    .ok_or_else(|| UNAVAILABLE.to_string())?;
+  Ok(RecordingModel {
+    id: model.id.clone(),
+    display_name: model.display_name.clone(),
+    provider: model.provider.clone(),
+    retains_data: model.retains_data,
+    takes_vocabulary: model.takes_vocabulary,
+    account: namespace,
+  })
+}
+
+/// The model a recording goes to, as its window names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecordingModel {
+  pub id: String,
+  pub display_name: String,
+  /// Who runs the model, as a name to show.
+  pub provider: Option<String>,
+  /// The provider keeps the audio; the window warns.
+  pub retains_data: bool,
+  /// The model reads vocabulary, so a piece carries the custom words.
+  #[serde(skip)]
+  pub takes_vocabulary: bool,
+  /// The account the model was read for; never shown.
+  #[serde(skip)]
+  pub account: String,
+}
+
+/// A recording's piece, and where it goes.
+pub(crate) struct RecordingPiece<'a> {
+  pub model: &'a RecordingModel,
+  /// The same on every attempt at this piece.
+  pub piece_id: &'a str,
+  pub language: Option<&'a str>,
+  pub matter_id: Option<&'a str>,
+  pub timeout: Duration,
+}
+
+/// Why a recording's piece has no text.
+#[derive(Debug)]
+pub(crate) enum PieceFailure {
+  /// The dictation account is no longer the one the recording started
+  /// for; nothing was sent.
+  AccountChanged,
+  /// stella AI did not transcribe it; trying again may.
+  Failed(String),
+}
+
+/// The longest reply a saved transcript sends back.
+const MAX_SAVED_REPLY_BYTES: usize = 64 * 1024;
+
+/// Saves a transcribed recording to a matter for the dictation account,
+/// whose lease is held until the reply has been read. Returns the reply.
+pub(crate) async fn save_transcript(
+  app: &AppHandle,
+  body: &impl Serialize,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
+  let account = dictation_account(app).await?;
+  let client = DesktopHttpClient::new(HttpClientOptions {
+    redirect: reqwest::redirect::Policy::none(),
+    timeout: Some(Duration::from_secs(60)),
+  })
+  .map_err(request_cause_logged(failure))?;
+  let response = save_request(&account, &client, body)?
+    .send()
+    .await
+    .map_err(request_cause_logged(failure))?;
+  if !response.status().is_success() {
+    return Err(failure.to_string());
+  }
+  let bytes = response
+    .bytes()
+    .await
+    .map_err(request_cause_logged(failure))?;
+  drop(account);
+  if bytes.len() > MAX_SAVED_REPLY_BYTES {
+    return Err(failure.to_string());
+  }
+  Ok(bytes.to_vec())
+}
+
+fn save_request(
+  account: &AccountRequest,
+  client: &DesktopHttpClient,
+  body: &impl Serialize,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  crate::http_client::device_proof_request(
+    client
+      .post(format!("{}{}", account.api_base_url, transcripts_path()))
+      .json(body),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )
+}
+
+/// One piece of a recording, already 16 kHz WAV, transcribed by stella AI,
+/// and only for the account the recording started for while the server
+/// still enables it.
+pub(crate) async fn transcribe_recording_piece(
+  app: &AppHandle,
+  wav: Vec<u8>,
+  piece: RecordingPiece<'_>,
+) -> Result<String, PieceFailure> {
+  if wav.len() > contract().max_audio_bytes {
+    return Err(PieceFailure::Failed(
+      "the piece is larger than stella AI accepts".to_string(),
+    ));
+  }
+  let account = cloud_account(app).await.map_err(PieceFailure::Failed)?;
+  if account.local_data_namespace() != piece.model.account {
+    return Err(PieceFailure::AccountChanged);
+  }
+  let words = crate::dictation_words::stored_for(&piece.model.account);
+  let text = send_chunk(
+    &account,
+    wav,
+    ChunkRequest {
+      model_id: Some(&piece.model.id),
+      language: piece.language,
+      vocabulary: chunk_vocabulary(piece.model.takes_vocabulary, &words),
+      matter_id: piece.matter_id,
+      piece_id: Some(piece.piece_id),
+      timeout: piece.timeout,
+    },
+  )
+  .await;
+  drop(account);
+  text.map_err(PieceFailure::Failed)
 }
 
 /// One model stella AI offers this organization. Fields a newer API adds are
@@ -571,6 +798,10 @@ pub struct CloudModel {
   /// window warns where such a model is chosen.
   #[serde(default)]
   retains_data: bool,
+  /// Whether the model reads vocabulary, so chunks carry the custom words;
+  /// absent from older APIs, which take none.
+  #[serde(default)]
+  takes_vocabulary: bool,
 }
 
 /// The models stella AI offers this organization, as the API lists them.
@@ -587,10 +818,28 @@ impl CloudModels {
   pub fn offers(&self, model_id: &str) -> bool {
     self.models.iter().any(|model| model.id == model_id)
   }
+
+  fn takes_vocabulary(&self, model_id: &str) -> bool {
+    self
+      .models
+      .iter()
+      .any(|model| model.id == model_id && model.takes_vocabulary)
+  }
 }
 
 pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
-  let account = cloud_account(app).await?;
+  models_for(cloud_account(app).await?).await
+}
+
+/// The account's models, with the namespace that names the account.
+async fn namespaced_models(
+  account: AccountRequest,
+) -> Result<(String, CloudModels), String> {
+  let namespace = account.local_data_namespace();
+  models_for(account).await.map(|models| (namespace, models))
+}
+
+async fn models_for(account: AccountRequest) -> Result<CloudModels, String> {
   let response = crate::http_client::device_proof_request(
     client(MODELS_TIMEOUT)?
       .get(format!(
@@ -656,6 +905,7 @@ mod tests {
         provider: None,
         outside_region: false,
         retains_data: false,
+        takes_vocabulary: false,
       })
       .to_vec(),
       default_model_id: default.map(ToString::to_string),
@@ -689,6 +939,39 @@ mod tests {
     assert_eq!(shown["retainsData"], false);
     let retaining = serde_json::to_value(&newer.models[2]).expect("serializes");
     assert_eq!(retaining["retainsData"], true);
+  }
+
+  #[test]
+  fn custom_words_go_only_to_a_model_the_api_says_reads_them() {
+    let listed: CloudModels = serde_json::from_str(
+      r#"{
+        "models": [
+          {"id": "openai/whisper-large-v3", "displayName": "Whisper",
+           "provider": "OpenAI", "outsideRegion": false, "takesVocabulary": true},
+          {"id": "elevenlabs-direct/scribe-v3", "displayName": "Scribe v3",
+           "provider": "ElevenLabs", "outsideRegion": false, "takesVocabulary": false},
+          {"id": "mistralai/voxtral-mini-transcribe", "displayName": "Voxtral"}
+        ],
+        "defaultModelId": "openai/whisper-large-v3",
+        "unavailable": null
+      }"#,
+    )
+    .expect("a model list reads");
+    assert!(listed.takes_vocabulary("openai/whisper-large-v3"));
+    assert!(!listed.takes_vocabulary("elevenlabs-direct/scribe-v3"));
+    // An older API lists no such field: no model gets the words.
+    assert!(!listed.takes_vocabulary("mistralai/voxtral-mini-transcribe"));
+    assert!(!listed.takes_vocabulary("google/chirp-3"));
+    let words = vec!["custom terms list".to_string()];
+    assert_eq!(chunk_vocabulary(true, &words), words.as_slice());
+    assert!(chunk_vocabulary(false, &words).is_empty());
+  }
+
+  #[test]
+  fn the_vocabulary_limits_are_the_contracts() {
+    let limits = vocabulary_limits();
+    assert_eq!(limits.words, 100);
+    assert_eq!(limits.length, 100);
   }
 
   #[test]

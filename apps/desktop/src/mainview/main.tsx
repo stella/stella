@@ -42,6 +42,7 @@ const ClipboardEditorWindow = lazy(
 );
 const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
 const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
+const TranscribeApp = lazy(async () => import("../transcribe/TranscribeApp"));
 
 const AccessibilityGuideApp = lazy(
   async () => import("../onboarding/AccessibilityGuideApp"),
@@ -147,6 +148,12 @@ const Root = () => {
     content = (
       <Suspense fallback={<main className="bg-background min-h-dvh" />}>
         <OnboardingApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "transcribe") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <TranscribeApp />
       </Suspense>
     );
   } else if (windowLabel === "clipboard-editor") {

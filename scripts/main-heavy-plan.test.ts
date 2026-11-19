@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
@@ -27,7 +28,7 @@ import {
   thinJobs,
 } from "./main-heavy-plan";
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 const source = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",

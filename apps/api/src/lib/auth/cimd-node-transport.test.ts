@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PROBE_RESULT_PREFIX = "CIMD_PROBE:";
 const IPV6 = "2606:4700:4700::1111";
@@ -130,7 +131,7 @@ const probe = async (options: ProbeOptions): Promise<ProbeResult> => {
     console.log(${JSON.stringify(PROBE_RESULT_PREFIX)} + JSON.stringify({ ...result, attempts, authorities, resolutions, elapsedMs: performance.now() - started }));
     });
   `;
-  const cwd = new URL("../../../../..", import.meta.url).pathname;
+  const cwd = fileURLToPath(new URL("../../../../..", import.meta.url));
   const directory = await mkdtemp(path.join(cwd, ".cimd-transport-"));
   try {
     const fixture = path.join(directory, "probe.test.mjs");

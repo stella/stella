@@ -1,4 +1,4 @@
-import { useRouterState } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 
 import {
   DefaultPendingComponent,
@@ -8,7 +8,10 @@ import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launc
 import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { selectAppFrame } from "@/routes/-app-frame.logic";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
-import { useLeafPendingView } from "@/routes/-route-pending-view";
+import {
+  leafRedirectFrameScope,
+  useLeafPendingView,
+} from "@/routes/-route-pending-view";
 
 /**
  * The root's pending view: what a cold load paints before the app mounts,
@@ -20,16 +23,21 @@ import { useLeafPendingView } from "@/routes/-route-pending-view";
  * own shell.
  */
 export function RootPendingComponent() {
+  const router = useRouter();
   const memberFrame = useRouterState({
-    select: (state) =>
-      selectAppFrame({
+    select: (state) => {
+      const frame = selectAppFrame({
         scope: matchedAppFrameScope(state.matches),
         routeIds: state.matches.map((match) => match.routeId),
         // No guard has run yet: a member page answers with the frame it
         // shows while the session is read.
         hasRouteUser: false,
         publicKnowledge: isPublicKnowledgeEnabled(),
-      }) === "checking",
+        redirectScope: leafRedirectFrameScope(router.routesById, state.matches),
+      });
+      // A redirect into the member frame draws it around its target too.
+      return frame === "checking" || frame === "neutral";
+    },
   });
   const leafPendingView = useLeafPendingView();
   if (!memberFrame) {
