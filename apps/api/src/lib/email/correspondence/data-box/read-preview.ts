@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -37,11 +38,15 @@ export const readDataBoxPreview = async ({ bytes }: ScannedFile) => {
     new TextDecoder().decode(result.value),
   );
   if (!parsed.success) {
+    // The worker broke its own output contract: a defect, not an outage.
     return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Invalid response from the data-box reader",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Invalid response from the data-box reader",
+        }),
+        "response_invalid",
+      ),
     );
   }
   if (parsed.output.kind === "unreadable") {
