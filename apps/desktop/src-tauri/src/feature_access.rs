@@ -231,6 +231,8 @@ pub fn account_changed(app: &AppHandle, unload: impl FnOnce(&AppHandle)) {
   if let Some(gates) = app.try_state::<FeatureGates>() {
     gates.invalidate();
   }
+  // A dictation model list read before the change is read again.
+  crate::dictation_models::forget();
   unload(app);
   if let Some(gates) = app.try_state::<FeatureGates>() {
     gates.finish_account_change();

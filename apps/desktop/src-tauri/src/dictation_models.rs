@@ -246,7 +246,8 @@ pub fn shared() -> &'static ModelCache<Monotonic> {
   &CACHE
 }
 
-/// Forgets the shared list: the account was linked, unlinked or relinked.
+/// Forgets the shared list: the account was linked, unlinked or relinked
+/// (`feature_access::account_changed`).
 pub fn forget() {
   shared().forget();
 }
