@@ -19,7 +19,7 @@ export const FAKE_ACP_MODEL = "fake-model-pro";
 export const FAKE_ACP_OTHER_MODEL = "fake-model-flash";
 export const FAKE_ACP_VERSION = "1.5.0";
 export const FAKE_ACP_REPLAYED_TEXT = "replayed history text";
-export const FAKE_ACP_STDERR = "fake agent stderr line";
+const FAKE_ACP_STDERR = "fake agent stderr line";
 
 type Step =
   /** Wait for the client's next request with this method and answer it. */
@@ -137,7 +137,7 @@ const text = (sessionUpdate: string, value: string): Step => ({
   update: { sessionUpdate, content: { type: "text", text: value } },
 });
 
-export const FAKE_ACP_SCENARIOS = {
+const FAKE_ACP_SCENARIOS = {
   probe: [...START],
   probe_signed_out: [
     { expect: "initialize", result: AGENT },
