@@ -27,7 +27,7 @@
     "apps/web/src/components/chat/composer-plus-menu.tsx": 3,
     "apps/web/src/components/chat/create-document-draft-inspector-view.tsx": 1,
     "apps/web/src/components/chat/message-export-menu.tsx": 2,
-    "apps/web/src/components/chat/tool-call-card.tsx": 7,
+    "apps/web/src/components/chat/tool-call-card.tsx": 4,
     "apps/web/src/components/company-registry-preview.tsx": 13,
     "apps/web/src/components/company-specification.tsx": 2,
     "apps/web/src/components/conditions/formula-editor.tsx": 7,
