@@ -63,7 +63,6 @@ import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 export {
   BackfillFailedError,
   BackfillHeldError,
-  BackfillLockWaitError,
 } from "@stll/db-load-gate/backfill-pass";
 
 type Query = IndicatorQuery;
