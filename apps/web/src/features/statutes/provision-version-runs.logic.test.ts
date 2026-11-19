@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildProvisionVersionRows,
   groupWordingRuns,
+  isRunStartKnown,
   previousWordingVersion,
   runWindow,
 } from "@/features/statutes/provision-version-runs.logic";
@@ -188,5 +189,15 @@ describe("the window a run covers", () => {
       type: "future",
       from: "2027-09-01",
     });
+  });
+});
+
+describe("where a run's wording began", () => {
+  test("only a compared start is known; an unread or unreadable neighbour leaves it open", () => {
+    expect(isRunStartKnown("changed")).toBe(true);
+    expect(isRunStartKnown("added")).toBe(true);
+    expect(isRunStartKnown("earliest")).toBe(true);
+    expect(isRunStartKnown("unknown")).toBe(false);
+    expect(isRunStartKnown(null)).toBe(false);
   });
 });

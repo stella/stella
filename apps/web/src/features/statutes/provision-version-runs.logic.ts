@@ -25,6 +25,14 @@ export type WordingRun<T> = {
   start: WordingRunStart | null;
 };
 
+/**
+ * Whether a run's start is established: the version before its oldest member
+ * was read and could be compared. Otherwise the wording may reach further
+ * back than the oldest version listed.
+ */
+export const isRunStartKnown = (start: WordingRunStart | null): boolean =>
+  start !== null && start !== "unknown";
+
 export type WordingRunGroup<T> =
   ({ type: "run" } & WordingRun<T>) | { type: "unavailable"; item: T };
 

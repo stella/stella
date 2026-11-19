@@ -13,7 +13,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { groupWordingRuns } from "@/features/statutes/provision-version-runs.logic";
+import {
+  groupWordingRuns,
+  isRunStartKnown,
+} from "@/features/statutes/provision-version-runs.logic";
 import type { ProvisionHistoryItem } from "@/features/statutes/queries/provision-history";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
@@ -106,8 +109,9 @@ export const ProvisionHistory = ({
     historyAnchor.type === "resolved" ? historyAnchor.anchor : anchorId;
   // A wording that cannot apply was never in force from its start date: it
   // is named for what it is, beside the dates its publisher stated.
-  // A wording whose start lies on a page not read yet is dated by the oldest
-  // version read so far, and says it may reach further back.
+  // A wording whose start lies on a page not read yet, or behind a version
+  // whose text could not be read, is dated by its oldest version listed, and
+  // says it may reach further back.
   const versionLabel = (
     version: ProvisionHistoryItem,
     startKnown = true,
@@ -153,7 +157,7 @@ export const ProvisionHistory = ({
           if (version === undefined) {
             return null;
           }
-          const label = versionLabel(version, group.start !== null);
+          const label = versionLabel(version, isRunStartKnown(group.start));
           const onScreen = group.members.some(
             (member) => member.documentId === documentId,
           );
