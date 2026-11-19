@@ -7,6 +7,7 @@ import {
   LEGISLATION_APPLICABLE_EXPRESSION_KINDS,
   LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
   type LegislationExpressionEligibility,
+  type LegislationExpressionKind,
 } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_WINDOW_STATUSES } from "@stll/api-contract/legislation-status";
 
@@ -297,6 +298,43 @@ export const isInconsistentWindowGapAt = (
        AND ${openedBy(later, asOf)}
        AND (${versionSortKey(later.validFrom)}, gap_later.id)
          > (${versionSortKey(row.validFrom)}, ${row.id})
+  )
+)`;
+};
+
+const PROMULGATED_KIND_SQL = sql.raw(
+  `'${"promulgated" satisfies LegislationExpressionKind}'`,
+);
+
+/**
+ * Whether this version is the text a read at `asOf` falls back to for a Work
+ * that holds no version of an applicable kind at all: its text as
+ * promulgated, with an effective window covering the date.
+ *
+ * It is a fallback, not an applicable kind: the text is answered as the text
+ * as promulgated, never as the text in force. A Work holding any version of
+ * an applicable kind for the row's `(source, eli, language)`, withdrawn or
+ * not, keeps its point-in-time answer, so a promulgated text beside a
+ * consolidation never answers a date. Callers evaluate it only once no
+ * eligible version answered.
+ */
+export const isPromulgatedOnlyTextAt = (
+  row: LegislationVersionRow,
+  asOf: SQLWrapper,
+): SQL => {
+  const sibling = legislationVersionRefAt("work_sibling");
+  return sql`(
+  ${row.kind} = ${PROMULGATED_KIND_SQL}
+  AND ${row.disposition} = ${APPLICABLE_DISPOSITION_SQL}
+  AND ${openedBy(row, asOf)}
+  AND ${stillOpenOn(row, asOf)}
+  AND NOT EXISTS (
+    SELECT 1
+      FROM legislation_documents AS work_sibling
+     WHERE work_sibling.source_id = ${row.sourceId}
+       AND work_sibling.eli = ${row.eli}
+       AND work_sibling.language = ${row.language}
+       AND ${applicableKind(sibling)}
   )
 )`;
 };
