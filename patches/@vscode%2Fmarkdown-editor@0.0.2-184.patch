@@ -1,9 +1,9 @@
 diff --git a/dist/index.js b/dist/index.js
-index b4fd052b3b6b1b0e2c9793fdb0cc771f352b0d57..f102e9c4dd29c3603e0d1c014ae01ca38c6ba456 100644
+index 6d1dda072f92a3854c5ccd9d6415d8467e704966..87e4a5e7a26e6de5a305f87d27f9c1bc77a7525e 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -7042,10 +7042,16 @@ class th extends W {
-     })), this.measuredLayout = new Ur();
+@@ -7823,10 +7823,16 @@ class Eu extends X {
+     })), this.measuredLayout = new Gc();
      let i = -1, o = -1, r = -1, c = 0;
      this._resizeObserver = new ResizeObserver(() => {
 +      // Width classes change the content inset, so they apply in the observer
@@ -12,12 +12,12 @@ index b4fd052b3b6b1b0e2c9793fdb0cc771f352b0d57..f102e9c4dd29c3603e0d1c014ae01ca3
 +      // frame, every newly mounted editor painted once with the narrow inset
 +      // and then jumped sideways.
 +      this.element.classList.toggle("md-editor-narrow", this.element.clientWidth <= 320), this.element.classList.toggle("md-editor-medium-margins", this.element.clientWidth > 600);
-+      const h = getComputedStyle(this._contentContainer), f = this._contentContainer.clientWidth - parseFloat(h.paddingLeft) - parseFloat(h.paddingRight);
-+      this.element.classList.toggle("md-find-compact", f <= 400);
++      const h = getComputedStyle(this._contentContainer), u = this._contentContainer.clientWidth - parseFloat(h.paddingLeft) - parseFloat(h.paddingRight);
++      this.element.classList.toggle("md-find-compact", u <= 400);
        c || (c = requestAnimationFrame(() => {
 -        c = 0, this.element.classList.toggle("md-editor-narrow", this.element.clientWidth <= 320), this.element.classList.toggle("md-editor-medium-margins", this.element.clientWidth > 600);
--        const h = getComputedStyle(this._contentContainer), f = this._contentContainer.clientWidth - parseFloat(h.paddingLeft) - parseFloat(h.paddingRight);
--        this.element.classList.toggle("md-find-compact", f <= 400);
+-        const h = getComputedStyle(this._contentContainer), u = this._contentContainer.clientWidth - parseFloat(h.paddingLeft) - parseFloat(h.paddingRight);
+-        this.element.classList.toggle("md-find-compact", u <= 400);
 +        c = 0;
          const m = this._document.get();
          if (!m)
