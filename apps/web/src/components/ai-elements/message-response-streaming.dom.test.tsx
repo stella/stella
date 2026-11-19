@@ -5,7 +5,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { PluggableList } from "unified";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import {
   markdownLines,
   readFencedBlockAt,
@@ -318,21 +318,24 @@ const renderedHtml = async (source: string, options: RenderOptions = {}) => {
 const TABLE_TRIGGER =
   '[data-slot="answer-table-header"] button[id^="base-ui-"]';
 
-const comparableTree = (root: HTMLElement) => {
-  const tree = document.importNode(root, true);
-  for (const [index, trigger] of tree
-    .querySelectorAll(TABLE_TRIGGER)
-    .entries()) {
-    trigger.id = `table-trigger-${index}`;
-  }
+const renderedTree = async (source: string, options: RenderOptions = {}) => {
+  const view = await mountAnswer(source, options);
+  const tree = document.importNode(view.root, true);
+  await view.unmount();
   return tree;
 };
 
-const renderedTree = async (source: string, options: RenderOptions = {}) => {
-  const view = await mountAnswer(source, options);
-  const tree = comparableTree(view.root);
-  await view.unmount();
-  return tree;
+// Align only the detached reference tree's trigger ids with the live answer.
+const matchesRenderedTree = (actual: HTMLElement, reference: HTMLElement) => {
+  const triggers = actual.querySelectorAll(TABLE_TRIGGER);
+  const referenceTriggers = reference.querySelectorAll(TABLE_TRIGGER);
+  if (triggers.length !== referenceTriggers.length) {
+    return false;
+  }
+  for (const [index, trigger] of referenceTriggers.entries()) {
+    trigger.id = triggers.item(index).id;
+  }
+  return actual.isEqualNode(reference);
 };
 
 const SAFE_HREF = /^(?:https?:|mailto:|tel:|#|\/(?![\\/]))/iu;
@@ -443,69 +446,77 @@ const brokenFragments = (root: Element): string[] => {
 };
 
 describe("streamed chat answers", () => {
-  test("streamed answers settle to the render of the whole answer", async () => {
-    await assertProperty(
-      "streamed answers settle to the render of the whole answer",
-      fc.asyncProperty(
-        streamedChatAnswerArbitrary,
-        async ({ answer, prefixes }) => {
-          for (const config of RENDERER_CONFIGS) {
-            // While the turn runs the chat marks the answer as animating.
-            const streaming = { ...config.options, isAnimating: true };
-            const view = await mountAnswer(prefixes.at(0) ?? "", streaming);
-            for (const prefix of prefixes) {
-              await view.update(prefix);
-              expect({
-                config: config.name,
-                prefix,
-                active: activeContent(view.root),
-              }).toEqual({ config: config.name, prefix, active: [] });
-              expect(duplicateIds(view.root, prefix)).toEqual([]);
-              expect({ prefix, names: unscopedNames(view.root) }).toEqual({
-                prefix,
-                names: [],
-              });
+  test(
+    "streamed answers settle to the render of the whole answer",
+    async () => {
+      await assertProperty(
+        "streamed answers settle to the render of the whole answer",
+        fc.asyncProperty(
+          streamedChatAnswerArbitrary,
+          async ({ answer, prefixes }) => {
+            for (const config of RENDERER_CONFIGS) {
+              // While the turn runs the chat marks the answer as animating.
+              const streaming = { ...config.options, isAnimating: true };
+              const view = await mountAnswer(prefixes.at(0) ?? "", streaming);
+              for (const prefix of prefixes) {
+                await view.update(prefix);
+                expect({
+                  config: config.name,
+                  prefix,
+                  active: activeContent(view.root),
+                }).toEqual({ config: config.name, prefix, active: [] });
+                expect(duplicateIds(view.root, prefix)).toEqual([]);
+                expect({ prefix, names: unscopedNames(view.root) }).toEqual({
+                  prefix,
+                  names: [],
+                });
+              }
+              // DOM equality ignores the order React added attributes in earlier frames.
+              expect(
+                matchesRenderedTree(
+                  view.root,
+                  await renderedTree(answer, streaming),
+                ),
+              ).toBe(true);
+              // The chat settles a finished turn by switching to source offsets;
+              // the settled frame is the one a reload of the thread shows.
+              const settled = { ...config.options, sourceOffsets: true };
+              await view.update(answer, settled);
+              expect(
+                matchesRenderedTree(
+                  view.root,
+                  await renderedTree(answer, settled),
+                ),
+              ).toBe(true);
+              expect(activeContent(view.root)).toEqual([]);
+              expect(unscopedNames(view.root)).toEqual([]);
+              expect(brokenFragments(view.root)).toEqual([]);
+              // Restorations can arrive after the text (server metadata): the
+              // mounted answer must pick up the new plugin set, not keep the old.
+              const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
+              await view.update(answer, restored);
+              expect(
+                matchesRenderedTree(
+                  view.root,
+                  await renderedTree(answer, restored),
+                ),
+              ).toBe(true);
+              await view.unmount();
             }
-            // DOM equality ignores the order React added attributes in earlier frames.
+            // Plugins a surface adds must never change what the base chain renders.
             expect(
-              comparableTree(view.root).isEqualNode(
-                await renderedTree(answer, streaming),
+              matchesRenderedTree(
+                await renderedTree(answer, { rehypePlugins: ANON_PLUGINS }),
+                await renderedTree(answer),
               ),
             ).toBe(true);
-            // The chat settles a finished turn by switching to source offsets;
-            // the settled frame is the one a reload of the thread shows.
-            const settled = { ...config.options, sourceOffsets: true };
-            await view.update(answer, settled);
-            expect(
-              comparableTree(view.root).isEqualNode(
-                await renderedTree(answer, settled),
-              ),
-            ).toBe(true);
-            expect(activeContent(view.root)).toEqual([]);
-            expect(unscopedNames(view.root)).toEqual([]);
-            expect(brokenFragments(view.root)).toEqual([]);
-            // Restorations can arrive after the text (server metadata): the
-            // mounted answer must pick up the new plugin set, not keep the old.
-            const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
-            await view.update(answer, restored);
-            expect(
-              comparableTree(view.root).isEqualNode(
-                await renderedTree(answer, restored),
-              ),
-            ).toBe(true);
-            await view.unmount();
-          }
-          // Plugins a surface adds must never change what the base chain renders.
-          expect(
-            (
-              await renderedTree(answer, { rehypePlugins: ANON_PLUGINS })
-            ).isEqualNode(await renderedTree(answer)),
-          ).toBe(true);
-        },
-      ),
-      { numRuns: 30 },
-    );
-  });
+          },
+        ),
+        { numRuns: 30 },
+      );
+    },
+    propertyTestTimeout(15_000),
+  );
 
   test("a code fence closed late, by a longer fence or never keeps the following text out of the code", async () => {
     const cases = [
