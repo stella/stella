@@ -539,10 +539,42 @@ export const polishConstitutionalDocketKey = (
  * registry mark is written all-caps (`NSČR`, `ÚS`) and title-case (`Cdo`,
  * `As`) by different courts and lowercase by a reader typing a query.
  */
+const CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX = 3;
+const CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX = 1;
+
+/** All-zero numeric prefixes accepted by the Czech grammar, including absence. */
+export const CZE_ZERO_SENATE_PREFIXES = Object.freeze(
+  Array.from(
+    {
+      length:
+        CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX *
+          (1 + CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX) +
+        1,
+    },
+    (_, length) => "0".repeat(length),
+  ),
+);
+
+/** Preserved citation keys can distinguish the grammar's two numeric components. */
+export const CZE_ZERO_SENATE_PREFIX_SPELLINGS = Object.freeze(
+  CZE_ZERO_SENATE_PREFIXES.flatMap((prefix) => {
+    const spellings = [prefix];
+    for (let split = 1; split < prefix.length; split += 1) {
+      if (
+        split <= CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX &&
+        prefix.length - split <= CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX
+      ) {
+        spellings.push(`${prefix.slice(0, split)} ${prefix.slice(split)}`);
+      }
+    }
+    return spellings;
+  }),
+);
+
 export const CZE_SHEET_NUMBER_SOURCE = String.raw`\d{1,5}`;
 const CZE_SHEET_SUFFIX_RE = new RegExp(`-${CZE_SHEET_NUMBER_SOURCE}$`, "u");
 const CZE_SENATE_DOCKET_RE = new RegExp(
-  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
+  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?)(?:\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?){0,${CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX}}\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
   "iu",
 );
 

@@ -1002,17 +1002,28 @@ test(
 // timeout: bounded embedded Postgres fixtures exercise indexed legacy identity paths.
 test.each(
   (["citation-key", "identifier", "family-key"] as const).flatMap(
-    (mode, index) => [
-      { mode, ordinal: 42 + index, storedZero: true },
-      { mode, ordinal: 42 + index, storedZero: false },
-    ],
+    (mode, index) =>
+      ["0", "000000", "00 00"].flatMap((zeroPrefix, prefixIndex) => [
+        {
+          mode,
+          ordinal: 42 + index * 3 + prefixIndex,
+          storedZero: true,
+          zeroPrefix,
+        },
+        {
+          mode,
+          ordinal: 42 + index * 3 + prefixIndex,
+          storedZero: false,
+          zeroPrefix,
+        },
+      ]),
   ),
 )(
-  "Czech zero senate reads legacy $mode identities in both directions ($storedZero)",
-  async ({ mode, ordinal, storedZero }) => {
+  "Czech zero senate reads legacy $mode identities in both directions ($storedZero/$zeroPrefix)",
+  async ({ mode, ordinal, storedZero, zeroPrefix }) => {
     const base = `Ts ${ordinal}/2003`;
-    const stored = storedZero ? `0 ${base}` : base;
-    const query = storedZero ? base : `0 ${base}`;
+    const stored = storedZero ? `${zeroPrefix} ${base}` : base;
+    const query = storedZero ? base : `${zeroPrefix} ${base}`;
     const printed = mode === "family-key" ? `${stored} - 46` : stored;
     const db = drizzle({ client });
     const sourceId = storedZero ? zeroSenateSourceId : openSourceId;
@@ -1022,7 +1033,7 @@ test.each(
       {
         id,
         sourceId,
-        sourceDocumentId: `legacy-${mode}-${storedZero ? "zero" : "bare"}`,
+        sourceDocumentId: `legacy-${mode}-${storedZero ? "zero" : "bare"}-${zeroPrefix.replaceAll(" ", "")}`,
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",
@@ -1030,13 +1041,13 @@ test.each(
         citationKey: mode === "identifier" ? null : citationKeyOf(printed),
         docketFamilyKey:
           mode === "family-key"
-            ? `${storedZero ? "0" : ""}ts${ordinal}/2003`
+            ? `${storedZero ? zeroPrefix.replaceAll(" ", "") : ""}ts${ordinal}/2003`
             : null,
       },
       {
         id: positiveId,
         sourceId: openSourceId,
-        sourceDocumentId: `positive-${mode}-${storedZero ? "zero" : "bare"}`,
+        sourceDocumentId: `positive-${mode}-${storedZero ? "zero" : "bare"}-${zeroPrefix.replaceAll(" ", "")}`,
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",

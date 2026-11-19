@@ -6,6 +6,7 @@ import { assertProperty, propertyConfig } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
+  CZE_ZERO_SENATE_PREFIXES,
   DECISION_DOCKET_GRAMMARS,
   parseDecisionDocket,
   storedDecisionDocketOf,
@@ -1303,7 +1304,7 @@ test("Czech five-digit court sheets preserve file identity and the exact target 
   }
 });
 
-test("Czech absent-senate spellings share a family while positive senates remain distinct", () => {
+test("Czech zero senate is absent", () => {
   assertProperty(
     "Czech zero senate is absent",
     fc.property(
@@ -1312,10 +1313,17 @@ test("Czech absent-senate spellings share a family while positive senates remain
         ordinal: fc.integer({ min: 1, max: 999_999 }),
         year: fc.integer({ min: 1900, max: 2099 }),
         senate: fc.integer({ min: 1, max: 999 }),
+        zeroPrefix: fc.constantFrom(...CZE_ZERO_SENATE_PREFIXES),
+        separateComponents: fc.boolean(),
       }),
-      ({ registry, ordinal, year, senate }) => {
+      ({ registry, ordinal, year, senate, zeroPrefix, separateComponents }) => {
         const bare = `${registry} ${ordinal}/${year}`;
-        const zero = `0 ${bare}`;
+        const split = Math.ceil(zeroPrefix.length / 2);
+        const prefix =
+          separateComponents && zeroPrefix.length > 1
+            ? `${zeroPrefix.slice(0, split)} ${zeroPrefix.slice(split)}`
+            : zeroPrefix;
+        const zero = prefix === "" ? bare : `${prefix} ${bare}`;
         const key = docketFamilyKeyOf(bare, "CZE");
         expect(key).not.toBeNull();
         expect(docketFamilyKeyOf(zero, "CZE")).toBe(key);
@@ -1331,22 +1339,31 @@ test("Czech absent-senate spellings share a family while positive senates remain
   );
 });
 
-test.each(["Ts 42/2003", "0 Ts 42/2003", "0 ts 42/2003", "0 TS 42/2003"])(
-  "legacy keys are reachable from %s",
-  (value) => {
-    expect(docketFamilyKeysToRead(value, "CZE")).toEqual([
-      "ts42/2003",
-      "0ts42/2003",
-    ]);
-    expect(
-      new Set(
-        decisionDocketFamilySpellings(value, "CZE").map((spelling) =>
-          docketFamilyKeyOf(spelling, "CZE"),
-        ),
+test.each([
+  "Ts 42/2003",
+  "0 Ts 42/2003",
+  "0 ts 42/2003",
+  "0 TS 42/2003",
+  "000000 Ts 42/2003",
+  "00 00 Ts 42/2003",
+])("legacy keys are reachable from %s", (value) => {
+  expect(docketFamilyKeysToRead(value, "CZE")).toEqual([
+    "ts42/2003",
+    "0ts42/2003",
+    "00ts42/2003",
+    "000ts42/2003",
+    "0000ts42/2003",
+    "00000ts42/2003",
+    "000000ts42/2003",
+  ]);
+  expect(
+    new Set(
+      decisionDocketFamilySpellings(value, "CZE").map((spelling) =>
+        docketFamilyKeyOf(spelling, "CZE"),
       ),
-    ).toEqual(new Set(["ts42/2003"]));
-  },
-);
+    ),
+  ).toEqual(new Set(["ts42/2003"]));
+});
 
 test.each(["1 Ts 42/2003", "01 Ts 42/2003", "IV. ÚS 42/03", "MZDR 42/2003"])(
   "zero-senate aliases are conditional: %s",
@@ -1395,4 +1412,23 @@ test("zero-senate aliases are scoped and retain sheet/year safeguards", () => {
       { exactIdentityRead: "complete" },
     ).status,
   ).toBe("incomplete_identifier");
+});
+
+test("zero-senate policy is bounded by the grammar's numeric components", () => {
+  expect(CZE_ZERO_SENATE_PREFIXES).toEqual([
+    "",
+    "0",
+    "00",
+    "000",
+    "0000",
+    "00000",
+    "000000",
+  ]);
+  expect(
+    DECISION_DOCKET_GRAMMARS.CZE.parse("000000 Ts 42/2003"),
+  ).not.toBeNull();
+  expect(DECISION_DOCKET_GRAMMARS.CZE.parse("0000000 Ts 42/2003")).toBeNull();
+  expect(docketFamilyKeysToRead("01 Ts 42/2003", "CZE")).toEqual([
+    "01ts42/2003",
+  ]);
 });

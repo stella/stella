@@ -3,6 +3,7 @@ import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 import {
   canonicalDecisionIdentifierKey,
   CZE_SHEET_NUMBER_SOURCE,
+  CZE_ZERO_SENATE_PREFIX_SPELLINGS,
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,
@@ -413,20 +414,27 @@ export const decisionDocketFamilySpellings = (
   if (jurisdiction !== "CZE") {
     return [formatted];
   }
-  const bare = formatted.replace(/^0+\s*(?=\p{L})/u, "");
-  let alternate = bare;
-  if (bare === formatted) {
-    alternate = `0 ${formatted}`;
-  } else if (grammar.parse(bare) === null) {
-    alternate = bare.replace(
+  let bare = formatted.replace(/^0+(?:\s+0+)*\s*(?=\p{L})/u, "");
+  if (grammar.parse(bare) === null) {
+    bare = bare.replace(
       /^\p{L}{1,7}(?=\.?\s)/u,
       (registry) =>
         `${registry.slice(0, 1).toLocaleUpperCase("und")}${registry.slice(1).toLocaleLowerCase("und")}`,
     );
   }
-  return grammar.parse(alternate)?.canonical === canonical
-    ? [...new Set([formatted, alternate])]
-    : [formatted];
+  const spellings = [
+    formatted,
+    ...CZE_ZERO_SENATE_PREFIX_SPELLINGS.map((prefix) =>
+      prefix === "" ? bare : `${prefix} ${bare}`,
+    ),
+  ];
+  return [
+    ...new Set(
+      spellings.filter(
+        (spelling) => grammar.parse(spelling)?.canonical === canonical,
+      ),
+    ),
+  ];
 };
 
 /** Indexed family keys include pre-canonicalization Czech zero-senate rows. */
@@ -449,7 +457,7 @@ export const docketFamilyKeysToRead = (
           canonicalDecisionIdentifierKey(spelling).replaceAll(".", ""),
       ),
     ]),
-  ];
+  ].toSorted((left, right) => left.length - right.length);
 };
 
 /**
