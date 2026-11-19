@@ -81,6 +81,7 @@ type SignInPanelProps = {
   /** The method a link asked this page to open with. */
   entryMethod?: SignInEntryMethod | undefined;
   redirectTo: string;
+  reserveInvitationHint?: boolean;
   showHeading?: boolean;
   onOtpSent?: (payload: {
     email: string;
@@ -778,6 +779,7 @@ export const SignInPanel = (props: SignInPanelProps) => {
           className={props.className}
           entryMethod={props.entryMethod}
           redirectTo={props.redirectTo}
+          reserveInvitationHint={props.reserveInvitationHint}
           showHeading={props.showHeading ?? true}
         />
       </>
@@ -786,11 +788,17 @@ export const SignInPanel = (props: SignInPanelProps) => {
   if (capabilitiesView.type !== "items") {
     return <QueryViewFeedback view={capabilitiesView} />;
   }
+  const showInvitationHint = isAcceptInvitationRedirect(props.redirectTo);
+  const invitationState = showInvitationHint
+    ? "visible-reserved"
+    : "hidden-reserved";
+  const reserveInvitationHint = props.reserveInvitationHint ?? false;
   const heading = (props.showHeading ?? true) && (
     <SignInHeading
       title={t("auth.signIn")}
+      invitationState={reserveInvitationHint ? invitationState : "visible"}
       invitation={
-        isAcceptInvitationRedirect(props.redirectTo)
+        showInvitationHint || reserveInvitationHint
           ? t("auth.signInBeforeInvitation")
           : undefined
       }

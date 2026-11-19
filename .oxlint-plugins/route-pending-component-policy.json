@@ -23,7 +23,7 @@
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
   "pendingSafeNamedImports": {
     "@tanstack/react-router": ["useParams", "useSearch"],
-    "@/lib/redirect": ["isAcceptInvitationRedirect"],
+    "@/lib/redirect": ["isAcceptInvitationRedirect", "normalizeRedirectTo"],
     "@/lib/chrome-header-actions": ["ChromeHeaderActions"]
   },
   "$syncCacheReadersComment": "Synchronous reads of data already in the query cache, by export name from any module, so a pending view can show the controls the loaded page will (no fetch, no subscription).",

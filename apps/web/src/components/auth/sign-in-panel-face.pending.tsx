@@ -83,16 +83,27 @@ export const SignInPanelShell = ({
 export const SignInHeading = ({
   title,
   invitation,
+  invitationState = "visible",
 }: {
   title: ReactNode;
   invitation?: ReactNode;
+  invitationState?: "visible" | "visible-reserved" | "hidden-reserved";
 }) => (
   <div className="flex flex-col gap-2">
     <h2 className="text-foreground text-3xl leading-tight font-light tracking-tight">
       {title}
     </h2>
     {invitation !== undefined && invitation !== null && (
-      <p className="text-muted-foreground text-sm">{invitation}</p>
+      <p
+        aria-hidden={invitationState === "hidden-reserved" || undefined}
+        className={cn(
+          "text-muted-foreground text-sm",
+          invitationState !== "visible" && "min-h-10 max-sm:min-h-15",
+          invitationState === "hidden-reserved" && "invisible",
+        )}
+      >
+        {invitation}
+      </p>
     )}
   </div>
 );
@@ -134,11 +145,13 @@ export const SignInPanelPending = ({
   className,
   entryMethod,
   redirectTo = "/",
+  reserveInvitationHint = false,
   showHeading = true,
 }: {
   className?: string | undefined;
   entryMethod?: SignInEntryMethod | undefined;
   redirectTo?: string;
+  reserveInvitationHint?: boolean | undefined;
   showHeading?: boolean;
 }) => {
   const password = entryMethod === SIGN_IN_ENTRY_METHOD.password;
@@ -151,7 +164,11 @@ export const SignInPanelPending = ({
         showHeading && (
           <SignInHeading
             title={<PendingText id="auth.signIn" barClassName="w-24" />}
+            invitationState={
+              reserveInvitationHint ? "hidden-reserved" : "visible"
+            }
             invitation={
+              reserveInvitationHint ||
               isAcceptInvitationRedirect(redirectTo) ? (
                 <PendingText
                   id="auth.signInBeforeInvitation"

@@ -1,7 +1,9 @@
 import type { Page } from "@playwright/test";
 
 import { getStorageKey } from "../../src/consts";
+import { SIGN_IN_PROVIDERS } from "../fixtures/sign-in-providers";
 import { apiJson, respond } from "../helpers/route-mock";
+import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
 const viewport = { width: 1440, height: 900 };
@@ -19,6 +21,8 @@ const forms = [
   { ...signIn, providers: "all" },
   { ...signIn, providers: "one" },
   { ...signIn, providers: "none" },
+  { ...signIn, providers: "all", invitation: "direct" },
+  { ...signIn, providers: "all", invitation: "oauth" },
   {
     path: "/auth/two-factor",
     title: '[data-slot="frame-panel-title"]',
@@ -121,7 +125,17 @@ const expectAvailableProviders = async (
 for (const locale of ["en", "cs"]) {
   for (const form of forms) {
     const variant = "providers" in form ? ` (${form.providers} providers)` : "";
-    test(`${form.path}${variant} keeps its landmarks through hydration in ${locale}`, async ({
+    const invitation = "invitation" in form ? form.invitation : undefined;
+    let href: string = form.path;
+    if (invitation !== undefined) {
+      const search = new URLSearchParams({
+        redirectTo: "/auth/accept-invitation/geometry",
+      });
+      const fragment =
+        invitation === "oauth" ? "#oauth_query=sig%3Dgeometry" : "";
+      href = `${form.path}?${search}${fragment}`;
+    }
+    test(`${href}${variant} keeps its landmarks through hydration in ${locale}`, async ({
       baseURL,
       browser,
       page,
@@ -137,11 +151,17 @@ for (const locale of ["en", "cs"]) {
       });
       const session = Promise.withResolvers<undefined>();
       try {
-        await cold.goto(form.path);
+        await cold.goto(href);
         const server = await landmarks(cold, form);
         const serverProviders =
           form.path === "/auth" ? await providerLandmarks(cold) : [];
-        const configured = serverProviders.map(({ provider }) => provider);
+        const rendered = serverProviders.map(({ provider }) => provider);
+        const configured = EXPECTS_DEV_RUNTIME
+          ? rendered
+          : SIGN_IN_PROVIDERS.map(({ id }) => id);
+        if (form.path === "/auth") {
+          expect(rendered).toEqual(configured);
+        }
         const enabled = enabledProviders(
           configured,
           form.path === "/auth" ? form.providers : "none",
@@ -189,7 +209,7 @@ for (const locale of ["en", "cs"]) {
           (request) =>
             new URL(request.url()).pathname === "/api/auth/get-session",
         );
-        await page.goto(form.path, { waitUntil: "commit" });
+        await page.goto(href, { waitUntil: "commit" });
         await sessionRequested;
         const pending = await landmarks(page, form);
         const pendingProviders =
@@ -205,7 +225,7 @@ for (const locale of ["en", "cs"]) {
           contentType: "application/json",
           body: JSON.stringify({
             locale,
-            path: form.path,
+            path: href,
             server,
             pending,
             loaded,
@@ -224,6 +244,11 @@ for (const locale of ["en", "cs"]) {
           expect(pendingProviders).toEqual(serverProviders);
           expect(loadedProviders).toEqual(serverProviders);
           await expectAvailableProviders(page, configured, enabled);
+          if (invitation !== undefined) {
+            await expect(
+              page.locator("h2 + p").filter({ visible: true }),
+            ).toHaveCount(invitation === "direct" ? 1 : 0);
+          }
         }
       } finally {
         session.resolve(undefined);

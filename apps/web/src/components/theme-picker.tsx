@@ -11,7 +11,7 @@ import {
 } from "@stll/ui/menu";
 
 import {
-  PickerTriggerContent,
+  PickerTriggerIcon,
   pickerTriggerProps,
 } from "@/components/picker-trigger.pending";
 import { THEMES, useTheme } from "@/components/theme-provider";
@@ -33,9 +33,8 @@ export const ThemePicker = () => {
         aria-label={t("appearance.theme")}
         render={<Button {...pickerTriggerProps} />}
       >
-        <PickerTriggerContent icon={TriggerIcon}>
-          {t(`appearance.${theme}`)}
-        </PickerTriggerContent>
+        <PickerTriggerIcon icon={TriggerIcon} />
+        {t(`appearance.${theme}`)}
       </MenuTrigger>
       <MenuPopup side="bottom">
         <MenuRadioGroup value={theme}>

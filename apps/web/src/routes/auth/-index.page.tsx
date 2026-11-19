@@ -3,6 +3,7 @@ import { lazy, Suspense } from "react";
 import { getRouteApi, useLocation } from "@tanstack/react-router";
 
 import { SignInPanel } from "@/components/auth/sign-in-panel";
+import { isAcceptInvitationRedirect } from "@/lib/redirect";
 
 import { getOauthPostLoginRedirectTo } from "./-index.logic";
 import { SignInShell } from "./-index.pending";
@@ -29,7 +30,11 @@ export function SignInPage() {
 
   return (
     <SignInShell>
-      <SignInPanel entryMethod={entryMethod} redirectTo={redirectTo} />
+      <SignInPanel
+        entryMethod={entryMethod}
+        redirectTo={redirectTo}
+        reserveInvitationHint={isAcceptInvitationRedirect(defaultRedirectTo)}
+      />
       {DevQuickStartButton === null ? null : (
         <Suspense fallback={null}>
           <DevQuickStartButton redirectTo={redirectTo} />

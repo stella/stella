@@ -4,6 +4,10 @@ import { useSearch } from "@tanstack/react-router";
 
 import { SignInPanelPending } from "@/components/auth/sign-in-panel-face.pending";
 import { SIGN_IN_ENTRY_METHOD } from "@/components/auth/sign-in-panel.logic";
+import {
+  isAcceptInvitationRedirect,
+  normalizeRedirectTo,
+} from "@/lib/redirect";
 import { framePendingView } from "@/routes/-pending-view.logic";
 
 export const SignInShell = ({ children }: PropsWithChildren) => (
@@ -18,13 +22,18 @@ export const SignInPending = framePendingView(() => {
       redirectTo: search.redirectTo,
     }),
   });
+  // The cold request cannot see a signed OAuth fragment that overrides this
+  // search target. Reserve the hint without stating which destination won.
+  const reserveInvitationHint =
+    typeof redirectTo === "string" &&
+    isAcceptInvitationRedirect(normalizeRedirectTo(redirectTo));
   return (
     <SignInShell>
       <SignInPanelPending
         entryMethod={
           method === SIGN_IN_ENTRY_METHOD.password ? method : undefined
         }
-        redirectTo={typeof redirectTo === "string" ? redirectTo : "/"}
+        reserveInvitationHint={reserveInvitationHint}
       />
     </SignInShell>
   );

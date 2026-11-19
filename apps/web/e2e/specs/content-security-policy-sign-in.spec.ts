@@ -1,29 +1,14 @@
 import * as v from "valibot";
 
 import type { AuthCapabilities } from "../../src/components/auth/sign-in-panel.logic";
+import { SIGN_IN_PROVIDERS } from "../fixtures/sign-in-providers";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { apiJson, authJson, respond, staticBody } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 
-// The production E2E build enables both buttons. Stub only the auth metadata
-// and authorization URL response so this browser boundary needs no credentials
-// or provider account; the application still performs the navigation itself.
-const PROVIDERS = [
-  {
-    name: "Google",
-    id: "google",
-    url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=csp-smoke",
-  },
-  {
-    name: "Microsoft",
-    id: "microsoft",
-    url: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=csp-smoke",
-  },
-] as const;
-
 test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
 
-for (const provider of PROVIDERS) {
+for (const provider of SIGN_IN_PROVIDERS) {
   test(`sign-in navigates to ${provider.name} without CSP violations`, async ({
     page,
   }) => {

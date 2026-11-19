@@ -11,7 +11,7 @@ import {
 } from "@stll/ui/menu";
 
 import {
-  PickerTriggerContent,
+  PickerTriggerIcon,
   pickerTriggerProps,
 } from "@/components/picker-trigger.pending";
 import { setLang } from "@/i18n/client-document-locale";
@@ -29,9 +29,8 @@ export const LanguagePicker = () => {
   return (
     <Menu>
       <MenuTrigger render={<Button {...pickerTriggerProps} />}>
-        <PickerTriggerContent icon={GlobeIcon}>
-          {LANG_ENDONYMS[lang]}
-        </PickerTriggerContent>
+        <PickerTriggerIcon icon={GlobeIcon} />
+        {LANG_ENDONYMS[lang]}
       </MenuTrigger>
       <MenuPopup side="bottom">
         <MenuRadioGroup value={lang}>
