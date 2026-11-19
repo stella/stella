@@ -124,13 +124,17 @@ import {
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
+import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
   HELD_DECISION_MATCH_BASES,
   HELD_DECISION_MATCH_BASIS,
 } from "@/api/lib/legal-search/held-decision-attachment-values";
-import type { HeldDecisionDeclaredIdentifier } from "@/api/lib/legal-search/held-decision-attachment-values";
+import type {
+  HeldDecisionDeclaredIdentifier,
+  HeldDecisionMatchEvidence,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
@@ -2004,6 +2008,13 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
      * Null once the host is withdrawn: the takedown covers it.
      */
     metadata: jsonb().$type<Record<string, unknown>>(),
+    /** The identity check that admitted this association, independently of document contents. */
+    matchEvidence: jsonb("match_evidence").$type<HeldDecisionMatchEvidence>(),
+    /** The publisher's printed part boundaries and actual headnote or subject tags. */
+    documentPart: jsonb("document_part").$type<CollectionDocumentPart>(),
+    /** Immutable complete corpus payload retained under the exact host's erasure prefix. */
+    documentBodyS3Key: p.varchar("document_body_s3_key", { length: 512 }),
+    documentBodySha256: p.varchar("document_body_sha256", { length: 64 }),
     /** The identifier rows this record declared on its host. */
     declaredIdentifiers: jsonb("declared_identifiers")
       .$type<HeldDecisionDeclaredIdentifier[]>()
@@ -2058,12 +2069,21 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
     // waits for review with its candidates listed.
     p.check(
       "case_law_held_decision_attachments_review_shape",
-      sql`${t.matchBasis} <> ${HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE} OR ${t.hostDecisionId} IS NULL`,
+      sql`${t.matchBasis} NOT IN (${HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE}, ${HELD_DECISION_MATCH_BASIS.SOURCE_POLICY}) OR ${t.hostDecisionId} IS NULL`,
     ),
     // A withdrawn host's takedown leaves nothing of the record but its key.
     p.check(
       "case_law_held_decision_attachments_withdrawn_shape",
       sql`${t.hostWithdrawnAt} IS NULL OR (${t.hostDecisionId} IS NOT NULL AND ${t.metadata} IS NULL AND ${t.sourceRawS3Key} IS NULL)`,
+    ),
+    p.check(
+      "case_law_held_decision_attachments_document_shape",
+      sql`(${t.documentBodyS3Key} IS NULL) = (${t.documentBodySha256} IS NULL)
+        AND (${t.documentBodyS3Key} IS NULL OR (${t.documentPart} IS NOT NULL
+          AND ${t.hostDecisionId} IS NOT NULL AND ${t.hostWithdrawnAt} IS NULL
+          AND (${t.matchEvidence}->>'status') IS NOT DISTINCT FROM 'matched'))
+        AND (${t.hostWithdrawnAt} IS NULL OR (${t.documentPart} IS NULL
+          AND ${t.documentBodyS3Key} IS NULL AND ${t.documentBodySha256} IS NULL))`,
     ),
     ...caseLawIngestionOnlyPolicies(),
   ],
