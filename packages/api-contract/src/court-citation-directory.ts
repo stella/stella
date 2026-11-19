@@ -54,8 +54,12 @@ export type DirectoryCourt = {
   /** The head phrase the name opens with, a key of the language's heads. */
   head: string;
   seat?: CourtSeat | undefined;
-  /** A regional court's branch: `pobočka v Táboře`. */
-  branch?: CourtSeat | undefined;
+  /** A court branch: `pobočka v Táboře`. */
+  branch?:
+    | (CourtSeat & {
+        /** The branch seat after `pobočky`: `Liberce`. */ genitive: string;
+      })
+    | undefined;
   /** Prague's district courts are numbered: `Obvodní soud pro Prahu 6`. */
   pragueDistrict?: number | undefined;
   /** A seat's short code a citation writes after the court's (`KS BA`). */
@@ -300,7 +304,7 @@ const czCourt = (
   head: keyof (typeof COURT_HEADS)["CZE"],
   seat: CourtSeat | undefined,
   ecliCodes: readonly string[] = [],
-  branch?: CourtSeat,
+  branch?: DirectoryCourt["branch"],
 ): DirectoryCourt => {
   const [nominativeHead] = COURT_HEADS.CZE[head].forms;
   const seatText =
@@ -351,7 +355,7 @@ const prague = (number: number): DirectoryCourt => ({
 const regional = (
   nominative: string,
   form: string,
-  branch?: CourtSeat,
+  branch?: DirectoryCourt["branch"],
 ): DirectoryCourt => czCourt("KS", seatIn(nominative, form), [], branch);
 
 /**
@@ -492,26 +496,39 @@ const CZE_COURTS: readonly DirectoryCourt[] = (
     czCourt("MS", seatIn("Praha", "Praze")),
     regional("Praha", "Praze"),
     regional("České Budějovice", "Českých Budějovicích"),
-    regional(
-      "České Budějovice",
-      "Českých Budějovicích",
-      seatIn("Tábor", "Táboře"),
-    ),
+    regional("České Budějovice", "Českých Budějovicích", {
+      ...seatIn("Tábor", "Táboře"),
+      genitive: "Tábora",
+    }),
     regional("Plzeň", "Plzni"),
-    regional("Plzeň", "Plzni", seatIn("Karlovy Vary", "Karlových Varech")),
+    regional("Plzeň", "Plzni", {
+      ...seatIn("Karlovy Vary", "Karlových Varech"),
+      genitive: "Karlových Varů",
+    }),
     regional("Ústí nad Labem", "Ústí nad Labem"),
-    regional("Ústí nad Labem", "Ústí nad Labem", seatIn("Liberec", "Liberci")),
+    regional("Ústí nad Labem", "Ústí nad Labem", {
+      ...seatIn("Liberec", "Liberci"),
+      genitive: "Liberce",
+    }),
     regional("Hradec Králové", "Hradci Králové"),
-    regional(
-      "Hradec Králové",
-      "Hradci Králové",
-      seatIn("Pardubice", "Pardubicích"),
-    ),
+    regional("Hradec Králové", "Hradci Králové", {
+      ...seatIn("Pardubice", "Pardubicích"),
+      genitive: "Pardubic",
+    }),
     regional("Brno", "Brně"),
-    regional("Brno", "Brně", seatIn("Zlín", "Zlíně", "ve")),
-    regional("Brno", "Brně", seatIn("Jihlava", "Jihlavě")),
+    regional("Brno", "Brně", {
+      ...seatIn("Zlín", "Zlíně", "ve"),
+      genitive: "Zlína",
+    }),
+    regional("Brno", "Brně", {
+      ...seatIn("Jihlava", "Jihlavě"),
+      genitive: "Jihlavy",
+    }),
     regional("Ostrava", "Ostravě"),
-    regional("Ostrava", "Ostravě", seatIn("Olomouc", "Olomouci")),
+    regional("Ostrava", "Ostravě", {
+      ...seatIn("Olomouc", "Olomouci"),
+      genitive: "Olomouce",
+    }),
     // Prague's ten district courts.
     ...Array.from({ length: 10 }, (_, index) => prague(index + 1)),
     // Krajský soud v Praze.
@@ -599,24 +616,18 @@ const CZE_COURTS: readonly DirectoryCourt[] = (
     district("Vsetín", "Vsetíně", "ve"),
     // District courts' branches, each with the code its decisions carry
     // (`ECLI:CZ:OSKIHA:…`).
-    czCourt(
-      "OS",
-      seatIn("Bruntál", "Bruntále"),
-      ["OSBUKR"],
-      seatIn("Krnov", "Krnově"),
-    ),
-    czCourt(
-      "OS",
-      seatIn("Karviná", "Karviné"),
-      ["OSKIHA"],
-      seatIn("Havířov", "Havířově"),
-    ),
-    czCourt(
-      "OS",
-      seatIn("Vsetín", "Vsetíně", "ve"),
-      ["OSVSVM"],
-      seatIn("Valašské Meziříčí", "Valašském Meziříčí", "ve"),
-    ),
+    czCourt("OS", seatIn("Bruntál", "Bruntále"), ["OSBUKR"], {
+      ...seatIn("Krnov", "Krnově"),
+      genitive: "Krnova",
+    }),
+    czCourt("OS", seatIn("Karviná", "Karviné"), ["OSKIHA"], {
+      ...seatIn("Havířov", "Havířově"),
+      genitive: "Havířova",
+    }),
+    czCourt("OS", seatIn("Vsetín", "Vsetíně", "ve"), ["OSVSVM"], {
+      ...seatIn("Valašské Meziříčí", "Valašském Meziříčí", "ve"),
+      genitive: "Valašského Meziříčí",
+    }),
     // Not a court, but a decision body whose decisions the corpus stores
     // under its name: the competition authority. It has no court head to
     // decline, so its name's cases are written out.
