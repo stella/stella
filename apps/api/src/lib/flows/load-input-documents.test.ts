@@ -17,7 +17,6 @@ import {
 import { eq } from "drizzle-orm";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
-import { sha256Hex } from "@stll/sha256/bun";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -29,18 +28,14 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import { createFileKey } from "@/api/lib/file-key";
 import {
   FlowStepError,
   loadInputDocuments,
 } from "@/api/lib/flows/flow-executor";
 import { authorizedWorkspaceIds } from "@/api/lib/workspaces/authorized-workspace-ids";
-import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
-import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -225,7 +220,6 @@ describe("loadInputDocuments", () => {
       organizationId,
       workspaceIds,
       entityIds: [extractedEntityId, pendingEntityId],
-      recordAuditEvent: auditRecorderDouble(),
     }).then(
       () => null,
       (error: unknown) => error,
@@ -266,7 +260,6 @@ describe("loadInputDocuments", () => {
         organizationId,
         workspaceIds,
         entityIds: [extractedEntityId, pendingEntityId],
-        recordAuditEvent: auditRecorderDouble(),
       }).then(
         () => null,
         (error: unknown) => error,
@@ -310,7 +303,6 @@ describe("loadInputDocuments", () => {
           organizationId,
           workspaceIds,
           entityIds: [extractedEntityId],
-          recordAuditEvent: auditRecorderDouble(),
         }).then(
           () => null,
           (error: unknown) => error,
@@ -349,7 +341,6 @@ describe("loadInputDocuments", () => {
             organizationId,
             workspaceIds: readableIds,
             entityIds: [extractedEntityId],
-            recordAuditEvent: auditRecorderDouble(),
           }),
         ).toEqual([{ label: "Available doc", text: "readable flow marker" }]);
       },
@@ -378,7 +369,6 @@ describe("loadInputDocuments", () => {
           organizationId,
           workspaceIds: unreadableIds,
           entityIds: [extractedEntityId],
-          recordAuditEvent: auditRecorderDouble(),
         }).then(
           () => null,
           (error: unknown) => error,
@@ -392,23 +382,12 @@ describe("loadInputDocuments", () => {
       userId,
     );
   });
-  test("reads a ZFO from its exact file with embedded attachment text before or after an older extraction", async () => {
-    const bytes = await zfoFile();
-    fake.put(
-      envBase.S3_BUCKET,
-      createFileKey({
-        organizationId,
-        workspaceId,
-        fileId,
-        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
-      }),
-      bytes,
-      DATA_BOX_MESSAGE_MIME_TYPE,
-    );
+  test("reads a ZFO input from its stored text in the order the run selected", async () => {
     await createDryScopedQuery(testDb)(
       [workspaceId],
       organizationId,
       async (tx) => {
+        // Same stored file and hash, so the text projection stays current.
         await tx
           .update(fields)
           .set({
@@ -416,19 +395,15 @@ describe("loadInputDocuments", () => {
               version: 1,
               type: "file",
               id: fileId,
-              fileName: "selected.ZFO",
+              fileName: "notice.zfo",
               mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
-              sizeBytes: bytes.length,
+              sizeBytes: 3,
               encrypted: false,
-              sha256Hex: sha256Hex(bytes),
+              sha256Hex: "a".repeat(64),
               pdfFileId: null,
             },
           })
           .where(eq(fields.id, fieldId));
-        await tx
-          .update(extractedContent)
-          .set({ sourceSha256Hex: sha256Hex(bytes) })
-          .where(eq(extractedContent.entityId, extractedEntityId));
         const scoped = asTestRaw<
           Parameters<typeof loadInputDocuments>[0]["scopedDb"]
         >(
@@ -442,98 +417,23 @@ describe("loadInputDocuments", () => {
             workspaceIds: [workspaceId],
           })
         ).unwrap();
-        const read = async () =>
+        const read = async (entityIds: SafeId<"entity">[]) =>
           await loadInputDocuments({
             scopedDb: scoped,
             organizationId,
             workspaceIds,
-            entityIds: [extractedEntityId],
-            recordAuditEvent: auditRecorderDouble(),
+            entityIds,
           });
-        const assertContent = (text: string | undefined) => {
-          expect(text).toContain(FIXTURE_MESSAGE.annotation);
-          expect(text).toContain("pouceni.txt");
-          expect(text).toContain("Synthetic instructions.");
-          expect(text).not.toContain("readable flow marker");
-        };
-        assertContent((await read()).at(0)?.text);
-        await tx
-          .delete(extractedContent)
-          .where(eq(extractedContent.entityId, extractedEntityId));
-        assertContent((await read()).at(0)?.text);
-      },
-      userId,
-    );
-  });
-
-  test("lists a ZFO read from its file in the order the run selected", async () => {
-    const bytes = await zfoFile();
-    fake.put(
-      envBase.S3_BUCKET,
-      createFileKey({
-        organizationId,
-        workspaceId,
-        fileId,
-        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
-      }),
-      bytes,
-      DATA_BOX_MESSAGE_MIME_TYPE,
-    );
-    await createDryScopedQuery(testDb)(
-      [workspaceId],
-      organizationId,
-      async (tx) => {
-        await tx
-          .update(fields)
-          .set({
-            content: {
-              version: 1,
-              type: "file",
-              id: fileId,
-              fileName: "selected.zfo",
-              mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
-              sizeBytes: bytes.length,
-              encrypted: false,
-              sha256Hex: sha256Hex(bytes),
-              pdfFileId: null,
-            },
-          })
-          .where(eq(fields.id, fieldId));
-        // No text projection yet: only its file can be read.
-        await tx
-          .delete(extractedContent)
-          .where(eq(extractedContent.entityId, extractedEntityId));
-        const scoped = asTestRaw<
-          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
-        >(
-          async (
-            run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
-          ) => await run(tx),
-        );
-        const workspaceIds = (
-          await authorizedWorkspaceIds(tx, {
-            organizationId,
-            workspaceIds: [workspaceId],
-          })
-        ).unwrap();
-        const labels = async (entityIds: SafeId<"entity">[]) =>
-          (
-            await loadInputDocuments({
-              scopedDb: scoped,
-              organizationId,
-              workspaceIds,
-              entityIds,
-              recordAuditEvent: auditRecorderDouble(),
-            })
-          ).map(({ label }) => label);
-        expect(await labels([extractedEntityId, secondEntityId])).toEqual([
-          "Available doc",
-          "Second doc",
+        expect(await read([extractedEntityId, secondEntityId])).toEqual([
+          { label: "Available doc", text: "readable flow marker" },
+          { label: "Second doc", text: "second marker" },
         ]);
-        expect(await labels([secondEntityId, extractedEntityId])).toEqual([
-          "Second doc",
-          "Available doc",
+        expect(await read([secondEntityId, extractedEntityId])).toEqual([
+          { label: "Second doc", text: "second marker" },
+          { label: "Available doc", text: "readable flow marker" },
         ]);
+        // The stored export itself is never opened.
+        expect(fake.requests).toEqual([]);
       },
       userId,
     );

@@ -41,8 +41,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transition } from "@/api/lib/db/transitions";
 import {
-  loadAgentDocumentSources,
   loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -51,7 +51,6 @@ import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { applicationErrorMessage } from "@/api/lib/errors/application-error-message";
 import { FlowStepError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
-import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -479,12 +478,6 @@ const runAiStep = async ({
           ).unwrap("The scoped workspace authorization read must succeed"),
         ),
         entityIds: run.inputEntityIds,
-        recordAuditEvent: flowRunAuditRecorder({
-          run,
-          organizationId,
-          actorUserId,
-        }),
-        signal,
       })
     : [];
 
@@ -635,16 +628,12 @@ type LoadInputDocumentsOptions = {
   organizationId: SafeId<"organization">;
   workspaceIds: AuthorizedWorkspaceIds;
   entityIds: SafeId<"entity">[];
-  recordAuditEvent: AuditRecorder;
-  signal?: AbortSignal;
 };
 export const loadInputDocuments = async ({
   scopedDb,
   organizationId,
   workspaceIds,
   entityIds,
-  recordAuditEvent,
-  signal,
 }: LoadInputDocumentsOptions): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
     return [];
@@ -674,69 +663,27 @@ export const loadInputDocuments = async ({
     });
   };
 
-  // Verify the entire input set before decrypting or opening any files.
+  // Availability is decided from provenance alone; text is decrypted only for
+  // a complete input set, and a document that became unavailable in between
+  // gets the same refusal. A data-box file is read like any other input, from
+  // its stored text.
   const options = { entityIds, organizationId, workspaceIds };
   const sources = await scopedDb(
-    async (tx) => await loadAgentDocumentSources(tx, options),
+    async (tx) => await loadCurrentExtractedSources(tx, options),
   );
   await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
-  const extractedIds = sources
-    .filter((source) => !source.legalFormat)
-    .map((source) => source.entityId);
-  const extracted = await scopedDb(
-    async (tx) =>
-      await loadCurrentExtractedContents(tx, {
-        ...options,
-        entityIds: extractedIds,
-      }),
+  const available = await scopedDb(
+    async (tx) => await loadCurrentExtractedContents(tx, options),
   );
-  const byId = new Map(extracted.map((row) => [row.entityId, row]));
-  const available = sources.filter((source) => {
-    if (source.legalFormat) {
-      return true;
-    }
-    const content = byId.get(source.entityId);
-    return (
-      content !== undefined &&
-      content.currentVersionId === source.currentVersionId &&
-      content.sourceFieldId === source.sourceFieldId
-    );
-  });
-  await refuseUnavailable(new Set(available.map((source) => source.entityId)));
+  await refuseUnavailable(new Set(available.map((row) => row.entityId)));
   // The prompt lists documents in the order the run selected them.
   const inputOrder = new Map(entityIds.map((id, index) => [id, index]));
-  const ordered = available.toSorted(
-    (a, b) =>
-      (inputOrder.get(a.entityId) ?? 0) - (inputOrder.get(b.entityId) ?? 0),
-  );
-  const documents: FlowStepDocument[] = [];
-  // Each nested reader can scan and parse several files. Keep that work bounded per run.
-  for (const source of ordered) {
-    signal?.throwIfAborted();
-    if (source.legalFormat) {
-      const read = await LEGAL_FILE_READERS[source.legalFormat.kind]({
-        purpose: "standalone",
-        scopedDb,
-        organizationId,
-        workspaceId: source.workspaceId,
-        fieldId: source.sourceFieldId,
-        recordAuditEvent,
-      });
-      if (read.isErr()) {
-        throw new FlowStepError({
-          message: `Could not read ${source.name}: ${read.error.message}`,
-        });
-      }
-      documents.push({ label: source.name, text: read.value.text });
-      continue;
-    }
-    const content = byId.get(source.entityId);
-    if (!content) {
-      panic("Available workflow document has no extracted content");
-    }
-    documents.push({ label: source.name, text: content.text });
-  }
-  return documents;
+  return available
+    .toSorted(
+      (a, b) =>
+        (inputOrder.get(a.entityId) ?? 0) - (inputOrder.get(b.entityId) ?? 0),
+    )
+    .map((row) => ({ label: row.name, text: row.text }));
 };
 
 /**
