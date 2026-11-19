@@ -52,6 +52,10 @@ import {
   type FakeScenario,
 } from "../../../scripts/fake-codex-app-server";
 import {
+  readCompleteLines,
+  readFakeHarnessLog,
+} from "../../../scripts/fake-harness-peer";
+import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_CALLS,
   FAKE_STELLA_SERVER,
@@ -147,13 +151,10 @@ const harnessFor = (
   };
   /** Messages the fake server received, in order. */
   const received = (): ReceivedMessage[] =>
-    readFileSync(logPath, "utf-8")
-      .split("\n")
-      .filter((line) => line !== "")
-      .flatMap((line) => {
-        const entry: { received?: ReceivedMessage } = JSON.parse(line);
-        return entry.received === undefined ? [] : [entry.received];
-      });
+    readCompleteLines(logPath).flatMap((line) => {
+      const entry: { received?: ReceivedMessage } = JSON.parse(line);
+      return entry.received === undefined ? [] : [entry.received];
+    });
   const startup = () => {
     const first: {
       startup: {
@@ -162,7 +163,7 @@ const harnessFor = (
         packageCache?: unknown;
         path?: unknown;
       };
-    } = JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}");
+    } = JSON.parse(readCompleteLines(logPath)[0] ?? "{}");
     return first.startup;
   };
   return { adapter, codexHome, workspaceDir, logPath, received, startup };
@@ -2245,9 +2246,10 @@ describe("Codex background terminals after a turn", () => {
     // Its server exited during the turn: nothing is kept any more.
     expect(await next.value.release()).toBeNull();
 
-    const startups = readFileSync(logPath, "utf-8")
-      .split("\n")
-      .filter((line) => line.includes('"startup"'));
+    const startups = readFakeHarnessLog(logPath).filter(
+      (entry) =>
+        typeof entry === "object" && entry !== null && "startup" in entry,
+    );
     expect(startups).toHaveLength(1);
     const methods = received().map(({ method }) => method);
     expect(methods.filter((method) => method === "initialize")).toHaveLength(1);
