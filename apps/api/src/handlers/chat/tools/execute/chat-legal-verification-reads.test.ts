@@ -18,6 +18,7 @@ import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { isRecord } from "@/api/lib/type-guards";
 import type { McpRequestResources } from "@/api/mcp/context";
 import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import {
@@ -339,14 +340,13 @@ const chatScriptResult = async (fixture: Fixture): Promise<unknown> => {
   const execute =
     codeMode.tool.execute ??
     expect.unreachable("execute_typescript has no execute");
-  const output = await execute({
+  const output: unknown = await execute({
     typescriptCode: `return await external_${fixture.toolName}(${JSON.stringify(fixture.args)});`,
   });
   expect(output).toMatchObject({ success: true });
-  if (typeof output !== "object" || output === null || !("result" in output)) {
-    return panic("execute_typescript answered without a result");
-  }
-  return output.result;
+  return isRecord(output)
+    ? output["result"]
+    : panic("execute_typescript answered without a result");
 };
 
 describe("legal verification reads in a chat script", () => {
