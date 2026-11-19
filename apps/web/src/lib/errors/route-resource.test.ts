@@ -84,6 +84,7 @@ const RESOURCE_PATHS: ReadonlySet<string> = new Set([
   "/_protected/chat/$threadId",
   "/_protected/chat/workspaces/$workspaceId/$threadId",
   "/_protected/contacts/$contactId",
+  "/_protected/guidance/$guidanceId",
   "/_protected/workspaces/$workspaceId",
   "/_protected/workspaces/$workspaceId/$viewId",
   "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
