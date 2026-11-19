@@ -29,9 +29,11 @@ import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
+  decisionDocketFamilySpellings,
   type DecisionDocketSelector,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
+  docketFamilyKeysToRead,
 } from "@stll/api-contract/decision-docket-reference";
 import {
   DECISION_IDENTITY_READ,
@@ -132,21 +134,23 @@ export const decisionIdentityLocatorOf = (
  * and, when the reference printed a sheet, the full file number a legacy row
  * or a parallel identifier still holds. Each is keyed as the stored column is.
  */
-const docketSpellingsOf = ({
-  family,
-  selector,
-}: Pick<
-  Extract<DecisionIdentityLocator, { kind: "docket" }>,
-  "family" | "selector"
->): string[] => [
-  family,
-  ...decisionDocketTailSpellings(family),
-  // Tight and spaced, as legacy rows and parallel identifiers print it; the
-  // stored key is whatever the ingest key function makes of each.
-  ...(selector.kind === "sheet"
-    ? [`${family}-${selector.value}`, `${family} - ${selector.value}`]
-    : []),
-];
+const docketSpellingsOf = (
+  {
+    family,
+    selector,
+  }: Pick<
+    Extract<DecisionIdentityLocator, { kind: "docket" }>,
+    "family" | "selector"
+  >,
+  jurisdiction: string | undefined,
+): string[] =>
+  decisionDocketFamilySpellings(family, jurisdiction).flatMap((spelling) => [
+    spelling,
+    ...decisionDocketTailSpellings(spelling),
+    ...(selector.kind === "sheet"
+      ? [`${spelling}-${selector.value}`, `${spelling} - ${selector.value}`]
+      : []),
+  ]);
 
 /**
  * The `citation_key` values a docket's file is read under: each stored
@@ -157,9 +161,10 @@ export const docketFamilyCitationKeys = (
     Extract<DecisionIdentityLocator, { kind: "docket" }>,
     "family" | "selector"
   >,
+  jurisdiction?: string,
 ): string[] => [
   ...new Set(
-    docketSpellingsOf(locator)
+    docketSpellingsOf(locator, jurisdiction)
       .map((spelling) => bareCitationKey(spelling))
       .filter((key) => key.length > 0),
   ),
@@ -318,10 +323,11 @@ type OwnColumnKeys =
 
 const ownColumnKeysOf = (
   locator: DecisionIdentityLocator,
+  country: string | undefined,
 ): OwnColumnKeys | null => {
   switch (locator.kind) {
     case "docket": {
-      const [first, ...rest] = docketFamilyCitationKeys(locator);
+      const [first, ...rest] = docketFamilyCitationKeys(locator, country);
       return first === undefined
         ? null
         : { column: "citation-key", keys: [first, ...rest] };
@@ -350,7 +356,7 @@ const identifierLookupSpellings = (
   country: string | undefined,
 ) => {
   if (locator.kind === "docket") {
-    return docketSpellingsOf(locator);
+    return docketSpellingsOf(locator, country);
   }
   if (locator.kind === "reporter" && country === "CZE") {
     return czechReporterLookupSpellings(locator.value);
@@ -380,7 +386,7 @@ export const decisionIdentityReadKeys = ({
     ),
     values: identifierLookupSpellings(locator, country),
   }),
-  ownColumn: ownColumnKeysOf(locator),
+  ownColumn: ownColumnKeysOf(locator, country),
 });
 
 const ownColumnCondition = (own: OwnColumnKeys | null) => {
@@ -467,7 +473,14 @@ export const decisionIdsNamedBy = ({
   const family = tx
     .select({ id: publishedCaseLawDecisions.id })
     .from(publishedCaseLawDecisions)
-    .where(and(eq(publishedCaseLawDecisions.docketFamilyKey, familyKey)));
+    .where(
+      inArray(
+        publishedCaseLawDecisions.docketFamilyKey,
+        locator.kind === "docket" && country !== undefined
+          ? docketFamilyKeysToRead(locator.family, country)
+          : [familyKey],
+      ),
+    );
   return unionAll(own, published, family);
 };
 
@@ -595,7 +608,7 @@ export const lookupDecisionsByIdentity = async ({
             rows: identifierRowKeysOf({
               jurisdiction: country,
               types: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
-              values: [locator.value],
+              values: decisionDocketFamilySpellings(locator.value, country),
             }),
           })
         : null;

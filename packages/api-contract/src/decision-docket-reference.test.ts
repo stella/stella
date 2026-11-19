@@ -19,8 +19,10 @@ import {
 } from "./decision-docket-identity.fixtures";
 import {
   DECISION_DOCKETS_STORED_WITH_SHEETS,
+  decisionDocketFamilySpellings,
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
+  docketFamilyKeysToRead,
   readDecisionDocketReference,
 } from "./decision-docket-reference";
 import type { DecisionDocketSelector } from "./decision-docket-reference";
@@ -1299,4 +1301,98 @@ test("Czech five-digit court sheets preserve file identity and the exact target 
       expect(reference?.family.filingYear.type).toBe("known");
     }
   }
+});
+
+test("Czech absent-senate spellings share a family while positive senates remain distinct", () => {
+  assertProperty(
+    "Czech zero senate is absent",
+    fc.property(
+      fc.record({
+        registry: fc.constantFrom("Ts", "Nad", "Konf", "Nt", "Cdo"),
+        ordinal: fc.integer({ min: 1, max: 999_999 }),
+        year: fc.integer({ min: 1900, max: 2099 }),
+        senate: fc.integer({ min: 1, max: 999 }),
+      }),
+      ({ registry, ordinal, year, senate }) => {
+        const bare = `${registry} ${ordinal}/${year}`;
+        const zero = `0 ${bare}`;
+        const key = docketFamilyKeyOf(bare, "CZE");
+        expect(key).not.toBeNull();
+        expect(docketFamilyKeyOf(zero, "CZE")).toBe(key);
+        expect(docketFamilyKeysToRead(zero, "CZE")).toEqual(
+          docketFamilyKeysToRead(bare, "CZE"),
+        );
+        expect(docketFamilyKeyOf(`${senate} ${bare}`, "CZE")).not.toBe(key);
+        expect(
+          docketFamilyKeyOf(`${registry} ${ordinal}/${year + 1}`, "CZE"),
+        ).not.toBe(key);
+      },
+    ),
+  );
+});
+
+test.each(["Ts 42/2003", "0 Ts 42/2003", "0 ts 42/2003", "0 TS 42/2003"])(
+  "legacy keys are reachable from %s",
+  (value) => {
+    expect(docketFamilyKeysToRead(value, "CZE")).toEqual([
+      "ts42/2003",
+      "0ts42/2003",
+    ]);
+    expect(
+      new Set(
+        decisionDocketFamilySpellings(value, "CZE").map((spelling) =>
+          docketFamilyKeyOf(spelling, "CZE"),
+        ),
+      ),
+    ).toEqual(new Set(["ts42/2003"]));
+  },
+);
+
+test.each(["1 Ts 42/2003", "01 Ts 42/2003", "IV. ÚS 42/03", "MZDR 42/2003"])(
+  "zero-senate aliases are conditional: %s",
+  (value) => {
+    expect(decisionDocketFamilySpellings(value, "CZE")).toHaveLength(1);
+  },
+);
+
+test("zero-senate aliases are scoped and retain sheet/year safeguards", () => {
+  expect(docketFamilyKeyOf("Ts 42/03", "CZE")).not.toBe(
+    docketFamilyKeyOf("Ts 42/2003", "CZE"),
+  );
+  expect(docketFamilyKeyOf("0 Ts 42/2003-99999", "CZE")).toBe("ts42/2003");
+  expect(
+    readDecisionDocketReference("0 Ts 42/2003-100000", {
+      grammar: DECISION_DOCKET_GRAMMARS.CZE,
+    }),
+  ).toBeNull();
+  expect(decisionDocketFamilySpellings("Ts 42/2003", "SVK")).toEqual([
+    "Ts 42/2003",
+  ]);
+  const intent = parseDecisionQuery("0 Ts 42/2003", {
+    grammar: DECISION_DOCKET_GRAMMARS.CZE,
+  });
+  if (intent.type !== "identifier") {
+    return panic("Expected a docket identity");
+  }
+  const owner = {
+    id: "owner",
+    caseNumber: "another reference",
+    ecli: null,
+    identifiers: [{ type: "case-number", value: "Ts 42/2003" }],
+  };
+  expect(
+    resolveDecisionIdentity(intent, [owner], { exactIdentityRead: "complete" }),
+  ).toMatchObject({ status: "unique", decision: owner });
+  expect(
+    resolveDecisionIdentity(
+      intent,
+      [
+        {
+          ...owner,
+          identifiers: [{ type: "case-number", value: "Ts 42/2003-46" }],
+        },
+      ],
+      { exactIdentityRead: "complete" },
+    ).status,
+  ).toBe("incomplete_identifier");
 });

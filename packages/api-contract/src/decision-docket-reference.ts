@@ -1,6 +1,7 @@
 import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 
 import {
+  canonicalDecisionIdentifierKey,
   CZE_SHEET_NUMBER_SOURCE,
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
@@ -390,6 +391,65 @@ export const docketFamilyKeyOf = (
     readDecisionDocketReference(caseNumber, { grammar })?.family.canonical ??
     null
   );
+};
+
+/** Equivalent printed family spellings, including the Czech absent-senate zero. */
+export const decisionDocketFamilySpellings = (
+  caseNumber: string,
+  jurisdiction: string | undefined,
+): string[] => {
+  const grammar =
+    jurisdiction === undefined
+      ? null
+      : decisionDocketGrammarForJurisdiction(jurisdiction);
+  if (grammar === null) {
+    return [caseNumber];
+  }
+  const reference = readDecisionDocketReference(caseNumber, { grammar });
+  if (reference === null) {
+    return [caseNumber];
+  }
+  const { formatted, canonical } = reference.family;
+  if (jurisdiction !== "CZE") {
+    return [formatted];
+  }
+  const bare = formatted.replace(/^0+\s*(?=\p{L})/u, "");
+  let alternate = bare;
+  if (bare === formatted) {
+    alternate = `0 ${formatted}`;
+  } else if (grammar.parse(bare) === null) {
+    alternate = bare.replace(
+      /^\p{L}{1,7}(?=\.?\s)/u,
+      (registry) =>
+        `${registry.slice(0, 1).toLocaleUpperCase("und")}${registry.slice(1).toLocaleLowerCase("und")}`,
+    );
+  }
+  return grammar.parse(alternate)?.canonical === canonical
+    ? [...new Set([formatted, alternate])]
+    : [formatted];
+};
+
+/** Indexed family keys include pre-canonicalization Czech zero-senate rows. */
+export const docketFamilyKeysToRead = (
+  caseNumber: string,
+  jurisdiction: string,
+): string[] => {
+  const canonical = docketFamilyKeyOf(caseNumber, jurisdiction);
+  if (canonical === null) {
+    return [];
+  }
+  if (jurisdiction !== "CZE") {
+    return [canonical];
+  }
+  return [
+    ...new Set([
+      canonical,
+      ...decisionDocketFamilySpellings(caseNumber, jurisdiction).map(
+        (spelling) =>
+          canonicalDecisionIdentifierKey(spelling).replaceAll(".", ""),
+      ),
+    ]),
+  ];
 };
 
 /**

@@ -1292,7 +1292,7 @@ export const DECISION_DOCKET_GRAMMARS = {
     canonicalize: (folded) =>
       canonicalDocketKey(
         folded.replace(CZE_SHEET_SUFFIX_RE, "").replaceAll(".", ""),
-      ),
+      ).replace(/^0+(?=\p{L})/u, ""),
     format: formatCzechDocket,
     jurisdiction: "CZE",
     patterns: CZE_DOCKET_PATTERNS,
