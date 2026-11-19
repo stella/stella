@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   type HarnessInteractionResponse,
@@ -334,8 +334,20 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
       case "retrying":
         this.clearSilence();
         return;
-      default:
+      // Output and bookkeeping: progress, nothing more.
+      case "session.started":
+      case "text.delta":
+      case "text.completed":
+      case "reasoning.completed":
+      case "input.settled":
+      case "model.rerouted":
+      case "turn.completed":
+      case "turn.interrupted":
+      case "turn.failed":
         break;
+      default:
+        event satisfies never;
+        panic("Unhandled harness event");
     }
     this.rearmSilence();
   }
