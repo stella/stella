@@ -210,6 +210,11 @@
       "use_connector_secret": "Usando la credencial del conector",
       "web_search": "Buscando en la web"
     },
+    "toolResearch": {
+      "caseLaw": "Buscando en la jurisprudencia",
+      "legislation": "Leyendo la legislación",
+      "legislationAndCaseLaw": "Buscando en la legislación y la jurisprudencia"
+    },
     "localRun": {
       "title": {
         "sign_in": "Inicia sesión para continuar",

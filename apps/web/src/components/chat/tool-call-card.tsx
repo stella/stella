@@ -7,6 +7,11 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
+  getCodeToolSource,
+  isCodeToolName,
+  summarizeCodeToolSource,
+} from "@stll/api-contract/chat-code-step";
+import {
   isLocalRunInterruptedOutput,
   localRunStepFailed,
   localRunToolView,
@@ -50,12 +55,7 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
-import {
-  getCodeToolSource,
-  getToolCallTitleKey,
-  isCodeToolName,
-  summarizeCodeToolSource,
-} from "@/components/chat/tool-call-title.logic";
+import { getToolCallTitleKey } from "@/components/chat/tool-call-title.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
   BUILT_IN_SKILL_ORIGIN,
@@ -525,7 +525,13 @@ const ToolCallCardComponent = ({
   const label =
     catalogEntry?.brand ??
     (localRunTitleKind === null
-      ? t(getToolCallTitleKey({ input: getToolInput(part), name }))
+      ? t(
+          getToolCallTitleKey({
+            input: getToolInput(part),
+            name,
+            output: part.output,
+          }),
+        )
       : t(LOCAL_RUN_TITLE_KEYS[localRunTitleKind]));
   const subtitle =
     localRunTool === null
@@ -568,12 +574,10 @@ const ToolCallCardComponent = ({
   const output: unknown = part.output;
   const hasOutput = output !== undefined;
   // Raw tool errors are written for the model (they drive its retry policy),
-  // not for people: render a short human line instead and keep the raw text
-  // behind a collapsed disclosure for debugging. A tool-call rewritten to the
-  // terminal "error" state at hydration (its stream died mid call, so it
-  // never produced an `output.error`) still reads as failed via a generic
-  // interrupted label.
-  const rawErrorDetails = getToolOutputError(part.output);
+  // not for people: the status mark names the failure and the raw text stays
+  // in the technical details. A tool-call rewritten to the terminal "error"
+  // state at hydration (its stream died mid call, so it never produced an
+  // `output.error`) still reads as failed via a generic interrupted label.
   const failureLabelKey = toolFailureLabelKey({
     name,
     output: part.output,
@@ -627,7 +631,7 @@ const ToolCallCardComponent = ({
   return (
     <div
       className={cn(
-        "relative max-w-xl border-s text-sm leading-5",
+        "relative border-s text-sm leading-5",
         showsMark ? "border-s-transparent" : "border-border/60",
       )}
     >
@@ -643,13 +647,7 @@ const ToolCallCardComponent = ({
       <Tooltip
         content={failureNote}
         render={
-          <div
-            className={cn(
-              "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-md",
-              failure === "terminal" &&
-                "bg-destructive/10 text-destructive hover:bg-destructive/15",
-            )}
-          />
+          <div className="group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-md" />
         }
       >
         {/* The row owns the hover tint; a plain button paints none of its
@@ -749,12 +747,6 @@ const ToolCallCardComponent = ({
           threadId={threadId}
         />
       )}
-      {failure === "terminal" && errorMessage && (
-        <ToolCallFailureDetails
-          errorMessage={errorMessage}
-          rawErrorDetails={rawErrorDetails}
-        />
-      )}
       <UnrestoredFieldsNotice output={output} />
     </div>
   );
@@ -832,29 +824,18 @@ const ToolCallHeaderLabel = ({
   subtitle: ReturnType<typeof getToolSubtitle>;
 }) => {
   const t = useTranslations();
-  const terminal = failure === "terminal";
+  // A failed step keeps the step colours; its status mark alone says it
+  // failed, and the answer's footer says the turn did not finish.
   return (
-    <span
-      className={cn(
-        "flex min-h-8 min-w-0 flex-1 items-center gap-2 ps-3 pe-2 text-sm leading-5 font-normal pointer-coarse:min-h-11",
-        terminal && "text-destructive",
-      )}
-    >
+    <span className="flex min-h-8 min-w-0 flex-1 items-center gap-2 ps-3 pe-2 text-sm leading-5 font-normal pointer-coarse:min-h-11">
       <TruncatedText
         render={<span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />}
       >
-        <span
-          className={cn(
-            !terminal &&
-              "text-foreground-label group-hover/tool-step:text-foreground",
-          )}
-        >
+        <span className="text-foreground-label group-hover/tool-step:text-foreground">
           {label}
         </span>
         {subtitle && (
-          <span className={cn("ms-1.5", !terminal && "text-muted-foreground")}>
-            {subtitle}
-          </span>
+          <span className="text-muted-foreground ms-1.5">{subtitle}</span>
         )}
       </TruncatedText>
       {statusLabel !== undefined && (
@@ -1061,46 +1042,38 @@ const ToolCallExpandToggle = ({
   );
 };
 
-/** The short human failure line, with the raw tool error (written for the
- *  model, not for people) behind a collapsed disclosure for debugging. */
-export const ToolCallFailureDetails = ({
-  errorMessage,
+/** A failed call's raw error, written for the model rather than for people,
+ *  behind a collapsed disclosure, and only with the technical details
+ *  setting on. A person reads the step's status mark and the answer's
+ *  footer; no per-step failure line repeats them. */
+export const ToolCallRawError = ({
   rawErrorDetails,
 }: {
-  errorMessage: string;
   rawErrorDetails: string | undefined;
 }) => {
   const t = useTranslations();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // The raw error is written for the model; a person reads the line above,
-  // and only the technical details setting shows the rest.
   const showRawError = usePresentationPrefs().prefs.chatTechnicalDetails;
+  if (!showRawError || rawErrorDetails === undefined) {
+    return null;
+  }
   return (
-    <div className="max-w-xl py-1 ps-3">
-      <p className="text-destructive text-2xs leading-relaxed">
-        {errorMessage}
-      </p>
-      {showRawError && rawErrorDetails !== undefined && (
-        <div className="text-2xs">
-          <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
-            <CollapsibleTrigger render={<Button variant="plain" />}>
-              <span className="text-muted-foreground hover:text-foreground">
-                {detailsOpen
-                  ? t("common.hideDetails")
-                  : t("common.showDetails")}
-              </span>
-            </CollapsibleTrigger>
-            <CollapsiblePanel>
-              <ToolCallCodeBlock
-                code={rawErrorDetails}
-                label={t("chat.toolCall.output")}
-                language="text"
-                tone="result"
-              />
-            </CollapsiblePanel>
-          </Collapsible>
-        </div>
-      )}
+    <div className="text-2xs py-1 ps-3">
+      <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span className="text-muted-foreground hover:text-foreground">
+            {detailsOpen ? t("common.hideDetails") : t("common.showDetails")}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <ToolCallCodeBlock
+            code={rawErrorDetails}
+            label={t("chat.toolCall.output")}
+            language="text"
+            tone="result"
+          />
+        </CollapsiblePanel>
+      </Collapsible>
     </div>
   );
 };

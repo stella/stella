@@ -210,6 +210,11 @@
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "web_search": "Web wird durchsucht"
     },
+    "toolResearch": {
+      "caseLaw": "Rechtsprechung durchsuchen",
+      "legislation": "Rechtsvorschriften lesen",
+      "legislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsuchen"
+    },
     "localRun": {
       "title": {
         "sign_in": "Zum Fortfahren anmelden",

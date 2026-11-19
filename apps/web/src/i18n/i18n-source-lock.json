@@ -1356,6 +1356,7 @@
   "chat.answerEdit.textStyle": "Text style",
   "chat.answerEdit.unorderedList": "Bulleted list",
   "chat.answerEdit.wholeBlockRequired": "Select a whole paragraph or list to change its style.",
+  "chat.answerNotFinished": "stella couldn't finish this answer.",
   "chat.answerQuote.showInDecision": "Show in decision",
   "chat.answerQuote.unverified": "Citation not verified",
   "chat.answerQuote.unverifiedHint": "The cited decisions do not contain this text word for word",

@@ -210,6 +210,11 @@
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "web_search": "Recherche web"
     },
+    "toolResearch": {
+      "caseLaw": "Recherche dans la jurisprudence",
+      "legislation": "Lecture de la législation",
+      "legislationAndCaseLaw": "Recherche dans la législation et la jurisprudence"
+    },
     "localRun": {
       "title": {
         "sign_in": "Connectez-vous pour continuer",

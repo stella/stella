@@ -1721,6 +1721,7 @@
       "unorderedList": "قائمة نقطية",
       "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
     },
+    "answerNotFinished": "لم تتمكن stella من إكمال هذه الإجابة.",
     "answerQuote": {
       "showInDecision": "عرض في القرار",
       "unverified": "تعذّر التحقق من الاقتباس",

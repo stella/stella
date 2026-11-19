@@ -210,6 +210,11 @@
       "use_connector_secret": "Używanie danych dostępowych łącznika",
       "web_search": "Wyszukiwanie w sieci"
     },
+    "toolResearch": {
+      "caseLaw": "Przeszukiwanie orzecznictwa",
+      "legislation": "Odczytywanie przepisów",
+      "legislationAndCaseLaw": "Przeszukiwanie przepisów i orzecznictwa"
+    },
     "localRun": {
       "title": {
         "sign_in": "Zaloguj się, aby kontynuować",

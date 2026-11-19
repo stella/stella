@@ -1721,6 +1721,7 @@
       "unorderedList": "Lista punktowana",
       "wholeBlockRequired": "Aby zmienić styl, zaznacz cały akapit lub listę."
     },
+    "answerNotFinished": "stella nie dokończyła tej odpowiedzi.",
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
       "unverified": "Cytat niezweryfikowany",

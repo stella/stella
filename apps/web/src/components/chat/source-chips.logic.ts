@@ -7,6 +7,7 @@ import {
   isCaseLawDecisionId,
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
+import { isCodeToolName } from "@stll/api-contract/chat-code-step";
 import { readChatStepLedger } from "@stll/api-contract/chat-step-ledger";
 import type {
   ChatStepLedger,
@@ -29,7 +30,6 @@ import type {
   CaseLawDecisionSourceReference,
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
-import { isCodeToolName } from "@/components/chat/tool-call-title.logic";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { entityReferenceHref } from "@/components/references/reference.logic";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";

@@ -1721,6 +1721,7 @@
       "unorderedList": "Felsorolás",
       "wholeBlockRequired": "A stílus módosításához jelöljön ki egy teljes bekezdést vagy listát."
     },
+    "answerNotFinished": "A stella nem tudta befejezni ezt a választ.",
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
       "unverified": "Az idézet nem ellenőrizhető",

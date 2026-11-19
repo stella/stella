@@ -1721,6 +1721,7 @@
       "unorderedList": "Bulleted list",
       "wholeBlockRequired": "Select a whole paragraph or list to change its style."
     },
+    "answerNotFinished": "stella couldn't finish this answer.",
     "answerQuote": {
       "showInDecision": "Show in decision",
       "unverified": "Citation not verified",

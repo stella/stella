@@ -1721,6 +1721,7 @@
       "unorderedList": "Ženklintas sąrašas",
       "wholeBlockRequired": "Norėdami pakeisti stilių, pažymėkite visą pastraipą arba sąrašą."
     },
+    "answerNotFinished": "stella negalėjo užbaigti šio atsakymo.",
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
       "unverified": "Citatos patikrinti nepavyko",

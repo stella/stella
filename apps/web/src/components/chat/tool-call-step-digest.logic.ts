@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { isCodeToolName } from "@stll/api-contract/chat-code-step";
 import { readChatStepLedger } from "@stll/api-contract/chat-step-ledger";
 import type {
   ChatStepCall,
@@ -15,7 +16,6 @@ import {
   sourceIsCited,
   stepRefSource,
 } from "@/components/chat/source-chips.logic";
-import { isCodeToolName } from "@/components/chat/tool-call-title.logic";
 
 /**
  * What an opened step shows a person: what it looked up and what came back,

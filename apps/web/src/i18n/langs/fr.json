@@ -1721,6 +1721,7 @@
       "unorderedList": "Liste à puces",
       "wholeBlockRequired": "Sélectionnez un paragraphe ou une liste entière pour changer son style."
     },
+    "answerNotFinished": "stella n’a pas pu terminer cette réponse.",
     "answerQuote": {
       "showInDecision": "Afficher dans la décision",
       "unverified": "Citation non vérifiée",

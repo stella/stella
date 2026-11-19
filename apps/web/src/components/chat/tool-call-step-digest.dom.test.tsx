@@ -435,7 +435,7 @@ describe("the technical details setting", () => {
     expect(text.includes(CHAT_STEP_LEDGER_KEY)).toBe(false);
   });
 
-  test("a failed step shows its failure in words, and its raw error only with the setting", async () => {
+  test("a failed step says what did not go through in a quiet line, and its raw error only with the setting", async () => {
     const failed = codeStep(
       {
         calls: [
@@ -469,20 +469,28 @@ describe("the technical details setting", () => {
       });
       await openStep();
 
-      expect(screen.getByText(enMessages.chat.toolCall.failed)).toBeDefined();
+      // The mark names the failure; the step body draws no red and no
+      // per-step failure line.
       expect(
-        screen.getByText(enMessages.chat.stepDigest.lookupDidNotGoThrough),
+        screen.getByRole("img", { name: enMessages.chat.toolCall.failed }),
       ).toBeDefined();
       expect(
-        screen.queryByRole("button", {
-          name: enMessages.common.showDetails,
-        }) !== null,
-      ).toBe(technical);
-      if (technical) {
-        fireEvent.click(
-          screen.getByRole("button", { name: enMessages.common.showDetails }),
-        );
-        expect(screen.getByText(/TypeError/u)).toBeDefined();
+        view.container.textContent.includes(enMessages.chat.toolCall.failed),
+      ).toBe(false);
+      const notThrough = screen.getByText(
+        enMessages.chat.stepDigest.lookupDidNotGoThrough,
+      );
+      expect(notThrough.className.includes("text-muted-foreground")).toBe(true);
+      expect(
+        view.container.querySelectorAll("[data-step-digest] .text-destructive"),
+      ).toHaveLength(0);
+      const technicalToggle = screen.queryByRole("button", {
+        name: enMessages.chat.stepDigest.technicalDetails,
+      });
+      expect(technicalToggle !== null).toBe(technical);
+      if (technicalToggle !== null) {
+        fireEvent.click(technicalToggle);
+        expect(view.container.textContent.includes("TypeError")).toBe(true);
       } else {
         expect(view.container.textContent.includes("TypeError")).toBe(false);
       }

@@ -1721,6 +1721,7 @@
       "unorderedList": "Täpploend",
       "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
     },
+    "answerNotFinished": "stella ei saanud seda vastust lõpetada.",
     "answerQuote": {
       "showInDecision": "Näita lahendis",
       "unverified": "Tsitaati ei õnnestunud kontrollida",

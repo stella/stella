@@ -1721,6 +1721,7 @@
       "unorderedList": "Aufzählung",
       "wholeBlockRequired": "Wählen Sie einen ganzen Absatz oder eine ganze Liste aus, um den Stil zu ändern."
     },
+    "answerNotFinished": "stella konnte diese Antwort nicht fertigstellen.",
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
       "unverified": "Zitat nicht verifiziert",

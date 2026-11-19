@@ -163,7 +163,10 @@ import {
   PendingToolApprovalCard,
   ToolApprovalCard,
 } from "@/components/chat/tool-approval-card";
-import { ToolCallCard } from "@/components/chat/tool-call-card";
+import {
+  ToolCallCard,
+  toolFailureLabelKey,
+} from "@/components/chat/tool-call-card";
 import {
   advanceToolCallTiming,
   createToolCallTiming,
@@ -394,6 +397,7 @@ const ActiveTurnStatus = memo(
                     getToolCallTitleKey({
                       input: "input" in part ? part.input : undefined,
                       name: part.name,
+                      output: part.output,
                     }),
                   ),
                 ),
@@ -575,6 +579,10 @@ export const ChatThreadMessages = ({
                                 messageId: message.id,
                                 messages,
                               })}
+                              endedUnfinished={
+                                !activeTurnMessageIds.has(message.id) &&
+                                endedAtFailedStep(message.parts)
+                              }
                               message={message}
                               onResend={onResend}
                               threadRef={threadRef}
@@ -1620,6 +1628,7 @@ const PausedTurnNotice = ({
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
+  endedUnfinished,
   message,
   onResend,
   threadRef,
@@ -1628,6 +1637,8 @@ const AssistantMessageActions = ({
   canFork: boolean;
   /** `canRetryAssistantMessage`. */
   canRetry: boolean;
+  /** The turn settled at a failed step without an answer. */
+  endedUnfinished: boolean;
   message: PersistedChatMessage;
   onResend?:
     ((options?: ChatResendOptions) => void | PromiseLike<void>) | undefined;
@@ -1643,7 +1654,9 @@ const AssistantMessageActions = ({
   const stoppedByUser =
     outcome?.type === "cancelled" && outcome.reason === "user-stop";
 
-  if (!text && !canRetry && !canFork && !stoppedByUser) {
+  const unfinished = endedUnfinished && !stoppedByUser;
+
+  if (!text && !canRetry && !canFork && !stoppedByUser && !unfinished) {
     return null;
   }
 
@@ -1652,6 +1665,13 @@ const AssistantMessageActions = ({
       {stoppedByUser && (
         <span className="text-muted-foreground px-1.5 text-xs" role="status">
           {t("chat.stopped")}
+        </span>
+      )}
+      {/* The one place a turn that ended at a failed step says so: its
+          steps stay calm, and Retry sits beside this line. */}
+      {unfinished && (
+        <span className="text-muted-foreground px-1.5 text-xs" role="status">
+          {t("chat.answerNotFinished")}
         </span>
       )}
       {text && (
@@ -2256,6 +2276,7 @@ const getProcessStepTitleKey = (
     return getToolCallTitleKey({
       input: "input" in part ? part.input : undefined,
       name: part.name,
+      output: part.output,
     });
   }
   return null;
@@ -2796,7 +2817,7 @@ const AssistantProcessGroup = ({
     <div
       data-slot="chat-step-list"
       className={cn(
-        "max-w-[min(44rem,100%)] rounded-md",
+        "rounded-md",
         isOpen && "border-border/70 bg-muted/20 border",
         appearedLive && "motion-safe:animate-text-fade",
       )}
@@ -2850,6 +2871,22 @@ const getReasoningTokenCount = (
   return count !== undefined && count > 0 ? count : null;
 };
 
+/**
+ * Whether a settled turn ended at a failed step: it holds a step that failed
+ * and no answer. The steps stay calm; the answer's footer says it once.
+ */
+const endedAtFailedStep = (parts: readonly ChatPart[]): boolean =>
+  !hasAssistantAnswerContent(parts) &&
+  parts.some(
+    (part) =>
+      part.type === "tool-call" &&
+      toolFailureLabelKey({
+        name: part.name,
+        output: part.output,
+        state: part.state,
+      }) === "chat.toolCall.failed",
+  );
+
 const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
   for (const part of parts) {
     if (part.type === "text" && part.content.trim()) {
@@ -2902,7 +2939,7 @@ const AssistantThinkingPart = ({
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <div className="group/reasoning border-border/60 max-w-xl border-s text-sm leading-5">
+    <div className="group/reasoning border-border/60 border-s text-sm leading-5">
       <Collapsible onOpenChange={setIsOpen} open={isOpen}>
         <CollapsibleTrigger
           render={<Button className="flex w-full" variant="plain" />}

@@ -1721,6 +1721,7 @@
       "unorderedList": "Lista com marcadores",
       "wholeBlockRequired": "Selecione um parágrafo ou uma lista inteira para alterar seu estilo."
     },
+    "answerNotFinished": "A stella não conseguiu concluir esta resposta.",
     "answerQuote": {
       "showInDecision": "Ver na decisão",
       "unverified": "Citação não verificada",

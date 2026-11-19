@@ -195,7 +195,9 @@ const useStepTitle = () => {
       case "reasoning":
         return t("reasoning");
       case "tool":
-        return t(`tool.${step.label}`);
+        return step.research === undefined
+          ? t(`tool.${step.label}`)
+          : t(`toolResearch.${step.research}`);
       case "local":
         return step.titleKind === null
           ? t(`tool.${step.label}`)

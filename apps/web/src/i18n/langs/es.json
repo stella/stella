@@ -1721,6 +1721,7 @@
       "unorderedList": "Lista con viñetas",
       "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
+    "answerNotFinished": "stella no pudo terminar esta respuesta.",
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
       "unverified": "Cita no verificada",

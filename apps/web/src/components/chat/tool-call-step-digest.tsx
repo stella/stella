@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import type { ChatStepFilter } from "@stll/api-contract/chat-step-ledger";
 import { BidiText } from "@stll/ui/bidi-text";
-import { FileTextIcon, SearchIcon } from "@stll/ui/icons";
+import { CircleOffIcon, FileTextIcon, SearchIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -129,7 +129,13 @@ const StepDigestCallView = ({
         </div>
       )}
       {call.outcome === "error" && (
-        <p className="text-destructive ps-4.5 text-xs">
+        // A lookup that did not go through is part of the work, not an
+        // alarm: it reads in the same quiet tone as one that matched nothing.
+        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <CircleOffIcon
+            aria-hidden="true"
+            className="text-foreground-ghost size-3 shrink-0"
+          />
           {t("lookupDidNotGoThrough")}
         </p>
       )}

@@ -203,7 +203,8 @@ test("a coding agent's step that reports it failed reads as failed, not as stopp
   expect(container.innerHTML.includes(messages.chat.toolCall.interrupted)).toBe(
     false,
   );
-  expect(container.innerHTML.includes("bg-destructive")).toBe(true);
+  // Only the status mark says so; the row keeps the step colours.
+  expect(container.innerHTML.includes("bg-destructive")).toBe(false);
 });
 
 type StepPart = ComponentProps<typeof ToolCallCard>["part"];
@@ -431,18 +432,27 @@ describe("a failed step stays calm when its turn went on past it", () => {
     expect(container.textContent.includes(SECTION_ERROR)).toBe(false);
   });
 
-  test("a failure that ended the turn keeps the failure styling and copy", () => {
+  test("a failure that ended the turn is named by its mark alone, in the step colours", () => {
     const { container } = renderStep({
       failureOutcome: "terminal",
       locale: "cs",
       part: failedSectionRead(),
     });
 
-    expect(container.innerHTML.includes("bg-destructive")).toBe(true);
-    expect(screen.getAllByText(csMessages.chat.toolCall.failed).length).toBe(1);
+    // The mark keeps the failure colour and its accessible name; the row,
+    // its title and its body draw none, and no line under it repeats it.
     expect(
       screen.getByRole("img", { name: csMessages.chat.toolCall.failed }),
     ).toBeDefined();
+    expect(
+      container.textContent.includes(csMessages.chat.toolCall.failed),
+    ).toBe(false);
+    expect(container.innerHTML.includes("bg-destructive")).toBe(false);
+    expect(
+      container.querySelectorAll(
+        '.text-destructive:not([data-slot="status-mark"])',
+      ),
+    ).toHaveLength(0);
     expect(screen.queryByText(csMessages.chat.toolCall.retried)).toBeNull();
   });
 });
