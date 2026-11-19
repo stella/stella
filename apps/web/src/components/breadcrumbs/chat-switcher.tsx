@@ -103,7 +103,7 @@ export const ChatSwitcher = ({ threadId }: ChatSwitcherProps) => {
     }
   };
 
-  const openChat = (chat: ChatHistoryItem) => {
+  const switchToChat = (chat: ChatHistoryItem) => {
     changeOpen(false);
     if (chat.id === threadId) {
       return;
@@ -179,7 +179,7 @@ export const ChatSwitcher = ({ threadId }: ChatSwitcherProps) => {
                   <CommandItem
                     aria-current={isCurrent ? "page" : undefined}
                     key={chat.id}
-                    onClick={() => openChat(chat)}
+                    onClick={() => switchToChat(chat)}
                     value={chat.id}
                   >
                     <TruncatedText render={<BidiText as="span" />}>
