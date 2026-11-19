@@ -5,7 +5,7 @@ import {
 } from "@/components/inspector/inspector-store-types";
 import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { hasFullScreenViewer } from "@/lib/file-open.logic";
-import { nativeFilePreviewKind } from "@/lib/file-preview-kind";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 
 // Sidepeek shows every facet, including Preview (the file viewer
 // itself). Fullscreen drops Preview entirely — the main view IS

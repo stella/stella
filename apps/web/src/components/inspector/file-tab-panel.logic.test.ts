@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 
-import { nativeFilePreviewKind } from "@/lib/file-preview-kind";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 
 import {
   getFileTabDisplayState,

@@ -21,7 +21,7 @@ import type {
   ViewLayoutType,
   WorkspacePropertyWire,
 } from "@/lib/api-contract";
-import { nativeFilePreviewKind } from "@/lib/file-preview-kind";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type { WorkspaceFieldContent };

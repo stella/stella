@@ -1,4 +1,5 @@
 import { legalFileFormat } from "@stll/api-contract/document-format";
+import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 
 import {
   DOCX_MIME,
@@ -6,15 +7,25 @@ import {
   isEmailFile,
   isMarkdownFile,
   isPlainTextFile,
+  type NativeOfficeViewerFormat,
   PDF_MIME,
 } from "@/lib/consts";
+
+type NativeFilePreviewKind =
+  | "pdf"
+  | "docx"
+  | NativeOfficeViewerFormat
+  | LegalFileFormatKind
+  | "email"
+  | "markdown"
+  | "text";
 
 /** A native preview works without a generated rendition. */
 export const nativeFilePreviewKind = (file: {
   fileName?: string | null | undefined;
   mimeType?: string | null | undefined;
   encrypted?: boolean | undefined;
-}) => {
+}): NativeFilePreviewKind | null => {
   if (file.mimeType === PDF_MIME) {
     return "pdf";
   }

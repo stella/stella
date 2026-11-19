@@ -1,4 +1,4 @@
-import { nativeFilePreviewKind } from "@/lib/file-preview-kind";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 
 export const FILE_OPEN_TARGET = {
   /** The full-screen `/workspaces/$workspaceId/$viewId/document` route. */
