@@ -191,7 +191,7 @@ const TABLE_ALIGN_CLASS = {
 // reading leading, and wrapped unless the table keeps cells on one line (the
 // base cell already does). The first column keeps a few words per line.
 const PROSE_CELL_CLASS =
-  "in-data-[density=prose]:h-auto in-data-[density=prose]:border-e in-data-[density=prose]:border-b in-data-[density=prose]:px-3 in-data-[density=prose]:py-2 in-data-[density=prose]:align-top in-data-[density=prose]:leading-normal in-data-[density=prose]:last:border-e-0 in-data-[density=prose]:min-w-24 in-data-[density=prose]:first:min-w-36 in-data-[cell-text=wrap]:in-data-[density=prose]:wrap-break-word in-data-[cell-text=wrap]:in-data-[density=prose]:whitespace-normal";
+  "in-data-[density=prose]:h-auto in-data-[density=prose]:border-e in-data-[density=prose]:border-b in-data-[density=prose]:px-3 in-data-[density=prose]:py-2 in-data-[density=prose]:align-top in-data-[density=prose]:leading-normal in-data-[density=prose]:last:border-e-0 in-data-[density=prose]:min-w-24 in-data-[density=prose]:first:min-w-36 in-data-[cell-text=wrap]:in-data-[density=prose]:wrap-anywhere in-data-[cell-text=wrap]:in-data-[density=prose]:whitespace-normal";
 
 const resolveTableAlign = (
   align: TableAlign | undefined,
