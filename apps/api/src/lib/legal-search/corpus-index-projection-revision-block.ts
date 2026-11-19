@@ -14,6 +14,7 @@ import {
   TRANSPORT_WRAPPERS,
 } from "@/api/lib/errors/handler-error-resolution";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import { corpusIndexDecisionTerms } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCorpusProjectionDocuments,
   legislationV2NeedsPassages,
@@ -505,6 +506,33 @@ export type CorpusProjectionRevisionBlock = {
   material: CorpusProjectionMaterial;
   documentCount: number;
   parts: readonly [string, ...string[]];
+  /**
+   * How the decision's terms were written, on a generation that maps them:
+   * `prefix` when they did not fit the opening passage and were cut, which
+   * the executor counts and reports, because a reader then learns the
+   * decision's words from its passages rather than from the decision field.
+   */
+  decisionTerms: CorpusProjectionDecisionTermsWritten;
+};
+
+export type CorpusProjectionDecisionTermsWritten =
+  "not_mapped" | "whole" | "prefix";
+
+/** Read off the documents as the engine receives them: the opening carries the mark. */
+const decisionTermsWritten = (
+  material: CorpusProjectionMaterial,
+  documents: readonly Record<string, unknown>[],
+): CorpusProjectionDecisionTermsWritten => {
+  const field =
+    material.family === "case_law"
+      ? corpusIndexDecisionTerms(material.manifest)
+      : null;
+  if (field === null) {
+    return "not_mapped";
+  }
+  return documents.some((document) => document[field.partialField] === true)
+    ? "prefix"
+    : "whole";
 };
 
 /** A revision's documents, serialized once and checked against the ceilings. */
@@ -583,6 +611,7 @@ const buildCorpusProjectionRevisionBlock = (
     material,
     documentCount: entry.documents.length,
     parts: [first, ...rest],
+    decisionTerms: decisionTermsWritten(material, entry.documents),
   });
 };
 

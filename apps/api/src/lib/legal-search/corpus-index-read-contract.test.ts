@@ -96,7 +96,11 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: [],
     functionWords: FUNCTION_WORDS.cs,
-    documentStems: { languages: ["cs", "en"], headnoteField: "headnote_stem" },
+    documentStems: {
+      languages: ["cs", "en"],
+      headnoteField: "headnote_stem",
+      textField: "text_stem",
+    },
     stemming: {
       language: "cs",
       fields: ["text_stem", "headnote_stem"],
@@ -113,7 +117,11 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: ["keywords"],
     functionWords: FUNCTION_WORDS.cs,
-    documentStems: { languages: ["cs", "en"], headnoteField: "headnote_stem" },
+    documentStems: {
+      languages: ["cs", "en"],
+      headnoteField: "headnote_stem",
+      textField: "text_stem",
+    },
     stemming: {
       language: "cs",
       fields: ["text_stem", "headnote_stem"],
@@ -195,6 +203,7 @@ test("the documents' stemmers answer for every read, with or without a language"
   expect(stemsOf("CZE", undefined)).toEqual({
     languages: ["cs", "en"],
     headnoteField: "headnote_stem",
+    textField: "text_stem",
   });
   // The European index holds a document per language, each stemmed under its
   // own: every EU language a stemmer covers, and none it does not.
