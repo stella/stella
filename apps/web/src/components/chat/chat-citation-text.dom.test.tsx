@@ -341,7 +341,7 @@ const PAREN_SPACING = ["", " ", "  ", " "];
 describe("citation text", () => {
   test("never repeats the court word and never leaves a loose bracket", async () => {
     await assertProperty(
-      "citation text never repeats the court word and never leaves a loose bracket",
+      "never repeats the court word and never leaves a loose bracket",
       fc.asyncProperty(
         fc.oneof(
           fc.constantFrom(...NAMING_LEAD_INS).map((leadIn) => ({
