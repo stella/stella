@@ -29,6 +29,7 @@ export const TAGGED_FAILURE_REASON = {
   ActionCostReportError: "tagged_failure",
   ActionPeriodBudgetError: "tagged_failure",
   ActionSizeError: "tagged_failure",
+  AcpRequestError: "tagged_failure",
   AdapterFetchError: "tagged_failure",
   AggregateLockBusy: "tagged_failure",
   AggregateLockUpgradeRefused: "tagged_failure",
