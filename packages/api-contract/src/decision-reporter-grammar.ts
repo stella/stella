@@ -78,10 +78,10 @@ const CZECH_COLLECTIONS: DecisionReporterGrammar = {
     if (CZ_US_CANONICAL_REPORT_RE.test(text)) {
       return text;
     }
-    const nss = NSS_ENTRY.exec(foldDecisionIdentifierInput(text));
-    return nss === null
-      ? canonicalCzNsCollectionCitation(text)
-      : `č. ${nss[1]}/${nss[2]} Sb. NSS`;
+    const folded = foldDecisionIdentifierInput(text);
+    return NSS_ENTRY.test(folded)
+      ? folded.replace(NSS_ENTRY, "č. $1/$2 Sb. NSS")
+      : canonicalCzNsCollectionCitation(text);
   },
 };
 

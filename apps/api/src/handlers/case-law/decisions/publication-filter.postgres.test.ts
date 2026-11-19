@@ -222,12 +222,13 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           })),
         );
-        const identity = parseDecisionQuery(reporter, {
+        const parsed = parseDecisionQuery(reporter, {
           reporters: decisionReporterGrammarForJurisdiction(country),
         });
-        if (identity.type !== "identifier" || identity.kind !== "reporter") {
-          return panic("Expected a Czech collection citation");
-        }
+        const identity =
+          parsed.type === "identifier" && parsed.kind === "reporter"
+            ? parsed
+            : panic("Expected a Czech collection citation");
         expect(
           await findDecisionIdsByIdentity({ caseLawDb, country, identity }),
         ).toEqual([decisionId]);
