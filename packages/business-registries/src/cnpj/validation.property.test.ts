@@ -7,7 +7,7 @@ import {
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import { registryString } from "../shared/property-test-helpers.test.js";
+import { registryString } from "../shared/tests/test-helpers.js";
 import { normalizeCnpj, validateCnpj } from "./validation.js";
 
 const checkDigit = (prefix: string): string => {

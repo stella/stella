@@ -1,0 +1,19 @@
+{
+  "id": "review-decision-map-owner",
+  "rules": ["review-decision-map-owner/review-decision-map-owner"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-19T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "review-decision-map-owner/review-decision-map-owner",
+    "apps",
+    "packages"
+  ]
+}

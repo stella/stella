@@ -132,6 +132,8 @@ test("a granted member enrolled in time billing sees the feature enabled", async
     features: {
       "activity-timeline": { status: "enabled" },
       "desktop-dictation": { status: "hidden" },
+      "desktop-dictation-cloud": { status: "hidden" },
+      "desktop-dictation-retaining-models": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -145,6 +147,8 @@ test("a granted member sees the feature enabled without reading identity again",
     features: {
       "activity-timeline": { status: "enabled" },
       "desktop-dictation": { status: "hidden" },
+      "desktop-dictation-cloud": { status: "hidden" },
+      "desktop-dictation-retaining-models": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -159,6 +163,8 @@ test("a granted member without time billing sees the activity timeline hidden", 
     features: {
       "activity-timeline": { status: "hidden" },
       "desktop-dictation": { status: "hidden" },
+      "desktop-dictation-cloud": { status: "hidden" },
+      "desktop-dictation-retaining-models": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -184,6 +190,8 @@ test("callers outside the grant see the feature hidden", async () => {
       features: {
         "activity-timeline": { status: "hidden" },
         "desktop-dictation": { status: "hidden" },
+        "desktop-dictation-cloud": { status: "hidden" },
+        "desktop-dictation-retaining-models": { status: "hidden" },
         "local-agents": { status: "hidden" },
       },
     });

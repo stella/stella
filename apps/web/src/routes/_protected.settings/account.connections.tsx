@@ -10,6 +10,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { AssistantSetup } from "@/components/assistant-setup";
 import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { prefetchSharepointAccess } from "@/features/sharepoint/sharepoint-queries";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
   mcpConnectionsOptions,
@@ -31,6 +32,10 @@ import {
   IntegrationsGroup,
   useIntegrations,
 } from "@/routes/_protected.settings/-components/account/connections/integrations-group";
+import {
+  SharepointGroup,
+  useSharepointConnectionRow,
+} from "@/routes/_protected.settings/-components/account/connections/sharepoint-group";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
@@ -42,6 +47,11 @@ export const Route = createFileRoute(
     // Prime every query the page suspends on so the fetches run in parallel
     // during navigation instead of one after another on mount.
     const organizationId = context.user.activeOrganizationId;
+    prefetchSharepointAccess({
+      queryClient: context.queryClient,
+      viewer: { organizationId, userId: context.user.id },
+      routeTemplate: "/_protected/settings/account/connections",
+    });
     await Promise.all([
       ensureRouteQueryData(
         context.queryClient,
@@ -79,6 +89,7 @@ function ConnectionsPage() {
   const integrations = useIntegrations(trimmedQuery);
   const apps = useConnectedApps(trimmedQuery);
   const sites = useBrowserSites(trimmedQuery);
+  const sharepoint = useSharepointConnectionRow(trimmedQuery);
   const showIntegrations = !isSearching || integrations.visible.length > 0;
   const showApps = !isSearching || apps.visible.length > 0;
   const showSites = sites.visible.length > 0;
@@ -100,11 +111,14 @@ function ConnectionsPage() {
       </div>
       {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
+      {sharepoint.visible && (
+        <SharepointGroup access={sharepoint.access} state={sharepoint.state} />
+      )}
       {showApps && <AppsGroup apps={apps} />}
       {!isSearching && <BrowserExtensionGroup />}
       {showSites && <BrowserSitesGroup sites={sites} />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}
-      {!showIntegrations && !showApps && !showSites && (
+      {!showIntegrations && !showApps && !showSites && !sharepoint.visible && (
         <div className="text-muted-foreground flex flex-col items-start gap-1 px-1 text-sm">
           <p className="text-foreground flex items-center gap-2">
             <SearchXIcon className="text-muted-foreground size-4" />

@@ -37,6 +37,7 @@ import {
   invoiceLines,
   invoices,
   organizationSettings,
+  outboundActions,
   playbookDefinitions,
   rateEntries,
   rateTables,
@@ -782,97 +783,93 @@ describe("review organization seed and reset", () => {
     }
   });
 
-  {
-    test.each(["before the sweep", "under the sweep's lock"] as const)(
-      "a cancellation %s keeps organization content and records no teardown",
-      async (moment) => {
-        const controller = new AbortController();
-        let sweepStarted = false;
-        let requestsBeforeSweep = 0;
-        try {
-          await resetReviewOrganization({
-            config: config(fixture.reviewOrgId),
-            db: ownerDb(),
-            rlsDatabase: rlsDatabase(),
-            runId: Bun.randomUUIDv7(),
-            signal: controller.signal,
-            dependencies: {
-              ...resetDependencies,
-              beforeSweep: async () => {
-                // The matters are gone by now; leave organization-level content
-                // for the sweep to (not) take.
-                await testDb.insert(savedSearches).values({
-                  organizationId: fixture.reviewOrgId,
-                  userId: fixture.reviewUserId,
-                  name: "Kept by the cancelled sweep",
-                  criteria: asTestRaw<
-                    typeof savedSearches.$inferInsert.criteria
-                  >({ version: 1 }),
-                });
-                // Stored organization-level content the storage census would
-                // record for erasure.
-                await testDb.insert(fileComparisonUploads).values({
-                  organizationId: fixture.reviewOrgId,
-                  userId: fixture.reviewUserId,
-                  kind: "redline",
-                  declaredName: "Kept redline.docx",
-                  declaredSize: 1,
-                  expiresAt: new Date(Date.now() + 3_600_000),
-                });
-                requestsBeforeSweep = await testDb.$count(
-                  entityDeletionCleanupRequests,
-                  eq(
-                    entityDeletionCleanupRequests.organizationId,
-                    fixture.reviewOrgId,
-                  ),
-                );
-                sweepStarted = true;
-                if (moment === "before the sweep") {
-                  controller.abort();
-                }
-              },
-              afterFenceCheck: async () => {
-                if (sweepStarted && moment === "under the sweep's lock") {
-                  controller.abort();
-                }
-              },
+  test.each(["before the sweep", "under the sweep's lock"] as const)(
+    "a cancellation %s keeps organization content and records no teardown",
+    async (moment) => {
+      const controller = new AbortController();
+      let sweepStarted = false;
+      let requestsBeforeSweep = 0;
+      try {
+        await resetReviewOrganization({
+          config: config(fixture.reviewOrgId),
+          db: ownerDb(),
+          rlsDatabase: rlsDatabase(),
+          runId: Bun.randomUUIDv7(),
+          signal: controller.signal,
+          dependencies: {
+            ...resetDependencies,
+            beforeSweep: async () => {
+              // The matters are gone by now; leave organization-level content
+              // for the sweep to (not) take.
+              await testDb.insert(savedSearches).values({
+                organizationId: fixture.reviewOrgId,
+                userId: fixture.reviewUserId,
+                name: "Kept by the cancelled sweep",
+                criteria: asTestRaw<typeof savedSearches.$inferInsert.criteria>(
+                  { version: 1 },
+                ),
+              });
+              // Stored organization-level content the storage census would
+              // record for erasure.
+              await testDb.insert(fileComparisonUploads).values({
+                organizationId: fixture.reviewOrgId,
+                userId: fixture.reviewUserId,
+                kind: "redline",
+                declaredName: "Kept redline.docx",
+                declaredSize: 1,
+                expiresAt: new Date(Date.now() + 3_600_000),
+              });
+              requestsBeforeSweep = await testDb.$count(
+                entityDeletionCleanupRequests,
+                eq(
+                  entityDeletionCleanupRequests.organizationId,
+                  fixture.reviewOrgId,
+                ),
+              );
+              sweepStarted = true;
+              if (moment === "before the sweep") {
+                controller.abort();
+              }
             },
-          });
-          expect(sweepStarted).toBe(true);
-          expect(
-            await testDb.$count(
-              savedSearches,
-              eq(savedSearches.organizationId, fixture.reviewOrgId),
+            afterFenceCheck: async () => {
+              if (sweepStarted && moment === "under the sweep's lock") {
+                controller.abort();
+              }
+            },
+          },
+        });
+        expect(sweepStarted).toBe(true);
+        expect(
+          await testDb.$count(
+            savedSearches,
+            eq(savedSearches.organizationId, fixture.reviewOrgId),
+          ),
+        ).toBe(1);
+        expect(
+          await testDb.$count(
+            entityDeletionCleanupRequests,
+            eq(
+              entityDeletionCleanupRequests.organizationId,
+              fixture.reviewOrgId,
             ),
-          ).toBe(1);
-          expect(
-            await testDb.$count(
-              entityDeletionCleanupRequests,
-              eq(
-                entityDeletionCleanupRequests.organizationId,
-                fixture.reviewOrgId,
-              ),
-            ),
-          ).toBe(requestsBeforeSweep);
-          expect(
-            await testDb.$count(
-              fileComparisonUploads,
-              eq(fileComparisonUploads.organizationId, fixture.reviewOrgId),
-            ),
-          ).toBe(1);
-        } finally {
-          await testDb
-            .delete(savedSearches)
-            .where(eq(savedSearches.organizationId, fixture.reviewOrgId));
-          await testDb
-            .delete(fileComparisonUploads)
-            .where(
-              eq(fileComparisonUploads.organizationId, fixture.reviewOrgId),
-            );
-        }
-      },
-    );
-  }
+          ),
+        ).toBe(requestsBeforeSweep);
+        expect(
+          await testDb.$count(
+            fileComparisonUploads,
+            eq(fileComparisonUploads.organizationId, fixture.reviewOrgId),
+          ),
+        ).toBe(1);
+      } finally {
+        await testDb
+          .delete(savedSearches)
+          .where(eq(savedSearches.organizationId, fixture.reviewOrgId));
+        await testDb
+          .delete(fileComparisonUploads)
+          .where(eq(fileComparisonUploads.organizationId, fixture.reviewOrgId));
+      }
+    },
+  );
 
   test("a cancellation during the seed stops before the next sample item, and the next run completes it", async () => {
     const controller = new AbortController();
@@ -1246,6 +1243,43 @@ describe("review organization reset task", () => {
   });
 
   test("is registered ungated and, without time billing, seeds everything else", async () => {
+    const owners = [
+      { organizationId: fixture.reviewOrgId, userId: fixture.reviewUserId },
+      { organizationId: fixture.foreignOrgId, userId: fixture.otherUserId },
+    ];
+    const prepared = owners.map((owner) => ({
+      ...owner,
+      threadId: createSafeId<"chatThread">(),
+      actionId: createSafeId<"outboundAction">(),
+    }));
+    await testDb.insert(chatThreads).values(
+      prepared.map(({ threadId, organizationId, userId }) => ({
+        id: threadId,
+        organizationId,
+        userId,
+        title: "Prepared action",
+      })),
+    );
+    await testDb.insert(outboundActions).values(
+      prepared.map(({ threadId, actionId, organizationId, userId }) => ({
+        id: actionId,
+        organizationId,
+        userId,
+        chatThreadId: threadId,
+        kind: "email.send" as const,
+        status: "pending" as const,
+        previewEncrypted: Buffer.from("preview"),
+        previewIv: Buffer.alloc(12),
+        previewHash: "a".repeat(64),
+        expiresAt: new Date("2099-01-01T00:00:00Z"),
+      })),
+    );
+    expect(
+      await testDb.$count(
+        outboundActions,
+        eq(outboundActions.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(1);
     // Enrolments survive resets (they are the account's preferences).
     await testDb
       .delete(featureEnrolments)
@@ -1278,6 +1312,18 @@ describe("review organization reset task", () => {
       panic("The registered reset task must return its Result");
     }
     outcome.unwrap("Expected the reset run to succeed without time billing");
+    expect(
+      await testDb.$count(
+        outboundActions,
+        eq(outboundActions.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        outboundActions,
+        eq(outboundActions.organizationId, fixture.foreignOrgId),
+      ),
+    ).toBe(1);
     expect(await countRows(fixture.reviewOrgId)).toEqual({
       ...SAMPLE_COUNTS,
       timeEntries: 0,

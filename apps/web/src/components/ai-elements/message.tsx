@@ -39,10 +39,16 @@ export const MessageContent = ({
     className={cn(
       "flex w-fit max-w-full min-w-0 flex-col gap-2",
       "overflow-hidden text-sm",
-      "group-[.is-user]:w-full group-[.is-user]:rounded-lg",
-      "group-[.is-user]:bg-secondary group-[.is-user]:px-2.5",
-      "group-[.is-user]:bg-secondary group-[.is-user]:py-2",
-      "group-[.is-user]:text-foreground",
+      // A sent message is a bubble that hugs its text at the end of the
+      // reading column, so the answer below it keeps the column to itself.
+      // It stays unclipped: its edit action sits just outside its start edge.
+      "group-[.is-user]:relative group-[.is-user]:ms-auto group-[.is-user]:max-w-[85%]",
+      "group-[.is-user]:overflow-visible group-[.is-user]:wrap-break-word",
+      "group-[.is-user]:bg-secondary group-[.is-user]:rounded-2xl",
+      "group-[.is-user]:px-4 group-[.is-user]:py-2.5",
+      "group-[.is-user]:text-foreground group-[.is-user]:text-base/6",
+      // Editing in place needs the column's width, not the text's.
+      "group-[.is-user]:has-data-chat-message-edit:w-full group-[.is-user]:has-data-chat-message-edit:max-w-full",
       "group-[.is-assistant]:text-foreground",
       "group-[.is-system]:w-full group-[.is-system]:rounded-lg",
       "group-[.is-system]:border group-[.is-system]:border-dashed",

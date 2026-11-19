@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   chmodSync,
@@ -25,9 +26,11 @@ import { waitFor } from "@stll/test-kit";
 import {
   captureCheckpoint,
   CHECKPOINT_LIMITS,
+  type CheckpointClock,
   type CheckpointLimits,
   checkpointStoreOf,
   type CheckpointUnavailableReason,
+  lockAt,
   restoreCheckpoint,
 } from "./checkpoints";
 
@@ -45,11 +48,6 @@ const isWindows = process.platform === "win32";
 const isRoot = process.getuid?.() === 0;
 
 const roots: string[] = [];
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
 
 /** A run's folder, with its sibling store, and a folder outside both. */
 const place = () => {
@@ -106,6 +104,9 @@ const treeOf = (dir: string, relative = ""): TreeEntry[] =>
 /** Every stored file's content. */
 const storedContents = (workspaceDir: string) => {
   const objects = path.join(checkpointStoreOf(workspaceDir), "objects");
+  if (!existsSync(checkpointStoreOf(workspaceDir))) {
+    return [];
+  }
   return readdirSync(objects).flatMap((bucket) =>
     readdirSync(path.join(objects, bucket)).map((name) =>
       readFileSync(path.join(objects, bucket, name), "utf-8"),
@@ -113,15 +114,21 @@ const storedContents = (workspaceDir: string) => {
   );
 };
 
-const manifestIds = (workspaceDir: string) =>
-  readdirSync(path.join(checkpointStoreOf(workspaceDir), "manifests"))
-    .map((name) => name.replace(/\.json$/u, ""))
-    .toSorted();
+/** The checkpoints kept; none before the store is first opened. */
+const manifestIds = (workspaceDir: string) => {
+  const manifests = path.join(checkpointStoreOf(workspaceDir), "manifests");
+  return existsSync(checkpointStoreOf(workspaceDir))
+    ? readdirSync(manifests)
+        .map((name) => name.replace(/\.json$/u, ""))
+        .toSorted()
+    : [];
+};
 
 type Capture = {
   memberFiles?: string[];
   protectedPaths?: string[];
   limits?: Partial<CheckpointLimits>;
+  clock?: CheckpointClock;
 };
 
 /** What captures and restores logged; nothing here fails a cleanup. */
@@ -130,12 +137,15 @@ const logLine = (line: string) => {
   logged.push(line);
 };
 afterEach(() => {
+  for (const root of roots.splice(0)) {
+    rmSync(root, { recursive: true, force: true });
+  }
   expect(logged.splice(0)).toEqual([]);
 });
 
 const capture = async (
   workspaceDir: string,
-  { memberFiles = [], protectedPaths = [], limits = {} }: Capture = {},
+  { memberFiles = [], protectedPaths = [], limits = {}, clock }: Capture = {},
 ) => {
   const runId = crypto.randomUUID();
   const report = await captureCheckpoint({
@@ -144,6 +154,7 @@ const capture = async (
     memberFiles,
     protectedPaths,
     limits: { ...CHECKPOINT_LIMITS, ...limits },
+    ...(clock === undefined ? {} : { clock }),
     log: logLine,
   });
   return { runId, report };
@@ -295,6 +306,66 @@ describe("a run folder's checkpoint", () => {
       }
     });
 
+    test("a capture holds its run's start for no longer than its bound, the wait for the store included", async () => {
+      // The test's clock: each reading is 20 ms of a slow disk, and a wait
+      // passes at once unless it was called off first. Another live process
+      // holds the store until `releasedAt`, and the folder is too slow to save
+      // within the bound once it is free.
+      const STEP_MS = 20;
+      // A few readings and one lock poll past the deadline.
+      const SLACK_MS = 200;
+      const budget = CHECKPOINT_LIMITS.maxCaptureMs;
+      for (const releasedAt of [0, budget - 300, Number.POSITIVE_INFINITY]) {
+        const { workspaceDir } = place();
+        for (const index of Array.from({ length: 300 }, (_, at) => at)) {
+          write(workspaceDir, `case-${String(index)}.txt`, String(index));
+        }
+        const store = checkpointStoreOf(workspaceDir);
+        mkdirSync(store, { recursive: true, mode: 0o700 });
+        const lock = path.join(store, ".lock");
+        const releaseBy = (now: number) => {
+          if (now >= releasedAt) {
+            rmSync(lock, { force: true });
+          }
+        };
+        writeFileSync(
+          lock,
+          JSON.stringify({ pid: process.pid, token: crypto.randomUUID() }),
+        );
+        let now = 0;
+        releaseBy(now);
+        const clock: CheckpointClock = {
+          now: () => {
+            now += STEP_MS;
+            releaseBy(now);
+            return now;
+          },
+          sleep: async (ms, signal) => {
+            // After whatever else is ready, so a wait called off first
+            // takes no time.
+            await new Promise((resolve) => {
+              setImmediate(resolve);
+            });
+            if (signal?.aborted !== true) {
+              now += ms;
+              releaseBy(now);
+            }
+          },
+        };
+        const { report } = await capture(workspaceDir, { clock });
+        expect({ releasedAt, report }).toEqual({
+          releasedAt,
+          report: unavailable("too_slow"),
+        });
+        expect({ releasedAt, held: now <= budget + SLACK_MS }).toEqual({
+          releasedAt,
+          held: true,
+        });
+        expect(manifestIds(workspaceDir)).toEqual([]);
+        rmSync(lock, { force: true });
+      }
+    });
+
     test("within every bound the same folder is saved", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, "a.txt", "0123456789");
@@ -394,28 +465,75 @@ describe("a run folder's checkpoint", () => {
   });
 
   describe("which checkpoint may be restored", () => {
-    test("only the newest not undone yet, then the one before it", async () => {
+    test("any kept one, undoing every later turn with it", async () => {
       const { workspaceDir } = place();
+      const read = () =>
+        readFileSync(path.join(workspaceDir, "a.txt"), "utf-8");
       write(workspaceDir, "a.txt", "before the first turn");
       const { runId: first } = await capture(workspaceDir);
       write(workspaceDir, "a.txt", "before the second turn");
       const { runId: second } = await capture(workspaceDir);
-      write(workspaceDir, "a.txt", "after the second turn");
+      write(workspaceDir, "a.txt", "before the third turn");
+      const { runId: third } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "after the third turn");
 
-      expect((await restore(workspaceDir, first)).outcome).toBe("not_newest");
-      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
-        "after the second turn",
-      );
       expect((await restore(workspaceDir, crypto.randomUUID())).outcome).toBe(
         "no_checkpoint",
       );
+      expect(read()).toBe("after the third turn");
       expect((await restore(workspaceDir, second)).outcome).toBe("restored");
-      // Undone once: never restored again.
-      expect((await restore(workspaceDir, second)).outcome).toBe("not_newest");
+      expect(read()).toBe("before the second turn");
+      // The third turn was undone with the second: restoring its checkpoint
+      // would bring back what the second turn wrote. Answered as done,
+      // nothing moves; so is a repeat of the second (a lost answer).
+      write(workspaceDir, "a.txt", "changed since the undo");
+      expect((await restore(workspaceDir, third)).outcome).toBe("restored");
+      expect((await restore(workspaceDir, second)).outcome).toBe("restored");
+      expect(read()).toBe("changed since the undo");
+      // An earlier one still restores.
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
-      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
-        "before the first turn",
-      );
+      expect(read()).toBe("before the first turn");
+    });
+
+    test("a turn after an undo of earlier turns can be undone, the undone ones stay undone", async () => {
+      const { workspaceDir } = place();
+      const read = () =>
+        readFileSync(path.join(workspaceDir, "a.txt"), "utf-8");
+      write(workspaceDir, "a.txt", "one");
+      const { runId: first } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "two");
+      const { runId: second } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "three");
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      const { runId: next } = await capture(workspaceDir);
+      write(workspaceDir, "a.txt", "four");
+      expect((await restore(workspaceDir, second)).outcome).toBe("restored");
+      expect(read()).toBe("four");
+      expect((await restore(workspaceDir, next)).outcome).toBe("restored");
+      expect(read()).toBe("one");
+    });
+
+    test("a checkpoint undone with an earlier one stays undone after that one is pruned", async () => {
+      const { workspaceDir } = place();
+      const limits = { maxManifests: 3 };
+      const read = () =>
+        readFileSync(path.join(workspaceDir, "a.txt"), "utf-8");
+      write(workspaceDir, "a.txt", "one");
+      const { runId: first } = await capture(workspaceDir, { limits });
+      write(workspaceDir, "a.txt", "two");
+      await capture(workspaceDir, { limits });
+      write(workspaceDir, "a.txt", "three");
+      const { runId: third } = await capture(workspaceDir, { limits });
+      write(workspaceDir, "a.txt", "four");
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      // Two more turns push the first two checkpoints out.
+      await capture(workspaceDir, { limits });
+      await capture(workspaceDir, { limits });
+      expect(manifestIds(workspaceDir)).toContain(third);
+      expect(manifestIds(workspaceDir)).not.toContain(first);
+      write(workspaceDir, "a.txt", "five");
+      expect((await restore(workspaceDir, third)).outcome).toBe("restored");
+      expect(read()).toBe("five");
     });
 
     test("a turn after an undo is the newest again", async () => {
@@ -426,7 +544,11 @@ describe("a run folder's checkpoint", () => {
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
       const { runId: next } = await capture(workspaceDir);
       write(workspaceDir, "a.txt", "three");
-      expect((await restore(workspaceDir, first)).outcome).toBe("not_newest");
+      // Undone already: answered again without touching the folder.
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
+        "three",
+      );
       expect((await restore(workspaceDir, next)).outcome).toBe("restored");
       expect(readFileSync(path.join(workspaceDir, "a.txt"), "utf-8")).toBe(
         "one",
@@ -463,6 +585,28 @@ describe("a run folder's checkpoint", () => {
       "attachments/019a0000-0000-7000-8000-000000000001/lease.pdf";
     const later = "attachments/019a0000-0000-7000-8000-000000000002/annex.pdf";
 
+    /** The folder after the first turn's undo: its draft, the later annex. */
+    const withLaterAnnex = [
+      { path: "attachments", kind: "dir", mode: expect.any(Number) },
+      {
+        path: "attachments/019a0000-0000-7000-8000-000000000002",
+        kind: "dir",
+        mode: expect.any(Number),
+      },
+      {
+        path: later,
+        kind: "file",
+        content: "the member's annex",
+        mode: expect.any(Number),
+      },
+      {
+        path: "draft.txt",
+        kind: "file",
+        content: "before the first turn",
+        mode: expect.any(Number),
+      },
+    ] satisfies TreeEntry[];
+
     test("an agent's edit to the run's attachment is undone; the attachment stays", async () => {
       const { workspaceDir } = place();
       write(workspaceDir, attachment, "as the member attached it");
@@ -489,26 +633,20 @@ describe("a run folder's checkpoint", () => {
       write(workspaceDir, later, "edited by the agent");
       expect((await restore(workspaceDir, second)).outcome).toBe("restored");
       expect((await restore(workspaceDir, first)).outcome).toBe("restored");
-      expect(treeOf(workspaceDir)).toEqual([
-        { path: "attachments", kind: "dir", mode: expect.any(Number) },
-        {
-          path: "attachments/019a0000-0000-7000-8000-000000000002",
-          kind: "dir",
-          mode: expect.any(Number),
-        },
-        {
-          path: later,
-          kind: "file",
-          content: "the member's annex",
-          mode: expect.any(Number),
-        },
-        {
-          path: "draft.txt",
-          kind: "file",
-          content: "before the first turn",
-          mode: expect.any(Number),
-        },
-      ]);
+      expect(treeOf(workspaceDir)).toEqual(withLaterAnnex);
+    });
+
+    test("undoing an earlier turn and every later one at once keeps the attachments of the later ones", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "draft.txt", "before the first turn");
+      const { runId: first } = await capture(workspaceDir);
+      write(workspaceDir, "draft.txt", "after the first turn");
+      write(workspaceDir, later, "the member's annex");
+      await capture(workspaceDir, { memberFiles: [later] });
+      write(workspaceDir, later, "edited by the agent");
+      write(workspaceDir, "draft.txt", "after the second turn");
+      expect((await restore(workspaceDir, first)).outcome).toBe("restored");
+      expect(treeOf(workspaceDir)).toEqual(withLaterAnnex);
     });
   });
 
@@ -704,6 +842,7 @@ describe("a run folder's checkpoint", () => {
       });
       expect(logged.splice(0)).toEqual([
         "an interrupted restore was not settled: The folder holds a special file.",
+        "no checkpoint was taken: An interrupted restore was not settled.",
       ]);
       expect(await restore(workspaceDir, runId)).toEqual({
         outcome: "failed",
@@ -781,8 +920,9 @@ describe("a run folder's checkpoint", () => {
       });
       expect(treeOf(workspaceDir)).toEqual(restored);
       expect(recoveries(workspaceDir)).toEqual([]);
-      // Undone once, and it stays undone.
-      expect((await restore(workspaceDir, runId)).outcome).toBe("not_newest");
+      // Undone once, and asking again moves nothing.
+      expect((await restore(workspaceDir, runId)).outcome).toBe("restored");
+      expect(treeOf(workspaceDir)).toEqual(restored);
     });
 
     test("a restore whose record could not be dropped keeps the restored folder", async () => {
@@ -1031,6 +1171,10 @@ describe("a run folder's checkpoint", () => {
       expect(
         (await capture(workspaceDir, { limits: { lockWaitMs: 100 } })).report,
       ).toEqual({ status: "unavailable", reason: "failed" });
+      // A capture that failed says why in the log; one past a bound does not.
+      expect(logged.splice(0)).toEqual([
+        "no checkpoint was taken: Another process holds the checkpoint store.",
+      ]);
       expect(manifestIds(workspaceDir)).toHaveLength(1);
 
       const gone = Bun.spawn(["true"]);
@@ -1041,6 +1185,40 @@ describe("a run folder's checkpoint", () => {
       ).toEqual({ status: "taken" });
       expect(manifestIds(workspaceDir)).toHaveLength(2);
       expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
+    test("a lock whose holder is gone is taken over even when the wait is spent", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      const gone = Bun.spawn(["true"]);
+      await gone.exited;
+      writeFileSync(lockFile(workspaceDir), holder(gone.pid));
+      expect(
+        (await capture(workspaceDir, { limits: { lockWaitMs: 0 } })).report,
+      ).toEqual({ status: "taken" });
+      expect(existsSync(lockFile(workspaceDir))).toBe(false);
+    });
+
+    test("a lock its holder gives up while another reads it reads as held or as free, never as a failure", async () => {
+      const { workspaceDir } = place();
+      write(workspaceDir, "a.txt", "saved");
+      await capture(workspaceDir);
+      const file = lockFile(workspaceDir);
+      const held = { pid: process.pid, token: crypto.randomUUID() };
+      // A holder gives its lock up at any moment; a waiting holder that reads
+      // the lock right then must read it as held or free. Reading a name
+      // checked a moment before failed the capture of the one who read it.
+      // Given up before the name is opened: no lock holds it.
+      expect(await lockAt(file)).toEqual(Result.ok(null));
+      // Given up after the name is opened: the read is of the lock it held.
+      writeFileSync(file, JSON.stringify(held));
+      const read = await lockAt(file, async () => {
+        rmSync(file);
+        await Promise.resolve();
+      });
+      expect(read).toEqual(Result.ok(held));
+      expect(existsSync(file)).toBe(false);
     });
 
     test.skipIf(isWindows)(
@@ -1131,6 +1309,7 @@ describe("a run folder's checkpoint", () => {
           ).toEqual({ status: "unavailable", reason: "failed" });
           expect(logged.splice(0)).toEqual([
             "older checkpoints were kept: The checkpoints could not be read.",
+            "no checkpoint was taken: The checkpoints could not be read.",
           ]);
           expect(manifestIds(workspaceDir)).toEqual([first, second].toSorted());
           expect(storedContents(workspaceDir).toSorted()).toEqual([

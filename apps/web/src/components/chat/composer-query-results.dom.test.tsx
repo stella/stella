@@ -140,7 +140,9 @@ for (const source of [
       for (const answer of [[], ["Cached answer"]]) {
         const { client, requests, ui, settle } = mount();
         await settle(answer);
-        await waitFor(() => expect(ui.queryByRole("status")).toBeNull());
+        await waitFor(() =>
+          expect(ui.queryByRole("status") === null).toBe(true),
+        );
         if (answer.length === 0) {
           expect(ui.getByText("Empty answer")).toBeDefined();
         }

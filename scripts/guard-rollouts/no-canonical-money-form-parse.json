@@ -1,7 +1,6 @@
 {
   "id": "no-canonical-money-form-parse",
   "rules": ["no-canonical-money-form-parse/no-canonical-money-form-parse"],
-  "type": "changed-lines",
-  "expiresAt": "2026-11-13T00:00:00.000Z",
+  "type": "full",
   "check": ["bun", "--bun", "oxlint", "-c", "oxlint.config.ts", "apps/web"]
 }

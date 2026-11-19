@@ -5,6 +5,8 @@ import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { getStorageKey } from "../../src/consts";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
+import type { AuthOk } from "../helpers/route-mock";
+import { authJson, respond, staticBody } from "../helpers/route-mock";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
@@ -198,10 +200,13 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
       redirectUri: callbackUrl,
     });
     await page.route(`${callbackUrl}**`, async (route) => {
-      await route.fulfill({
-        contentType: "text/html",
-        body: "<!doctype html><title>OAuth callback received</title><p>Callback received</p>",
-      });
+      await respond(
+        route,
+        staticBody({
+          contentType: "text/html",
+          body: "<!doctype html><title>OAuth callback received</title><p>Callback received</p>",
+        }),
+      );
     });
 
     await openConsent({ page, clientId, id, redirectUri: callbackUrl });
@@ -292,10 +297,7 @@ test("account switching preserves the signed OAuth query through auth routing", 
 
     signOutWasIntercepted = true;
     await context.clearCookies();
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ success: true }),
-    });
+    await respond(route, authJson("sign-out", { success: true }));
   });
 
   await openConsent({ page, clientId, id, redirectUri });
@@ -344,9 +346,9 @@ test("account switching preserves the signed OAuth query through auth routing", 
   await expect
     .poll(
       async () =>
-        await (
+        (await (
           await context.request.get(`${AUTH_BASE_URL}/get-session`)
-        ).json(),
+        ).json()) as unknown,
     )
     .toBeNull();
 });
@@ -383,20 +385,21 @@ test("organization picker names the signed-in account and switches it without lo
   // own; a second membership in the list keeps the picker on screen.
   await page.route(`${AUTH_BASE_URL}/organization/list`, async (route) => {
     const response = await route.fetch();
-    const organizations: unknown = await response.json();
+    const organizations: AuthOk<"organization/list"> = await response.json();
     expect(Array.isArray(organizations)).toBe(true);
-    await route.fulfill({
-      response,
-      json: [
-        ...(Array.isArray(organizations) ? organizations : []),
+    await respond(
+      route,
+      authJson("organization/list", [
+        ...organizations,
         {
           id: `second-organization-${id}`,
           name: `Second organization ${id}`,
           slug: `second-organization-${id}`,
           createdAt: new Date().toISOString(),
         },
-      ],
-    });
+      ]),
+      { response },
+    );
   });
 
   // Clear this browser session without revoking the shared authenticated fixture.
@@ -409,10 +412,7 @@ test("organization picker names the signed-in account and switches it without lo
 
     signOutWasIntercepted = true;
     await context.clearCookies();
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ success: true }),
-    });
+    await respond(route, authJson("sign-out", { success: true }));
   });
 
   // The server sends a single-membership account straight to consent; take
@@ -450,9 +450,9 @@ test("organization picker names the signed-in account and switches it without lo
   await expect
     .poll(
       async () =>
-        await (
+        (await (
           await context.request.get(`${AUTH_BASE_URL}/get-session`)
-        ).json(),
+        ).json()) as unknown,
     )
     .toBeNull();
 });
@@ -514,7 +514,9 @@ test("a client asking for account selection gets the organization step with the 
     `${AUTH_BASE_URL}/organization/list`,
   );
   const organizations: unknown = await organizationsResponse.json();
-  const [organization] = Array.isArray(organizations) ? organizations : [];
+  const [organization] = Array.isArray(organizations)
+    ? (organizations as unknown[])
+    : [];
   const organizationName =
     typeof organization === "object" &&
     organization !== null &&

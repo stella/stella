@@ -80,7 +80,7 @@ const assertTestShardPartition = (workflow: typeof ci) => {
   expect(thinJobs(workflow)).not.toContain("ci-tests");
 };
 
-test("test shards follow the derived heavy partition and cannot retain a thin exception", () => {
+test("the test shards follow the derived heavy partition and cannot retain a thin exception", () => {
   assertTestShardPartition(ci);
   const mutated = structuredClone(ci);
   const tests = mutated.jobs["ci-tests"];

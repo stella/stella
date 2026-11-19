@@ -1,9 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type WorkspaceMemberPreviewsScope = {
   organizationId: string;
@@ -53,14 +56,24 @@ export const workspaceMemberPreviewsOptions = ({
   userId,
   workspaceIds,
 }: WorkspaceMemberPreviewsKey) =>
-  queryOptions({
-    queryKey: workspaceMemberPreviewsKeys.batch({
-      organizationId,
-      userId,
-      workspaceIds,
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: workspaceMemberPreviewsKeys.batch({
+        organizationId,
+        userId,
+        workspaceIds,
+      }),
+      queryFn: async ({ signal }) =>
+        await readWorkspaceMemberPreviews(workspaceIds, signal),
+      enabled: workspaceIds.length > 0,
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
     }),
-    queryFn: async ({ signal }) =>
-      await readWorkspaceMemberPreviews(workspaceIds, signal),
-    enabled: workspaceIds.length > 0,
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+    {
+      resources: [RESOURCE_TYPE.WORKSPACE],
+      scope: { type: "workspace-set", workspaceIds },
+      organizationReads: {
+        organizationId,
+        resources: [RESOURCE_TYPE.WORKSPACE, RESOURCE_TYPE.USER],
+      },
+    },
+  );

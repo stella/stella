@@ -139,7 +139,7 @@ const submitInvitation = async () => {
   });
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(requests.at(0)?.path).toBe("/api/auth/organization/invite-member");
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog") === null).toBe(true));
 };
 
 describe("mounted membership role controls", () => {
@@ -222,7 +222,7 @@ describe("mounted membership role controls", () => {
           role: targetRole,
         });
         await waitFor(() =>
-          expect(screen.queryByRole("alertdialog")).toBeNull(),
+          expect(screen.queryByRole("alertdialog") === null).toBe(true),
         );
       });
     }

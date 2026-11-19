@@ -216,7 +216,7 @@ const importFile = (variants: ClauseExportVariant[]) =>
     [
       JSON.stringify({
         version: 1,
-        exportedAt: new Date().toISOString(),
+        exportedAt: "2026-04-30T09:00:00.000Z",
         clauses: [
           {
             title: "Imported variants",

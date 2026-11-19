@@ -1,9 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { Temporal } from "@stll/time";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { weekOf } from "@/components/billing/work-week.logic";
+import { todayIn, weekOf } from "@/components/billing/work-week.logic";
 import {
   TimeApprovalsPage,
   timeApprovalsQuery,
@@ -19,9 +18,6 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-
-const todayIn = (timezoneId: string) =>
-  Temporal.Now.plainDateISO(timezoneId).toString();
 
 export const Route = createFileRoute("/_protected/time_/approvals")({
   validateSearch: timeApprovalsSearchSchema,

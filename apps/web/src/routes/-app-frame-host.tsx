@@ -22,6 +22,7 @@ import {
 } from "@/routes/-app-frame.logic";
 import type { AppFrameAudience } from "@/routes/-app-frame.logic";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
+import { useLeafPendingView } from "@/routes/-route-pending-view";
 
 // The signed-in frame (sidebar, inspector, chat and their registrations) loads
 // only once a member is known, so sign-in and pages for visitors never
@@ -96,6 +97,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const scope = useRouterState({
     select: (state) => matchedAppFrameScope(state.matches),
   });
+  const leafPendingView = useLeafPendingView();
   const routeUser = useRouterState({
     select: (state) => routeUserOf(state.matches),
   });
@@ -164,14 +166,17 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     };
   }, [queryClient, publicKnowledge, visitor]);
 
+  // Until the frame mounts, the skeleton already has the page's shape.
+  const pending = <ProtectedPendingSkeleton body={leafPendingView} />;
+
   if (resetting) {
-    return <ProtectedPendingSkeleton />;
+    return pending;
   }
 
   switch (frame) {
     case "member":
       return memberUser === undefined ? (
-        <ProtectedPendingSkeleton />
+        pending
       ) : (
         <ProtectedPendingInspectorScopeContext.Provider
           value={{
@@ -179,7 +184,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
             organizationId: memberUser.activeOrganizationId,
           }}
         >
-          <Suspense fallback={<ProtectedPendingSkeleton />}>
+          <Suspense fallback={pending}>
             <MemberFrame
               key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
               user={memberUser}
@@ -191,7 +196,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       );
     case "public":
       return (
-        <Suspense fallback={<ProtectedPendingSkeleton />}>
+        <Suspense fallback={pending}>
           <PublicFrame>{children}</PublicFrame>
         </Suspense>
       );
@@ -199,7 +204,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     case "unresolved":
       // Until the visitor is known, neither frame (nor anything it would
       // fetch) mounts.
-      return <ProtectedPendingSkeleton />;
+      return pending;
     case "neutral":
       // A page the same for every visitor shows inside the skeleton, so it
       // is there in the server render before either frame mounts.

@@ -49,13 +49,13 @@ export const resolveCourtCodeAlias = (code: string): string =>
 export const buildCourtMapFromEntries = (
   courts: readonly CourtEntry[],
 ): CourtMap => {
-  const result: CourtMap = { ...EXTRA_COURTS };
+  const result = new Map(Object.entries(EXTRA_COURTS));
 
   for (const court of courts) {
-    result[court.kod] = court.nazev;
+    result.set(court.kod, court.nazev);
   }
 
-  return result;
+  return Object.fromEntries(result);
 };
 
 export const normalizeCourtQuery = (value: string): string => {

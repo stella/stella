@@ -16,6 +16,13 @@ import {
   freeTierInvariantViolation,
 } from "./env-schema";
 
+test("invoice links require explicit deployment enablement", () => {
+  const schema = envApiServerSchema.FEATURE_INVOICE_LINKS;
+  expect(v.parse(schema, undefined)).toBe(false);
+  expect(v.parse(schema, "false")).toBe(false);
+  expect(v.parse(schema, "true")).toBe(true);
+});
+
 test("generated views require explicit deployment enablement", () => {
   expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, undefined)).toBe(
     false,
@@ -382,6 +389,37 @@ test("a free tier that resolves to OpenRouter without AI_PROVIDER needs the fast
     envApiInvariantViolation({
       ...resolved,
       OPENROUTER_FAST_TIER_API_KEY: "fast-key",
+    }),
+  ).toBeNull();
+});
+
+test("a free tier with a standard OpenRouter credential needs the fast one under any AI_PROVIDER", () => {
+  // Transcription offers OpenRouter models from the standard credential
+  // whatever the chat provider is, and a free organization dispatches them on
+  // the fast credential.
+  const otherProvider = {
+    ...environment,
+    AI_PROVIDER: "anthropic" as const,
+    FEATURE_FREE_TIER: true,
+    FEATURE_ORG_ACCESS_STATE: true,
+    FEATURE_ORG_SERVICE_BUDGETS: true,
+    FEATURE_ACTION_ADMISSION: true,
+    ORG_EVALUATION_PERIOD_DAYS: 14,
+    OPENROUTER_API_KEY: "standard-key",
+  };
+  expect(envApiInvariantViolation(otherProvider)).toContain(
+    "requires OPENROUTER_FAST_TIER_API_KEY",
+  );
+  expect(
+    envApiInvariantViolation({
+      ...otherProvider,
+      OPENROUTER_FAST_TIER_API_KEY: "fast-key",
+    }),
+  ).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...otherProvider,
+      OPENROUTER_API_KEY: undefined,
     }),
   ).toBeNull();
 });

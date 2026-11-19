@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
@@ -10,22 +11,94 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { registerCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   ensureCorpusProjectionDesiredStateTx,
   lockActiveCorpusProjectionSourceTx,
   reconcileCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { getPgErrorCode } from "@/api/lib/pg-error";
+import {
+  type GatedTestDb,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
 
 import {
+  lockCorpusIndexProjectionFlipTx,
   lockCorpusIndexProjectionMutationsTx,
   lockCorpusIndexProjectionPromotionTx,
+  lockCorpusIndexProjectionRevisionTx,
   readCorpusIndexProjectionRevisionTx,
 } from "./corpus-index-projection-revision";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+type ExecutingTransaction = {
+  execute: (query: ReturnType<typeof sql>) => Promise<unknown>;
+};
+
+/** Start a wait measured by the database's own clock. */
+const markWaitStart = async (tx: ExecutingTransaction): Promise<void> => {
+  await tx.execute(
+    sql`SELECT set_config('stella_test.wait_started', clock_timestamp()::text, true)`,
+  );
+};
+
+/** Whether the database's clock says the wait since the mark lay in [min, max). */
+const waitedWithin = async (
+  tx: ExecutingTransaction,
+  { min, max }: { min: string; max: string },
+): Promise<unknown> => {
+  const elapsed = sql`clock_timestamp() - current_setting('stella_test.wait_started')::timestamptz`;
+  return executedRows(
+    await tx.execute(
+      sql`SELECT ${elapsed} >= ${min}::interval AS at_least, ${elapsed} < ${max}::interval AS below`,
+    ),
+  ).at(0);
+};
+/**
+ * Hang guard for an exclusive take: far above the bound, so a take that waits
+ * unbounded fails on the statement timeout (57014) instead of answering busy.
+ */
+const EXCLUSIVE_HANG_GUARD = "8s";
+
+/**
+ * A projection writer holding the shared side of the fence in an open
+ * transaction until released. Every exclusive request queues behind it.
+ */
+const holdWriterFence = async (db: GatedTestDb) => {
+  const holding = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+  const done = db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL statement_timeout = '60s'`);
+    await tx.execute(
+      sql`SELECT public.lock_corpus_projection_mutations_shared()`,
+    );
+    holding.resolve(undefined);
+    await release.promise;
+  });
+  await holding.promise;
+  return {
+    release: async () => {
+      release.resolve(undefined);
+      await done;
+    },
+  };
+};
+
+const lockTimeoutOf = async (tx: ExecutingTransaction): Promise<unknown> =>
+  executedRows(
+    await tx.execute(
+      sql`SELECT pg_catalog.current_setting('lock_timeout') AS lock_timeout`,
+    ),
+  ).at(0);
+
+const UNREGISTERED_TARGET = {
+  family: "case_law",
+  generation: "case_law_v1",
+} as const;
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("corpus projection mutation fence (postgres)", () => {
@@ -267,8 +340,12 @@ if (!databaseUrl || !runPostgresTests) {
 
           const promotion = promotionDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+            // The order is under test, not the bound: wait past it.
+            await tx.execute(sql`SET LOCAL lock_timeout = '4s'`);
             promotionAttempted.resolve(undefined);
-            await lockCorpusIndexProjectionPromotionTx(tx, target);
+            expect(
+              (await lockCorpusIndexProjectionPromotionTx(tx, target)).isOk(),
+            ).toBe(true);
             promotionLocked.resolve(undefined);
           });
           await promotionAttempted.promise;
@@ -367,9 +444,12 @@ if (!databaseUrl || !runPostgresTests) {
 
           const olderMutation = olderDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-            const [row] = await tx.execute(sql<{ transactionId: string }>`
+            const [row] = await tx.execute(
+              sql<{ transactionId: string }>`
             SELECT pg_current_xact_id()::text AS "transactionId"
-          `);
+          `,
+              "objects",
+            );
             const transactionId = Number(row?.["transactionId"]);
             expect(Number.isSafeInteger(transactionId)).toBe(true);
             olderIdAssigned.resolve(transactionId);
@@ -387,9 +467,12 @@ if (!databaseUrl || !runPostgresTests) {
           const olderTransactionId = await olderIdAssigned.promise;
 
           const newerTransactionId = await newerDb.transaction(async (tx) => {
-            const [row] = await tx.execute(sql<{ transactionId: string }>`
+            const [row] = await tx.execute(
+              sql<{ transactionId: string }>`
             SELECT pg_current_xact_id()::text AS "transactionId"
-          `);
+          `,
+              "objects",
+            );
             await tx.insert(corpusIndexProjectionStates).values({
               ...target,
               entityId: entityIds[0],
@@ -402,10 +485,9 @@ if (!databaseUrl || !runPostgresTests) {
 
           const proof = proofDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-            const proofRevision = await lockCorpusIndexProjectionPromotionTx(
-              tx,
-              target,
-            );
+            const proofRevision = (
+              await lockCorpusIndexProjectionPromotionTx(tx, target)
+            ).unwrap();
             proofLocked.resolve(undefined);
             await releaseProof.promise;
             return proofRevision;
@@ -476,7 +558,6 @@ if (!databaseUrl || !runPostgresTests) {
           family: "case_law",
           generation: "case_law_v5",
         } as const;
-        const unrelatedGeneration = `case_law_v${suffix}`;
         const subject = { family: "case_law", entityId: decisionId } as const;
         const releaseWriter = Promise.withResolvers<undefined>();
         const writerLocked = Promise.withResolvers<undefined>();
@@ -511,14 +592,6 @@ if (!databaseUrl || !runPostgresTests) {
             language: "cs",
             contentHash: "a".repeat(64),
           });
-          await writerDb.insert(corpusIndexGenerations).values({
-            family: "case_law",
-            generation: unrelatedGeneration,
-            cluster: "q09",
-            manifestDigest: "a".repeat(64),
-            status: "building",
-          });
-
           const writer = writerDb.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
             const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
@@ -564,8 +637,8 @@ if (!databaseUrl || !runPostgresTests) {
         } finally {
           releaseWriter.resolve(undefined);
           const createdGenerations = targetGenerationCreated
-            ? [unrelatedGeneration, target.generation]
-            : [unrelatedGeneration];
+            ? [target.generation]
+            : [];
           await writerDb
             .update(corpusIndexGenerations)
             .set({ status: "retired" })
@@ -592,6 +665,178 @@ if (!databaseUrl || !runPostgresTests) {
                 inArray(corpusIndexGenerations.generation, createdGenerations),
               ),
             );
+        }
+      });
+    });
+
+    // timeout: three exclusive takes each wait the database's two-second bound.
+    test(
+      "an exclusive take behind a writer is busy after the database's bound, and the caller's transaction and lock_timeout are as they were",
+      async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: writerDb } = openClient();
+          const { db: proofDb } = openClient();
+          const writer = await holdWriterFence(writerDb);
+          try {
+            const observed = await proofDb.transaction(async (tx) => {
+              // The deployed default: no lock_timeout of the caller's own.
+              await tx.execute(sql`SET LOCAL lock_timeout = 0`);
+              await tx.execute(
+                sql`SELECT set_config('statement_timeout', ${EXCLUSIVE_HANG_GUARD}, true)`,
+              );
+              await markWaitStart(tx);
+              // Busy before any read: the target needs no registration.
+              const revision = await lockCorpusIndexProjectionRevisionTx(
+                tx,
+                UNREGISTERED_TARGET,
+              );
+              // The database waited its two-second bound, not zero and not
+              // without end.
+              const revisionWait = await waitedWithin(tx, {
+                min: "1800 milliseconds",
+                max: "6 seconds",
+              });
+              const promotion = await lockCorpusIndexProjectionPromotionTx(
+                tx,
+                UNREGISTERED_TARGET,
+              );
+              const flip = await lockCorpusIndexProjectionFlipTx(tx);
+              return {
+                outcomes: [revision, promotion, flip].map((outcome) =>
+                  outcome.isErr() ? outcome.error.reason : "held",
+                ),
+                revisionWait,
+                // A statement after the refusal runs: the transaction is usable.
+                after: await lockTimeoutOf(tx),
+              };
+            });
+            expect(observed.outcomes).toEqual([
+              "lock_unavailable",
+              "lock_unavailable",
+              "lock_unavailable",
+            ]);
+            expect(observed.revisionWait).toEqual({
+              at_least: true,
+              below: true,
+            });
+            expect(observed.after).toEqual({ lock_timeout: "0" });
+          } finally {
+            await writer.release();
+          }
+        });
+      },
+      { timeout: 30_000 },
+    );
+
+    test("a caller's own lock_timeout bounds the exclusive wait and stays in place, whether the take is refused or granted", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: writerDb } = openClient();
+        const { db: proofDb } = openClient();
+        const writer = await holdWriterFence(writerDb);
+        const released = { value: false };
+        try {
+          const observed = await proofDb.transaction(async (tx) => {
+            await tx.execute(sql`SET LOCAL lock_timeout = '300ms'`);
+            await tx.execute(
+              sql`SELECT set_config('statement_timeout', ${EXCLUSIVE_HANG_GUARD}, true)`,
+            );
+            await markWaitStart(tx);
+            const refused = await lockCorpusIndexProjectionFlipTx(tx);
+            // Refused on the caller's 300 ms, well before the database's 2 s.
+            const refusedWait = await waitedWithin(tx, {
+              min: "250 milliseconds",
+              max: "1800 milliseconds",
+            });
+            const afterRefusal = await lockTimeoutOf(tx);
+            await writer.release();
+            released.value = true;
+            await tx.execute(sql`SET LOCAL lock_timeout = 0`);
+            const granted = await lockCorpusIndexProjectionFlipTx(tx);
+            return {
+              refused: refused.isErr() ? refused.error.reason : "held",
+              refusedWait,
+              afterRefusal,
+              granted: granted.isErr() ? granted.error.reason : "held",
+              afterGrant: await lockTimeoutOf(tx),
+            };
+          });
+          expect(observed).toMatchObject({
+            refused: "lock_unavailable",
+            refusedWait: { at_least: true, below: true },
+            afterRefusal: { lock_timeout: "300ms" },
+            granted: "held",
+            afterGrant: { lock_timeout: "0" },
+          });
+        } finally {
+          if (!released.value) {
+            await writer.release();
+          }
+        }
+      });
+    });
+
+    test("a granted exclusive take survives its savepoint and holds writers back until the transaction ends", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: proofDb } = openClient();
+        const { db: writerDb } = openClient();
+        const fenceHeld = Promise.withResolvers<undefined>();
+        const releaseFence = Promise.withResolvers<undefined>();
+        const proof = proofDb.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('statement_timeout', ${EXCLUSIVE_HANG_GUARD}, true)`,
+          );
+          const fenced = await lockCorpusIndexProjectionFlipTx(tx);
+          expect(fenced.isOk()).toBe(true);
+          fenceHeld.resolve(undefined);
+          await releaseFence.promise;
+        });
+        try {
+          await fenceHeld.promise;
+          const writerAttempt = await Result.tryPromise({
+            try: async () =>
+              await writerDb.transaction(async (tx) => {
+                await tx.execute(sql`SET LOCAL lock_timeout = '300ms'`);
+                await tx.execute(
+                  sql`SELECT public.lock_corpus_projection_mutations_shared()`,
+                );
+              }),
+            catch: (cause) => cause,
+          });
+          expect(
+            writerAttempt.isErr() ? getPgErrorCode(writerAttempt.error) : "ok",
+          ).toBe("55P03");
+        } finally {
+          releaseFence.resolve(undefined);
+          await proof;
+        }
+      });
+    });
+
+    test("the raw exclusive function raises lock_not_available after the bound for a caller with no lock_timeout", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: writerDb } = openClient();
+        const { db: proofDb } = openClient();
+        const writer = await holdWriterFence(writerDb);
+        try {
+          // The statement an older caller sends, outside any savepoint.
+          const raw = await Result.tryPromise({
+            try: async () =>
+              await proofDb.transaction(async (tx) => {
+                await tx.execute(sql`SET LOCAL lock_timeout = 0`);
+                await tx.execute(
+                  sql`SELECT set_config('statement_timeout', ${EXCLUSIVE_HANG_GUARD}, true)`,
+                );
+                await tx.execute(
+                  sql`SELECT public.lock_corpus_projection_mutations_exclusive()`,
+                );
+              }),
+            catch: (cause) => cause,
+          });
+          expect(raw.isErr() ? getPgErrorCode(raw.error) : "granted").toBe(
+            "55P03",
+          );
+        } finally {
+          await writer.release();
         }
       });
     });

@@ -203,6 +203,7 @@ const callerContext = () => ({
   orgAIConfig,
   safeDb,
   scopedDb,
+  set: { headers: {}, status: 200 },
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
 });
@@ -334,6 +335,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
       recordAuditEvent: async () => undefined,
       request: new Request("http://localhost/v1/chat"),
       route: "/v1/chat" satisfies ApiRoutePath,
+      headers: {},
     }),
   );
   expect(result).toBeInstanceOf(Response);

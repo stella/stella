@@ -28,6 +28,15 @@ checks:
     # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
     run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
+  - name: Test CLI contract changeset guard over derived catalogs
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Derives two revisions' capability catalogs in a disposable clone of the checkout."
+    id: cli_contract_derived
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test CLI contract changeset guard over derived catalogs')) }}
+    # Two private revision exports each build the MCP Apps and the catalog.
+    run: bun test --timeout 300000 scripts/cli-contract-derived.test.ts
+
   - name: Generated files manifest guard
     env:
       CI_CHECK_KIND: STATIC
@@ -103,8 +112,9 @@ checks:
       CI_CHECK_CONTEXT: "CLI runtime pack test selects a real merge-base against origin/main."
     id: cli_runtime_parity
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-    # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
-    run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+    # Fresh packs derive the capability catalog from API sources after
+    # building the MCP Apps; the pack test sets its own budget.
+    run: bun test --timeout 240000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
   # Root script tests belong to no workspace package, so no scoped test
   # run reaches them. Other steps call some by path; this runs every
@@ -120,7 +130,7 @@ checks:
   - name: Test remaining repository scripts
     env:
       CI_CHECK_KIND: CONTEXTUAL
-      CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
+      CI_CHECK_CONTEXT: "Selects tests from the merge-base diff, static import closures, and declared data inputs and runs them untraced; the nightly script-test-declarations job verifies declarations."
     id: remaining_scripts
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
@@ -259,8 +269,11 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
+  # Advisory: the script warns and exits 0; the release gate runs it with
+  # --require. A failure of its own (a crash, its time budget) never blocks.
   - name: Release queue history guard
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+    continue-on-error: true
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Reads base history and current GitHub release state."
@@ -581,6 +594,18 @@ checks:
       bash scripts/install-actionlint.sh "$ACTIONLINT_VERSION" "$ACTIONLINT_SHA256" "$RUNNER_TEMP"
       ACTIONLINT_BIN="$RUNNER_TEMP/actionlint" bun scripts/check-actionlint-baseline.ts
 
+  - name: Action commit pins
+    timeout-minutes: 5
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Action commit pins')) }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Verifies changed action pins against authenticated GitHub commit objects."
+      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+      GITHUB_TOKEN: ${{ github.token }}
+    run: |
+      bun test scripts/check-action-commit-pins.test.ts
+      bash scripts/retry.sh bun scripts/check-action-commit-pins.ts "$BASE_SHA"
+
   - name: Workflow YAML
     env:
       CI_CHECK_KIND: STATIC
@@ -754,8 +779,7 @@ checks:
     # TanStack's own converters; a hand-written snapshot only agrees with
     # the engine until it changes. The guard rejects a snapshot literal in
     # a chat test outside that owner and outside `unsafeFixture(reason,
-    # ...)`, with a shrink-only ledger of the files that predate the
-    # builders. The --self-test run first proves the detector still fires.
+    # ...)`. The --self-test run first proves the detector still fires.
     run: |
       bun scripts/chat-fixture-guard.ts --self-test
       bun scripts/chat-fixture-guard.ts
@@ -821,17 +845,28 @@ checks:
     id: static_check_053
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Capability description ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_053 != 'true') }}
     # A capability's `description` is what an MCP client reads before
-    # deciding whether to call it, so every capability still missing one is
-    # listed by exact id in apps/api/capability-description-ledger.json. A
-    # capability missing prose that is not in the ledger fails (no new
-    # debt); a ledger entry whose capability now has prose, or no longer
-    # exists, fails as stale — so authoring a description means deleting its
-    # ledger line in the same change and the list can only shrink. The
-    # --self-test run first proves the detectors still fire, so a broken
+    # deciding whether to call it, so a capability without one fails. The
+    # --self-test run first proves the detector still fires, so a broken
     # guard cannot pass silently.
     run: |
       bun apps/api/scripts/capability-description-guard.ts --self-test
       bun apps/api/scripts/capability-description-guard.ts
+
+  - name: Capability file-transport ledger
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_129
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Capability file-transport ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_129 != 'true') }}
+    # A capability suppressed from the generic transport (a byte response or
+    # a required file input) is unreachable from the CLI and executors, so
+    # each one is listed by exact id in
+    # apps/api/capability-file-transport-ledger.json over the catalog derived
+    # in memory. A new suppression fails, and a capability made invocable
+    # again must delete its line, so the list can only shrink.
+    run: |
+      bun apps/api/scripts/capability-file-transport-guard.ts --self-test
+      bun apps/api/scripts/capability-file-transport-guard.ts
 
   - name: MCP coverage guard
     env:
@@ -843,9 +878,9 @@ checks:
     # typecheck-enforced McpExposure). This guard imports every handler
     # module, verifies each disposition is well-formed, that every
     # tool/covered reference names a real static MCP tool, that no registry
-    # tool is orphaned, and that the `pending` baseline only ever shrinks
-    # (a new pending endpoint fails). The --self-test run first proves the
-    # ratchet detectors still fire, so a broken guard cannot pass silently.
+    # tool is orphaned, and that no endpoint is `pending`. The --self-test
+    # run first proves the detectors still fire, so a broken guard cannot
+    # pass silently.
     run: |
       bun apps/api/scripts/mcp-coverage-guard.ts --self-test
       bun apps/api/scripts/mcp-coverage-guard.ts
@@ -931,6 +966,19 @@ checks:
     run: |
       bun test scripts/check-workflow-shells.test.ts
       bun scripts/check-workflow-shells.ts
+
+  # Bun keys each root patch to an exact name@version. When the package moves,
+  # bun.lock drops the patch and a frozen install puts the new version in
+  # unpatched, with a warning at most. Needs no dependency install.
+  - name: Patched dependencies apply
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_131
+    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Patched dependencies apply')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_131 != 'true') }}
+    run: |
+      bun test scripts/check-patched-dependencies.test.ts
+      bun scripts/check-patched-dependencies.ts
 
   # Self-test the release-channel script. The desktop release
   # pipeline relies on three independent steps deriving the
@@ -1475,6 +1523,18 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bun scripts/check-migration-order.ts "origin/$BASE_REF"
 
+  # A public-law column grant is required only after a production release
+  # has permitted it. The checkout's full history carries the release tags;
+  # without them the script fails rather than passes.
+  - name: Check grant release order against the production release
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check grant release order against the production release')) }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Compares the grant map with the newest production release tag."
+    run: |
+      bun test scripts/check-grant-release-order.test.ts
+      bun scripts/check-grant-release-order.ts
+
   # Self-test the dead-columns reference matcher: a regression here
   # would either silently stop flagging genuinely unreferenced columns
   # or start flagging live ones, in both cases undermining the
@@ -1525,6 +1585,16 @@ checks:
     run: |
       bun run check:office-fixture-metadata
       bun --filter @stll/docx-utils test:office-fixture-metadata
+
+  - name: Tailwind sources cover class-shipping dependencies
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_130
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tailwind sources cover class-shipping dependencies')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_130 != 'true') }}
+    run: |
+      bun test scripts/check-tailwind-sources.test.ts
+      bun run check:tailwind-sources
 
   # Fail PRs that change the desktop bridge surface without
   # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.

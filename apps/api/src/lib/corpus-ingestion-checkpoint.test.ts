@@ -403,7 +403,7 @@ describe("case-law source ingestion lease", () => {
           plainTextIngestionResult({
             caseNumber: "lifecycle/1/2026",
             sourceDocumentId: "lifecycle-document-1",
-            court: "Lifecycle Court",
+            court: "Nejvyšší soud",
             country: "CZE",
             language: "cs",
             fulltext: "Lifecycle decision text.",

@@ -4,9 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import {
-  DESKTOP_RUNNER_APPROVAL_MODES,
-  type DesktopRunnerApprovalMode,
-} from "@stll/api-contract/desktop-runner";
+  CHAT_LOCAL_RUN_APPROVAL_CEILINGS,
+  type ChatLocalRunApprovalCeiling,
+} from "@stll/api-contract/chat-run-target";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import {
@@ -33,8 +33,10 @@ import {
 } from "@/queries/organization-settings";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
-const isApprovalMode = (value: unknown): value is DesktopRunnerApprovalMode =>
-  DESKTOP_RUNNER_APPROVAL_MODES.some((mode) => mode === value);
+const isApprovalCeiling = (
+  value: unknown,
+): value is ChatLocalRunApprovalCeiling =>
+  CHAT_LOCAL_RUN_APPROVAL_CEILINGS.some((mode) => mode === value);
 
 /**
  * The most a coding agent running a chat on a member's computer may do
@@ -65,7 +67,7 @@ export const LocalRunApprovalCeilingCard = () => {
       handlerId: "LocalRunApprovalCeilingCard.mutation.useSettingsMutation",
     },
     // An agent must not raise its own limit, so this write has no capability.
-    mutationFn: async (maxApprovals: DesktopRunnerApprovalMode) =>
+    mutationFn: async (maxApprovals: ChatLocalRunApprovalCeiling) =>
       await invokeAppOnlyWrite(
         "organization-settings.local-runs.update",
         async () =>
@@ -117,7 +119,7 @@ export const LocalRunApprovalCeilingCard = () => {
           <Select
             disabled={!canEdit || mutation.isPending}
             onValueChange={(next) => {
-              if (isApprovalMode(next) && next !== selected) {
+              if (isApprovalCeiling(next) && next !== selected) {
                 mutation.mutate(next);
               }
             }}
@@ -129,7 +131,7 @@ export const LocalRunApprovalCeilingCard = () => {
               </SelectValue>
             </SelectTrigger>
             <SelectPopup>
-              {DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => (
+              {CHAT_LOCAL_RUN_APPROVAL_CEILINGS.map((mode) => (
                 <SelectItem key={mode} value={mode}>
                   {t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
                 </SelectItem>

@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Checks migration safety rules and coverage; no publication or deployment.",
+  "reviewedDigest": "10ac71711fe9c133fc52fb16b46593818567f2cef4cc2e431721cfa54f8ceadf"
+}

@@ -135,6 +135,10 @@ type TargetAccessResult =
       status: "available";
       loadBlocks: () => Promise<readonly Block[]>;
       loadTextPieces: () => Promise<readonly ReaderTextPiece[]>;
+      resolveHeldAnchors: (
+        anchors: readonly string[],
+        currentAnchors: ReadonlySet<string>,
+      ) => Promise<ReadonlyMap<string, string>>;
     }
   | { status: "refused"; result: InternalToolErrorResult };
 
@@ -173,6 +177,7 @@ const resolveTargetForAgent = async ({
         status: "available",
         loadBlocks: access.value.readBlocks,
         loadTextPieces: access.value.readTextPieces,
+        resolveHeldAnchors: access.value.resolveHeldAnchors,
       };
     case "not_found":
       return {
@@ -520,7 +525,34 @@ const handleCreateTool: TypedMcpToolHandler<
     });
   }
 
-  const located = locatePassages(blocks.value, passages);
+  // An anchor an agent read before the document's last reparse names the
+  // block now holding its text; one the redirects do not know is located as
+  // given, and the miss names the candidates.
+  const moved = await Result.tryPromise(
+    async () =>
+      await target.resolveHeldAnchors(
+        passages.flatMap(({ anchor }) =>
+          anchor === undefined ? [] : [anchor],
+        ),
+        new Set(blocks.value.map(({ anchorId }) => anchorId)),
+      ),
+  );
+  if (Result.isError(moved)) {
+    return internalFailureResult(
+      moved.error,
+      "mcp.handleCreateTool.anchor_redirects_error",
+    );
+  }
+  const located = locatePassages(
+    blocks.value,
+    passages.map((passage) => {
+      const current =
+        passage.anchor === undefined
+          ? undefined
+          : moved.value.get(passage.anchor);
+      return current === undefined ? passage : { ...passage, anchor: current };
+    }),
+  );
   if (located.status === "rejected") {
     return structuredErrorResult({
       code: "validation_error",

@@ -298,3 +298,34 @@ test("scoped adapter callbacks preserve receivers, arguments and rejections whil
   expect(await factoryRejected).toBe(failure);
   expect(getExceptionScope()).toBeUndefined();
 });
+
+describe("a page fetch that throws", () => {
+  const throwing = (cause: Error) =>
+    defineSourceAdapter({
+      ...plKioAdapter,
+      fetchPage: async () => await Promise.reject(cause),
+    });
+
+  test("keeps the cause's words in the failure a cycle stores", async () => {
+    const result = await throwing(
+      new TypeError("fetch failed: socket closed"),
+    ).fetchPage(null, {});
+
+    expect(Result.isError(result) && result.error.message).toBe(
+      "Adapter page fetch failed: fetch failed: socket closed",
+    );
+  });
+
+  test("keeps a thrown adapter failure as it was raised", async () => {
+    const refusal = new AdapterFetchError({
+      adapterKey: plKioAdapter.key,
+      cursor: null,
+      message: "publisher refused",
+      httpStatus: 403,
+    });
+
+    const result = await throwing(refusal).fetchPage(null, {});
+
+    expect(Result.isError(result) && result.error).toBe(refusal);
+  });
+});

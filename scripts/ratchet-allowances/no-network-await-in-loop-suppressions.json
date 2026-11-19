@@ -1,0 +1,5 @@
+{
+  "metric": "no-network-await-in-loop-suppressions",
+  "delta": 1,
+  "reason": "The trusted-list refresh script follows HTTP redirects through the guarded fetch with redirect: manual; each hop's URL is known only from the previous response, so the requests cannot run in parallel."
+}

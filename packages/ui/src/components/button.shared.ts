@@ -17,6 +17,10 @@ import type { ReactNode } from "react";
  * focus treatment on top.
  */
 export const BUTTON_VARIANT_TOKENS = {
+  composer: {
+    surface: "border-primary bg-foreground",
+    label: "text-background",
+  },
   default: {
     surface: "border-primary bg-primary",
     label: "text-primary-foreground",
@@ -72,12 +76,14 @@ export const BUTTON_SIZES = [
   "default",
   "icon",
   "icon-lg",
+  "icon-round",
   "icon-sm",
   "icon-xl",
   "icon-2xs",
   "icon-xs",
   // An action inside a line of text: no box of its own.
   "inline",
+  "inspector-row",
   "lg",
   "row",
   "sm",

@@ -105,6 +105,37 @@ export const isGrantableChatTool = (toolName: string): boolean =>
   getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.grantable;
 
 /**
+ * The installed connector an external tool (`mcp__<connector>__<tool>`)
+ * belongs to, or `null` for any other name. A grant on such a tool covers
+ * every tool of that connector.
+ */
+export const externalMcpConnectorSlugOf = (toolName: string): string | null => {
+  if (!toolName.startsWith(EXTERNAL_MCP_TOOL_NAME_PREFIX)) {
+    return null;
+  }
+  const parts = toolName.split("__");
+  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
+};
+
+/**
+ * Whether a grant stored for `grantedToolName` also answers an approval of
+ * `toolName`: the same tool, or another tool of the same external connector.
+ */
+export const isChatToolCoveredByGrantOn = (
+  grantedToolName: string,
+  toolName: string,
+): boolean => {
+  if (grantedToolName === toolName) {
+    return true;
+  }
+  const connector = externalMcpConnectorSlugOf(toolName);
+  return (
+    connector !== null &&
+    connector === externalMcpConnectorSlugOf(grantedToolName)
+  );
+};
+
+/**
  * How long a stored grant applies: the one conversation it was given in, or
  * every conversation of the user in the organization.
  */

@@ -19,6 +19,7 @@ import {
 import { bootstrapCorpusProjectionDesiredStateBatchTx } from "@/api/lib/legal-search/corpus-index-projection-bootstrap";
 import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -226,14 +227,21 @@ test("bootstrap and the canonical lock derive the same projection from the same 
         .from(corpusIndexProjectionStates)
         .where(eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID))
     ).at(0);
+  // Puts the decision back as never projected, which no writer does, so the
+  // seeding guard stands aside for the fixture.
   const reset = async () => {
-    await db
-      .delete(corpusIndexProjectionStates)
-      .where(eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID));
-    await db
-      .update(caseLawDecisions)
-      .set({ projectionEpoch: 0n })
-      .where(eq(caseLawDecisions.id, CZE_DECISION_ID));
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+      );
+      await tx
+        .delete(corpusIndexProjectionStates)
+        .where(eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID));
+      await tx
+        .update(caseLawDecisions)
+        .set({ projectionEpoch: 0n })
+        .where(eq(caseLawDecisions.id, CZE_DECISION_ID));
+    });
   };
   const bootstrap = async () =>
     await inTx(

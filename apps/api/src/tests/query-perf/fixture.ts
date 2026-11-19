@@ -77,7 +77,7 @@ const dumpQueryPerfDiagnostics = async ({
             })}\n`,
           );
         },
-        { label: `query perf ${profileId}: diagnostics`, timeoutMs: 5000 },
+        { label: "query-perf-diagnostics", timeoutMs: 5000 },
       );
     },
     { closeMode: "force" },
@@ -141,7 +141,7 @@ const dropQueryPerfDatabase = async ({
               sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)}`,
             ),
           {
-            label: `query perf ${profileId}: DROP DATABASE teardown`,
+            label: "query-perf-database-teardown",
             timeoutMs: 35_000,
           },
         );

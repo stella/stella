@@ -22,11 +22,18 @@ export type {
 export {
   CHAT_SKILL_CONTEXT_NEED,
   CHAT_SKILL_DOCUMENT,
+  SKILL_DRAFT_NAME_KINDS,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_RESOURCE_REFUSAL_CODE,
   SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
-export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
+export type {
+  ChatSkillContextNeed,
+  ChatSkillDocument,
+  SkillDraftNameKind,
+} from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
 export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
@@ -81,6 +88,7 @@ export {
   INVOICE_LINE_INPUT_LIMITS,
   INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
+  INVOICE_SEND_LIMITS,
   INVOICE_PAYMENT_INPUT_LIMITS,
   INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
@@ -295,6 +303,7 @@ export type {
   EntityFindScopeType,
   PropertyContentType,
 } from "./entity-find";
+export { PROPERTY_SORT_KINDS } from "./property-sort";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
@@ -361,14 +370,18 @@ export {
   API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  SAVED_SEARCH_NOT_FOUND_ERROR_CODE,
   IDEMPOTENCY_IN_PROGRESS_CODE,
   IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_HISTORY_CHANGED_ERROR_CODE,
   CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
@@ -491,7 +504,10 @@ export type {
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
   chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   RESOURCE_MUTATION_ID_HEADER,
   parseResourceMutationId,
@@ -509,6 +525,8 @@ export {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
@@ -574,6 +592,7 @@ export type {
   RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserEventRead,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";

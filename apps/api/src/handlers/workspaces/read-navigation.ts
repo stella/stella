@@ -28,7 +28,7 @@ const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE_AND_ARCHIVED: "active-and-archived",
 } as const;
 
-export const workspaceNavigationCursor = createTimestampIdCursorCodec({
+const workspaceNavigationCursor = createTimestampIdCursorCodec({
   column: workspaces.lastActivityAt,
   brandId: brandPersistedWorkspaceId,
 });

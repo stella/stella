@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { CommandIcon, SkillIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {
@@ -167,7 +168,14 @@ export const PromptSlashList = ({
     );
   }
 
-  let runningIndex = 0;
+  // Each group's first item index in render order, computed before render so
+  // no counter is mutated while the list renders.
+  const indexedGroups = groups.map((group, groupIndex) => ({
+    ...group,
+    start: groups
+      .slice(0, groupIndex)
+      .reduce((count, previous) => count + previous.items.length, 0),
+  }));
 
   return (
     <Popover modal={true} onOpenChange={setIsOpen} open={isOpen}>
@@ -180,13 +188,13 @@ export const PromptSlashList = ({
         side="top"
       >
         <div className="max-h-72 space-y-1 overflow-y-auto" ref={listRef}>
-          {groups.map((group) => (
+          {indexedGroups.map((group) => (
             <div key={group.section}>
               <div className="text-muted-foreground text-2xs px-2 py-1 font-medium tracking-wide uppercase">
                 {t(SECTION_LABEL_KEYS[group.section])}
               </div>
-              {group.items.map((item) => {
-                const index = runningIndex++;
+              {group.items.map((item, itemIndex) => {
+                const index = group.start + itemIndex;
                 const active = index === safeIndex;
                 return (
                   <Button
@@ -210,9 +218,12 @@ export const PromptSlashList = ({
                       <span className="text-foreground block text-xs font-medium">
                         {getItemName(item)}
                       </span>
-                      <span className="text-muted-foreground text-2xs line-clamp-2 leading-snug font-normal">
+                      <TruncatedText
+                        className="text-muted-foreground text-2xs leading-snug font-normal"
+                        lines={2}
+                      >
                         {getItemSecondary(item)}
-                      </span>
+                      </TruncatedText>
                     </span>
                   </Button>
                 );

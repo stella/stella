@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { zstdCompress } from "@/api/lib/compression";
 import { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
-import { projectionAstOfResult } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { projectionAstOfResult } from "@/api/lib/legal-search/corpus-index-projection-revision-block";
 import {
   parsePersistedCorpusAst,
   readCorpusAst,

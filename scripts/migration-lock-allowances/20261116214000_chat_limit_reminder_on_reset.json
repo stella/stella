@@ -1,0 +1,4 @@
+{
+  "add-column": "One text column with a constant default on chat_limit_reminders: a catalog-only change that rewrites no rows, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The on_reset CHECK is added NOT VALID without scanning existing reminders, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released."
+}

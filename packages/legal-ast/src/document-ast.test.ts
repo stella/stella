@@ -145,6 +145,100 @@ describe("document anchor resolution", () => {
   });
 });
 
+describe("an annex named by its number", () => {
+  const annexHeading = (anchorId: string, text: string): Block => ({
+    id: anchorId,
+    anchorId,
+    type: "heading",
+    level: 1,
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  });
+  // The tail of 134/2016 Sb. (public procurement): annexes after the
+  // signatures, each a heading the publisher anchors `pril_<n>`.
+  const procurement = [
+    annexHeading("par_272", "§ 272"),
+    annexHeading("pril_2", "Příloha č. 2 k zákonu č. 134/2016 Sb."),
+    annexHeading(
+      "pril_3",
+      "Příloha č. 3 k zákonu č. 134/2016 Sb.\nTrestné činy vylučující prokázání splnění základní způsobilosti podle § 74 odst. 1 písm. a)",
+    ),
+    {
+      id: "p-3",
+      anchorId: "pril_3-frag_8775881",
+      type: "paragraph",
+      inlines: [{ type: "text", text: "Pro účely prokázání …" }],
+      plainText: "Pro účely prokázání …",
+    },
+  ] satisfies Block[];
+
+  test("every spelling of the number reaches the publisher's annex anchor", () => {
+    for (const requested of [
+      "pril_3",
+      "priloha_3",
+      "příloha č. 3",
+      "Příloha 3",
+      "annex_3",
+    ]) {
+      expect({
+        requested,
+        heading: resolveDocumentHeadingAnchor(czech(procurement), requested)
+          ?.anchorId,
+      }).toEqual({ requested, heading: "pril_3" });
+    }
+  });
+
+  test("Slov-Lex's annex anchors, which embed the act, are reached by number", () => {
+    const slovak = [
+      annexHeading(
+        "prilohy.priloha-priloha_c_1_k_zakonu_c_108_2024_z_z",
+        "Príloha č. 1 k zákonu č. 108/2024 Z. z.",
+      ),
+      annexHeading(
+        "prilohy.priloha-priloha_c_2_k_zakonu_c_108_2024_z_z",
+        "Príloha č. 2 k zákonu č. 108/2024 Z. z.",
+      ),
+    ] satisfies Block[];
+    expect(
+      resolveDocumentHeadingAnchor(
+        { blocks: slovak, scheme: SLOV_LEX_ANCHORS },
+        "priloha_2",
+      )?.anchorId,
+    ).toBe("prilohy.priloha-priloha_c_2_k_zakonu_c_108_2024_z_z");
+  });
+
+  test("a number no annex carries, or two annexes carry, resolves nowhere", () => {
+    expect(
+      resolveDocumentHeadingAnchor(czech(procurement), "priloha_9"),
+    ).toBeNull();
+    const twoFirstAnnexes = [
+      annexHeading(
+        "prilohy.priloha-priloha_c_1_k_zakonu_c_108_2024_z_z",
+        "Príloha č. 1 k zákonu č. 108/2024 Z. z.",
+      ),
+      annexHeading(
+        "prilohy.priloha-priloha_c_1_k_zakonu_c_311_2001_z_z",
+        "Príloha č. 1 k zákonu č. 311/2001 Z. z.",
+      ),
+    ] satisfies Block[];
+    expect(
+      resolveDocumentHeadingAnchor(
+        { blocks: twoFirstAnnexes, scheme: SLOV_LEX_ANCHORS },
+        "priloha_1",
+      ),
+    ).toBeNull();
+  });
+
+  test("a compound designator is read whole", () => {
+    expect(
+      resolveDocumentHeadingAnchor(
+        czech([...procurement, annexHeading("pril_3:2", "Příloha")]),
+        "priloha 3:2",
+      )?.anchorId,
+    ).toBe("pril_3:2");
+  });
+});
+
 describe("isDocumentAst", () => {
   test("accepts a well-formed v1 document AST", () => {
     expect(isDocumentAst(documentAst)).toBe(true);

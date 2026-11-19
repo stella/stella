@@ -206,6 +206,30 @@ describe("clipboard copy error", () => {
   });
 });
 
+describe("clipboard dictation items", () => {
+  const copied = {
+    copiedAt: "2026-09-04T07:00:00.000Z",
+    groupId: null,
+    groupedAt: null,
+    id: "dictation-1",
+    name: null,
+    plainText: "Kupující uhradí kupní cenu do 30 dnů.",
+    sourceApp: null,
+    type: "text",
+  } as const;
+  const dictation = { ...copied, origin: "dictation" } as const;
+
+  test("accepts a text clip labelled as a dictation, and one without a label", () => {
+    expect(isClipboardItem(dictation)).toBe(true);
+    expect(isClipboardItem(copied)).toBe(true);
+  });
+
+  test("rejects an origin the native side never sends", () => {
+    expect(isClipboardItem({ ...dictation, origin: "copied" })).toBe(false);
+    expect(isClipboardItem({ ...dictation, origin: null })).toBe(false);
+  });
+});
+
 describe("clipboard image items", () => {
   const image = {
     byteSize: 2048,

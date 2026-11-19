@@ -9,6 +9,12 @@ license = "Apache-2.0"
 name = "local_file_creation_guard"
 required-features = ["local-file-guard-probe"]
 
+# The development stand-in computer `bun run agent:up -- --local-runner`
+# starts; the feature refuses a release build.
+[[example]]
+name = "runner_stand_in"
+required-features = ["dev-runner-stand-in"]
+
 [lib]
 name = "stella_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -54,11 +60,14 @@ unsafe_code = "forbid"
 
 # The raw AppKit/WebKit, Security.framework and CryptoAPI calls this crate
 # cannot express without `unsafe` live in the workspace members below, behind
-# safe APIs.
+# safe APIs. A smart card vendor's PKCS #11 module never loads into this
+# crate: `stella-pkcs11-helper` loads it in a process of its own.
 [workspace]
 members = [
   "crates/macos-park",
   "crates/macos-signing",
+  "crates/pkcs11",
+  "crates/pkcs11-helper",
   "crates/signing-core",
   "crates/windows-signing",
 ]
@@ -102,7 +111,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clipboard-rs = { version = "0.3.5", default-features = false, features = [
   "image",
 ] }
-csscolorparser = "=0.9.0"
+csscolorparser = "=0.9.1"
 dirs = "7"
 flate2 = "1"
 futures-util = "0.3"
@@ -138,6 +147,7 @@ serde_json = "1"
 sys-locale = "0.3"
 sha2 = "0.11"
 tar = { version = "0.4", default-features = false }
+stella-desktop-pkcs11 = { path = "crates/pkcs11", version = "0.0.1" }
 stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
 # `__rustls-tls` takes the client configuration the runner builds with the
@@ -192,7 +202,7 @@ stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1
 # The targets `build.rs` marks with `cfg(dictation)`.
 [target.'cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "windows"))'.dependencies]
 cpal = "0.18"
-transcribe-cpp = "=0.4.1"
+transcribe-cpp = "=0.4.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
@@ -205,6 +215,7 @@ winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [features]
 allocation-tests = []
+dev-runner-stand-in = []
 local-file-guard-probe = []
 
 [dev-dependencies]

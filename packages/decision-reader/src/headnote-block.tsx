@@ -4,6 +4,12 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 
 import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 
 import { CourtTierBadge } from "./court-tier-badge";
 import { useReaderMessages } from "./reader-adapters";
@@ -91,13 +97,13 @@ export const HeadnoteBlock = ({
   const [openedByReader, setOpenedByReader] = useState(defaultOpen);
 
   return (
-    // The mark shares the summary's row without being inside it: the
-    // `<summary>` is itself the section's toggle, and a control nested in it
+    // The mark shares the label's row without being inside it: the
+    // disclosure trigger is itself a control, and a control nested in it
     // would be interactive content inside interactive content.
     // It comes first in the DOM so assistive technology announces the origin
     // before the headnote it describes, not after the whole section.
     <div className="relative mt-4 first:mt-0" data-slot="headnote-block">
-      {/* Same type as the summary, so both sit on one line at every size. */}
+      {/* The origin and label share the same document-label scale. */}
       <span
         className="reader-chrome text-foreground-disabled absolute end-0 top-0 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase"
         data-reader-chrome=""
@@ -105,26 +111,30 @@ export const HeadnoteBlock = ({
       >
         <OriginMark origin={origin} />
       </span>
-      <details
+      <Collapsible
         data-reader-chrome={origin.type === "court" ? undefined : ""}
-        onToggle={(event) => {
+        onOpenChange={(nextOpen) => {
           // Held open by a find match, not by the reader: recording it as
           // their choice would leave the section open once the match moves on.
           if (forceOpen) {
             return;
           }
-          setOpenedByReader(event.currentTarget.open);
+          setOpenedByReader(nextOpen);
         }}
         open={openedByReader || forceOpen}
       >
-        <summary
-          className="reader-chrome text-muted-foreground cursor-pointer pe-20 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase select-none marker:text-current"
+        <div
+          className="reader-chrome pe-20 text-[calc(0.75rem*var(--reader-text-scale))]"
           data-reader-chrome=""
         >
-          {label}
-        </summary>
-        <div className="mt-2">{children}</div>
-      </details>
+          <CollapsibleTrigger render={<Button size="inline" variant="muted" />}>
+            {label}
+          </CollapsibleTrigger>
+        </div>
+        <CollapsiblePanel>
+          <div className="mt-2">{children}</div>
+        </CollapsiblePanel>
+      </Collapsible>
     </div>
   );
 };

@@ -195,7 +195,7 @@ describe("direct OpenAI GPT-5.6 family", () => {
     expect(getModelDisplayMetadata("gpt-5.6-sol")).toEqual({
       displayName: "GPT-5.6 Sol",
       iconProvider: "openai",
-      supersededBy: "gpt-6.1-sol",
+      supersededBy: "gpt-6.2-sol",
     });
     expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
     expect(getContextWindowTokens("gpt-5.6-sol")).toBe(

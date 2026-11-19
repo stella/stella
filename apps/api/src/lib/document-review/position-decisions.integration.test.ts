@@ -99,8 +99,8 @@ const seedRun = async (
     contentSha256: CONTENT_SHA256,
     basis: runBasis,
     status: "completed",
-    startedAt: new Date(),
-    finishedAt: new Date(),
+    startedAt: new Date("2026-04-30T09:00:00.000Z"),
+    finishedAt: new Date("2026-04-30T09:01:00.000Z"),
   });
   return runId;
 };

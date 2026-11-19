@@ -116,7 +116,14 @@ describe("chunked organization file deletion", () => {
     );
     await hold.reached;
     try {
-      expect(await committedBytes()).toBe(2n);
+      // The held chunk keeps its legal-hold fence transaction open until its
+      // storage deletes settle, and this database serves one connection, so
+      // the earlier chunk is read from storage here and from usage below.
+      expect(
+        keys
+          .slice(0, 50)
+          .filter((key) => fake.objects.has(`${envBase.S3_BUCKET}/${key}`)),
+      ).toEqual([]);
     } finally {
       hold.release();
       await deleting;

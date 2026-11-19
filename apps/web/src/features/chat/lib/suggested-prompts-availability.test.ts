@@ -78,6 +78,24 @@ describe("resolveSuggestedPromptsAvailability", () => {
     }
   });
 
+  test("offers no follow-up on a turn paused on its budget", () => {
+    expect(
+      resolveSuggestedPromptsAvailability({
+        ...ELIGIBLE_INPUT,
+        lastMessage: {
+          ...ELIGIBLE_INPUT.lastMessage,
+          metadata: {
+            turnOutcome: {
+              type: "paused",
+              reason: "tool-calls",
+              toolCalls: 50,
+            },
+          },
+        },
+      }),
+    ).toEqual({ status: "blocked", reason: "terminal-outcome" });
+  });
+
   test("keeps persisted human interactions user-owned", () => {
     for (const interaction of [
       { type: "ask-user", toolCallId: "ask-1" },

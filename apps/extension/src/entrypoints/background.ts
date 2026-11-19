@@ -2,18 +2,34 @@ import { panic } from "better-result";
 import { defineBackground } from "wxt/utils/define-background";
 
 import {
+  BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  type BrowserControlErrorCode,
   type BrowserControlResult,
   type BrowserExtensionRequest,
   type BrowserExtensionResponse,
   parseBrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { browserControlError } from "@stll/browser-page/browser-control-result";
+import {
+  SIGN_IN_POLICY,
+  type SignInPolicy,
+} from "@stll/browser-page/sign-in-policy";
 
-import { hasAllSiteAccess, removeAllSiteAccess } from "../lib/access";
-import { browserControlError } from "../lib/browser-control-result";
+import {
+  hasAllSiteAccess,
+  hasDesktopLinkAccess,
+  removeAllSiteAccess,
+} from "../lib/access";
 import { storedCommandBudget } from "../lib/command-budget";
+import { CONTROL_TRANSPORT } from "../lib/control-holder";
+import {
+  admitControl,
+  CONTROL_ADMISSION,
+  takeOverControl,
+} from "../lib/control-owner";
 import { createControlSession } from "../lib/control-session";
 import {
   controllerForSender,
@@ -23,12 +39,26 @@ import {
   pairStellaTab,
   readBrowserController,
 } from "../lib/controller";
+import { desktopCommandRefusal } from "../lib/desktop-commands";
+import {
+  createDesktopLink,
+  DESKTOP_LINK_ALARM,
+  type DesktopCommand,
+  desktopControllerId,
+  realDesktopLinkTimer,
+} from "../lib/desktop-link";
 import {
   enforceStoppedDownload,
   holdDownloadForJudgement,
   judgeDownload,
   loadDownloadScope,
+  noteNavigation,
+  reportDeliveredDownload,
+  saveShownPdf,
+  setDownloadReporter,
   setDownloadScope,
+  setShownPdfReader,
+  type SuggestFilename,
   takeDownloadNotices,
 } from "../lib/download-guard";
 import { executeAtMostOnce } from "../lib/execution-ledger";
@@ -44,6 +74,7 @@ import {
   POPUP_PORT_NAME,
   type PopupResponse,
 } from "../lib/popup-request";
+import { createOffscreenShownPdfReader } from "../lib/shown-pdf-reader";
 import {
   forgetStellaTab,
   rememberStellaTab,
@@ -142,7 +173,7 @@ type FilenameEvents = {
   addListener: (
     listener: (
       download: chrome.downloads.DownloadItem,
-      suggest: () => void,
+      suggest: SuggestFilename,
     ) => boolean,
   ) => void;
 };
@@ -170,6 +201,7 @@ const registerOptionalListeners = (): void => {
     });
     chrome.downloads.onChanged.addListener((delta) => {
       enforceStoppedDownload(delta).catch(() => undefined);
+      reportDeliveredDownload(delta).catch(() => undefined);
     });
   }
   if (!navigationTargetsRegistered && Reflect.has(chrome, "webNavigation")) {
@@ -180,47 +212,93 @@ const registerOptionalListeners = (): void => {
     chrome.webNavigation.onCommitted.addListener((details) => {
       sortCommittedNavigation(details).catch(() => undefined);
     });
+    // A download a navigation turns into is traced to the tab that made it.
+    chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+      noteNavigation(details).catch(() => undefined);
+    });
   }
 };
 
 type CommandRequest = Extract<BrowserExtensionRequest, { type: "command" }>;
 
-const runCommand = async (
-  message: CommandRequest,
-  senderUrl: string,
-): Promise<BrowserControlResult> => {
-  const execution = await session.runCommand(message.turnId, async (signal) => {
-    // Checked inside the session: a pairing change that was queued ahead of
-    // this command has been applied by now.
-    const controller = await controllerForSender(senderUrl);
-    if (!controller || controller.controllerId !== message.controllerId) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.staleController,
-        "Connect stella from the extension popup before using browser actions.",
-      );
-    }
-    if (!(await hasAllSiteAccess())) {
-      return browserControlError(
-        BROWSER_CONTROL_ERROR_CODE.permissionDenied,
-        "Grant stella access to websites from the extension popup.",
-      );
-    }
-    return await executeAtMostOnce({
-      command: message.command,
-      controllerId: message.controllerId,
-      execute: async () =>
-        await executeBrowserCommand(message.controllerId, message.command, {
-          budget: storedCommandBudget({
-            command: message.command,
-            controllerId: message.controllerId,
-            turnId: message.turnId,
+type ControlledCommand = Pick<
+  CommandRequest,
+  "command" | "controllerId" | "observedTab" | "toolCallId" | "turnId"
+> & {
+  /**
+   * Checked inside the session, once changes queued ahead of the command
+   * have been applied: refuses the command, or admits it, with the takeover
+   * an `open` runs once nothing refused it.
+   */
+  admit: () => Promise<Admission>;
+  signIn: SignInPolicy;
+};
+
+type Admission =
+  | { type: "refused"; result: BrowserControlResult }
+  | { type: "admitted"; takeOver: (() => Promise<void>) | null };
+
+const ADMITTED = { takeOver: null, type: "admitted" } as const;
+
+const refused = (
+  code: BrowserControlErrorCode,
+  message: string,
+): Admission => ({
+  result: browserControlError(code, message),
+  type: "refused",
+});
+
+/** One command from either transport, through the one control session. */
+const runControlledCommand = async ({
+  admit,
+  command,
+  controllerId,
+  observedTab,
+  signIn,
+  toolCallId,
+  turnId,
+}: ControlledCommand): Promise<BrowserControlResult> => {
+  const execution = await session.runCommand(
+    { controllerId, turnId },
+    async (signal) => {
+      const admission = await admit();
+      switch (admission.type) {
+        case "refused":
+          return admission.result;
+        case "admitted":
+          break;
+        default:
+          admission satisfies never;
+          return panic("Unhandled command admission");
+      }
+      if (!(await hasAllSiteAccess())) {
+        return browserControlError(
+          BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+          "Grant stella access to websites from the extension popup.",
+        );
+      }
+      return await executeAtMostOnce({
+        command,
+        controllerId,
+        execute: async () =>
+          await executeBrowserCommand(controllerId, command, {
+            budget: storedCommandBudget({ command, controllerId, turnId }),
+            observedTab,
+            // Only a desktop chat holding the browser has it saved; the
+            // read stands whatever the save does.
+            onPdfShown: async (shown) => {
+              await saveShownPdf({ ...shown, controllerId, turnId }).catch(
+                () => undefined,
+              );
+            },
+            signal,
+            signIn,
+            takeOver: admission.takeOver,
           }),
-          observedTab: message.observedTab,
-          signal,
-        }),
-      toolCallId: message.toolCallId,
-    });
-  });
+        toolCallId,
+      });
+    },
+  );
   return execution.status === "completed"
     ? execution.result
     : browserControlError(
@@ -228,6 +306,113 @@ const runCommand = async (
         "Another approved browser action is still running. Wait for it to finish, then retry.",
       );
 };
+
+const runCommand = async (
+  message: CommandRequest,
+  senderUrl: string,
+): Promise<BrowserControlResult> =>
+  await runControlledCommand({
+    admit: async () => {
+      const controller = await controllerForSender(senderUrl);
+      if (controller?.controllerId !== message.controllerId) {
+        return refused(
+          BROWSER_CONTROL_ERROR_CODE.staleController,
+          "Connect stella from the extension popup before using browser actions.",
+        );
+      }
+      // While a desktop chat holds the browser, this connection lists,
+      // switches to and acts on nothing.
+      const admission = await admitControl({
+        action: message.command.action,
+        controllerId: controller.controllerId,
+        transport: CONTROL_TRANSPORT.web,
+      });
+      return admission === CONTROL_ADMISSION.holds
+        ? ADMITTED
+        : refused(
+            BROWSER_CONTROL_ERROR_CODE.staleController,
+            "stella desktop is using the browser now. Connect stella again from the extension popup to take it back.",
+          );
+    },
+    command: message.command,
+    controllerId: message.controllerId,
+    observedTab: message.observedTab,
+    signIn: SIGN_IN_POLICY.withholdSecrets,
+    toolCallId: message.toolCallId,
+    turnId: message.turnId,
+  });
+
+/**
+ * A command from a coding agent on this computer. Chrome only starts the
+ * host for this extension and the member allowed it, so there is no pairing
+ * to check. A desktop chat that does not hold the browser may only open a
+ * page, which takes the browser over once nothing refused it: the previous
+ * holder loses its controlled tab and its tabs go back to the member.
+ */
+const runDesktopCommand = async (
+  message: DesktopCommand,
+): Promise<BrowserControlResult> => {
+  const controllerId = desktopControllerId(message.controllerId);
+  const { command } = message;
+  const refusal = desktopCommandRefusal(command);
+  if (refusal !== null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.invalidCommand,
+      refusal,
+    );
+  }
+  const result = await runControlledCommand({
+    admit: async () => {
+      const admission = await admitControl({
+        action: command.action,
+        controllerId,
+        transport: CONTROL_TRANSPORT.desktop,
+      });
+      switch (admission) {
+        case CONTROL_ADMISSION.holds:
+          return ADMITTED;
+        case CONTROL_ADMISSION.takesOver:
+          return {
+            takeOver: async () => {
+              await takeOverControl({
+                controllerId,
+                transport: CONTROL_TRANSPORT.desktop,
+              });
+            },
+            type: "admitted",
+          };
+        case CONTROL_ADMISSION.refused:
+          return refused(
+            BROWSER_CONTROL_ERROR_CODE.noControlledTab,
+            "Another chat is using the browser. Open a page to take it over.",
+          );
+        default:
+          admission satisfies never;
+          return panic("Unhandled control admission");
+      }
+    },
+    command,
+    controllerId,
+    observedTab: message.observedTab,
+    signIn: SIGN_IN_POLICY.handToMember,
+    toolCallId: message.toolCallId,
+    turnId: message.turnId,
+  });
+  // A web chat that had the tab hears it no longer does.
+  await notifyController();
+  return result;
+};
+
+const desktopLink = createDesktopLink({
+  cancel: ({ controllerId, turnId }) => {
+    session.stopTurn({
+      controllerId: desktopControllerId(controllerId),
+      turnId,
+    })();
+  },
+  runCommand: runDesktopCommand,
+  timer: realDesktopLinkTimer,
+});
 
 const handleWebMessage = (
   rawMessage: unknown,
@@ -250,7 +435,10 @@ const handleWebMessage = (
   if (message.type === "cancel") {
     // The target is fixed on receipt; checking the sender reads storage,
     // and a command admitted meanwhile is not the one being stopped.
-    const stop = session.stopTurn(message.turnId);
+    const stop = session.stopTurn({
+      controllerId: message.controllerId,
+      turnId: message.turnId,
+    });
     controllerForSender(senderUrl)
       .then((controller) => {
         if (controller?.controllerId === message.controllerId) {
@@ -332,7 +520,21 @@ const handlePopupRequest = async (
         if (controller === null || tab === null) {
           return { status: "unsupported-tab" };
         }
-        const adopted = await adoptControlledTab(controller.controllerId, tab);
+        // Handing a tab over takes the browser back from a desktop chat.
+        const { controllerId } = controller;
+        const adopted = await adoptControlledTab(
+          controllerId,
+          tab,
+          (await admitControl({
+            action: BROWSER_CONTROL_ACTION.snapshot,
+            controllerId,
+            transport: CONTROL_TRANSPORT.web,
+          })) === CONTROL_ADMISSION.holds
+            ? null
+            : async () => {
+                await takeOverControl({ transport: CONTROL_TRANSPORT.web });
+              },
+        );
         if (adopted.status === "unsupported-page") {
           return { status: "unsupported-page" };
         }
@@ -360,9 +562,33 @@ const handlePopupRequest = async (
 
 export default defineBackground(() => {
   onContainedTabsChanged(setDownloadScope);
+  setDownloadReporter(desktopLink.downloadReporter);
+  setShownPdfReader(createOffscreenShownPdfReader());
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
+  // Every worker start reconnects: Chrome ends the host with the worker.
+  desktopLink.connect().catch(() => undefined);
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === DESKTOP_LINK_ALARM) {
+      desktopLink.connect().catch(() => undefined);
+    }
+  });
+  chrome.permissions.onAdded.addListener(() => {
+    desktopLink.connect().catch(() => undefined);
+  });
+  chrome.permissions.onRemoved.addListener(() => {
+    // A desktop command already running stops and answers on the
+    // still-open link before it closes. Access is read once that work has
+    // settled: granted again meanwhile, the open link stays.
+    session
+      .change(async () => {
+        if (!(await hasDesktopLinkAccess())) {
+          await desktopLink.disconnect();
+        }
+      })
+      .catch(() => undefined);
+  });
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     handleTabRemoved(tabId).catch(() => undefined);

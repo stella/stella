@@ -1,0 +1,25 @@
+{
+  "startupPageCode": [],
+  "coldLoadHops": [
+    {
+      "route": "/knowledge/playbooks",
+      "module": "src/routes/knowledge/-member/member-playbooks-page.tsx",
+      "reason": "The component imports member-playbooks-page with a dynamic import."
+    },
+    {
+      "route": "/knowledge/templates",
+      "module": "src/routes/knowledge/-member/member-templates-page.tsx",
+      "reason": "The component imports member-templates-page with a dynamic import."
+    },
+    {
+      "route": "/knowledge/tools",
+      "module": "src/routes/knowledge/-member/member-tools-page.tsx",
+      "reason": "The component imports member-tools-page with a dynamic import."
+    },
+    {
+      "route": "/knowledge/tools_/$entry",
+      "module": "src/routes/knowledge/-member/member-skill-editor-page.tsx",
+      "reason": "The component imports member-skill-editor-page with a dynamic import."
+    }
+  ]
+}

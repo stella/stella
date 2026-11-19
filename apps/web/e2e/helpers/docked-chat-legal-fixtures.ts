@@ -13,6 +13,8 @@ import {
 
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
+import { apiJson, respond } from "./route-mock";
+import type { ApiOk } from "./route-mock";
 
 const {
   decision,
@@ -129,40 +131,83 @@ export const dockedLegalPath = (template: string): string => {
 
 /** Exact HTTP reads only: the real route, reader, runtime and composer mount. */
 export const installDockedLegalFixtures = async (page: Page) => {
+  const statuteRead = (value: ApiOk<"v1/law/statutes/:documentId", "get">) =>
+    apiJson("v1/law/statutes/:documentId", "get", value);
+  const decisionRead = (value: ApiOk<"v1/case/decisions/:decisionId", "get">) =>
+    apiJson("v1/case/decisions/:decisionId", "get", value);
+  const decisionBySlug = (
+    value: ApiOk<"v1/case/decisions/by-slug/:slug", "get">,
+  ) => apiJson("v1/case/decisions/by-slug/:slug", "get", value);
+  const versionsRead = apiJson(
+    "v1/law/statutes/:documentId/versions",
+    "get",
+    versions,
+  );
   const reads = [
-    { pathname: `/v1/law/statutes/${statute.id}`, body: statute },
-    { pathname: `/v1/law/statutes/by-slug/${statute.slug}`, body: statute },
-    { pathname: `/v1/law/statutes/${statute.id}/versions`, body: versions },
-    { pathname: `/v1/law/statutes/${olderStatute.id}`, body: olderStatute },
+    { pathname: `/v1/law/statutes/${statute.id}`, reply: statuteRead(statute) },
+    {
+      pathname: `/v1/law/statutes/by-slug/${statute.slug}`,
+      reply: apiJson("v1/law/statutes/by-slug/:slug", "get", statute),
+    },
+    {
+      pathname: `/v1/law/statutes/${statute.id}/versions`,
+      reply: versionsRead,
+    },
+    {
+      pathname: `/v1/law/statutes/${olderStatute.id}`,
+      reply: statuteRead(olderStatute),
+    },
     {
       pathname: `/v1/law/statutes/${olderStatute.id}/versions`,
-      body: versions,
+      reply: versionsRead,
     },
     ...[decision, bilingualDecision, bilingualCzechDecision].flatMap(
       (value) => [
-        { pathname: `/v1/case/decisions/${value.id}`, body: value },
+        {
+          pathname: `/v1/case/decisions/${value.id}`,
+          reply: decisionRead(value),
+        },
         {
           pathname: `/v1/case/decisions/${value.id}/provisions`,
-          body: noProvisions,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/provisions",
+            "get",
+            noProvisions,
+          ),
         },
         {
           pathname: `/v1/case/decisions/${value.id}/citations`,
-          body: noCitations,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/citations",
+            "get",
+            noCitations,
+          ),
         },
         {
           pathname: `/v1/case/decisions/${value.id}/citations/leading`,
-          body: noLeadingCitations,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/citations/leading",
+            "get",
+            noLeadingCitations,
+          ),
         },
         {
           pathname: `/v1/case/decisions/${value.id}/citations/summary`,
-          body: citationSummary,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/citations/summary",
+            "get",
+            citationSummary,
+          ),
         },
       ],
     ),
-    { pathname: `/v1/case/decisions/by-slug/${decision.slug}`, body: decision },
+    {
+      pathname: `/v1/case/decisions/by-slug/${decision.slug}`,
+      reply: decisionBySlug(decision),
+    },
     {
       pathname: `/v1/case/decisions/by-slug/${bilingualDecision.slug}`,
-      body: bilingualDecision,
+      reply: decisionBySlug(bilingualDecision),
     },
   ];
   await page.route(
@@ -178,23 +223,23 @@ export const installDockedLegalFixtures = async (page: Page) => {
       const read =
         reads.find(({ pathname }) => pathname === url.pathname) ??
         panic(`Unregistered legal fixture read ${url.pathname}`);
-      const body = (() => {
+      const reply = (() => {
         if (
           url.pathname ===
             `/v1/case/decisions/by-slug/${bilingualDecision.slug}` &&
           url.searchParams.get("language") === "cs"
         ) {
-          return bilingualCzechDecision;
+          return decisionBySlug(bilingualCzechDecision);
         }
         if (
           url.pathname === `/v1/law/statutes/by-slug/${statute.slug}` &&
           url.searchParams.get("asOf") === olderStatute.versionValidFrom
         ) {
-          return olderStatute;
+          return apiJson("v1/law/statutes/by-slug/:slug", "get", olderStatute);
         }
-        return read.body;
+        return read.reply;
       })();
-      await route.fulfill({ json: body });
+      await respond(route, reply);
     },
   );
 };

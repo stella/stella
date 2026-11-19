@@ -1,6 +1,7 @@
 // The native Button's look as class names, apart from ./button.native.tsx so
 // it can be read without React Native.
 
+import { TOOLBAR_ROW_HEIGHT } from "../inspector/layout-tokens";
 import {
   BUTTON_PLAIN_VARIANT,
   BUTTON_VARIANT_TOKENS,
@@ -29,6 +30,7 @@ const SIZES = {
   },
   icon: { box: `${CONTROL} size-11 rounded-lg`, label: "", slop: 0 },
   "icon-lg": { box: `${CONTROL} size-12 rounded-lg`, label: "", slop: 0 },
+  "icon-round": { box: `${CONTROL} size-7 rounded-full`, label: "", slop: 8 },
   "icon-sm": { box: `${CONTROL} size-8 rounded-lg`, label: "", slop: 6 },
   "icon-xl": { box: `${CONTROL} size-11 rounded-full`, label: "", slop: 0 },
   "icon-2xs": { box: `${CONTROL} size-5 rounded-md`, label: "", slop: 12 },
@@ -36,6 +38,11 @@ const SIZES = {
   // An action inside a line of text: no height, padding or border of its
   // own, so it sits at the size of its label; `slop` reaches the target.
   inline: { box: "items-center gap-1", label: "", slop: 8 },
+  "inspector-row": {
+    box: `${CONTROL} ${TOOLBAR_ROW_HEIGHT} justify-start gap-2 rounded-none px-3`,
+    label: "",
+    slop: 0,
+  },
   lg: { box: `${CONTROL} min-h-12 gap-2 rounded-lg px-5`, label: "", slop: 0 },
   // One row of a list: full width, its content leading and top-aligned (a
   // glyph stays beside a title's first line), as tall as the content plus
@@ -72,6 +79,7 @@ const SIZES = {
  * held (a row open beside the list, a chosen option).
  */
 const PRESS = {
+  composer: { pressed: "active:opacity-80", selected: "" },
   default: { pressed: "active:opacity-80", selected: "" },
   destructive: { pressed: "active:bg-destructive/18", selected: "" },
   "destructive-outline": { pressed: "active:bg-destructive/4", selected: "" },

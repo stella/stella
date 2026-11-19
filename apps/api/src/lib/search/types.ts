@@ -221,7 +221,7 @@ export type ContactGlobalSearchHit = GlobalSearchHitBase & {
   contactType: ContactType;
 };
 
-type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
+export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
   courtAbbreviation: string | null;
   resource: ResourceRef<"case_law_decision">;

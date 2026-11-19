@@ -8,11 +8,11 @@ import {
   isCaseLawDecisionId,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { referenceFromHref } from "@stll/api-contract/chat-reference-href";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 
 import { isOpaquePersistedChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
-import { referenceFromHref } from "@/components/references/reference.logic";
 import type { ChatMessage } from "@/lib/api-contract";
 
 /** Uses the same CommonMark/GFM link grammar as the answer renderer, excluding code and unused definitions. */

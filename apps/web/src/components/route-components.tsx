@@ -10,10 +10,11 @@ import { Button } from "@stll/ui/button";
 import { MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
-import { CopyActionButton } from "@/components/copy-action-button";
+import { CopyControl } from "@/components/copy-control";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import {
   isNetworkError,
@@ -415,11 +416,14 @@ const UnexpectedRouteError = ({
             <span className="text-muted-foreground text-xs">
               {t("routeError.reference")}
             </span>
-            <bdi className="text-foreground truncate font-mono text-sm">
+            <TruncatedText
+              className="text-foreground font-mono text-sm"
+              render={<bdi />}
+            >
               {visibleErrorReference}
-            </bdi>
+            </TruncatedText>
           </div>
-          <CopyActionButton
+          <CopyControl
             disabled={errorReference === null}
             iconClassName="size-4"
             iconOnly
@@ -504,17 +508,28 @@ type DefaultPendingComponentProps = {
   announce?: boolean | undefined;
 };
 
+/** How a pending view rendered before the intl provider mounts announces
+ *  itself: one busy status region around decorative skeleton bars. */
+export const PENDING_STATUS_PROPS = {
+  "aria-busy": true,
+  "aria-label": "Loading",
+  role: "status",
+} as const;
+
 // Shared content fallback, including before the intl provider mounts. Shell
 // chrome belongs to the frame owner, never to a nested loading boundary.
+// It is the last resort, never a page's loading view: a route's
+// `pendingComponent` is the page's own tree in a pending phase (static
+// chrome real, data regions as skeletons from the loaded rows' primitives;
+// the contract is in `routes/-route-pending-view.tsx`), and the
+// `route-pending-component` lint rule keeps this out of route options.
 export const DefaultPendingComponent = ({
   className,
   announce = true,
 }: DefaultPendingComponentProps) => (
   // Announced as busy content; the skeleton bars themselves are decoration.
   <div
-    {...(announce
-      ? { "aria-busy": true, "aria-label": "Loading", role: "status" }
-      : { "aria-hidden": true })}
+    {...(announce ? PENDING_STATUS_PROPS : { "aria-hidden": true })}
     className={cn(
       "flex h-full min-h-0 w-full flex-1 flex-col gap-4 p-6",
       className,

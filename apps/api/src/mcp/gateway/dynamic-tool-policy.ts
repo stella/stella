@@ -1,13 +1,18 @@
 import * as v from "valibot";
 
 import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
+import { SKILL_RESOURCE_WINDOW_CHARS } from "@/api/lib/agent-skills/resource-window";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { LIMITS } from "@/api/lib/limits";
 import {
   type DynamicToolNamespace,
   dynamicToolNamespaceOf,
 } from "@/api/lib/mcp-upstream/namespace";
-import { nullAsAbsent } from "@/api/mcp/input-schemas";
+import {
+  BOUND_TEXT_CURSOR_MAX_CHARS,
+  isBoundTextCursor,
+} from "@/api/mcp/bound-text-window";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
@@ -25,7 +30,7 @@ export const SKILL_TOOL_OUTPUT_TYPE = {
 /**
  * The one input contract every `skill__*` tool accepts. Without `resource` a
  * call reads the skill's instructions and the paths of its resource files;
- * with it, one of those files.
+ * with it, one window of those files, continued with `cursor`.
  */
 export const SKILL_TOOL_INPUT = defineMcpToolInput(
   nullAsAbsent(
@@ -42,6 +47,13 @@ export const SKILL_TOOL_INPUT = defineMcpToolInput(
           ),
         ),
       ),
+      cursor: cursorInput({
+        description:
+          "nextCursor from the previous read of this same `resource`; " +
+          "omit to read the file from the start.",
+        issuedBy: isBoundTextCursor,
+        maxLength: BOUND_TEXT_CURSOR_MAX_CHARS,
+      }),
     }),
   ),
 );
@@ -99,9 +111,28 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.variant("type", [
   }),
   v.strictObject({
     type: v.literal(SKILL_TOOL_OUTPUT_TYPE.resource),
-    content: v.pipe(v.string(), v.description("The resource file's text")),
+    charCount: v.pipe(
+      v.number(),
+      v.integer(),
+      v.description("Length of the whole file in characters"),
+    ),
+    content: v.pipe(
+      v.string(),
+      v.maxLength(SKILL_RESOURCE_WINDOW_CHARS),
+      v.description(
+        "One window of the resource file's text, from the position the " +
+          "cursor names (the start without one)",
+      ),
+    ),
     id: skillIdSchema,
     name: skillNameSchema,
+    nextCursor: v.pipe(
+      v.nullable(v.string()),
+      v.description(
+        "Pass as `cursor` with the same `resource` to read the next " +
+          "window; null once this window reaches the end of the file",
+      ),
+    ),
     path: v.pipe(v.string(), v.description("The resource file's path")),
   }),
 ]);

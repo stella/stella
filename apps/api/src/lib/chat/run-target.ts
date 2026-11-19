@@ -29,8 +29,8 @@ export const storedChatRunTarget = (
 /**
  * The run target a thread column holds, read through the contract's schema.
  * A value the schema no longer accepts (a harness a chat turn can no longer
- * run on, say) reads as cloud: the composer then shows cloud, and a send
- * still carries its own target, so nothing is rerouted.
+ * run on, say) reads as cloud: the composer then shows cloud, and a send that
+ * names no target runs there too.
  */
 export const chatRunTargetOf = (stored: unknown): ChatRunTarget => {
   if (stored === null) {
@@ -40,7 +40,30 @@ export const chatRunTargetOf = (stored: unknown): ChatRunTarget => {
   return parsed.success ? parsed.output : CHAT_CLOUD_RUN_TARGET;
 };
 
-/** Whether two run targets send turns to the same place in the same mode. */
+/**
+ * Where a turn runs: the target its send names, otherwise where its thread
+ * runs, so every client that leaves the target out (the phone, a queued
+ * message, a script) gets the thread's computer rather than stella's models.
+ * A send that asks for the agent sandbox has named where it runs, which is
+ * never the thread's computer.
+ */
+export const turnRunTarget = ({
+  agentSandboxRequested,
+  requested,
+  thread,
+}: {
+  agentSandboxRequested: boolean;
+  requested: ChatRunTarget | undefined;
+  /** The thread's stored target; cloud for a thread the send creates. */
+  thread: ChatRunTarget;
+}): ChatRunTarget => {
+  if (requested !== undefined) {
+    return requested;
+  }
+  return agentSandboxRequested ? CHAT_CLOUD_RUN_TARGET : thread;
+};
+
+/** Whether two run targets send turns to the same place in the same way. */
 export const sameChatRunTarget = (
   left: ChatRunTarget,
   right: ChatRunTarget,
@@ -49,7 +72,10 @@ export const sameChatRunTarget = (
     ? right.kind === "local" &&
       left.harness === right.harness &&
       left.model === right.model &&
-      left.approvals === right.approvals
+      left.approvals === right.approvals &&
+      left.folder?.desktopId === right.folder?.desktopId &&
+      left.folder?.linkId === right.folder?.linkId &&
+      left.reasoningEffort === right.reasoningEffort
     : right.kind === left.kind;
 
 /**

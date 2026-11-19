@@ -3,6 +3,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-provision-extractions-clock-seed-idx",
   revision: 480,
+  lifecycle: "finalized",
   type: "indexes",
   values: [
     {

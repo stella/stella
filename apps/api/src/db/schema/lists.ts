@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 
+import { LIST_SOURCE_KINDS } from "@stll/api-contract/list-source-kinds";
 import {
+  type ReadsExactly,
   REVIEW_DECISION,
   type ReviewDecision,
 } from "@stll/api-contract/review-decision";
@@ -104,6 +106,18 @@ export const LEGAL_LIST_REVIEW_DECISIONS = [
 export type LegalListReviewDecision =
   (typeof LEGAL_LIST_REVIEW_DECISIONS)[number];
 
+// What each list status means in the shared review vocabulary is the
+// owner's (`REVIEW_STATUS_DECISION`), and it reads exactly these.
+true satisfies ReadsExactly<"listItem", LegalListReviewDecision>;
+true satisfies ReadsExactly<
+  "listItemSource",
+  LegalListSourceVerificationStatus
+>;
+true satisfies ReadsExactly<
+  "listGenerationCandidate",
+  LegalListGenerationCandidateStatus
+>;
+
 const LEGAL_LIST_STATUS_SQL_VALUES = LEGAL_LIST_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
 );
@@ -144,6 +158,10 @@ const LIST_ITEM_TYPE_SQL_VALUES = LIST_ITEM_TYPES.map((itemType) =>
 
 const FACT_CONFIDENCE_SQL_VALUES = FACT_CONFIDENCES.map((confidence) =>
   sql.raw(`'${confidence}'`),
+);
+
+const SOURCE_KIND_SQL_VALUES = LIST_SOURCE_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
 );
 
 const FACT_SCORING_SQL_VALUES = FACT_SCORING.map((scoring) =>
@@ -642,6 +660,71 @@ export const legalListItemSourceDecisions = p.pgTable(
   ],
 );
 
+/**
+ * What a document is to one list's facts, as a reviewer classified it: a
+ * record of what happened or a person's account of it. One row per document
+ * a reviewer has classified on the list; every source of the list citing
+ * the document inherits its kind, and an unclassified document is
+ * `document` (`lib/lists/source-kind.ts`). Kept per list because the
+ * classification is part of one evidence list's method, not a property of
+ * the file.
+ */
+export const legalListSourceDocuments = p.pgTable(
+  "legal_list_source_documents",
+  {
+    ...entityFeatureGateColumns(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    listId: safeUuid<"legalList">("list_id").notNull(),
+    documentEntityId: safeUuid<"entity">("document_entity_id").notNull(),
+    sourceKind: p.text("source_kind", { enum: LIST_SOURCE_KINDS }).notNull(),
+    updatedBy: p.text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "legal_list_source_documents_pkey",
+      columns: [table.listId, table.documentEntityId],
+    }),
+    ...entityFeatureGateChecks(table),
+    p
+      .foreignKey({
+        name: "legal_list_source_documents_list_fk",
+        columns: [table.listId, table.workspaceId],
+        foreignColumns: [legalLists.id, legalLists.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "legal_list_source_documents_document_fk",
+        columns: [table.documentEntityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.check(
+      "legal_list_source_documents_source_kind_check",
+      sql`${table.sourceKind} in (${sql.join(SOURCE_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.pgPolicy("legal_list_source_documents_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_source_documents'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_source_documents'::regclass)`,
+    }),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.documentEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("legal_list_source_documents_ef_document_entity_id_idx")
+      .on(table.workspaceId, table.documentEntityId),
+  ],
+);
+
 export const legalListGenerationRuns = p.pgTable(
   "legal_list_generation_runs",
   {
@@ -701,6 +784,14 @@ export const legalListGenerationRuns = p.pgTable(
     p
       .index("legal_list_generation_runs_status_idx")
       .on(table.workspaceId, table.status, table.createdAt, table.id),
+    // The reconciler's keyset walk over unfinished runs stella produces;
+    // built online (indexes-legal-list-generation-runs-stella-active-idx).
+    p
+      .index("legal_list_generation_runs_stella_active_idx")
+      .on(table.createdAt, table.id)
+      .where(
+        sql`${table.producer} = 'stella' AND ${table.status} IN ('queued', 'running')`,
+      ),
     p.check(
       "legal_list_generation_runs_status_check",
       sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_STATUS_SQL_VALUES, sql`, `)})`,

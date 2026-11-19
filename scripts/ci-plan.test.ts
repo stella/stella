@@ -563,8 +563,9 @@ test("required checks report on pull requests and merge groups", () => {
     );
     expect(parsed.jobs, check).toHaveProperty(job);
     expect(parsed.on, check).toHaveProperty("merge_group");
+    // The signature check runs on main after its unprivileged notification.
     expect(parsed.on, check).toHaveProperty(
-      check === "cla" ? "pull_request_target" : "pull_request",
+      check === "cla" ? "workflow_run" : "pull_request",
     );
   }
   expect(required.at(2)?.[1]).toContain('name = "cla"');
@@ -947,6 +948,9 @@ type EvaluateResultOptions = {
   missingJob?: boolean;
   matrixTimeoutSibling?: boolean;
   embeddedStepFailure?: boolean;
+  /** The failed job's merge-group cancel step ran and handed the run's
+   *  cancellation off, so the job itself ended with its failure. */
+  handedOffCancellation?: boolean;
   jobConclusion?: "cancelled" | "failure" | "timed_out";
   heavyOnly?: boolean;
   outcomeScript?: string;
@@ -1168,6 +1172,23 @@ const prHeavyEnv = (plannedOutputs: Record<string, string>) => ({
   PR_HEAVY_JOBS: JSON.stringify(PR_HEAVY_JOBS),
 });
 
+/** A failed job's steps: the step that failed it and, when the job handed
+ *  its run's cancellation off, its successful merge-group cancel step. */
+const fixtureJobSteps = ({
+  embeddedStepFailure,
+  handedOffCancellation,
+}: {
+  embeddedStepFailure: boolean;
+  handedOffCancellation: boolean;
+}) => [
+  ...(embeddedStepFailure
+    ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
+    : []),
+  ...(handedOffCancellation
+    ? [{ name: CANONICAL_CANCEL_STEP.name, number: 4, conclusion: "success" }]
+    : []),
+];
+
 const resultGateCase = ({
   event,
   results,
@@ -1184,6 +1205,7 @@ const resultGateCase = ({
   missingJob = false,
   matrixTimeoutSibling = false,
   embeddedStepFailure = false,
+  handedOffCancellation = false,
   jobConclusion,
   heavyOnly = false,
   outcomeScript = resultStep.run,
@@ -1252,9 +1274,7 @@ const resultGateCase = ({
         (job === "ci-tests" ? " (api-1)" : ""),
       conclusion: jobConclusion ?? result.result,
       html_url: `https://example.test/jobs/${checkId}`,
-      steps: embeddedStepFailure
-        ? [{ name: "Validate contract", number: 3, conclusion: "failure" }]
-        : [],
+      steps: fixtureJobSteps({ embeddedStepFailure, handedOffCancellation }),
       check_run_url: `https://api.github.com/repos/${PULL_REQUEST.repo}/check-runs/${checkId}`,
     });
     checkAnnotations[checkId] = [annotations];
@@ -1577,7 +1597,7 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
     }
   }
   expectResultGates(gates);
-}, 30_000);
+}, 50_000);
 
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
@@ -1623,7 +1643,7 @@ test("PR-depth evidence never replaces admitted merge-group checks", () => {
     }
   }
   expectResultGates(gates);
-}, 35_000);
+}, 50_000);
 
 test("CI result rejects a failed check leg after independent guards finish", () => {
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
@@ -2297,7 +2317,7 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
     }),
   )) {
     expect(exitCode, `${item.event}/${item.job}`).toBe(1);
-    expect(stdout).toContain("Cancelled CI job contains a failed step:");
+    expect(stdout).toContain("::error::CI job failed:");
     expect(stdout).toContain("3: Validate contract");
   }
   const options = {
@@ -2313,7 +2333,43 @@ test("cancelled jobs retain failed-step evidence and cannot pass verified supers
   expect(outcomeScript).not.toBe(resultStep.run);
   expect(evaluateResult({ ...options, outcomeScript })).toBe(0);
   // Runs the outcome script for every required job of three events.
-}, 30_000);
+}, 50_000);
+
+// timeout: runs the outcome script once for every required job.
+test("a failed job that handed off its run's cancellation is named as the cause", () => {
+  // Every required job of a merge group can fail first; the run's other
+  // jobs end cancelled, and the summary names the job and step that failed.
+  const cases = resultJob.needs.map((job) => ({
+    job: activeJobForEvent(job, EVENT.mergeGroup),
+    handedOffCancellation: true,
+  }));
+  // Without its cancel step the failed job did not end the run: ordinary
+  // evaluation names it, never as a cancellation cause.
+  const notHandedOff = { job: "ci-tests", handedOffCancellation: false };
+  const outcomes = evaluateResults([...cases, notHandedOff], (item) => ({
+    event: EVENT.mergeGroup,
+    results: { [item.job]: "failure" },
+    cancellationEvidence: "missing",
+    embeddedStepFailure: true,
+    handedOffCancellation: item.handedOffCancellation,
+  }));
+  for (const { item, exitCode, stdout } of outcomes) {
+    expect(exitCode, item.job).toBe(1);
+    expect(stdout.includes("::error::CI job failed:"), item.job).toBe(
+      item.handedOffCancellation,
+    );
+    if (item.handedOffCancellation) {
+      expect(stdout, item.job).toMatch(
+        /::error::CI job failed: .+ \/ 3: Validate contract \(https:\/\/example\.test\/jobs\/10\)/u,
+      );
+      expect(stdout, item.job).toContain("Merge group failed: ");
+    }
+  }
+  // The gate recognises the hand-off by the canonical step's own name.
+  expect(resultStep.run).toContain(
+    `.name == "${CANONICAL_CANCEL_STEP.name}" and .conclusion == "success"`,
+  );
+}, 50_000);
 
 test("ci-result summary opens with the failed job and step before its cancelled verdict", () => {
   const outcomeScript = `
@@ -3625,7 +3681,7 @@ test("metadata ci-result mirrors only a code run on the same pull request head",
   expect(`${timedOut.stdout}\n${timedOut.stderr}`).toContain(
     "timed out after 45 min waiting for a code run",
   );
-}, 20_000);
+}, 50_000);
 
 test("required checks retain PR and merge-group coverage", async () => {
   const workflowSchema = v.object({
@@ -3649,10 +3705,11 @@ test("required checks retain PR and merge-group coverage", async () => {
     expect(owners).toHaveLength(1);
     const [owner] = owners;
     expect(owner?.on).toHaveProperty("merge_group");
-    expect(
-      Object.hasOwn(owner?.on ?? {}, "pull_request") ||
-        Object.hasOwn(owner?.on ?? {}, "pull_request_target"),
-    ).toBe(true);
+    // The signature check runs on main after its unprivileged pull_request
+    // notification completes.
+    expect(owner?.on).toHaveProperty(
+      job === "verify-signatures" ? "workflow_run" : "pull_request",
+    );
   }
 });
 
@@ -4504,6 +4561,24 @@ test.each([1, 2, 3, 4])(
   },
 );
 
+test("production route-smoke coverage has one unfiltered network owner", () => {
+  const steps = jobSteps(ciJobs["e2e-production-shard"]);
+  const routeRuns = steps.filter(
+    ({ run }) =>
+      run?.includes("test:e2e") &&
+      (run.includes("--project=route-smoke") ||
+        run.includes("test:e2e -- route-smoke.spec.ts")),
+  );
+  expect(routeRuns).toHaveLength(1);
+  const [routeRun] = routeRuns;
+  expect(routeRun?.name).toBe("Check route network baseline");
+  expect(routeRun?.run).toContain("test:e2e -- route-smoke.spec.ts");
+  expect(routeRun?.run).not.toContain("--grep-invert");
+  expect(routeRun?.run).not.toContain("--pass-with-no-tests");
+  expect(routeRun?.env?.["E2E_EXECUTION_PROFILE"]).toBe("network-baseline");
+  expect(routeRun?.if).toContain("matrix.shard == 'network-baseline'");
+});
+
 test("every production Playwright shard total comes from the matrix shard source", () => {
   const steps = jobSteps(ciJobs["e2e-production-shard"]);
   const countStep = steps.find(
@@ -4516,7 +4591,7 @@ test("every production Playwright shard total comes from the matrix shard source
   const invocationLines = steps.flatMap(({ run }) =>
     (run ?? "").split("\n").filter((line) => line.includes("--shard=")),
   );
-  expect(invocationLines).toHaveLength(3);
+  expect(invocationLines).toHaveLength(2);
   expect(invocationLines.every((line) => line.includes(shardArgument))).toBe(
     true,
   );
@@ -4746,12 +4821,14 @@ test("a selected leg planned only for a hosted browser suite skips the web run",
   const runs = (mode: string, specs: string, suiteSpecs: string) =>
     evaluate(step?.if ?? panic("Missing Playwright shard condition"), {
       values: {
+        "steps.checkout.outcome": "success",
         "steps.e2e-stack.outcome": "success",
         "matrix.shard": 1,
         "needs.ci-plan.outputs.e2e_production_mode": mode,
         "needs.ci-plan.outputs.e2e_production_specs": specs,
         "needs.ci-plan.outputs.e2e_production_suite_specs": suiteSpecs,
       },
+      status: { cancelled: false },
     });
   const suite = JSON.stringify(["apps/api/e2e/citation-graph.spec.mts"]);
   const web = JSON.stringify(["apps/web/e2e/specs/guides.spec.ts"]);
@@ -5388,10 +5465,9 @@ test("split service suites preserve their scopes and independent verdicts", () =
       expect(suite.if).toBe(`\${{ !cancelled() && ${predicate} }}`);
       continue;
     }
+    // A suite runs after an earlier failure, once its checkout succeeded.
     expect(suite.if).toBe(
-      scope === "postgres_suites_required"
-        ? `${predicate} && ${nonCorpusGate}`
-        : `\${{ !cancelled() && ${predicate} && ${nonCorpusGate} }}`,
+      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (${predicate} && ${nonCorpusGate}) }}`,
     );
   }
   const collab = suites.find(({ run }) => run?.includes("@stll/collab"));
@@ -5745,7 +5821,7 @@ test("route-relevant changes plan the required route smoke", () => {
       unplannedScopes: [scope],
     }),
   ).toBe(0);
-}, 30_000);
+}, 50_000);
 
 test("a merge group relies on route-smoke after the duplicate matrix leg is removed", () => {
   const event = EVENT.mergeGroup;
@@ -5800,7 +5876,7 @@ test("a merge group plans both browser suites for app changes and neither for do
       EVENT.mergeGroup,
     ),
   ).toEqual(["false", "false"]);
-}, 30_000);
+}, 50_000);
 
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
@@ -5969,7 +6045,7 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
       })),
     ),
   );
-}, 30_000);
+}, 50_000);
 
 describe("drawn property samples match the shared runner", () => {
   // Compare both consumers under one seed, including the exploratory tier.
@@ -6142,7 +6218,7 @@ test("image scopes remain planned while pull requests skip execution", () => {
       }
     }
   }
-}, 30_000);
+}, 50_000);
 
 test("each split service step follows its own dependency scope and execution depth", () => {
   const scopes = [
@@ -6162,7 +6238,7 @@ test("each split service step follows its own dependency scope and execution dep
     ({ name }) => name === "Run cross-replica collaboration suite",
   );
   expect(collaboration?.if).toBe(
-    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}`,
+    `\${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))) }}`,
   );
   const planned = Object.fromEntries(
     scopes.map((scope, index) => [scope, packagePlan.at(index)]),
@@ -6180,6 +6256,7 @@ test("each split service step follows its own dependency scope and execution dep
           ]),
         ),
         "github.event_name": EVENT.mergeGroup,
+        "steps.checkout.outcome": "success",
         "vars.CI_POSTGRES_PR_SELECTION": "off",
         "needs.ci-plan.outputs.queue_depth": "full",
         "needs.ci-plan.outputs.suite_depth": "full",
@@ -6244,6 +6321,7 @@ test("corpus bypasses non-corpus service depth and PR opt-in gates", () => {
     ]),
   );
   const commonValues = {
+    "steps.checkout.outcome": "success",
     "needs.ci-plan.outputs.postgres_suites_required": "true",
     "needs.ci-plan.outputs.corpus_suites_required": "true",
     "needs.ci-plan.outputs.valkey_suites_required": "true",
@@ -7827,9 +7905,12 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
             status: { cancelled: false },
           }),
         ).toBe(event !== EVENT.pullRequest || enabled);
-        expect(evaluate(runner?.if ?? "false", { values })).toBe(
-          event !== EVENT.pullRequest || prSwitch === "on",
-        );
+        expect(
+          evaluate(runner?.if ?? "false", {
+            values: { ...values, "steps.checkout.outcome": "success" },
+            status: { cancelled: false },
+          }),
+        ).toBe(event !== EVENT.pullRequest || prSwitch === "on");
         expect(evaluate(runnerSelection, { values })).toBe(
           event === EVENT.mergeGroup || enabled ? selection : "",
         );

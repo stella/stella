@@ -405,7 +405,10 @@ describe.skipIf(!runEngineTests)(
         searchCalls.push({
           observer: options.observer,
           indexId: options.indexId,
-          query: options.query,
+          query:
+            typeof options.query === "string"
+              ? options.query
+              : JSON.stringify(options.query.query),
           maxHits: options.size,
           startOffset: options.from,
         });

@@ -10,6 +10,8 @@
 import type { SortingState } from "@tanstack/react-table";
 import { panic } from "better-result";
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 import {
   STATUTE_LIST_SORT_ORDERS,
   statuteListSort,
@@ -25,11 +27,7 @@ import type { SortDirection } from "@stll/workspace-ui/column-sort";
 import { ALL_SORT_DIRECTIONS_AVAILABLE } from "@/components/workspaces/properties/sort-property.logic";
 import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type { TableSortingLayout } from "@/components/workspaces/table/use-table-state";
-import {
-  STATUTE_COLUMN_IDS,
-  STATUTE_COLUMN_SORT_KEYS,
-} from "@/features/statutes/statute-columns.logic";
-import type { StatuteColumnId } from "@/features/statutes/statute-columns.logic";
+import { STATUTE_COLUMN_SORT_KEYS } from "@/features/statutes/statute-columns.logic";
 
 /** The column a key belongs to; every key has exactly one. */
 const columnOfSortKey = (key: StatuteListSortKey): StatuteColumnId =>

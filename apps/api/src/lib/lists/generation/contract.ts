@@ -21,3 +21,5 @@ export const LIST_GENERATION_RUN_ERROR_CODES = [
   "run_limit_reached",
   "internal",
 ] as const;
+export type ListGenerationRunErrorCode =
+  (typeof LIST_GENERATION_RUN_ERROR_CODES)[number];

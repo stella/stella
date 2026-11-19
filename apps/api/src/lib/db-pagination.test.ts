@@ -134,17 +134,12 @@ describe("createTimestampIdCursorCodec", () => {
     ).toBeNull();
   });
 
-  test("accepts the legacy pipe-delimited `timestamp|uuid` form", () => {
-    const timestamp = "2026-07-10T08:15:30.123456";
-    const id = "6f5b2c1a-1111-4222-8333-444455556666";
-    expect(codec.decode(`${timestamp}|${id}`)).toEqual({
-      timestamp: {
-        type: "pgTimestampCursor",
-        value: timestamp,
-        precision: "microseconds-naive",
-      },
-      id: brandPersistedInvoiceId(id),
-    });
+  test("refuses a plain `timestamp|uuid` string", () => {
+    expect(
+      codec.decode(
+        "2026-07-10T08:15:30.123456|6f5b2c1a-1111-4222-8333-444455556666",
+      ),
+    ).toBeNull();
   });
 
   test("accepts already-issued millisecond ISO timestamps in the tuple", () => {

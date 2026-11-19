@@ -100,27 +100,26 @@ const setNestedValue = (
   obj: NestedMessages,
   keyPath: string,
   value: string | NestedMessages,
-): void => {
-  const parts = keyPath.split(".");
-  const leaf = parts.at(-1);
-  if (!leaf) {
-    return;
+): NestedMessages => {
+  if (!keyPath || keyPath.endsWith(".")) {
+    return obj;
   }
-
-  let current: NestedMessages = obj;
-
-  for (const part of parts.slice(0, -1)) {
-    const next = current[part];
-    if (typeof next === "object") {
-      current = next;
-    } else {
-      const child: NestedMessages = {};
-      current[part] = child;
-      current = child;
-    }
+  const [part, ...rest] = keyPath.split(".");
+  if (part === undefined) {
+    return panic("A message path must have a segment");
   }
-
-  current[leaf] = value;
+  if (rest.length === 0) {
+    return { ...obj, [part]: value };
+  }
+  const child = Object.hasOwn(obj, part) ? obj[part] : undefined;
+  return {
+    ...obj,
+    [part]: setNestedValue(
+      typeof child === "object" ? child : {},
+      rest.join("."),
+      value,
+    ),
+  };
 };
 
 const deleteNestedKey = (obj: NestedMessages, keyPath: string): void => {
@@ -174,19 +173,17 @@ export const isSorted = (obj: NestedMessages): boolean => {
 };
 
 /** Recursively sort object keys alphabetically. */
-export const sortKeys = (obj: NestedMessages): NestedMessages => {
-  const sorted: NestedMessages = {};
-
-  for (const key of Object.keys(obj).toSorted()) {
-    const value = obj[key];
-    if (value === undefined) {
-      continue;
-    }
-    sorted[key] = typeof value === "string" ? value : sortKeys(value);
-  }
-
-  return sorted;
-};
+export const sortKeys = (obj: NestedMessages): NestedMessages =>
+  Object.fromEntries(
+    Object.keys(obj)
+      .toSorted()
+      .flatMap((key) => {
+        const value = obj[key];
+        return value === undefined
+          ? []
+          : [[key, typeof value === "string" ? value : sortKeys(value)]];
+      }),
+  );
 
 /**
  * Sync a locale object against the source (en) object.
@@ -198,23 +195,23 @@ export const syncMessages = (
   source: NestedMessages,
   target: NestedMessages,
 ): NestedMessages => {
-  const result: NestedMessages = structuredClone(target);
+  let result: NestedMessages = structuredClone(target);
 
   const sourceKeys = new Set(flattenKeys(source));
   const targetKeys = new Set(flattenKeys(result));
+
+  for (const key of targetKeys) {
+    if (!sourceKeys.has(key)) {
+      deleteNestedKey(result, key);
+    }
+  }
 
   for (const key of sourceKeys) {
     if (!targetKeys.has(key)) {
       const value = getNestedValue(source, key);
       if (value !== undefined) {
-        setNestedValue(result, key, value);
+        result = setNestedValue(result, key, value);
       }
-    }
-  }
-
-  for (const key of targetKeys) {
-    if (!sourceKeys.has(key)) {
-      deleteNestedKey(result, key);
     }
   }
 
@@ -822,7 +819,7 @@ if (import.meta.main) {
 
   // Seed/refresh the baseline from the current state, then exit.
   if (shouldWriteBaseline) {
-    const identicalToSource: Record<string, string[]> = {};
+    const identicalToSource = new Map<string, string[]>();
     const baselineLocaleMessages = await Promise.all(
       localeFiles.map(async (file) => ({
         file,
@@ -837,7 +834,9 @@ if (import.meta.main) {
         locale,
         emptyBaseline(),
       )) {
-        (identicalToSource[key] ??= []).push(locale);
+        const locales = identicalToSource.get(key) ?? [];
+        locales.push(locale);
+        identicalToSource.set(key, locales);
       }
     }
     const duplicatesCommon = findCommonDuplicates(
@@ -852,7 +851,7 @@ if (import.meta.main) {
       duplicatesCommon: duplicatesCommon.toSorted(),
       duplicateValues: duplicateValues.toSorted(),
       identicalToSource: Object.fromEntries(
-        Object.entries(identicalToSource)
+        [...identicalToSource]
           .map(([k, v]) => [k, v.toSorted()] as const)
           .toSorted(([a], [b]) => a.localeCompare(b)),
       ),
@@ -865,12 +864,12 @@ if (import.meta.main) {
             }),
     };
     await Bun.write(baselinePath, `${JSON.stringify(next, null, 2)}\n`);
-    const localeCount = Object.values(identicalToSource).reduce(
+    const localeCount = [...identicalToSource.values()].reduce(
       (a, v) => a + v.length,
       0,
     );
     console.log(
-      `Wrote ${baselinePath}\n  ${Object.keys(identicalToSource).length} untranslated keys (${localeCount} locale entries), ${duplicatesCommon.length} common-duplicate keys, ${duplicateValues.length} shared-value keys grandfathered.`,
+      `Wrote ${baselinePath}\n  ${identicalToSource.size} untranslated keys (${localeCount} locale entries), ${duplicatesCommon.length} common-duplicate keys, ${duplicateValues.length} shared-value keys grandfathered.`,
     );
     process.exit(0);
   }

@@ -14,6 +14,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
   mock.restore();
+  document.body.replaceChildren();
 });
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -21,10 +22,6 @@ GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const { claimUnderPoint, paintClaimRanges, resolveHighlightApi } =
   await import("@/features/avt/original-docx-paint");
 const { claimId } = await import("@/features/avt/avt.test-fixtures");
-
-afterEach(() => {
-  document.body.replaceChildren();
-});
 afterAll(async () => {
   await unregisterDomEnvironment();
 });

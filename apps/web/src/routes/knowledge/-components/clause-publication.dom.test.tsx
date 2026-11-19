@@ -89,8 +89,8 @@ type Operation =
       expectedBody: ClauseParagraph[];
     };
 
-beforeEach(() => jest.useFakeTimers());
 beforeEach(() => {
+  jest.useFakeTimers();
   fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: RequestInfo | URL) => {

@@ -88,7 +88,7 @@ const installDockerFake = (): DockerFake => {
   });
 
   globalThis.fetch = Object.assign(
-    mock(async (input, init) => {
+    mock(async (input, init?: RequestInit) => {
       const url = new URL(String(input));
       const method = init?.method ?? "GET";
 

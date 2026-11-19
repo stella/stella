@@ -8,7 +8,6 @@ import {
   mkdir,
   open,
   readdir,
-  readFile,
   readlink,
   rename,
   rm,
@@ -24,6 +23,7 @@ import * as v from "valibot";
 import {
   DESKTOP_RUNNER_CHECKPOINT_EVENT,
   type DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS,
+  DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   type DesktopRunnerCheckpointEvent,
 } from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
@@ -35,7 +35,9 @@ import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
  * A run's folder as it stood before its turn, so the member can undo what the
  * turn changed there. The sidecar saves the folder once per run, after the
  * run's attachments are copied and before its harness starts; restoring puts
- * the folder back as it was saved.
+ * the folder back as it was saved. Any kept checkpoint may be restored, not
+ * only the newest: restoring one undoes its run and every later run, so
+ * those later checkpoints are undone with it.
  *
  * Saved beside the folder (`<folder>.checkpoints/`), never inside it: the
  * agent's sandbox can write in the folder only, so it can neither forge nor
@@ -55,8 +57,9 @@ import { SIDECAR_CHECKPOINT_STORE_SUFFIX } from "./protocol";
  * sandbox, so nothing here follows a link: a link is saved and restored as a
  * link, a file is read through a descriptor opened without following one, and
  * every folder on the way to an entry is checked to be a plain folder. Skill
- * folders, the package cache and the CLI's home are outside the folder and
- * are never read or written; a folder that holds one of them is not saved.
+ * folders, the package cache, the step output store and the CLI's home are
+ * outside the folder and are never read or written; a folder that holds one
+ * of them is not saved.
  *
  * Windows: a link in the folder makes it unsaved (`unsupported`), as do names
  * the platform reserves; modes are neither saved nor restored. Paths are
@@ -73,14 +76,27 @@ export type CheckpointLimits = {
   maxFileBytes: number;
   /** Bytes one capture reads into the store. */
   maxNewBytes: number;
+  /**
+   * The longest a capture holds its run's start, counted from the moment it
+   * is asked for: the wait for the store, the walk and the cleanup after it.
+   * Past it nothing is saved (`too_slow`) and the turn runs without an undo.
+   */
   maxCaptureMs: number;
+  /**
+   * How long one walk of the folder during a restore may take. A restore
+   * holds no run's start, so it keeps the longer bound.
+   */
+  maxRestoreWalkMs: number;
   /** Checkpoints kept per folder, newest first. */
   maxManifests: number;
   /** Bytes of stored files per folder; the newest checkpoint is always kept. */
   maxStoredBytes: number;
   /** Bytes of one manifest; a folder past it is not saved. */
   maxManifestBytes: number;
-  /** How long a capture or restore waits for another one on the same store. */
+  /**
+   * How long a restore waits for another holder of the same store. A capture
+   * waits no longer than `maxCaptureMs` allows.
+   */
   lockWaitMs: number;
   /** How often a holder refreshes its lock; five missed beats make it stale. */
   lockHeartbeatMs: number;
@@ -91,20 +107,53 @@ export const CHECKPOINT_LIMITS: CheckpointLimits = {
   maxDepth: 8,
   maxFileBytes: 256 * 1024 * 1024,
   maxNewBytes: 1024 * 1024 * 1024,
-  maxCaptureMs: 15_000,
-  maxManifests: 20,
+  // A run's start waits on the capture. A first capture near the entry or
+  // byte bound takes about 2 s on a laptop SSD, and an unchanged folder well
+  // under 0.1 s, so 5 s fails only a folder too slow to save in time.
+  maxCaptureMs: 5000,
+  maxRestoreWalkMs: 15_000,
+  maxManifests: DESKTOP_RUNNER_CHECKPOINTS_KEPT,
   maxStoredBytes: 2 * 1024 * 1024 * 1024,
   maxManifestBytes: 16 * 1024 * 1024,
   lockWaitMs: 30_000,
   lockHeartbeatMs: 2000,
 };
 
+/**
+ * Time as a capture reads it and waits on it. The host passes none and gets
+ * the system's; a test passes its own to stand in for a slow disk or a store
+ * another process holds, without waiting.
+ */
+export type CheckpointClock = {
+  /** Milliseconds, as `performance.now()` counts them. */
+  now: () => number;
+  /** Settles after `ms`, or at once when `signal` aborts. */
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void>;
+};
+
+const SYSTEM_CLOCK: CheckpointClock = {
+  now: () => performance.now(),
+  sleep: async (ms, signal) => {
+    await new Promise<void>((resolve) => {
+      // real-time: a wait for another holder of the store.
+      const timer = setTimeout(resolve, ms);
+      signal?.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+    });
+  },
+};
+
 export type CheckpointUnavailableReason =
   (typeof DESKTOP_RUNNER_CHECKPOINT_UNAVAILABLE_REASONS)[number];
 
 /** What a restore did; the host adds `folder_busy` before it starts one. */
-type CheckpointRestoreOutcome =
-  "restored" | "no_checkpoint" | "not_newest" | "failed";
+type CheckpointRestoreOutcome = "restored" | "no_checkpoint" | "failed";
 
 export type CheckpointRestore = {
   outcome: CheckpointRestoreOutcome;
@@ -185,6 +234,7 @@ const relativePathSchema = v.pipe(
   v.maxLength(4096),
   v.check(isInsidePath, "A path inside the run's folder"),
 );
+const ordinalSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 const modeSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -224,20 +274,54 @@ type Entry = v.InferOutput<typeof entrySchema>;
 type FileEntry = Extract<Entry, { kind: "file" }>;
 type StatKey = FileEntry["stat"];
 
-const manifestSchema = v.object({
-  version: v.literal(MANIFEST_VERSION),
-  runId: v.pipe(v.string(), v.uuid()),
-  /** Orders a folder's checkpoints; the clock does not. */
-  ordinal: v.pipe(v.number(), v.integer(), v.minValue(1)),
-  takenAt: v.pipe(v.string(), v.isoTimestamp()),
-  /** Restored once; an undone checkpoint is never restored again. */
-  undone: v.boolean(),
-  entries: v.array(entrySchema),
-  /** The attachments copied into the folder for this run. */
-  memberFiles: v.array(relativePathSchema),
-});
+const manifestSchema = v.pipe(
+  v.object({
+    version: v.literal(MANIFEST_VERSION),
+    runId: v.pipe(v.string(), v.uuid()),
+    /** Orders a folder's checkpoints; the clock does not. */
+    ordinal: ordinalSchema,
+    takenAt: v.pipe(v.string(), v.isoTimestamp()),
+    /** Restored once; an undone checkpoint is never restored again. */
+    undone: v.boolean(),
+    /**
+     * The newest ordinal when this checkpoint was restored: the later
+     * checkpoints up to it were undone by the same restore. Absent on a
+     * checkpoint never restored, and on one undone before restores reached
+     * past the newest (it undid itself alone).
+     */
+    undoneThrough: v.optional(ordinalSchema),
+    entries: v.array(entrySchema),
+    /** The attachments copied into the folder for this run. */
+    memberFiles: v.array(relativePathSchema),
+  }),
+  v.check(
+    ({ ordinal, undone, undoneThrough }) =>
+      undoneThrough === undefined || (undone && undoneThrough >= ordinal),
+    "Only an undone checkpoint undoes later ones, never earlier ones",
+  ),
+);
 
 type Manifest = v.InferOutput<typeof manifestSchema>;
+
+/**
+ * The runs whose checkpoints are undone: each restored checkpoint, and the
+ * later ones its restore undid with it (`undoneThrough`).
+ */
+const undoneRunIds = (manifests: readonly Manifest[]): Set<string> => {
+  const undoneRanges = manifests.flatMap(
+    ({ ordinal, undone, undoneThrough }) =>
+      undone ? [{ from: ordinal, through: undoneThrough ?? ordinal }] : [],
+  );
+  return new Set(
+    manifests
+      .filter(({ ordinal }) =>
+        undoneRanges.some(
+          ({ from, through }) => from <= ordinal && ordinal <= through,
+        ),
+      )
+      .map(({ runId }) => runId),
+  );
+};
 
 /** The folder as a restore found it, kept until the restore is settled. */
 const recoverySchema = v.object({
@@ -307,8 +391,9 @@ type Walk = {
   workspaceDir: string;
   store: string;
   limits: CheckpointLimits;
-  /** `performance.now()` when the walk started. */
-  started: number;
+  clock: CheckpointClock;
+  /** The capture's deadline, on `clock`. */
+  deadline: number;
   /** Files of an earlier checkpoint: one unchanged since keeps its object. */
   known: ReadonlyMap<string, FileEntry>;
   signal: AbortSignal | undefined;
@@ -316,13 +401,13 @@ type Walk = {
   newBytes: number;
 };
 
+const tooSlow = refused("too_slow", "The folder took too long to save.");
+
 const outOfTime = (walk: Walk): CheckpointRefused | null => {
   if (walk.signal?.aborted === true) {
     return refused("failed", "The capture was stopped.")();
   }
-  return performance.now() - walk.started >= walk.limits.maxCaptureMs
-    ? refused("too_slow", "The folder took too long to save.")()
-    : null;
+  return walk.clock.now() >= walk.deadline ? tooSlow() : null;
 };
 
 /**
@@ -523,15 +608,26 @@ type WalkOptions = {
   workspaceDir: string;
   store: string;
   limits: CheckpointLimits;
+  clock: CheckpointClock;
+  deadline: number;
   known: readonly Entry[];
   signal?: AbortSignal | undefined;
 };
+
+/** A restore's walk: on the system's clock, within its own bound. */
+const restoreWalk = (limits: CheckpointLimits) => ({
+  limits,
+  clock: SYSTEM_CLOCK,
+  deadline: SYSTEM_CLOCK.now() + limits.maxRestoreWalkMs,
+});
 
 /** The folder's entries, each file stored; parents come before children. */
 const saveTree = async ({
   workspaceDir,
   store,
   limits,
+  clock,
+  deadline,
   known,
   signal,
 }: WalkOptions): Promise<Result<Entry[], CheckpointRefused>> =>
@@ -540,7 +636,8 @@ const saveTree = async ({
       workspaceDir,
       store,
       limits,
-      started: performance.now(),
+      clock,
+      deadline,
       known: new Map(
         known.flatMap((entry) =>
           entry.kind === "file" ? [[entry.path, entry]] : [],
@@ -627,12 +724,41 @@ const lockSchema = v.object({
 
 type Lock = v.InferOutput<typeof lockSchema>;
 
-/** The lock file's holder; `null` when there is none or it cannot be told. */
-const lockAt = async (file: string) => {
-  if (entryAt(file) === undefined) {
-    return null;
+/**
+ * The lock file's holder; `null` when there is none or it cannot be told.
+ * The name is opened once and read through that handle: a holder that gives
+ * the lock up while it is read leaves either the lock it held or no file,
+ * never a failed read.
+ */
+export const lockAt = async (
+  file: string,
+  /** Test seam: runs once the name is open, before the lock is read. */
+  opened: () => Promise<void> = async () => await Promise.resolve(),
+): Promise<Result<Lock | null, CheckpointRefused>> => {
+  const read = await Result.tryPromise({
+    try: async () => {
+      const handle = await open(file, READ_FLAGS);
+      try {
+        await opened();
+        return await handle.readFile("utf-8");
+      } finally {
+        await handle.close();
+      }
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(read)) {
+    return Result.ok(parsedAs(lockSchema, read.value));
   }
-  return parsedAs(lockSchema, await readFile(file, "utf-8"));
+  // ENOENT: no lock holds the name, or its holder just gave it up.
+  return errorCode(read.error) === "ENOENT"
+    ? Result.ok(null)
+    : Result.err(
+        refused(
+          "failed",
+          "The checkpoint store's lock could not be read.",
+        )(read.error),
+      );
 };
 
 /** A lock, draft or reclaim mutex left alone for this long is stale. */
@@ -647,24 +773,31 @@ const ageOf = (stat: Stats) =>
  * refreshing the lock for several heartbeats (its process id may have been
  * reused). A lock that cannot be read is judged by its age alone.
  */
-const isStaleLock = async (lock: string, limits: CheckpointLimits) => {
+const isStaleLock = async (
+  lock: string,
+  limits: CheckpointLimits,
+): Promise<Result<boolean, CheckpointRefused>> => {
   const stat = entryAt(lock);
   if (stat === undefined) {
-    return false;
+    return Result.ok(false);
   }
   if (ageOf(stat) > staleAfterMs(limits)) {
-    return true;
+    return Result.ok(true);
   }
   const holder = await lockAt(lock);
-  if (holder === null) {
-    return false;
+  if (Result.isError(holder)) {
+    return holder;
   }
+  if (holder.value === null) {
+    return Result.ok(false);
+  }
+  const { pid } = holder.value;
   const alive = Result.try({
-    try: () => process.kill(holder.pid, 0),
+    try: () => process.kill(pid, 0),
     catch: (cause) => cause,
   });
   // EPERM: alive, under another user.
-  return Result.isError(alive) && errorCode(alive.error) === "ESRCH";
+  return Result.ok(Result.isError(alive) && errorCode(alive.error) === "ESRCH");
 };
 
 /**
@@ -712,10 +845,23 @@ const reclaimLock = async (
   }
   try {
     const current = await lockAt(lock);
+    if (Result.isError(current)) {
+      return "failed";
+    }
     const same =
-      judged === null ? current === null : current?.token === judged.token;
-    if (same && (await isStaleLock(lock, limits))) {
-      await unlink(lock);
+      judged === null
+        ? current.value === null
+        : current.value?.token === judged.token;
+    if (!same) {
+      return "kept";
+    }
+    const stale = await isStaleLock(lock, limits);
+    if (Result.isError(stale)) {
+      return "failed";
+    }
+    if (stale.value) {
+      // Forced: a lock its holder gave up meanwhile is gone just the same.
+      await rm(lock, { force: true });
       return "gone";
     }
     return "kept";
@@ -750,15 +896,28 @@ const sweepLockLeftovers = async (store: string, limits: CheckpointLimits) => {
  * published fresh and a waiting draft never looks left behind. A lock whose
  * holder is gone is taken over through `reclaimLock`.
  */
-const takeLock = async (
-  store: string,
-  limits: CheckpointLimits,
-  signal: AbortSignal | undefined,
-): Promise<Result<Lock, CheckpointRefused>> => {
+const takeLock = async ({
+  store,
+  limits,
+  signal,
+  clock,
+  deadline: captureDeadline,
+}: StoreAccess): Promise<Result<Lock, CheckpointRefused>> => {
   const lock = path.join(store, LOCK_FILE);
   const mine: Lock = { pid: process.pid, token: crypto.randomUUID() };
   const draft = path.join(store, `${LOCK_FILE}-${mine.token}`);
-  const deadline = performance.now() + limits.lockWaitMs;
+  const lockDeadline = clock.now() + limits.lockWaitMs;
+  // A capture stops waiting at its own deadline, as a folder too slow to save.
+  const waitEnds =
+    captureDeadline !== null && captureDeadline <= lockDeadline
+      ? { at: captureDeadline, refusal: tooSlow }
+      : {
+          at: lockDeadline,
+          refusal: refused(
+            "failed",
+            "Another process holds the checkpoint store.",
+          ),
+        };
   const lockFailed = refused(
     "failed",
     "The checkpoint store could not be locked.",
@@ -802,10 +961,17 @@ const takeLock = async (
       return "failed";
     }
     const judged = await lockAt(lock);
-    if (!(await isStaleLock(lock, limits))) {
+    if (Result.isError(judged)) {
+      return "failed";
+    }
+    const stale = await isStaleLock(lock, limits);
+    if (Result.isError(stale)) {
+      return "failed";
+    }
+    if (!stale.value) {
       return "wait";
     }
-    const reclaimed = await reclaimLock(store, judged, limits);
+    const reclaimed = await reclaimLock(store, judged.value, limits);
     switch (reclaimed) {
       case "gone":
         return "retry";
@@ -837,15 +1003,14 @@ const takeLock = async (
       if (signal?.aborted === true) {
         return Result.err(refused("failed", "The capture was stopped.")());
       }
-      if (performance.now() >= deadline) {
-        return Result.err(
-          refused("failed", "Another process holds the checkpoint store.")(),
-        );
-      }
       if (taken.value === "wait") {
-        // real-time: another process holds the lock; it is polled until free.
+        // A retry follows a lock just freed, so only a wait ends at the deadline.
+        if (clock.now() >= waitEnds.at) {
+          return Result.err(waitEnds.refusal());
+        }
+        // Another process holds the lock; it is polled until free.
         // await-in-loop: one wait between attempts.
-        await Bun.sleep(LOCK_POLL_MS);
+        await clock.sleep(LOCK_POLL_MS);
       }
     }
   } finally {
@@ -863,7 +1028,13 @@ const keepLock = (
   const lock = path.join(store, LOCK_FILE);
   const beat = async () => {
     const holder = await lockAt(lock);
-    if (holder?.token === mine.token) {
+    if (Result.isError(holder)) {
+      log(
+        `the checkpoint store's lock was not refreshed: ${holder.error.message}`,
+      );
+      return;
+    }
+    if (holder.value?.token === mine.token) {
       const now = new Date();
       await utimes(lock, now, now);
     }
@@ -882,14 +1053,18 @@ const keepLock = (
 
 /** Give the lock up, unless it is no longer ours. */
 const releaseLock = async (store: string, mine: Lock) =>
-  await Result.tryPromise({
-    try: async () => {
-      const lock = path.join(store, LOCK_FILE);
-      if ((await lockAt(lock))?.token === mine.token) {
+  await Result.gen(async function* () {
+    const lock = path.join(store, LOCK_FILE);
+    const holder = yield* Result.await(lockAt(lock));
+    if (holder?.token !== mine.token) {
+      return Result.ok();
+    }
+    return await Result.tryPromise({
+      try: async () => {
         await rm(lock, { force: true });
-      }
-    },
-    catch: refused("failed", "The checkpoint store could not be unlocked."),
+      },
+      catch: refused("failed", "The checkpoint store could not be unlocked."),
+    });
   });
 
 /** Work on one store, in this process queued after the work before it. */
@@ -920,17 +1095,21 @@ type StoreAccess = {
   log: (line: string) => void;
   /** Ends the wait for the store when the run is stopped. */
   signal?: AbortSignal | undefined;
+  clock: CheckpointClock;
+  /** A capture's deadline on `clock`, which ends its wait for the store. */
+  deadline: number | null;
 };
 
 /**
  * Run `work` with the store to itself: after earlier work on it in this
  * process, and holding its lock file against other processes. A stopped run
- * stops waiting for either at once.
+ * stops waiting for either at once, and a capture at its deadline.
  */
 const withStore = async <T>(
-  { store, limits, log, signal }: StoreAccess,
+  access: StoreAccess,
   work: () => Promise<Result<T, CheckpointRefused>>,
 ): Promise<Result<T, CheckpointRefused>> => {
+  const { store, limits, log, signal, clock, deadline } = access;
   const before = storeQueues.get(store) ?? Promise.resolve(null);
   const { promise: ours, resolve: finish } = Promise.withResolvers<null>();
   // The next in line waits for this work and for everything before it, also
@@ -942,14 +1121,25 @@ const withStore = async <T>(
     return null;
   });
   storeQueues.set(store, done);
+  const queued = new AbortController();
   try {
-    await Promise.race([before, whenAborted(signal)]);
+    await Promise.race([
+      before,
+      whenAborted(signal),
+      ...(deadline === null
+        ? []
+        : [clock.sleep(Math.max(0, deadline - clock.now()), queued.signal)]),
+    ]);
+    queued.abort();
     if (signal?.aborted === true) {
       return Result.err(refused("failed", "The capture was stopped.")());
     }
+    if (deadline !== null && clock.now() >= deadline) {
+      return Result.err(tooSlow());
+    }
     return await Result.gen(async function* () {
       yield* Result.await(openStore(store));
-      const mine = yield* Result.await(takeLock(store, limits, signal));
+      const mine = yield* Result.await(takeLock(access));
       const stopBeating = keepLock(store, mine, limits, log);
       const swept = await Result.tryPromise({
         try: async () => {
@@ -1111,14 +1301,20 @@ const storedBytes = (saved: readonly { entries: readonly Entry[] }[]) => {
   return [...sizes.values()].reduce((total, size) => total + size, 0);
 };
 
+/** When a capture's cleanup stops: its deadline on its clock. */
+type CleanupDeadline = { clock: CheckpointClock; deadline: number };
+
 /**
  * Remove every stored file that no kept manifest and no recovery names, and
- * stale temp files. Only called with the store to itself.
+ * stale temp files. Only called with the store to itself. A capture stops at
+ * its deadline and leaves the rest to the next one: what is left is named by
+ * nothing, so no checkpoint depends on it.
  */
 const collectGarbage = async (
   store: string,
   kept: readonly Manifest[],
   recoveries: readonly Recovery[],
+  until: CleanupDeadline | null,
 ) =>
   await Result.tryPromise({
     try: async () => {
@@ -1130,7 +1326,11 @@ const collectGarbage = async (
         ),
       );
       const objects = path.join(store, OBJECTS);
+      const late = () => until !== null && until.clock.now() >= until.deadline;
       for (const bucket of await namesIn(objects)) {
+        if (late()) {
+          return;
+        }
         const folder = path.join(objects, bucket);
         if (bucket.startsWith(TEMP_OBJECT_PREFIX)) {
           // await-in-loop: removals one at a time.
@@ -1139,6 +1339,9 @@ const collectGarbage = async (
         }
         // await-in-loop: one bucket listed at a time.
         for (const name of await namesIn(folder)) {
+          if (late()) {
+            return;
+          }
           if (!referenced.has(name)) {
             // await-in-loop: removals one at a time.
             await rm(path.join(folder, name), { force: true });
@@ -1154,7 +1357,11 @@ const collectGarbage = async (
  * the newest; then remove what nothing names. A store that cannot be read
  * removes nothing.
  */
-const prune = async (store: string, limits: CheckpointLimits) =>
+const prune = async (
+  store: string,
+  limits: CheckpointLimits,
+  until: CleanupDeadline,
+) =>
   await Result.gen(async function* () {
     const state = yield* Result.await(readStore(store, limits));
     const kept = state.manifests.slice(-Math.max(1, limits.maxManifests));
@@ -1164,6 +1371,18 @@ const prune = async (store: string, limits: CheckpointLimits) =>
       storedBytes([...kept, ...state.recoveries]) > limits.maxStoredBytes
     ) {
       kept.shift();
+    }
+    // A kept checkpoint undone through an older one it outlives is marked
+    // undone itself first, so dropping the older one cannot make it
+    // restorable again.
+    const undone = undoneRunIds(state.manifests);
+    for (const manifest of kept) {
+      if (undone.has(manifest.runId) && !manifest.undone) {
+        // await-in-loop: one manifest written at a time.
+        yield* Result.await(
+          writeManifest(store, { ...manifest, undone: true }, limits),
+        );
+      }
     }
     const keptIds = new Set(kept.map(({ runId }) => runId));
     const dropped = [
@@ -1183,12 +1402,12 @@ const prune = async (store: string, limits: CheckpointLimits) =>
         catch: refused("failed", "Older checkpoints could not be removed."),
       }),
     );
-    return await collectGarbage(store, kept, state.recoveries);
+    return await collectGarbage(store, kept, state.recoveries, until);
   });
 
 /**
  * The folder the checkpoint describes, plus the attachments later turns
- * copied: those turns are still in the chat, so their files stay.
+ * copied: files the member gave are never taken away by an undo.
  */
 const desiredTree = (
   target: Manifest,
@@ -1696,7 +1915,7 @@ const rollBack = async ({
 > =>
   await Result.gen(async function* () {
     const now = yield* Result.await(
-      saveTree({ workspaceDir, store, limits, known: before }),
+      saveTree({ ...restoreWalk(limits), workspaceDir, store, known: before }),
     );
     const saved = byEntryPath(before);
     const current = byEntryPath(now);
@@ -1751,7 +1970,7 @@ const rollBack = async ({
     }
     yield* Result.await(applyTree(workspaceDir, store, target, current));
     const after = yield* Result.await(
-      saveTree({ workspaceDir, store, limits, known: now }),
+      saveTree({ ...restoreWalk(limits), workspaceDir, store, known: now }),
     );
     return sameTree(after, [...target.values()])
       ? Result.ok()
@@ -1839,11 +2058,13 @@ const reconcile = async (
   });
 
 /**
- * Put the folder back as the run's checkpoint saved it. Only the newest
- * checkpoint not undone yet is restored. The folder's current state is saved
- * and written down first; any failure puts it back. Until the folder is
- * restored or verifiably put back, that state and its files stay in the
- * store.
+ * Put the folder back as the run's checkpoint saved it, undoing that run and
+ * every later one. A checkpoint already undone, by its own restore or by an
+ * earlier one's, is answered as restored and the folder is not touched:
+ * restoring it now would bring back changes an undo took away. The folder's
+ * current state is saved and written down first; any failure puts it back.
+ * Until the folder is restored or verifiably put back, that state and its
+ * files stay in the store.
  *
  * The caller holds the store, and makes sure no run uses the folder.
  */
@@ -1864,18 +2085,20 @@ const restoreHeld = async (
   if (target === undefined) {
     return { outcome: "no_checkpoint", detail: null };
   }
-  const newest = manifests.findLast(({ undone }) => !undone);
-  if (newest?.runId !== runId) {
-    return { outcome: "not_newest", detail: null };
+  // Asked again after it was done (an answer that never arrived), or undone
+  // with an earlier checkpoint: the folder is not touched, and the answer is
+  // the same.
+  if (undoneRunIds(manifests).has(runId)) {
+    return { outcome: "restored", detail: null };
   }
   const desired = desiredTree(
     target,
     manifests.filter(({ ordinal }) => ordinal > target.ordinal),
   );
   const saved = await saveTree({
+    ...restoreWalk(limits),
     workspaceDir,
     store,
-    limits,
     known: manifests.at(-1)?.entries ?? [],
   });
   if (Result.isError(saved)) {
@@ -1918,12 +2141,20 @@ const restoreHeld = async (
     };
   }
   const applied = await applyTree(workspaceDir, store, desired, before);
-  // Marked undone in the same step: a restore that is not recorded did not
-  // happen, and is undone too.
+  // Marked undone in the same step, the later checkpoints with it in the one
+  // write: a restore that is not recorded did not happen, and is undone too.
   const marked =
     Result.isOk(applied) &&
     Result.isOk(
-      await writeManifest(store, { ...target, undone: true }, limits),
+      await writeManifest(
+        store,
+        {
+          ...target,
+          undone: true,
+          undoneThrough: (manifests.at(-1) ?? target).ordinal,
+        },
+        limits,
+      ),
     );
   if (marked) {
     await afterMark?.();
@@ -1983,7 +2214,7 @@ export const restoreCheckpoint = async (
     return { outcome: "no_checkpoint", detail: null };
   }
   const restored = await withStore(
-    { store, limits, log: options.log },
+    { store, limits, log: options.log, clock: SYSTEM_CLOCK, deadline: null },
     async () => {
       // An interrupted restore is settled first; until it is, nothing else.
       const settled = await reconcile(
@@ -2003,7 +2234,12 @@ export const restoreCheckpoint = async (
       // A store that cannot be read removes nothing.
       const collected = await Result.gen(async function* () {
         const state = yield* Result.await(readStore(store, limits));
-        return await collectGarbage(store, state.manifests, state.recoveries);
+        return await collectGarbage(
+          store,
+          state.manifests,
+          state.recoveries,
+          null,
+        );
       });
       return Result.ok(
         Result.isOk(collected) || outcome.detail !== null
@@ -2027,19 +2263,22 @@ type CaptureOptions = {
   memberFiles: readonly string[];
   /**
    * Folders the run uses and never owns: skill folders, the package cache,
-   * the CLI's home. A run folder holding one, or inside one, is not saved.
+   * the step output store, the CLI's home. A run folder holding one, or
+   * inside one, is not saved.
    */
   protectedPaths: readonly string[];
   /** Ends a capture in progress when the run is stopped. */
   signal?: AbortSignal;
   limits?: CheckpointLimits;
+  clock?: CheckpointClock;
   /** One line in the holder's log; never given a path or a file name. */
   log: (line: string) => void;
 };
 
 /**
- * Save the run's folder as it stands. Past any bound, nothing is saved and
- * the reason is reported: the turn runs either way, without an undo.
+ * Save the run's folder as it stands, within `maxCaptureMs` of being asked.
+ * Past any bound, nothing is saved and the reason is reported: the turn runs
+ * either way, without an undo.
  */
 export const captureCheckpoint = async ({
   workspaceDir,
@@ -2048,8 +2287,10 @@ export const captureCheckpoint = async ({
   protectedPaths,
   signal,
   limits = CHECKPOINT_LIMITS,
+  clock = SYSTEM_CLOCK,
   log,
 }: CaptureOptions): Promise<DesktopRunnerCheckpointEvent> => {
+  const deadline = clock.now() + limits.maxCaptureMs;
   if (
     protectedPaths.some(
       (protectedPath) =>
@@ -2060,56 +2301,69 @@ export const captureCheckpoint = async ({
     return { status: "unavailable", reason: "unsupported" };
   }
   const store = checkpointStoreOf(workspaceDir);
-  const taken = await withStore({ store, limits, log, signal }, async () => {
-    // An interrupted restore is settled first; until it is, nothing else.
-    const settled = await reconcile(store, workspaceDir, limits, log);
-    if (Result.isError(settled)) {
-      log(`an interrupted restore was not settled: ${settled.error.message}`);
-      return Result.err(
-        refused("failed", "An interrupted restore was not settled.")(),
-      );
-    }
-    const saved = await Result.gen(async function* () {
-      const { manifests } = yield* Result.await(readStore(store, limits));
-      const latest = manifests.at(-1);
-      const entries = yield* Result.await(
-        saveTree({
-          workspaceDir,
-          store,
-          limits,
-          known: latest?.entries ?? [],
-          signal,
-        }),
-      );
-      const files = new Set(
-        entries.flatMap((entry) => (entry.kind === "file" ? [entry.path] : [])),
-      );
-      return await writeManifest(
-        store,
-        {
-          version: MANIFEST_VERSION,
-          runId,
-          ordinal: (latest?.ordinal ?? 0) + 1,
-          takenAt: Temporal.Now.instant().toString(),
-          undone: false,
-          entries,
-          memberFiles: memberFiles.filter((memberFile) =>
-            files.has(memberFile),
+  const taken = await withStore(
+    { store, limits, log, signal, clock, deadline },
+    async () => {
+      // An interrupted restore is settled first; until it is, nothing else.
+      const settled = await reconcile(store, workspaceDir, limits, log);
+      if (Result.isError(settled)) {
+        log(`an interrupted restore was not settled: ${settled.error.message}`);
+        return Result.err(
+          refused("failed", "An interrupted restore was not settled.")(),
+        );
+      }
+      const saved = await Result.gen(async function* () {
+        const { manifests } = yield* Result.await(readStore(store, limits));
+        const latest = manifests.at(-1);
+        const entries = yield* Result.await(
+          saveTree({
+            workspaceDir,
+            store,
+            limits,
+            clock,
+            deadline,
+            known: latest?.entries ?? [],
+            signal,
+          }),
+        );
+        const files = new Set(
+          entries.flatMap((entry) =>
+            entry.kind === "file" ? [entry.path] : [],
           ),
-        },
-        limits,
-      );
-    });
-    // Also after a refusal: files stored before it are named by nothing.
-    const pruned = await prune(store, limits);
-    if (Result.isError(pruned)) {
-      log(`older checkpoints were kept: ${pruned.error.message}`);
-    }
-    return saved;
-  });
-  return Result.isOk(taken)
-    ? { status: "taken" }
-    : { status: "unavailable", reason: taken.error.reason };
+        );
+        return await writeManifest(
+          store,
+          {
+            version: MANIFEST_VERSION,
+            runId,
+            ordinal: (latest?.ordinal ?? 0) + 1,
+            takenAt: Temporal.Now.instant().toString(),
+            undone: false,
+            entries,
+            memberFiles: memberFiles.filter((memberFile) =>
+              files.has(memberFile),
+            ),
+          },
+          limits,
+        );
+      });
+      // Also after a refusal: files stored before it are named by nothing.
+      const pruned = await prune(store, limits, { clock, deadline });
+      if (Result.isError(pruned)) {
+        log(`older checkpoints were kept: ${pruned.error.message}`);
+      }
+      return saved;
+    },
+  );
+  if (Result.isOk(taken)) {
+    return { status: "taken" };
+  }
+  // A folder past a bound is expected and reported in the run's event; only
+  // a capture that failed is worth a line in the log.
+  if (taken.error.reason === "failed") {
+    log(`no checkpoint was taken: ${taken.error.message}`);
+  }
+  return { status: "unavailable", reason: taken.error.reason };
 };
 
 /** A capture's report as the chunk it travels in on the run's stream. */

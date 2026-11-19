@@ -23,6 +23,7 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
   CZ_TAKTO,
+  isCzechOpeningFormula,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
@@ -165,6 +166,8 @@ export const parseRegionalDecision = (
   }
 
   // ── Header (intro) ───────────────────────────────────
+  // The state and the formula beside the title are the court's words, not
+  // its preamble's prose.
   for (const { inlines, plainText } of header) {
     blockIndex += 1;
     blocks.push(
@@ -182,7 +185,9 @@ export const parseRegionalDecision = (
             id: makeBlockId(),
             anchorId: `p-${blockIndex}`,
             type: "paragraph",
-            role: "intro",
+            role: isCzechOpeningFormula(plainText)
+              ? "opening-formula"
+              : "intro",
             inlines,
             plainText,
           },

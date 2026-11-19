@@ -35,15 +35,18 @@ const answer = (
   }
   const court = args["court"];
   if (court === undefined) {
-    return {
-      facets: {
-        court: [
-          { courts: [{ value: CONSTITUTIONAL }] },
-          { courts: [{ value: SUPREME }] },
-        ],
-      },
-      results: [],
-    };
+    // As the deployment answers: court facets only for a search that asks.
+    const requested = args["facets"];
+    const courtFacets =
+      Array.isArray(requested) && requested.includes("court")
+        ? {
+            court: [
+              { courts: [{ value: CONSTITUTIONAL }] },
+              { courts: [{ value: SUPREME }] },
+            ],
+          }
+        : null;
+    return { facets: courtFacets, results: [] };
   }
   const hit = Object.values(hits).find((entry) => entry.court === court);
   return { facets: null, results: hit ? [hit] : [] };
@@ -188,6 +191,21 @@ describe("the case-law identity canary", () => {
       status: "passed",
       detail: `4 identities across 2 courts resolved to the decision search found; docket only (no ECLI sampled): ${SUPREME}`,
     });
+  });
+
+  test("the seed search asks for court facets", async () => {
+    const seeds: unknown[] = [];
+    const recording: CallCaseLawTool = async (name, args) => {
+      if (name === "search_case_law" && args["court"] === undefined) {
+        seeds.push(args["facets"]);
+      }
+      return await deployment(exact)(name, args);
+    };
+    await sampleCaseLawIdentities(recording);
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const facets of seeds) {
+      expect(facets).toContain("court");
+    }
   });
 
   test("a country whose search is closed has nothing to sample", async () => {

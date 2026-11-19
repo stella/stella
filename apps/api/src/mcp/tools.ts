@@ -48,7 +48,11 @@ import {
   resolveMcpToolOutputContract,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
-import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
+import {
+  modeAllowsGatewayTools,
+  modeAllowsSkillTools,
+  type SkillToolSession,
+} from "@/api/mcp/gateway/mode-policy";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   agentInputValidationError,
@@ -220,6 +224,8 @@ export const getMcpToolDefinition = async (
 export const getMcpToolRequiredScopesHint = (
   toolName: string,
   mode: McpMode = "default",
+  /** The caller's credential; without it, only the advanced surface serves skills. */
+  session: SkillToolSession = {},
 ): readonly ToolScope[] | undefined => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
@@ -228,16 +234,13 @@ export const getMcpToolRequiredScopesHint = (
     }
     return [staticTool.scope, ...staticTool.additionalScopes];
   }
-  if (!modeAllowsGatewayTools(mode)) {
-    return undefined;
-  }
 
   if (isExternalMcpToolName(toolName)) {
-    return ["stella:external_mcps"];
+    return modeAllowsGatewayTools(mode) ? ["stella:external_mcps"] : undefined;
   }
 
   if (isSkillToolName(toolName)) {
-    return ["stella:skills"];
+    return modeAllowsSkillTools(mode, session) ? ["stella:skills"] : undefined;
   }
 
   return undefined;
@@ -666,6 +669,7 @@ const dispatchMcpToolCall = async ({
               context: executionContext,
               mode,
               response,
+              outputSchema: outputContract.outputSchemaSource,
             },
             {
               anonymizeTextFields:

@@ -4,6 +4,7 @@ import { SANCTIONS_MONITORING_CONSTRAINTS } from "../sanctions-monitoring-constr
 export default {
   id: "constraints-sanctions-monitoring-constraints",
   revision: 1300,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...SANCTIONS_MONITORING_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

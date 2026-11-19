@@ -3,9 +3,11 @@ import * as v from "valibot";
 
 import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resolveRate } from "@/api/lib/billing/rates";
+import { rateResolutionMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { userIdSchema, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -26,6 +28,7 @@ const resolveRateQuerySchema = v.object({
 
 const resolveRateHandler = createSafeHandler(
   {
+    moneyResponse: rateResolutionMoneyResponse,
     contract: "patch",
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
@@ -33,7 +36,7 @@ const resolveRateHandler = createSafeHandler(
       "activity, user, role, then table default. Effective dates apply throughout. Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
-    permissions: { rate: ["read"] },
+    permissions: BILLING_MATTER_READ_PERMISSION,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     mcp: { type: "tool", name: "resolve_rate" },

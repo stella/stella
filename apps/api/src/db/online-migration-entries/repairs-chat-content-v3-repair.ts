@@ -4,6 +4,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "repairs-chat-content-v3-repair",
   revision: 1020,
+  lifecycle: "finalized",
   type: "repairs",
   values: [CHAT_CONTENT_V3_REPAIR],
 } satisfies OnlineMigrationEntry;

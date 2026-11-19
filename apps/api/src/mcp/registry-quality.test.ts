@@ -378,6 +378,11 @@ test("every read tool permission declaration stays visible in review", () => {
         "name": "search_legislation",
         "reason": "public legislation corpus",
       },
+      {
+        "kind": "open-read",
+        "name": "verify_quote",
+        "reason": "public case-law corpus",
+      },
     ]
   `);
 });
@@ -438,8 +443,11 @@ test("every surface's read declarations are covered by the census", () => {
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.
 // Raised for a search that can answer "still running": that branch is part of
-// the schema, so a client can tell it from an empty result.
-const OUTPUT_SCHEMA_CHAR_CEILING = 4500;
+// the schema, so a client can tell it from an empty result. Raised again by
+// the 154 characters search_case_law needs to say which words each hit holds
+// (`terms`), how many decisions hold each word, and that unread partial
+// matches stopped a page (4473 before, 4627 after).
+const OUTPUT_SCHEMA_CHAR_CEILING = 4650;
 
 // An editorial limit on one description; the largest measured one is in the
 // surface baseline.

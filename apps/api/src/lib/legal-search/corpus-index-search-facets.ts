@@ -232,20 +232,23 @@ const facetAggregations = ({
         return panic(`Unhandled corpus facet spec: ${String(spec)}`);
     }
   };
-  const aggs: Record<string, unknown> = {};
+  const aggs = new Map<string, unknown>();
   for (const name of names) {
-    aggs[name] = aggregationFor(CORPUS_SEARCH_FACET_SPEC[name]);
+    aggs.set(name, aggregationFor(CORPUS_SEARCH_FACET_SPEC[name]));
   }
   if (withTotal) {
-    aggs[TOTAL_AGGREGATION] = { cardinality: { field: decisionCountField } };
+    aggs.set(TOTAL_AGGREGATION, { cardinality: { field: decisionCountField } });
   }
   if (withCourtYear) {
-    aggs["courtYear"] = courtYearAggregation({
-      decisionCountField,
-      yearRanges,
-    });
+    aggs.set(
+      "courtYear",
+      courtYearAggregation({
+        decisionCountField,
+        yearRanges,
+      }),
+    );
   }
-  return aggs;
+  return Object.fromEntries(aggs);
 };
 
 /**
@@ -253,7 +256,7 @@ const facetAggregations = ({
  * with a JSON float from a sketch, and a fractional "3.0000000001 decisions"
  * is not a number to put in front of a reader. Null when the shape is not one.
  */
-const readCardinality = (aggregation: unknown): number | null => {
+export const readCardinality = (aggregation: unknown): number | null => {
   if (!isRecord(aggregation)) {
     return null;
   }
@@ -496,13 +499,13 @@ export const readCorpusSearchFacets = async ({
     ),
   );
 
-  const facets: Record<CorpusSearchFacetName, SearchFacetBucket[]> = {
-    court: [],
-    decisionType: [],
-    source: [],
-    language: [],
-    year: [],
-  };
+  const facets = new Map<CorpusSearchFacetName, SearchFacetBucket[]>([
+    ["court", []],
+    ["decisionType", []],
+    ["source", []],
+    ["language", []],
+    ["year", []],
+  ]);
   let total: number | null = null;
   let courtYear: CorpusCourtYear | null = null;
   for (const [index, answer] of answers.entries()) {
@@ -544,15 +547,21 @@ export const readCorpusSearchFacets = async ({
           }),
         );
       }
-      facets[name] = buckets;
+      facets.set(name, buckets);
     }
   }
 
-  const court = facets.court;
-  const decisionType = facets.decisionType;
-  const source = facets.source;
-  const language = facets.language;
-  const year = facets.year;
+  const court =
+    facets.get("court") ?? panic("Missing declared corpus facet: court");
+  const decisionType =
+    facets.get("decisionType") ??
+    panic("Missing declared corpus facet: decisionType");
+  const source =
+    facets.get("source") ?? panic("Missing declared corpus facet: source");
+  const language =
+    facets.get("language") ?? panic("Missing declared corpus facet: language");
+  const year =
+    facets.get("year") ?? panic("Missing declared corpus facet: year");
   if (total === null) {
     return Result.err(
       new CorpusSearchFacetsError({

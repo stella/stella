@@ -15,7 +15,6 @@ import {
 } from "drizzle-orm";
 
 import type { ChatTurnTiming } from "@stll/api-contract/chat";
-import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -38,6 +37,11 @@ import type {
   ChatRunRescanReferenceState,
   ChatRunTrackedReferenceState,
 } from "@/api/lib/chat/run-log-reference-state";
+import {
+  CHAT_RUN_LOG_REFUSALS,
+  ChatRunLogRefusedError,
+} from "@/api/lib/chat/run-log-refusal";
+import type { ChatRunLogRefusalReason } from "@/api/lib/chat/run-log-refusal";
 import { createRunMessageRoles } from "@/api/lib/chat/run-log-roles";
 import type { OpenRunMessage } from "@/api/lib/chat/run-log-roles";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
@@ -75,29 +79,6 @@ type ChatRunLogExecution = {
 class ChatRunLogError extends TaggedError("ChatRunLogError")<{
   message: string;
 }> {}
-
-/**
- * Why the log refused a batch. Every reason is decided before the batch writes
- * anything, so a refused batch is known not to be stored: it never holds the
- * log for a retry, and the next batch (a terminal error, say) still appends.
- */
-const CHAT_RUN_LOG_REFUSALS = {
-  "chunk-too-large": "Chat run log chunk exceeds its size limit",
-  "run-too-large": "Chat run log exceeds its size limit",
-  "fence-lost": "Chat run log execution fence lost",
-  closed: "Chat run log is closed or bound to another turn",
-} as const satisfies Record<string, string>;
-
-export type ChatRunLogRefusalReason = keyof typeof CHAT_RUN_LOG_REFUSALS;
-
-/** The log refused a batch it is known not to have stored. */
-export class ChatRunLogRefusedError extends TaggedError(
-  "ChatRunLogRefusedError",
-)<{ message: string; reason: ChatRunLogRefusalReason }> {
-  static {
-    declareFingerprintFields(this, ["reason"]);
-  }
-}
 
 const refusal = (reason: ChatRunLogRefusalReason) =>
   new ChatRunLogRefusedError({

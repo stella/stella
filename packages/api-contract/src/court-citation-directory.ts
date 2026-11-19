@@ -22,6 +22,12 @@ import type { PublicCountry } from "./public-country-capability";
  * An ECLI court code is listed only where it is recorded (the registry's, and
  * codes observed on published decisions); a code the directory does not know
  * still constrains a citation, compared against the decision's own ECLI.
+ *
+ * Where a country's decisions are identified by court (`id`, see
+ * `court-identity.ts`), this is also the list of courts a decision can be
+ * stored under: ingestion reads the name a publisher prints onto one of these
+ * courts through the same aliases a citation is read through, and stores the
+ * court's id and official name beside what was printed.
  */
 
 /** A court's seat as a citation writes it. */
@@ -37,6 +43,12 @@ export type CourtSeat = {
 };
 
 export type DirectoryCourt = {
+  /**
+   * The court's identity in a country whose decisions store one: its
+   * Ministry of Justice abbreviation, the code its ECLIs carry, where it has
+   * one. Stable across renamings and spellings, unlike the name.
+   */
+  id?: string | undefined;
   /** The official name, the spelling the corpus stores it under. */
   name: string;
   /** The head phrase the name opens with, a key of the language's heads. */
@@ -49,7 +61,10 @@ export type DirectoryCourt = {
   /** A seat's short code a citation writes after the court's (`KS BA`). */
   seatCode?: string | undefined;
   ecliCodes: readonly string[];
-  /** Fixed citation spellings the generator does not derive. */
+  /**
+   * Fixed spellings the generator does not derive: a citation's, or the
+   * abbreviation a publisher prints in its court field (`Bánovce n/B`).
+   */
   extraAliases?: readonly string[] | undefined;
 };
 
@@ -260,7 +275,10 @@ const seatIn = (
   nominative: string,
   form: string,
   preposition = "v",
-): CourtSeat => ({ nominative, prepositional: { preposition, form } });
+): CourtSeat => ({
+  nominative,
+  prepositional: { preposition, form },
+});
 
 const registryCodesByName = (
   registry: Readonly<Record<string, RegisteredCourt>>,
@@ -431,6 +449,35 @@ const withObservedCode = (court: DirectoryCourt): DirectoryCourt => {
 };
 
 /**
+ * The id of a court whose decisions carry no ECLI code of its own: a branch
+ * that publishes under its main court's code, and a decision body that is no
+ * court. Spelled the way the ministry builds a branch's code, main court
+ * first.
+ */
+const CZ_IDS_WITHOUT_ECLI_CODE: Readonly<Record<string, string>> = {
+  "Krajský soud v Plzni – pobočka v Karlových Varech": "KSPLKV",
+  "Krajský soud v Brně – pobočka v Jihlavě": "KSBRJI",
+  "Úřad pro ochranu hospodářské soutěže": "UOHS",
+};
+
+/**
+ * A court with its id: the one ECLI code it carries, or the id the list
+ * declares for a court without one. A court with neither, or with several
+ * codes and no declared id, stops the module from loading.
+ */
+const withDirectoryId = (
+  court: DirectoryCourt,
+  declared: Readonly<Record<string, string>>,
+): DirectoryCourt => {
+  const id =
+    declared[court.name] ??
+    (court.ecliCodes.length === 1 ? court.ecliCodes[0] : undefined);
+  return id === undefined
+    ? panic(`Court without an id: ${court.name}`)
+    : { ...court, id };
+};
+
+/**
  * The Czech courts (zákon č. 6/2002 Sb., o soudech a soudcích, přílohy 1–3):
  * the apex courts, both high courts, the regional courts and their branches,
  * the Municipal Court in Prague, and the 86 district-level courts.
@@ -550,8 +597,42 @@ const CZE_COURTS: readonly DirectoryCourt[] = (
     district("Přerov", "Přerově"),
     district("Šumperk", "Šumperku"),
     district("Vsetín", "Vsetíně", "ve"),
+    // District courts' branches, each with the code its decisions carry
+    // (`ECLI:CZ:OSKIHA:…`).
+    czCourt(
+      "OS",
+      seatIn("Bruntál", "Bruntále"),
+      ["OSBUKR"],
+      seatIn("Krnov", "Krnově"),
+    ),
+    czCourt(
+      "OS",
+      seatIn("Karviná", "Karviné"),
+      ["OSKIHA"],
+      seatIn("Havířov", "Havířově"),
+    ),
+    czCourt(
+      "OS",
+      seatIn("Vsetín", "Vsetíně", "ve"),
+      ["OSVSVM"],
+      seatIn("Valašské Meziříčí", "Valašském Meziříčí", "ve"),
+    ),
+    // Not a court, but a decision body whose decisions the corpus stores
+    // under its name: the competition authority. It has no court head to
+    // decline, so its name's cases are written out.
+    {
+      name: "Úřad pro ochranu hospodářské soutěže",
+      head: "ÚOHS",
+      ecliCodes: [],
+      extraAliases: [
+        "Úřadu pro ochranu hospodářské soutěže",
+        "Úřadem pro ochranu hospodářské soutěže",
+      ],
+    },
   ] satisfies DirectoryCourt[]
-).map(withObservedCode);
+)
+  .map(withObservedCode)
+  .map((court) => withDirectoryId(court, CZ_IDS_WITHOUT_ECLI_CODE));
 
 /** Slovak seats a registry name writes in the locative, in the nominative. */
 const SLOVAK_SEAT_NOMINATIVES: Readonly<Record<string, string>> = {
@@ -589,9 +670,21 @@ const SK_OBSERVED_COURTS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Abbreviations the Slovak courts' publisher prints in a decision's court
+ * field for the same court (`sud.registreGuid`), alongside the full name.
+ */
+const SK_PUBLISHER_ABBREVIATIONS: Readonly<Record<string, readonly string[]>> =
+  {
+    OSBN: ["Okresný súd Bánovce n/B"],
+    OSNM: ["Okresný súd Nové Mesto n/V"],
+    OSVT: ["Okresný súd Vranov n/T"],
+    OSZH: ["Okresný súd Žiar n/H"],
+  };
+
+/**
  * The Slovak courts, read off the ECLI registry and the observed courts: the
  * head the name opens with, and the seat after it (`v Bratislave` or a bare
- * `Bratislava I`).
+ * `Bratislava I`). The id is the court's ECLI code.
  */
 const SVK_COURTS: readonly DirectoryCourt[] = [
   ...Object.entries(SK_ECLI_COURT_REGISTRY).map(
@@ -602,8 +695,9 @@ const SVK_COURTS: readonly DirectoryCourt[] = [
   const [head, { forms }] = slovakHeadOf(name);
   const rest = name.slice(forms[0].length).trim();
   const apex = APEX_COUNTRY_SUFFIXES.SVK.some((suffix) => suffix === rest);
+  const extraAliases = SK_PUBLISHER_ABBREVIATIONS[code];
   if (apex) {
-    return { name, head, ecliCodes: [code] };
+    return { id: code, name, head, ecliCodes: [code], extraAliases };
   }
   const located = rest.startsWith("v ") ? rest.slice(2).trim() : undefined;
   const seat: CourtSeat =
@@ -618,7 +712,15 @@ const SVK_COURTS: readonly DirectoryCourt[] = [
   // Slovak citations abbreviate it (`KS BA`).
   const seatCode =
     head === "KS" || head === "SpS" ? code.slice(head.length) : undefined;
-  return { name, head, seat, seatCode, ecliCodes: [code] };
+  return {
+    id: code,
+    name,
+    head,
+    seat,
+    seatCode,
+    ecliCodes: [code],
+    extraAliases,
+  };
 });
 
 const EU_COURTS: readonly DirectoryCourt[] = [
@@ -1736,6 +1838,7 @@ const grammarOf = (
  */
 export const COURT_CITATION_GRAMMARS = {
   AUT: { kind: "no-identity-surface" },
+  BRA: { kind: "no-identity-surface" },
   CZE: grammarOf("CZE", {
     ecliJurisdiction: "CZ",
     ecliFamilyPrefixes: ["KS", "MS", "OS", "VS"],

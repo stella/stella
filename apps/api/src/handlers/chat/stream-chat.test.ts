@@ -1,5 +1,6 @@
 import {
   chat,
+  convertMessagesToModelMessages,
   EventType,
   maxIterations,
   normalizeStreamChunk,
@@ -47,6 +48,8 @@ import {
 import {
   CHAT_LOCAL_RUN_CONTEXT_METADATA_KEY,
   CHAT_LOCAL_RUN_LIMIT_METADATA_KEY,
+  CHAT_LOCAL_RUN_MODEL_METADATA_KEY,
+  chatLocalRunReroutedModel,
 } from "@stll/api-contract/chat-run-target";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
@@ -69,7 +72,7 @@ import {
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { cutShortAssistantMessage } from "@/api/handlers/chat/chat-turn-persistence";
-import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run-cut";
 import {
   findUnsettledStoredToolCalls,
   settleHistoryForRun,
@@ -163,6 +166,7 @@ import {
   transformPersistenceVisibleStream,
 } from "./stream-chat";
 import {
+  attachSnapshotMessageOwners,
   createChatMessageIdMapper,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
@@ -172,6 +176,8 @@ import {
 } from "./stream-message-identity";
 import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
 import type { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "./tanstack-chat-lifecycle";
+
+const FIXTURE_TIMESTAMP = Date.parse("2026-01-01T00:00:00.000Z");
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
@@ -266,6 +272,7 @@ describe("agent sandbox third-party boundary", () => {
     const error = resolveAgentRunBoundaryError({
       boundary: { type: CHAT_SEND_MODE.anonymized },
       runMode: CHAT_RUN_MODE.agent,
+      runsOn: "agent_sandbox",
     });
 
     expect(error).toMatchObject({
@@ -274,11 +281,27 @@ describe("agent sandbox third-party boundary", () => {
     });
   });
 
+  test("refuses an anonymized turn on the member's computer, naming the computer", () => {
+    const error = resolveAgentRunBoundaryError({
+      boundary: { type: CHAT_SEND_MODE.anonymized },
+      runMode: CHAT_RUN_MODE.agent,
+      runsOn: "computer",
+    });
+
+    expect(error).toMatchObject({
+      code: CHAT_TRANSPORT_ERROR_CODE.localRunAnonymizedRefusal,
+      status: 422,
+    });
+    expect(error?.message).toContain("your computer");
+    expect(error?.message).not.toContain("sandbox");
+  });
+
   test("allows an explicit agent run at the raw boundary", () => {
     expect(
       resolveAgentRunBoundaryError({
         boundary: { type: "raw" },
         runMode: CHAT_RUN_MODE.agent,
+        runsOn: "computer",
       }),
     ).toBeNull();
   });
@@ -344,9 +367,9 @@ const createScriptedAdapter = (
     const { arguments: argumentsText, input, toolName } = turn;
     const callId = `call-${String(turnIndex + 1)}`;
     const resolvedRunId = runId ?? "run-1";
-    const resolvedThreadId = threadId ?? "thread-1";
+    const resolvedThreadId = threadId;
     const messageId = `provider-message-${String(turnIndex + 1)}`;
-    const timestamp = Date.now();
+    const timestamp = FIXTURE_TIMESTAMP;
     yield {
       type: EventType.RUN_STARTED,
       runId: resolvedRunId,
@@ -417,9 +440,9 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
   },
   async *chatStream({ model, runId, threadId }) {
     const resolvedRunId = runId ?? "run-1";
-    const resolvedThreadId = threadId ?? "thread-1";
+    const resolvedThreadId = threadId;
     const messageId = "provider-reply";
-    const timestamp = Date.now();
+    const timestamp = FIXTURE_TIMESTAMP;
     yield {
       type: EventType.RUN_STARTED,
       runId: resolvedRunId,
@@ -1557,7 +1580,7 @@ describe("transient visual preview fault persistence", () => {
             yield* normalizeStreamChunk({
               type: EventType.TOOL_CALL_END,
               toolCallId: "preview-call",
-              toolName: VISUAL_PREVIEW_TOOL_NAME,
+              metadata: { tanstack: { toolName: VISUAL_PREVIEW_TOOL_NAME } },
               output: partial,
               input: {},
             });
@@ -1707,9 +1730,9 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
     },
     async *chatStream({ model, runId, threadId }) {
       iteration += 1;
-      const timestamp = Date.now();
+      const timestamp = FIXTURE_TIMESTAMP;
       const resolvedRunId = runId ?? "run-1";
-      const resolvedThreadId = threadId ?? "thread-1";
+      const resolvedThreadId = threadId;
       if (iteration > 1) {
         // Reading the tool result, the model produces nothing for as long as
         // it thinks; the run is cut first and the provider request rejects
@@ -1822,7 +1845,7 @@ const createFailingAfterUsageAdapter = ({
     yield {
       type: EventType.RUN_STARTED,
       runId: runId ?? "run-1",
-      threadId: threadId ?? "thread-1",
+      threadId,
     } satisfies StreamChunk;
     if (text !== "") {
       yield {
@@ -2360,7 +2383,16 @@ describe("native interrupt boundary persistence", () => {
         input: { name: "NDA", source: "@title NDA" },
         name: "create-document",
         state: "input-complete",
-        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
+        metadata: {
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client",
+          tanstack: {
+            source: {
+              api: "text",
+              model: "single-tool-call",
+              provider: "single-tool-call",
+            },
+          },
+        },
         type: "tool-call",
       },
     ]);
@@ -3054,6 +3086,8 @@ describe("approved client tool with an output schema", () => {
     snapshot: {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       elements: [],
+      elementsLeftOut: false,
+      facts: { meta: [] },
       revision: "revision-1",
       tabId: 1,
       tabs: [
@@ -3064,10 +3098,9 @@ describe("approved client tool with an output schema", () => {
         },
       ],
       text: "Example Domain",
-      textOffset: 0,
-      textTotalChars: 14,
       title: "Example Domain",
       url: "https://example.com/",
+      window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
     },
     status: "success",
   } as const satisfies BrowserControlResult;
@@ -3863,11 +3896,11 @@ describe("outgoing chat stream message ids", () => {
       {
         type: EventType.REASONING_MESSAGE_CONTENT,
         delta: "Checking source law.",
-        messageId,
+        messageId: "openrouter-reasoning-message",
       },
       {
         type: EventType.REASONING_MESSAGE_END,
-        messageId,
+        messageId: "openrouter-reasoning-message",
       },
       {
         type: EventType.RUN_FINISHED,
@@ -4260,13 +4293,23 @@ describe("outgoing chat stream message ids", () => {
           threadId: "thread-1",
         },
         {
-          type: EventType.CUSTOM,
-          name: "approval-requested",
-          value: {
-            approval: { id: "approval_tool-1", needsApproval: true },
-            input: { query: "Winston Churchill quotes" },
-            toolCallId: "tool-1",
-            toolName: "web_search",
+          type: EventType.RUN_FINISHED,
+          runId: "run-1",
+          threadId: "thread-1",
+          outcome: {
+            type: "interrupt",
+            interrupts: [
+              {
+                id: "approval_tool-1",
+                reason: "tool-approval",
+                toolCallId: "tool-1",
+                metadata: {
+                  kind: "approval",
+                  input: { query: "Winston Churchill quotes" },
+                  toolName: "web_search",
+                },
+              },
+            ],
           },
         },
       ]),
@@ -4298,7 +4341,8 @@ describe("outgoing chat stream message ids", () => {
       EventType.TOOL_CALL_START,
       EventType.TOOL_CALL_ARGS,
       EventType.TOOL_CALL_END,
-      EventType.CUSTOM,
+      // The model call ends before the native approval boundary closes the run.
+      EventType.RUN_FINISHED,
       EventType.RUN_FINISHED,
     ]);
     expect(persistedState).toBe(clientState);
@@ -4462,6 +4506,7 @@ describe("outgoing chat stream message ids", () => {
       },
       processor: new StreamProcessor(),
       source: chat({
+        threadId: "test-thread",
         adapter,
         messages: [{ content: "Hello", role: "user" }],
       }),
@@ -4876,7 +4921,17 @@ describe("interrupt snapshot assistant message identity", () => {
     mapMessageId,
     run,
   }: RemapSnapshotOptions) => {
-    const input = buildEngineSnapshot([...history, ...run]);
+    const input = attachSnapshotMessageOwners(
+      {
+        messages: convertMessagesToModelMessages([...history, ...run]),
+        activities: [],
+        runId: "snapshot-test",
+      },
+      buildEngineSnapshot([...history, ...run]),
+    );
+    if (input.type !== EventType.MESSAGES_SNAPSHOT) {
+      throw new Error("Expected a native snapshot");
+    }
     const [output] = await collectChunks(
       remapOutgoingMessageIds({
         existingMessageIds: new Set(history.map(({ id }) => id)),
@@ -4962,55 +5017,120 @@ describe("interrupt snapshot assistant message identity", () => {
     ]);
   });
 
-  test("carries a split historical assistant message once beside a fresh turn", async () => {
-    const turnMessageId = toSafeId<"chatMessage">(
-      "22222222-2222-4222-8222-222222222222",
-    );
-    const history = [
-      userMessage,
-      {
-        id: "assistant-previous",
-        role: "assistant",
-        parts: [
-          ...answeredCall("lookup-1"),
-          { content: "Found two", type: "text" },
-          ...answeredCall("lookup-2"),
-        ],
-      } satisfies ChatMessage,
-      {
-        id: "user-2",
-        role: "user",
-        parts: [{ content: "Now ask me", type: "text" }],
-      } satisfies ChatMessage,
-    ];
-    const { output } = await remapSnapshot({
-      history,
-      mapMessageId: createChatMessageIdMapper(() => turnMessageId),
-      run: [
+  test.each(["result", "ordered"] as const)(
+    "carries historical %s segments and a text-only tail once beside a fresh turn",
+    async (split) => {
+      const turnMessageId = toSafeId<"chatMessage">(
+        "22222222-2222-4222-8222-222222222222",
+      );
+      const history = [
+        userMessage,
         {
-          id: "provider-message-1",
+          id: "assistant-previous",
           role: "assistant",
-          parts: [pendingCall("ask-1")],
-        },
-      ],
-    });
+          parts:
+            split === "result"
+              ? [
+                  ...answeredCall("lookup-1"),
+                  { content: "Found two", type: "text" },
+                  ...answeredCall("lookup-2"),
+                  { content: "Found three", type: "text" },
+                  ...answeredCall("lookup-3"),
+                  { content: "Done", type: "text" },
+                ]
+              : [
+                  answeredCall("lookup-1")[0],
+                  { content: "Found two", type: "text" },
+                  answeredCall("lookup-2")[0],
+                  { content: "Found three", type: "text" },
+                  answeredCall("lookup-3")[0],
+                  answeredCall("lookup-1")[1],
+                  answeredCall("lookup-2")[1],
+                  answeredCall("lookup-3")[1],
+                  { content: "Done", type: "text" },
+                ],
+        } satisfies ChatMessage,
+        {
+          // Collides with the SDK's first generated segment candidate: only
+          // whole-history conversion can derive the actual row ids correctly.
+          id: "assistant-previous-segment-1",
+          role: "user",
+          parts: [{ content: "Now ask me", type: "text" }],
+        } satisfies ChatMessage,
+      ];
+      const { input, output, snapshot } = await remapSnapshot({
+        history,
+        mapMessageId: createChatMessageIdMapper(() => turnMessageId),
+        run: [
+          {
+            id: "provider-message-1",
+            role: "assistant",
+            parts: [pendingCall("ask-1")],
+          },
+        ],
+      });
 
-    expect(assistantToolCalls(output)).toEqual([
-      { id: "assistant-previous", toolCallIds: ["lookup-1", "lookup-2"] },
-      { id: turnMessageId, toolCallIds: ["ask-1"] },
-    ]);
-    expect(output.find(({ id }) => id === "assistant-previous")).toMatchObject({
-      content: "Found two",
-    });
-    expect(output.map(({ role }) => role)).toEqual([
-      "user",
-      "assistant",
-      "tool",
-      "tool",
-      "user",
-      "assistant",
-    ]);
-  });
+      const historicalRows = input.filter(
+        (message) =>
+          message.role === "assistant" && message.id !== "provider-message-1",
+      );
+      expect(historicalRows).toHaveLength(4);
+      expect(new Set(historicalRows.map(({ id }) => id)).size).toBe(4);
+      expect(
+        historicalRows.some(({ id }) => id === "assistant-previous-segment-1"),
+      ).toBe(false);
+      // Explicit tool results split model iterations, so these segments do not
+      // carry the within-model `continues` marker.
+      for (const [index, row] of historicalRows.entries()) {
+        if (split === "ordered" && index > 0 && index < 3) {
+          expect(row.metadata).toMatchObject({
+            tanstack: { continues: historicalRows[index - 1]?.id },
+          });
+        } else {
+          expect(row.metadata).not.toHaveProperty("tanstack.continues");
+        }
+      }
+      expect(assistantToolCalls(output)).toEqual([
+        {
+          id: "assistant-previous",
+          toolCallIds: ["lookup-1", "lookup-2", "lookup-3"],
+        },
+        { id: turnMessageId, toolCallIds: ["ask-1"] },
+      ]);
+      expect(
+        output.find(({ id }) => id === "assistant-previous"),
+      ).toMatchObject({
+        content: "Found two\n\nFound three\n\nDone",
+      });
+      expect(output.map(({ role }) => role)).toEqual([
+        "user",
+        "assistant",
+        "tool",
+        "tool",
+        "tool",
+        "user",
+        "assistant",
+      ]);
+      expect(
+        clientMessages({ history, snapshot })
+          .filter(({ role }) => role === "assistant")
+          .map(({ id, parts }) => ({
+            id,
+            toolCallIds: parts.flatMap((part) =>
+              part.type === "tool-call" ? [part.id] : [],
+            ),
+          })),
+      ).toEqual([
+        {
+          id: "assistant-previous",
+          toolCallIds: ["lookup-1", "lookup-2", "lookup-3"],
+        },
+        { id: turnMessageId, toolCallIds: ["ask-1"] },
+      ]);
+      expect(JSON.stringify(output)).not.toContain("__stellaSnapshotOwner");
+      expect(JSON.stringify(history)).not.toContain("__stellaSnapshotOwner");
+    },
+  );
 
   test("keeps the tool-call metadata of every merged copy", async () => {
     const history = [
@@ -5825,15 +5945,15 @@ describe("chat stream refs", () => {
           toolCallId: "tool-1",
         },
         // Shaped by the SDK's own normalizer, as `chat()` emits it: `input`
-        // and `toolName` are not spec keys on TOOL_CALL_END, so the engine
-        // moves them into `metadata.tanstack` before the chunk reaches this
+        // moves into metadata.tanstack; toolName already lives there in v1,
+        // since it is not a spec key on TOOL_CALL_END. Before it reaches this
         // pipeline. An adapter that parses the whole input on END (Anthropic)
         // delivers the canonical arguments there.
         ...normalizeStreamChunk({
           type: EventType.TOOL_CALL_END,
           input: { matter_id: matterRef },
           toolCallId: "tool-1",
-          toolName: "list_matters",
+          metadata: { tanstack: { toolName: "list_matters" } },
         }),
         ...normalizeStreamChunk({
           type: EventType.RUN_FINISHED,
@@ -5921,7 +6041,9 @@ describe("chat stream refs", () => {
       transformClientVisibleStream({
         deniedApprovals,
         resolveAssistantValueRefs: (value) =>
-          JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
+          JSON.parse(
+            JSON.stringify(value).replaceAll(ref, () => resolved),
+          ) as unknown,
         source: streamChunks([buildEngineSnapshot(history)]),
         storedHistory: NOTHING_REWRITTEN,
       }),
@@ -6782,12 +6904,10 @@ describe("anonymized outgoing chat stream", () => {
   });
 });
 
-// A user who types past an ask-user card supersedes the turn: the card's call
-// is stored as an error with no result. Handed to the engine as is, that call
-// still reads as pending, so the run pauses for the client again and answers
-// nothing. The settled history closes it and the model runs. The first test
-// is the canary for that engine behaviour: once an upgrade makes it fail, the
-// engine no longer needs `closeUnresolvedCallsForEngine`, and both go.
+// A later user message closes the SDK's active execution batch in v1. Stella
+// still settles history before its context and provider-history boundaries;
+// both the raw SDK history and that settled copy must answer the new turn
+// without asking for the superseded client call again.
 describe("a superseded client-tool call in the engine's history", () => {
   const askUserTool = toolDefinition({
     name: "ask-user",
@@ -6837,13 +6957,20 @@ describe("a superseded client-tool call in the engine's history", () => {
       { ...uncutTurnSignals(), initialMessages: messages },
     );
 
-  test("canary: the engine ends the raw history with an empty completion", async () => {
-    const { finish } = await runOver(supersededHistory);
+  test("the engine does not resume a client call from a superseded turn", async () => {
+    const { finish, source } = await runOver(supersededHistory);
 
-    expect(finish?.outcome).toEqual({
-      error: "empty_completion",
-      type: "failed",
-    });
+    expect(finish?.outcome).toEqual({ type: "completed" });
+    expect(finish?.responseMessage.parts).toMatchObject([
+      { type: "text", content: "It will say one sentence." },
+    ]);
+    expect(
+      source.some(
+        (chunk) =>
+          chunk.type === EventType.RUN_FINISHED &&
+          chunk.outcome?.type === "interrupt",
+      ),
+    ).toBe(false);
   });
 
   test("the settled history lets the model answer", async () => {
@@ -7257,6 +7384,64 @@ test("a local turn's context report is stored with its answer and reloaded, and 
     { usedTokens: 10, windowTokens: 0 },
     { ...report, note: "extra" },
     "48200/200000",
+  ]) {
+    expect((await finishedWith(malformed)).stored).toBeUndefined();
+  }
+});
+
+test("a local turn's models are stored with its answer and reloaded, and a malformed report is not", async () => {
+  const finishedWith = async (reported: unknown) => {
+    const chunks = async function* (): AsyncIterable<StreamChunk> {
+      yield { type: EventType.RUN_STARTED, runId: "run-1", threadId: "t-1" };
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "m-1",
+        role: "assistant",
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "m-1",
+        delta: "Done.",
+      };
+      yield { type: EventType.TEXT_MESSAGE_END, messageId: "m-1" };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "run-1",
+        threadId: "t-1",
+        finishReason: "stop",
+        metadata: { [CHAT_LOCAL_RUN_MODEL_METADATA_KEY]: reported },
+      };
+    };
+    const result = await persistNativeInterruptTurn(chunks());
+    const response =
+      result.finish?.responseMessage ?? panic("Expected terminal response");
+    const reloaded = normalizePersistedChatMessageContent(
+      toPersistedChatMessageContentV3({
+        data: response.parts,
+        metadata: response.metadata,
+      }),
+    ).metadata;
+    return {
+      stored: response.metadata.localRunModel,
+      reloaded: reloaded.localRunModel,
+      ranOn: chatLocalRunReroutedModel(reloaded),
+    };
+  };
+
+  const rerouted = { requested: "gpt-5.5", ran: "gpt-5.4" };
+  const reported = await finishedWith(rerouted);
+  expect(reported.stored).toEqual(rerouted);
+  expect(reported.reloaded).toEqual(rerouted);
+  expect(reported.ranOn).toBe("gpt-5.4");
+
+  const asked = { requested: "gpt-5.5", ran: "gpt-5.5" };
+  expect((await finishedWith(asked)).ranOn).toBeNull();
+
+  for (const malformed of [
+    { requested: "gpt-5.5" },
+    { requested: "gpt-5.5", ran: "" },
+    { ...rerouted, note: "extra" },
+    "gpt-5.4",
   ]) {
     expect((await finishedWith(malformed)).stored).toBeUndefined();
   }

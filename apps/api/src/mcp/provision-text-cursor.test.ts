@@ -3,11 +3,11 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { isRecord } from "@/api/lib/type-guards";
-import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import {
-  isProvisionTextCursor,
-  windowProvisionText,
-} from "@/api/mcp/provision-text-window";
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
+import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 
 const ELI = "https://www.e-sbirka.cz/eli/cz/sb/2012/89";
 const ANCHOR = "par_1729";
@@ -54,7 +54,7 @@ const parseCursor = ({
 };
 
 const issuedCursor = (subject = SUBJECT) => {
-  const window = windowProvisionText({ limit: 3, subject, text: "abcdefgh" });
+  const window = windowBoundText({ limit: 3, subject, text: "abcdefgh" });
   if (window.type !== "window" || window.nextTextCursor === null) {
     return panic("Expected a provision continuation");
   }
@@ -64,7 +64,7 @@ const issuedCursor = (subject = SUBJECT) => {
 describe.each(TOOLS)("%s provision text cursor boundary", (toolName) => {
   test("preserves an issued cursor unchanged", () => {
     const cursor = issuedCursor();
-    expect(isProvisionTextCursor(cursor)).toBe(true);
+    expect(isBoundTextCursor(cursor)).toBe(true);
     expect(parseCursor({ toolName, cursor })).toBe(cursor);
   });
 
@@ -76,7 +76,7 @@ describe.each(TOOLS)("%s provision text cursor boundary", (toolName) => {
     expect(cursor.length).toBeLessThanOrEqual(512);
     expect(parseCursor({ toolName, cursor, eli, anchor })).toBe(cursor);
     expect(
-      windowProvisionText({ cursor, limit: 3, subject, text: "abcdefgh" }),
+      windowBoundText({ cursor, limit: 3, subject, text: "abcdefgh" }),
     ).toMatchObject({ type: "window", text: "def" });
   });
 
@@ -85,7 +85,7 @@ describe.each(TOOLS)("%s provision text cursor boundary", (toolName) => {
     const chunks: string[] = [];
     let cursor: string | undefined;
     for (let index = 0; index <= text.length; index += 1) {
-      const window = windowProvisionText({
+      const window = windowBoundText({
         cursor,
         limit: 3,
         subject: SUBJECT,
@@ -127,7 +127,7 @@ describe.each(TOOLS)("%s provision text cursor boundary", (toolName) => {
     const parsed = parseCursor({ toolName, cursor });
     expect(parsed).toBe(cursor);
     expect(
-      windowProvisionText({
+      windowBoundText({
         cursor: parsed,
         limit: 3,
         subject: SUBJECT,
@@ -139,7 +139,7 @@ describe.each(TOOLS)("%s provision text cursor boundary", (toolName) => {
   test.each(["start", "0", " "])(
     "reads placeholder %p as absence",
     (cursor) => {
-      expect(isProvisionTextCursor(cursor)).toBe(false);
+      expect(isBoundTextCursor(cursor)).toBe(false);
       expect(parseCursor({ toolName, cursor })).toBeUndefined();
     },
   );

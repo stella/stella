@@ -4,6 +4,7 @@ import { ORGANIZATION_ACCESS_STATE_CONSTRAINTS } from "../organization-access-st
 export default {
   id: "constraints-organization-access-state-constraints",
   revision: 1320,
+  lifecycle: "finalized",
   type: "constraints",
   values: [...ORGANIZATION_ACCESS_STATE_CONSTRAINTS],
 } satisfies OnlineMigrationEntry;

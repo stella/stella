@@ -4,6 +4,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
@@ -83,9 +84,9 @@ const KnowledgePublicTopBar = () => {
         {entryName !== null && (
           <>
             <span className="text-foreground-placeholder">/</span>
-            <span className="text-foreground truncate font-medium" dir="auto">
+            <TruncatedText className="text-foreground font-medium" dir="auto">
               {entryName}
-            </span>
+            </TruncatedText>
           </>
         )}
       </nav>

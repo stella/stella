@@ -98,6 +98,21 @@ export const DOCUMENT_RAW_CAPTURE = {
   },
   [ADAPTER_KEYS.HU_BHGY]: document,
   [ADAPTER_KEYS.UK_FCL]: document,
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    type: "inline",
+    parts: ["detail"],
+    objectPrefixes: [],
+  },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    type: "inline",
+    parts: ["detail"],
+    objectPrefixes: [],
+  },
+  [ADAPTER_KEYS.BR_TST]: {
+    type: "inline",
+    parts: ["listing"],
+    objectPrefixes: [],
+  },
   [ADAPTER_KEYS.PL_KIS]: {
     type: "inline",
     parts: ["detail"],

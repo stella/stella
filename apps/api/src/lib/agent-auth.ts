@@ -32,8 +32,8 @@ import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import {
+  getAgentRedirectUri,
   getAuthEndpointUrl,
-  getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
@@ -55,8 +55,7 @@ import type { McpMode } from "@/api/mcp/constants";
  * better-auth's exact redirect-uri match at authorize and token time, so
  * it points at an internal, handler-less path under our own origin.
  */
-const AGENT_REDIRECT_URI =
-  `${getAuthIssuerUrl()}/agent/internal/code-sink` as const;
+const AGENT_REDIRECT_URI = getAgentRedirectUri();
 
 /** How long an unconsumed claim token / registration row stays valid. */
 const REGISTRATION_TTL_MS = AGENT_AUTH_CEREMONY_TTL_SECONDS * 1000;

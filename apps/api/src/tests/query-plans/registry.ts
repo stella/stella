@@ -27,6 +27,7 @@ import {
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
   decisionIdsByIdentityQuery,
+  servableCandidateRevisionsStatement,
   unresolvedCandidateDecisionRowsStatement,
   unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
@@ -66,7 +67,17 @@ import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
+import {
+  corpusIndexFlipBehindCursorQuery,
+  corpusIndexFlipCoveragePageQuery,
+  corpusIndexFlipPageRecountQuery,
+  corpusIndexFlipRegressionQuery,
+} from "@/api/lib/legal-search/corpus-index-flip-parity";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import {
+  corpusProjectionUnservedCountQuery,
+  corpusProjectionUnservedPageQuery,
+} from "@/api/lib/legal-search/corpus-index-projection-unserved";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
 import { legislationFacetRefreshQuery } from "@/api/lib/legal-search/legislation-facet-refresh";
 import {
@@ -105,6 +116,23 @@ type QueryPlanEntry = {
     allowSeqScan?: string;
   };
 };
+
+/** A generation a flip could move the seeded one's readers to. */
+const FLIP_CANDIDATE_GENERATION = "case_law_v10";
+
+/** Two walked pages' bounds, as a flip's coverage walk keeps them. */
+const FLIP_WALKED_PAGES = [
+  {
+    after: null,
+    last: "0198e331-e578-7000-8000-000000000400",
+    walked: 1000,
+  },
+  {
+    after: "0198e331-e578-7000-8000-000000000400",
+    last: "0198e331-e578-7000-8000-000000000800",
+    walked: 1000,
+  },
+] as const;
 
 /**
  * A read that resolves a decision's language versions probes that one group,
@@ -437,6 +465,27 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     heapFetchMitigation: LANGUAGE_GROUP_HEAP_FETCHES,
     contract: planContracts["case-law.search-candidate-rows"],
+  },
+  {
+    // The keyed read of an indexed ranking, once per scan round: which copy
+    // Postgres serves each candidate from, by primary-key probes only.
+    id: "case-law.search-servable-candidate-revisions",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      servableCandidateRevisionsStatement(tx, {
+        body: { country: sampleCountry },
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: LIMITS.corpusIndexSearchCandidateLimit,
+      reason:
+        "The decisions of one scan round, probed by the id array the round reached, and heap visits are only for pages not yet all-visible.",
+    },
+    contract: planContracts["case-law.search-servable-candidate-revisions"],
   },
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration,
@@ -813,6 +862,160 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["case-law.freshness-pending-states"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the unproven-delete revision index,
+    // each joined to the state naming it by primary key.
+    id: "corpus-index.projection-unserved-at-risk-count",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusProjectionUnservedCountQuery("at_risk", {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-at-risk-count"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of the absent-state index.
+    id: "corpus-index.projection-unserved-absent-count",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusProjectionUnservedCountQuery("absent", {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-absent-count"],
+  },
+  {
+    id: "corpus-index.projection-unserved-at-risk-page",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionUnservedPageQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        kind: "at_risk",
+        limit: 100,
+        after: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-at-risk-page"],
+  },
+  {
+    id: "corpus-index.projection-unserved-absent-page",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionUnservedPageQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        kind: "absent",
+        limit: 100,
+        after: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-unserved-absent-page"],
+  },
+  {
+    // Operator read and flip gate: four bounded walks of the candidate's
+    // partial queue indexes, each walked entity probed in both generations
+    // by primary key.
+    id: "corpus-index.flip-regressions",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusIndexFlipRegressionQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        Temporal.Instant.from("2026-01-01T00:00:00Z"),
+      ),
+    seed: "case-law",
+    contract: planContracts["corpus-index.flip-regressions"],
+  },
+  {
+    // One coverage page: the serving generation's states in primary-key
+    // order, each probed in the candidate by primary key.
+    id: "corpus-index.flip-coverage-page",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusIndexFlipCoveragePageQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        {
+          after: null,
+          limit: 1000,
+        },
+      ),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: 1000,
+      reason:
+        "Operator-only page: one candidate primary-key probe per serving copy the page walked, at most the page size, and heap visits are only for pages not yet all-visible.",
+    },
+    contract: planContracts["corpus-index.flip-coverage-page"],
+  },
+  {
+    // Under the flip's fence: every walked page counted again, one
+    // index-only primary-key range count per page.
+    id: "corpus-index.flip-page-recount",
+    class: "aggregate",
+    role: "root",
+    build: () =>
+      corpusIndexFlipPageRecountQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        FLIP_WALKED_PAGES,
+      ),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: 5000,
+      reason:
+        "Operator-only, under the flip's fence: one primary-key range count per walked page, at most the coverage page size, and heap visits are only for pages not yet all-visible (measured 0.1 to 0.3 s per 2 M states).",
+    },
+    contract: planContracts["corpus-index.flip-page-recount"],
+  },
+  {
+    // Under the flip's fence: the moved pages' states and the listed ones,
+    // each probed by primary key in both generations.
+    id: "corpus-index.flip-behind-cursor",
+    class: "page",
+    role: "root",
+    build: () =>
+      corpusIndexFlipBehindCursorQuery(
+        {
+          family: "case_law",
+          serving: QUERY_PLAN_SAMPLE.caseLaw.generation,
+          candidate: FLIP_CANDIDATE_GENERATION,
+        },
+        {
+          pages: FLIP_WALKED_PAGES,
+          listed: ["0198e331-e578-7000-8000-000000000900"],
+        },
+      ),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: 50_000,
+      reason:
+        "Operator-only, under the flip's fence: one serving and one candidate primary-key probe per state of a page whose count moved or of the listed ones, at most the recheck bound, and heap visits are only for pages not yet all-visible.",
+    },
+    contract: planContracts["corpus-index.flip-behind-cursor"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

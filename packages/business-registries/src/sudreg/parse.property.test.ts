@@ -11,7 +11,7 @@ import { decodeRegistryNumericEntity } from "../shared/decode-registry-numeric-e
 import {
   expectRegistryOutcome,
   registryString,
-} from "../shared/property-test-helpers.test.js";
+} from "../shared/tests/test-helpers.js";
 import { parseAddress, parseCompanyPage } from "./parse.js";
 
 const sectionHtml = (title: string, content: string) =>

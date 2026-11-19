@@ -119,6 +119,34 @@ describe("ÚOHS stored document replay", () => {
     expect(again).toEqual(replay);
   });
 
+  test("a row stored under its lowercased lookup key is re-read as the printed file number of the same document", async () => {
+    const record =
+      parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING).at(0) ??
+      panic("Missing test record");
+    testFetchState.set(
+      asFetchMock(async () => new Response(czUohsSyntheticPdf())),
+    );
+    const decision = await buildCzUohsDecision(record);
+    const legacyCaseNumber = decision.caseNumber.toLocaleLowerCase("cs");
+    expect(legacyCaseNumber).not.toBe(decision.caseNumber);
+    rejectPublisherReads();
+    const replay = await reparse({
+      ...replayInput(decision),
+      caseNumber: legacyCaseNumber,
+    });
+    expect(replay).toMatchObject({
+      type: "parsed",
+      legacyCaseNumber,
+      result: {
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId,
+      },
+    });
+    // A row already under the printed number vouches for nothing.
+    const current = await reparse(replayInput(decision));
+    expect(current).not.toHaveProperty("legacyCaseNumber");
+  });
+
   test("an envelope without document objects is metadata-only and never refetches", async () => {
     const record =
       parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING).at(0) ??

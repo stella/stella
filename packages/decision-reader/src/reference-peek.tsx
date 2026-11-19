@@ -5,14 +5,16 @@ import { panic } from "better-result";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ExternalLinkIcon,
   Maximize2Icon,
-  PanelRightIcon,
+  MoveToSideIcon,
 } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
@@ -117,7 +119,7 @@ const PeekActionButton = ({
           tooltip={label}
           variant="ghost"
         >
-          <PanelRightIcon aria-hidden="true" className="size-3.5" />
+          <DirectionalIcon className="size-3.5" icon={MoveToSideIcon} />
         </Button>
       );
     }
@@ -201,13 +203,16 @@ export const ReferencePeekHeader = ({
         className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         data-slot="reference-peek-summary"
       >
+        {/* Each part shows its whole text on hover, cut or not, so the
+            tooltip is the part's own and the cut text has no second hint. */}
         <Tooltip>
           <TooltipTrigger
             render={
-              <BidiText
-                as="span"
-                className="max-w-full shrink-0 truncate text-sm font-medium"
+              <TruncatedText
+                className="shrink-0 text-sm font-medium"
                 data-slot="reference-peek-primary"
+                hint={false}
+                render={<BidiText as="span" />}
               />
             }
           >
@@ -221,14 +226,15 @@ export const ReferencePeekHeader = ({
           <Tooltip key={part}>
             <TooltipTrigger
               render={
-                <span
+                <TruncatedText
                   className={cn(
-                    "text-muted-foreground min-w-0 truncate text-xs",
+                    "text-muted-foreground text-xs",
                     index === 0 && "max-w-max flex-1 basis-0",
                     SEPARATED_PART,
                   )}
                   data-part={part}
                   data-slot="reference-peek-meta"
+                  hint={false}
                 />
               }
             >

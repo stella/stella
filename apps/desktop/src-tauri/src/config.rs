@@ -47,7 +47,7 @@ fn parse_origins(value: Option<String>) -> Vec<String> {
     .collect()
 }
 
-fn is_loopback_host(parsed: &reqwest::Url) -> bool {
+pub(crate) fn is_loopback_host(parsed: &reqwest::Url) -> bool {
   parsed.host_str().is_some_and(|host| {
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
   })

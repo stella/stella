@@ -242,10 +242,13 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test capability shard merge and package parity": [
     "packages/scripts/src/tree-base-revision.ts",
+    "scripts/borrowed-dependencies.ts",
+    "scripts/capability-catalog-sources.ts",
     "scripts/capability-shard-merge.test.ts",
     "scripts/capability-shard-pack.test.ts",
     "scripts/changeset-guard.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/generated-files.ts",
   ],
   "ci-checks-rest/Lockfile workspace-version guard": [
     "scripts/check-lockfile-workspace-versions.ts",
@@ -375,7 +378,9 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/main-heavy.test.ts",
     "scripts/validate-main-heavy-sha.test.ts",
   ],
-  "ci-checks-rest/Test cancellation evidence": [],
+  "ci-checks-rest/Test cancellation evidence": [
+    "scripts/ci-cancellation-contract.test.ts",
+  ],
   "ci-checks-rest/Test thin merge queue contracts": [
     "scripts/ci-expression-context.ts",
     "scripts/ci-plan-variables.ts",
@@ -389,6 +394,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test maintenance release preparation": [
     "packages/property-testing/src/pinned-seeds.ts",
+    "scripts/check-desktop-support-floor.ts",
     "scripts/check-marketing-recordings.ts",
     "scripts/prepare-maintenance-release.property.test.ts",
     "scripts/prepare-maintenance-release.ts",
@@ -450,6 +456,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
     "scripts/autofix-workflow.test.ts",
+    "scripts/capability-catalog-sources.ts",
     "scripts/changeset-guard.ts",
     "scripts/check-base-image-pulls.test.ts",
     "scripts/check-release-upload-retry.test.ts",
@@ -555,15 +562,34 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test CLI release coupling gate": [
     "packages/property-testing/src/pinned-seeds.ts",
+    "scripts/borrowed-dependencies.ts",
+    "scripts/capability-catalog-sources.ts",
     "scripts/changeset-guard.ts",
     "scripts/check-cli-release-coupling.test.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/check-desktop-support-floor.ts",
+    "scripts/check-marketing-recordings.ts",
     "scripts/ci-check-pool-registry.ts",
+    "scripts/generated-files.ts",
+    "scripts/prepare-maintenance-release.ts",
+    "scripts/product-media.ts",
   ],
   "ci-checks-rest/Test CLI contract changeset guard": [
+    "scripts/borrowed-dependencies.ts",
+    "scripts/capability-catalog-sources.ts",
     "scripts/changeset-guard.ts",
     "scripts/check-cli-contract-changeset.test.ts",
+    "scripts/check-cli-contract-changeset.ts",
     "scripts/check-cli-release-coupling.ts",
+    "scripts/generated-files.ts",
+  ],
+  "ci-checks-rest/Test CLI contract changeset guard over derived catalogs": [
+    "scripts/borrowed-dependencies.ts",
+    "scripts/capability-catalog-sources.ts",
+    "scripts/changeset-guard.ts",
+    "scripts/check-cli-release-coupling.ts",
+    "scripts/cli-contract-derived.test.ts",
+    "scripts/generated-files.ts",
   ],
   "ci-checks-rest/Test package scaffolder": [
     "scripts/new-package.test.ts",
@@ -573,11 +599,13 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
+    "scripts/capability-catalog-sources.ts",
     "scripts/changeset-guard.test.ts",
     "scripts/changeset-guard.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-install-store.ts",
     "scripts/ci-static-checks.ts",
+    "scripts/generated-files.ts",
   ],
   "ci-checks-rest/Test CI failure digest": [
     "scripts/ci-check-pool-registry.ts",
@@ -595,8 +623,11 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test migration identity logic": [
     "scripts/check-migration-order.test.ts",
+    "scripts/check-migration-order.ts",
   ],
-  "ci-checks-rest/Check migration identity against the base branch": [],
+  "ci-checks-rest/Check migration identity against the base branch": [
+    "scripts/check-migration-order.ts",
+  ],
   "ci-checks-rest/Test dead-columns reference matching": [
     "scripts/check-dead-columns.ts",
   ],
@@ -865,7 +896,7 @@ test("the release image gate ignores changelog entries and follows CI plan chang
   ).toContain(check);
 });
 
-test("derived capability inputs retain API readers and shell bodies retain lockfile validation", () => {
+test("derived capability runtime inputs retain API readers and shell bodies retain lockfile validation", () => {
   const isolated = {
     ...graph,
     packages: new Map(
@@ -877,7 +908,7 @@ test("derived capability inputs retain API readers and shell bodies retain lockf
   };
   for (const { file, check } of [
     {
-      file: "packages/cli/capabilities/probe.json",
+      file: "packages/api-contract/assets/probe.json",
       check: "ci-checks-policy/Processed-field backlog guard",
     },
     {

@@ -46,7 +46,8 @@ const beforeQuery = <Builder extends object>(
       if (property === "then") {
         return async (...args: unknown[]) => {
           await before();
-          return await Reflect.apply(value, target, args);
+          const result: unknown = await Reflect.apply(value, target, args);
+          return result;
         };
       }
       return (...args: unknown[]) => {
@@ -205,7 +206,7 @@ if (!databaseUrl || !runPostgresTests) {
               new Proxy(tx, {
                 get(target, property) {
                   if (property !== "select") {
-                    return Reflect.get(target, property);
+                    return Reflect.get(target, property) as unknown;
                   }
                   return new Proxy(target.select, {
                     apply(call, thisArg, args) {
@@ -366,7 +367,7 @@ if (!databaseUrl || !runPostgresTests) {
       const delivered = (prefix + tail)
         .split("\n")
         .filter((line) => line.startsWith("data: "))
-        .map((line) => JSON.parse(line.slice(6)));
+        .map((line): unknown => JSON.parse(line.slice(6)));
       expect(delivered.slice(1)).toEqual(chunks);
       expect(providerCalls).toBe(1);
       expect(

@@ -63,6 +63,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { recoverVersionChanges } from "@/api/lib/legal-search/legislation-version-changes-recovery";
 import { syncLegislationWorkIdentifiersTx } from "@/api/lib/legal-search/legislation-work-identifiers";
 import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
@@ -643,7 +644,7 @@ const commitLegislationVersion = async ({
     // Settle and the write-error retry take the projection source before the
     // row; this write takes them in the same order so they cannot deadlock.
     const projectionLock =
-      corpusMode === "off" || existing === undefined
+      existing === undefined
         ? null
         : await lockActiveCorpusProjectionSourceTx(tx, {
             family: "legislation",
@@ -685,7 +686,11 @@ const commitLegislationVersion = async ({
     };
     const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
     await syncLegislationWorkIdentifiersTx(tx, input);
-    if (bodyChanged && projectionLock !== null) {
+    // Every update of an existing version projects it: the decided values
+    // (country, title, withdrawal window) are projection inputs whether or
+    // not the body changed. A new version is not projectable until its
+    // settle transaction writes its content hash and projects it.
+    if (row !== undefined && projectionLock !== null) {
       await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
         lock: projectionLock,
         subject: { family: "legislation", entityId: id },
@@ -985,6 +990,11 @@ export const processLegislationDocument = async (
       projection: revision.withoutCorpusWrite(classification),
       scopedDb,
     });
+    await recoverVersionChanges({
+      db: scopedDb,
+      works: [revisionInput],
+      around: existing.id,
+    });
     return {
       type: "stored",
       id: existing.id,
@@ -1086,6 +1096,14 @@ export const processLegislationDocument = async (
       scopedDb,
     });
   }
+
+  // Last: settling the corpus pointers advances the payload revision, and a
+  // summary records the revision it was computed from.
+  await recoverVersionChanges({
+    db: scopedDb,
+    works: [revisionInput],
+    around: id,
+  });
 
   return {
     type: "stored",

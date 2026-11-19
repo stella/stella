@@ -153,6 +153,8 @@ const openCombobox = (
               decision: null,
               id: `thread-${workspaceId}`,
               origin: "original" as const,
+              pinState: "unpinned" as const,
+              readState: "read" as const,
               title: "Chat",
               updatedAt,
               usedAnonymization: false,
@@ -370,7 +372,7 @@ describe("matter combobox", () => {
     await openList(input);
 
     await testing.waitFor(() =>
-      expect(ui.getAllByRole("option")).toHaveLength(2),
+      expect(ui.getAllByRole("option").length).toBe(2),
     );
     expect(ui.queryByText(messages.common.noResults)).toBeNull();
   });

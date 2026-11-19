@@ -24,6 +24,14 @@ describe("citation probe candidates", () => {
     expect(residual("sp. zn. 12 C 345/2020 ÚOHS-S123/2019/VZ")).toBe(true);
   });
 
+  test("a city-hall file number is benign, a longer reference is not", () => {
+    expect(residual("č. j. MHMP 123456/2020")).toBe(false);
+    expect(residual("č. j. S-MHMP 765432/2018")).toBe(false);
+    expect(residual("č.j. MHMP 12345/2019/Abc ze dne 1. 2. 2019")).toBe(false);
+    expect(residual("č. j. MHMP 123456/2020/3")).toBe(true);
+    expect(residual("č. j. 12 C 345/2020")).toBe(true);
+  });
+
   test("an enforcement-officer or arbitration file is benign, a docket is not", () => {
     expect(residual("sp. zn. EX 1234/23")).toBe(false);
     expect(residual("sp.zn. EX 567/07")).toBe(false);
@@ -87,6 +95,17 @@ describe("citation probe candidates", () => {
     expect(residual("sp. zn.XV/2 Gn 45/09")).toBe(false);
     expect(residual("sp. zn. VI/2 Pz 123/07-5")).toBe(true);
     expect(residual("sp. zn. 2 Tdo 123/2007")).toBe(true);
+  });
+
+  test("a Czech anonymization label is benign, a numbered docket is not", () => {
+    expect(residual("č. j. číslo jednací ze dne 1. 2. 2020")).toBe(false);
+    expect(residual("č. j. číslo uvedený v bodě 3.2 rozsudku")).toBe(false);
+    expect(residual("č.j. č. účtu ze dne 3. 4. 2019")).toBe(false);
+    expect(residual("č. j. číslo")).toBe(false);
+    expect(residual("č. j. Číslo jednací ze dne 1. 2. 2020")).toBe(false);
+    expect(residual("č. j. číslo jednací 12 C 345/2020")).toBe(true);
+    expect(residual("č. j. číslo 12 C 345/2020")).toBe(true);
+    expect(residual("č. j. 12 C 345/2020-67")).toBe(true);
   });
 
   test("a multi-segment authority file after sp. zn. is benign, a docket is not", () => {

@@ -26,6 +26,7 @@ import {
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
@@ -290,6 +291,7 @@ export const useTemplateStudioSelectionGesture = ({
   });
   const enrichSeqRef = useRef(0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const hideGesture = useCallback(() => {
     enrichSeqRef.current += 1;
     gestureRef.current = null;
@@ -873,11 +875,14 @@ const GestureSplitRow = ({
                 variant="ghost"
               >
                 <OptionIcon className="text-muted-foreground size-3.5 shrink-0" />
-                <span className="min-w-0 truncate">{option.label}</span>
+                <TruncatedText>{option.label}</TruncatedText>
                 {option.sublabel === undefined ? null : (
-                  <code className="text-muted-foreground text-3xs ms-auto min-w-0 truncate">
+                  <TruncatedText
+                    className="text-muted-foreground text-3xs ms-auto"
+                    render={<code />}
+                  >
                     {option.sublabel}
-                  </code>
+                  </TruncatedText>
                 )}
               </Button>
             );
@@ -934,11 +939,10 @@ const GestureAiRow = ({
       onClick={onAcceptAi}
       onMouseDown={keepEditorFocus}
       size="sm"
-      title={label}
       variant="ghost"
     >
       <TypeIcon className="size-3.5 shrink-0" />
-      <span className="min-w-0 truncate">{label}</span>
+      <TruncatedText>{label}</TruncatedText>
       <AiActionIcon className="ms-auto size-3.5 shrink-0" />
     </Button>
   );

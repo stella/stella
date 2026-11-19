@@ -121,7 +121,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               });
             },
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                   concurrencyAcquisitions += 1;
                 }
@@ -230,7 +230,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               logicalPhaseId: "expired-phase",
             },
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 const script = args.at(0);
                 if (script === undefined) {
                   throw new Error("Missing acquisition script");
@@ -286,7 +286,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             policy,
             periodPolicy: { periodMs: 86_400_000, limit: 2 },
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                   acquisitions += 1;
                 }
@@ -357,7 +357,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             policy,
             periodPolicy: singleActionPeriod,
             redis: {
-              send: async (command, args) => {
+              send: async (command, args): Promise<unknown> => {
                 if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                   acquisitions += 1;
                 }
@@ -583,7 +583,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             logicalPhaseId: "delayed-phase",
           },
           redis: {
-            send: async (command, args) => {
+            send: async (command, args): Promise<unknown> => {
               if (!args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                 return await client.send(command, args);
               }
@@ -673,7 +673,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             },
           },
           redis: {
-            send: async (command, args) => {
+            send: async (command, args): Promise<unknown> => {
               if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
                 budgetKey = args.at(4);
               }
@@ -732,7 +732,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                 },
               },
               redis: {
-                send: async (command, args) => {
+                send: async (command, args): Promise<unknown> => {
                   if (args.at(1) === "3") {
                     endMs = Number(args.at(10));
                     budgetKey = args.at(4);

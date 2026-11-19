@@ -12,6 +12,7 @@ import { caseLawRefineOutputSchema } from "@/api/handlers/case-law/decisions/sea
 import { outputSchema as spanEditOutputSchema } from "@/api/handlers/chat/messages/revisions/span-edit";
 import { rewriteOutputSchema } from "@/api/handlers/clauses/rewrite";
 import { extractProcuracaoOutputSchema } from "@/api/handlers/contacts/extract-procuracao";
+import { dictationCleanupModelOutputSchema } from "@/api/handlers/dictation/cleanup-model";
 import { proposedPositionsSchema } from "@/api/handlers/document-reviews/reference-position-normalizer";
 import {
   generatedSummariesAISchema,
@@ -22,9 +23,9 @@ import {
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
 } from "@/api/handlers/search/ai";
-import { aiGenerationSchema } from "@/api/handlers/skills/drafts/generate";
 import { aiRevisionSchema } from "@/api/handlers/skills/proposals/from-comments/create";
 import { prefillOutputSchema } from "@/api/handlers/templates/prefill";
+import { aiGenerationSchema } from "@/api/lib/agent-skills/draft-prompt";
 import { changeSummarySchema } from "@/api/lib/ai-change-summary";
 import { bboxOutputSchema } from "@/api/lib/bbox/ai-prompts";
 import {
@@ -42,6 +43,7 @@ import { proposedPartiesSchema } from "@/api/lib/document-review/parties";
 import { referenceGradeSchema } from "@/api/lib/document-review/reference-grade";
 import { translationSchema as documentTranslationSchema } from "@/api/lib/document-translation/ai";
 import { occurrenceRenderingsSchema } from "@/api/lib/docx/ai-field-generator";
+import { factExtractionSchema } from "@/api/lib/lists/generation/fact-extract";
 import { extractionSchema as claimExtractionSchema } from "@/api/lib/lists/verification/claim-extract";
 import { gradingSchema } from "@/api/lib/lists/verification/claim-grade";
 import { extractionSchema as memoryExtractionSchema } from "@/api/lib/scheduler/tasks/memory-extractor";
@@ -157,6 +159,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
         '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","matchedEarlierEntryIds":[]}]}',
     },
     {
+      file: "handlers/dictation/cleanup.ts",
+      outputSchema: "dictationCleanupModelOutputSchema",
+      schema: dictationCleanupModelOutputSchema,
+      answer:
+        '{"segments":[{"type":"lineBreak","text":"","bold":false},{"type":"text","text":"Smlouva se prodlužuje o ","bold":false},{"type":"text","text":"24","bold":true},{"type":"text","text":" dní.","bold":false},{"type":"paragraphBreak","text":"","bold":false},{"type":"text","text":"Hotovo?","bold":false}]}',
+    },
+    {
       file: "handlers/case-law/decisions/search-expand.ts",
       outputSchema: "expansionOutputSchema",
       schema: expansionOutputSchema,
@@ -251,6 +260,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       schema: aiGenerationSchema,
       answer:
         '{"markdown":"---\\nname: nda-review\\ndescription: Review a mutual NDA against the firm\'s standard positions.\\n---\\n\\n# NDA review\\n\\nCheck the term, the definition of confidential information and the carve-outs.","resources":[{"path":"references/nda-positions.md","content":"# Standard positions\\n\\n- Term: at most three years."}]}',
+    },
+    {
+      file: "handlers/skills/from-chat/draft.ts",
+      outputSchema: "aiGenerationSchema",
+      schema: aiGenerationSchema,
+      answer:
+        '{"markdown":"---\\nname: delay-claim-reply\\ndescription: Reply to a passenger\'s delay claim the way this firm does.\\n---\\n\\n# Delay claim reply\\n\\nCheck <flight number> against the delay records before answering <passenger name>.","resources":[{"path":"references/defences.md","content":"# Defences\\n\\n- Extraordinary circumstances need evidence."}]}',
     },
     {
       file: "handlers/skills/proposals/from-comments/create.ts",
@@ -355,6 +371,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
         '{"renderings":["Czech law","according to the laws of the Czech Republic"]}',
     },
     {
+      file: "lib/lists/generation/fact-extract.ts",
+      outputSchema: "factExtractionSchema",
+      schema: factExtractionSchema,
+      answer:
+        '{"facts":[{"blockId":"b3","quote":"the board approved the discharge policy","fact":"The board approved the discharge policy on 9 March 2021.","occurredOn":"2021-03-09","evidenceKind":"document","medium":"Board minutes","confidence":"high","contestedMeaning":null},{"blockId":"b7","quote":"the final version was sent to every ward","fact":"The final version of the policy was sent to every ward.","occurredOn":null,"evidenceKind":"testimony","medium":"Witness statement","confidence":"medium","contestedMeaning":"Final may mean the approved policy or the last circulated draft."}]}',
+    },
+    {
       file: "lib/lists/verification/claim-extract.ts",
       outputSchema: "extractionSchema",
       schema: claimExtractionSchema,
@@ -366,7 +389,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "gradingSchema",
       schema: gradingSchema,
       answer:
-        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null}]}',
+        '{"grades":[{"claimId":"c1","verdict":"supported","score":86,"refs":[{"factId":"f3","rel":"supports"}],"conflict":null,"qualifiers":[],"statedDate":"2025-03-03"},{"claimId":"c2","verdict":"nocover","score":null,"refs":[],"conflict":null,"qualifiers":[{"kind":"record-silent","explanation":"The witness describes her own expectation, which no document would record."}],"statedDate":null}]}',
     },
     {
       file: "lib/scheduler/tasks/memory-extractor.ts",

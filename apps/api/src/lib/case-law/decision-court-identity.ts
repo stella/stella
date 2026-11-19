@@ -1,15 +1,23 @@
+// parser-output-unchanged: listing court identity uses the existing stored-field converter; stored court resolution is unchanged.
 /**
  * How a decision's court is identified at the ingestion boundary.
  *
- * Most jurisdictions identify a court by the name the publisher prints. A
- * jurisdiction backed by a court directory (`COURT_DIRECTORY_JURISDICTIONS`)
- * identifies it by the directory's exact id instead: names collide and
- * change, an id does not, and the index derives the court's partition from
- * the id. Its decisions store both, and the name must be the directory's
- * canonical name for the id.
+ * Names collide and change, an id does not. A jurisdiction backed by a court
+ * directory (`COURT_DIRECTORY_JURISDICTIONS`) identifies a court by the
+ * directory's exact id, which its source states, and the index derives the
+ * court's partition from the id. A jurisdiction whose publishers print only a
+ * court's name (`PRINTED_COURT_JURISDICTIONS`) has the name read onto its own
+ * directory's id here, at the one place every adapter's decisions pass, so no
+ * spelling a publisher prints can store a second court. Either way the
+ * decision stores both, and the name is the directory's canonical name for
+ * the id. Every other jurisdiction identifies a court by the printed name.
  */
 import { panic, Result, TaggedError } from "better-result";
 
+import {
+  isPrintedCourtJurisdiction,
+  readPrintedCourt,
+} from "@stll/api-contract/court-identity";
 import {
   resolveUsCourt,
   type UsCourtResolution,
@@ -20,6 +28,7 @@ import {
   type CourtDirectoryJurisdiction,
   isCourtDirectoryJurisdiction,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 
 /**
  * The directory that admits a jurisdiction's court ids for writing: every
@@ -55,6 +64,10 @@ type DecisionCourtIdentityRejection =
   | "missing"
   | "unexpected"
   | "name-mismatch"
+  /** A printed name no directory court answers to. */
+  | "unknown-name"
+  /** A printed name several directory courts answer to. */
+  | "ambiguous-name"
   | Extract<UsCourtResolution, { type: "rejected" }>["reason"];
 
 /** A decision whose court identity its jurisdiction does not admit. */
@@ -64,6 +77,8 @@ export class DecisionCourtIdentityError extends TaggedError(
   message: string;
   country: string;
   courtId: string | null;
+  /** The court name the rejected decision carried, as written. */
+  court: string;
   reason: DecisionCourtIdentityRejection;
 }> {
   static {
@@ -77,18 +92,29 @@ type DecisionCourtIdentityInput = {
   courtId?: string | undefined;
 };
 
+/** The court a decision is stored under: its name and, where it has one, id. */
+export type DecisionCourt = { court: string; courtId: string | null };
+
 /**
- * The court id a decision is stored with: null where its jurisdiction
- * identifies courts by name, or an accepted directory court whose canonical
- * name is exactly the decision's court. Exact on purpose: no case folding and
- * no lookup by name, since a name is not an identity.
+ * The court a decision is stored under.
+ *
+ * A directory jurisdiction's adapter states the id, which must be an
+ * accepted directory court whose canonical name is exactly the decision's
+ * court: no case folding and no lookup by name, since its source has an id.
+ *
+ * A printed-name jurisdiction's adapter states the name its publisher
+ * prints, and never an id: the name is read onto the directory court it
+ * answers to, and the decision is stored under that court's id and official
+ * name. The adapter keeps the printed name in the decision's metadata. A name
+ * no directory court answers to, or several do, is rejected: a spelling the
+ * directory cannot place is not a new court.
  */
-export const resolveDecisionCourtId = ({
+export const resolveDecisionCourt = ({
   country,
   court,
   courtId,
 }: DecisionCourtIdentityInput): Result<
-  string | null,
+  DecisionCourt,
   DecisionCourtIdentityError
 > => {
   const reject = (reason: DecisionCourtIdentityRejection) =>
@@ -97,11 +123,34 @@ export const resolveDecisionCourtId = ({
         message: `Decision court identity rejected for ${country}: ${reason}`,
         country,
         courtId: courtId ?? null,
+        court,
         reason,
       }),
     );
+  if (isPrintedCourtJurisdiction(country)) {
+    if (courtId !== undefined) {
+      return reject("unexpected");
+    }
+    const reading = readPrintedCourt(country, court);
+    switch (reading.type) {
+      case "court":
+        return Result.ok({
+          court: reading.court.name,
+          courtId: reading.court.id,
+        });
+      case "unknown":
+        return reject("unknown-name");
+      case "ambiguous":
+        return reject("ambiguous-name");
+      default:
+        reading satisfies never;
+        return panic(`Unhandled printed court: ${JSON.stringify(reading)}`);
+    }
+  }
   if (!isCourtDirectoryJurisdiction(country)) {
-    return courtId === undefined ? Result.ok(null) : reject("unexpected");
+    return courtId === undefined
+      ? Result.ok({ court, courtId: null })
+      : reject("unexpected");
   }
   if (courtId === undefined) {
     return reject("missing");
@@ -111,6 +160,48 @@ export const resolveDecisionCourtId = ({
     return reject(resolution.reason);
   }
   return resolution.court.canonicalName === court
-    ? Result.ok(courtId)
+    ? Result.ok({ court, courtId })
     : reject("name-mismatch");
+};
+
+/** The court id a decision is stored with (`resolveDecisionCourt`). */
+export const resolveDecisionCourtId = (
+  input: DecisionCourtIdentityInput,
+): Result<string | null, DecisionCourtIdentityError> =>
+  resolveDecisionCourt(input).map(({ courtId }) => courtId);
+
+/** Exact court partition shared by listing and stored-decision identity. */
+export type ListingCourtIdentity =
+  | { type: "court-id"; courtId: string }
+  | { type: "court-name"; name: string }
+  | { type: "unknown-court" };
+
+type ListingCourtIdentityOptions = {
+  court: string;
+  courtId?: string | null | undefined;
+  /**
+   * The decision's jurisdiction. A printed-name jurisdiction's court is
+   * keyed by its canonical name, which its id stands for one to one, so the
+   * keys of rows stored before it had an id stay the keys it is found by.
+   */
+  country?: string | undefined;
+};
+
+/** Uses the same plain-text conversion as stored decision assembly. */
+export const listingCourtIdentity = ({
+  court,
+  courtId,
+  country,
+}: ListingCourtIdentityOptions): ListingCourtIdentity => {
+  if (
+    courtId !== undefined &&
+    courtId !== null &&
+    (country === undefined || !isPrintedCourtJurisdiction(country))
+  ) {
+    return { type: "court-id", courtId };
+  }
+  const canonicalCourt = toPlainText(court).unwrapOr("");
+  return canonicalCourt.length === 0
+    ? { type: "unknown-court" }
+    : { type: "court-name", name: canonicalCourt };
 };

@@ -26,6 +26,7 @@ import {
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 
 import {
   type FirmKnowledgeJob,
@@ -263,6 +264,14 @@ const cleanOrganization = defineEndpoint.member(
     const orgId = session.activeOrganizationId;
 
     await scopedDb(async (tx) => {
+      const hold = await requireNoHold({
+        tx,
+        organizationId: orgId,
+        target: { type: "organization" },
+      });
+      if (hold.isErr()) {
+        throw hold.error;
+      }
       // audit: skip — dev-only org-nuke endpoint; not deployed to prod
       // Delete in dependency order.
       // 1. Billing records, which a matter deletion refuses to take (lines

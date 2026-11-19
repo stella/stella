@@ -3,7 +3,9 @@ import { lazy, Suspense } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
+import * as v from "valibot";
 
+import { AVT_MODES } from "@/features/avt/avt-mode";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { loadCallerFeature } from "@/lib/organization/feature-access/access";
@@ -14,7 +16,7 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
-import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
+import type { ViewLayoutType } from "@/lib/types";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
   overviewActivityOptions,
@@ -34,7 +36,12 @@ import { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
-import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
+import {
+  isAvtView,
+  isCalendarView,
+  isFilesystemView,
+  isTableView,
+} from "@/lib/workspaces/view-layout";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
@@ -50,24 +57,11 @@ const AvtRoute = lazy(async () => {
   return { default: m.AvtRoute };
 });
 
-type FilesystemWorkspaceView = WorkspaceView & {
-  layout: Extract<ViewLayout, { type: "filesystem" }>;
-};
-
-type CalendarWorkspaceView = WorkspaceView & {
-  layout: Extract<ViewLayout, { type: "calendar" }>;
-};
-
-const isFilesystemView = (
-  view: WorkspaceView,
-): view is FilesystemWorkspaceView => view.layout.type === "filesystem";
-
-const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
-  view.layout.type === "calendar";
-
-// `run` opens one verification in an AVT view.
+// `run` opens one verification in an AVT view; `mode` shows the list as a
+// graph or a chronology instead of its review.
 const searchSchema = routeSearchSchema({
   run: optionalSearchStringSchema(),
+  mode: v.fallback(v.optional(v.picklist(AVT_MODES)), undefined),
 });
 
 export const Route = createFileRoute(
@@ -107,7 +101,13 @@ export const Route = createFileRoute(
       },
       overview: async () => {
         await Promise.all([
-          ensureRouteQueryData(queryClient, overviewOptions(workspaceId)),
+          ensureRouteQueryData(
+            queryClient,
+            overviewOptions({
+              workspaceId,
+              organizationId: context.user.activeOrganizationId,
+            }),
+          ),
           ensureRouteInfiniteQueryData(
             queryClient,
             overviewActivityOptions({
@@ -210,6 +210,7 @@ function RouteComponent() {
     select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
   });
   const runId = Route.useSearch({ select: (search) => search.run });
+  const mode = Route.useSearch({ select: (search) => search.mode });
   const navigate = Route.useNavigate();
   const { data: activeView } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
@@ -249,6 +250,10 @@ function RouteComponent() {
       return (
         <Suspense fallback={null}>
           <AvtRoute
+            mode={mode}
+            onModeChange={(next) => {
+              detached(navigate({ search: { mode: next } }), "avt-view.mode");
+            }}
             onRunChange={(run) => {
               detached(navigate({ search: { run } }), "avt-view.open-run");
             }}

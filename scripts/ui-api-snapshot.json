@@ -161,6 +161,7 @@
       "FrameTitle",
       "GitHubLogoIcon",
       "HexColorPicker",
+      "HighlightedTextarea",
       "HoverCard",
       "HoverCardContent",
       "HoverCardTrigger",
@@ -385,6 +386,7 @@
       "SortableHead",
       "StellaMark",
       "StellaWordmarkLatin",
+      "TABLE_FIRST_LINE",
       "TOAST_RIGHT_OFFSET_VAR",
       "TOOLBAR_ROW_HEIGHT",
       "TOOLBAR_ROW_HEIGHT_PX",
@@ -792,6 +794,7 @@
     "./components/hex-color-picker": ["HexColorPicker"],
     "./components/horizontal-scroller": [
       "HorizontalScroller",
+      "fitsRow",
       "scrollState",
       "wheelDeltaPixels"
     ],
@@ -954,6 +957,7 @@
     "./components/stella-wordmark": ["StellaWordmarkLatin"],
     "./components/table": [
       "SortableHead",
+      "TABLE_FIRST_LINE",
       "Table",
       "TableBody",
       "TableCaption",
@@ -1008,6 +1012,7 @@
       "COMPOSER_SEND_BUTTON_CLASS",
       "COMPOSER_TEXT_CLASS",
       "ComposerPicker",
+      "ComposerPlaceholder",
       "ComposerStatusRow"
     ],
     "./composer-tokens": [
@@ -1122,6 +1127,7 @@
     "./field-trigger": ["FIELD_TRIGGER_CLASS_NAME"],
     "./file-input": ["FileInput"],
     "./file-picker": ["openFilePicker"],
+    "./file-size": ["formatFileSize", "getFileSizeDisplay"],
     "./form": ["Form", "formVariants"],
     "./frame": [
       "Frame",
@@ -1132,6 +1138,7 @@
       "FrameTitle"
     ],
     "./hex-color-picker": ["HexColorPicker"],
+    "./highlighted-textarea": ["HighlightedTextarea"],
     "./hooks/use-contained-handler": [
       "containedEventHandler",
       "containedHandler"
@@ -1146,10 +1153,12 @@
     "./hooks/use-viewport-width": ["useViewportWidth"],
     "./horizontal-scroller": [
       "HorizontalScroller",
+      "fitsRow",
       "scrollState",
       "wheelDeltaPixels"
     ],
     "./icons": [
+      "AccessibilityIcon",
       "ActivityIcon",
       "AddCommentIcon",
       "AiActionIcon",
@@ -1206,10 +1215,10 @@
       "ClipboardListIcon",
       "Clock3Icon",
       "ClockIcon",
+      "CloudIcon",
       "CogIcon",
       "Columns2Icon",
       "Columns3Icon",
-      "ColumnsIcon",
       "CommandIcon",
       "CompassIcon",
       "CopyFromMenuIcon",
@@ -1224,6 +1233,7 @@
       "DownloadIcon",
       "DuplicateIcon",
       "EditIcon",
+      "EditPagesIcon",
       "EllipsisIcon",
       "EllipsisVerticalIcon",
       "EqualIcon",
@@ -1239,7 +1249,6 @@
       "FileIcon",
       "FileImageIcon",
       "FileOutputIcon",
-      "FilePenLineIcon",
       "FilePlus2Icon",
       "FilePlusIcon",
       "FileQuestionIcon",
@@ -1319,6 +1328,7 @@
       "MonitorIcon",
       "MoonIcon",
       "MoreHorizontalIcon",
+      "MoveToSideIcon",
       "NewChatIcon",
       "PackageIcon",
       "PaletteIcon",
@@ -1540,13 +1550,26 @@
     "./landing": [
       "LANDING_ROW_CLASS",
       "LANDING_SECTION_HEADING_CLASS",
+      "LandingBoxPending",
       "LandingButton",
       "LandingEmpty",
       "LandingGreeting",
       "LandingItemText",
       "LandingLayout",
       "LandingRowIcon",
-      "LandingSection"
+      "LandingRowsPending",
+      "LandingSection",
+      "LandingSectionHeadingPending"
+    ],
+    "./landing-shell": [
+      "LANDING_ROW_CLASS",
+      "LANDING_SECTION_HEADING_CLASS",
+      "LandingBoxPending",
+      "LandingGreeting",
+      "LandingLayout",
+      "LandingRowsPending",
+      "LandingSection",
+      "LandingSectionHeadingPending"
     ],
     "./layout-tokens": [
       "PROPERTY_ROW_GRID",
@@ -1644,6 +1667,7 @@
     ],
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
+    "./outcome-screen": ["OutcomeScreen"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",
@@ -1664,6 +1688,19 @@
       "PaginationLink",
       "PaginationNext",
       "PaginationPrevious"
+    ],
+    "./pane-width": [
+      "INSPECTOR_CONTENT_MIN_WIDTH",
+      "INSPECTOR_EDITOR_MIN_WIDTH",
+      "INSPECTOR_PANE_DEFAULT_WIDTH",
+      "INSPECTOR_PANE_MAX_WIDTH",
+      "INSPECTOR_PANE_MIN_WIDTH",
+      "INSPECTOR_RAIL_WIDTH",
+      "clampInspectorPaneWidth",
+      "resolveInspectorDockWidth",
+      "resolveInspectorPaneMaxWidth",
+      "resolveInspectorPaneWidth",
+      "shouldForceSidebarCollapsed"
     ],
     "./panel-inset": [
       "DOCUMENT_PANEL_BOTTOM_INSET",
@@ -1722,6 +1759,7 @@
     ],
     "./review-status-badge": ["ReviewStatusBadge"],
     "./review-word-diff": ["diffWords"],
+    "./run-state-mark": ["RunStateMark"],
     "./scroll-area": ["ScrollArea", "ScrollBar"],
     "./scroll-edge-fade": [
       "SCROLL_EDGE_FADE_CLASS",
@@ -1802,6 +1840,7 @@
     "./switch": ["Switch", "SwitchField"],
     "./table": [
       "SortableHead",
+      "TABLE_FIRST_LINE",
       "Table",
       "TableBody",
       "TableCaption",
@@ -1869,6 +1908,7 @@
     "./use-viewport-width": ["useViewportWidth"],
     "./utils": ["cn", "composeRefs"],
     "./view-toolbar": [
+      "ViewChromeBar",
       "ViewFilterButton",
       "ViewFilterChip",
       "ViewToolbarChrome"
@@ -1938,10 +1978,12 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
       "inline",
+      "inspector-row",
       "lg",
       "row",
       "sm",
@@ -1950,6 +1992,7 @@
       "xs"
     ],
     "Button.variant": [
+      "composer",
       "default",
       "destructive",
       "destructive-ghost",
@@ -1963,11 +2006,15 @@
       "secondary"
     ],
     "ButtonTextRun.layout": ["wrap"],
+    "ButtonTextRun.variant": ["link", "plain"],
+    "Checkbox.appearance": ["cell", "default"],
+    "Checkbox.firstLine": ["control", "text"],
     "ColorPicker.align": ["center", "end", "start"],
     "ColorPicker.side": ["bottom", "left", "right", "top"],
     "ColorPickerContent.presentation": ["inline", "popover"],
     "ComboboxTrigger.variant": ["field", "plain"],
     "CommandItem.size": ["default", "row"],
+    "ComposerPlaceholder.stature": ["compact", "large"],
     "CourtBadge.size": ["default", "inline"],
     "CourtBadge.weight": ["dashed", "outline", "solid", "tinted"],
     "DatePickerPopover.layer": [
@@ -2052,10 +2099,12 @@
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],
     "DropdownMenuRadioItem.indicator": ["check", "none"],
+    "DropdownMenuTrigger.appearance": ["caption", "default"],
     "EntityActionsButton.align": ["center", "end", "start"],
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
+    "HighlightedTextarea.dir": ["ltr", "rtl"],
     "InlineDropIndicator.position": ["after", "before"],
     "InputGroupAddon.align": [
       "block-end",
@@ -2063,6 +2112,7 @@
       "inline-end",
       "inline-start"
     ],
+    "InputGroupTextarea.appearance": ["composer", "default"],
     "InputGroupTextarea.fieldSizing": ["content", "fixed"],
     "InspectorDock.mount": ["content", "shell-end"],
     "InspectorEntityTab.inactiveIcon": ["dim", "legible"],
@@ -2071,11 +2121,13 @@
     "KanbanVirtualCell.footerPlacement": ["end", "sticky-start"],
     "Kbd.variant": ["cap", "plain"],
     "Label.variant": ["choice", "choice-card", "default", "muted"],
+    "LandingBoxPending.box": ["composer", "search"],
     "LandingItemText.iconTone": ["matter", "muted"],
     "LandingRowIcon.tone": ["matter", "muted"],
-    "ListItemDescription.variant": ["code", "text"],
+    "ListItemDescription.variant": ["code", "paragraph", "text"],
     "ListItemMedia.variant": ["icon", "initial"],
     "ListItemStatus.tone": ["destructive", "neutral", "success", "warning"],
+    "ListItemTitle.variant": ["name", "statement"],
     "Loader.animation": ["none", "spin"],
     "Loader.size": ["lg", "md", "sm"],
     "Loader.variant": ["decorative", "status"],
@@ -2083,6 +2135,9 @@
     "MenuCheckboxItem.variant": ["default", "switch"],
     "MenuItem.variant": ["default", "destructive"],
     "MenuRadioItem.indicator": ["check", "none"],
+    "MenuTrigger.appearance": ["caption", "default"],
+    "OutcomeScreen.surface": ["embedded", "page"],
+    "OutcomeScreen.tone": ["error", "success"],
     "OutlineRail.presentation": ["panel", "popover", "rail"],
     "PanelTrigger.side": ["left", "right"],
     "PopoverContent.layer": [
@@ -2103,10 +2158,12 @@
       "search-child"
     ],
     "PopoverPopup.padding": ["default", "md", "none", "sm", "xs"],
+    "PopoverTrigger.appearance": ["caption", "default"],
     "PreviewPane.overflow": ["clip", "scroll"],
     "PreviewPane.size": ["default", "thumbnail"],
     "Prose.size": ["default", "lede", "sm"],
     "Prose.tone": ["default", "muted"],
+    "ReviewDecisionActions.emphasis": ["primary", "quiet"],
     "ReviewDecisionActions.size": ["sm", "xs"],
     "ReviewDecisionActions.state": [
       "accepted",
@@ -2133,6 +2190,8 @@
       "success",
       "warning"
     ],
+    "RunStateMark.size": ["badge", "row"],
+    "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],
@@ -2206,6 +2265,7 @@
     ],
     "TextMark.variant": ["dotted", "fill", "strike", "underline", "wavy"],
     "TextMark.weight": ["inherit", "medium"],
+    "Textarea.appearance": ["composer", "default"],
     "Textarea.fieldSizing": ["content", "fixed"],
     "ToastProvider.position": [
       "bottom-center",
@@ -2221,10 +2281,12 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
       "inline",
+      "inspector-row",
       "lg",
       "row",
       "sm",
@@ -2239,10 +2301,12 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
       "inline",
+      "inspector-row",
       "lg",
       "row",
       "sm",
@@ -2256,10 +2320,12 @@
       "icon",
       "icon-2xs",
       "icon-lg",
+      "icon-round",
       "icon-sm",
       "icon-xl",
       "icon-xs",
       "inline",
+      "inspector-row",
       "lg",
       "row",
       "sm",

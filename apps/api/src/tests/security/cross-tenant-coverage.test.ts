@@ -75,6 +75,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // Bearer-token reads resolve their own organization and recheck it inside
+  // SECURITY DEFINER projections, rather than using a signed-in member's RLS
+  // scope. handlers/invoice-links/invoice-links.integration.test.ts covers
+  // live-token positive controls and foreign-organization projection denial.
+  "invoice-links": WAIVER_REASON.isolatedOutsideRlsHarness,
   // The runner socket reads and writes through the gateway's root connection;
   // every row it touches is bound to the account, organization, installation
   // and device key the upgrade proved. The binding and the refusal of another
@@ -87,6 +92,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Caller-supplied audio is transient; optional matter access is authorized
   // through MemberCaller and covered by dictation/transcribe.test.ts.
   dictation: WAIVER_REASON.noTenantReadSurface,
+  // The Outlook add-in's email helpers answer from the email text in the
+  // request body and read no stored record.
+  ai: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
@@ -209,6 +217,11 @@ const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
     // organization; gateway.db.test.ts covers that one member never reads or
     // answers another's runs.
     "local-runners": WAIVER_REASON.isolatedOutsideRlsHarness,
+    // Approves a folder on the caller's own computer, written on the owner
+    // connection only where account, organization and computer match;
+    // linked-folder-approval.db.test.ts covers that another member or
+    // organization records nothing.
+    "local-folder-approval": WAIVER_REASON.isolatedOutsideRlsHarness,
     // Rewrites the prompt text in the request body; reads no stored record.
     "improve-prompt": WAIVER_REASON.noTenantReadSurface,
     // Plans a chart from the table in the request body; reads no stored record.

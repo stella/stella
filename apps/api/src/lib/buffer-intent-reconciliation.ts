@@ -20,26 +20,39 @@ import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import {
+  organizationObjectIntentLockKey,
+  withAggregateRowQuery,
+} from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  type DeleteOrganizationFileError,
+  deleteOrganizationFileWithSignal,
+} from "@/api/lib/files/delete-organization-file";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+import type { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 
 type DeleteObject = (
   key: string,
   signal: AbortSignal,
 ) => Promise<
-  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+  | Result<
+      void,
+      | DeleteOrganizationFileError
+      | LegalHoldActiveError
+      | OrganizationFileUsageError
+    >
+  | undefined
 >;
 
-export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
+const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
-export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
-const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
@@ -143,25 +156,12 @@ class BufferIntentOwnershipError extends TaggedError(
   "BufferIntentOwnershipError",
 )<{ message: string }> {}
 
-const organizationObjectIntentLockKey = (
-  organizationId: SafeId<"organization">,
-): string => `buffer-object:${organizationId}`;
-
 export const lockOrganizationObjectIntentsForWriter = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock_shared(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
-  );
-};
-
-export const lockOrganizationObjectIntentsForLifecycle = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
   );
 };
 
@@ -211,30 +211,41 @@ export const lockActiveWorkspaceForBufferIntent = async (
   }
 };
 
-/** Reserve exact-key recovery ownership before a non-upload writer calls PUT. */
-export const reserveObjectCleanupIntents = async ({
-  chatThreadId,
-  objectKey,
-  organizationId,
-  safeDb,
-  workspaceAvailability = OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE,
-  workspaceIds,
-}: {
+type ObjectCleanupIntentScope = {
   chatThreadId?: SafeId<"chatThread">;
-  objectKey: string;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   workspaceAvailability?: ObjectIntentWorkspaceAvailability;
   workspaceIds: SafeId<"workspace">[];
-}): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
+};
+
+/**
+ * Reserve exact-key recovery ownership for every object a non-upload writer
+ * is about to PUT, in one transaction: one organization lock, one workspace
+ * check and one insert however many objects there are. Answers each key's
+ * intent ids.
+ */
+export const reserveObjectCleanupIntents = async ({
+  chatThreadId,
+  objectKeys,
+  organizationId,
+  safeDb,
+  workspaceAvailability = OBJECT_INTENT_WORKSPACE_AVAILABILITY.ACTIVE,
+  workspaceIds,
+}: ObjectCleanupIntentScope & {
+  objectKeys: readonly [string, ...string[]];
+}): Promise<
+  Result<ReadonlyMap<string, SafeId<"pendingUpload">[]>, SafeDbError>
+> => {
   const uniqueWorkspaceIds = [...new Set(workspaceIds)].toSorted();
-  const intents =
-    uniqueWorkspaceIds.length === 0
-      ? [{ id: createSafeId<"pendingUpload">(), ownerWorkspaceId: null }]
-      : uniqueWorkspaceIds.map((candidate) => ({
-          id: createSafeId<"pendingUpload">(),
-          ownerWorkspaceId: candidate,
-        }));
+  const owners = uniqueWorkspaceIds.length === 0 ? [null] : uniqueWorkspaceIds;
+  const intents = [...new Set(objectKeys)].flatMap((objectKey) =>
+    owners.map((ownerWorkspaceId) => ({
+      id: createSafeId<"pendingUpload">(),
+      objectKey,
+      ownerWorkspaceId,
+    })),
+  );
   const result = await safeDb(async (tx) => {
     await lockOrganizationObjectIntentsForWriter(tx, organizationId);
 
@@ -266,7 +277,7 @@ export const reserveObjectCleanupIntents = async ({
     }
     // audit: skip; crash-recovery ownership for the later audited mutation.
     await tx.insert(bufferObjectCleanupIntents).values(
-      intents.map(({ id, ownerWorkspaceId }) => ({
+      intents.map(({ id, objectKey, ownerWorkspaceId }) => ({
         chatThreadId: chatThreadId ?? null,
         id,
         nextAttemptAt: new Date(
@@ -280,9 +291,38 @@ export const reserveObjectCleanupIntents = async ({
       })),
     );
   });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  const byKey = new Map<string, SafeId<"pendingUpload">[]>();
+  for (const { id, objectKey } of intents) {
+    const ids = byKey.get(objectKey);
+    if (ids === undefined) {
+      byKey.set(objectKey, [id]);
+    } else {
+      ids.push(id);
+    }
+  }
+  return Result.ok(byKey);
+};
+
+/** Reserve exact-key recovery ownership before a non-upload writer calls PUT. */
+export const reserveObjectCleanupIntentsForKey = async ({
+  objectKey,
+  ...scope
+}: ObjectCleanupIntentScope & {
+  objectKey: string;
+}): Promise<Result<SafeId<"pendingUpload">[], SafeDbError>> => {
+  const result = await reserveObjectCleanupIntents({
+    ...scope,
+    objectKeys: [objectKey],
+  });
   return Result.isError(result)
     ? Result.err(result.error)
-    : Result.ok(intents.map(({ id }) => id));
+    : Result.ok(
+        result.value.get(objectKey) ??
+          panic("Object intents were reserved for another key"),
+      );
 };
 
 export const reserveObjectCleanupIntent = async ({
@@ -296,7 +336,7 @@ export const reserveObjectCleanupIntent = async ({
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
 }): Promise<Result<SafeId<"pendingUpload">, SafeDbError>> => {
-  const result = await reserveObjectCleanupIntents({
+  const result = await reserveObjectCleanupIntentsForKey({
     objectKey,
     organizationId,
     safeDb,
@@ -759,7 +799,7 @@ export const startBufferIntentHeartbeat = ({
   };
 };
 
-export const isRecoverableBufferIntent = (
+const isRecoverableBufferIntent = (
   value: PendingUploadPurposeData,
   purpose: BufferIntentPurpose,
 ): value is RecoverableBufferIntent =>
@@ -773,7 +813,7 @@ const rejectionReason = (purpose: BufferIntentPurpose): string =>
     ? "Reconciled abandoned server-generated entity bytes"
     : "Reconciled abandoned server-generated version bytes";
 
-export const isBufferIntentPurpose = (
+const isBufferIntentPurpose = (
   purpose: string,
 ): purpose is BufferIntentPurpose =>
   purpose === "entity_create" || purpose === "entity_version";
@@ -1128,30 +1168,6 @@ export const reconcileBufferObjectCleanupIntents = async ({
     }
   }
   return claimedResult.value.length;
-};
-
-/**
- * Claim and remove one bounded workspace batch of final-key objects whose
- * durable intent proves that no entity/version transaction committed. The
- * intent is finalized atomically with the reference, so a committed object
- * can never satisfy this stale-scanning predicate.
- */
-export const reconcileStaleBufferIntents = async ({
-  safeDb,
-  organizationId,
-  workspaceId,
-  purpose,
-}: {
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  purpose: BufferIntentPurpose;
-}): Promise<void> => {
-  await reconcileStaleBufferIntentBatch({
-    safeDb,
-    scope: { organizationId, workspaceId, purpose },
-    limit: BUFFER_INTENT_RECONCILE_LIMIT,
-  });
 };
 
 /**

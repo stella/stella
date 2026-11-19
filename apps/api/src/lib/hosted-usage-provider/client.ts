@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import {
@@ -14,6 +15,7 @@ import {
 } from "@/api/lib/hosted-usage-provider/config";
 
 export const HOSTED_PROVIDER_REQUEST_TIMEOUT_MS = 10_000;
+const HOSTED_PROVIDER_SESSION_RESPONSE_MAX_BYTES = 1024 * 1024;
 
 export class HostedUsageProviderApiError extends TaggedError(
   "HostedUsageProviderApiError",
@@ -52,7 +54,10 @@ const readJsonRecord = async (
   response: Response,
   context: string,
 ): Promise<Record<string, unknown>> => {
-  const body: unknown = await response.json();
+  const body = await readBodyJsonWithIdleDeadline(response, {
+    idleMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+    maxBytes: HOSTED_PROVIDER_SESSION_RESPONSE_MAX_BYTES,
+  });
   if (isNonNullObject(body)) {
     return body;
   }

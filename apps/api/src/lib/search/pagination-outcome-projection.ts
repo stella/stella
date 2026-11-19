@@ -3,6 +3,7 @@ import * as v from "valibot";
 import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET,
   SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
 } from "@stll/api-contract/search";
 
@@ -22,6 +23,15 @@ export const SEARCH_PAGINATION_OUTCOME_SCHEMA = v.union([
     v.strictObject({
       type: v.literal(SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.type),
       reason: v.literal(SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET.reason),
+    }),
+  ),
+  // Partial matches were due and unread: `nextCursor` runs the phrasing again.
+  projectionBranch(
+    v.strictObject({
+      type: v.literal(SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.type),
+      reason: v.literal(
+        SEARCH_PAGINATION_TRUNCATED_PARTIAL_MATCHES_BUDGET.reason,
+      ),
     }),
   ),
 ]);

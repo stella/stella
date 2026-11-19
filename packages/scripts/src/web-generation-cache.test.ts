@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -174,6 +175,24 @@ test("web sources generate once across compiler tasks and restore until source i
         },
       }),
     );
+    write(
+      "packages/cli/package.json",
+      JSON.stringify({
+        name: "@stll/cli",
+        scripts: {
+          "codegen:runtime": "bun scripts/codegen.ts",
+          "generate:capabilities": "bun scripts/generate-capabilities.ts",
+        },
+      }),
+    );
+    write(
+      "packages/cli/scripts/codegen.ts",
+      "console.log('CLI runtime generated');",
+    );
+    write(
+      "packages/cli/scripts/generate-capabilities.ts",
+      "await Bun.write('capabilities/fixture.list.json', JSON.stringify({ id: 'fixture.list' }));",
+    );
     const apiTask = tasks["@stll/api#generate:capability-runtime"];
     if (
       !isRecord(apiTask) ||
@@ -224,7 +243,7 @@ test("web sources generate once across compiler tasks and restore until source i
     );
     write(
       ".gitignore",
-      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\napps/web/src/route-templates.gen.ts\nruns.log\ntask-hash\n${apiTask[
+      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\napps/web/src/route-templates.gen.ts\npackages/cli/capabilities/\nruns.log\ntask-hash\n${apiTask[
         "outputs"
       ]
         .map((output) => `apps/api/${output}\n`)
@@ -263,6 +282,8 @@ test("web sources generate once across compiler tasks and restore until source i
         tasks: {
           "@stll/api#generate:capability-runtime": apiTask,
           "@stll/mcp-apps#build": mcpTask,
+          "@stll/cli#generate:capabilities":
+            tasks["@stll/cli#generate:capabilities"],
           "@stll/api#generate:typecheck-declarations": {
             inputs: ["src/**"],
             outputs: [],
@@ -286,6 +307,7 @@ test("web sources generate once across compiler tasks and restore until source i
           "apps/api": { name: "@stll/api" },
           "apps/web": { name: "@stll/web" },
           "packages/mcp-apps": { name: "@stll/mcp-apps" },
+          "packages/cli": { name: "@stll/cli" },
         },
         packages: {},
       }),
@@ -301,6 +323,13 @@ test("web sources generate once across compiler tasks and restore until source i
       path.join(directory, ".turbo/cache"),
     ];
     run([...command.slice(0, 2), ...consumers, ...command.slice(3)]);
+    // Web compilers read the in-memory capability catalog, so a web run does
+    // not produce the CLI's capability manifests.
+    expect(
+      existsSync(
+        path.join(directory, "packages/cli/capabilities/fixture.list.json"),
+      ),
+    ).toBe(false);
     const executions = readFileSync(path.join(directory, "runs.log"), "utf-8");
     expect(executions.trim().split("\n")).toHaveLength(3);
     run([process.execPath, "--cwd=apps/api", "run", "gen:web-api-types"]);
@@ -399,17 +428,6 @@ test("web sources generate once across compiler tasks and restore until source i
       path.join(directory, "packages/scripts/src"),
       "dir",
     );
-    write(
-      "packages/cli/package.json",
-      JSON.stringify({
-        name: "@stll/cli",
-        scripts: { "codegen:runtime": "bun scripts/codegen.ts" },
-      }),
-    );
-    write(
-      "packages/cli/scripts/codegen.ts",
-      "console.log('CLI runtime generated');",
-    );
     write("apps/web/scripts/typegen.ts", "console.log('messages generated');");
     write(
       "scripts/prepare-mcp-apps.ts",
@@ -467,3 +485,146 @@ test("web sources generate once across compiler tasks and restore until source i
     rmSync(directory, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("MCP diagnostics wait for the single generated-artifact cache owner", () => {
+  const configuration: unknown = Bun.JSONC.parse(
+    readFileSync(path.join(root, "turbo.json"), "utf-8"),
+  );
+  if (!isRecord(configuration) || !isRecord(configuration["tasks"])) {
+    panic("Missing Turbo tasks");
+  }
+  const tasks = configuration["tasks"];
+  const build = tasks["@stll/mcp-apps#build"];
+  const typecheck = tasks["@stll/mcp-apps#typecheck"];
+  const testTask = tasks["@stll/mcp-apps#test"];
+  if (!isRecord(build) || !isRecord(typecheck) || !isRecord(testTask)) {
+    panic("Missing MCP tasks");
+  }
+  expect(typecheck["outputs"]).toEqual([]);
+  for (const consumer of [testTask, typecheck]) {
+    expect(consumer["dependsOn"]).toContain("build");
+  }
+  const directory = mkdtempSync(path.join(tmpdir(), "stella-mcp-cache-owner-"));
+  const write = (file: string, contents: string) => {
+    mkdirSync(path.dirname(path.join(directory, file)), { recursive: true });
+    writeFileSync(path.join(directory, file), contents);
+  };
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !key.startsWith("TURBO_") && key !== "CI_GENERATED_SOURCES_MANIFEST",
+    ),
+  );
+  const run = (arguments_: string[]) => {
+    const child = Bun.spawnSync(arguments_, {
+      cwd: directory,
+      env: { ...environment, TURBO_TELEMETRY_DISABLED: "1" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(child.exitCode, child.stderr.toString()).toBe(0);
+    return child.stdout.toString();
+  };
+  try {
+    write(
+      "package.json",
+      JSON.stringify({
+        name: "mcp-cache-fixture",
+        private: true,
+        packageManager: "bun@1.4.4",
+        workspaces: ["packages/*"],
+      }),
+    );
+    write(
+      "bun.lock",
+      JSON.stringify({
+        lockfileVersion: 1,
+        workspaces: {
+          "": { name: "mcp-cache-fixture" },
+          "packages/mcp-apps": { name: "@stll/mcp-apps" },
+        },
+        packages: {},
+      }),
+    );
+    write(
+      ".gitignore",
+      "node_modules\n.turbo\n**/generated/\nconsumer-runs\nbuild-runs\n",
+    );
+    symlinkSync(
+      path.join(root, "node_modules"),
+      path.join(directory, "node_modules"),
+      "dir",
+    );
+    write(
+      "packages/mcp-apps/package.json",
+      JSON.stringify({
+        name: "@stll/mcp-apps",
+        scripts: {
+          build: "bun producer.ts",
+          test: "bun consumer.ts",
+          typecheck: "bun consumer.ts",
+        },
+      }),
+    );
+    write(
+      "packages/mcp-apps/producer.ts",
+      "import {mkdirSync,writeFileSync,appendFileSync} from 'node:fs'; mkdirSync('src/shared/generated',{recursive:true}); writeFileSync('src/shared/generated/style.css','current stylesheet'); appendFileSync('../../build-runs','build\\n');",
+    );
+    write(
+      "packages/mcp-apps/consumer.ts",
+      "import {readFileSync,appendFileSync} from 'node:fs'; if(readFileSync('src/shared/generated/style.css','utf8')!=='current stylesheet')process.exit(1); appendFileSync('../../consumer-runs','read\\n');",
+    );
+    write(
+      "turbo.json",
+      JSON.stringify({
+        tasks: {
+          transit: {},
+          "generate:capability-runtime": {},
+          "@stll/mcp-apps#build": { ...build, inputs: ["producer.ts"] },
+          "@stll/mcp-apps#test": testTask,
+          "@stll/mcp-apps#typecheck": typecheck,
+        },
+      }),
+    );
+    run(["git", "init", "--quiet"]);
+    run(["git", "add", "."]);
+    const command = [
+      path.join(root, "node_modules/.bin/turbo"),
+      "run",
+      "test",
+      "typecheck",
+      "--filter=@stll/mcp-apps",
+      "--cache=local:rw",
+      "--cache-dir",
+      path.join(directory, ".turbo/cache"),
+    ];
+    run(command);
+    const executions = readFileSync(
+      path.join(directory, "build-runs"),
+      "utf-8",
+    );
+    rmSync(
+      path.join(directory, "packages/mcp-apps/src/shared/generated/style.css"),
+    );
+    rmSync(path.join(directory, "consumer-runs"));
+    // Consumers must execute again while the producer restores from cache.
+    write(
+      "packages/mcp-apps/consumer.ts",
+      `${readFileSync(
+        path.join(directory, "packages/mcp-apps/consumer.ts"),
+        "utf-8",
+      )}\n// fresh diagnostic input\n`,
+    );
+    const output = run(command);
+    expect(output).toContain("cache hit");
+    expect(readFileSync(path.join(directory, "build-runs"), "utf-8")).toBe(
+      executions,
+    );
+    expect(
+      readFileSync(path.join(directory, "consumer-runs"), "utf-8").split("read")
+        .length - 1,
+    ).toBe(2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

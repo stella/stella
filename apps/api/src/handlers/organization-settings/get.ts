@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 
-import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
+import type { ChatLocalRunApprovalCeiling } from "@stll/api-contract/chat-run-target";
 import type { TimeZoneId } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type {
   DocumentProcessingMode,
   PracticeJurisdiction,
@@ -20,6 +21,7 @@ import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { localRunApprovalCeilingOf } from "@/api/lib/chat/local-run-approval-ceiling";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,
@@ -36,15 +38,34 @@ import {
   ORGANIZATION_TIME_ZONE_SOURCE,
 } from "@/api/lib/organization-time-zone";
 
+/** The deployment features web callers read from organization settings. */
+type WebDeploymentFeature = "legalLists" | "invoiceLinks";
+
+/** The deployment availability contract shared by web callers and discovery. */
+export const WEB_DEPLOYMENT_FEATURES = {
+  legalLists: "FEATURE_LEGAL_LISTS",
+  invoiceLinks: "FEATURE_INVOICE_LINKS",
+} as const satisfies Record<WebDeploymentFeature, DeploymentFeatureFlag>;
+
+// The annotated return type makes a missing registry key a compile error.
+const readWebDeploymentFeatures = (): {
+  [Key in keyof typeof WEB_DEPLOYMENT_FEATURES]: boolean;
+} => ({
+  legalLists: isDeploymentFeatureEnabled(WEB_DEPLOYMENT_FEATURES.legalLists),
+  invoiceLinks: isDeploymentFeatureEnabled(
+    WEB_DEPLOYMENT_FEATURES.invoiceLinks,
+  ),
+});
+
 const config = {
   contract: "patch",
   description:
     "Read the organization's general settings: document processing mode, " +
     "matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt " +
-    "caching, memory extraction, time policy, the time zone whose calendar " +
+    "caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar " +
     "decides the organization's day, and localRunMaxApprovalMode, the most a " +
     "chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; " +
-    "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
+    "capabilities contains caller decisions; deploymentFeatures supplies legalLists and invoiceLinks deployment availability. " +
     "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
     "for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the " +
@@ -69,9 +90,10 @@ type OrganizationSettingsRow = {
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
+  aiInstructions: string;
   managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
-  localRunMaxApprovalMode: DesktopRunnerApprovalMode;
+  localRunMaxApprovalMode: ChatLocalRunApprovalCeiling;
   timeMinimumUnitMinutes: number;
   timeEditWindowDays: number;
   timeLockedThroughMonth: string | null;
@@ -79,11 +101,7 @@ type OrganizationSettingsRow = {
   timeZone: TimeZoneId | null;
 };
 
-export const projectOrganizationSettingsRow = (
-  row: OrganizationSettingsRow | null | undefined,
-  snapshot: FeatureAccessSnapshot,
-) => {
-  const practiceJurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
+const projectFeatureAccess = (snapshot: FeatureAccessSnapshot) => {
   const visibleDecisions = Array.from(snapshot.decisions).filter(
     ([featureId]) =>
       featureId !== LIST_VERIFICATION_FEATURE_ID ||
@@ -91,9 +109,7 @@ export const projectOrganizationSettingsRow = (
   );
   return {
     declaredFeatureIds: visibleDecisions.map(([featureId]) => featureId),
-    deploymentFeatures: {
-      legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
-    },
+    deploymentFeatures: readWebDeploymentFeatures(),
     capabilities: Object.fromEntries(
       visibleDecisions.map(
         ([featureId]) =>
@@ -107,6 +123,45 @@ export const projectOrganizationSettingsRow = (
           ] as const,
       ),
     ),
+  };
+};
+
+const projectTimePolicy = (
+  row: OrganizationSettingsRow | null | undefined,
+) => ({
+  timeMinimumUnitMinutes:
+    row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  timeEditWindowDays: row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
+  timeNarrativeRequired:
+    row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+});
+
+const projectTimeZone = (
+  row: OrganizationSettingsRow | null | undefined,
+  practiceJurisdictions: PracticeJurisdiction[],
+) => ({
+  timeZone: effectiveOrganizationTimeZone({
+    timeZone: row?.timeZone ?? null,
+    practiceJurisdictions,
+  }),
+  primaryJurisdictionTimeZone: effectiveOrganizationTimeZone({
+    timeZone: null,
+    practiceJurisdictions,
+  }),
+  timeZoneSource:
+    (row?.timeZone ?? null) === null
+      ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
+      : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
+});
+
+export const projectOrganizationSettingsRow = (
+  row: OrganizationSettingsRow | null | undefined,
+  snapshot: FeatureAccessSnapshot,
+) => {
+  const practiceJurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
+  return {
+    ...projectFeatureAccess(snapshot),
     documentProcessingMode:
       row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
     matterNumberPattern:
@@ -116,28 +171,13 @@ export const projectOrganizationSettingsRow = (
     matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
     practiceJurisdictions,
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
+    aiInstructions: row?.aiInstructions ?? "",
+    aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
     managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
     memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
     localRunMaxApprovalMode: localRunApprovalCeilingOf(row),
-    timeMinimumUnitMinutes:
-      row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
-    timeEditWindowDays:
-      row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
-    timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
-    timeNarrativeRequired:
-      row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
-    timeZone: effectiveOrganizationTimeZone({
-      timeZone: row?.timeZone ?? null,
-      practiceJurisdictions,
-    }),
-    primaryJurisdictionTimeZone: effectiveOrganizationTimeZone({
-      timeZone: null,
-      practiceJurisdictions,
-    }),
-    timeZoneSource:
-      (row?.timeZone ?? null) === null
-        ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
-        : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
+    ...projectTimePolicy(row),
+    ...projectTimeZone(row, practiceJurisdictions),
   };
 };
 
@@ -155,6 +195,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberingEnabled: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
+            aiInstructions: true,
             managedAIResidency: true,
             memoryExtractionEnabled: true,
             localRunMaxApprovalMode: true,

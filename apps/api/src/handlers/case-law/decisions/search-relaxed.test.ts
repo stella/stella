@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import { readFailureBrand } from "@stll/errors";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   corpusIndexBudgetExpiry,
@@ -19,19 +20,33 @@ import { LIMITS } from "@/api/lib/limits";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 
 import {
+  allTermsHeld,
+  copiesShownSinceRead,
+  distinctRequiredTerms,
+  fewDecisionsHoldEveryWord,
+  hitTermsFromCoverage,
+  mergeWordsRead,
   rankByTermCoverage,
   readTermCoverage,
+  readTermDecisionCounts,
   relaxedFetchLimit,
   relaxedTopUpOutcome,
   shouldRelaxCaseLawSearch,
-  termsForCoverage,
+  wordsHeldAt,
 } from "./search-relaxed";
+
+/** `count` distinct words, as a query's terms. */
+const wordsOf = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    type: "term",
+    value: `slovo${String(index)}`,
+  }));
 
 const ELIGIBLE = {
   body: {},
   intentType: "text",
   isFirstPage: true,
-  requiredTermCount: 3,
+  requiredTerms: wordsOf(3),
   sort: "relevance",
   strictHitCount: 2,
   limit: 10,
@@ -52,11 +67,39 @@ describe("when a short strict page is topped up", () => {
     ["sort newest", { sort: "newest" }],
     ["a full strict page", { strictHitCount: 10 }],
     ["an identifier lookup", { intentType: "identifier" }],
-    ["a single required term", { requiredTermCount: 1 }],
+    ["a single required term", { requiredTerms: wordsOf(1) }],
+    [
+      "one word repeated",
+      {
+        requiredTerms: [
+          { type: "term", value: "škoda" },
+          { type: "term", value: "škoda" },
+        ],
+      },
+    ],
+    [
+      "more words than the phase checks one by one",
+      { requiredTerms: wordsOf(LIMITS.caseLawSearchTermCountsMax + 1) },
+    ],
     ["a continuation", { strictEnd: SEARCH_PAGE_END.MORE }],
     ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
   ] as const)("%s is not", (_name, override) => {
     expect(shouldRelaxCaseLawSearch({ ...ELIGIBLE, ...override })).toBe(false);
+  });
+
+  test("the word bound counts a repeated word once", () => {
+    // More occurrences than the bound, two distinct words: the queries built
+    // from them hold two words, so the pass is due.
+    const repeated = [
+      ...Array.from({ length: LIMITS.caseLawSearchTermCountsMax + 1 }, () => ({
+        type: "term",
+        value: "škoda",
+      })),
+      { type: "term", value: "nárok" },
+    ];
+    expect(
+      shouldRelaxCaseLawSearch({ ...ELIGIBLE, requiredTerms: repeated }),
+    ).toBe(true);
   });
 
   test("strict: false still relaxes", () => {
@@ -66,27 +109,110 @@ describe("when a short strict page is topped up", () => {
   });
 });
 
-describe("termsForCoverage", () => {
-  test("keeps distinct terms, longest first, within the bound", () => {
-    const terms = [
-      "a",
-      "bbbb",
-      "bbbb",
-      "cc",
-      "ddddd",
-      "eee",
-      "ffffff",
-      "ggggggg",
-      "h",
-    ].map((value) => ({ value }));
-    expect(termsForCoverage(terms).map(({ value }) => value)).toEqual([
-      "ggggggg",
-      "ffffff",
-      "ddddd",
-      "bbbb",
-      "eee",
-      "cc",
+describe("matched and missing words", () => {
+  const terms = [
+    { type: "term", value: "loajalita" },
+    { type: "phrase", value: "ušlý zisk" },
+    { type: "term", value: "loajalita" },
+    { type: "term", value: "škoda" },
+  ] as const;
+
+  test("every distinct word is checked, in the query's order", () => {
+    // Nothing is dropped for length: a word left out of the check would be
+    // reported as neither matched nor missing.
+    expect(distinctRequiredTerms(terms).map(({ value }) => value)).toEqual([
+      "loajalita",
+      "ušlý zisk",
+      "škoda",
     ]);
+  });
+
+  test("a hit holds the words its coverage found and lacks the rest", () => {
+    expect(hitTermsFromCoverage(terms, new Set([0, 2]))).toEqual({
+      matchedTerms: ["loajalita", "škoda"],
+      missingTerms: ['"ušlý zisk"'],
+    });
+  });
+
+  test("matched and missing partition the distinct words for every subset", () => {
+    const distinct = distinctRequiredTerms(terms);
+    // Every subset of the word indexes, built by doubling.
+    const subsets: number[][] = [[]];
+    for (const index of distinct.keys()) {
+      for (const set of subsets.slice()) {
+        subsets.push([...set, index]);
+      }
+    }
+    expect(subsets).toHaveLength(2 ** distinct.length);
+    for (const subset of subsets) {
+      const held = new Set(subset);
+      const { matchedTerms, missingTerms } = hitTermsFromCoverage(terms, held);
+      expect(matchedTerms).toHaveLength(held.size);
+      expect(new Set([...matchedTerms, ...missingTerms])).toEqual(
+        new Set(allTermsHeld(terms).matchedTerms),
+      );
+      expect(matchedTerms.length + missingTerms.length).toBe(distinct.length);
+    }
+  });
+});
+
+describe("when the words are counted one by one", () => {
+  const SHORT = {
+    intentType: "text",
+    isFirstPage: true,
+    requiredTerms: wordsOf(3),
+    strictHitCount: 2,
+    limit: 10,
+    strictEnd: SEARCH_PAGE_END.COMPLETE,
+  } as const;
+
+  test("a short, exhausted first page is", () => {
+    expect(fewDecisionsHoldEveryWord(SHORT)).toBe(true);
+  });
+
+  test.each([
+    ["a full page", { strictHitCount: 10 }],
+    ["a continuation page", { isFirstPage: false }],
+    ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
+    ["an identifier", { intentType: "identifier" }],
+    ["one word", { requiredTerms: wordsOf(1) }],
+  ] as const)("%s is not", (_name, override) => {
+    expect(fewDecisionsHoldEveryWord({ ...SHORT, ...override })).toBe(false);
+  });
+
+  test("each word gets its own distinct decision count", async () => {
+    const asked: unknown[] = [];
+    const counts = await readTermDecisionCounts({
+      observer: "unobserved",
+      indexId: "fixture-index",
+      filter: "jurisdiction:CZE",
+      decisionCountField: "document_id",
+      queries: ["text:a", "text:b"],
+      aggregate: async ({ query, filter, aggs }) => {
+        asked.push({ query, filter, aggs });
+        return Result.ok({
+          decisions: { value: query === "text:a" ? 12.0000001 : 3 },
+        });
+      },
+    });
+    expect(counts.unwrap()).toEqual([12, 3]);
+    expect(asked).toContainEqual({
+      query: "text:b",
+      filter: "jurisdiction:CZE",
+      aggs: { decisions: { cardinality: { field: "document_id" } } },
+    });
+  });
+
+  test("an unreadable count fails rather than reading as zero", async () => {
+    const counts = await readTermDecisionCounts({
+      observer: "unobserved",
+      indexId: "fixture-index",
+      filter: undefined,
+      decisionCountField: "document_id",
+      queries: ["text:a"],
+      aggregate: async () => Result.ok({ decisions: {} }),
+    });
+    expect(Result.isError(counts)).toBe(true);
   });
 });
 
@@ -189,9 +315,14 @@ test.each(["complete", "truncated", "missing"] as const)(
     });
     const coverageById = coverage.unwrap();
     expect(queries).toHaveLength(4);
-    expect([...coverageById]).toEqual([
-      ["two", 2],
-      ["four", 4],
+    expect(
+      [...coverageById].map(([id, held]) => [
+        id,
+        [...held].toSorted((left, right) => left - right),
+      ]),
+    ).toEqual([
+      ["two", [0, 1]],
+      ["four", [0, 1, 2, 3]],
     ]);
     expect(
       rankByTermCoverage({ ranked: candidates, coverageById }).map(
@@ -206,8 +337,8 @@ test("equal engine coverage keeps the blended order", () => {
     rankByTermCoverage({
       ranked: [hit("a", 3), hit("b", 2)],
       coverageById: new Map([
-        ["a", 2],
-        ["b", 2],
+        ["a", new Set([0, 1])],
+        ["b", new Set([1, 2])],
       ]),
     }).map(({ id }) => id),
   ).toEqual(["a", "b"]);
@@ -349,5 +480,38 @@ test.each([
   expect(readFailureBrand(result.error)).toEqual({
     reason: "response_invalid",
     source: "instance",
+  });
+});
+
+describe("the words a hit shows are read off the copy it shows", () => {
+  const older = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-0000000000b1",
+  );
+  const newer = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-0000000000b2",
+  );
+  const read = new Map([
+    ["kept", { revision: older, held: new Set([0, 1]) }],
+    ["refreshed", { revision: older, held: new Set([0, 1]) }],
+  ]);
+
+  test("a decision shown from a newer copy is named for a second read", () => {
+    expect(
+      copiesShownSinceRead(read, (id) => (id === "refreshed" ? newer : older)),
+    ).toEqual([{ id: "refreshed", revision: newer }]);
+  });
+
+  test("words read off another copy never reach a hit", () => {
+    expect(wordsHeldAt(read, "kept", older)).toEqual(new Set([0, 1]));
+    expect(() => wordsHeldAt(read, "refreshed", newer)).toThrow("another copy");
+    expect(() => wordsHeldAt(read, "kept", null)).toThrow("another copy");
+  });
+
+  test("a second read answers for the copy it re-read", () => {
+    const merged = mergeWordsRead(
+      read,
+      new Map([["refreshed", { revision: newer, held: new Set([0]) }]]),
+    );
+    expect(wordsHeldAt(merged, "refreshed", newer)).toEqual(new Set([0]));
   });
 });

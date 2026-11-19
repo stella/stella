@@ -33,10 +33,6 @@ import type {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-beforeEach(() => {
-  createTimeEntryHandlerMock.mockReset();
-});
-
 const createTimeEntryHandlerMock = mock();
 
 // Inject the backing time-entry create handler through the request context so
@@ -183,6 +179,7 @@ let analytics: RecordingAnalytics;
 let logs: RecordingLogger;
 
 beforeEach(() => {
+  createTimeEntryHandlerMock.mockReset();
   resetFailureObservationsForTesting();
   analytics = installRecordingAnalytics();
   logs = installRecordingLogger();
@@ -417,7 +414,8 @@ describe("internalFailureResult preserves expected handler errors", () => {
         mapBoeError(cause),
         "mcp.result.failure",
       );
-      expect(JSON.parse(envelopeText(result)).error).toMatchObject({
+      const envelope: { error: unknown } = JSON.parse(envelopeText(result));
+      expect(envelope.error).toMatchObject({
         code: "upstream_unavailable",
         retryable: true,
       });
@@ -429,7 +427,10 @@ describe("internalFailureResult preserves expected handler errors", () => {
       ),
       "mcp.result.failure",
     );
-    expect(JSON.parse(envelopeText(rejected)).error).toMatchObject({
+    const rejectedEnvelope: { error: unknown } = JSON.parse(
+      envelopeText(rejected),
+    );
+    expect(rejectedEnvelope.error).toMatchObject({
       code: "validation_error",
       message: expect.stringContaining("Check the identifier and filters"),
     });

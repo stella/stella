@@ -6,7 +6,7 @@ import { isPathInside } from "@stll/portable-path";
 
 import { createTestMutantDirectory } from "./test-mutants";
 
-test("test mutant directories stay outside the API source tree", () => {
+test("mutant test directories stay outside the API source tree", () => {
   const directory = createTestMutantDirectory("source-boundary-");
   try {
     const sourceRoot = path.resolve(import.meta.dir, "../..");

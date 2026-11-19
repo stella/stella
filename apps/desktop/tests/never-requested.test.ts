@@ -35,9 +35,31 @@ const declarations = [
   ).map((file) => readFileSync(file, "utf-8")),
 ].join("\n");
 
-const nativeSources = filesUnder(NATIVE_ROOT, (file) => file.endsWith(".rs"))
+const nativeFiles = filesUnder(NATIVE_ROOT, (file) => file.endsWith(".rs"));
+
+const nativeSources = nativeFiles
   .map((file) => readFileSync(file, "utf-8"))
   .join("\n");
+
+const readNative = (file: string) =>
+  readFileSync(path.join(NATIVE_ROOT, file), "utf-8");
+
+/** The body of the function whose signature starts with `signature`, up to
+ *  the closing brace at the start of a line. */
+const functionBody = (source: string, signature: string) => {
+  const start = source.indexOf(signature);
+  expect(start, signature).toBeGreaterThanOrEqual(0);
+  const end = source.indexOf("\n}\n", start);
+  return source.slice(start, end);
+};
+
+/** Key presses and releases in an event mask: what a tap that sees typing
+ *  subscribes to. */
+const KEYBOARD_EVENTS = /\bKeyDown\b|\bKeyUp\b|kCGEventMaskForAllEvents/u;
+
+/** Creating a macOS event tap, by its C name or its Rust binding. */
+const TAP_CREATION =
+  /\bCGEventTapCreate|\btap_create(?:_for_pid|_for_psn)?\s*\(/u;
 
 type Evidence = {
   /** Info.plist usage keys or entitlements that would declare the access. */
@@ -62,10 +84,19 @@ const EVIDENCE = {
     declarations: ["com.apple.security.files.all", "SystemPolicyAllFiles"],
     nativeCalls: null,
   },
+  // The one macOS event tap sees modifier changes only, which needs no
+  // Input Monitoring; a test below checks its event mask.
   keystrokes: {
     declarations: ["NSInputMonitoringUsageDescription"],
     nativeCalls:
-      /\bCGEventTapCreate\b|addGlobalMonitorForEventsMatchingMask|\bIOHIDRequestAccess\b|\bSetWindowsHookEx/u,
+      /\bCGEventTapCreate\b|addGlobalMonitorForEventsMatchingMask|\bIOHIDRequestAccess\b|\bCGRequestListenEventAccess\b/u,
+  },
+  // Windows asks nobody before an app hooks the keyboard. The only hook is
+  // the one a hold key the speaker chooses needs; tests below keep the
+  // Windows default on a shortcut that needs none.
+  keystrokesWithoutHoldKey: {
+    declarations: [],
+    nativeCalls: null,
   },
   screenRecording: {
     declarations: ["NSScreenCaptureUsageDescription"],
@@ -92,6 +123,75 @@ describe("never-requested claims", () => {
     },
   );
 
+  test("Windows hooks the keyboard only for a chosen hold key", () => {
+    const hooks = filesUnder(
+      NATIVE_ROOT,
+      (file) =>
+        file.endsWith(".rs") &&
+        /\bSetWindowsHookEx/u.test(readFileSync(file, "utf-8")),
+    );
+    expect(hooks.map((file) => path.basename(file))).toEqual([
+      "windows_hold_key.rs",
+    ]);
+    const choices = readFileSync(
+      path.join(NATIVE_ROOT, "src/dictation_hold_key.rs"),
+      "utf-8",
+    );
+    expect(choices).toMatch(
+      /cfg!\(target_os = "windows"\)\s*\{\s*&\[Self::Combination,/u,
+    );
+  });
+
+  test("the only macOS event tap listens to modifier changes, never to typing", () => {
+    const taps = nativeFiles.filter((file) =>
+      TAP_CREATION.test(readFileSync(file, "utf-8")),
+    );
+    expect(taps.map((file) => path.basename(file))).toEqual(["hold_key.rs"]);
+    const source = readNative("crates/macos-park/src/hold_key.rs");
+    expect(source.match(/\btap_create\s*\(/gu)).toHaveLength(1);
+    const createTap = functionBody(source, "fn create_tap(");
+    expect(createTap).toMatch(
+      /let mask: CGEventMask = 1 << CGEventType::FlagsChanged\.0;/u,
+    );
+    expect(createTap.match(/<</gu)).toHaveLength(1);
+    expect(createTap).not.toMatch(KEYBOARD_EVENTS);
+    expect(createTap).toMatch(/CGEventTapOptions::ListenOnly,\s*mask,/u);
+    // Created only with Accessibility access, so macOS never asks for
+    // Input Monitoring.
+    expect(createTap).toMatch(
+      /if !crate::accessibility_trusted\(\) \{\s*return None;\s*\}[\s\S]*tap_create/u,
+    );
+  });
+
+  test("the combination listens through the registered shortcut; only a chosen hold key starts a listener", () => {
+    const dictation = readNative("src/dictation.rs");
+    const listen = functionBody(dictation, "fn listen(app: &AppHandle) {");
+    expect(listen).toMatch(
+      /HoldChoice::Combination => \{\s*match app\.global_shortcut\(\)\.on_shortcut\(shortcut\(\), on_shortcut\)/u,
+    );
+    expect(listen.match(/\blisten_for_hold_key\(/gu)).toHaveLength(1);
+    expect(listen).toMatch(
+      /_ => listen_for_hold_key\(app, choice, generation\),/u,
+    );
+    // Besides that dispatch, the listener is started only by the function
+    // it dispatches to, and only from dictation.
+    expect(dictation.match(/(?<!fn )\blisten_for_hold_key\(/gu)).toEqual([
+      "listen_for_hold_key(",
+      "listen_for_hold_key(",
+    ]);
+    expect(dictation).toMatch(
+      /fn listen_for_hold_key\([\s\S]*stella_desktop_macos::listen_for_hold_key\(key, on_edge, on_listening\)/u,
+    );
+    const callers = nativeFiles.filter(
+      (file) =>
+        !file.includes(`${path.sep}crates${path.sep}`) &&
+        /\blisten_for_hold_key\b/u.test(readFileSync(file, "utf-8")),
+    );
+    expect(callers.map((file) => path.basename(file))).toEqual([
+      "dictation.rs",
+    ]);
+  });
+
   test("the Windows installer stays per-user", () => {
     const config: unknown = JSON.parse(
       readFileSync(path.join(NATIVE_ROOT, "tauri.conf.json"), "utf-8"),
@@ -108,6 +208,8 @@ describe("never-requested claims", () => {
     expect("CGRequestScreenCaptureAccess();").toMatch(
       EVIDENCE.screenRecording.nativeCalls,
     );
+    expect("CGEvent::tap_create(").toMatch(TAP_CREATION);
+    expect("let mask = 1 << CGEventType::KeyDown.0;").toMatch(KEYBOARD_EVENTS);
   });
 
   test("every claim has a name in the source catalogue", () => {

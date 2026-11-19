@@ -5,6 +5,7 @@ import type { OnlineMigrationEntry } from "../online-migration-entry";
 export default {
   id: "indexes-case-law-provision-search-index",
   revision: 245,
+  lifecycle: "finalized",
   type: "indexes",
   values: [CASE_LAW_PROVISION_SEARCH_INDEX],
 } satisfies OnlineMigrationEntry;

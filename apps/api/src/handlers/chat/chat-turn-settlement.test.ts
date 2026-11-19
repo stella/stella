@@ -30,6 +30,7 @@ import type {
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -296,8 +297,8 @@ describe("the history a run hands the engine", () => {
 
   // A superseded turn stores its client call as an error without a result,
   // and a stopped turn may leave an input-complete call or an approval request
-  // open. The engine would ask the client for any of them again instead of
-  // running the model. Every state is listed so a new one must choose.
+  // open. The pre-SDK context and provider-history boundaries need an explicit
+  // result for each. Every state is listed so a new one must choose.
   const unresolvedResult = (toolCallId: string): ChatPart =>
     errorToolResult(toolCallId, UNRESOLVED_CALL_ERROR);
   const openCallByState = {
@@ -320,7 +321,7 @@ describe("the history a run hands the engine", () => {
   } as const satisfies Record<ToolCallState, boolean>;
 
   for (const part of Object.values(openCallByState)) {
-    test(`an unanswered ${part.state} call on an earlier message is closed only if the engine would ask again`, () => {
+    test(`an unanswered ${part.state} call on an earlier message has its required closing result`, () => {
       const history = settleHistoryForRun({
         messages: [assistant("earlier", [part])],
         resumedMessageId: undefined,
@@ -453,11 +454,17 @@ describe("the settled history the engine converts", () => {
       resumedMessageId: undefined,
     });
 
+    const violations = violationsOf(
+      CHAT_ORACLE.providerTranscriptSettled,
+      findTranscriptProblems(modelRequest(parts)),
+    );
+    if (violations.length > 0) {
+      panic(`The settled history is unbalanced: ${JSON.stringify(violations)}`);
+    }
     expect(history[0]?.parts).toEqual([
       ...parts,
       errorToolResult("question", UNRESOLVED_CALL_ERROR),
     ]);
-    expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
   });
 
   test("a denial in a step the message goes on past is answered in that step of the provider's copy", () => {

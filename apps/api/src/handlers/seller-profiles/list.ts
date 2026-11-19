@@ -41,6 +41,7 @@ const SELLER_PROFILE_LIST_COLUMNS = {
   city: sellerProfiles.city,
   postalCode: sellerProfiles.postalCode,
   country: sellerProfiles.country,
+  email: sellerProfiles.email,
   iban: sellerProfiles.iban,
   bic: sellerProfiles.bic,
   accountNumber: sellerProfiles.accountNumber,
