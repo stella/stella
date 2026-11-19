@@ -526,6 +526,7 @@
     "title": "Documento",
     "failedTitle": "Não foi possível abrir este documento",
     "failure": {
+      "dataBoxUnreadable": "Não foi possível ler o arquivo como uma mensagem da caixa de dados nem como um comprovante de entrega.",
       "offline": "Você está offline. Conecte-se à internet e tente novamente.",
       "noFile": "Este documento ainda não tem arquivo.",
       "failed": "Algo deu errado ao abrir. Tente novamente em instantes.",
@@ -533,6 +534,7 @@
       "android": "Ainda não é possível abrir documentos no app para Android."
     },
     "retry": "Tentar novamente",
+    "openOriginal": "Abrir original",
     "preview": "Abrir pré-visualização",
     "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
     "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",

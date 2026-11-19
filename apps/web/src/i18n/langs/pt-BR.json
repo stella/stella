@@ -2124,6 +2124,7 @@
     },
     "newChat": "Novo chat",
     "newChatInSidePanel": "O novo chat está disponível no painel lateral",
+    "nextSteps": "Próximos passos",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -2230,7 +2231,6 @@
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
       "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
-      "harnessModels": "Modelos do {harness}",
       "hintCheck": "Verifique-o no stella desktop",
       "hintInstall": "Instale pelo stella desktop",
       "hintOffline": "Abra o stella desktop no seu computador",
@@ -2240,7 +2240,6 @@
       "localFolderSelection": "Seu computador · {harness} · {folder}",
       "localPlace": "Seu computador, {harness}",
       "localSelection": "Seu computador · {harness}",
-      "modelDefault": "Padrão (recomendado)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e verifique o {harness} em Configurações › Geral › Assinaturas de IA.",
       "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
@@ -2314,7 +2313,6 @@
     "stopping": "Parando…",
     "suggestTitle": "Sugerir um título",
     "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
-    "suggestedFollowupsLabel": "Sugestões de perguntas de acompanhamento",
     "suggestingTitle": "Sugerindo um título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2325,7 +2323,6 @@
       "accepted": "Aplicado",
       "rejected": "Rejeitado"
     },
-    "tabToAsk": "→ para perguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -2749,6 +2746,7 @@
     "done": "Concluído",
     "doubleClickToRename": "Clique duas vezes para renomear",
     "download": "Baixar",
+    "downloadOriginal": "Baixar original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimentação cancelada. {itemName} não foi movido.} other {Movimentação cancelada. {itemName} não foram movidos.} many {Movimentação cancelada. {itemName} não foram movidos.}}",
       "droppedOn": "{count, plural, one {{itemName} foi solto sobre {destinationName}.} other {{itemName} foram soltos sobre {destinationName}.} many {{itemName} foram soltos sobre {destinationName}.}}",
@@ -3336,6 +3334,8 @@
       "contact": "Contato: {name}",
       "deliveredAt": "Entregue na caixa",
       "delivery": "Entrega",
+      "deliveryEvents": "Histórico de entrega",
+      "deliveryReceipt": "Comprovante de entrega",
       "directionUnknown": "Direção desconhecida",
       "messageId": "ID da mensagem",
       "moreContacts": "Há mais contatos associados a esta caixa de dados.",
@@ -3348,6 +3348,8 @@
       "sent": "Enviada",
       "statedInFile": "Mensagem de caixa de dados (conforme o arquivo)",
       "toHands": "Aos cuidados de {name}",
+      "unlinkedFiles": "Para abrir os anexos exibidos sem link, baixe o arquivo ZFO original.",
+      "unreadable": "Não foi possível ler o arquivo como uma mensagem da caixa de dados nem como um comprovante de entrega.",
       "uploaded": "Mensagem de caixa de dados enviada"
     },
     "deliveredBy": "Entregue por <address>{sender}</address>",

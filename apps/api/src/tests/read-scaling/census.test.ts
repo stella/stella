@@ -35,6 +35,7 @@ import {
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
 } from "./conflict-checks";
+import { dataBoxPreviewScalingScenario } from "./data-box-preview";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
@@ -77,6 +78,7 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { skillExportScalingScenario } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -132,6 +134,7 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -156,6 +159,7 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
+  skillExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

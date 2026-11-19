@@ -195,6 +195,8 @@ import {
 } from "@/features/chat/chat-queue.logic";
 import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import { SuggestedFollowups } from "@/features/chat/components/suggested-followups";
+import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -411,6 +413,7 @@ export const ChatThreadMessages = ({
   approvalPendingMessageId,
   branchSource,
   error,
+  followUps,
   hasOlderMessages = false,
   isGenerating = false,
   isLoadingOlder = false,
@@ -593,6 +596,9 @@ export const ChatThreadMessages = ({
                               onAnswerEdited={onAnswerEdited}
                             />
                           </AnswerFooter>
+                          {followUps?.messageId === message.id && (
+                            <SuggestedFollowups {...followUps} />
+                          )}
                         </ChatAnswerDecisionProvider>
                       );
                     case "text":
@@ -1711,6 +1717,12 @@ type ChatThreadMessagesProps = {
   /** Compact prose is reserved for constrained overlays over a document. */
   assistantTextDensity?: "compact" | "default" | undefined;
   approvalPendingMessageId: string | null;
+  /**
+   * What to ask next, drawn at the end of the answer it follows
+   * (`followUps.messageId`), after that answer's actions. The one place
+   * suggestions appear: never over the answer, never in the composer.
+   */
+  followUps?: SuggestedFollowupsProps | undefined;
   /**
    * The chat this transcript is, for branching from a selection: when
    * present, words selected in a message can be asked about in a new

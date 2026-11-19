@@ -2124,6 +2124,7 @@
     },
     "newChat": "Neuer Chat",
     "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
+    "nextSteps": "Nächste Schritte",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
@@ -2230,7 +2231,6 @@
       "chipLabel": "Läuft auf: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Läuft in der Cloud. Funktioniert überall.",
-      "harnessModels": "{harness}-Modelle",
       "hintCheck": "Prüfen Sie es in stella desktop",
       "hintInstall": "Installieren Sie es in stella desktop",
       "hintOffline": "Öffnen Sie stella desktop auf Ihrem Computer",
@@ -2240,7 +2240,6 @@
       "localFolderSelection": "Ihr Computer · {harness} · {folder}",
       "localPlace": "Ihr Computer, {harness}",
       "localSelection": "Ihr Computer · {harness}",
-      "modelDefault": "Standard (empfohlen)",
       "placeState": "{place}. {state}",
       "stepsCheck": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und prüfen Sie {harness} unter Einstellungen › Allgemein › KI-Abonnements.",
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
@@ -2314,7 +2313,6 @@
     "stopping": "Wird angehalten…",
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
-    "suggestedFollowupsLabel": "Vorgeschlagene Folgefragen",
     "suggestingTitle": "Titel wird vorgeschlagen…",
     "suggestionSeverity": {
       "style": "Stil",
@@ -2325,7 +2323,6 @@
       "accepted": "Angewendet",
       "rejected": "Abgelehnt"
     },
-    "tabToAsk": "→ zum Fragen: „{prompt}“",
     "tableChart": {
       "bar": "Balken",
       "kind": "Diagrammtyp",
@@ -2749,6 +2746,7 @@
     "done": "Fertig",
     "doubleClickToRename": "Zum Umbenennen doppelklicken",
     "download": "Herunterladen",
+    "downloadOriginal": "Original herunterladen",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Verschieben abgebrochen. {itemName} wurde nicht verschoben.} other {Verschieben abgebrochen. {itemName} wurden nicht verschoben.}}",
       "droppedOn": "{count, plural, one {{itemName} wurde auf {destinationName} abgelegt.} other {{itemName} wurden auf {destinationName} abgelegt.}}",
@@ -3336,6 +3334,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "In die Databox zugestellt",
       "delivery": "Zustellung",
+      "deliveryEvents": "Zustellverlauf",
+      "deliveryReceipt": "Zustellnachweis",
       "directionUnknown": "Richtung unbekannt",
       "messageId": "Nachrichten-ID",
       "moreContacts": "Weitere Kontakte stimmen mit diesem Datenpostfach überein.",
@@ -3348,6 +3348,8 @@
       "sent": "Gesendet",
       "statedInFile": "Databox-Nachricht (laut Datei)",
       "toHands": "Zu Händen von {name}",
+      "unlinkedFiles": "Laden Sie die ursprüngliche ZFO-Datei herunter, um Anhänge ohne Link zu öffnen.",
+      "unreadable": "Die Datei konnte weder als Databox-Nachricht noch als Zustellnachweis gelesen werden.",
       "uploaded": "Hochgeladene Databox-Nachricht"
     },
     "deliveredBy": "Zugestellt von <address>{sender}</address>",

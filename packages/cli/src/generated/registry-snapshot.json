@@ -1223,6 +1223,22 @@
     "outputSchema": {
       "type": "object",
       "properties": {
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "number"
+              },
+              "entityId": {
+                "type": "string"
+              }
+            },
+            "required": ["position", "entityId"],
+            "additionalProperties": false
+          }
+        },
         "charCount": {
           "type": "number"
         },

@@ -102,7 +102,8 @@ const registrationProps = (memberRole: MemberRole) =>
       body: "# Sample",
       version: null,
       resources: [{ path: "references/sample.md" }],
-      requiredTools: [],
+      // Declares the skill-gated tools so their registrations are exercised.
+      requiredTools: ["validate_skill_package", "save_skill_package"],
       documentedChatReads: [],
       excludedChatTools: [],
       // The active-skill resolver supplies this preauthorized field in production.

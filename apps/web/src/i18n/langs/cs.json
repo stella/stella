@@ -2124,6 +2124,7 @@
     },
     "newChat": "Nový chat",
     "newChatInSidePanel": "Nový chat je dostupný v bočním panelu",
+    "nextSteps": "Další kroky",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
     "officeCitationUnavailable": "Tato citace už není dostupná.",
@@ -2230,7 +2231,6 @@
       "chipLabel": "Kde běží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Běží v cloudu. Funguje odkudkoli.",
-      "harnessModels": "Modely {harness}",
       "hintCheck": "Zkontrolujte ho ve stella desktop",
       "hintInstall": "Nainstalujte ho ve stella desktop",
       "hintOffline": "Otevřete stella desktop ve svém počítači",
@@ -2240,7 +2240,6 @@
       "localFolderSelection": "Váš počítač · {harness} · {folder}",
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
-      "modelDefault": "Výchozí (doporučeno)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
@@ -2314,7 +2313,6 @@
     "stopping": "Zastavuji…",
     "suggestTitle": "Navrhnout název",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
-    "suggestedFollowupsLabel": "Navrhované navazující dotazy",
     "suggestingTitle": "Navrhuji název…",
     "suggestionSeverity": {
       "style": "Styl",
@@ -2325,7 +2323,6 @@
       "accepted": "Použito",
       "rejected": "Odmítnuto"
     },
-    "tabToAsk": "→ pro dotaz: \"{prompt}\"",
     "tableChart": {
       "bar": "Sloupcový",
       "kind": "Typ grafu",
@@ -2749,6 +2746,7 @@
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikem přejmenujete",
     "download": "Stáhnout",
+    "downloadOriginal": "Stáhnout originál",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Přesun byl zrušen. Položka {itemName} nebyla přesunuta.} few {Přesun byl zrušen. {itemName} nebyly přesunuty.} other {Přesun byl zrušen. {itemName} nebylo přesunuto.} many {Přesun byl zrušen. {itemName} nebylo přesunuto.}}",
       "droppedOn": "{count, plural, one {Položka {itemName} byla upuštěna na {destinationName}.} few {{itemName} byly upuštěny na {destinationName}.} other {{itemName} bylo upuštěno na {destinationName}.} many {{itemName} bylo upuštěno na {destinationName}.}}",
@@ -3336,6 +3334,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dodáno do schránky",
       "delivery": "Doručení",
+      "deliveryEvents": "Události doručování",
+      "deliveryReceipt": "Doručenka",
       "directionUnknown": "Směr neznámý",
       "messageId": "ID zprávy",
       "moreContacts": "Této datové schránce odpovídají další kontakty.",
@@ -3348,6 +3348,8 @@
       "sent": "Odeslaná",
       "statedInFile": "Datová zpráva (dle údajů v souboru)",
       "toHands": "K rukám: {name}",
+      "unlinkedFiles": "Přílohy bez odkazu otevřete po stažení původního souboru ZFO.",
+      "unreadable": "Soubor se nepodařilo přečíst jako datovou zprávu ani jako doručenku.",
       "uploaded": "Nahraná datová zpráva"
     },
     "deliveredBy": "Doručil <address>{sender}</address>",

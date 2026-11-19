@@ -83,7 +83,7 @@ const environment = {
   desktopBridgePort: 45_901,
   documentsBucket: "documents",
   documentsEndpoint: "https://objects.stella.test",
-  sandboxUrl: "https://stella.test/sandbox",
+  sandboxUrls: ["https://stella.test/sandbox"],
 };
 
 // Serve as `server.ts` does: the server entry owns the request scope that

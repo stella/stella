@@ -8,6 +8,8 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const testing = await import("@testing-library/react");
+const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
+  await import("@tanstack/react-router");
 const { isFramePendingView } = await import("@/routes/-pending-view.logic");
 
 afterEach(() => {
@@ -48,10 +50,22 @@ test("the frame draws at least the guidance reader's pending view", () => {
 
 test.each(views)(
   "$name renders markup the HTML parser keeps as is",
-  ({ view: View }) => {
+  async ({ view: View }) => {
+    const router = createRouter({
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+      routeTree: createRootRoute({
+        component: () => (
+          <div data-testid="frame-pending-view">
+            <View />
+          </div>
+        ),
+      }),
+    });
+    await router.load();
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
     try {
-      testing.render(<View />);
+      const result = testing.render(<RouterProvider router={router} />);
+      expect(result.getByTestId("frame-pending-view")).toBeTruthy();
       const nestingErrors = consoleError.mock.calls
         .map((call) => call.map(String).join(" "))
         .filter((message) => message.startsWith("In HTML, "));

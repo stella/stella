@@ -6,7 +6,7 @@ import type { TimeEntryReport } from "@stll/api-contract/time-entry-report";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { useFormatter } from "@/i18n/formatting-context";
 
-import { REPORT_LABELS } from "./report-labels";
+import { REPORT_LABELS } from "./report-labels.logic";
 import {
   REPORT_METRICS,
   type ReportMetric,
@@ -42,7 +42,11 @@ export const ReportSummary = ({ data }: { data: TimeEntryReport }) => {
   return (
     <ReportTiles>
       {REPORT_METRICS.map(({ key }) => (
-        <ReportTile key={key} label={t(REPORT_LABELS[key])}>
+        <ReportTile
+          key={key}
+          label={t(REPORT_LABELS[key])}
+          labelText={t(REPORT_LABELS[key])}
+        >
           <p className="text-2xl font-medium tabular-nums">
             {key === "billableShare"
               ? format.number(metricValue(key, data.summary.current) / 100, {
