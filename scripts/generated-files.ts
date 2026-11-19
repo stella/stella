@@ -1946,6 +1946,31 @@ const GENERATOR_DECLARATIONS = [
     after: ["cli-runtime", "capability-runtime"],
   },
   {
+    id: "mcp-app-style-sources",
+    outputKind: "committed",
+    outputs: ["packages/mcp-apps/src/shared/style.css"],
+    blocks: [
+      {
+        path: "packages/mcp-apps/src/shared/style.css",
+        begin: "/* BEGIN GENERATED MCP APP STYLE SOURCES */",
+        end: "/* END GENERATED MCP APP STYLE SOURCES */",
+      },
+    ],
+    // The walk follows the apps' imports through every workspace package.
+    inputs: [
+      "packages/mcp-apps/scripts/style-sources.ts",
+      "packages/*/src/**",
+      "packages/*/package.json",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
+    write: ["bun", "packages/mcp-apps/scripts/style-sources.ts", "--write"],
+    check: ["bun", "packages/mcp-apps/scripts/style-sources.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "mcp-app-bundles",
     outputKind: "derived",
     outputs: [
@@ -1961,6 +1986,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
+      "packages/mcp-apps/scripts/style-sources.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1996,7 +2022,7 @@ const GENERATOR_DECLARATIONS = [
     check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
     checkedBy: "MCP app derived outputs guard",
     autofix: true,
-    after: ["mcp-app-contracts"],
+    after: ["mcp-app-contracts", "mcp-app-style-sources"],
   },
   {
     id: "scan-engine-fixtures",
