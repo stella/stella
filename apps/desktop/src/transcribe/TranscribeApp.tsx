@@ -305,7 +305,7 @@ const RecordingTile = ({ size }: { size: "large" | "small" }) => (
 );
 
 const REFUSED_MESSAGES = {
-  dictaphone: "refused.dictaphone",
+  dictaphone: "note",
   unsupported: "refused.unsupported",
   tooLong: "refused.tooLong",
   unreadable: "refused.unreadable",

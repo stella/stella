@@ -532,7 +532,6 @@ const TranscribeRecordingGroup = () => {
           onClick={() => {
             void open();
           }}
-          size="sm"
           variant="outline"
         >
           {t("open")}
