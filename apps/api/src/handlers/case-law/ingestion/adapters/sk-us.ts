@@ -926,9 +926,14 @@ const statedSkUsString = (value: unknown): string | undefined => {
  * The audit identity of a search row, read off the fields the DMS states for
  * the record each time it lists it, whether or not it states the document id
  * with them: the corpus, the docket, the registry number, the decision date,
- * the decision form, the document type and the dissenting judge. Together
- * they tell apart the documents one docket publishes on one day (the
- * decision, its corrections and each separate opinion).
+ * the decision form, the document type and the kind of separate opinion.
+ * Together they tell apart the decision one docket publishes on one day, its
+ * corrections and its separate opinions of each kind. Two documents of one
+ * type on one docket and day, such as two separate opinions of one kind,
+ * state nothing apart but the document id and the result index, so they
+ * share an identity: no field the row states tells which of them an id-less
+ * listing is, and whichever is first keyed takes over the row (the store
+ * adopts a row only while it is the one row stored under the identity).
  *
  * Left out: the document id itself and the ECLI, which can come back with it,
  * the result index (a listing position), the title (the document type again,
