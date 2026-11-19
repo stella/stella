@@ -5,13 +5,20 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import { isPublicLegislationPageCountry } from "@stll/api-contract/legislation-publication";
 import {
   PUBLIC_ROBOTS_DENIED_USER_AGENTS,
   ROBOTS_DISALLOWED_PATHS,
 } from "@stll/api-contract/public-crawl-rules";
+import { STATUTE_QUERY_CAPABILITIES } from "@stll/api-contract/statute-query-capability";
 
 import { env } from "@/env";
-import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { createCaseLawJurisdictionHubPath } from "@/features/case-law/browse-path";
+import {
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  publicCaseLawPageCountryFromParam,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import {
   createStatuteSitemapShardPath,
   type StatuteSitemapShard,
@@ -43,11 +50,33 @@ import {
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 import {
   createPublicCrawlRules,
+  isPublicLawUrlIndexable,
   publicCrawlRobotsLines,
-  publicLawHubSitemapPaths,
 } from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
+
+/**
+ * The law sitemap's static entries: each public jurisdiction's hub and its
+ * statute hub. A path is listed only when the crawl policy makes it
+ * indexable, so the sitemap cannot list what robots.txt or the page's head
+ * refuses.
+ */
+const publicLawHubSitemapPaths = (): readonly `/law/${string}`[] =>
+  [
+    ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map((country) =>
+      createCaseLawJurisdictionHubPath(toCaseLawCountryParam(country)),
+    ),
+    // Jurisdictions with a statute browser whose statute pages are public.
+    ...Object.entries(STATUTE_QUERY_CAPABILITIES)
+      .filter(
+        ([country, capability]) =>
+          capability.type === "supported" &&
+          isPublicLegislationPageCountry(country.toUpperCase()),
+      )
+      .map(([country]) => country)
+      .map((country): `/law/${string}` => `/law/${country}/statutes`),
+  ].filter((path) => isPublicLawUrlIndexable(path, true));
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
 
 type FetchLike = (

@@ -1,8 +1,5 @@
-import { isPublicLegislationPageCountry } from "@stll/api-contract/legislation-publication";
-import { STATUTE_QUERY_CAPABILITIES } from "@stll/api-contract/statute-query-capability";
 import { loadCatalogue } from "@stll/catalogue";
 
-import { createCaseLawJurisdictionHubPath } from "./features/case-law/browse-path";
 import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
@@ -217,25 +214,3 @@ export const publicCrawlRobotsLines = (
     const queryRule = path.startsWith("/law/") ? [`Disallow: ${path}/*?`] : [];
     return [...queryRule, `Allow: ${path}/`, `Allow: ${path}$`];
   });
-
-/**
- * The law sitemap's static entries: each public jurisdiction's hub and its
- * statute hub. A path is listed only when the policy above makes it
- * indexable, so the sitemap cannot list what robots.txt or the page's head
- * refuses.
- */
-export const publicLawHubSitemapPaths = (): readonly `/law/${string}`[] =>
-  [
-    ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map((country) =>
-      createCaseLawJurisdictionHubPath(toCaseLawCountryParam(country)),
-    ),
-    // Jurisdictions with a statute browser whose statute pages are public.
-    ...Object.entries(STATUTE_QUERY_CAPABILITIES)
-      .filter(
-        ([country, capability]) =>
-          capability.type === "supported" &&
-          isPublicLegislationPageCountry(country.toUpperCase()),
-      )
-      .map(([country]) => country)
-      .map((country): `/law/${string}` => `/law/${country}/statutes`),
-  ].filter((path) => isPublicLawUrlIndexable(path, true));
