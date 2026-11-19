@@ -5,8 +5,8 @@ import type { OrganizationRoleName } from "@stll/auth-model";
 import { memberHasPermissions } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { rootKeys } from "@/lib/auth-query-keys.logic";
-import { newestCachedData } from "@/lib/pending-cache-reads.logic";
+import { newestCachedData } from "@/components/pending-cache-reads.logic";
+import { rootKeys } from "@/lib/account/auth-query-keys.logic";
 
 const isRoleName = (value: unknown): value is OrganizationRoleName =>
   ORGANIZATION_ROLE_NAMES.some((name) => name === value);
@@ -23,10 +23,10 @@ export const cachedRoleGrants = (
   queryClient: QueryClient,
   permissions: PermissionInput,
 ): boolean => {
-  const role = newestCachedData<unknown>(queryClient, {
-    exact: true,
-    queryKey: rootKeys.role,
-  });
+  const role = newestCachedData(
+    queryClient,
+    queryClient.getQueriesData({ exact: true, queryKey: rootKeys.role }),
+  );
   return (
     isRoleName(role) &&
     memberHasPermissions({ role, billingAccess: false, permissions })

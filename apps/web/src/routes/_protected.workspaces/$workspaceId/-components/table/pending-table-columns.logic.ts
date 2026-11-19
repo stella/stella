@@ -1,12 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { newestCachedData } from "@/components/pending-cache-reads.logic";
 import { getInternalColId } from "@/components/workspaces/internal-ids.logic";
 import { getWorkspaceGridTemplateColumns } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import type {
   GridColumnGeometry,
   GridColumnsInput,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { newestCachedData } from "@/lib/pending-cache-reads.logic";
 import { propertiesQueryRoot } from "@/lib/resource-query-roots.logic";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema";
@@ -33,10 +33,13 @@ export const cachedWorkspaceProperties = (
   queryClient: QueryClient,
   workspaceId: string,
 ): WorkspaceProperty[] | undefined =>
-  newestCachedData<WorkspaceProperty[]>(queryClient, {
-    exact: true,
-    queryKey: propertiesQueryRoot(workspaceId),
-  });
+  newestCachedData(
+    queryClient,
+    queryClient.getQueriesData<WorkspaceProperty[]>({
+      exact: true,
+      queryKey: propertiesQueryRoot(workspaceId),
+    }),
+  );
 
 /**
  * Whether the table view draws grouped sections rather than one flat table,

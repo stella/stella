@@ -30,27 +30,26 @@ export const ViewBodyPending = ({
     return null;
   }
   const { layout } = view;
-  switch (layout.type) {
-    case "table":
-      return (
-        <TableViewPending
-          cache={cache}
-          view={{ ...view, layout }}
-          workspaceId={workspaceId}
-        />
-      );
-    case "overview":
-      return <OverviewViewPending />;
-    case "calendar":
-      return <CalendarViewPending view={{ ...view, layout }} />;
-    case "correspondence":
-      return <CorrespondenceViewSkeleton />;
-    // A board's columns come from its grouping, which the board resolves
-    // once it mounts; it then stands with its columns and card placeholders.
-    case "kanban":
-    case "filesystem":
-    case "timeline":
-    case "avt":
-      return null;
+  if (layout.type === "table") {
+    return (
+      <TableViewPending
+        cache={cache}
+        view={{ ...view, layout }}
+        workspaceId={workspaceId}
+      />
+    );
   }
+  if (layout.type === "overview") {
+    return <OverviewViewPending />;
+  }
+  if (layout.type === "calendar") {
+    return <CalendarViewPending view={{ ...view, layout }} />;
+  }
+  if (layout.type === "correspondence") {
+    return <CorrespondenceViewSkeleton />;
+  }
+  // A board's columns come from its grouping, which the board resolves once
+  // it mounts; it then stands with its columns and card placeholders. A
+  // filesystem tree, a timeline and an AVT view claim no shape either.
+  return null;
 };

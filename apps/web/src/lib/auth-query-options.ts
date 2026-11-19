@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { rootKeys } from "@/lib/auth-query-keys.logic";
+import { rootKeys } from "@/lib/account/auth-query-keys.logic";
 import { STALE_TIME } from "@/lib/consts";
 
 export { rootKeys };

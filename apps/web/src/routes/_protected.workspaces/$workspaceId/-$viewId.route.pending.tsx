@@ -1,5 +1,5 @@
 import { createContext, use } from "react";
-import type { ComponentProps, ReactNode, Ref } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { useParams, useSearch } from "@tanstack/react-router";
 
@@ -50,9 +50,9 @@ type ViewShellFaceProps = {
   /** The view's body: the layout, or what stands in for it. */
   children: ReactNode;
   paneRef?: Ref<HTMLDivElement> | undefined;
-  /** Attributes the page sets on the body and its scroll area (guide anchors). */
-  bodyProps?: ComponentProps<"div"> | undefined;
-  scrollProps?: ComponentProps<"div"> | undefined;
+  /** The guide anchors the page puts on the body and on its scroll area. */
+  bodyAnchor?: string | undefined;
+  scrollAnchor?: string | undefined;
 };
 
 /**
@@ -62,16 +62,19 @@ type ViewShellFaceProps = {
  * pending body.
  */
 export const ViewShellFace = ({
-  bodyProps,
+  bodyAnchor,
   children,
   chrome,
   paneRef,
-  scrollProps,
+  scrollAnchor,
 }: ViewShellFaceProps) => (
   <div className="flex min-h-0 flex-1 flex-col" ref={paneRef}>
     {chrome}
-    <div {...bodyProps} className="flex min-h-0 flex-1 flex-col">
-      <div {...scrollProps} className="flex-1 overflow-auto">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      data-guide-anchor={bodyAnchor}
+    >
+      <div className="flex-1 overflow-auto" data-guide-anchor={scrollAnchor}>
         {children}
       </div>
     </div>
@@ -90,7 +93,7 @@ export const ViewBodySlot = ({ children }: { children: ReactNode }) => (
 );
 
 /** A view's tab icon, the same in the switcher and its face. */
-export const ViewLayoutTabIcon = ({ view }: { view: WorkspaceView }) => {
+const ViewLayoutTabIcon = ({ view }: { view: WorkspaceView }) => {
   const Icon = VIEW_LAYOUT_ICONS[view.layout.type];
   return <Icon className="size-3.5 shrink-0" />;
 };

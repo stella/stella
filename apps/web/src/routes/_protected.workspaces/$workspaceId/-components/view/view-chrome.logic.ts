@@ -1,9 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { newestCachedData } from "@/components/pending-cache-reads.logic";
 import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
 import { callerFeatureEnabled } from "@/lib/organization/feature-access/access.logic";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { newestCachedData } from "@/lib/pending-cache-reads.logic";
 import { organizationSettingsQueryRoot } from "@/lib/resource-query-roots.logic";
 import type { WorkspaceView } from "@/lib/types";
 import {
@@ -40,30 +40,25 @@ type CachedViewChromeInput = {
 };
 
 /** The matter's views as the cache holds them, or `undefined`. */
-export const cachedWorkspaceViews = (
+const cachedWorkspaceViews = (
   queryClient: QueryClient,
   workspaceId: string,
 ): CachedWorkspaceView[] | undefined =>
-  newestCachedData<CachedWorkspaceView[]>(queryClient, {
-    queryKey: viewsRootKey(workspaceId),
-  });
-
-/** The view `viewId` names (or the matter's first), as the cache holds it. */
-export const cachedWorkspaceView = (
-  queryClient: QueryClient,
-  { workspaceId, viewId }: CachedViewChromeInput,
-): WorkspaceView | undefined => {
-  const views = cachedWorkspaceViews(queryClient, workspaceId);
-  return views === undefined
-    ? undefined
-    : selectAvailableWorkspaceView(views, viewId);
-};
+  newestCachedData(
+    queryClient,
+    queryClient.getQueriesData<CachedWorkspaceView[]>({
+      queryKey: viewsRootKey(workspaceId),
+    }),
+  );
 
 const cachedAvtEnabled = (queryClient: QueryClient): boolean =>
   callerFeatureEnabled(
-    newestCachedData<OrganizationSettings>(queryClient, {
-      queryKey: organizationSettingsQueryRoot(),
-    }),
+    newestCachedData(
+      queryClient,
+      queryClient.getQueriesData<OrganizationSettings>({
+        queryKey: organizationSettingsQueryRoot(),
+      }),
+    ),
     CALLER_FEATURE.verification,
   );
 

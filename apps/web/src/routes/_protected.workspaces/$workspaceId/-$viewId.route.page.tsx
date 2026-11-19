@@ -111,10 +111,12 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
 
   return (
     <ViewShellFace
-      bodyProps={guideAnchor(
-        GUIDE_ANCHORS.tabularReviewTable,
-        activeView.layout.type === "table",
-      )}
+      bodyAnchor={
+        guideAnchor(
+          GUIDE_ANCHORS.tabularReviewTable,
+          activeView.layout.type === "table",
+        )["data-guide-anchor"]
+      }
       chrome={
         <ViewChromeRow
           activeViewId={activeView.id}
@@ -131,10 +133,12 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
         />
       }
       paneRef={paneRef}
-      scrollProps={guideAnchor(
-        GUIDE_ANCHORS.documentsList,
-        activeView.layout.type === "table",
-      )}
+      scrollAnchor={
+        guideAnchor(
+          GUIDE_ANCHORS.documentsList,
+          activeView.layout.type === "table",
+        )["data-guide-anchor"]
+      }
     >
       <ViewBodySlot>
         <Outlet />

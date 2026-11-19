@@ -198,7 +198,7 @@ test("a pending half imports only pending-safe modules", async () => {
   expect(
     await pendingRule(
       [
-        'import { Skeleton } from "@stll/ui/skeleton";',
+        'import { Button } from "@stll/ui/button";',
         'import { DefaultPendingComponent } from "@/components/route-components";',
         'import { Menu } from "@stll/ui/menu";',
         'import { useQuery } from "@tanstack/react-query";',

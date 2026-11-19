@@ -86,7 +86,7 @@ export const CalendarViewPending = ({
   view: WorkspaceView<"calendar">;
 }) => {
   const { datePropertyId, mode } = view.layout;
-  if (datePropertyId === undefined || mode === "year") {
+  if (!datePropertyId || mode === "year") {
     return null;
   }
   return (

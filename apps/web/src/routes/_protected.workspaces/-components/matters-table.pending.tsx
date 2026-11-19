@@ -25,7 +25,7 @@ import {
 } from "@/routes/_protected.workspaces/-hooks/matters-labels.logic";
 
 /** A column of the matters table: its width, and the sort its head sets. */
-export type MattersTableColumn = {
+type MattersTableColumn = {
   id: MattersColumnId | "name";
   widthPx: number;
   /** The sort the head toggles; `null` for a head that does not sort. */
@@ -37,7 +37,7 @@ export type MattersTableColumn = {
  * its loading view both read. The name always shows; the member hides the
  * others.
  */
-export const MATTERS_TABLE_COLUMNS = [
+const MATTERS_TABLE_COLUMNS = [
   { id: "name", sortKey: "name", widthPx: 260 },
   { id: "client", sortKey: "clientName", widthPx: 240 },
   { id: "team", sortKey: null, widthPx: 160 },
@@ -141,7 +141,7 @@ const sortDirectionFor = (
  * shows) in its face, the filter trigger's place kept. `sort` is the
  * member's sort, `undefined` while it is not read yet.
  */
-export const MattersTableHeadPending = ({
+const MattersTableHeadPending = ({
   columns,
   sort,
 }: {
@@ -195,32 +195,30 @@ const MattersCellPending = ({
 }: {
   columnId: MattersTableColumnId;
 }) => {
-  switch (columnId) {
-    case "name":
-      return (
-        <div className="flex min-w-0 items-center gap-2">
-          <Skeleton className="size-2 shrink-0 rounded-full" />
-          <CellLineBar className="h-3 w-2/5" />
-        </div>
-      );
-    case "team":
-      return (
-        <div className="flex min-w-0 justify-end sm:justify-start">
-          <div className="flex items-center -space-x-1">
-            <Skeleton className="size-5 rounded-full sm:size-6" />
-            <Skeleton className="size-5 rounded-full sm:size-6" />
-            <Skeleton className="size-5 rounded-full sm:size-6" />
-          </div>
-        </div>
-      );
-    case "entityCount":
-      return <CellLineBar className="h-3 w-6" />;
-    case "client":
-    case "reference":
-    case "lastActivityAt":
-    case "createdAt":
-      return <CellLineBar className="h-3 w-3/5" />;
+  if (columnId === "name") {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <Skeleton className="size-2 shrink-0 rounded-full" />
+        <CellLineBar className="h-3 w-2/5" />
+      </div>
+    );
   }
+  if (columnId === "team") {
+    return (
+      <div className="flex min-w-0 justify-end sm:justify-start">
+        <div className="flex items-center -space-x-1">
+          <Skeleton className="size-5 rounded-full sm:size-6" />
+          <Skeleton className="size-5 rounded-full sm:size-6" />
+          <Skeleton className="size-5 rounded-full sm:size-6" />
+        </div>
+      </div>
+    );
+  }
+  if (columnId === "entityCount") {
+    return <CellLineBar className="h-3 w-6" />;
+  }
+  // The client, the reference and the dates: one line of text.
+  return <CellLineBar className="h-3 w-3/5" />;
 };
 
 /** Placeholder rows, about a screen of them. */
@@ -236,7 +234,7 @@ const MATTERS_TABLE_ROW_PENDING_KEYS = [
 ] as const;
 
 /** The table's rows while the matters load, one cell per shown column. */
-export const MattersTableRowsPending = ({
+const MattersTableRowsPending = ({
   columns,
 }: {
   columns: readonly MattersTableColumnEntry[];

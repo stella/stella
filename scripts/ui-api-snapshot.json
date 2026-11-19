@@ -1878,6 +1878,24 @@
       "TableRow"
     ],
     "./table-chart": ["TableChart"],
+    "./table-shell": [
+      "HEAD_CONTENT_CLASS",
+      "SORT_ICON_SLOT_CLASS",
+      "SortDirectionIcon",
+      "SortableHeadFace",
+      "Table",
+      "TableBody",
+      "TableFooter",
+      "TableHead",
+      "TableHeadLabel",
+      "TableHeader",
+      "TableRow",
+      "TableShellCell",
+      "ariaSortOf",
+      "resolveTableAlign",
+      "sortableHeadButtonClassName",
+      "tableCellClassName"
+    ],
     "./tabs": [
       "Tabs",
       "TabsContent",
@@ -1922,6 +1940,10 @@
       "TooltipTrigger"
     ],
     "./truncated-text": ["TruncatedText", "isTextOverflowing"],
+    "./truncated-text-face": [
+      "TRUNCATED_TEXT_LINES_CLASS",
+      "TruncatedTextFace"
+    ],
     "./typed-character": ["typedCharacter"],
     "./use-contained-handler": ["containedEventHandler", "containedHandler"],
     "./use-content-dir": [
@@ -1940,6 +1962,7 @@
       "ViewFilterChip",
       "ViewToolbarChrome"
     ],
+    "./view-toolbar-shell": ["ViewChromeBar", "ViewToolbarChrome"],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
     "./workspace-shell": ["WorkspaceEndRail", "WorkspaceShell"]
   },
@@ -2277,8 +2300,11 @@
     "SidebarMenuButton.size": ["default", "lg", "rail", "sm"],
     "SidebarMenuButton.variant": ["default", "outline"],
     "SidebarMenuSubButton.size": ["md", "sm"],
+    "SortDirectionIcon.direction": ["asc", "desc"],
     "SortableHead.align": ["center", "end", "start"],
     "SortableHead.sortDirection": ["asc", "desc"],
+    "SortableHeadFace.align": ["center", "end", "start"],
+    "SortableHeadFace.sortDirection": ["asc", "desc"],
     "SplitButton.size": ["md", "sm"],
     "SplitButton.surface": ["menu", "popover"],
     "SplitButtonFace.size": ["md", "sm"],
@@ -2297,6 +2323,8 @@
     "TableHead.align": ["center", "end", "start"],
     "TableHeader.surface": ["muted", "plain"],
     "TableRow.tone": ["default", "muted"],
+    "TableShellCell.align": ["center", "end", "start"],
+    "TableShellCell.tone": ["default", "muted"],
     "TabsList.variant": ["default", "underline"],
     "Text.variant": [
       "badge",
