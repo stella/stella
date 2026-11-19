@@ -5,7 +5,7 @@ import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { STATUTE_ALIASES } from "./statute-aliases";
-import type { StatuteQueryCountry } from "./statute-query-capability";
+import type { StatuteGazetteCountry } from "./statute-query-capability";
 import {
   foldStatuteQuery,
   parseStatuteQuery,
@@ -14,7 +14,7 @@ import {
 } from "./statute-query-intent";
 
 const countries = Object.keys(STATUTE_ALIASES).filter(
-  (country): country is StatuteQueryCountry =>
+  (country): country is StatuteGazetteCountry =>
     Object.hasOwn(STATUTE_ALIASES, country),
 );
 
@@ -583,5 +583,92 @@ describe("reading act references inside a full-text query", () => {
         label: null,
       },
     ]);
+  });
+});
+
+describe("reading a Hungarian entry", () => {
+  test.each([
+    [
+      "2013. évi V. törvény",
+      { collection: "torveny", number: "5", year: "2013", provision: null },
+    ],
+    [
+      "Ptk. 6:519. §",
+      {
+        collection: "torveny",
+        number: "5",
+        year: "2013",
+        provision: "6:519. §",
+      },
+    ],
+    [
+      "123/2020. (IV. 30.) Korm. rendelet 25/G. §",
+      {
+        collection: "korm-rendelet",
+        number: "123",
+        year: "2020",
+        provision: "25/G. §",
+      },
+    ],
+    [
+      "123/2020 Korm. rendelet",
+      {
+        collection: "korm-rendelet",
+        number: "123",
+        year: "2020",
+        provision: null,
+      },
+    ],
+    [
+      "5/2019. (III. 13.) IM rendelet",
+      { collection: "im-rendelet", number: "5", year: "2019", provision: null },
+    ],
+  ])("%s names one act in its series", (entry, act) => {
+    expect(parseStatuteQuery("hun", entry)).toEqual({
+      type: "act",
+      label: null,
+      ...act,
+    });
+  });
+
+  test.each([
+    "a polgári törvénykönyv",
+    "89/2012 Sb.",
+    "2013. évi V. törvény és 2012. évi I. törvény",
+  ])("%s searches titles", (entry) => {
+    expect(parseStatuteQuery("hun", entry)).toEqual({
+      type: "text",
+      text: entry,
+    });
+  });
+
+  test("references inside prose name each act once, in mention order", () => {
+    expect(
+      readStatuteQueryReferences(
+        "hun",
+        "a Btk. 370. §-a és a Ptk., valamint a 2013. évi V. törvény",
+      ),
+    ).toEqual([
+      {
+        country: "hun",
+        collection: "torveny",
+        number: "100",
+        year: "2012",
+        label: null,
+      },
+      {
+        country: "hun",
+        collection: "torveny",
+        number: "5",
+        year: "2013",
+        label: null,
+      },
+    ]);
+  });
+
+  test("a Czech number read in Hungarian names no act", () => {
+    expect(readStatuteQueryReferences("hun", "zákon č. 89/2012 Sb.")).toEqual(
+      [],
+    );
   });
 });
