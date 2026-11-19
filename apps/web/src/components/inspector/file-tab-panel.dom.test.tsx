@@ -278,7 +278,7 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
         kind === "message"
           ? {
               ...common,
-              kind,
+              kind: "message",
               files: [
                 { fileName: "Order.pdf", entityId: ENTITY_ID },
                 { fileName: "Exhibit.pdf", entityId: null },
@@ -286,7 +286,7 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
             }
           : {
               ...common,
-              kind,
+              kind: "receipt",
               events: [
                 {
                   occurredAt: envelope.acceptedAt,
