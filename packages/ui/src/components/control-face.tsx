@@ -94,7 +94,7 @@ export const FaceLabelPending = ({
 }) => (
   <span
     aria-hidden="true"
-    className="inline-flex h-[1lh] items-center"
+    className="inline-flex h-[1lh] items-center align-top"
     data-slot="face-label-skeleton"
   >
     <InlineSkeleton className={cn("h-[0.75em]", className)} />

@@ -44,7 +44,7 @@ const landmarks = async (page: Page, form: (typeof forms)[number]) => {
       await expect(node).toBeVisible();
       return node.evaluate((element) => {
         const { x, y, width, height } = element.getBoundingClientRect();
-        return [x, y, width, height].map(Math.round);
+        return [x, y, width, height];
       });
     }),
   );
@@ -57,13 +57,13 @@ const providerLandmarks = async (page: Page) =>
   await providerRows(page).evaluateAll((elements) =>
     elements.map((element) => {
       const { x, y, width, height } = element.getBoundingClientRect();
-      const provider = element.dataset.authProvider;
+      const provider = element.dataset["authProvider"];
       if (!provider) {
         throw new TypeError("Configured provider rows require a provider ID");
       }
       return {
         provider,
-        rectangle: [x, y, width, height].map(Math.round),
+        rectangle: [x, y, width, height],
       };
     }),
   );
