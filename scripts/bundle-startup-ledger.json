@@ -1,102 +1,12 @@
 {
   "startupPageCode": [
     {
-      "kind": "page-module",
-      "module": "src/routes/law/-law-coverage/coverage-page.tsx",
-      "reason": "law/coverage.tsx imports CaseLawCoveragePending from the page module for its pendingComponent."
-    },
-    {
-      "kind": "page-module",
-      "module": "src/routes/_protected.time_.report/-components/report-page.tsx",
-      "reason": "_protected.time_.report.tsx renders ReportLayout from the page module in its inline pendingComponent."
-    },
-    {
-      "kind": "route-component",
-      "module": "src/routes/law/$country/statutes/index.tsx",
-      "reason": "The pendingComponent renders PublicStatutesIndex, so the page it shares with the component stays in the route file."
-    },
-    {
-      "kind": "route-component",
-      "module": "src/routes/invoice-link.tsx",
-      "reason": "InvoiceSummary is exported for a test, so the splitter keeps it in the route file."
-    },
-    {
-      "kind": "route-component",
-      "module": "src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
-      "reason": "ViewPendingComponent renders ViewChromeRow, which the component's ViewShell also renders."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.contacts/index.tsx?tsr-shared=1",
-      "reason": "ContactsPendingComponent and ContactsPage share the contact table features and columns."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/law/$country/statutes/index.tsx?tsr-shared=1",
-      "reason": "The pending and loaded PublicStatutesIndex share the filter chips, row phases and list heading."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.settings/organization.members.tsx?tsr-shared=1",
-      "reason": "MembersPendingComponent and Members share MEMBER_COLUMNS and MembersTableHeader."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.workspaces/$workspaceId/invoices/new.tsx?tsr-shared=1",
-      "reason": "NewInvoicePending and NewInvoicePage share PageHeader."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/knowledge/tools_.$entry.tsx?tsr-shared=1",
-      "reason": "The eager notFoundComponent ToolEntryNotFound is shared with ToolEntryPage."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx?tsr-shared=1",
-      "reason": "The loader and the component share POLL_INTERVAL_MS and the report export query keys and options."
-    },
-    {
       "kind": "tsr-shared",
       "module": "src/routes/law/index.tsx?tsr-shared=1",
       "reason": "LawHomePending and LawHome share LawHomeGreeting."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/auth/index.tsx?tsr-shared=1",
-      "reason": "beforeLoad and the component share getOauthPostLoginRedirectTo."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx?tsr-shared=1",
-      "reason": "ViewPendingComponent and the component share hasViewToolbar."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.time_.approvals.tsx?tsr-shared=1",
-      "reason": "The loader and the component share todayIn."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.time.tsx?tsr-shared=1",
-      "reason": "The loader and the component share todayIn."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.workspaces/$workspaceId/$viewId.index.tsx?tsr-shared=1",
-      "reason": "The loader and the component share isFilesystemView."
-    },
-    {
-      "kind": "tsr-shared",
-      "module": "src/routes/_protected.settings/organization.audit-logs.tsx?tsr-shared=1",
-      "reason": "The loader and the component share DEFAULT_PERFORMER_FILTER."
     }
   ],
   "coldLoadHops": [
-    {
-      "route": "/law/cases/",
-      "module": "src/routes/law/cases/-case-law-index-page.tsx",
-      "reason": "component and pendingComponent load -case-law-index-page through a hand-written lazyRouteComponent import."
-    },
     {
       "route": "/knowledge/playbooks",
       "module": "src/routes/knowledge/-member/member-playbooks-page.tsx",

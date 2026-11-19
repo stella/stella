@@ -202,12 +202,6 @@
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/routes/_protected.contacts/index.tsx::CreateContactDialog": {
-    "memos": 0,
-    "reasons": [
-      "(BuildHIR::lowerStatement) Handle TryStatement with a finalizer ('finally') clause"
-    ]
-  },
   "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::RouteComponentInner": {
     "memos": 2,
     "reasons": [

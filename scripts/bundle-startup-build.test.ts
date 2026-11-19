@@ -15,8 +15,54 @@ import {
   componentDeclarationLines,
   parseStartManifest,
   readStartupGraph,
+  resolveModuleImports,
+  staticSpecifiers,
 } from "./bundle-startup-build";
 import { coldLoadHops, startupPageCode } from "./bundle-startup-gates";
+
+describe("module imports", () => {
+  test("type-only imports load nothing, re-exports and side effects do", () => {
+    const source = [
+      'import type { Row } from "./-rows";',
+      'import { type Cell, cellOf } from "./-cells";',
+      'import "./-styles.css";',
+      'export { pagerOf } from "@/components/pager";',
+      'export type { Pager } from "@/components/pager-types";',
+    ].join("\n");
+
+    expect(staticSpecifiers("src/routes/-x.page.tsx", source)).toEqual([
+      "./-cells",
+      "./-styles.css",
+      "@/components/pager",
+    ]);
+  });
+
+  test("specifiers resolve to the build's module ids, packages left out", () => {
+    const imports = resolveModuleImports(
+      new Map([
+        [
+          "src/routes/cases.tsx?tsr-split=component",
+          ["./-cases.page", "@stll/ui/button"],
+        ],
+        ["src/routes/-cases.page.tsx", ["@/lib/loader", "./cases"]],
+      ]),
+      [
+        "src/routes/cases.tsx?tsr-split=component",
+        "src/routes/cases.tsx",
+        "src/routes/-cases.page.tsx",
+        "src/lib/loader/index.ts",
+      ],
+    );
+
+    expect(imports.get("src/routes/cases.tsx?tsr-split=component")).toEqual([
+      "src/routes/-cases.page.tsx",
+    ]);
+    expect(imports.get("src/routes/-cases.page.tsx")).toEqual([
+      "src/lib/loader/index.ts",
+      "src/routes/cases.tsx",
+    ]);
+  });
+});
 
 describe("route component declarations", () => {
   // The shape that keeps a page in the route file: the eager pending view

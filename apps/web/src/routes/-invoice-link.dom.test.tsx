@@ -18,7 +18,7 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { InvoiceSummary, invoiceLinkViewOptions } =
-  await import("./invoice-link");
+  await import("./-invoice-link.page");
 
 const invoice = {
   title: "Invoice 2026-18",

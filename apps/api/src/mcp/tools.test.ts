@@ -6413,6 +6413,54 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_statute and read_statute_provisions read a Work held only as promulgated and say so", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "promulgated-only",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      expressionKind: "promulgated",
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      { ...createProvisionVersionRow(), expressionKind: "promulgated" },
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    expect(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { eli: STATUTE_ELI },
+          context: createContext(),
+          toolName: "read_statute",
+        }),
+      ),
+    ).toMatchObject({
+      statute: { documentId: STATUTE_ID, expressionKind: "promulgated" },
+    });
+    expect(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { items: [{ anchor: PROVISION_ANCHOR, eli: STATUTE_ELI }] },
+          context: createContext(),
+          toolName: "read_statute_provisions",
+        }),
+      ),
+    ).toMatchObject({
+      items: [
+        {
+          documentId: STATUTE_ID,
+          expressionKind: "promulgated",
+          status: "found",
+          windowDisposition: "effective",
+        },
+      ],
+    });
+  });
+
   test("read_statute_provisions answers each entry in input order and resolves each work once", async () => {
     resolveStatuteExpressionMock.mockImplementation(
       async ({ asOf, eli }: { asOf?: string; eli: string }) => {
