@@ -1843,16 +1843,9 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # The repository script test job may be out of scope for this tree.
-      - name: Check script test declarations when repository checks skip
-        if: >-
-          !cancelled() && steps.checkout.outcome == 'success'
-          && steps.install.outcome == 'success'
-          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
-          && (needs.ci-plan.outputs.package_checks_required != 'true'
-          || needs.ci-plan.outputs.run_required == 'false'
-          || (github.event_name == 'pull_request' && needs.ci-plan.outputs.pr_depth_reused == 'true'))
-        run: bun scripts/run-unlisted-script-tests.ts --check-declarations
+      - name: Check script test declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: &script_test_declarations bun scripts/run-unlisted-script-tests.ts --check-declarations
 
       # Workflow job classifications fail more red pull requests than any
       # other check and take seconds, so they run here, before the heavy
@@ -2918,14 +2911,6 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Check script test declarations
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: script_test_declarations
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_script_test_declarations != 'true') }}
-        run: bun scripts/run-unlisted-script-tests.ts --check-declarations
-
       - name: Download generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
@@ -2943,6 +2928,14 @@ jobs:
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      - name: Check script test declarations
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: script_test_declarations
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_script_test_declarations != 'true') }}
+        run: *script_test_declarations
 
       - name: Prepare route network manifest
         env:

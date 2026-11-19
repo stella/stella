@@ -99,7 +99,7 @@
     "displayName": { "prefix": "pr-heavy-gate", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
-      "Check script test declarations when repository checks skip",
+      "Check script test declarations",
       "Check workflow job classifications",
       "Checkout",
       "Checkout workflow classification tooling",
@@ -1069,7 +1069,7 @@
     "displayName": { "prefix": "ci-quick-checks", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
-      "Check script test declarations when repository checks skip",
+      "Check script test declarations",
       "Check workflow job classifications",
       "Checkout",
       "Checkout workflow classification tooling",
