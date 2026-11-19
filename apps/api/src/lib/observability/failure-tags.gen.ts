@@ -3,6 +3,7 @@ export const FAILURE_TAGS = [
   "AIColumnInputRequiredError",
   "AIGenerationCancelledError",
   "AccountExportArchiveError",
+  "AcpRequestError",
   "ActionAdmissionError",
   "ActionCallObserverError",
   "ActionCostConfigError",
