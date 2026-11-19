@@ -86,8 +86,12 @@ const normalizedReference = (series: string, number: string) =>
     .replace(/\s|[-–]/gu, "")
     .replace("GFŘD", "GFŘ-D")}-${number}`;
 const referenceIn = (pattern: RegExp, text: string) => {
+  const match = pattern.exec(text);
+  if (!match) {
+    return null;
+  }
   // The patterns alternate, so the matched pair sits after unmatched groups.
-  const groups = [...(pattern.exec(text) ?? [])].slice(1);
+  const groups = [...match].slice(1);
   const index = groups.findIndex(Boolean);
   const series = groups.at(index);
   const number = groups.at(index + 1);
