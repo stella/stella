@@ -132,6 +132,12 @@ const HUB_SCOPE =
 const jurisdictionHubData = {
   scope: HUB_SCOPE,
   courts: [{ name: "Nejvyšší soud", segment: "nejvyssi-soud" }],
+  head: {
+    description: "Courts with public decisions in Czechia.",
+    items: [],
+    path: "/law/cze",
+    title: "Czech case law",
+  },
 } satisfies typeof JurisdictionHubRoute.types.loaderData;
 
 const courtBrowseData = {
@@ -141,6 +147,12 @@ const courtBrowseData = {
     kind: "periods",
     target: { level: "court", court: "nejvyssi-soud" },
     periods: [{ value: 2023, count: 0 }],
+  },
+  head: {
+    description: "Decisions of Nejvyšší soud by year.",
+    items: [],
+    path: "/law/cze/courts/nejvyssi-soud",
+    title: "Nejvyšší soud",
   },
 } satisfies typeof CourtBrowseRoute.types.loaderData;
 
