@@ -26,9 +26,14 @@ export type EliOptions = {
   readCitation?: ((text: string) => string | undefined) | undefined;
   /** The corrective call when the input is not an ELI. */
   hint?: string | undefined;
+  /** Prefixes of the URNs that name works of publishers without ELIs
+   *  (`"urn:hu:magyar-kozlony:"`). A work URN is one lower-case slug after
+   *  its prefix; it is read in any case, as written otherwise. */
+  urnPrefixes?: readonly string[] | undefined;
 };
 
 const ELI_EXPECTED = "an ELI";
+const URN_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ELI_HINT = "Pass the eli a search result returned.";
 
 /** An origin with a scheme, or a bare host a model pasted without one; a bare
@@ -151,6 +156,19 @@ export const normalizeEli = (
     return notAnEli();
   }
   const trimmed = input.trim();
+  const lowered = trimmed.toLowerCase();
+  const urnPrefix = options.urnPrefixes?.find((prefix) =>
+    lowered.startsWith(prefix.toLowerCase()),
+  );
+  if (urnPrefix !== undefined) {
+    return URN_SLUG_RE.test(lowered.slice(urnPrefix.length))
+      ? readValueAs(input, lowered)
+      : askForFix({
+          input,
+          expected: "the URN of a work",
+          hint: options.hint ?? ELI_HINT,
+        });
+  }
   const parsed = parseEli(trimmed);
 
   if (parsed === null) {
