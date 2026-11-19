@@ -44,6 +44,11 @@ const CASE_LAW_SEARCH_WARNING_DISPLAY = {
     messageKey: "caseLaw.searchWarnings.partialMatches",
     actionKey: "caseLaw.searchWarnings.searchEveryWord",
   },
+  partial_matches_ranked: {
+    surface: "resultsLine",
+    messageKey: "caseLaw.searchWarnings.partialMatches",
+    actionKey: "caseLaw.searchWarnings.searchEveryWord",
+  },
   no_hits: {
     surface: "emptyState",
     messageKey: "caseLaw.searchWarnings.noHits.message",
