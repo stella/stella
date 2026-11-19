@@ -149,6 +149,20 @@ const visualLoaders = {
       return { default: ChatStatusPlayground };
     },
   },
+  "chat-citation-chips": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_CITATION_CHIPS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-citation-chips-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_CITATION_CHIPS_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-citations": {
     load: async () => {
       const { ChatCitationsPlayground } =

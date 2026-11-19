@@ -82,6 +82,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "chat-citation-chips": { label: "Chat citation chips", layout: "plain" },
   "button-label": { label: "Button labels", layout: "plain" },
   "menu-commits": { label: "Menu commits", layout: "plain" },
   "chat-continuation-error": {
