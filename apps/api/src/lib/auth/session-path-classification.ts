@@ -117,6 +117,7 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
     ["/send-verification-email", noSession("verification message request")],
     ["/sign-out", noSession("session removal")],
     ["/social-link-hint", noSession("social account lookup")],
+    ["/sign-in/sso", noSession("identity provider redirect")],
     ["/token", noSession("token exchange")],
     ["/oauth2/authorize", noSession("OAuth authorization request")],
     ["/oauth2/consent", noSession("OAuth consent submission")],
@@ -184,6 +185,12 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
   classification: AuthSessionPathClassification;
 }[] = [
   { prefix: "/callback/", classification: SECOND_FACTOR },
+  {
+    // The organization's identity provider authenticates the sign-in; its
+    // own factors stand in for this app's second factor.
+    prefix: "/sso/callback/",
+    classification: noSecondFactor("organization identity provider sign-in"),
+  },
   {
     prefix: "/.well-known/",
     classification: noSession("OAuth server metadata"),

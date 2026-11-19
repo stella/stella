@@ -19,6 +19,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 // The member lookup and the member's connections read through the root
@@ -108,7 +109,12 @@ if (!databaseUrl || !enabled) {
         }
 
         const authorization = await resolveMemberAuthorization(
-          { organizationId, userId, workspaceId: undefined },
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId,
+            userId,
+            workspaceId: undefined,
+          },
           db,
         );
         if (authorization === null || !isMemberRole(authorization.role)) {
@@ -130,6 +136,7 @@ if (!databaseUrl || !enabled) {
               userDeleted: authorization.userDeleted,
               enrolledFeatureIds: authorization.enrolledFeatureIds,
               professionalUse: authorization.professionalUse,
+              ssoAccess: authorization.ssoAccess,
             },
           },
           initialWorkspaceId: null,

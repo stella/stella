@@ -2,7 +2,10 @@ import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
+import {
+  getCurrentAdapter,
+  tryGetCurrentAuthEndpointContext,
+} from "@better-auth/core/context";
 import type {
   AuthContext,
   BetterAuthPlugin,
@@ -35,6 +38,7 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
+import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 import {
   WORKSPACE_STATUS,
   workspaceIsVisible,
@@ -171,9 +175,11 @@ import {
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
 import { getWebHandoffService } from "@/api/lib/auth/mcp-web-handoff-service";
 import type {
+  CredentialMemberAuthorizationLookup,
   MemberAuthorization,
   MemberAuthorizationLookup,
 } from "@/api/lib/auth/member-authorization";
+import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
 import type {
   MemberCaller,
   SessionMemberCaller,
@@ -270,6 +276,13 @@ import {
 } from "@/api/lib/auth/social-sign-in-outcome";
 import { socialTokenExchangePlugin } from "@/api/lib/auth/social-token-exchange";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
+import { ssoAccessColumn, ssoAccessOf } from "@/api/lib/auth/sso-access";
+import {
+  createSsoSignInPlugin,
+  SSO_SESSION_FIELDS,
+  ssoSessionProvenance,
+  withoutIdentityProviderTokens,
+} from "@/api/lib/auth/sso-sign-in";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
@@ -1519,10 +1532,18 @@ export const createAuth = (
   const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
   const demoConfig = getDemoAccountConfig();
   const reviewConfig = getReviewAccountConfig();
+  // Session and account hooks read through the auth layer's current adapter:
+  // an SSO callback creates the account and its session in one transaction,
+  // and a read on another connection would not see the account it just made.
+  const currentAuthAdapter = async () =>
+    await getCurrentAdapter((await auth.$context).adapter);
   const resolveSessionAccount = async (userId: SafeId<"user">) =>
-    await rootDb.query.user.findFirst({
-      where: { id: userId },
-      columns: { email: true },
+    await (
+      await currentAuthAdapter()
+    ).findOne<{ email: string }>({
+      model: "user",
+      where: [{ field: "id", value: userId }],
+      select: ["email"],
     });
   const reviewDatabaseHooks = createReviewAccountDatabaseHooks(reviewConfig, {
     findUserEmail: async (userId: SafeId<"user">) =>
@@ -1535,12 +1556,16 @@ export const createAuth = (
     userId: SafeId<"user">;
     organizationId: SafeId<"organization">;
   }) =>
-    Boolean(
-      await rootDb.query.member.findFirst({
-        where: { userId, organizationId },
-        columns: { id: true },
-      }),
-    );
+    (await (
+      await currentAuthAdapter()
+    ).findOne<{ id: string }>({
+      model: "member",
+      where: [
+        { field: "userId", value: userId },
+        { field: "organizationId", value: organizationId },
+      ],
+      select: ["id"],
+    })) !== null;
   // Both accounts are pinned to their organization the same way: a session
   // opens only with a membership there, and always on that organization.
   const demoSessionPolicy = createDemoSessionPolicy({
@@ -2283,7 +2308,10 @@ export const createAuth = (
     },
     account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
     session: {
-      additionalFields: SESSION_LIFETIME_FIELDS,
+      additionalFields: {
+        ...SESSION_LIFETIME_FIELDS,
+        ...SSO_SESSION_FIELDS,
+      },
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       ...AUTH_SESSION_STORAGE_OPTIONS,
@@ -2341,6 +2369,16 @@ export const createAuth = (
           before: async (account, ctx) => {
             syntheticAuthHooks.accountCreateBefore(account);
             await reviewDatabaseHooks.accountCreateBefore(account, ctx);
+            const data = withoutIdentityProviderTokens(account, ctx);
+            return data === undefined ? undefined : { data };
+          },
+        },
+        update: {
+          before: async (account, ctx) => {
+            const data = withoutIdentityProviderTokens(account, ctx);
+            return await Promise.resolve(
+              data === undefined ? undefined : { data },
+            );
           },
         },
       },
@@ -2382,16 +2420,17 @@ export const createAuth = (
       },
       session: {
         create: {
-          before: async (session) => {
+          before: async (session, ctx) => {
             const accountPolicy =
               (await demoSessionPolicy(session)) ??
               (await reviewSessionPolicy(session)) ??
               (await syntheticSessionPolicy(session));
             const data = accountPolicy?.data ?? session;
             const lifetime = decidePinnedSessionLifetime(data);
-            return accountPolicy || lifetime
-              ? { data: { ...data, ...lifetime } }
-              : undefined;
+            // Every session is created with its SSO provenance decided:
+            // the verified provider on its own callback, null elsewhere.
+            const provenance = await ssoSessionProvenance(ctx);
+            return { data: { ...data, ...lifetime, ...provenance } };
           },
           // Aborting here, before Better Auth sets any cookie, issues neither
           // a session token nor a cached session snapshot for the session.
@@ -2665,6 +2704,8 @@ export const createAuth = (
       // actually receives.
       socialSignInOutcomePlugin,
       organizationPlugin,
+      // Mounted always, answering 404 until FEATURE_ENTERPRISE_SSO is on.
+      createSsoSignInPlugin(),
       createMemberInvitationSectionsPlugin(
         createAuthMiddleware,
         () => new Date(),
@@ -3129,6 +3170,10 @@ const getSessionAndMemberAuthorization = async ({
               userId: toSafeId<"user">(user.id),
               organizationId: toSafeId<"organization">(activeOrganizationId),
               workspaceId,
+              authentication: {
+                kind: "browser_session",
+                sessionId: session.id,
+              },
             },
             rootDb,
           );
@@ -3146,6 +3191,7 @@ const getSessionAndMemberAuthorization = async ({
             userDeleted: authorization.userDeleted,
             enrolledFeatureIds: authorization.enrolledFeatureIds,
             professionalUse: authorization.professionalUse,
+            ssoAccess: authorization.ssoAccess,
           };
         })
       : Result.ok(null);
@@ -3199,14 +3245,26 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
 } as const;
 
 /**
- * How validateAuth refuses a request. Only the professional-use refusal has a
- * body of its own; an app token refused a route gets the shared 403, never
- * the professional-use prompt.
+ * The rejection a session gets from an organization that requires SSO when
+ * none of its providers created the session. It refuses that organization
+ * only: the session stays valid, and the web app offers SSO sign-in.
+ */
+const SSO_SIGN_IN_REJECTION_BODY = {
+  code: SSO_SIGN_IN_REQUIRED_CODE,
+  message: "This organization requires signing in with its SSO provider.",
+} as const;
+
+/**
+ * How validateAuth refuses a request. Only the professional-use and SSO
+ * refusals have bodies of their own; an app token refused a route gets the
+ * shared 403, never either prompt.
  */
 type ValidateAuthRefusal =
   | {
       statusCode: 401 | 403;
-      body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+      body?:
+        | typeof PROFESSIONAL_USE_REJECTION_BODY
+        | typeof SSO_SIGN_IN_REJECTION_BODY;
     }
   | { statusCode: 500; cause: unknown };
 
@@ -3336,7 +3394,12 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
 };
 
 export const resolveMemberAuthorization = async (
-  { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
+  {
+    organizationId,
+    userId,
+    workspaceId,
+    authentication,
+  }: MemberAuthorizationLookup,
   db: MemberAuthorizationDb,
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
@@ -3348,6 +3411,7 @@ export const resolveMemberAuthorization = async (
         email: authUser.email,
         ...featureAccessColumns(organizationId),
         ...professionalUseColumns,
+        ssoAccess: ssoAccessColumn(authentication),
       })
       .from(member)
       .innerJoin(authUser, eq(authUser.id, member.userId))
@@ -3375,6 +3439,7 @@ export const resolveMemberAuthorization = async (
           userDeleted: row.userDeleted,
           enrolledFeatureIds: row.enrolledFeatureIds,
           professionalUse: professionalUseStateOf(row),
+          ssoAccess: ssoAccessOf(row.ssoAccess),
         }
       : null;
   }
@@ -3389,6 +3454,7 @@ export const resolveMemberAuthorization = async (
       workspaceStatus: workspaces.status,
       ...featureAccessColumns(organizationId),
       ...professionalUseColumns,
+      ssoAccess: ssoAccessColumn(authentication),
     })
     .from(member)
     .innerJoin(authUser, eq(authUser.id, member.userId))
@@ -3422,6 +3488,7 @@ export const resolveMemberAuthorization = async (
     userDeleted: row.userDeleted,
     enrolledFeatureIds: row.enrolledFeatureIds,
     professionalUse: professionalUseStateOf(row),
+    ssoAccess: ssoAccessOf(row.ssoAccess),
   };
   if (row.workspaceId === null || row.workspaceStatus === null) {
     return {
@@ -3451,9 +3518,12 @@ export const resolveMemberAuthorization = async (
  * resolve in this module.
  */
 export const resolveCredentialMemberAuthorization = async (
-  lookup: MemberAuthorizationLookup,
+  lookup: CredentialMemberAuthorizationLookup,
 ): Promise<MemberAuthorization | null> =>
-  await resolveMemberAuthorization(lookup, rootDb);
+  await resolveMemberAuthorization(
+    { ...lookup, authentication: { kind: "credential" } },
+    rootDb,
+  );
 
 /**
  * The signed-in account's own professional-use state, read on the owner
@@ -3485,16 +3555,18 @@ export const isActiveOrganizationMember = async ({
     returnHeaders: true,
   });
   appendSetCookieHeaders(responseHeaders, resolved.headers);
-  const activeOrganizationId = getSessionActiveOrganizationId(
-    resolved.response?.session,
-  );
-  if (activeOrganizationId === undefined) {
+  const activeSession = resolved.response?.session;
+  const activeOrganizationId = getSessionActiveOrganizationId(activeSession);
+  if (activeSession === undefined || activeOrganizationId === undefined) {
     return true;
   }
+  // Membership alone answers this; the SSO requirement is read but refuses
+  // only organization routes, which resolve it themselves.
   const authorization = await resolveMemberAuthorization(
     {
       organizationId: brandPersistedOrganizationId(activeOrganizationId),
       userId,
+      authentication: { kind: "browser_session", sessionId: activeSession.id },
     },
     rootDb,
   );
@@ -3800,6 +3872,7 @@ export type ResolvedIdentity = {
     | "userDeleted"
     | "enrolledFeatureIds"
     | "professionalUse"
+    | "ssoAccess"
   >;
 };
 
@@ -4040,6 +4113,23 @@ export const resolveValidateAuth = async ({
       authorization.professionalUse satisfies never;
       return panic("Unhandled professional-use state");
   }
+  // An organization that requires SSO admits only a session one of its
+  // providers created; every other organization of the account is
+  // unaffected, and nothing here ends the session.
+  switch (authorization.ssoAccess.status) {
+    case SSO_ACCESS_STATUS.notRequired:
+    case SSO_ACCESS_STATUS.satisfied:
+    case SSO_ACCESS_STATUS.notEvaluated:
+      break;
+    case SSO_ACCESS_STATUS.signInRequired:
+      return rejectValidateAuth({
+        statusCode: 403,
+        body: SSO_SIGN_IN_REJECTION_BODY,
+      });
+    default:
+      authorization.ssoAccess.status satisfies never;
+      return panic("Unhandled SSO access state");
+  }
   const { role } = authorization;
   const memberRole = sessionMemberRole(role, authorization.billingAccess);
   // Feature access comes from the member lookup above, so gated routes and
@@ -4134,8 +4224,15 @@ export const resolveValidateAuth = async ({
           const items = await accessibleWorkspacesPromise;
           return items.find((item) => item.id === workspaceId) ?? null;
         }
+        // The lookup that admitted this request already decided its SSO
+        // access; this read answers matter access only.
         const targetAuthorization = await resolveMemberAuthorization(
-          { organizationId: activeOrganizationId, userId, workspaceId },
+          {
+            organizationId: activeOrganizationId,
+            userId,
+            workspaceId,
+            authentication: { kind: "credential" },
+          },
           ownerDb,
         );
         return targetAuthorization?.workspace?.id === workspaceId

@@ -328,6 +328,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth maps a rejected code exchange to its callback error, so the
   // retry wrapper hands the provider's rejection back unchanged.
   "apps/api/src/lib/auth/social-token-exchange.ts",
+  // Better Auth consumes an SSO endpoint gate's and the session provenance
+  // hook's refusals as rejected APIError values.
+  "apps/api/src/lib/auth/sso-sign-in.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",

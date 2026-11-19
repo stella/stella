@@ -39,6 +39,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
+import { SSO_SESSION_FIELDS } from "@/api/lib/auth/sso-sign-in";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 
 const PRODUCT_AUTH_MODEL_NAMES = [
@@ -52,6 +53,7 @@ const PRODUCT_AUTH_MODEL_NAMES = [
   "oauthRefreshToken",
   "oauthResource",
   "oauthConsent",
+  "ssoProvider",
 ] as const;
 
 const OAUTH_PROVIDER_MODEL_TABLES = [
@@ -291,22 +293,25 @@ const HOST_USER_FIELDS = {
   }),
 };
 
-const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS, {
-  originConsentId: {
-    databaseReference: {
-      field: "id",
-      model: "oauthConsent",
-      onDelete: "cascade",
+const HOST_SESSION_FIELDS = normalizeRuntimeFields(
+  { ...SESSION_LIFETIME_FIELDS, ...SSO_SESSION_FIELDS },
+  {
+    originConsentId: {
+      databaseReference: {
+        field: "id",
+        model: "oauthConsent",
+        onDelete: "cascade",
+      },
+    },
+    refreshMode: {
+      databaseDefault: {
+        kind: "literal",
+        value: SESSION_LIFETIME_FIELDS.refreshMode.defaultValue,
+      },
+      databaseNotNull: true,
     },
   },
-  refreshMode: {
-    databaseDefault: {
-      kind: "literal",
-      value: SESSION_LIFETIME_FIELDS.refreshMode.defaultValue,
-    },
-    databaseNotNull: true,
-  },
-});
+);
 
 const HOST_MEMBER_FIELDS = {
   ...normalizeRuntimeFields(BILLING_ACCESS_MEMBER_FIELDS, {

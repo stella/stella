@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  pgPolicy,
   pgTable,
   text,
   uniqueIndex,
@@ -13,7 +14,7 @@ import {
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { UI_LOCALES } from "@stll/locales";
 
-import { jsonb, timestamptz } from "@/api/db/columns";
+import { jsonb, sealedText, timestamptz } from "@/api/db/columns";
 import {
   authMemberPolicies,
   authOrganizationPolicies,
@@ -167,6 +168,13 @@ export const session = pgTable(
     lastSeenAt: timestamptz("last_seen_at"),
     priorTokenHash: text("prior_token_hash"),
     priorTokenExpiresAt: timestamptz("prior_token_expires_at"),
+    /**
+     * The `sso_provider` row whose sign-in created this session, written only
+     * by that provider's callback; null for every other sign-in. No foreign
+     * key: a deleted provider leaves an id that matches no row, which an
+     * organization requiring SSO reads as a session it did not create.
+     */
+    ssoProviderId: text("sso_provider_id"),
   },
   (table) => [
     check(
@@ -375,6 +383,121 @@ export const invitation = pgTable(
       )})`,
     ),
     index("invitation_email_idx").on(table.email),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+/**
+ * The form of an SSO provider id: `sso_` and a lowercase slug. Better-auth
+ * signs an account in by (provider id, subject), so a provider named after a
+ * social provider (`google`) could assert that provider's subjects; the
+ * prefix keeps the two namespaces apart.
+ */
+export const SSO_PROVIDER_ID_PATTERN = "^sso_[a-z0-9][a-z0-9_-]{0,62}$";
+
+/**
+ * Row security is forced on the SSO policy table, so even the owner role
+ * reaches it only through this policy; the request role has none.
+ */
+const tableOwnerAccess = (table: string) => {
+  const isOwner = sql.raw(
+    `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass)`,
+  );
+  return pgPolicy(`${table}_owner_access`, {
+    for: "all",
+    to: "public",
+    using: isOwner,
+    withCheck: isOwner,
+  });
+};
+
+/**
+ * An organization's OIDC identity provider, read by `@better-auth/sso` during
+ * sign-in. Column keys mirror the plugin's field names. Rows are written only
+ * by server code: the plugin's own provider endpoints are disabled.
+ */
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    /** The provider id in sign-in and callback paths; see the pattern above. */
+    providerId: text("provider_id").notNull(),
+    /** The organization whose members this provider signs in. */
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** The OIDC issuer the ID token's `iss` must equal. */
+    issuer: text("issuer").notNull(),
+    /**
+     * The email domains, comma-separated, whose addresses this provider may
+     * create accounts for.
+     */
+    domain: text("domain").notNull(),
+    /** The plugin's OIDC configuration JSON, client secret included, sealed. */
+    oidcConfig: sealedText("stella:sealed-text:v1:sso_provider.oidc_config")(
+      "oidc_config",
+    ),
+    /** SAML configuration; always null until SAML sign-in is offered. */
+    samlConfig: text("saml_config"),
+    /** The account that registered the provider, as the plugin records it. */
+    userId: text("user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sso_provider_provider_id_uidx").on(table.providerId),
+    index("sso_provider_organization_id_idx").on(table.organizationId),
+    index("sso_provider_user_id_idx").on(table.userId),
+    check(
+      "sso_provider_provider_id_check",
+      sql`${table.providerId} ~ ${sql.raw(`'${SSO_PROVIDER_ID_PATTERN}'`)}`,
+    ),
+    check(
+      "sso_provider_oidc_only_check",
+      sql`${table.oidcConfig} IS NOT NULL AND ${table.samlConfig} IS NULL`,
+    ),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+/** Whether an organization's members must sign in through its SSO provider. */
+export const ORGANIZATION_SSO_REQUIREMENTS = ["optional", "required"] as const;
+
+/**
+ * An organization's single sign-on policy; no row means SSO is optional.
+ * Kept apart from the providers so deleting or replacing a provider never
+ * lifts the requirement.
+ */
+export const organizationSsoPolicy = pgTable(
+  "organization_sso_policy",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /**
+     * `required`: only a session one of the organization's providers created
+     * reaches the organization.
+     */
+    requirement: text("requirement", {
+      enum: ORGANIZATION_SSO_REQUIREMENTS,
+    }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "organization_sso_policy_requirement_check",
+      inArray(table.requirement, ORGANIZATION_SSO_REQUIREMENTS),
+    ),
+    tableOwnerAccess("organization_sso_policy"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -771,6 +894,7 @@ export const authSchema = {
   organization,
   member,
   invitation,
+  ssoProvider,
   jwks,
   apikey,
   oauthClient,
@@ -850,6 +974,16 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
     invitations: r.many.invitation({
       from: r.organization.id,
       to: r.invitation.organizationId,
+    }),
+    ssoProviders: r.many.ssoProvider({
+      from: r.organization.id,
+      to: r.ssoProvider.organizationId,
+    }),
+  },
+  ssoProvider: {
+    organization: r.one.organization({
+      from: r.ssoProvider.organizationId,
+      to: r.organization.id,
     }),
   },
   member: {

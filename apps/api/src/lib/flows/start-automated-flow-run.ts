@@ -104,7 +104,10 @@ export const automatedFlowRunDependencies = (
       columns: { id: true, name: true, steps: true, enabled: true },
     }),
   resolveAuthorization: async (lookup) =>
-    await resolveMemberAuthorization(lookup, database),
+    await resolveMemberAuthorization(
+      { ...lookup, authentication: { kind: "credential" } },
+      database,
+    ),
   insertWithinCap: async (input) =>
     await insertAutomatedFlowRunWithinCap({ ...input, database }),
   enqueueStep: enqueueFlowStep,
