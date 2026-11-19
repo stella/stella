@@ -106,6 +106,7 @@ import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-dec
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
   unredactedCaseLawDecisionFor,
 } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
@@ -2115,11 +2116,12 @@ export const caseLawCollectionBodies = p
     ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
     attachment.source_raw_content_type AS detail_raw_content_type
   FROM case_law_held_decision_attachments AS attachment
-  JOIN case_law_published_decisions AS host
+  JOIN case_law_decisions AS host
     ON host.id = attachment.host_decision_id
   JOIN case_law_sources AS host_source ON host_source.id = host.source_id
   JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
   WHERE attachment.host_withdrawn_at IS NULL
+    AND ${sql.raw(publishedCaseLawDecisionSqlFor("host"))}
     AND collection_source.adapter_key = 'cz-ns-sbirka'
     AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
     AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
@@ -2136,11 +2138,12 @@ export const caseLawCollectionBodies = p
   FROM case_law_held_decision_attachments AS attachment
   JOIN case_law_decision_aliases AS alias
     ON alias.retired_decision_id = attachment.host_decision_id
-  JOIN case_law_published_decisions AS host
+  JOIN case_law_decisions AS host
     ON host.id = alias.canonical_decision_id
   JOIN case_law_sources AS host_source ON host_source.id = host.source_id
   JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
   WHERE attachment.host_withdrawn_at IS NULL
+    AND ${sql.raw(publishedCaseLawDecisionSqlFor("host"))}
     AND collection_source.adapter_key = 'cz-ns-sbirka'
     AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
     AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}

@@ -14,11 +14,12 @@ SELECT host.id AS host_decision_id,
     ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
     attachment.source_raw_content_type AS detail_raw_content_type
   FROM case_law_held_decision_attachments AS attachment
-  JOIN case_law_published_decisions AS host
+  JOIN case_law_decisions AS host
     ON host.id = attachment.host_decision_id
   JOIN case_law_sources AS host_source ON host_source.id = host.source_id
   JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
   WHERE attachment.host_withdrawn_at IS NULL
+    AND (host.redacted_at IS NULL AND jsonb_extract_path_text(host.metadata, '_stellaPartialObservation', 'isListingOnly') IS DISTINCT FROM 'true')
     AND collection_source.adapter_key = 'cz-ns-sbirka'
     AND (host_source.descriptor IS NULL OR host_source.descriptor ->> 'allowsRedistribution' = 'true')
     AND (collection_source.descriptor IS NULL OR collection_source.descriptor ->> 'allowsRedistribution' = 'true')
@@ -35,11 +36,12 @@ SELECT host.id AS host_decision_id,
   FROM case_law_held_decision_attachments AS attachment
   JOIN case_law_decision_aliases AS alias
     ON alias.retired_decision_id = attachment.host_decision_id
-  JOIN case_law_published_decisions AS host
+  JOIN case_law_decisions AS host
     ON host.id = alias.canonical_decision_id
   JOIN case_law_sources AS host_source ON host_source.id = host.source_id
   JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
   WHERE attachment.host_withdrawn_at IS NULL
+    AND (host.redacted_at IS NULL AND jsonb_extract_path_text(host.metadata, '_stellaPartialObservation', 'isListingOnly') IS DISTINCT FROM 'true')
     AND collection_source.adapter_key = 'cz-ns-sbirka'
     AND (host_source.descriptor IS NULL OR host_source.descriptor ->> 'allowsRedistribution' = 'true')
     AND (collection_source.descriptor IS NULL OR collection_source.descriptor ->> 'allowsRedistribution' = 'true');--> statement-breakpoint
