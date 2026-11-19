@@ -3632,6 +3632,39 @@
               "versionValidTo": {
                 "type": ["string", "null"]
               },
+              "expressionKind": {
+                "enum": ["consolidation", "promulgated", "unversioned"],
+                "type": "string"
+              },
+              "windowDisposition": {
+                "enum": [
+                  "effective",
+                  "never-in-force",
+                  "invalid-window",
+                  "withdrawn"
+                ],
+                "type": "string"
+              },
+              "windowDispositionBasis": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "publisher-flag",
+                      "replaced-same-day",
+                      "zero-length-window",
+                      "reversed",
+                      "missing-start",
+                      "publisher-unlisted",
+                      "listed-not-stored",
+                      "deferred-promulgated"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "message": {
                 "type": "string"
               },

@@ -614,6 +614,7 @@
     "descriptionCloud": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runu tekstā pārvērš stella AI, un stella to nesaglabā.",
     "lede": "Turiet <key>{shortcut}</key> un runājiet. Teksts parādās tur, kur rakstāt.",
     "groups": {
+      "shortcut": "Īsinājumtaustiņš",
       "transcription": "Transkripcija",
       "cleanup": "Labošana",
       "thisComputer": "Šajā datorā"
@@ -667,6 +668,13 @@
     "downloadFailed": "Runas modeli neizdevās lejupielādēt.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} izmanto cita lietotne.",
+    "holdKey": {
+      "title": "Turamais taustiņš",
+      "description": "Turiet tikai to, lai diktētu. Īss pieskāriens vai īsinājumtaustiņš, kas to izmanto, neko nedara.",
+      "right": "Labais {key}",
+      "waiting": "stella pamanīs {shortcut}, kad tai būs piekļuve pieejamībai.",
+      "unavailable": "stella šajā datorā nevar sekot {shortcut}. Izvēlieties citu taustiņu."
+    },
     "failure": {
       "accessibility": "Atļaujiet piekļuvi pieejamībai, lai stella varētu rakstīt citās lietotnēs.",
       "microphone": "stella nedzird jūsu mikrofonu. Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos.",
@@ -675,6 +683,7 @@
       "focusChanged": "Jūs pārslēdzāties uz citu lietotni, pirms teksts bija gatavs, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz.",
+      "passwordField": "Ir atlasīts paroles lauks, tāpēc diktētais netika saglabāts vai ievadīts.",
       "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
     },
     "failureKeptInHistory": "Teksts ir starpliktuves vēsturē."
@@ -817,6 +826,7 @@
       "screenRecording": "Ekrāna ierakstīšana",
       "camera": "Kamera",
       "keystrokes": "Taustiņsitieni",
+      "keystrokesWithoutHoldKey": "Taustiņsitieni, ja vien neizvēlaties turamo taustiņu",
       "fullDiskAccess": "Pilna piekļuve diskam",
       "administrator": "Administratora tiesības"
     }

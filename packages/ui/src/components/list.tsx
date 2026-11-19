@@ -113,11 +113,19 @@ const ListGroupAction = ({
   />
 );
 
-/** The surface. Depth comes from a ring plus a soft shadow, not a frame. */
+/**
+ * The surface. Depth comes from a ring plus a soft shadow, not a frame.
+ *
+ * A row wrapped in `EntityActions` sits inside its `display: contents`
+ * listener, which draws no border, and its menu anchor follows it as a
+ * sibling, so `divide-y` cannot reach it: such a row draws its own hairline
+ * on top, from the second wrapped row on.
+ */
 const List = ({ className, ...props }: React.ComponentProps<"ul">) => (
   <ul
     className={cn(
       "bg-background ring-border divide-border flex flex-col divide-y overflow-hidden rounded-xl shadow-xs/5 ring-1",
+      "[&>[data-slot=entity-actions]~[data-slot=entity-actions]>*]:border-border [&>[data-slot=entity-actions]~[data-slot=entity-actions]>*]:border-t",
       className,
     )}
     data-slot="list"

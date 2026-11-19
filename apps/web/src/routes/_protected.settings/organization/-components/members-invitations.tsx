@@ -19,53 +19,16 @@ import { Frame } from "@stll/ui/frame";
 import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { ListGroupCount } from "@stll/ui/list";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@stll/ui/table";
-import { cn } from "@stll/ui/utils";
+import { Table, TableBody, TableCell, TableRow } from "@stll/ui/table";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { Role } from "@/lib/auth-client";
 
-const SECONDARY_COLUMN_CLASS = "hidden sm:table-cell";
-
-type InvitationColumn = {
-  id: "email" | "role" | "status" | "invited" | "expires" | "actions";
-  label:
-    | "common.email"
-    | "common.role"
-    | "common.status"
-    | "organization.invitations.invited"
-    | "organization.invitations.expires"
-    | null;
-  secondary?: true;
-};
-
-export const INVITATION_COLUMNS: readonly InvitationColumn[] = [
-  { id: "email", label: "common.email" },
-  { id: "role", label: "common.role" },
-  { id: "status", label: "common.status" },
-  {
-    id: "invited",
-    label: "organization.invitations.invited",
-    secondary: true,
-  },
-  {
-    id: "expires",
-    label: "organization.invitations.expires",
-    secondary: true,
-  },
-  { id: "actions", label: null },
-];
-
-const isSecondaryInvitationColumn = (id: InvitationColumn["id"]) =>
-  INVITATION_COLUMNS.some((column) => column.id === id && column.secondary);
+import {
+  InvitationsTableHeader,
+  InvitationTableCell,
+} from "./members-invitations.pending";
 
 export type MemberInvitation = {
   id: string;
@@ -177,22 +140,12 @@ function InvitationsTable({
                   `organization.invitations.statuses.${classifyInvitation(invitation, now).status}`,
                 )}
               </TableCell>
-              <TableCell
-                className={cn(
-                  isSecondaryInvitationColumn("invited") &&
-                    SECONDARY_COLUMN_CLASS,
-                )}
-              >
+              <InvitationTableCell columnId="invited">
                 {formatMemberDate(invitation.createdAt)}
-              </TableCell>
-              <TableCell
-                className={cn(
-                  isSecondaryInvitationColumn("expires") &&
-                    SECONDARY_COLUMN_CLASS,
-                )}
-              >
+              </InvitationTableCell>
+              <InvitationTableCell columnId="expires">
                 {formatMemberDate(invitation.expiresAt)}
-              </TableCell>
+              </InvitationTableCell>
               <TableCell className="text-end">
                 <Menu>
                   <Tooltip
@@ -292,29 +245,3 @@ function InvitationsTable({
     </Frame>
   );
 }
-
-export const InvitationsTableHeader = () => {
-  const t = useTranslations();
-
-  return (
-    <TableHeader>
-      <TableRow>
-        {INVITATION_COLUMNS.map((column) =>
-          column.label === null ? (
-            <TableHead
-              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-              key={column.id}
-            />
-          ) : (
-            <TableHead
-              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-              key={column.id}
-            >
-              {t(column.label)}
-            </TableHead>
-          ),
-        )}
-      </TableRow>
-    </TableHeader>
-  );
-};

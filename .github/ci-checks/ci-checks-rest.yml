@@ -1510,6 +1510,18 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
     run: bun scripts/check-migration-order.ts "origin/$BASE_REF"
 
+  # A public-law column grant is required only after a production release
+  # has permitted it. The checkout's full history carries the release tags;
+  # without them the script fails rather than passes.
+  - name: Check grant release order against the production release
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check grant release order against the production release')) }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Compares the grant map with the newest production release tag."
+    run: |
+      bun test scripts/check-grant-release-order.test.ts
+      bun scripts/check-grant-release-order.ts
+
   # Self-test the dead-columns reference matcher: a regression here
   # would either silently stop flagging genuinely unreferenced columns
   # or start flagging live ones, in both cases undermining the

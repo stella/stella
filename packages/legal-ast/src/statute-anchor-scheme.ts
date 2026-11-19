@@ -3,6 +3,7 @@
 // parser-output-unchanged: Unnumbered statute wording is read only by provision reads and previews; decision parsers still call none of this module.
 // parser-output-unchanged: Governing wording, unnumbered segments and ancestor paths serve statute provision reads only; decision parsers still call none of this module.
 // parser-output-unchanged: Annex anchor grammars and the reading of a requested annex number serve statute reads only; decision parsers still call none of this module.
+// parser-output-unchanged: The Hungarian gazette grammar and its annex spelling serve statute reads only; decision parsers still call none of this module.
 /**
  * The grammar a publisher writes statute anchors in, and every reading of an
  * anchor's path that the readers, previews and provision reads make.
@@ -131,6 +132,39 @@ export const SLOV_LEX_ANCHORS = {
     /^(?:prilohy|predpis)\.priloha-(?<designator>[0-9]+[a-z]{0,2})$/u,
     /^(?:prilohy|predpis)\.priloha-[^.]+$/u,
   ],
+} as const satisfies StatuteAnchorScheme;
+
+const MAGYAR_KOZLONY_KINDS = {
+  section: "sz",
+  article: "cikk",
+  subsection: "bek",
+  letter: "pont",
+  point: "alpont",
+} as const satisfies StatuteAnchorKinds;
+
+/**
+ * Magyar Közlöny (Hungary): `sz_10-bek_2`, `sz_6:519-bek_1-pont_b-alpont_ba`,
+ * `sz_25/G`, `cikk_IV-bek_1`. A `pont` is a lettered point (`a)`) or a
+ * numbered one (`1.`), and an `alpont` sits in a point (`aa)`). A repeated
+ * anchor in one act carries `~2`. Wording printed with no number of its own,
+ * such as the text that closes a list, is filed under the unit it belongs to
+ * by its ordinal there (`sz_9-szoveg_1`). An annex is `mell_1`, an act's one
+ * unnumbered annex a bare `mell`, and everything in an annex is filed under
+ * it (`mell_1-szoveg_1`).
+ */
+export const MAGYAR_KOZLONY_ANCHORS = {
+  type: "listed",
+  kinds: MAGYAR_KOZLONY_KINDS,
+  kindSeparator: "_",
+  listKinds: {
+    [MAGYAR_KOZLONY_KINDS.letter]: 1,
+    [MAGYAR_KOZLONY_KINDS.point]: 2,
+  },
+  restatementSuffix: /~\d+$/u,
+  segmentSeparator: "-",
+  unnumberedAnchor: /^szoveg_\d+$/u,
+  unnumberedSegment: /^szoveg_\d+$/u,
+  annexAnchors: [/^mell_(?<designator>[^-]+)$/u, /^mell$/u],
 } as const satisfies StatuteAnchorScheme;
 
 /**
@@ -466,15 +500,24 @@ export const annexDesignator = (
 /**
  * The annex a caller's spelling names, whatever grammar it was written in:
  * `priloha_3`, `příloha č. 3`, `Příloha 3`, `pril_3`, `annex-3`,
- * `prilohy.priloha-3`, or a bare `priloha` for an act's one annex. Returns
- * the designator lower-cased, or null when the spelling names no annex.
- * A designator that the `č.`/`no.` prefix could also have eaten (`pril_c`)
- * is read as the designator.
+ * `prilohy.priloha-3`, `1. melléklet`, `melléklet 1`, or a bare
+ * `priloha` or `melléklet` for an act's one annex. Returns the designator
+ * lower-cased, or null when the spelling names no annex. A designator that
+ * the `č.`/`no.` prefix could also have eaten (`pril_c`) is read as the
+ * designator.
  */
 export const requestedAnnexDesignator = (requested: string): string | null => {
   const folded = stripDiacritics(requested).toLowerCase().trim();
+  // Hungarian prints the number first: `1. melléklet`.
+  const numberFirst =
+    /^(?<designator>[0-9a-z]+(?:[/:][0-9a-z]+)?)(?:\.[ ._-]*|[ ._-]+)melleklet$/u.exec(
+      folded,
+    )?.groups?.["designator"];
+  if (numberFirst !== undefined) {
+    return numberFirst;
+  }
   const match =
-    /^(?:prilohy[ ._-]*)?(?:priloha|pril|annex|appendix)(?<prefix>[ ._-]*(?:c|cislo|no|nr)\.?)?[ ._-]*(?<designator>[0-9a-z]+(?:[/:][0-9a-z]+)?)?$/u.exec(
+    /^(?:prilohy[ ._-]*)?(?:priloha|pril|melleklet|annex|appendix)(?<prefix>[ ._-]*(?:c|cislo|no|nr)\.?)?[ ._-]*(?<designator>[0-9a-z]+(?:[/:][0-9a-z]+)?)?$/u.exec(
       folded,
     );
   if (match === null) {

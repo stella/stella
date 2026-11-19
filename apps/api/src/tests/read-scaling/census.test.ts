@@ -43,6 +43,7 @@ import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   dictationScalingScenario,
 } from "./dictation";
 import {
@@ -149,6 +150,7 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,

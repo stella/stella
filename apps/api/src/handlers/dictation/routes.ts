@@ -7,10 +7,16 @@ import {
   readDesktopDictationModels,
   transcribeDesktopDictation,
 } from "./desktop-transcription";
+import memberCleanup from "./member-cleanup";
+import models from "./models";
 import transcribe from "./transcribe";
 
 export const dictationRoute = routes(
-  { "/transcribe": { POST: transcribe } },
+  {
+    "/cleanup": { POST: memberCleanup },
+    "/models": { GET: models },
+    "/transcribe": { POST: transcribe },
+  },
   { prefix: "/dictation" },
 );
 

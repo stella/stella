@@ -193,6 +193,34 @@ fn selection_start(element: &CFType) -> Option<CFIndex> {
   (copied != 0 && range.location >= 0).then_some(range.location)
 }
 
+/// Whether the focused element of process `pid` is a password field, read
+/// without prompting or logging. False when it cannot be read.
+pub fn focused_field_is_secure(pid: i32) -> bool {
+  if pid <= 0 || !accessibility_trusted() {
+    return false;
+  }
+  // SAFETY: A positive process ID is accepted by AX; its Create result is owned
+  // below. A process exit yields failed attribute reads, not pointer misuse.
+  let Some(application) = owned_type(unsafe { AXUIElementCreateApplication(pid) })
+  else {
+    return false;
+  };
+  if !set_timeout(&application) {
+    return false;
+  }
+  let Some(element) = attribute(&application, "AXFocusedUIElement") else {
+    return false;
+  };
+  // SAFETY: The framework's type-ID query has no arguments or ownership effects.
+  if element.type_of() != unsafe { AXUIElementGetTypeID() } || !set_timeout(&element) {
+    return false;
+  }
+  ["AXRole", "AXSubrole"].into_iter().any(|name| {
+    string_attribute(&element, name).ok().flatten().as_deref()
+      == Some(SECURE_TEXT_FIELD)
+  })
+}
+
 /// Up to `max_characters` characters right before the insertion point of the
 /// focused text element of process `pid`, read without prompting or logging.
 /// `None` for a password field, an element without text or an insertion
