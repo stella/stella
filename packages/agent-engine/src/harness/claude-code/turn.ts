@@ -261,6 +261,17 @@ const usageOf = (
   };
 };
 
+/**
+ * A completed result held past while a steer was unread. `deciding`: the CLI
+ * has not said yet whether it reads the steer; a drop of every unread steer
+ * ends the turn on this result. `answering`: it read one and answers it now,
+ * so only that answer's result ends the turn.
+ */
+type HeldResult = {
+  type: "deciding" | "answering";
+  usage: HarnessUsage | null;
+};
+
 /** Two parts of one turn's usage; the context is the later part's. */
 const addUsage = (
   earlier: HarnessUsage | null,
@@ -379,7 +390,7 @@ export class ClaudeCodeTurnSession {
    * usage so far, kept until the CLI reads the steer (the turn answers it)
    * or drops it (the turn ends here).
    */
-  private held: { usage: HarnessUsage | null } | null = null;
+  private held: HeldResult | null = null;
   private heldTimer: ReturnType<typeof setTimeout> | null = null;
   private assistantError: string | null = null;
   /**
@@ -1034,6 +1045,9 @@ export class ClaudeCodeTurnSession {
     // Read after the result it was held past: the CLI answers it now, and
     // that answer's result ends the turn.
     this.stopHolding();
+    if (this.held !== null) {
+      this.held = { ...this.held, type: "answering" };
+    }
   }
 
   private commandLifecycle({
@@ -1050,7 +1064,7 @@ export class ClaudeCodeTurnSession {
     }
     this.steering.delete(uuid);
     this.lifecycle.settleInput(inputId, "rejected");
-    if (this.held !== null && this.steering.size === 0) {
+    if (this.held?.type === "deciding" && this.steering.size === 0) {
       this.completeHeld();
     }
   }
@@ -1100,7 +1114,7 @@ export class ClaudeCodeTurnSession {
         // read, then answer that steer as its next turn. The turn waits to
         // own that answer: ending here would hand the steer back to be sent
         // again while the CLI still runs it.
-        this.held = { usage };
+        this.held = { type: "deciding", usage };
         this.heldTimer = setTimeout(() => {
           this.heldTimer = null;
           this.completeHeld();

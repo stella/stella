@@ -1192,6 +1192,31 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(toolCompletions(events)).toHaveLength(1);
   });
 
+  test("a steer dropped while the CLI answers another held one does not end the turn", async () => {
+    const [read, dropped] = [crypto.randomUUID(), crypto.randomUUID()];
+    const { events } = await run("steers_read_and_dropped_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId: read, text: "Also check the annex." });
+          await turn.steer({ inputId: dropped, text: "And the appendix." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId: read, status: "accepted" },
+      { type: "input.settled", inputId: dropped, status: "rejected" },
+    ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "text.completed",
+        text: "The annex is not here.",
+      }),
+    );
+    expect(events.filter(({ type }) => type === "turn.completed")).toHaveLength(
+      1,
+    );
+  });
+
   test("a steer the CLI drops after its result is settled rejected, and the turn ends", async () => {
     const inputId = crypto.randomUUID();
     const { events } = await run("steer_dropped_past_result", {

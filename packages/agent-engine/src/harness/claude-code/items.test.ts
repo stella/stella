@@ -39,6 +39,8 @@ describe("a subagent's report", () => {
     for (const report of [
       "Plain report.",
       "The note names agentId: x7 for the clerk.",
+      "The clerk's note names agentId: x7",
+      "Done.\nagentId: x7",
       // A frame line inside a framed report is indented, so it is the
       // subagent's text, never the CLI's.
       "  [Subagent hand-back] quoted",

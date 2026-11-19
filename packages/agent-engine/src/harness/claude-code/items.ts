@@ -512,7 +512,7 @@ const isAgentIdLine = (line: string) => {
 /**
  * `text` without the notes the CLI appends to a subagent's result for the
  * parent model, at its very end: the agent id it can be continued by (with
- * any worktree it ran in), then what it used.
+ * any worktree it ran in), then the block of what it used.
  */
 const withoutTrailer = (text: string) => {
   const at = text.lastIndexOf(AGENT_ID);
@@ -524,11 +524,10 @@ const withoutTrailer = (text: string) => {
     (line) => !WORKTREE_LINES.some((prefix) => line.startsWith(prefix)),
   );
   const usage = (worktree === -1 ? [] : rest.slice(worktree)).join("\n");
-  if (
-    !isAgentIdLine(first) ||
-    (usage !== "" &&
-      !(usage.startsWith("<usage>") && usage.endsWith("</usage>")))
-  ) {
+  const hasUsage = usage.startsWith("<usage>") && usage.endsWith("</usage>");
+  // The CLI's trailer always ends in its usage block; a report that only
+  // ends with an agent id is the subagent's own text.
+  if (!isAgentIdLine(first) || !hasUsage) {
     return text;
   }
   const report = text.slice(0, at);
