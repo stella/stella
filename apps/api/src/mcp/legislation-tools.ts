@@ -476,10 +476,26 @@ const legislationResourceName = (documentId: string): string =>
     }),
   );
 
+/** A resolution that names a text to read: one in force, or a Work's text as promulgated. */
+type StatuteTextResolution = Extract<
+  StatuteExpressionResolution,
+  { type: "expression" | "promulgated-only" }
+>;
+
 type StatuteResolutionRefusal = Exclude<
   StatuteExpressionResolution,
-  { type: "expression" }
+  StatuteTextResolution
 >;
+
+/**
+ * Whether a resolution names a text these tools read. A text as promulgated
+ * is read too; its `expressionKind` tells the caller it is not the text in
+ * force.
+ */
+const namesStatuteText = (
+  resolution: StatuteExpressionResolution,
+): resolution is StatuteTextResolution =>
+  resolution.type === "expression" || resolution.type === "promulgated-only";
 
 /**
  * The versions an inconsistency names, as an agent reads them: which
@@ -813,7 +829,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     legislationPublicReadDb,
     "search",
   );
-  if (resolved.type !== "expression") {
+  if (!namesStatuteText(resolved)) {
     return statuteResolutionError(resolved, {
       asOf,
       uncoveredHint:
@@ -994,7 +1010,8 @@ const provisionItemResult = ({
           status: PROVISION_STATUS.uncoveredDate,
         },
       };
-    case "expression": {
+    case "expression":
+    case "promulgated-only": {
       // Absent where the source was withdrawn between the resolution and
       // this read, which is the same answer as no such work.
       const version = versionsByDocumentId.get(String(resolution.id));
@@ -1092,6 +1109,9 @@ const provisionItemResult = ({
           status: PROVISION_STATUS.found,
           versionValidFrom: version.versionValidFrom,
           versionValidTo: version.versionValidTo,
+          expressionKind: version.expressionKind,
+          windowDisposition: version.windowDisposition,
+          windowDispositionBasis: version.windowDispositionBasis,
         },
       };
     }
@@ -1239,7 +1259,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
   const documentIds = [
     ...new Set(
       [...resolutionsByKey.values()].flatMap((resolution) =>
-        resolution.type === "expression" ? [resolution.id] : [],
+        namesStatuteText(resolution) ? [resolution.id] : [],
       ),
     ),
   ];
@@ -1262,7 +1282,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
   // one read per requested item.
   const requestedElisByDocumentId = new Map<string, Set<string>>();
   for (const [key, resolution] of resolutionsByKey) {
-    if (resolution.type !== "expression") {
+    if (!namesStatuteText(resolution)) {
       continue;
     }
     const request = requestsByKey.get(key) ?? panic("Lost a provision request");

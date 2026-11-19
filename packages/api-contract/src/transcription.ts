@@ -24,6 +24,14 @@ export const MAX_TRANSCRIPTION_VOCABULARY_TERMS = 100;
 export const MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH = 100;
 export const MAX_TRANSCRIPTION_MODEL_ID_LENGTH = 128;
 
+/** The optional multipart field (set to `1`) a member client sends with a
+ *  transcription when the place it chose the model showed the models list's
+ *  `outsideRegion` and `retainsData` labels. Only then may the request name
+ *  a model outside the organization's region, or one whose provider keeps
+ *  the audio to a member granted such models. Without it a request gets the
+ *  region's models only. */
+export const TRANSCRIPTION_LABELS_SHOWN_FIELD = "labels" as const;
+
 // A control character or unpaired surrogate takes six bytes in escaped JSON.
 const MAX_JSON_BYTES_PER_CODE_UNIT = 6;
 const MAX_VOCABULARY_JSON_CONTENT_BYTES =
@@ -40,8 +48,9 @@ const MAX_VOCABULARY_JSON_CONTENT_BYTES =
  *  that largest request and proves this is the exact maximum. */
 export const MAX_TRANSCRIPTION_AUDIO_BYTES = contract.maxAudioBytes;
 
-// Five form parts: file, model, language, vocabulary JSON, and a matter UUID.
-const MULTIPART_PARTS = 5;
+// Six form parts: file, model, language, vocabulary JSON, a matter UUID and
+// the labels-shown flag.
+const MULTIPART_PARTS = 6;
 const MULTIPART_BOUNDARY_LENGTH = 70;
 const MULTIPART_PART_HEADER_BYTES = 512;
 const MULTIPART_FRAMING_BYTES =
@@ -54,7 +63,8 @@ const MAX_MULTIPART_METADATA_BYTES =
   2 +
   36 +
   2 +
-  MAX_VOCABULARY_JSON_CONTENT_BYTES;
+  MAX_VOCABULARY_JSON_CONTENT_BYTES +
+  1;
 
 /** Framing is bounded independently of the parsed file's byte limit. */
 export const MAX_TRANSCRIPTION_MULTIPART_BYTES =

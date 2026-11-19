@@ -49,6 +49,7 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
@@ -695,11 +696,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: {
-                      skillDisplayName: detail.data.name,
+                    activeSkill: skillEditorChatSkill({
+                      name: detail.data.name,
                       skillId,
-                      skillName: detail.data.slug,
-                    },
+                      slug: detail.data.slug,
+                    }),
                     label: detail.data.name,
                   })
                 }

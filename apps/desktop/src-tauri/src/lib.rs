@@ -48,6 +48,7 @@ mod dictation_context;
 mod dictation_engine;
 mod dictation_focus;
 mod dictation_format;
+mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;

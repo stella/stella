@@ -143,10 +143,10 @@
       "delete_reader_annotation": "Supprimer le surlignage ou le commentaire",
       "delete_task": "Supprimer la tâche",
       "delete_time_entry": "Supprimer l’entrée de temps",
-      "describe-stella-api": "Préparation de la recherche de données",
-      "describe-stella-function": "Préparation de la recherche de données",
+      "describe-stella-api": "Choix des sources à consulter",
+      "describe-stella-function": "Choix des sources à consulter",
       "describe_template": "Lecture des champs du modèle",
-      "discover_tools": "Préparation de la recherche de données",
+      "discover_tools": "Choix des sources à consulter",
       "execute-typescript": "Lecture des données du dossier",
       "execute_typescript": "Lecture des données du dossier",
       "expand-chat-history": "Lecture de l’historique des conversations",
@@ -588,7 +588,17 @@
     "signOutFailed": "La déconnexion n’a pas pu aboutir. Réessayez.",
     "lockScreenTitle": "Écran verrouillé",
     "timerDetails": "Détails du minuteur",
-    "timerDetailsHint": "Quand un minuteur change sur un autre appareil, le service de notifications d'Apple affiche sa description et son dossier sur l'écran verrouillé. Désactivé, seul le temps s'affiche jusqu'à ce que vous ouvriez l'app."
+    "timerDetailsHint": "Quand un minuteur change sur un autre appareil, le service de notifications d'Apple affiche sa description et son dossier sur l'écran verrouillé. Désactivé, seul le temps s'affiche jusqu'à ce que vous ouvriez l'app.",
+    "dictationTitle": "Dictée",
+    "dictationModelDefault": "Par défaut",
+    "dictationModelDefaultNamed": "Par défaut ({model})",
+    "dictationModelOutsideRegion": "Hors de votre région",
+    "dictationModelRetainsData": "Conserve votre audio",
+    "dictationModelRetainsWarning": "Ce modèle fonctionne avec un compte sans conservation nulle des données. {provider} stocke l’audio et la transcription de tout ce que vous dictez selon ses propres conditions, hors du contrôle de stella. N’y dictez aucune information confidentielle ni aucune donnée client.",
+    "dictationModelHint": "Le modèle qui transforme votre dictée en texte. stella ne conserve pas l’audio.",
+    "dictationModelsUnavailable": "Les modèles n’ont pas pu être chargés. La dictée utilise le modèle choisi, ou celui par défaut si le serveur ne le propose plus.",
+    "dictationCleanup": "Corriger avec l’IA",
+    "dictationCleanupHint": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne ». Seul le texte, pas l’audio, passe par stella vers le fournisseur d’IA de votre organisation ; stella ne le conserve pas."
   },
   "header": {
     "search": "Rechercher"

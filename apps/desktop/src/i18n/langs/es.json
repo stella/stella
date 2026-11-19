@@ -614,6 +614,7 @@
     "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
     "lede": "Mantén pulsado <key>{shortcut}</key> y habla. El texto aparece donde estás escribiendo.",
     "groups": {
+      "shortcut": "Atajo",
       "transcription": "Transcripción",
       "cleanup": "Corrección",
       "thisComputer": "En este ordenador"
@@ -667,6 +668,13 @@
     "downloadFailed": "No se pudo descargar el modelo de voz.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Otra aplicación está usando {shortcut}.",
+    "holdKey": {
+      "title": "Tecla para mantener",
+      "description": "Mantenla pulsada sola para dictar. Una pulsación breve o un atajo que la use no hace nada.",
+      "right": "{key} derecha",
+      "waiting": "stella detecta {shortcut} en cuanto tiene acceso a Accesibilidad.",
+      "unavailable": "stella no puede detectar {shortcut} en este ordenador. Elige otra tecla."
+    },
     "failure": {
       "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",
       "microphone": "stella no oye tu micrófono. Comprueba el acceso al micrófono en Ajustes del Sistema.",
@@ -675,6 +683,7 @@
       "focusChanged": "Cambió a otra aplicación antes de que el texto estuviera listo, así que no se escribió nada. Inténtelo de nuevo.",
       "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
       "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo.",
+      "passwordField": "Hay un campo de contraseña seleccionado, así que el dictado no se guardó ni se escribió.",
       "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo."
     },
     "failureKeptInHistory": "El texto está en el historial del portapapeles."
@@ -817,6 +826,7 @@
       "screenRecording": "Grabación de pantalla",
       "camera": "Cámara",
       "keystrokes": "Pulsaciones de teclas",
+      "keystrokesWithoutHoldKey": "Pulsaciones de teclas, salvo que elija una tecla para mantener",
       "fullDiskAccess": "Acceso total al disco",
       "administrator": "Derechos de administrador"
     }

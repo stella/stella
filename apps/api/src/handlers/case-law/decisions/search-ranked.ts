@@ -120,6 +120,11 @@ type RankedSearchShapeOptions = {
   functionWords: ReadonlySet<string> | null;
   queryVariant: CorpusIndexQueryVariant;
   jurisdiction: string | undefined;
+  /**
+   * The arm a request without `strict` ranks with, when a caller measuring
+   * the arms sets it; the public routes leave it to the default.
+   */
+  unstrictArm?: DecisionRankingArm | undefined;
 };
 
 /** A request the decision-level ranking answers, before its leaves are built. */
@@ -143,6 +148,7 @@ export const rankedSearchShape = ({
   functionWords,
   queryVariant,
   jurisdiction,
+  unstrictArm = CASE_LAW_RANKED_DEFAULT_ARM,
 }: RankedSearchShapeOptions):
   RankedSearchShape | { type: "passages"; reason: RankedSearchIneligible } => {
   if (decisionTerms === null) {
@@ -172,7 +178,7 @@ export const rankedSearchShape = ({
   }
   return {
     type: "ranked",
-    arm: strict ? "all" : CASE_LAW_RANKED_DEFAULT_ARM,
+    arm: strict ? "all" : unstrictArm,
     decisionTerms,
     tokens,
   };

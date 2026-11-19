@@ -7,9 +7,9 @@ import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 
 import { PermissionsSection } from "../mainview/PermissionsSection";
+import { formatHoldKey, holdKeyCaps } from "../shared/hold-key";
 import { Keycaps } from "../shared/Keycaps";
 import type { Permission } from "../shared/permissions";
-import { formatShortcut, shortcutKeycaps } from "../shared/shortcut-keys";
 import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
@@ -55,8 +55,15 @@ export const DictationSetup = ({
   }
 
   const failure = namedDictationFailure(snapshot.failure);
-  const keys = { keys: snapshot.keys, layout, locale };
-  const shortcut = formatShortcut({ ...keys, platform: DESKTOP_PLATFORM });
+  const keys = {
+    holdKey: snapshot.holdKey,
+    keys: snapshot.keys,
+    layout,
+    locale,
+    platform: DESKTOP_PLATFORM,
+    right: (key: string) => dictationT("holdKey.right", { key }),
+  };
+  const shortcut = formatHoldKey(keys);
   const ready = snapshot.enabled && snapshot.model.status === "ready";
 
   return (
@@ -96,10 +103,7 @@ export const DictationSetup = ({
                 {t("dictationReady")}
               </p>
               <Keycaps
-                caps={shortcutKeycaps({
-                  ...keys,
-                  platform: DESKTOP_PLATFORM,
-                }).map((cap) => ({
+                caps={holdKeyCaps(keys).map((cap) => ({
                   ...cap,
                   state: snapshot.phase === "recording" ? "down" : "idle",
                 }))}

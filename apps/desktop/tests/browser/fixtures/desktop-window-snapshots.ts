@@ -46,6 +46,7 @@ export const DICTATION_READY = {
   destination: "local",
   enabled: true,
   failure: null,
+  holdKey: "combination",
   keys: { code: "Space", modifiers: ["control", "alt"] },
   model: { status: "ready" },
   modelBytes: 740_363_168,
@@ -65,6 +66,9 @@ export const SETTINGS_DICTATION = {
   enabled: true,
   failure: null,
   failureKeptInHistory: false,
+  holdKey: "fn",
+  holdKeys: ["fn", "rightOption", "rightCommand", "combination"],
+  holdKeyWaiting: false,
   keepsInHistory: true,
   keys: { code: "Space", modifiers: ["control", "alt"] },
   language: {

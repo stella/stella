@@ -18,6 +18,7 @@ export const AUTOFIX_PROTECTED_PATHS = [
   "apps/api/src/tests/security/contacts-owner-scope-census.allowlist.json",
   "apps/api/src/tests/security/matter-access-census.allowlist.json",
   "apps/api/src/tests/security/public-response-text-bounds.allowlist.json",
+  "scripts/bundle-startup-ledger.json",
   "scripts/calendar-day-ledger.json",
   "scripts/contract-domain-ledger.json",
   "scripts/fill-diagnostics-ledger.json",
