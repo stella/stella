@@ -61,9 +61,9 @@ export const czechConstitutionalDesignation = (
   }
   const kind = requiredGroup(report, "kind");
   const series = kind === "U" || kind === "usnesení" ? "U" : "N";
-  const volume = Number(requiredGroup(report, "volume"));
-  const number = Number(requiredGroup(report, "number"));
-  return `SbNU sv. ${String(volume)} ${series} ${String(number)}`;
+  const numeral = (name: "volume" | "number") =>
+    requiredGroup(report, name).replace(/^0+(?=\d)/u, "");
+  return `SbNU sv. ${numeral("volume")} ${series} ${numeral("number")}`;
 };
 
 const CZ_US_CANONICAL_REPORT_RE =
