@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
   const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-cli-"));
@@ -10,7 +11,7 @@ const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
     [
       process.execPath,
       "--no-env-file",
-      new URL("seed-usage-policies.ts", import.meta.url).pathname,
+      fileURLToPath(new URL("seed-usage-policies.ts", import.meta.url)),
       "--results",
       resultsPath,
       ...extraArgs,

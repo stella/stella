@@ -3,6 +3,7 @@
   "modelsLabeledQuery": "labels",
   "modelsRetentionQuery": "retention",
   "transcribePath": "/v1/desktop/dictation/transcribe",
+  "transcriptsPath": "/v1/desktop/dictation/transcripts",
   "maxAudioBytes": 19614813,
   "maxAudioSeconds": 60
 }

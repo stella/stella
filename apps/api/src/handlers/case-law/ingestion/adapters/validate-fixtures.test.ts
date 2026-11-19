@@ -12,6 +12,7 @@
 
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -43,11 +44,7 @@ const loadPageFixtures = async (): Promise<
   }[] = [];
 
   const glob = new Glob("*-page.json.gz");
-  const fixturePath = FIXTURES_DIR.pathname.endsWith("/")
-    ? FIXTURES_DIR.pathname
-    : `${FIXTURES_DIR.pathname}/`;
-
-  for await (const filename of glob.scan(fixturePath)) {
+  for await (const filename of glob.scan(fileURLToPath(FIXTURES_DIR))) {
     const path = new URL(filename, FIXTURES_DIR);
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
     const data = (await readGzipJson(path)) as FixtureRecord;

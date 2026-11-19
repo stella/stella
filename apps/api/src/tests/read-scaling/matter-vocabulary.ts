@@ -11,12 +11,12 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
-import { VOCABULARY_LIMITS } from "@/api/handlers/workspaces/vocabulary/candidates";
 import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
+import { VOCABULARY_LIMITS } from "@/api/lib/workspaces/vocabulary/candidates";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
