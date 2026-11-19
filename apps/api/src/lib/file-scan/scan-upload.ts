@@ -11,7 +11,6 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
-import { admitWork, WorkRefusal } from "@/api/lib/load/work-admission";
 
 export class FileScanRejectedError extends TaggedError(
   "FileScanRejectedError",
@@ -34,49 +33,73 @@ export type ScanUploadInput = {
   ownership?: "copy" | "transfer";
   declaredMimeType: string;
   fileName: string;
+  /**
+   * `process` (the default) admits the scan into this API process's file-scan
+   * pool. `subprocess` is for a worker process (text extraction), which runs
+   * outside the API's pools, bounded by its own timeout, and has no server
+   * environment to load them from.
+   */
+  admission?: "process" | "subprocess";
 };
 
 /** Scans untrusted bytes; only a non-rejecting verdict yields a `ScannedFile`. */
 export const scanUpload = async (
-  { bytes, ownership = "copy", declaredMimeType, fileName }: ScanUploadInput,
+  {
+    bytes,
+    ownership = "copy",
+    declaredMimeType,
+    fileName,
+    admission = "process",
+  }: ScanUploadInput,
   scan: typeof scanFile = scanFile,
 ): Promise<
   Result<ScannedFile, FileScanRejectedError | FileScanFailedError>
 > => {
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes;
-  const admitted = await admitWork({
-    pool: "file-scan",
-    kind: "file-scan",
-    bytes: view.byteLength,
-    run: async () => {
-      // Detaching the caller's aliases preserves verdict isolation without
-      // copying. Subranges and shared buffers need an exact-fit private copy.
-      const buffer =
-        ownership === "transfer" &&
-        view.buffer instanceof ArrayBuffer &&
-        view.byteOffset === 0 &&
-        view.byteLength === view.buffer.byteLength
-          ? view.buffer.transfer()
-          : new Uint8Array(view).buffer;
-      const scanned = await scan({
-        buffer: new Uint8Array(buffer),
-        declaredMimeType,
-        fileName,
-      });
-      return { buffer, scanned };
-    },
-  });
-  if (Result.isError(admitted)) {
-    return Result.err(
-      new FileScanFailedError({
-        message: WorkRefusal.is(admitted.error)
-          ? "File security scan is busy"
-          : "File security scan failed",
-        cause: admitted.error,
-      }),
-    );
+  const run = async () => {
+    // Detaching the caller's aliases preserves verdict isolation without
+    // copying. Subranges and shared buffers need an exact-fit private copy.
+    const buffer =
+      ownership === "transfer" &&
+      view.buffer instanceof ArrayBuffer &&
+      view.byteOffset === 0 &&
+      view.byteLength === view.buffer.byteLength
+        ? view.buffer.transfer()
+        : new Uint8Array(view).buffer;
+    const scanned = await scan({
+      buffer: new Uint8Array(buffer),
+      declaredMimeType,
+      fileName,
+    });
+    return { buffer, scanned };
+  };
+  let completed: Awaited<ReturnType<typeof run>>;
+  if (admission === "subprocess") {
+    completed = await run();
+  } else {
+    // Loaded on use: the admission pools read the server environment, which
+    // a worker subprocess does not have.
+    const { admitWork, WorkRefusal } =
+      await import("@/api/lib/load/work-admission");
+    const admitted = await admitWork({
+      pool: "file-scan",
+      kind: "file-scan",
+      bytes: view.byteLength,
+      run,
+    });
+    if (Result.isError(admitted)) {
+      return Result.err(
+        new FileScanFailedError({
+          message: WorkRefusal.is(admitted.error)
+            ? "File security scan is busy"
+            : "File security scan failed",
+          cause: admitted.error,
+        }),
+      );
+    }
+    completed = admitted.value;
   }
-  const { buffer, scanned } = admitted.value;
+  const { buffer, scanned } = completed;
   if (Result.isError(scanned)) {
     return Result.err(
       new FileScanFailedError({
