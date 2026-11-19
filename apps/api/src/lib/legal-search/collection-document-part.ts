@@ -86,6 +86,15 @@ export const validateCollectionDocumentPart = (
   part: CollectionDocumentPart,
   payload: CorpusPayload,
 ) => {
+  const parsed = v.safeParse(collectionDocumentPartSchema, part);
+  if (!parsed.success) {
+    return Result.err(
+      new CollectionDocumentPartInvalid({
+        message:
+          "Collection document part exceeds its canonical descriptor bounds",
+      }),
+    );
+  }
   switch (part.extent) {
     case COLLECTION_DOCUMENT_EXTENT.UNCLASSIFIED:
       return Result.ok(part);
