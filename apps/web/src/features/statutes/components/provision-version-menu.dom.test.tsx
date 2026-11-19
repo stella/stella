@@ -338,7 +338,7 @@ test("an in-force version of the act shows its change counts once", () => {
 
   const inForce = view
     .getAllByRole("listitem")
-    .find((row) => row.textContent?.startsWith("Jan 1, 2026"));
+    .find((row) => row.textContent.startsWith("Jan 1, 2026"));
   expect(inForce).toBeDefined();
   expect(
     inForce?.querySelectorAll('[data-slot="statute-version-changes"]'),
