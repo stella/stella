@@ -16,6 +16,8 @@ import type {
 } from "@stll/api-contract/desktop-runner";
 import { createDetached } from "@stll/errors";
 
+import { createAcpHarnessAdapter } from "../harness/acp/adapter";
+import { ANTIGRAVITY } from "../harness/acp/antigravity";
 import type {
   HarnessAdapter,
   HarnessContinuationRequest,
@@ -393,6 +395,29 @@ const ADAPTERS = {
     });
   },
   opencode: null,
+  antigravity: (launch: HarnessLaunch, options: AdapterOptions) => {
+    // Antigravity takes no configuration overrides or client name.
+    if (
+      launch.launch.configOverrides.length > 0 ||
+      launch.launch.clientName !== null
+    ) {
+      panic("Antigravity adapter: launch settings it cannot apply");
+    }
+    return createAcpHarnessAdapter({
+      definition: ANTIGRAVITY,
+      executable: launch.executable,
+      configDir: launch.configDir,
+      environment: launchEnvironment(options.environment, launch.launch),
+      clientVersion: launch.clientVersion,
+      gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
+      onBackgroundError: options.onBackgroundError,
+      protocolLog: options.protocolLog,
+      platform: process.platform,
+      ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
+    });
+  },
 } as const satisfies Record<
   AgentHarness,
   ((launch: HarnessLaunch, options: AdapterOptions) => HarnessAdapter) | null

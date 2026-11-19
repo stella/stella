@@ -90,7 +90,7 @@
       "drainSpreadMs": 30000,
       "tokenRefreshMarginMs": 300000
     },
-    "harnesses": ["codex", "claude-code", "opencode"],
+    "harnesses": ["codex", "claude-code", "opencode", "antigravity"],
     "harnessStates": [
       "ready",
       "needs_login",
@@ -290,6 +290,10 @@
             "id": "opencode",
             "state": "unsupported",
             "version": "1.2.3"
+          },
+          {
+            "id": "antigravity",
+            "state": "not_installed"
           }
         ],
         "activeRuns": []
