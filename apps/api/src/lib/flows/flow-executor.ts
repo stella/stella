@@ -697,9 +697,15 @@ export const loadInputDocuments = async ({
     );
   });
   await refuseUnavailable(new Set(available.map((source) => source.entityId)));
+  // The prompt lists documents in the order the run selected them.
+  const inputOrder = new Map(entityIds.map((id, index) => [id, index]));
+  const ordered = available.toSorted(
+    (a, b) =>
+      (inputOrder.get(a.entityId) ?? 0) - (inputOrder.get(b.entityId) ?? 0),
+  );
   const documents: FlowStepDocument[] = [];
   // Each nested reader can scan and parse several files. Keep that work bounded per run.
-  for (const source of available) {
+  for (const source of ordered) {
     signal?.throwIfAborted();
     if (source.legalFormat) {
       const read = await LEGAL_FILE_READERS[source.legalFormat.kind]({

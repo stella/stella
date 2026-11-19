@@ -31,6 +31,7 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { createFileKey } from "@/api/lib/file-key";
 import {
@@ -68,6 +69,10 @@ describe("loadInputDocuments", () => {
   const propertyId = createSafeId<"property">();
   const fileId = Bun.randomUUIDv7();
   const pendingEntityId = createSafeId<"entity">();
+  const secondEntityId = createSafeId<"entity">();
+  const secondVersionId = createSafeId<"entityVersion">();
+  const secondFieldId = createSafeId<"field">();
+  const secondFileId = Bun.randomUUIDv7();
   let fake: FakeS3;
 
   beforeAll(async () => {
@@ -106,16 +111,25 @@ describe("loadInputDocuments", () => {
         name: "Pending doc",
         createdBy: userId,
       },
+      {
+        id: secondEntityId,
+        workspaceId,
+        name: "Second doc",
+        createdBy: userId,
+      },
     ]);
-    await testDb.insert(entityVersions).values({
-      id: versionId,
-      entityId: extractedEntityId,
-      workspaceId,
-    });
+    await testDb.insert(entityVersions).values([
+      { id: versionId, entityId: extractedEntityId, workspaceId },
+      { id: secondVersionId, entityId: secondEntityId, workspaceId },
+    ]);
     await testDb
       .update(entities)
       .set({ currentVersionId: versionId })
       .where(eq(entities.id, extractedEntityId));
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: secondVersionId })
+      .where(eq(entities.id, secondEntityId));
     await testDb.insert(properties).values({
       id: propertyId,
       workspaceId,
@@ -153,6 +167,37 @@ describe("loadInputDocuments", () => {
       sourceFieldId: fieldId,
       sourceFileId: fileId,
       sourceSha256Hex: "a".repeat(64),
+    });
+    await testDb.insert(fields).values({
+      id: secondFieldId,
+      propertyId,
+      workspaceId,
+      entityVersionId: secondVersionId,
+      content: {
+        version: 1,
+        type: "file",
+        id: secondFileId,
+        fileName: "second.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        sizeBytes: 3,
+        encrypted: false,
+        sha256Hex: "b".repeat(64),
+        pdfFileId: null,
+      },
+    });
+    const secondText = await encryptContent(organizationId, "second marker");
+    await testDb.insert(extractedContent).values({
+      entityId: secondEntityId,
+      organizationId,
+      workspaceId,
+      ciphertext: secondText.ciphertext,
+      iv: secondText.iv,
+      charCount: 13,
+      sourceEntityVersionId: secondVersionId,
+      sourceFieldId: secondFieldId,
+      sourceFileId: secondFileId,
+      sourceSha256Hex: "b".repeat(64),
     });
   });
 
@@ -416,6 +461,79 @@ describe("loadInputDocuments", () => {
           .delete(extractedContent)
           .where(eq(extractedContent.entityId, extractedEntityId));
         assertContent((await read()).at(0)?.text);
+      },
+      userId,
+    );
+  });
+
+  test("lists a ZFO read from its file in the order the run selected", async () => {
+    const bytes = await zfoFile();
+    fake.put(
+      envBase.S3_BUCKET,
+      createFileKey({
+        organizationId,
+        workspaceId,
+        fileId,
+        mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+      }),
+      bytes,
+      DATA_BOX_MESSAGE_MIME_TYPE,
+    );
+    await createDryScopedQuery(testDb)(
+      [workspaceId],
+      organizationId,
+      async (tx) => {
+        await tx
+          .update(fields)
+          .set({
+            content: {
+              version: 1,
+              type: "file",
+              id: fileId,
+              fileName: "selected.zfo",
+              mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+              sizeBytes: bytes.length,
+              encrypted: false,
+              sha256Hex: sha256Hex(bytes),
+              pdfFileId: null,
+            },
+          })
+          .where(eq(fields.id, fieldId));
+        // No text projection yet: only its file can be read.
+        await tx
+          .delete(extractedContent)
+          .where(eq(extractedContent.entityId, extractedEntityId));
+        const scoped = asTestRaw<
+          Parameters<typeof loadInputDocuments>[0]["scopedDb"]
+        >(
+          async (
+            run: (transaction: TestDatabaseTransaction) => Promise<unknown>,
+          ) => await run(tx),
+        );
+        const workspaceIds = (
+          await authorizedWorkspaceIds(tx, {
+            organizationId,
+            workspaceIds: [workspaceId],
+          })
+        ).unwrap();
+        const labels = async (entityIds: SafeId<"entity">[]) =>
+          (
+            await loadInputDocuments({
+              scopedDb: scoped,
+              organizationId,
+              workspaceIds,
+              entityIds,
+              recordAuditEvent: auditRecorderDouble(),
+            })
+          ).map(({ label }) => label);
+        expect(await labels([extractedEntityId, secondEntityId])).toEqual([
+          "Available doc",
+          "Second doc",
+        ]);
+        expect(await labels([secondEntityId, extractedEntityId])).toEqual([
+          "Second doc",
+          "Available doc",
+        ]);
       },
       userId,
     );
