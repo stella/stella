@@ -539,7 +539,7 @@ export const buildCzIsirDecision = ({
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       metadata: checkedDecisionMetadata({ [CZ_ISIR_METADATA_KEY]: metadata }),
       rawHash: sourceFingerprint({ sourceRaw }),
-      parserVersion: PARSER_VERSIONS[KEY],
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_ISIR],
       documentAst,
       sections,
       sourceRaw,
