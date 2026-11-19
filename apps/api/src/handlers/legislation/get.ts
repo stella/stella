@@ -1,8 +1,12 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import {
+  isPublicCountry,
+  type PublicCountrySurface,
+} from "@stll/api-contract/public-country-capability";
+import { legalDayTimeZone } from "@stll/api-contract/public-country-legal-day";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import { todayFor } from "@stll/time";
 
@@ -45,17 +49,6 @@ import {
   legislationPublicReadDb,
   type LegislationReadDb,
 } from "@/api/lib/legislation-public-read-db";
-
-const amendmentLegalDayTimeZone = (country: string): string => {
-  switch (country) {
-    case "CZE":
-      return "Europe/Prague";
-    case "SVK":
-      return "Europe/Bratislava";
-    default:
-      return panic("Amendment source has no legal-day time zone");
-  }
-};
 
 /**
  * Read one legislation document for display. Prefers canonical text/AST
@@ -124,9 +117,12 @@ export const readPublicLegislationHandler = async (
         .limit(1),
   );
 
-  if (!document) {
+  // The published-read filter admits public countries only, so a row outside
+  // the list is as unpublished as a missing one.
+  if (!document || !isPublicCountry(document.country)) {
     return status(404, { message: "Legislation document not found" });
   }
+  const { country } = document;
 
   const pendingChanges = await legislationDb(async (tx) => {
     const work = {
@@ -138,12 +134,11 @@ export const readPublicLegislationHandler = async (
     if (snapshot === null) {
       return null;
     }
-    const timeZone = amendmentLegalDayTimeZone(document.country);
     const page = await readLegislationAmendments(tx, {
       work,
       direction: "incoming",
       limit: LEGISLATION_AMENDMENT_PAGE_MAX,
-      effectiveAfter: todayFor(timeZone).toString(),
+      effectiveAfter: todayFor(legalDayTimeZone(country)).toString(),
     });
     return projectStatuteAmendments({ page, snapshot });
   });

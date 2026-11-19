@@ -23,15 +23,6 @@ import { STATUTE_LIST_SORT_KEY_KINDS } from "@stll/api-contract/statute-list-sor
 import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
-import {
-  CalendarClockIcon,
-  CalendarIcon,
-  CircleDotIcon,
-  HashIcon,
-  HistoryIcon,
-  ScrollTextIcon,
-  ShapesIcon,
-} from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
@@ -57,6 +48,10 @@ import type {
 } from "@/components/workspaces/table/types";
 import { selectColId } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import {
+  STATUTE_COLUMN_ICONS,
+  StatuteColumnIcon,
+} from "@/features/statutes/components/statute-table.pending";
+import {
   statuteListLinkTarget,
   useOpenStatuteTab,
 } from "@/features/statutes/open-statute-tab";
@@ -75,17 +70,6 @@ import type { StatuteTableLayout } from "@/features/statutes/statute-table-layou
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
-
-/** The icon each statute column wears in its header menu and the chooser. */
-const STATUTE_COLUMN_ICONS = {
-  act: ScrollTextIcon,
-  type: ShapesIcon,
-  validity: CircleDotIcon,
-  firstVersion: CalendarIcon,
-  amendments: HistoryIcon,
-  lastAmended: CalendarClockIcon,
-  citedBy: HashIcon,
-} as const satisfies Record<StatuteColumnId, LucideIcon>;
 
 const statuteRowId = (row: StatuteRowData): string => row.statute.id;
 
@@ -207,17 +191,6 @@ export const useStatuteColumnGroups = (): ColumnToggleGroup[] => {
       })),
     },
   ];
-};
-
-export const StatuteColumnIcon = ({
-  className = "size-3.5",
-  column,
-}: {
-  className?: string;
-  column: StatuteColumnId;
-}) => {
-  const Icon = STATUTE_COLUMN_ICONS[column];
-  return <Icon className={className} />;
 };
 
 /**

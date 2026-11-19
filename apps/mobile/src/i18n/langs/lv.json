@@ -143,10 +143,10 @@
       "delete_reader_annotation": "Dzēst izcēlumu vai komentāru",
       "delete_task": "Dzēst uzdevumu",
       "delete_time_entry": "Dzēst laika ierakstu",
-      "describe-stella-api": "Datu meklēšanas sagatavošana",
-      "describe-stella-function": "Datu meklēšanas sagatavošana",
+      "describe-stella-api": "Avotu izvēle",
+      "describe-stella-function": "Avotu izvēle",
       "describe_template": "Veidnes lauku lasīšana",
-      "discover_tools": "Datu meklēšanas sagatavošana",
+      "discover_tools": "Avotu izvēle",
       "execute-typescript": "Lietas datu lasīšana",
       "execute_typescript": "Lietas datu lasīšana",
       "expand-chat-history": "Lasa tērzēšanas vēsturi",
@@ -588,7 +588,17 @@
     "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz.",
     "lockScreenTitle": "Bloķēšanas ekrāns",
     "timerDetails": "Taimera informācija",
-    "timerDetailsHint": "Kad taimeris mainās citā ierīcē, Apple paziņojumu pakalpojums nogādā tā aprakstu un lietu bloķēšanas ekrānā. Izslēgtā stāvoklī redzams tikai laiks, līdz atverat lietotni."
+    "timerDetailsHint": "Kad taimeris mainās citā ierīcē, Apple paziņojumu pakalpojums nogādā tā aprakstu un lietu bloķēšanas ekrānā. Izslēgtā stāvoklī redzams tikai laiks, līdz atverat lietotni.",
+    "dictationTitle": "Diktēšana",
+    "dictationModelDefault": "Noklusējuma",
+    "dictationModelDefaultNamed": "Noklusējuma ({model})",
+    "dictationModelOutsideRegion": "Ārpus jūsu reģiona",
+    "dictationModelRetainsData": "Saglabā jūsu audio",
+    "dictationModelRetainsWarning": "Šis modelis darbojas kontā bez nulles datu glabāšanas. {provider} saskaņā ar saviem noteikumiem, ārpus stella kontroles, glabā visa diktētā audio un transkripciju. Nediktējiet ar to konfidenciālu informāciju vai klientu datus.",
+    "dictationModelHint": "Modelis, kas jūsu diktēto pārvērš tekstā. stella audio neglabā.",
+    "dictationModelsUnavailable": "Modeļus neizdevās ielādēt. Diktēšana izmanto jūsu izvēlēto modeli vai noklusējuma modeli, ja serveris to vairs nepiedāvā.",
+    "dictationCleanup": "Labot ar MI",
+    "dictationCleanupHint": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”. Tikai teksts, nevis audio, caur stella nonāk pie jūsu organizācijas MI pakalpojumu sniedzēja; stella to neglabā."
   },
   "header": {
     "search": "Meklēt"

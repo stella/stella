@@ -644,6 +644,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/dictation/cleanup": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/dictation/transcribe": {
     type: "non-replay",
     reason: "external-effect",

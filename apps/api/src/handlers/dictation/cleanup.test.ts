@@ -8,9 +8,11 @@ import {
 } from "@stll/api-contract/desktop-dictation-cleanup";
 import { createTestState } from "@stll/test-state";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -24,6 +26,10 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+} from "@/api/tests/helpers/handler-context";
 import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -35,6 +41,7 @@ import {
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
 import type { consumeDictationLimit } from "./limits";
+import { createMemberDictationCleanupEndpoint } from "./member-cleanup";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -349,4 +356,112 @@ test("where the text goes reaches the model as its own field, and the answer is 
   });
   expect(echoed.response.status).toBe(502);
   expect(await echoed.response.text()).not.toContain("Kupní cena");
+});
+
+const admitInline = asTestRaw<typeof withActionAdmission>(
+  async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
+    Result.ok(
+      await run(new AbortController().signal, {
+        reservePeriod: async () => Result.ok(undefined),
+      }),
+    ),
+);
+
+/** The member route: a signed-in member's session, no desktop decision. */
+const exerciseMember = async ({
+  role = "member",
+  limited = false,
+}: { role?: "member" | "external"; limited?: boolean } = {}) => {
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+  const calls: { system: string; prompt: string }[] = [];
+  const { scopedDb } = createScopedDbMock({});
+  const generate = mock(
+    async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
+      await runDispatchCheck(options.beforeEachDispatch);
+      calls.push({
+        system: options.system ?? "",
+        prompt: options.prompt ?? "",
+      });
+      return await Promise.resolve(CLEANED);
+    },
+  );
+  const limit = mock(
+    async (_options: Parameters<typeof consumeDictationLimit>[0]) =>
+      await Promise.resolve(
+        limited
+          ? Result.err(
+              new HandlerError({
+                status: 429,
+                code: "rate_limited",
+                message: "Too many dictation cleanup requests",
+              }),
+            )
+          : Result.ok(undefined),
+      ),
+  );
+  const endpoint = createMemberDictationCleanupEndpoint({
+    admit: admitInline,
+    limit: asTestRaw<typeof consumeDictationLimit>(limit),
+    generateObjectForTask:
+      asTestRaw<typeof generateTanStackObjectForTask>(generate),
+  });
+  const result = await endpoint.handler(
+    createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+      audit: NO_AUDIT,
+      scopedDb,
+      safeDb: safeDbFromScoped(scopedDb),
+      memberRole: sessionMemberRole(role),
+      session: { activeOrganizationId: ORGANIZATION_ID },
+      user: { id: USER_ID, email: EMAIL },
+      body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
+      request: new Request("https://stella.test/v1/dictation/cleanup", {
+        method: "POST",
+      }),
+      route: "/v1/dictation/cleanup",
+    }),
+  );
+  return { result, calls, generate, limit };
+};
+
+test("a signed-in member gets the same cleanup as a desktop, without any desktop decision", async () => {
+  const { result, calls, limit } = await exerciseMember();
+  if (result instanceof HttpStatusResponse) {
+    throw new TypeError(`Expected the cleaned segments, got ${result.code}`);
+  }
+  expect(v.parse(desktopDictationCleanupResponseSchema, result)).toEqual({
+    segments: [
+      { type: "text", text: "a tedy", bold: false },
+      { type: "lineBreak" },
+      { type: "text", text: "se rozhodl odejít za ", bold: false },
+      { type: "text", text: "24", bold: true },
+      { type: "text", text: " dní.", bold: false },
+    ],
+  });
+  expect(calls).toHaveLength(1);
+  expect(calls.at(0)?.system).toBe(DICTATION_CLEANUP_SYSTEM_PROMPT);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toEqual({
+    languages: ["cs", "en"],
+    locale: "cs",
+    transcript: TRANSCRIPT,
+  });
+  expect(limit.mock.calls.at(0)?.[0]).toMatchObject({
+    organizationId: ORGANIZATION_ID,
+    userId: USER_ID,
+    operation: "cleanup",
+  });
+});
+
+test("a member whose role may not use AI is refused before the limit or any model call", async () => {
+  const { result, generate, limit } = await exerciseMember({
+    role: "external",
+  });
+  expect(result instanceof HttpStatusResponse && result.code).toBe(403);
+  expect(limit).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+test("a member over the cleanup budget is refused before any model call", async () => {
+  const { result, generate } = await exerciseMember({ limited: true });
+  expect(result instanceof HttpStatusResponse && result.code).toBe(429);
+  expect(generate).not.toHaveBeenCalled();
 });

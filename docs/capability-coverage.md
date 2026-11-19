@@ -838,7 +838,7 @@ mechanics, and similar), not gaps in coverage.
 | human_confirmation | 3 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 11 |
+| native_tool_ui | 13 |
 | organization_export | 2 |
 | provider_secret | 34 |
 | public_indexing | 11 |

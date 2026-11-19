@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -136,13 +136,22 @@ import {
 } from "@/routes/law/-components/public-law-list-failure";
 
 import { caseLawResultsFeedback } from "./-case-law-filter-notice";
+import { CaseLawIndexLayout } from "./-case-law-index.pending";
 import { usePageSelection } from "./-case-law-page-selection";
 import {
   type CaseLawSearchChange,
   nextCaseLawIndexSearch,
 } from "./-case-law-search-navigation.logic";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
-import { Route } from "./index";
+
+// The case-law results page, the route's component. It renders the shell its
+// pending view renders (`-case-law-index.pending.tsx`), with the live controls
+// in the places the faces held.
+
+const routeApi = getRouteApi("/law/cases/");
+
+/** The page renders only once the router has the route's data. */
+const ROUTE_STATE: PublicLawRouteState = "loaded";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const NO_SHOWN_QUESTIONS: readonly string[] = [];
@@ -243,23 +252,12 @@ const SearchStillBusyNotice = ({
   ) : null;
 };
 
-type PublicCaseLawIndexProps = {
-  /** Whether the router has this page's rows yet. */
-  routeState: PublicLawRouteState;
-};
-
-export const PublicCaseLawIndexPending = () => (
-  <PublicCaseLawIndex routeState="pending" />
-);
-
-export function PublicCaseLawIndex({
-  routeState = "loaded",
-}: Partial<PublicCaseLawIndexProps>) {
+export function PublicCaseLawIndex() {
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
   const readingLanguages = useCaseLawReadingLanguages();
-  const search = Route.useSearch({
+  const search = routeApi.useSearch({
     select: ({
       country,
       court,
@@ -292,17 +290,17 @@ export function PublicCaseLawIndex({
   });
   // Read apart from the search: the questions drawn are not part of what the
   // rows, the canonical link or a decision opened from here describe.
-  const shownQuestionIds = Route.useSearch({
+  const shownQuestionIds = routeApi.useSearch({
     select: ({ questions }) => questions ?? NO_SHOWN_QUESTIONS,
   });
   // Also read apart: which words a rewrite replaced does not change the rows.
-  const rewriteState = Route.useSearch({
+  const rewriteState = routeApi.useSearch({
     select: ({ rewrite, rewrittenFrom }) => ({ rewrite, rewrittenFrom }),
   });
-  const filterNotice = Route.useSearch({
+  const filterNotice = routeApi.useSearch({
     select: ({ filterNotice: notice }) => notice,
   });
-  const navigate = Route.useNavigate();
+  const navigate = routeApi.useNavigate();
   const routerNavigate = useNavigate();
 
   // The resolution `beforeLoad` performs, not a reading of the canonical URL
@@ -398,7 +396,7 @@ export function PublicCaseLawIndex({
   // A failed search is this region's failure, not the page's.
   // The loader lets it through for the same reason, so both the first render
   // and a filter applied to a drawn page arrive here.
-  const loadedSearch = Route.useMatch({
+  const loadedSearch = routeApi.useMatch({
     select: (match) => match.loaderData?.search,
   });
   const isSearchUnavailable = publicLawSearchOutage({
@@ -413,7 +411,7 @@ export function PublicCaseLawIndex({
     isLoading,
     isPlaceholderData,
     keptRowCount: pageDecisions(pageData).length,
-    routeState,
+    routeState: ROUTE_STATE,
   });
   const isRefreshing = rows === "stale";
 
@@ -767,31 +765,102 @@ export function PublicCaseLawIndex({
     },
   });
 
-  // The pane below claims the page's height, so on a normal viewport nothing
-  // overflows here and the table owns the only scroll. The page scroller stays
-  // as the fallback for a viewport too short to hold the table's own minimum:
-  // without it the stack would be clipped and the pager unreachable.
   return (
-    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      {/*
-        The breadcrumb already names the screen, so the heading is for the
-        document outline and for a screen reader, not for the eye.
-      */}
-      <h1 className="sr-only">{t("common.caseLaw")}</h1>
-
-      <CaseLawSearch
-        country={countryParam}
-        maxLength={SEARCH_QUERY_MAX_LENGTH}
-        onQueryChange={handleQueryChange}
-        onSubmit={openSingleMatch}
-        query={queryInput}
-        refine={refine}
-      />
-      {autoRewrite && (
-        <CaseLawAutoRewrite key={autoRewriteKey} onAutoRefine={onAutoRefine} />
-      )}
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
+    <CaseLawIndexLayout
+      aboveResults={
+        <>
+          {feedback.aboveResults}
+          <SearchStillBusyNotice
+            failureReason={pageQuery.failureReason}
+            isFetching={pageQuery.isFetching}
+          />
+        </>
+      }
+      afterSearch={
+        autoRewrite ? (
+          <CaseLawAutoRewrite
+            key={autoRewriteKey}
+            onAutoRefine={onAutoRefine}
+          />
+        ) : null
+      }
+      chips={
+        <PublicLawFilterChips
+          chips={chips}
+          onClearAll={() => {
+            // Clear the filters, not the query the reader typed into the box:
+            // the box is the search, and emptying it is its own gesture.
+            detached(
+              searchNavigation("clear-filters", (previous) =>
+                dropCaseLawFilters(previous, [
+                  ...CASE_LAW_FILTER_KEYS,
+                  "from",
+                  "to",
+                  "year",
+                ]),
+              ),
+              "cases.clear-filters",
+            );
+          }}
+        />
+      }
+      paneRef={paneRef}
+      results={
+        isSearchUnavailable ? (
+          <PublicLawListFailure
+            description={t("caseLaw.searchUnavailable.description")}
+            error={error ?? firstPageError}
+            reset={() => {
+              detached(
+                Promise.all([refetch(), firstPageQuery.refetch()]),
+                "cases.search-retry",
+              );
+            }}
+          />
+        ) : (
+          <PublicLawResultsBoundary
+            searchKey={JSON.stringify(resultSetSearch)}
+            resetOn={pageData}
+          >
+            <DecisionTable
+              dateOrder={dateOrder}
+              decisions={find.rows}
+              emptyState={feedback.emptyState}
+              expectedRowCount={pageSize}
+              findHighlight={find.highlight}
+              firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
+              isLoading={rows === "skeleton"}
+              isRefreshing={isRefreshing}
+              layout={layout}
+              onLayoutChange={setLayout}
+              onSelectedIdsChange={setSelectedIds}
+              query={rowsQuery}
+              questions={questions.surface}
+              referenceKind={referenceKind}
+              selectedIds={selectedIds}
+            />
+            <PublicLawPager
+              navigation={{ type: "numbered", model: pager }}
+              onPageRequest={requestPage}
+              onPageSizeChange={setPageSize}
+              pageLink={caseLawPageLink}
+              pageSize={pageSize}
+            />
+          </PublicLawResultsBoundary>
+        )
+      }
+      scope={caseLawCountryName(format, scope)}
+      search={
+        <CaseLawSearch
+          country={countryParam}
+          maxLength={SEARCH_QUERY_MAX_LENGTH}
+          onQueryChange={handleQueryChange}
+          onSubmit={openSingleMatch}
+          query={queryInput}
+          refine={refine}
+        />
+      }
+      toolbar={
         <PublicLawResultsToolbar
           actions={<QuestionColumnControls controller={questions} />}
           columnGroups={columnGroups}
@@ -864,91 +933,22 @@ export function PublicCaseLawIndex({
             </div>
           }
         />
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="bg-muted rounded-md border px-2 py-1 text-xs">
-            {caseLawCountryName(format, scope)}
-          </span>
-          <PublicLawFilterChips
-            chips={chips}
-            onClearAll={() => {
-              // Clear the filters, not the query the reader typed into the box:
-              // the box is the search, and emptying it is its own gesture.
-              detached(
-                searchNavigation("clear-filters", (previous) =>
-                  dropCaseLawFilters(previous, [
-                    ...CASE_LAW_FILTER_KEYS,
-                    "from",
-                    "to",
-                    "year",
-                  ]),
-                ),
-                "cases.clear-filters",
-              );
-            }}
-          />
-        </div>
-        {feedback.aboveResults}
-        <SearchStillBusyNotice
-          failureReason={pageQuery.failureReason}
-          isFetching={pageQuery.isFetching}
-        />
-
-        {isSearchUnavailable ? (
-          <PublicLawListFailure
-            description={t("caseLaw.searchUnavailable.description")}
-            error={error ?? firstPageError}
-            reset={() => {
-              detached(
-                Promise.all([refetch(), firstPageQuery.refetch()]),
-                "cases.search-retry",
-              );
-            }}
-          />
-        ) : (
-          <PublicLawResultsBoundary
-            searchKey={JSON.stringify(resultSetSearch)}
-            resetOn={pageData}
-          >
-            <DecisionTable
-              dateOrder={dateOrder}
-              decisions={find.rows}
-              emptyState={feedback.emptyState}
-              expectedRowCount={pageSize}
-              findHighlight={find.highlight}
-              firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
-              isLoading={rows === "skeleton"}
-              isRefreshing={isRefreshing}
-              layout={layout}
-              onLayoutChange={setLayout}
-              onSelectedIdsChange={setSelectedIds}
-              query={rowsQuery}
-              questions={questions.surface}
-              referenceKind={referenceKind}
-              selectedIds={selectedIds}
-            />
-            <PublicLawPager
-              navigation={{ type: "numbered", model: pager }}
-              onPageRequest={requestPage}
-              onPageSizeChange={setPageSize}
-              pageLink={({ label, page }) => (
-                <Link
-                  aria-label={label}
-                  search={(previous) => ({
-                    ...previous,
-                    page: publicLawPageSearchValue(page),
-                  })}
-                  to="/law/cases"
-                />
-              )}
-              pageSize={pageSize}
-            />
-          </PublicLawResultsBoundary>
-        )}
-      </div>
-    </main>
+      }
+    />
   );
 }
+
+/** One page of the results, as this route addresses it; the rest of the URL travels. */
+const caseLawPageLink = ({ label, page }: { label: string; page: number }) => (
+  <Link
+    aria-label={label}
+    search={(previous) => ({
+      ...previous,
+      page: publicLawPageSearchValue(page),
+    })}
+    to="/law/cases"
+  />
+);
 
 type CaseLawRewriteFlowOptions = {
   country: string;

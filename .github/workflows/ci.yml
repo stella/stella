@@ -5008,14 +5008,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Bundle size report
+      - name: Startup bundle gates
+        # Blocking: the initial chunks' gzip against the committed budget, the
+        # eager pending views, page code in the initial chunks, and pages a
+        # route loads outside its preloads (scripts/bundle-startup-gates.ts).
+        # Reads the build above and its hidden sourcemaps; writes a table to
+        # the job summary.
         run: |
           bun scripts/bundle-baseline.ts --self-test
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 
       - name: Bundle duplicate content guard
-        # Blocking, unlike the warning-only size report above: a chunk that
-        # repeats a large block of identical content is a build defect.
+        # Blocking: a chunk that repeats a large block of identical content
+        # is a build defect.
         run: bun scripts/bundle-baseline.ts --check-duplicates
 
       - name: Prod-deps web boot smoke
@@ -5184,7 +5189,9 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Passing runs take 7 to 9 min (the three bundles about 5 to 7); 20 min
+    # allows about 2.5x contention headroom for a slow hosted runner.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write

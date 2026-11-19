@@ -10,6 +10,7 @@ import {
   MAX_TRANSCRIPTION_MODEL_ID_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import { LANGUAGES } from "@stll/locales";
 
@@ -45,11 +46,16 @@ export const dictationBodySchema = v.strictObject({
     ),
   ),
   matterId: v.optional(resourceIdSchema("workspace")),
+  /** Present: the caller showed the models list's `outsideRegion` and
+   *  `retainsData` labels where the model was chosen. */
+  [TRANSCRIPTION_LABELS_SHOWN_FIELD]: v.optional(v.literal("1")),
 });
 
 /** What a linked desktop uploads: the audio chunk, a model and a language.
- *  It names no matter and sends no vocabulary. */
+ *  It names no matter and sends no vocabulary, and its route always knows
+ *  the desktop labels its models, so it sends no labels flag. */
 export const desktopDictationBodySchema = v.omit(dictationBodySchema, [
   "matterId",
   "vocabulary",
+  TRANSCRIPTION_LABELS_SHOWN_FIELD,
 ]);

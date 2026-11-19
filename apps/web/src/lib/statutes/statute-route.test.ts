@@ -5,6 +5,7 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 import {
   createStatuteLinkTarget,
   isPublicStatuteCountry,
+  STATUTE_BROWSER_PENDING_COUNTRIES,
   STATUTE_COUNTRIES,
 } from "@/lib/statutes/statute-route";
 
@@ -47,11 +48,17 @@ describe("statute link targets", () => {
 });
 
 test("public statute routes follow the shared jurisdiction admission list", () => {
-  expect(
-    Object.keys(STATUTE_COUNTRIES)
-      .filter(isPublicStatuteCountry)
-      .map((country) => country.toUpperCase()),
-  ).toEqual([...PUBLIC_LEGISLATION_COUNTRIES]);
+  const browsed = Object.keys(STATUTE_COUNTRIES)
+    .filter(isPublicStatuteCountry)
+    .map((country) => country.toUpperCase());
+  // Every admitted jurisdiction is browsed unless it is declared pending.
+  const pending: readonly string[] = STATUTE_BROWSER_PENDING_COUNTRIES;
+  expect(browsed).toEqual(
+    PUBLIC_LEGISLATION_COUNTRIES.filter(
+      (country) => !pending.includes(country),
+    ),
+  );
+  expect(isPublicStatuteCountry("hun")).toBe(false);
   expect(isPublicStatuteCountry("svk")).toBe(true);
   expect(isPublicStatuteCountry("pol")).toBe(false);
   expect(isPublicStatuteCountry("xaa")).toBe(false);
