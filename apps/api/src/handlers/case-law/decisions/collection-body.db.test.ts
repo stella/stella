@@ -190,18 +190,40 @@ test("public API and MCP blocks share attachment-to-host body selection and prov
     })
     .where(eq(caseLawSources.id, collectionSourceId));
   expect((await readApi()).source.allowsDerivedAi).toBe(true);
-  const denied = JSON.stringify(await blocks());
-  expect(denied).toContain('"withheld"');
-  expect(denied).not.toContain(collectionText);
+  expect(JSON.stringify(await blocks())).toContain(collectionText);
+  const denied = await readDecisionReaderSource({
+    caseLawDb,
+    decisionId,
+    phase: "blocks",
+    audience: "model",
+    surface: "search",
+  });
+  expect(denied?.status).toBe("read");
+  if (denied?.status !== "read") {
+    return panic("Expected visible collection reader source");
+  }
+  expect(denied.textAccess).toBe("withheld");
+  expect(denied.ast).toBeNull();
 
   const retiredId = createSafeId<"caseLawDecision">();
   const retiredKey = rawDocumentPayloadKey(
     { family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId, documentId: retiredId },
     sha256Hex(envelope),
   );
+  await fixture.db.insert(caseLawDecisions).values({
+    id: retiredId,
+    sourceId,
+    caseNumber: "1 Cdo 2/2026",
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+  });
   await fixture.db
     .insert(caseLawDecisionAliases)
     .values({ retiredDecisionId: retiredId, canonicalDecisionId: decisionId });
+  await fixture.db
+    .delete(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, retiredId));
   await fixture.db
     .update(caseLawHeldDecisionAttachments)
     .set({ hostDecisionId: retiredId, sourceRawS3Key: retiredKey })
