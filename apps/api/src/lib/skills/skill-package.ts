@@ -102,7 +102,7 @@ type ParsedSkillResource = {
  * What a stella package's manifest restores beyond SKILL.md: the slug, the
  * display name and the command the skill was exported with.
  */
-export type SkillPackageIdentity = SkillPackageManifest["skill"];
+type SkillPackageIdentity = SkillPackageManifest["skill"];
 
 export type ParsedSkillPackage = {
   body: string;
