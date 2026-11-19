@@ -351,6 +351,44 @@ test("a reviewed boundary repeated in its file reviews none of its copies", () =
   });
 });
 
+test("an unescaped copy of a reviewed line also repeats the boundary", () => {
+  const line = 'let output = Command::new("cargo");';
+  const source = `#[test] fn first() {\n// kit-allow: runs cargo\n${line}\n}\n#[test] fn second() {\n${line}\n}`;
+  const copies = scanRustTestDeterminism({ source, integrationTest: false });
+  expect(copies).toEqual([
+    { line: 3, kind: "process", escaped: true },
+    { line: 6, kind: "process", escaped: false },
+  ]);
+  const reviewedBoundaryText = JSON.stringify([
+    { file: FILE, line, reason: "runs cargo" },
+  ]);
+  const files = new Map([[FILE, copies]]);
+  const sources = new Map([[FILE, source]]);
+  expect(
+    createRustTestBaseline({
+      sources: [{ file: FILE, crate: "crates/example" }],
+      files,
+      sourceText: sources,
+      reviewedBoundaryText,
+    }),
+  ).toEqual({
+    [FILE]: expect.objectContaining({ count: 2 }),
+  });
+  expect(
+    evaluateRustTestBaseline({
+      files,
+      sources,
+      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
+      reviewedBoundaryText,
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      line: 6,
+      message: expect.stringContaining("repeated in its file"),
+    }),
+  ]);
+});
+
 test("a baseline write followed by a check ignores reviewed boundaries", () => {
   const source =
     "#[test] fn example() { Instant::now(); } // kit-allow: exercise deadline";

@@ -199,13 +199,13 @@ const budgetedRustTestHits = ({
   const sourceLines = source.split("\n");
   const idOf = (hit: RustTestDeterminismHit) =>
     boundaryId({ file, line: sourceLines.at(hit.line - 1) ?? "" });
-  // A reviewed boundary covers the one line it names. A copy of that line is
-  // a new occurrence, so a boundary repeated in its file reviews no copy: the
-  // copies share one helper instead, which is reviewed once.
+  // A reviewed boundary covers the one line it names. A copy of that line,
+  // escaped or not, is a new occurrence, so a boundary repeated in its file
+  // reviews no copy: the copies share one helper instead, reviewed once.
   const reviewedLines = new Map<string, Set<number>>();
   for (const hit of hits) {
     const id = idOf(hit);
-    if (hit.escaped && reviewed.has(id)) {
+    if (reviewed.has(id)) {
       reviewedLines.set(id, (reviewedLines.get(id) ?? new Set()).add(hit.line));
     }
   }
@@ -213,7 +213,7 @@ const budgetedRustTestHits = ({
     .filter((hit) => !hit.escaped || reviewedLines.get(idOf(hit))?.size !== 1)
     .map((hit) => ({
       ...hit,
-      repeatedBoundary: hit.escaped && reviewed.has(idOf(hit)),
+      repeatedBoundary: (reviewedLines.get(idOf(hit))?.size ?? 0) > 1,
     }));
 };
 
