@@ -437,6 +437,8 @@ const DataBoxPreview = ({
     };
   }, []);
 
+  // Each await can outlive the screen; read the ref afresh after every one.
+  const isMounted = () => mounted.current;
   const openOriginal = async () => {
     if (originalInFlight.current) {
       return;
@@ -451,7 +453,7 @@ const DataBoxPreview = ({
         workspaceId,
         fieldId,
       });
-      if (!mounted.current) {
+      if (!isMounted()) {
         return;
       }
       if (Result.isError(original)) {
@@ -467,10 +469,10 @@ const DataBoxPreview = ({
       );
       if (Result.isOk(downloaded)) {
         opened = downloaded.value;
-        if (mounted.current) {
+        if (isMounted()) {
           await showPreview(opened);
         }
-      } else if (mounted.current) {
+      } else if (isMounted()) {
         Alert.alert(
           t("failedTitle"),
           t(downloaded.error.offline ? "failure.offline" : "failure.failed"),
@@ -481,7 +483,7 @@ const DataBoxPreview = ({
         discardOpenedFile(opened);
       }
       originalInFlight.current = false;
-      if (mounted.current) {
+      if (isMounted()) {
         setOpeningOriginal(false);
       }
     }
