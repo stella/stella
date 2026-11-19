@@ -222,16 +222,10 @@ const MattersCellPending = ({
 };
 
 /** Placeholder rows, about a screen of them. */
-const MATTERS_TABLE_ROW_PENDING_KEYS = [
-  "a",
-  "b",
-  "c",
-  "d",
-  "e",
-  "f",
-  "g",
-  "h",
-] as const;
+const MATTERS_TABLE_ROW_PENDING_KEYS = Array.from(
+  { length: 8 },
+  (_, slot) => `row-${String(slot)}`,
+);
 
 /** The table's rows while the matters load, one cell per shown column. */
 const MattersTableRowsPending = ({

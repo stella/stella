@@ -10,20 +10,17 @@ export const getInternalColId = (col: InternalColId): InternalColId => col;
 
 // -- Internal property IDs (metadata columns stored in view config) --
 
-const INTERNAL_PROPERTIES = [
-  "name",
-  "created-by",
-  "updated-at",
-  "version",
-  "kind",
-  "list-item-type",
-  "status",
-  "priority",
-  "due-date",
-  "assignee",
-] as const;
-
-type InternalProperty = (typeof INTERNAL_PROPERTIES)[number];
+type InternalProperty =
+  | "name"
+  | "created-by"
+  | "updated-at"
+  | "version"
+  | "kind"
+  | "list-item-type"
+  | "status"
+  | "priority"
+  | "due-date"
+  | "assignee";
 export type InternalPropertyId = `_${InternalProperty}`;
 
 export const getInternalPropertyId = (

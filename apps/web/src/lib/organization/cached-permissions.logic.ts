@@ -25,7 +25,10 @@ export const cachedRoleGrants = (
 ): boolean => {
   const role = newestCachedData(
     queryClient,
-    queryClient.getQueriesData({ exact: true, queryKey: rootKeys.role }),
+    queryClient.getQueriesData<unknown>({
+      exact: true,
+      queryKey: rootKeys.role,
+    }),
   );
   return (
     isRoleName(role) &&

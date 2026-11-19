@@ -61,7 +61,10 @@ export const MatterCardSkeleton = ({
 );
 
 /** Placeholder cards, about a screen of them. */
-export const MATTER_CARD_PENDING_KEYS = ["a", "b", "c", "d", "e", "f"] as const;
+export const MATTER_CARD_PENDING_KEYS = Array.from(
+  { length: 6 },
+  (_, slot) => `card-${String(slot)}`,
+);
 
 /** The flat matters grid while the matters load. */
 export const MatterCardGridPending = () => (
