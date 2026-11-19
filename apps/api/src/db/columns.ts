@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import { customType, timestamp } from "drizzle-orm/pg-core";
 
@@ -6,6 +6,34 @@ import {
   decodeStoredChatContent,
   encodeStoredChatContent,
 } from "@/api/db/stored-chat-part-codec";
+import type { SealedTextScope } from "@/api/lib/content-encryption";
+import { openText, sealText } from "@/api/lib/content-encryption";
+
+/**
+ * A text column holding a secret sealed under `scope`: every write through
+ * Drizzle seals the value and every read opens it, so the database never
+ * receives the plaintext and no reader can skip the envelope. A value that
+ * cannot be sealed or opened fails the statement; select this column only
+ * where the secret is needed.
+ */
+export const sealedText = (scope: SealedTextScope) =>
+  customType<{ data: string; driverData: string }>({
+    dataType: () => "text",
+    toDriver: (value) => {
+      const sealed = sealText(scope, value);
+      if (Result.isError(sealed)) {
+        throw sealed.error;
+      }
+      return sealed.value;
+    },
+    fromDriver: (value) => {
+      const opened = openText(scope, value);
+      if (Result.isError(opened)) {
+        throw opened.error;
+      }
+      return opened.value;
+    },
+  });
 
 /**
  * Safe replacement for `p.jsonb()`.
