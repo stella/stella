@@ -513,13 +513,15 @@ export const attachmentText = ({
   content: string;
 }): string => `Attached file "${fileName}":\n\n${content}`;
 
+// A chat attachment is read whole and then cut to the chat context limit; it
+// is not a windowed document read.
 const extractChatAttachmentText = async (file: ScannedFile) =>
   (
-    await extractFileTextResult(file, {
-      maxChars: LIMITS.chatContextFileMaxChars,
-      includeContainerAttachments: true,
-    })
-  ).map((extracted) => extracted?.trim() || null);
+    await extractFileTextResult(file, { includeContainerAttachments: true })
+  ).map((extracted) => {
+    const text = extracted?.trim();
+    return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
+  });
 
 export const hydrateFilePart = async ({
   extractedText,
