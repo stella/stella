@@ -2150,9 +2150,17 @@
     },
     "placeholder": "Saisissez votre question ici, / pour les compétences, @ pour ajouter du contexte",
     "processSummary": {
-      "analyses": "{count, plural, one {# analyse} other {# analyses} many {# analyses}}",
       "changesSaved": "{count, plural, one {# modification enregistrée} other {# modifications enregistrées} many {# modifications enregistrées}}",
+      "checkedRegisters": "Registres publics vérifiés",
       "documentEdits": "{count, plural, one {# modification du document} other {# modifications du document} many {# modifications du document}}",
+      "readDocument": "Document lu",
+      "readDocuments": "Documents lus",
+      "searchedCaseLaw": "Jurisprudence consultée",
+      "searchedChats": "Historique des conversations consulté",
+      "searchedLegislation": "Législation consultée",
+      "searchedLegislationAndCaseLaw": "Législation et jurisprudence consultées",
+      "searchedMatters": "Dossiers parcourus",
+      "searchedWeb": "Web consulté",
       "sourcesChecked": "{count, plural, one {# source vérifiée} other {# sources vérifiées} many {# sources vérifiées}}"
     },
     "promptImprovementStrategies": {

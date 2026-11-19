@@ -2150,9 +2150,17 @@
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "processSummary": {
-      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}",
       "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
+      "checkedRegisters": "Avalikud registrid kontrollitud",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
+      "readDocument": "Dokument loetud",
+      "readDocuments": "Dokumendid loetud",
+      "searchedCaseLaw": "Kohtupraktikast otsitud",
+      "searchedChats": "Vestlusajaloost otsitud",
+      "searchedLegislation": "Õigusaktidest otsitud",
+      "searchedLegislationAndCaseLaw": "Õigusaktidest ja kohtupraktikast otsitud",
+      "searchedMatters": "Toimikud läbi vaadatud",
+      "searchedWeb": "Veebist otsitud",
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}"
     },
     "promptImprovementStrategies": {

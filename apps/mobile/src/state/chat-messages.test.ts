@@ -100,10 +100,9 @@ describe("what a thread shows of a stored message", () => {
             { type: "tool", label: "discover_tools", status: "done" },
             { type: "tool", label: "execute_typescript", status: "done" },
           ],
-          work: new Map([
-            ["research", 1],
-            ["computation", 1],
-          ]),
+          // Finding a tool's signature and a script that read nothing are
+          // no lookups: the run counts its steps.
+          summary: [{ phrase: "steps", count: 3 }],
         },
         { type: "text", key: "5", markdown: "First.\n\nSecond." },
       ],
@@ -135,7 +134,7 @@ describe("what a thread shows of a stored message", () => {
         type: "steps",
         key: "0",
         steps: [{ type: "tool", label: "web_search", status: "done" }],
-        work: new Map([["research", 1]]),
+        summary: [{ phrase: "searchedWeb", count: 1 }],
       },
       { type: "text", key: "1", markdown: "Found it." },
     ]);

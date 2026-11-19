@@ -2150,9 +2150,17 @@
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "processSummary": {
-      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
       "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "checkedRegisters": "Patikrinti viešieji registrai",
       "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "readDocument": "Perskaitytas dokumentas",
+      "readDocuments": "Perskaityti dokumentai",
+      "searchedCaseLaw": "Peržiūrėta teismų praktika",
+      "searchedChats": "Peržiūrėta pokalbio istorija",
+      "searchedLegislation": "Peržiūrėti teisės aktai",
+      "searchedLegislationAndCaseLaw": "Peržiūrėti teisės aktai ir teismų praktika",
+      "searchedMatters": "Peržiūrėtos bylos",
+      "searchedWeb": "Ieškota internete",
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
     },
     "promptImprovementStrategies": {

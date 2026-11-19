@@ -2150,9 +2150,17 @@
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
     "processSummary": {
-      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
       "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "checkedRegisters": "Nyilvános nyilvántartások ellenőrizve",
       "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "readDocument": "Dokumentum elolvasva",
+      "readDocuments": "Dokumentumok elolvasva",
+      "searchedCaseLaw": "Ítélkezési gyakorlat átnézve",
+      "searchedChats": "Csevegési előzmények átnézve",
+      "searchedLegislation": "Jogszabályok átnézve",
+      "searchedLegislationAndCaseLaw": "Jogszabályok és ítélkezési gyakorlat átnézve",
+      "searchedMatters": "Ügyek átnézve",
+      "searchedWeb": "Internet átkeresve",
       "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
     },
     "promptImprovementStrategies": {

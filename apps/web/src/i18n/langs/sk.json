@@ -2150,9 +2150,17 @@
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "processSummary": {
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}",
       "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uloženej zmeny}}",
+      "checkedRegisters": "Overené verejné registre",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
+      "readDocument": "Prečítaný dokument",
+      "readDocuments": "Prečítané dokumenty",
+      "searchedCaseLaw": "Prehľadaná judikatúra",
+      "searchedChats": "Prehľadaná história chatu",
+      "searchedLegislation": "Prehľadané predpisy",
+      "searchedLegislationAndCaseLaw": "Prehľadané predpisy a judikatúra",
+      "searchedMatters": "Prehľadané spisy",
+      "searchedWeb": "Prehľadaný web",
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}"
     },
     "promptImprovementStrategies": {
