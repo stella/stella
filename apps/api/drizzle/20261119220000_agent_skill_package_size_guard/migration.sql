@@ -1,5 +1,5 @@
-SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 -- A skill's files together stay within the package size every export fits
 -- in (SKILL_PACKAGE_LIMITS.packageFilesMaxBytes in packages/skills, 49 MiB),

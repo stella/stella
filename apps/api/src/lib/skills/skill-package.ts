@@ -682,12 +682,13 @@ const parseZipSkillPackage = async (
   }
 
   const unread = skippedResourcePaths({ rootPrefix, skippedFiles });
-  const identity =
-    manifestBytes === null
-      ? null
-      : readPackageIdentity({ digests, manifestBytes, unread });
-  if (identity?.isErr()) {
-    return Result.err(identity.error);
+  let identity: SkillPackageIdentity | null = null;
+  if (manifestBytes !== null) {
+    const read = readPackageIdentity({ digests, manifestBytes, unread });
+    if (read.isErr()) {
+      return Result.err(read.error);
+    }
+    identity = read.value;
   }
   const parsed = parseSkillFiles(files, unread);
   if (parsed.isErr()) {
@@ -695,7 +696,7 @@ const parseZipSkillPackage = async (
   }
   return Result.ok({
     ...parsed.value,
-    identity: identity?.value ?? null,
+    identity,
     skippedFiles,
   });
 };
@@ -801,8 +802,6 @@ const decodePackageFile = ({
       return decodeUtf8(bytes);
     case "resource":
       return Result.ok(tryDecodeUtf8(bytes));
-    case "manifest":
-      return unreachable("The manifest is read as bytes, never decoded");
     default:
       return unreachable("Unknown package path verdict");
   }
@@ -1010,7 +1009,9 @@ const fetchGithubSkillFiles = async (
       rootPrefix: "",
       skillFilePath: SKILL_FILE_NAME,
     });
-    if (verdict.type === "ignored") {
+    // A repository folder is read as the folder it is: a manifest there
+    // describes some other export, so it is neither fetched nor trusted.
+    if (verdict.type === "ignored" || verdict.type === "manifest") {
       continue;
     }
     if (verdict.type === "skipped") {

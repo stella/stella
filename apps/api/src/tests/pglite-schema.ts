@@ -79,6 +79,11 @@ const AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH = nodePath.join(
   "20260925230100_agent_skill_anchor_lock",
   "migration.sql",
 );
+const AGENT_SKILL_PACKAGE_SIZE_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261119220000_agent_skill_package_size_guard",
+  "migration.sql",
+);
 const SYNTHETIC_SESSION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261019070000_monitoring_session",
@@ -470,6 +475,11 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   await installPgliteMigration({
     db,
     migrationPath: AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH,
+  });
+  // So does the package size guard, with its two statement triggers.
+  await installPgliteMigration({
+    db,
+    migrationPath: AGENT_SKILL_PACKAGE_SIZE_GUARD_MIGRATION_PATH,
   });
 };
 
