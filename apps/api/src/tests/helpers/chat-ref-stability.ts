@@ -1,15 +1,16 @@
 import { Result } from "better-result";
 
 import {
+  CHAT_REF_TOKEN_PREFIX,
+  type ChatRefTokenKind,
+} from "@stll/api-contract/chat-ref-token";
+
+import {
   CHAT_SOURCE_CITATION_REF_PREFIX,
   CHAT_UNRESOLVED_REF_HREF,
   type ChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
-import {
-  CHAT_REF_TOKEN_PREFIX,
-  CHAT_SOURCE_REF_PREFIX,
-  type ChatRefTokenKind,
-} from "@/api/lib/chat/ref-token";
+import { CHAT_SOURCE_REF_PREFIX } from "@/api/lib/chat/ref-token";
 import { isRecord } from "@/api/lib/type-guards";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
