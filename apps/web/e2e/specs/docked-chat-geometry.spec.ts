@@ -47,8 +47,6 @@ const test = base.extend<Record<never, never>, { world: DockedChatWorld }>({
   ],
 });
 
-const SKILL_EDITOR_TEMPLATE = "/knowledge/tools/skills/$skillId";
-
 const routePath = (host: DockedChatHost, world: DockedChatWorld): string => {
   if (host.template.startsWith("/law/")) {
     return dockedLegalPath(host.template);
@@ -201,18 +199,6 @@ for (const host of partitionRoundRobin(hosts, E2E_SHARD_COUNT).flat()) {
           ).toBeAttached();
         } else {
           await page.goto(destination, { waitUntil: "commit" });
-        }
-        if (host.template === SKILL_EDITOR_TEMPLATE) {
-          // The skill editor lands with its SKILL.md open in the inspector,
-          // so the restored file, and the docked chat it carries, is one
-          // rail click away, as it is for the reader.
-          const rail = page.locator('[data-slot="inspector-rail"]');
-          await expect(
-            rail.getByRole("button", { name: "SKILL.md", exact: true }),
-          ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
-          await rail
-            .getByRole("button", { name: world.fileTab.label, exact: true })
-            .click();
         }
         if (
           isMainReader &&

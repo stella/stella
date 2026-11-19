@@ -12,6 +12,7 @@ import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -154,7 +155,10 @@ const SessionRailPlaceholder = () => {
         chatAction={{
           label: t("chat.newChat"),
           onActivate: () => {
-            openChat(railChatOpenArgs({ legalDocument }));
+            openChat({
+              ...railChatOpenArgs({ legalDocument }),
+              focus: INSPECTOR_FOCUS_INTENT.claim,
+            });
           },
           status: "enabled",
         }}

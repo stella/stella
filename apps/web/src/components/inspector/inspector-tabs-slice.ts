@@ -12,10 +12,14 @@ import {
   getInspectorTabGroupId,
   normalizeInspectorGroupAssignments,
 } from "@/components/inspector/inspector-groups.logic";
-import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
+import {
+  INSPECTOR_FOCUS_INTENT,
+  INSPECTOR_PANE_INTENT,
+} from "@/components/inspector/inspector-store-types";
 import type {
   ExternalTabId,
   FileTab,
+  InspectorFocusIntent,
   InspectorTab,
   InspectorTabsSet,
   InspectorTabsStore,
@@ -107,6 +111,27 @@ const activateInspectorTab = (
     }
   }
   state.activeId = id;
+};
+
+/**
+ * Brings an opened tab forward as its opener asked: always for `claim`, and
+ * for `ifIdle` only when no open tab is active. Returns whether it did, so
+ * the opener shows the pane only for a tab it brought forward.
+ */
+const focusOpenedTab = (
+  state: Draft<InspectorTabsStore>,
+  id: string,
+  focus: InspectorFocusIntent,
+): boolean => {
+  const idle =
+    state.activeId === null ||
+    !state.tabs.some((tab) => tab.id === state.activeId);
+  if (focus === INSPECTOR_FOCUS_INTENT.ifIdle && !idle) {
+    return false;
+  }
+  activateInspectorTab(state, id);
+  state.activationSeq += 1;
+  return true;
 };
 
 const removeGroupAssignment = (
@@ -549,6 +574,7 @@ export const createInspectorTabsSlice = (
     content,
     refreshContent = false,
     target = "resource",
+    focus,
     ...source
   }) =>
     set((state) => {
@@ -576,9 +602,9 @@ export const createInspectorTabsSlice = (
           content: sourceChanged || refreshContent ? content : existing.content,
         };
       }
-      activateInspectorTab(state, id);
-      state.activationSeq += 1;
-      state.minimized = false;
+      if (focusOpenedTab(state, id, focus)) {
+        state.minimized = false;
+      }
     }),
 
   updateSkillResourceTabContent: (tabId, content) =>
@@ -589,7 +615,7 @@ export const createInspectorTabsSlice = (
       }
     }),
 
-  openChat: (args = {}) => {
+  openChat: (args) => {
     const id = resolveChatTabThreadId(args);
     const { pane = INSPECTOR_PANE_INTENT.expand } = args;
     set((state) => {
@@ -625,9 +651,10 @@ export const createInspectorTabsSlice = (
           existing.activeSkill = args.activeSkill;
         }
       }
-      activateInspectorTab(state, id);
-      state.activationSeq += 1;
-      if (pane === INSPECTOR_PANE_INTENT.expand) {
+      if (
+        focusOpenedTab(state, id, args.focus) &&
+        pane === INSPECTOR_PANE_INTENT.expand
+      ) {
         state.minimized = false;
       }
     });
