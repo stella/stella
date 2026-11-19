@@ -1322,12 +1322,17 @@ const skUsRapporteurs = (doc: SearchDocument): string[] =>
  */
 const NO_LEGAL_SENTENCE = "- bez právnej vety -";
 
+const trimmedSkUsText = (value: unknown): string | undefined =>
+  typeof value === "string" ? value.trim() : undefined;
+
 const skUsTextFields = (
   doc: SearchDocument,
 ): RawIngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
-  const headnote = doc.mkClauseTitle?.trim();
-  const legalSentence = doc.mkClauseText?.trim();
+  // The DMS changes field types without notice, and only a string states a
+  // text: a value of another type reads as absent instead of failing the row.
+  const headnote = trimmedSkUsText(doc.mkClauseTitle);
+  const legalSentence = trimmedSkUsText(doc.mkClauseText);
   const fields = {
     ...absent,
     ...(headnote === undefined || headnote.length === 0

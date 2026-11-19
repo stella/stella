@@ -791,6 +791,34 @@ describe("sk-us row without a usable document id", () => {
       }),
     ).toMatchObject({ type: "rejected" });
   });
+
+  test("a text field of another type reads as absent instead of failing the row", async () => {
+    mockFetch({ search: [] });
+    // Parked as JSONB, where a field whose type the DMS changed survives.
+    const parked: unknown = structuredClone({
+      ...WITHOUT_DOCUMENT_ID,
+      mkClauseTitle: 7,
+      mkClauseText: ["Právna veta"],
+    });
+
+    const built = await reconciliation.buildDecision(parked);
+
+    expect(built).toMatchObject({
+      type: "built",
+      decision: {
+        isListingOnly: true,
+        textFields: {
+          headnote: { type: "absent" },
+          legalSentence: { type: "absent" },
+        },
+      },
+    });
+    expect(
+      built.type === "built"
+        ? decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")
+        : undefined,
+    ).toEqual({ listing: JSON.stringify(parked) });
+  });
 });
 
 describe("sk-us listSlicePage", () => {
