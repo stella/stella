@@ -54,7 +54,10 @@ const observedAt = "2026-10-09T12:00:00.000Z";
 const collectionText = "The official collection supplies the court's reasons.";
 const hostText = "The host's later complete decision takes precedence.";
 const detail = `<table class="content-table"><tr><td></td><td><h2 class="detail-section__table-heading">Sbírkový text rozhodnutí</h2><p>${collectionText}</p></td></tr></table>`;
-const envelope = encodeSourceRawEnvelope({ detail });
+const envelope = encodeSourceRawEnvelope({
+  listing: JSON.stringify({ postId: "123" }),
+  detail,
+});
 const key = rawDocumentPayloadKey(
   { family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId, documentId: decisionId },
   sha256Hex(envelope),
@@ -210,6 +213,26 @@ test("public API and MCP blocks share attachment-to-host body selection and prov
     SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   );
   expect((await readApi()).fulltext).toContain(collectionText);
+
+  const wrongEntry = encodeSourceRawEnvelope({
+    listing: JSON.stringify({ postId: "456" }),
+    detail,
+  });
+  const wrongEntryKey = rawDocumentPayloadKey(
+    { family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId, documentId: retiredId },
+    sha256Hex(wrongEntry),
+  );
+  store.put(
+    envBase.S3_BUCKET,
+    wrongEntryKey,
+    wrongEntry,
+    SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  );
+  await fixture.db
+    .update(caseLawHeldDecisionAttachments)
+    .set({ sourceRawS3Key: wrongEntryKey })
+    .where(eq(caseLawHeldDecisionAttachments.sourceId, collectionSourceId));
+  expect((await readApi()).documentReadFailed).toBe(true);
 
   const requestsBeforeForeignKey = store.requests.length;
   await fixture.db

@@ -14,10 +14,8 @@ import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/lib/legal-search/source-raw-envelope";
+import { readStoredRawListing } from "@/api/lib/legal-search/ingestion-types";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/source-raw-envelope";
 
 /** A detail page is bounded independently of the corpus's larger PDF budget. */
 export const COLLECTION_DETAIL_MAX_BYTES = 1024 * 1024;
@@ -89,8 +87,20 @@ export const readCollectionBody = async ({
   ) {
     return { status: "unavailable" } as const;
   }
-  const parts = decodeSourceRawEnvelope(new TextDecoder().decode(bytes));
-  const detail = parts?.detail;
+  const listing = readStoredRawListing({
+    stored: {
+      raw: bytes,
+      contentType: attachment.contentType,
+      sourceDocumentId: attachment.postId,
+    },
+    part: "listing",
+    identityOf: (row) =>
+      typeof row["postId"] === "string" ? row["postId"] : undefined,
+  });
+  if (listing.type === "rejected") {
+    return { status: "unavailable" } as const;
+  }
+  const detail = listing.parts.detail;
   if (detail === undefined) {
     return { status: "unavailable" } as const;
   }
