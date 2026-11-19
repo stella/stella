@@ -8,6 +8,7 @@ import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 import {
   CaseLawBrowseLink,
   PublicLawHubItem,
+  PublicLawHubScroll,
   PublicLawHubSection,
 } from "@/routes/law/-components/public-law-hub";
 import { PublicLawHubHeader } from "@/routes/law/-components/public-law-hub.pending";
@@ -29,46 +30,48 @@ export const JurisdictionHubPage = () => {
   const statuteCountry = countryParam;
 
   return (
-    <JurisdictionHubShell
-      header={
-        <PublicLawHubHeader
-          description={t("caseLaw.browse.jurisdictionDescription", {
-            country,
-          })}
-          title={t("chat.mention.corpus.caseLaw", { country })}
-        />
-      }
-    >
-      <p className="flex flex-wrap gap-x-4 text-sm">
-        <Link
-          className="underline underline-offset-2"
-          search={{ country: countryParam }}
-          to="/law"
-        >
-          {t("lawHome.searchLabel")}
-        </Link>
-        {isPublicStatutePageCountry(statuteCountry) ? (
+    <PublicLawHubScroll>
+      <JurisdictionHubShell
+        header={
+          <PublicLawHubHeader
+            description={t("caseLaw.browse.jurisdictionDescription", {
+              country,
+            })}
+            title={t("chat.mention.corpus.caseLaw", { country })}
+          />
+        }
+      >
+        <p className="flex flex-wrap gap-x-4 text-sm">
           <Link
             className="underline underline-offset-2"
-            params={{ country: statuteCountry }}
-            to="/law/$country/statutes"
+            search={{ country: countryParam }}
+            to="/law"
           >
-            {t("statutes.title")}
+            {t("lawHome.searchLabel")}
           </Link>
-        ) : null}
-      </p>
-      <PublicLawHubSection heading={t("caseLaw.browse.courts")}>
-        {courts.map(({ name, segment }) => (
-          <PublicLawHubItem key={segment}>
-            <CaseLawBrowseLink
-              countryParam={countryParam}
-              target={{ level: "court", court: segment }}
+          {isPublicStatutePageCountry(statuteCountry) ? (
+            <Link
+              className="underline underline-offset-2"
+              params={{ country: statuteCountry }}
+              to="/law/$country/statutes"
             >
-              {name}
-            </CaseLawBrowseLink>
-          </PublicLawHubItem>
-        ))}
-      </PublicLawHubSection>
-    </JurisdictionHubShell>
+              {t("statutes.title")}
+            </Link>
+          ) : null}
+        </p>
+        <PublicLawHubSection heading={t("caseLaw.browse.courts")}>
+          {courts.map(({ name, segment }) => (
+            <PublicLawHubItem key={segment}>
+              <CaseLawBrowseLink
+                countryParam={countryParam}
+                target={{ level: "court", court: segment }}
+              >
+                {name}
+              </CaseLawBrowseLink>
+            </PublicLawHubItem>
+          ))}
+        </PublicLawHubSection>
+      </JurisdictionHubShell>
+    </PublicLawHubScroll>
   );
 };

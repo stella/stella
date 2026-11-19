@@ -1,15 +1,18 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
-import { ScrollArea } from "@stll/ui/scroll-area";
-import { Skeleton } from "@stll/ui/skeleton";
+import { FaceLabelPending } from "@stll/ui/control-face";
 
 /**
  * The shell every public law hub page shares, and its loading pieces. The hub
  * routes render these eagerly while the page chunk and its reads load; each
  * page renders the same shell, so the layout the reader lands on is the one
- * that waited.
+ * that waited. The cold-load frame draws the pending view before any provider
+ * mounts, so this module stays context-free: the page scrolls the shell in a
+ * `ScrollArea` (`PublicLawHubScroll`), the pending view sits in plain boxes of
+ * the same geometry (nothing in a placeholder scrolls).
  */
 
+/** The hub's one column: the crumb trail, the header and the sections. */
 export const PublicLawHubLayout = ({
   children,
   crumbs,
@@ -18,15 +21,11 @@ export const PublicLawHubLayout = ({
   crumbs?: ReactNode;
   header: ReactNode;
 }>) => (
-  <main className="flex min-h-0 flex-1 flex-col">
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-3 sm:p-6">
-        {crumbs}
-        {header}
-        {children}
-      </div>
-    </ScrollArea>
-  </main>
+  <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-3 sm:p-6">
+    {crumbs}
+    {header}
+    {children}
+  </div>
 );
 
 /** A hub's heading and its one sentence. */
@@ -43,27 +42,54 @@ export const PublicLawHubHeader = ({
   </header>
 );
 
+/**
+ * The heading and the sentence at their type sizes. The sentence's line is a
+ * `div`, not a `p`: a bar is a block, and the HTML parser closes a paragraph
+ * at a block, so the server's paint would no longer match the tree the client
+ * hydrates.
+ */
 const PublicLawHubHeaderPending = () => (
-  <div className="flex flex-col gap-1">
-    <Skeleton className="my-1 h-5 w-56 max-w-full" />
-    <Skeleton className="my-0.5 h-4 w-80 max-w-full" />
-  </div>
+  <header className="flex flex-col gap-1">
+    <h1 className="text-lg font-semibold">
+      <FaceLabelPending className="w-56 max-w-full" />
+    </h1>
+    <div className="text-muted-foreground text-sm">
+      <FaceLabelPending className="w-80 max-w-full" />
+    </div>
+  </header>
 );
 
 const PENDING_LINKS = 9;
 
-/** A hub before its reads are in: the heading, and a section of links. */
+/** A section's heading and its grid of links, at the rows' height. */
+const PublicLawHubSectionPending = () => (
+  <div aria-hidden="true" className="flex flex-col gap-2">
+    <div className="text-xs font-medium">
+      <FaceLabelPending className="w-24" />
+    </div>
+    <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: PENDING_LINKS }, (_, index) => (
+        <div className="flex min-h-11 items-center px-2 text-sm" key={index}>
+          <FaceLabelPending className="w-40 max-w-full" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/**
+ * A hub before its reads are in: the heading and a section of links, inside
+ * the scroll area's root and viewport boxes.
+ */
 export const PublicLawHubPending = () => (
-  <PublicLawHubLayout header={<PublicLawHubHeaderPending />}>
-    <div className="flex flex-col gap-2">
-      <Skeleton className="my-0.5 h-3 w-24" />
-      <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: PENDING_LINKS }, (_, index) => (
-          <div className="flex min-h-11 items-center px-2" key={index}>
-            <Skeleton className="h-4 w-40 max-w-full" />
-          </div>
-        ))}
+  <main className="flex min-h-0 flex-1 flex-col">
+    {/* `ScrollArea`'s root and viewport boxes, without the scrolling. */}
+    <div className="flex size-full min-h-0 flex-1 flex-col">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-[inherit]">
+        <PublicLawHubLayout header={<PublicLawHubHeaderPending />}>
+          <PublicLawHubSectionPending />
+        </PublicLawHubLayout>
       </div>
     </div>
-  </PublicLawHubLayout>
+  </main>
 );

@@ -3,6 +3,8 @@ import type { PropsWithChildren, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { ScrollArea } from "@stll/ui/scroll-area";
+
 import type { CaseLawBrowseTarget } from "@/features/case-law/browse-path";
 import { createCaseLawBrowsePath } from "@/features/case-law/browse-path";
 
@@ -11,6 +13,16 @@ import { createCaseLawBrowsePath } from "@/features/case-law/browse-path";
  * and plain server-rendered links to the next level down. No client state:
  * the page is complete in the server's HTML.
  */
+
+/**
+ * The hub's region and its scroll area, around the page's shell; the pending
+ * view (`PublicLawHubPending`) draws the same boxes without the scrolling.
+ */
+export const PublicLawHubScroll = ({ children }: PropsWithChildren) => (
+  <main className="flex min-h-0 flex-1 flex-col">
+    <ScrollArea className="min-h-0 flex-1">{children}</ScrollArea>
+  </main>
+);
 
 const LINK_CLASS =
   "hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm underline-offset-2 hover:underline focus-visible:ring-2";

@@ -23,6 +23,7 @@ import {
   CaseLawBrowsePager,
   PublicLawHubCrumbs,
   PublicLawHubItem,
+  PublicLawHubScroll,
   PublicLawHubSection,
 } from "@/routes/law/-components/public-law-hub";
 import { PublicLawHubHeader } from "@/routes/law/-components/public-law-hub.pending";
@@ -154,77 +155,79 @@ export const CourtBrowsePage = () => {
       : t("caseLaw.citation.decisionCount", { count });
 
   return (
-    <CourtBrowseShell
-      crumbs={<PublicLawHubCrumbs items={crumbs} />}
-      header={
-        <PublicLawHubHeader
-          description={
-            period === null
-              ? t("caseLaw.browse.courtDescription", { court, country })
-              : t("caseLaw.browse.periodDescription", {
-                  court,
-                  country,
-                  period,
-                })
-          }
-          title={period === null ? court : `${court} · ${period}`}
-        />
-      }
-    >
-      {page.kind === "periods" ? (
-        <PublicLawHubSection heading={t(PERIOD_HEADING_KEYS[target.level])}>
-          {page.periods.map(({ count, value }) => {
-            const next = childTarget(target, value);
-            return (
-              <PublicLawHubItem key={value} meta={countLabel(count)}>
-                <CaseLawBrowseLink countryParam={countryParam} target={next}>
-                  {caseLawBrowsePeriodLabel(format, next) ?? String(value)}
-                </CaseLawBrowseLink>
-              </PublicLawHubItem>
-            );
-          })}
-        </PublicLawHubSection>
-      ) : (
-        <>
-          <PublicLawHubSection heading={t("common.decisions")}>
-            {page.decisions.map((decision) => (
-              <PublicLawHubItem
-                key={decision.id}
-                meta={
-                  decision.decisionDate === null
-                    ? decision.decisionType
-                    : [
-                        formatDecisionDate(decision.decisionDate, format),
-                        decision.decisionType,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                }
-              >
-                {decisionLinkElement({
-                  children: decision.caseNumber,
-                  className:
-                    "inline-flex min-h-11 items-center px-2 text-sm underline-offset-2 hover:underline",
-                  params: createCaseLawDecisionRouteParams({
-                    caseNumber: decision.caseNumber,
-                    country: decision.country,
-                    court: decision.court,
-                    decisionId: decision.id,
-                    language: decision.language,
-                    languageAlternates: decision.languageAlternates,
-                    slug: decision.slug,
-                  }),
-                })}
-              </PublicLawHubItem>
-            ))}
-          </PublicLawHubSection>
-          <CaseLawBrowsePager
-            countryParam={countryParam}
-            hasNext={page.hasNext}
-            target={page.target}
+    <PublicLawHubScroll>
+      <CourtBrowseShell
+        crumbs={<PublicLawHubCrumbs items={crumbs} />}
+        header={
+          <PublicLawHubHeader
+            description={
+              period === null
+                ? t("caseLaw.browse.courtDescription", { court, country })
+                : t("caseLaw.browse.periodDescription", {
+                    court,
+                    country,
+                    period,
+                  })
+            }
+            title={period === null ? court : `${court} · ${period}`}
           />
-        </>
-      )}
-    </CourtBrowseShell>
+        }
+      >
+        {page.kind === "periods" ? (
+          <PublicLawHubSection heading={t(PERIOD_HEADING_KEYS[target.level])}>
+            {page.periods.map(({ count, value }) => {
+              const next = childTarget(target, value);
+              return (
+                <PublicLawHubItem key={value} meta={countLabel(count)}>
+                  <CaseLawBrowseLink countryParam={countryParam} target={next}>
+                    {caseLawBrowsePeriodLabel(format, next) ?? String(value)}
+                  </CaseLawBrowseLink>
+                </PublicLawHubItem>
+              );
+            })}
+          </PublicLawHubSection>
+        ) : (
+          <>
+            <PublicLawHubSection heading={t("common.decisions")}>
+              {page.decisions.map((decision) => (
+                <PublicLawHubItem
+                  key={decision.id}
+                  meta={
+                    decision.decisionDate === null
+                      ? decision.decisionType
+                      : [
+                          formatDecisionDate(decision.decisionDate, format),
+                          decision.decisionType,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                  }
+                >
+                  {decisionLinkElement({
+                    children: decision.caseNumber,
+                    className:
+                      "inline-flex min-h-11 items-center px-2 text-sm underline-offset-2 hover:underline",
+                    params: createCaseLawDecisionRouteParams({
+                      caseNumber: decision.caseNumber,
+                      country: decision.country,
+                      court: decision.court,
+                      decisionId: decision.id,
+                      language: decision.language,
+                      languageAlternates: decision.languageAlternates,
+                      slug: decision.slug,
+                    }),
+                  })}
+                </PublicLawHubItem>
+              ))}
+            </PublicLawHubSection>
+            <CaseLawBrowsePager
+              countryParam={countryParam}
+              hasNext={page.hasNext}
+              target={page.target}
+            />
+          </>
+        )}
+      </CourtBrowseShell>
+    </PublicLawHubScroll>
   );
 };
