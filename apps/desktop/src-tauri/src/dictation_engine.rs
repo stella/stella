@@ -151,6 +151,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           focus,
           context,
           mut trace,
+          ..
         }) = active.take()
         {
           dictation::set_phase(app, Phase::Transcribing);
