@@ -1,6 +1,5 @@
 import type * as React from "react";
 
-import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 import {
@@ -9,8 +8,15 @@ import {
   TableCellFace,
 } from "./table-cell";
 import type { TableCellFaceProps } from "./table-cell";
-import { TableHead } from "./table-shell";
-import type { TableHeadProps } from "./table-shell";
+import {
+  ariaSortOf,
+  HEAD_CONTENT_CLASS,
+  SORT_ICON_SLOT_CLASS,
+  sortableHeadButtonClassName,
+  SortDirectionIcon,
+  TableHead,
+} from "./table-shell";
+import type { SortDirection, TableHeadProps } from "./table-shell";
 import { TruncatedText } from "./truncated-text";
 
 type TableCellProps = TableCellFaceProps & {
@@ -61,8 +67,6 @@ const TableCell = ({
   );
 };
 
-type SortDirection = "asc" | "desc" | null;
-
 type SortableHeadProps = Omit<TableHeadProps, "onClick"> & {
   sortDirection?: SortDirection;
   onSort: () => void;
@@ -88,22 +92,10 @@ const SortableHead = ({
   ...props
 }: SortableHeadProps) => {
   const endAligned = resolveTableAlign(align, numeric) === "end";
-  let ariaSort: "ascending" | "descending" | "none" = "none";
-  if (sortDirection === "asc") {
-    ariaSort = "ascending";
-  } else if (sortDirection === "desc") {
-    ariaSort = "descending";
-  }
-  let sortIcon: React.ReactNode = null;
-  if (sortDirection === "asc") {
-    sortIcon = <ArrowUpIcon className="size-3" />;
-  } else if (sortDirection === "desc") {
-    sortIcon = <ArrowDownIcon className="size-3" />;
-  }
   return (
     <TableHead
       align={align}
-      aria-sort={ariaSort}
+      aria-sort={ariaSortOf(sortDirection)}
       className={className}
       numeric={numeric}
       {...props}
@@ -114,23 +106,20 @@ const SortableHead = ({
       // that no keyboard user can reach.
       onClick={undefined}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className={HEAD_CONTENT_CLASS}>
         <Button
           // The button's inline padding equals the head's, and the negative
           // margin cancels exactly that: the label lines up with the cells and
           // the button never reaches past the table's edge, where a scrolling
           // container could not reveal it.
-          className={cn(
-            "min-w-0 gap-1 px-2.5",
-            endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
-          )}
+          className={sortableHeadButtonClassName(endAligned)}
           onClick={onSort}
           type="button"
           variant="muted"
         >
           <TruncatedText>{children}</TruncatedText>
-          <span aria-hidden className="inline-flex w-3 shrink-0 justify-center">
-            {sortIcon}
+          <span aria-hidden className={SORT_ICON_SLOT_CLASS}>
+            <SortDirectionIcon direction={sortDirection} />
           </span>
         </Button>
         {trailing}

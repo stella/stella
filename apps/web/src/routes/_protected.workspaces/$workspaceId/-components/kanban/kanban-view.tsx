@@ -28,7 +28,10 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import { useKanbanSelectionOwner } from "@/components/workspaces/kanban/kanban-selection";
 import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
@@ -1043,7 +1046,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   if (visibleSubgroupMatrix !== null) {
     return (
       <>
-        <QueryViewFeedback view={subgroupView} />
+        <SettledQueryViewFeedback view={subgroupView} />
         <KanbanSelectionSurface className="h-full" selection={selection}>
           <KanbanSubgroupBoard
             canCreateTaskInLane={canCreateTaskInLane}
@@ -1221,13 +1224,16 @@ const KanbanGroupColumn = ({
     ? queryData.pages.flatMap((page) => page.entities)
     : [];
 
+  // A column whose page is on its way stands with its header and card
+  // placeholders; only a failed read says so above it.
   return (
     <>
-      <QueryViewFeedback view={columnView} />
+      <SettledQueryViewFeedback view={columnView} />
       <KanbanColumn
         {...props}
         columnValue={columnValue}
         entities={entities}
+        entitiesPending={columnView.type === "pending"}
         hasMore={query.hasNextPage}
         isLoadingMore={query.isFetchingNextPage}
         onLoadMore={() => {

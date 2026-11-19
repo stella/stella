@@ -1,6 +1,8 @@
 import type * as React from "react";
 
+import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
+import { buttonFaceClassName } from "./control-face";
 import { Skeleton } from "./skeleton";
 import {
   resolveTableAlign,
@@ -8,6 +10,7 @@ import {
   TableCellFace,
 } from "./table-cell";
 import type { TableAlign, TableTone } from "./table-cell";
+import { TRUNCATED_TEXT_LINES_CLASS } from "./truncated-text-face";
 
 /**
  * How far cells pad their content from the column edges.
@@ -193,6 +196,105 @@ const TableCaption = ({
   />
 );
 
+type SortDirection = "asc" | "desc" | null;
+
+/** A sortable head's `aria-sort` for its direction. */
+const ariaSortOf = (
+  direction: SortDirection,
+): "ascending" | "descending" | "none" => {
+  if (direction === "asc") {
+    return "ascending";
+  }
+  if (direction === "desc") {
+    return "descending";
+  }
+  return "none";
+};
+
+/** The arrow after a sorted head's label; nothing for an unsorted one. */
+const SortDirectionIcon = ({ direction }: { direction: SortDirection }) => {
+  if (direction === "asc") {
+    return <ArrowUpIcon className="size-3" />;
+  }
+  if (direction === "desc") {
+    return <ArrowDownIcon className="size-3" />;
+  }
+  return null;
+};
+
+/** A head's label and the control after it, on one line. */
+const HEAD_CONTENT_CLASS = "inline-flex items-center gap-1";
+
+/** The arrow's slot, held open so a label never moves as the sort flips. */
+const SORT_ICON_SLOT_CLASS = "inline-flex w-3 shrink-0 justify-center";
+
+/**
+ * A sortable head's button: a quiet button whose inline padding equals the
+ * head's, pulled back by a negative margin so the label lines up with the
+ * cells and the button never reaches past the table's edge. In an
+ * end-aligned (numeric) column the arrow sits before the label.
+ */
+const sortableHeadButtonClassName = (endAligned: boolean): string =>
+  cn(
+    "min-w-0 gap-1 px-2.5",
+    endAligned ? "-me-2.5 flex-row-reverse" : "-ms-2.5",
+  );
+
+/** A head's label before its page has loaded: the cut line it sits on. */
+const TableHeadLabel = ({ children }: { children: React.ReactNode }) => (
+  <span className={TRUNCATED_TEXT_LINES_CLASS[1]} data-slot="truncated-text">
+    {children}
+  </span>
+);
+
+type SortableHeadFaceProps = Omit<TableHeadProps, "children" | "onClick"> & {
+  children: React.ReactNode;
+  sortDirection?: SortDirection;
+  /** Drawn next to the label, where the head's trailing control goes. */
+  trailing?: React.ReactNode;
+};
+
+/**
+ * A sortable head before its page has loaded: the label in the sort button's
+ * face and the arrow in its slot, with no behaviour.
+ */
+const SortableHeadFace = ({
+  align,
+  children,
+  numeric = false,
+  sortDirection = null,
+  trailing,
+  ...props
+}: SortableHeadFaceProps) => (
+  <TableHead
+    align={align}
+    aria-sort={ariaSortOf(sortDirection)}
+    numeric={numeric}
+    {...props}
+    // After the spread: a wider props object could carry a handler through
+    // it, and a face is not something to click.
+    onClick={undefined}
+  >
+    <span className={HEAD_CONTENT_CLASS}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          buttonFaceClassName({ size: "default", variant: "muted" }),
+          sortableHeadButtonClassName(
+            resolveTableAlign(align, numeric) === "end",
+          ),
+        )}
+      >
+        <TableHeadLabel>{children}</TableHeadLabel>
+        <span className={SORT_ICON_SLOT_CLASS}>
+          <SortDirectionIcon direction={sortDirection} />
+        </span>
+      </span>
+      {trailing}
+    </span>
+  </TableHead>
+);
+
 type TableSkeletonColumn = {
   id: string;
   bar: string;
@@ -238,6 +340,10 @@ const TableSkeletonRows = ({
   ));
 
 export {
+  HEAD_CONTENT_CLASS,
+  SORT_ICON_SLOT_CLASS,
+  SortableHeadFace,
+  SortDirectionIcon,
   Table,
   TableBody,
   TableCaption,
@@ -245,10 +351,14 @@ export {
   TableFooter,
   TableHead,
   TableHeader,
+  TableHeadLabel,
   TableRow,
   TableSkeletonRows,
+  ariaSortOf,
+  sortableHeadButtonClassName,
 };
 export type {
+  SortDirection,
   TableAlign,
   TableDensity,
   TableHeadProps,

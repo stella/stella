@@ -7,6 +7,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 
 import { useFormattingLocale } from "@/i18n/formatting-context";
+import { CALENDAR_HEADER_ROW_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.pending";
 
 import { getMonthLabels } from "./calendar-utils";
 
@@ -35,7 +36,7 @@ export const CalendarHeader = ({
   const monthPickerMonths = getMonthLabels(locale, year, "short");
 
   return (
-    <div className="flex min-w-0 items-center gap-2 px-4 py-2">
+    <div className={CALENDAR_HEADER_ROW_CLASS}>
       <Button onClick={onNavigateToday} size="sm" variant="outline">
         {t("common.today")}
       </Button>
