@@ -369,7 +369,7 @@
     "@better-auth/cimd@1.7.20": "patches/@better-auth%2Fcimd@1.7.20.patch",
     "@better-auth/oauth-provider@1.7.20": "patches/@better-auth%2Foauth-provider@1.7.20.patch",
     "drizzle-orm@1.0.0-rc.5": "patches/drizzle-orm@1.0.0-rc.5.patch",
-    "@vscode/markdown-editor@0.0.2-123": "patches/@vscode%2Fmarkdown-editor@0.0.2-123.patch"
+    "@vscode/markdown-editor@0.0.2-184": "patches/@vscode%2Fmarkdown-editor@0.0.2-184.patch"
   },
   "trustedDependencies": [
     "lefthook"

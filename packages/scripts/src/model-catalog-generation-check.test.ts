@@ -145,6 +145,23 @@ describe("model catalog newer-generation guard", () => {
     ]);
   });
 
+  test("Neon is a Gemini tier of its own", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.google.push("gemini-4-neon", "gemini-4.1-neon");
+    const offered = emptyProviderMap();
+    offered.google.push("gemini-4-hydrogen", "gemini-4-neon");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-11-19" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "google",
+        modelId: "gemini-4.1-neon",
+      },
+    ]);
+  });
+
   test("a date suffix is not a minor version", () => {
     const upstreamIds = emptyProviderMap();
     upstreamIds.anthropic.push("claude-haiku-5-6");
