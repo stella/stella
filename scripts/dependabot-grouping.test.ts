@@ -107,6 +107,27 @@ const ignorePolicies = {
       "Its glyphs are native mobile assets; a bump waits for the next store build.",
     type: "documented_policy",
   },
+  "better-auth": {
+    reason:
+      "The local cimd and oauth-provider patches target 1.7.20; held until they are ported.",
+    type: "documented_policy",
+  },
+  "@better-auth/api-key": {
+    reason: "Moves with better-auth, which is held at 1.7.20.",
+    type: "documented_policy",
+  },
+  "@better-auth/cimd": {
+    reason: "Its local patch does not apply past 1.7.20; held until ported.",
+    type: "documented_policy",
+  },
+  "@better-auth/core": {
+    reason: "Moves with better-auth, which is held at 1.7.20.",
+    type: "documented_policy",
+  },
+  "@better-auth/oauth-provider": {
+    reason: "Its local patch does not apply past 1.7.20; held until ported.",
+    type: "documented_policy",
+  },
 } as const satisfies Record<string, IgnorePolicy>;
 
 type IgnorePolicyDependency = keyof typeof ignorePolicies;
