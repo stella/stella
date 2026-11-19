@@ -1798,12 +1798,16 @@ export const normalizeDecisionIdentifierIn = (
   const canonical = decisionReporterGrammarForJurisdiction(
     jurisdiction,
   )?.canonicalCitation(identifier.value);
-  return canonical === null || canonical === undefined
-    ? normalizeDecisionIdentifier(identifier)
-    : normalizeStructuredDecisionIdentifier({
-        type: identifier.type,
-        value: canonical,
-      });
+  if (
+    readsUsReporterCitations(jurisdiction) ||
+    (canonical !== null && canonical !== undefined)
+  ) {
+    return normalizeStructuredDecisionIdentifier({
+      type: identifier.type,
+      value: canonical ?? identifier.value,
+    });
+  }
+  return normalizeDecisionIdentifier(identifier);
 };
 
 /** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
