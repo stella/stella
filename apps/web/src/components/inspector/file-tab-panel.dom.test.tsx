@@ -1,5 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { QueryClient as QueryClientInstance } from "@tanstack/react-query";
+import type {
+  InferDataFromTag,
+  QueryClient as QueryClientInstance,
+} from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
@@ -226,6 +229,11 @@ test("PDF keeps the host registry and PDF engine inside the render budget", asyn
   expect(pdfEngineRenderCount - rendersAfterMount).toBeLessThanOrEqual(1);
 });
 
+type DataBoxPreviewData = InferDataFromTag<
+  unknown,
+  ReturnType<typeof dataBoxPreviewOptions>["queryKey"]
+>;
+
 test.each(DATA_BOX_DOCUMENT_KINDS)(
   "opens a ZFO %s in the inspector",
   async (kind) => {
@@ -273,14 +281,13 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
         envelope,
         text: "Court notice",
       };
-      client.setQueryData(
-        queryKey,
+      // A literal passed straight to setQueryData meets its NoInfer'd data
+      // union and fails to discriminate; a typed value does not.
+      const preview: DataBoxPreviewData =
         kind === "message"
           ? {
               ...common,
-              // The query data type is still being inferred here, so a
-              // fresh literal would widen to string.
-              kind: "message" as const,
+              kind,
               files: [
                 { fileName: "Order.pdf", entityId: ENTITY_ID },
                 { fileName: "Exhibit.pdf", entityId: null },
@@ -288,15 +295,15 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
             }
           : {
               ...common,
-              kind: "receipt" as const,
+              kind,
               events: [
                 {
                   occurredAt: envelope.acceptedAt,
                   description: "Message accepted",
                 },
               ],
-            },
-      );
+            };
+      client.setQueryData(queryKey, preview);
     });
     expect(await mounted.findByText("Court notice")).toBeTruthy();
     expect(mounted.getByText("District court")).toBeTruthy();
