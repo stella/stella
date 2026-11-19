@@ -41,6 +41,7 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 const openSourceId = createSafeId<"caseLawSource">();
+const zeroSenateSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const displayOnlySourceId = createSafeId<"caseLawSource">();
 const displayOnlyId = createSafeId<"caseLawDecision">();
@@ -143,6 +144,10 @@ beforeAll(
 
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        id: zeroSenateSourceId,
+      }),
       caseLawSourceRow({
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         id: euSourceId,
@@ -1010,12 +1015,7 @@ test.each(
     const query = storedZero ? base : `0 ${base}`;
     const printed = mode === "family-key" ? `${stored} - 46` : stored;
     const db = drizzle({ client });
-    const sourceId = createSafeId<"caseLawSource">();
-    await db
-      .insert(caseLawSources)
-      .values(
-        caseLawSourceRow({ id: sourceId, adapterKey: ADAPTER_KEYS.CZ_NSS }),
-      );
+    const sourceId = storedZero ? zeroSenateSourceId : openSourceId;
     const id = createSafeId<"caseLawDecision">();
     const positiveId = createSafeId<"caseLawDecision">();
     await db.insert(caseLawDecisions).values([
