@@ -1442,27 +1442,28 @@ mod tests {
     assert!(inner.begin_choice().is_ok());
   }
 
+  /// A real child process that stays busy until it is killed.
   #[cfg(unix)]
-  #[test]
-  fn stopping_kills_a_worker_that_is_still_busy() {
-    let workers = LocalWorkers::default();
-    let child: SharedChild = Arc::new(Mutex::new(
+  fn busy_worker() -> SharedChild {
+    Arc::new(Mutex::new(
       std::process::Command::new("sleep") // kit-allow: a real worker process, killed and reaped; no timing is waited on
         .arg("30")
         .spawn()
         .unwrap(),
-    ));
+    ))
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn stopping_kills_a_worker_that_is_still_busy() {
+    let workers = LocalWorkers::default();
+    let child = busy_worker();
     assert!(workers.register(&child));
     workers.kill();
     let status = child.lock().unwrap().wait().unwrap();
     assert!(!status.success());
 
-    let late: SharedChild = Arc::new(Mutex::new(
-      std::process::Command::new("sleep") // kit-allow: a real worker process, killed and reaped; no timing is waited on
-        .arg("30")
-        .spawn()
-        .unwrap(),
-    ));
+    let late = busy_worker();
     assert!(
       !workers.register(&late),
       "a stopped job keeps no new worker"
