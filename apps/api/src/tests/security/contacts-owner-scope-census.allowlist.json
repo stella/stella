@@ -242,7 +242,7 @@
       "updateWorkspaceHandler.txResult.client": 1
     }
   },
-  "apps/api/src/handlers/workspaces/vocabulary/get.ts::names-contacts-table": {
+  "apps/api/src/lib/workspaces/vocabulary/read.ts::names-contacts-table": {
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`scopedDb`), whose row policies admit the request's organization only. The matter read follows its client and party relations on that handle.",
     "sites": {
       "readVocabularyHandler.matter.with": 1,

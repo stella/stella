@@ -1,5 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -157,7 +158,7 @@ const routeRoot = new URL("../../routes/", import.meta.url);
 const families: string[] = [];
 const familiesWithoutId: string[] = [];
 for (const path of new Bun.Glob("**/*.tsx").scanSync({
-  cwd: routeRoot.pathname,
+  cwd: fileURLToPath(routeRoot),
 })) {
   if (
     path.includes(".test.") ||
@@ -186,7 +187,7 @@ test("every signed-in route family is found by its route id", () => {
 
 const sourceRoot = new URL("../../", import.meta.url);
 const registrationPaths = [
-  ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: sourceRoot.pathname }),
+  ...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: fileURLToPath(sourceRoot) }),
 ].filter(
   (path) =>
     !path.includes(".test.") &&
@@ -203,7 +204,7 @@ await Promise.all(
   registrationSources
     .filter(({ source }) => /\bregisterInspectorView\s*(?:<|\()/u.test(source))
     .map(async ({ path }) => {
-      await import(new URL(path, sourceRoot).pathname);
+      await import(fileURLToPath(new URL(path, sourceRoot)));
     }),
 );
 

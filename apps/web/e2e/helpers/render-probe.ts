@@ -2,6 +2,7 @@
 import type { BrowserContext, Page, Request, Response } from "@playwright/test";
 import { TaggedError } from "better-result";
 import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { RenderSnapshot } from "@stll/render-probe";
@@ -99,8 +100,9 @@ const buildProbe = async (): Promise<string> =>
     execFile(
       "bun",
       [
-        new URL("../../scripts/render-probe-bundle.ts", import.meta.url)
-          .pathname,
+        fileURLToPath(
+          new URL("../../scripts/render-probe-bundle.ts", import.meta.url),
+        ),
       ],
       { maxBuffer: 4 * 1024 * 1024, encoding: "utf-8" },
       (error, stdout, stderr) => {

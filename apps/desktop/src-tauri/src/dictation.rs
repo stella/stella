@@ -52,6 +52,7 @@ const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 /// `local` (this computer, the default) or `cloud` (stella AI).
 const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// The stella AI transcription model the user picked; absent: the default.
+/// A recording transcribed with stella AI uses it too.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
 /// Off unless the user turned it on: cleanup also gets the window title.
 const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
@@ -370,7 +371,7 @@ const fn stored_switch(enabled: bool) -> &'static str {
 }
 
 /// A build that can run the model, for an account the server enabled.
-fn available(app: &AppHandle) -> bool {
+pub(crate) fn available(app: &AppHandle) -> bool {
   SUPPORTED
     && app
       .state::<FeatureGates>()
@@ -423,7 +424,7 @@ fn valid_model_id(model_id: &str) -> bool {
 }
 
 /// Whether the server enables stella AI transcription alongside dictation.
-fn cloud_available(app: &AppHandle) -> bool {
+pub(crate) fn cloud_available(app: &AppHandle) -> bool {
   available(app) && dictation_cloud::enabled(app)
 }
 

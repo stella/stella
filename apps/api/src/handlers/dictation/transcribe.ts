@@ -219,17 +219,27 @@ const checkUsage = async ({
   );
 };
 
+/** How a chunk the client may send again is counted once: the same key on
+ *  every attempt, and the audit row names the same resource. */
+export type DictationUsageKey = {
+  idempotencyKey: string;
+  resourceId: string;
+};
+
 type SettleOptions = {
   caller: UsageCaller;
   result: Pick<TranscriptionResult, "modelId" | "durationMs">;
   workspaceId: SafeId<"workspace"> | null;
   isByok: boolean;
+  /** Absent: every request is its own usage event. */
+  usageKey?: DictationUsageKey | undefined;
 };
 const settleUsage = async ({
   caller,
   result,
   workspaceId,
   isByok,
+  usageKey,
 }: SettleOptions): Promise<Result<void, SafeDbError | HandlerError<503>>> => {
   if (!isTranscriptionModelId(result.modelId)) {
     return Result.err(managedProviderUnavailable("openrouter"));
@@ -242,7 +252,7 @@ const settleUsage = async ({
   });
   const requestId = Bun.randomUUIDv7();
   return await caller.safeDb(async (tx) => {
-    await recordUsageEvent({
+    const recorded = await recordUsageEvent({
       tx,
       organizationId: caller.session.activeOrganizationId,
       workspaceId,
@@ -252,12 +262,17 @@ const settleUsage = async ({
       serviceTier: "standard",
       isByok,
       ...units,
-      idempotencyKey: requestId,
+      idempotencyKey: usageKey?.idempotencyKey ?? requestId,
     });
+    // A chunk sent again after its answer was lost was counted, and
+    // audited, the first time.
+    if (recorded.status === "duplicate") {
+      return;
+    }
     await caller.recordAuditEvent(tx, {
       action: AUDIT_ACTION.EXECUTE,
       resourceType: AUDIT_RESOURCE_TYPE.USAGE_EVENT,
-      resourceId: requestId,
+      resourceId: usageKey?.resourceId ?? requestId,
       workspaceId,
       metadata: {
         operation: "dictation.transcribe",
@@ -282,6 +297,7 @@ type DictationContext = DictationCaller & {
   body: v.InferOutput<typeof dictationBodySchema>;
   request: Request;
   modelAdmission?: ModelDispatchAdmission;
+  usageKey?: DictationUsageKey;
 };
 
 export type { DictationDependencies };
@@ -471,6 +487,7 @@ export const executeDictation = async (
         },
         workspaceId,
         isByok,
+        usageKey: ctx.usageKey,
       }),
     );
     return Result.ok(result);
