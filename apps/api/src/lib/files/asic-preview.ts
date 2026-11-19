@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
+import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -76,9 +77,12 @@ export const readAsicPreview = async (
   return parsed.success
     ? Result.ok(parsed.output)
     : Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Invalid response from the ASiC reader",
-        }),
+        classifyFailure(
+          new HandlerError({
+            status: 500,
+            message: "Invalid response from the ASiC reader",
+          }),
+          "response_invalid",
+        ),
       );
 };

@@ -8,13 +8,13 @@ import {
 } from "@stll/api-contract/legal-file-formats";
 import { declareFingerprintFields } from "@stll/errors";
 
-import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import { createZipBombGuard } from "@/api/lib/file-scan/scanner";
 import {
   hasZipMagic,
   readZipIndex,
   type ZipEntry,
 } from "@/api/lib/file-scan/zip";
+import { archivePathKey } from "@/api/lib/files/archive-path-key";
 import { ASIC_CONTAINER_MAX_BYTES } from "@/api/lib/files/asic-preview-protocol";
 
 const MIMETYPE_ENTRY = "mimetype";
@@ -28,9 +28,12 @@ const ZIP_EXTRA_UNICODE_PATH = 0x70_75;
 const ZIP_FLAG_UTF8 = 0x08_00;
 const ZIP_METHOD_STORED = 0;
 const ZIP_METHOD_DEFLATE = 8;
-const ZIP_FLAGS_ENCRYPTED = 0x00_41;
-const UNIX_DIRECTORY_MODE = 0x40_00;
-const UNIX_FILE_MODE = 0x80_00;
+const ZIP_FLAG_ENCRYPTED = 0x00_01;
+const ZIP_FLAG_STRONG_ENCRYPTION = 0x00_40;
+// The high nibble of the ZIP external attributes holds the POSIX file type.
+const UNIX_FILE_TYPE_PLACE = 0x10_00_00_00;
+const UNIX_DIRECTORY_TYPE = 4;
+const UNIX_REGULAR_FILE_TYPE = 8;
 
 // Bound both the ZIP index walk and the total retained decompressed contents.
 // These are independent of the upload scanner's inspection budgets.
@@ -94,10 +97,12 @@ const hasConsistentPathExtras = (fields: Uint8Array, name: Buffer): boolean => {
   return true;
 };
 
+const hasZipFlag = (flags: number, flag: number): boolean =>
+  Math.floor(flags / flag) % 2 === 1;
+
 const decodeName = (entry: ZipEntry): string | undefined => {
   // Without the UTF-8 flag, non-ASCII bytes have ambiguous legacy encodings.
-  // oxlint-disable-next-line no-bitwise -- ZIP filename encoding flag
-  const isUtf8 = (entry.flags & ZIP_FLAG_UTF8) !== 0;
+  const isUtf8 = hasZipFlag(entry.flags, ZIP_FLAG_UTF8);
   if (
     entry.name.length > MAX_ENTRY_NAME_BYTES ||
     (!isUtf8 && entry.name.some((byte) => byte > 0x7f)) ||
@@ -161,19 +166,19 @@ const indexMembers = (entries: readonly ZipEntry[]) => {
   const metadata = new Set<string>();
   let mimetype: ZipEntry | undefined;
   for (const entry of entries) {
-    // Bits 0 and 6 designate encryption. UNIX special files are not payloads.
-    // oxlint-disable-next-line no-bitwise -- ZIP flags and POSIX mode masks
-    const unixType = (entry.externalAttributes >>> 16) & 0xf0_00;
+    const unixType = Math.floor(
+      entry.externalAttributes / UNIX_FILE_TYPE_PLACE,
+    );
     if (
-      // oxlint-disable-next-line no-bitwise -- ZIP encryption bits
-      (entry.flags & ZIP_FLAGS_ENCRYPTED) !== 0 ||
+      hasZipFlag(entry.flags, ZIP_FLAG_ENCRYPTED) ||
+      hasZipFlag(entry.flags, ZIP_FLAG_STRONG_ENCRYPTION) ||
       (entry.method !== ZIP_METHOD_STORED &&
         entry.method !== ZIP_METHOD_DEFLATE) ||
       (entry.method === ZIP_METHOD_STORED &&
         entry.data.length !== entry.uncompressedSize) ||
       (unixType !== 0 &&
-        unixType !== UNIX_DIRECTORY_MODE &&
-        unixType !== UNIX_FILE_MODE)
+        unixType !== UNIX_DIRECTORY_TYPE &&
+        unixType !== UNIX_REGULAR_FILE_TYPE)
     ) {
       return invalid("The container has an unsupported ZIP entry");
     }
@@ -183,7 +188,7 @@ const indexMembers = (entries: readonly ZipEntry[]) => {
       fileName === undefined ||
       !indexPath(paths, fileName, isDirectory) ||
       (isDirectory && entry.uncompressedSize !== 0) ||
-      (unixType === UNIX_DIRECTORY_MODE && !isDirectory)
+      (unixType === UNIX_DIRECTORY_TYPE && !isDirectory)
     ) {
       return invalid("The container has an invalid or ambiguous entry path");
     }
