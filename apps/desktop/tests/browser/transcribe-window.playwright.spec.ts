@@ -1,7 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
-import { installTauriIpc, unexpectedTauriCalls } from "./tauri-ipc";
+import {
+  emitTauriEvent,
+  installTauriIpc,
+  unexpectedTauriCalls,
+} from "./tauri-ipc";
 
 /** The window's native size (`transcribe_window.rs`). */
 const SIZE = { width: 760, height: 600 } as const;
@@ -77,24 +81,6 @@ const open = async (page: Page, scheme: "light" | "dark") => {
   await page.goto("/");
 };
 
-/** Delivers a native event to the page's listeners. */
-const emit = async (page: Page, event: string, payload: unknown) => {
-  await page.evaluate(
-    ([name, data]) => {
-      const ipc: unknown = Reflect.get(window, "__STELLA_TAURI_IPC__");
-      const deliver: unknown =
-        typeof ipc === "object" && ipc !== null
-          ? Reflect.get(ipc, "emit")
-          : undefined;
-      if (typeof deliver !== "function") {
-        throw new TypeError("The Tauri IPC boundary is not installed");
-      }
-      deliver(name, data);
-    },
-    [event, payload] as const,
-  );
-};
-
 const PIECES = [
   [
     0,
@@ -141,7 +127,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: t.drop.choose }).click();
     await expect(page.getByText("Memo to file 2026-11-14.m4a")).toBeVisible();
     for (const [index, startMs, text] of PIECES) {
-      await emit(page, "transcribe-piece", {
+      await emitTauriEvent(page, "transcribe-piece", {
         job: 1,
         index,
         startMs,
@@ -158,7 +144,10 @@ for (const scheme of ["light", "dark"] as const) {
     if (SCREENSHOTS) {
       await page.screenshot({ path: `${SCREENSHOTS}/result-${scheme}.png` });
     }
-    await emit(page, "transcribe-finished", { outcome: "stopped", job: 1 });
+    await emitTauriEvent(page, "transcribe-finished", {
+      outcome: "stopped",
+      job: 1,
+    });
     await expect(
       page.getByRole("button", { name: t.result.saveToMatter }),
     ).toBeEnabled();
@@ -169,7 +158,7 @@ for (const scheme of ["light", "dark"] as const) {
 test("a dropped DS2 file is refused with the export note", async ({ page }) => {
   await open(page, "light");
   await expect(page.getByText(en.transcribe.drop.title)).toBeVisible();
-  await emit(page, "transcribe-file", {
+  await emitTauriEvent(page, "transcribe-file", {
     status: "refused",
     name: "Interview.ds2",
     reason: "dictaphone",
