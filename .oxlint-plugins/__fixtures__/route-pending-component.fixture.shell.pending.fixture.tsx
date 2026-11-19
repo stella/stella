@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { useParams } from "@tanstack/react-router";
 
 // oxlint-disable-next-line route-pending-component/pending-module-imports
-import { Skeleton } from "@stll/ui/skeleton";
+import { Button } from "@stll/ui/button";
 import { LandingRowsPending } from "@stll/ui/landing-shell";
 import { framePendingView } from "@/routes/-pending-view.logic";
 
@@ -24,7 +24,7 @@ export const FixturePending = () => {
   return (
     <FixtureShell
       rows={
-        Object.keys(params).length > 0 ? <LandingRowsPending /> : <Skeleton />
+        Object.keys(params).length > 0 ? <LandingRowsPending /> : <Button />
       }
     />
   );
