@@ -1,3 +1,5 @@
+import { createServerOnlyFn } from "@tanstack/react-start";
+
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
@@ -99,13 +101,22 @@ const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
     (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
   );
 
+/**
+ * The catalogue's tool slugs. Only the server lists tool pages (robots.txt,
+ * the tools sitemap and a document's cache headers); the browser asks only
+ * about law pages, so the catalogue stays out of the startup bundle.
+ */
+const catalogueToolSlugs = createServerOnlyFn((): readonly string[] =>
+  loadCatalogue().map(({ slug }) => slug),
+);
+
 export const publicToolCrawlPaths = (
   toolsBasePath: PublicCrawlOptions["toolsBasePath"],
 ): readonly `/${string}`[] => [
   toolsBasePath,
   `${toolsBasePath}/contribute`,
-  ...loadCatalogue().map(
-    ({ slug }): `/${string}` => `${toolsBasePath}/${slug}`,
+  ...catalogueToolSlugs().map(
+    (slug): `/${string}` => `${toolsBasePath}/${slug}`,
   ),
 ];
 
