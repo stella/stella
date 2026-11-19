@@ -2,6 +2,10 @@ import * as v from "valibot";
 
 import contract from "./desktop-dictation-cleanup.json";
 import { STELLA_API_VERSION_PREFIX } from "./index";
+import {
+  MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+} from "./transcription";
 
 // desktop-dictation-cleanup.json carries the same values for the native
 // client; desktop-dictation-cleanup.test.ts binds the two.
@@ -131,6 +135,23 @@ export const desktopDictationCleanupRequestSchema = v.strictObject({
    *  for the model, never instructions and never part of the answer; it is
    *  neither logged nor stored. */
   context: v.optional(desktopDictationCleanupContextSchema),
+  /** The speaker's custom words: how they spell names and terms they
+   *  dictate, within the transcription vocabulary's limits. Data for the
+   *  model, never instructions and never added to the answer; neither
+   *  logged nor stored. */
+  vocabulary: v.optional(
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH),
+          v.regex(/^\P{Cc}*$/u),
+        ),
+      ),
+      v.maxLength(MAX_TRANSCRIPTION_VOCABULARY_TERMS),
+    ),
+  ),
 });
 export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema
