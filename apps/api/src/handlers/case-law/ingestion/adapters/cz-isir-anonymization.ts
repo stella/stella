@@ -46,6 +46,7 @@ import { declareFingerprintFields } from "@stll/errors";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { CzIsirParagraph } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
+import { isRecord } from "@/api/lib/type-guards";
 
 export class CzIsirAnonymizationError extends TaggedError(
   "CzIsirAnonymizationError",
@@ -336,6 +337,8 @@ export type CzIsirAnonymizer = {
  */
 const PLACEHOLDER_PARTS = /^\[(?<label>[A-Z_]+?)_(?<index>\d+)\]$/u;
 const PERSON_PLACEHOLDER_LABEL = "PERSON";
+const ADDRESS_PLACEHOLDER_LABEL = "ADDRESS";
+const DATE_OF_BIRTH_PLACEHOLDER_LABEL = "DATE_OF_BIRTH";
 
 /**
  * Placeholders numbered across the whole document. The pipeline numbers
@@ -468,9 +471,31 @@ export const anonymizeCzIsirParagraphs = (
         ? placeholder
         : placeholders.of(label, original);
     });
-    // A name word inside a span the pipeline kept whole (an organisation it
-    // read too widely) is replaced here, outside the pipeline.
-    const swept = renumbered.replaceAll(WORD, (word) =>
+    // A residence or a birth date inside a span the pipeline kept whole (an
+    // organisation it read too widely) is still standing verbatim; it is
+    // replaced here, outside the pipeline, and so is a name word.
+    const kept = renumbered
+      .replaceAll(RESIDENCE, (whole: string, ...rest: unknown[]) => {
+        const groups = rest.at(-1);
+        const address =
+          isRecord(groups) && typeof groups["address"] === "string"
+            ? groups["address"]
+            : undefined;
+        return address === undefined
+          ? whole
+          : `${whole.slice(0, whole.length - address.length)}${placeholders.of(ADDRESS_PLACEHOLDER_LABEL, address)}`;
+      })
+      .replaceAll(BIRTH_DATE, (whole: string, ...rest: unknown[]) => {
+        const groups = rest.at(-1);
+        const born =
+          isRecord(groups) && typeof groups["date"] === "string"
+            ? groups["date"]
+            : undefined;
+        return born === undefined
+          ? whole
+          : `${whole.slice(0, whole.length - born.length)}${placeholders.of(DATE_OF_BIRTH_PLACEHOLDER_LABEL, born)}`;
+      });
+    const swept = kept.replaceAll(WORD, (word) =>
       isCapitalised(word) && stems.has(stemOf(word))
         ? placeholders.of(PERSON_PLACEHOLDER_LABEL, word)
         : word,

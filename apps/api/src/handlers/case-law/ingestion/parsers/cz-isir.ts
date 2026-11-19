@@ -24,7 +24,7 @@
  *
  * Headings are read from typesetting: a short paragraph set wholly in bold.
  */
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 import { declareFingerprintFields } from "@stll/errors";
@@ -216,28 +216,37 @@ const readIdentity = (
   paragraphs: readonly CzIsirParagraph[],
   documentId: string,
 ): Result<CzIsirDecisionIdentity, CzIsirParseError> => {
-  const header = paragraphs
-    .slice(0, HEADER_PARAGRAPHS)
-    .map(({ text }) => text)
-    .join(" ");
-  const highCourt = HIGH_COURT_DOCKET.exec(header)?.groups;
-  const file = INSOLVENCY_FILE.exec(header)?.groups;
-  const dispute = INCIDENTAL_DISPUTE.exec(header)?.groups;
-
-  const headings = new Set(
-    paragraphs
-      .slice(0, HEADER_PARAGRAPHS + 2)
-      .map(({ text }) => text.trim().toLocaleUpperCase("cs")),
-  );
-  const decisionType = DECISION_HEADINGS.find(([heading]) =>
-    headings.has(heading),
-  )?.[1];
-  if (decisionType === undefined) {
+  // The dockets stand above the decision's own heading; a docket below it
+  // names another decision (the one appealed, a related file).
+  const headingAt = paragraphs
+    .slice(0, HEADER_PARAGRAPHS + 2)
+    .findIndex(({ text }) =>
+      DECISION_HEADINGS.some(
+        ([heading]) => text.trim().toLocaleUpperCase("cs") === heading,
+      ),
+    );
+  if (headingAt === -1) {
     return failure(
       CZ_ISIR_PARSE_FAILURE.NO_DECISION_TYPE,
       `Document ${documentId} states no decision heading`,
     );
   }
+  const headingText = paragraphs[headingAt]?.text
+    .trim()
+    .toLocaleUpperCase("cs");
+  const decisionType = DECISION_HEADINGS.find(
+    ([heading]) => heading === headingText,
+  )?.[1];
+  if (decisionType === undefined) {
+    return panic("A decision heading matched no kind");
+  }
+  const header = paragraphs
+    .slice(0, headingAt)
+    .map(({ text }) => text)
+    .join(" ");
+  const highCourt = HIGH_COURT_DOCKET.exec(header)?.groups;
+  const file = INSOLVENCY_FILE.exec(header)?.groups;
+  const dispute = INCIDENTAL_DISPUTE.exec(header)?.groups;
   const decisionDate = paragraphs
     .map(({ text }) => givenOn(text))
     .findLast((date) => date !== null);

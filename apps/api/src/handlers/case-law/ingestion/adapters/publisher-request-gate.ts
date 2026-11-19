@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the Finanční správa and Ministry of the Interior gate reservations are new; existing gates and parsed output are unchanged.
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TJDFT gate reservation is new; existing gates and parsed output are unchanged.
