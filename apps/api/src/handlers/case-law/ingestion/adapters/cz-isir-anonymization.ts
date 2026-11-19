@@ -135,7 +135,7 @@ const BIRTH_NUMBER = /(?<![\d/])\d{6} ?\/ ?\d{3,4}(?![\d/])/u;
  * likely an account or a file number.
  */
 const LABELLED_BIRTH_NUMBER =
-  /(?:\br\. ?č\.|\brodn\p{Ll}* čísl\p{Ll}*|\bRČ)\s*:?\s*\d{6} ?\d{3,4}(?!\d)/iu;
+  /(?:\br\. ?č\.|\brodn\p{Ll}* čísl\p{Ll}*|\bRČ)[\s:]{0,3}\d{6} ?\d{3,4}(?!\d)/iu;
 
 const WORD = /\p{L}[\p{L}'’-]*/gu;
 const PLACEHOLDER = /\[[A-Z_]+_\d+\]/gu;
@@ -464,7 +464,11 @@ const createPlaceholderAllocator = () => {
     }
     const surnameStem = stemOf(surname);
     const givenStem = stemOf(given);
-    const people = bySurname.get(surnameStem) ?? [];
+    let people = bySurname.get(surnameStem);
+    if (people === undefined) {
+      people = [];
+      bySurname.set(surnameStem, people);
+    }
     const matches = people.filter((known) =>
       sameGivenName(known.given, givenStem),
     );
@@ -475,7 +479,6 @@ const createPlaceholderAllocator = () => {
     const placeholder = match?.placeholder ?? fresh(PERSON_PLACEHOLDER_LABEL);
     if (match === undefined) {
       people.push({ given: givenStem, placeholder });
-      bySurname.set(surnameStem, people);
     }
     remember(words, placeholder);
     return placeholder;
@@ -682,17 +685,19 @@ export const createCzIsirAnonymizer = (
     load: async () => {
       prepared ??= prepare();
       const attempt = prepared;
-      // A failed preparation is not kept: the next load prepares again.
-      const pipeline = await attempt.catch((error: unknown) => {
+      try {
+        const pipeline = await attempt;
+        return {
+          anonymize: (paragraphs) =>
+            anonymizeCzIsirParagraphs(pipeline, paragraphs),
+        };
+      } catch (error) {
+        // A failed preparation is not kept: the next load prepares again.
         if (prepared === attempt) {
           prepared = null;
         }
         throw error;
-      });
-      return {
-        anonymize: (paragraphs) =>
-          anonymizeCzIsirParagraphs(pipeline, paragraphs),
-      };
+      }
     },
   };
 };

@@ -389,8 +389,11 @@ const docketLineDockets = (text: string): string[] | null => {
 };
 
 /** A docket without its brackets and sheet: what a running header repeats. */
-const fileOfDocket = (docket: string): string =>
-  docket.replaceAll(/[()]/gu, "").replace(/-.*$/u, "");
+const fileOfDocket = (docket: string): string => {
+  const bare = docket.replaceAll(/[()]/gu, "");
+  const sheet = bare.indexOf("-");
+  return sheet === -1 ? bare : bare.slice(0, sheet);
+};
 
 /** A stamp is a handful of lines; one that runs on has no confirmed end. */
 const STAMP_MAX_LINES = 8;

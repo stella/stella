@@ -250,7 +250,7 @@ describe("readCzIsirDocumentParagraphs", () => {
 describe("reconciliation", () => {
   test("a stored action whose document id is not one is unkeyable, and nothing is requested", async () => {
     const requested = await serve(await documents());
-    const outcome = await czIsirAdapter.reconciliation?.buildDecision({
+    const outcome = await czIsirAdapter.reconciliation.buildDecision({
       id: 65_000_401,
       createdAt: null,
       publishedAt: null,

@@ -251,7 +251,7 @@ describe("createCzIsirAnonymizer", () => {
       return scripted();
     });
     const [failed] = await Promise.allSettled([anonymizer.load()]);
-    expect(failed?.status).toBe("rejected");
+    expect(failed.status).toBe("rejected");
     await anonymizer.load();
     await anonymizer.load();
     expect(calls).toBe(2);
