@@ -4505,6 +4505,11 @@
             "required": ["decisionId", "identifier", "label", "readerUrl"]
           }
         },
+        "candidateSet": {
+          "enum": ["truncated"],
+          "description": "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
+          "type": "string"
+        },
         "missing": {
           "type": "array",
           "items": {
@@ -4871,6 +4876,11 @@
             },
             "required": ["decisionId", "identifier", "label", "readerUrl"]
           }
+        },
+        "candidateSet": {
+          "enum": ["truncated"],
+          "description": "More candidates exist. Refine the identifier with a court, ECLI or full published reference.",
+          "type": "string"
         },
         "missing": {
           "type": "array",
