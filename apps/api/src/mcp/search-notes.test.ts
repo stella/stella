@@ -38,6 +38,7 @@ describe("search note audiences", () => {
     const wordLists = [["za", "vůči"], ["vůči"], ["na", "za"], ["na"]];
     const searches = wordLists.map((droppedFunctionWords) => ({
       warnings: caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords,
         filters: [],
         emptyResultSet: false,
