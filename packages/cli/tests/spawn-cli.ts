@@ -43,7 +43,7 @@ export const spawnCliSync = (
     cacheHome = path.join(home, ".cache"),
     server,
   }: SpawnCliOptions = {},
-) => {
+): Bun.SyncSubprocess<"pipe", "pipe"> => {
   if (server !== undefined && !LOOPBACK_HOSTS.has(new URL(server).hostname)) {
     panic(`A CLI test server must be on this computer, not ${server}.`);
   }
