@@ -140,6 +140,14 @@ const FRAMES: readonly Frame[] = [
 
 const LAST_FRAME = FRAMES.length - 1;
 
+// The same turn, ended at the failed step without an answer, as a reload
+// shows it: the one case where the failure is the result.
+const ENDED_AT_FAILURE_FRAME: Frame = {
+  durationMs: 0,
+  isGenerating: false,
+  parts: [THINKING, searchHistory("complete"), readSection("complete")],
+};
+
 // The chat page's transcript rhythm (`ConversationContent` gap-3), so the
 // fixture spaces messages the way the product does.
 const THREAD_FRAME_CLASS =
@@ -249,6 +257,17 @@ export function ChatStatusPlayground() {
             </h2>
             <div className={THREAD_FRAME_CLASS}>
               {thread("settled", FRAMES[LAST_FRAME] ?? frame, true)}
+            </div>
+          </section>
+          <section
+            className="flex flex-col gap-2"
+            data-testid="terminal-failure"
+          >
+            <h2 className="text-muted-foreground text-xs font-medium">
+              Turn ended at a failed step
+            </h2>
+            <div className={THREAD_FRAME_CLASS}>
+              {thread("ended-at-failure", ENDED_AT_FAILURE_FRAME, true)}
             </div>
           </section>
         </div>
