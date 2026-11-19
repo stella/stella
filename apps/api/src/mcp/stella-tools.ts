@@ -1783,6 +1783,56 @@ const documentContentWindow = ({
   });
 };
 
+type LegalContentWindowOptions = {
+  context: AuthorizedMcpRequestContext;
+  currentDocument: CurrentDocument;
+  cursor: string | undefined;
+  entityId: SafeId<"entity">;
+  fileField: CurrentDocument["currentVersion"]["fields"][number] | null;
+};
+
+/** A registered legal format is read from its live file; null for any other file. */
+const readLegalContentWindow = async ({
+  context,
+  currentDocument,
+  cursor,
+  entityId,
+  fileField,
+}: LegalContentWindowOptions) => {
+  const format =
+    fileField?.content?.type === "file"
+      ? legalFileFormat(fileField.content.mimeType, fileField.content.fileName)
+      : undefined;
+  if (fileField === null || format === undefined) {
+    return null;
+  }
+  const workspaceId = brandPersistedWorkspaceId(currentDocument.workspaceId);
+  const readers =
+    context.testDependencies?.legalFileReaders ?? LEGAL_FILE_READERS;
+  const preview = await readers[format.kind]({
+    purpose: "agent",
+    scopedDb: context.scopedDb,
+    organizationId: context.organizationId,
+    workspaceId,
+    fieldId: fileField.id,
+    recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+  });
+  if (preview.isErr()) {
+    return legalFileReadError(
+      preview.error,
+      "mcp.readContentAcrossMatters.legal_file",
+    );
+  }
+  return documentContentWindow({
+    cursor,
+    entityId,
+    kind: currentDocument.kind,
+    name: currentDocument.name,
+    workspaceId,
+    ...preview.value,
+  });
+};
+
 const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
   v.InferInput<typeof READ_CONTENT_ACROSS_MATTERS_PROJECTION>
 > = async ({ args, context }) => {
@@ -1847,34 +1897,15 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     extracted: currentDocument.extractedContent,
     fields: currentDocument.currentVersion.fields,
   });
-  const format =
-    fileField?.content?.type === "file"
-      ? legalFileFormat(fileField.content.mimeType, fileField.content.fileName)
-      : undefined;
-  if (fileField !== null && format !== undefined) {
-    const workspaceId = brandPersistedWorkspaceId(currentDocument.workspaceId);
-    const preview = await LEGAL_FILE_READERS[format.kind]({
-      purpose: "agent",
-      scopedDb: context.scopedDb,
-      organizationId: context.organizationId,
-      workspaceId,
-      fieldId: fileField.id,
-      recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
-    });
-    if (preview.isErr()) {
-      return legalFileReadError(
-        preview.error,
-        "mcp.readContentAcrossMatters.legal_file",
-      );
-    }
-    return documentContentWindow({
-      cursor,
-      entityId,
-      kind: currentDocument.kind,
-      name: currentDocument.name,
-      workspaceId,
-      ...preview.value,
-    });
+  const legal = await readLegalContentWindow({
+    context,
+    currentDocument,
+    cursor,
+    entityId,
+    fileField,
+  });
+  if (legal !== null) {
+    return legal;
   }
   const docxOutcome = await loadCurrentVersionDocxMarkdown({
     context,
