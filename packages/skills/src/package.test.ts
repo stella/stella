@@ -10,7 +10,7 @@ import {
   SKILL_PACKAGE_FILE_TYPES,
   SKILL_PACKAGE_FORMATS,
   SKILL_PACKAGE_MANIFEST_PATH,
-  type SkillPackageEntry,
+  type SkillArchiveEntry,
   type SkillPackageSource,
 } from "./package";
 
@@ -44,13 +44,13 @@ const source = (
 });
 
 const replace = (
-  entries: readonly SkillPackageEntry[],
+  entries: readonly SkillArchiveEntry[],
   path: string,
   bytes: Uint8Array,
-): SkillPackageEntry[] =>
+): SkillArchiveEntry[] =>
   entries.map((entry) => (entry.path === path ? { bytes, path } : entry));
 
-const manifestOf = (entries: readonly SkillPackageEntry[]) => {
+const manifestOf = (entries: readonly SkillArchiveEntry[]) => {
   const manifest = entries.find(({ path }) =>
     path.endsWith(SKILL_PACKAGE_MANIFEST_PATH),
   );
@@ -61,9 +61,9 @@ const manifestOf = (entries: readonly SkillPackageEntry[]) => {
 };
 
 const withManifest = (
-  entries: readonly SkillPackageEntry[],
+  entries: readonly SkillArchiveEntry[],
   edit: (manifest: Record<string, unknown>) => unknown,
-): SkillPackageEntry[] => {
+): SkillArchiveEntry[] => {
   const { bytes, path } = manifestOf(entries);
   const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
   if (typeof parsed !== "object" || parsed === null) {
@@ -222,7 +222,7 @@ describe("skill package", () => {
       SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes -
       encoder.encode(SKILL_MD).byteLength -
       manifestShare;
-    const resources: SkillPackageEntry[] = [];
+    const resources: SkillArchiveEntry[] = [];
     for (let offset = 0; offset < total; offset += chunk) {
       const size = Math.min(chunk, total - offset);
       resources.push({

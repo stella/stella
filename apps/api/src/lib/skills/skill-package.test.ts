@@ -6,7 +6,7 @@ import { ZipArchive } from "@stll/docx-core/zip";
 import {
   buildSkillPackage,
   SKILL_PACKAGE_MANIFEST_PATH,
-  type SkillPackageEntry,
+  type SkillArchiveEntry,
 } from "@stll/skills/package";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
@@ -53,7 +53,7 @@ Read \`references/checklist.md\` first.
 `;
 
 const packageArchive = async (
-  edit: (entries: SkillPackageEntry[]) => SkillPackageEntry[] = (entries) =>
+  edit: (entries: SkillArchiveEntry[]) => SkillArchiveEntry[] = (entries) =>
     entries,
 ) => {
   const zip = new ZipArchive();
@@ -94,7 +94,7 @@ describe("skill packages", () => {
         throw result.error;
       }
       expect(result.value).toMatchObject({
-        body: "Read `references/checklist.md` first.\n",
+        body: "Read `references/checklist.md` first.",
         description: "Review a contract against the checklist.",
         identity: {
           command: "review",
@@ -130,7 +130,7 @@ describe("skill packages", () => {
   test.each([
     {
       code: SKILL_PACKAGE_REFUSAL_CODE.fileChanged,
-      edit: (entries: SkillPackageEntry[]) =>
+      edit: (entries: SkillArchiveEntry[]) =>
         entries.map((entry) =>
           entry.path.endsWith("checklist.md")
             ? { ...entry, bytes: new TextEncoder().encode("- edited\n") }
@@ -140,13 +140,13 @@ describe("skill packages", () => {
     },
     {
       code: SKILL_PACKAGE_REFUSAL_CODE.fileMissing,
-      edit: (entries: SkillPackageEntry[]) =>
+      edit: (entries: SkillArchiveEntry[]) =>
         entries.filter(({ path }) => !path.endsWith("checklist.md")),
       refusal: "a listed file that is missing",
     },
     {
       code: SKILL_PACKAGE_REFUSAL_CODE.formatUnsupported,
-      edit: (entries: SkillPackageEntry[]) =>
+      edit: (entries: SkillArchiveEntry[]) =>
         entries.map((entry) => {
           if (!entry.path.endsWith(SKILL_PACKAGE_MANIFEST_PATH)) {
             return entry;

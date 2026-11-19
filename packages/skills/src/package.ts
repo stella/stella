@@ -75,7 +75,7 @@ export type SkillPackageManifest = {
 };
 
 /** One file of a package, at its path inside the archive. */
-export type SkillPackageEntry = {
+export type SkillArchiveEntry = {
   bytes: Uint8Array;
   path: string;
 };
@@ -84,7 +84,7 @@ export type SkillPackageSource = {
   command: string | null;
   displayName: string;
   /** Files beside SKILL.md, at their paths relative to the skill folder. */
-  resources: readonly SkillPackageEntry[];
+  resources: readonly SkillArchiveEntry[];
   skillMd: string;
   slug: string;
 };
@@ -106,8 +106,8 @@ const compareCodeUnits = (left: string, right: string): number => {
  */
 export const buildSkillPackage = (
   source: SkillPackageSource,
-): SkillPackageEntry[] => {
-  const files: SkillPackageEntry[] = [
+): SkillArchiveEntry[] => {
+  const files: SkillArchiveEntry[] = [
     { bytes: UTF8_ENCODER.encode(source.skillMd), path: SKILL_FILE_NAME },
     ...source.resources
       .filter(({ path }) => !isReservedSkillPackagePath(path))
@@ -315,7 +315,7 @@ export const verifySkillPackageFiles = ({
 /** A package read back: the skill folder's files and its manifest. */
 export type ReadSkillPackage = {
   /** Files beside SKILL.md, relative to the skill folder, sorted by path. */
-  resources: SkillPackageEntry[];
+  resources: SkillArchiveEntry[];
   manifest: SkillPackageManifest | null;
   skillMd: string;
 };
@@ -332,7 +332,7 @@ export type SkillPackageReadRefusal =
  * outside the skill folder are not part of it.
  */
 export const readSkillPackage = (
-  entries: readonly SkillPackageEntry[],
+  entries: readonly SkillArchiveEntry[],
 ): Result<ReadSkillPackage, SkillPackageReadRefusal> => {
   const entrypoint = entries
     .filter(
@@ -350,7 +350,7 @@ export const readSkillPackage = (
     return Result.err({ type: "entrypoint_not_text" });
   }
   const digests = new Map([[SKILL_FILE_NAME, sha256Hex(entrypoint.bytes)]]);
-  const resources: SkillPackageEntry[] = [];
+  const resources: SkillArchiveEntry[] = [];
   let manifestBytes: Uint8Array | null = null;
   for (const { bytes, path } of entries) {
     if (!path.startsWith(root) || path === entrypoint.path) {

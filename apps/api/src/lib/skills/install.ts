@@ -237,9 +237,11 @@ const skillSlugCandidates = (slug: string): string[] => [
   slug,
   ...Array.from({ length: LIMITS.agentSkillsPerUser }, (_, index) => {
     const suffix = `-${String(index + 2)}`;
+    // A slug never holds two hyphens in a row, so a cut leaves at most one
+    // trailing.
     const base = slug
       .slice(0, SKILL_SLUG_MAX_CHARS - suffix.length)
-      .replace(/-+$/u, "");
+      .replace(/-$/u, "");
     return `${base}${suffix}`;
   }),
 ];
