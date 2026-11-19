@@ -241,8 +241,13 @@ test("reserves several objects in one transaction, each under every owner", asyn
   let workspaceReads = 0;
   const inserts: unknown[][] = [];
   const tx = asTestRaw<Transaction>({
-    execute: async () => {
+    execute: async (statement: SQL) => {
+      const advisory = advisoryLockRows(statement);
+      if (advisory === null) {
+        throw new Error("Unexpected statement while reserving intents");
+      }
       advisoryLocks += 1;
+      return advisory;
     },
     insert: () => ({
       values: async (rows: unknown[]) => {
@@ -289,12 +294,16 @@ test("reserves several objects in one transaction, each under every owner", asyn
   if (Result.isError(result)) {
     throw result.error;
   }
-  // One transaction, one lock, one check and one insert for both objects.
+  // One transaction, one organization fence (the registered lock and the
+  // previous build's key), one check and one insert for both objects.
   expect({ transactions, advisoryLocks, workspaceReads }).toEqual({
     transactions: 1,
-    advisoryLocks: 1,
+    advisoryLocks: 2,
     workspaceReads: 1,
   });
+  expect(legacyFenceLocks).toEqual([
+    "SELECT pg_advisory_xact_lock_shared(hashtext($1))",
+  ]);
   expect(inserts).toHaveLength(1);
   const rows = inserts[0] ?? [];
   expect(rows).toEqual([
