@@ -12,7 +12,10 @@ import {
   type JsonLdObject,
   type PublicHeadInput,
 } from "@/lib/public-seo";
-import { isPublicLawPathIndexable } from "@/public-crawl-policy";
+import {
+  hasPublicLawQuery,
+  isPublicLawPathIndexable,
+} from "@/public-crawl-policy";
 
 type PublicLawHeadInput = Omit<PublicHeadInput, "crawlAllowed"> & {
   crawlAllowed?: boolean;
@@ -94,13 +97,24 @@ const absoluteUrlOrNull = (value: string | null | undefined): string | null => {
 
 export const createPublicLawCanonicalUrl = createPublicCanonicalUrl;
 
-export const createPublicLawHead = (input: PublicLawHeadInput) =>
-  createPublicHead({
+/**
+ * A public law page's head, from the crawl policy that writes robots.txt: a
+ * page whose path the policy opens is `index,follow` at its query-free URL,
+ * and `noindex` (canonical to `canonicalPath`) at any URL with a query.
+ */
+export const createPublicLawHead = (input: PublicLawHeadInput) => {
+  const url = new URL(input.path, "https://crawl.invalid");
+  const crawlAllowed =
+    input.crawlAllowed ??
+    isPublicLawPathIndexable(url.pathname, isPublicLawCrawlAllowed());
+  return createPublicHead({
     ...input,
-    crawlAllowed:
-      input.crawlAllowed ??
-      isPublicLawPathIndexable(input.path, isPublicLawCrawlAllowed()),
+    crawlAllowed,
+    indexing: hasPublicLawQuery(input.path)
+      ? "noindex"
+      : (input.indexing ?? "default"),
   });
+};
 
 export const createCaseLawDecisionJsonLd = async ({
   canonicalUrl,

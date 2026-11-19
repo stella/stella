@@ -8054,7 +8054,7 @@ const config = defineConfig({
         "apps/web/src/components/auth/password-sign-in-form.tsx",
         "apps/web/src/components/auth/sign-in-panel.tsx",
         "apps/web/src/components/organization/invite-member-dialog.tsx",
-        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+        "apps/web/src/routes/auth/-error.page.tsx",
       ],
       rules: {
         "require-valibot-message/require-valibot-message": "error",

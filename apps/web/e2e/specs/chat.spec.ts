@@ -154,7 +154,7 @@ test("/new with trailing text sends that text on a fresh thread", async ({
 
   const firstMessage = "Draft a mutual NDA for Acme.";
   const routedComposer = page.getByRole("textbox", {
-    name: /type your question|to ask:/iu,
+    name: /type your question/iu,
   });
   await routedComposer.fill(`/new ${firstMessage}`);
   await page.getByRole("button", { name: "Send message" }).click();
@@ -263,17 +263,22 @@ test("chat composer sends a message and renders the assistant reply", async ({
   );
   await expect(errorBoundary).toHaveCount(0);
 
-  const followups = page.getByRole("group", {
-    name: /suggested follow-up prompts/iu,
+  // The finished answer is followed, inside the transcript, by its suggested
+  // follow-ups: a section labelled by its "Next steps" heading
+  // (apps/web/src/features/chat/components/suggested-followups.tsx).
+  const followups = transcript.getByRole("region", {
+    name: /^next steps$/iu,
   });
   await expect(followups).toBeVisible({
     timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
+  await expect(followups.getByRole("button").first()).toBeVisible();
 
-  // A populated thread advertises the first follow-up as a Tab-to-ask
-  // suggestion. This is intentionally a different accessible name than the
-  // blank-thread composer checked above; pressing Tab accepts the suggestion.
-  const compactComposer = page.getByRole("textbox", { name: /to ask:/iu });
+  // Suggestions are never ghost text in the composer: a populated thread's
+  // composer keeps the same accessible name as the blank-thread one above.
+  const compactComposer = page.getByRole("textbox", {
+    name: /type your question/iu,
+  });
   await expect(compactComposer).toHaveCount(1);
 
   // A populated thread uses the compact composer. Its controls share the
@@ -289,22 +294,18 @@ test("chat composer sends a message and renders the assistant reply", async ({
   });
   expect(compactComposerHeight).toBeLessThanOrEqual(48);
 
-  const typography = await followups
-    .getByRole("button")
-    .first()
-    .evaluate((chip) => {
-      const textbox = document.querySelector(
-        '[role="textbox"][contenteditable="true"]',
-      );
-      if (!(textbox instanceof HTMLElement)) {
-        throw new TypeError("Chat composer textbox is missing");
-      }
-      return {
-        chip: Number.parseFloat(getComputedStyle(chip).fontSize),
-        composer: Number.parseFloat(getComputedStyle(textbox).fontSize),
-      };
-    });
-  expect(typography.chip).toBeLessThan(typography.composer);
+  // The follow-ups sit after the answer's actions, not over the answer, and
+  // a long suggestion wraps like text instead of scrolling sideways.
+  const copyBox = await transcript
+    .getByRole("button", { name: "Copy" })
+    .boundingBox();
+  const followupRow = followups.getByRole("button").first();
+  const followupBox = await followupRow.boundingBox();
+  if (copyBox === null || followupBox === null) {
+    throw new Error("The answer's actions or its follow-ups have no layout");
+  }
+  expect(followupBox.y).toBeGreaterThanOrEqual(copyBox.y + copyBox.height);
+  await expect(followupRow).toHaveCSS("white-space", "normal");
 
   // Pin the long user prompt at its sticky boundary. Compaction must remain
   // visual only: changing the turn's in-flow height makes Chrome scroll

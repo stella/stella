@@ -1233,6 +1233,13 @@
       "treatment": "Neskoršia judikatúra"
     },
     "analyzing": "Analyzujem...",
+    "browse": {
+      "courtDescription": "{court} ({country}): rozhodnutia vo verejnej právnej databáze stelly podľa roka a mesiaca.",
+      "courts": "Súdy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: súdne rozhodnutia vo verejnej právnej databáze stelly podľa súdu, roka a mesiaca.",
+      "periodDescription": "{court} ({country}), {period}: rozhodnutia vo verejnej právnej databáze stelly."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -2124,6 +2131,7 @@
     },
     "newChat": "Nový chat",
     "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
+    "nextSteps": "Ďalšie kroky",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
@@ -2230,7 +2238,6 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
-      "harnessModels": "Modely {harness}",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
@@ -2240,7 +2247,6 @@
       "localFolderSelection": "Váš počítač · {harness} · {folder}",
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
-      "modelDefault": "Predvolený (odporúčaný)",
       "placeState": "{place}. {state}",
       "startedInCloud": "Nový chat sa spustil v cloude, pretože {harness} na vašom počítači nie je k dispozícii ({state})",
       "startedInCloudCheckFailed": "Nový chat sa spustil v cloude, pretože sa nepodarilo skontrolovať váš počítač",
@@ -2316,7 +2322,6 @@
     "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
-    "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
     "suggestingTitle": "Navrhujem názov…",
     "suggestionSeverity": {
       "style": "Štýl",
@@ -2327,7 +2332,6 @@
       "accepted": "Použité",
       "rejected": "Odmietnuté"
     },
-    "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "tableChart": {
       "bar": "Stĺpcový",
       "kind": "Typ grafu",
@@ -2751,6 +2755,7 @@
     "done": "Hotovo",
     "doubleClickToRename": "Dvojklikom premenujete",
     "download": "Stiahnuť",
+    "downloadOriginal": "Stiahnuť originál",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Presun bol zrušený. Položka {itemName} nebola presunutá.} few {Presun bol zrušený. {itemName} neboli presunuté.} other {Presun bol zrušený. {itemName} nebolo presunutých.} many {Presun bol zrušený. {itemName} nebolo presunutých.}}",
       "droppedOn": "{count, plural, one {Položka {itemName} bola pustená na {destinationName}.} few {{itemName} boli pustené na {destinationName}.} other {{itemName} bolo pustených na {destinationName}.} many {{itemName} bolo pustených na {destinationName}.}}",
@@ -3338,6 +3343,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dodané do schránky",
       "delivery": "Doručenie",
+      "deliveryEvents": "Udalosti doručovania",
+      "deliveryReceipt": "Doručenka",
       "directionUnknown": "Smer neznámy",
       "messageId": "ID správy",
       "moreContacts": "Tejto dátovej schránke zodpovedajú ďalšie kontakty.",
@@ -3350,6 +3357,8 @@
       "sent": "Odoslaná",
       "statedInFile": "Dátová správa (podľa údajov v súbore)",
       "toHands": "K rukám: {name}",
+      "unlinkedFiles": "Prílohy bez odkazu otvoríte po stiahnutí pôvodného súboru ZFO.",
+      "unreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "uploaded": "Nahraná dátová správa"
     },
     "deliveredBy": "Doručil <address>{sender}</address>",

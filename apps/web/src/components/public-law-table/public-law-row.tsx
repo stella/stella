@@ -30,11 +30,11 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
+import { AddPropertyCell } from "@/components/workspaces/table/workspace-table/end-fillers";
 import {
-  AddPropertyCell,
+  PinnedBoundary,
   RowEndFillerCell,
-} from "@/components/workspaces/table/workspace-table/end-fillers";
-import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
+} from "@/components/workspaces/table/workspace-table/internals";
 import {
   addPropertyColId,
   getGridPinningStyles,

@@ -26,7 +26,10 @@ import {
   type LegislationExpressionClassification,
   typedLegislationClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import {
+  caseLawDocumentStemLanguage,
+  documentMorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/corpus-language";
 import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
@@ -237,6 +240,20 @@ const rankingSignalFingerprintFields = (
         },
       };
 
+/**
+ * A decision in a language its jurisdiction does not declare is blocked, not
+ * built. Its fingerprint carries that mark, and only its: every declared
+ * decision keeps the fingerprint it had, and declaring the language later
+ * changes exactly the blocked decisions' fingerprints, which makes their
+ * states eligible again.
+ */
+export const undeclaredLanguageFingerprintFields = (
+  input: Pick<CaseLawProjectionInput, "jurisdiction" | "language">,
+): { documentLanguage?: "undeclared" } =>
+  caseLawDocumentStemLanguage(input).isErr()
+    ? { documentLanguage: "undeclared" }
+    : {};
+
 export const deriveCorpusIndexProjectionDescriptor = (
   manifest: CorpusIndexManifest,
   input: CorpusIndexProjectionInput,
@@ -315,6 +332,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
           ...publisher,
           ...groupContractFingerprintFields(manifest, input),
           ...rankingSignalFingerprintFields(manifest, input),
+          ...undeclaredLanguageFingerprintFields(input),
         }),
       };
     }

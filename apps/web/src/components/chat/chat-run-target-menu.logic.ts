@@ -21,7 +21,6 @@ import {
   DESKTOP_RUNNER_LINKED_FOLDER_STATE,
   type DesktopRunnerApprovalMode,
   type DesktopRunnerLinkedFolderState,
-  type DesktopRunnerReasoningEffort,
 } from "@stll/api-contract/desktop-runner";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -433,28 +432,6 @@ export const localRunTargetFor = ({
       offered: option.approvalModes,
     }),
   };
-};
-
-/**
- * The reasoning efforts the selected local model offers, or `null` when the
- * turn runs in the cloud, its harness cannot take a turn, or the model offers
- * no choice; the menu then shows none.
- */
-export const reasoningEffortChoices = (
-  selected: ChatRunTarget,
-  options: readonly ChatLocalHarnessOption[],
-): readonly DesktopRunnerReasoningEffort[] | null => {
-  if (selected.kind !== "local") {
-    return null;
-  }
-  const option = options.find(({ harness }) => harness === selected.harness);
-  if (option?.state !== "ready") {
-    return null;
-  }
-  const efforts =
-    option.models.find(({ id }) => id === selected.model)?.reasoningEfforts ??
-    [];
-  return efforts.length === 0 ? null : efforts;
 };
 
 /**

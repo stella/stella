@@ -27,7 +27,6 @@ import {
   publicLawPageSizeSearchValue,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
-import { publicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
   PublicLawResultsToolbar,
@@ -75,7 +74,7 @@ import {
   useSearchResultsTiming,
 } from "@/lib/analytics/search-timing";
 import { detached } from "@/lib/detached";
-import { queryView } from "@/lib/query-view.logic";
+import { queryView, routeRowsPhase } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -357,7 +356,7 @@ const statuteRowsPhase = (query: {
   isLoading: boolean;
   isPlaceholderData: boolean;
 }) =>
-  publicLawRowsPhase({
+  routeRowsPhase({
     isLoading: query.isLoading,
     isPlaceholderData: query.isPlaceholderData,
     keptRowCount:

@@ -1,6 +1,7 @@
 import {
   getChatTools,
   type GetChatToolsProps,
+  SKILL_GATED_TOOLS,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
   chatScriptReadToolNames,
@@ -92,7 +93,11 @@ const chatOfferedToolNames = ({
 
 export type ChatSkillToolContext = Omit<
   GetChatToolsProps,
-  "activeSkillContext" | "externalTools" | "purpose" | "skillMetadata"
+  | "activeSkillContext"
+  | "externalTools"
+  | "purpose"
+  | "skillGatedTools"
+  | "skillMetadata"
 > & {
   /** The request's named tool scope, which narrows the streaming set. */
   toolScope?: ChatToolScope | undefined;
@@ -113,6 +118,9 @@ export const chatToolNamesForSkills = ({
     ...props,
     activeSkillContext: null,
     externalTools: {},
+    // A skill-gated tool is offered to the turn whose skill declares it, so
+    // it counts as available to every skill that may declare it.
+    skillGatedTools: SKILL_GATED_TOOLS.every,
     skillMetadata: undefined,
   });
   return chatOfferedToolNames({

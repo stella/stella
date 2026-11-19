@@ -48,7 +48,6 @@ export const resolveSignInOptions = ({
     showMicrosoft,
     showApple,
     showSocialProviders,
-    hasAboveEmailOptions: showSocialProviders || showLocalPassword,
   };
 };
 

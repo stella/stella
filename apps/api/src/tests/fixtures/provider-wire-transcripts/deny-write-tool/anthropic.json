@@ -71,14 +71,6 @@
               "cache_control": null
             },
             {
-              "name": "validate_skill_package",
-              "cache_control": null
-            },
-            {
-              "name": "save_skill_package",
-              "cache_control": null
-            },
-            {
               "name": "counterparty_check",
               "cache_control": null
             },
@@ -319,14 +311,6 @@
             },
             {
               "name": "read-skill-resource",
-              "cache_control": null
-            },
-            {
-              "name": "validate_skill_package",
-              "cache_control": null
-            },
-            {
-              "name": "save_skill_package",
               "cache_control": null
             },
             {

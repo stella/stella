@@ -989,6 +989,14 @@
       "unreadable": "Nepavyko perskaityti šio aplanko."
     }
   },
+  "keepAwake": {
+    "title": "Neužmigdyti",
+    "enabled": "Neužmigdyti šio kompiuterio, kol dirba agentai",
+    "description": "Kol šiame kompiuteryje dirba agentas, kompiuteris neužmiega dėl neveiklumo, todėl ilgos užduotys vykdomos toliau. Ekranas vis tiek gali išsijungti. „Mac“ nešiojamasis kompiuteris vis tiek užmigs uždarius dangtį.",
+    "onBattery": "Taip pat naudojant akumuliatorių",
+    "onBatteryDescription": "Kai ši parinktis išjungta, naudojant akumuliatorių kompiuteris užmiega kaip įprasta, net kai dirba agentas.",
+    "errorSave": "Nepavyko išsaugoti šio nustatymo. Bandykite dar kartą."
+  },
   "transcribe": {
     "title": "Įrašo transkribavimas",
     "retry": "Bandyti dar kartą",

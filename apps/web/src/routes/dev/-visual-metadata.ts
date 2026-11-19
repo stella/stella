@@ -100,7 +100,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
-  "chat-follow-ups": { label: "Chat follow-up chips", layout: "plain" },
+  "chat-follow-ups": { label: "Chat follow-ups", layout: "plain" },
   "ask-user": { label: "Ask-user questions", layout: "plain" },
   "case-law-text-availability": {
     label: "Case-law text availability",
