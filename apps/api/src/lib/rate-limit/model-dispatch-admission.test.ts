@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import {
@@ -257,7 +258,7 @@ const productionSources = async () => {
   const sources: { file: string; source: string }[] = [];
   for (const root of ["src", "evals", "scripts"]) {
     for (const relative of new Bun.Glob("**/*.ts").scanSync({
-      cwd: new URL(`${root}/`, apiRoot).pathname,
+      cwd: fileURLToPath(new URL(`${root}/`, apiRoot)),
     })) {
       if (relative.includes(".test.") || relative.startsWith("tests/")) {
         continue;

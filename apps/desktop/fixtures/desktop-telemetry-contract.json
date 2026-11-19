@@ -11,7 +11,8 @@
     "selfHostConnectDialog",
     "takeoverDialog",
     "activity",
-    "onboarding"
+    "onboarding",
+    "transcribe"
   ],
   "operations": [
     "autostartRead",

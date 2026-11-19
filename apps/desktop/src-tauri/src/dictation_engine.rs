@@ -273,7 +273,12 @@ fn begin(
   let language = dictation::language(app);
   let local_installed = model.is_some();
   let engines = Engines {
-    cloud: CloudSession::new(app.clone(), cloud_model, language.hint),
+    cloud: CloudSession::new(
+      app.clone(),
+      cloud_model,
+      language.hint,
+      crate::dictation_words::words(app),
+    ),
     worker: worker.take(),
     model,
     language: language.hint,
@@ -371,7 +376,8 @@ fn finish(
   }
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
     if dictation::cleanup_enabled(app) {
-      dictation_cleanup::clean_up(app, text, &language.speaker, context)
+      let words = crate::dictation_words::words(app);
+      dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
     } else {
       (None, Cleanup::Off)
     }

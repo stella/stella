@@ -68,6 +68,7 @@ members = [
   "crates/macos-signing",
   "crates/pkcs11",
   "crates/pkcs11-helper",
+  "crates/recording",
   "crates/signing-core",
   "crates/windows-signing",
 ]
@@ -148,6 +149,7 @@ sys-locale = "0.3"
 sha2 = "0.11"
 tar = { version = "0.4", default-features = false }
 stella-desktop-pkcs11 = { path = "crates/pkcs11", version = "0.0.1" }
+stella-desktop-recording = { path = "crates/recording", version = "0.0.1" }
 stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
 # `__rustls-tls` takes the client configuration the runner builds with the

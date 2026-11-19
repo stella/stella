@@ -9,6 +9,7 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -2374,7 +2375,7 @@ describe("the responses this court served, as recorded", () => {
     const file = Bun.gunzipSync(
       new Uint8Array(
         await Bun.file(
-          new URL("sk-us-decision.pdf.gz", FIXTURES).pathname,
+          fileURLToPath(new URL("sk-us-decision.pdf.gz", FIXTURES)),
         ).arrayBuffer(),
       ),
     );

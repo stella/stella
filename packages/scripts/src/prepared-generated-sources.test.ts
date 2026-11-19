@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 import { createTestState } from "@stll/test-state";
@@ -191,7 +192,7 @@ test("CLI runtime preparation preserves verified modules and generates npm catal
         ? dependency.split("/").slice(0, 2).join("/")
         : dependency;
       const directoryName = path.basename(packageName);
-      let directory = path.dirname(new URL(entry).pathname);
+      let directory = path.dirname(fileURLToPath(entry));
       while (path.basename(directory) !== directoryName) {
         const parent = path.dirname(directory);
         if (parent === directory) {
@@ -601,7 +602,7 @@ test("API runtime generation works with only packaged sources and rejects a root
       );
     }
     symlinkSync(
-      new URL("../../../node_modules", import.meta.url).pathname,
+      fileURLToPath(new URL("../../../node_modules", import.meta.url)),
       path.join(root, "node_modules"),
     );
     write(
@@ -609,12 +610,12 @@ test("API runtime generation works with only packaged sources and rejects a root
       `import { hasPreparedGeneratedSources } from "./packages/scripts/src/prepared-generated-sources";
 import { writeCapabilityRuntime } from "./apps/api/scripts/lib/write-capability-runtime";
 const root = new URL("./", import.meta.url);
-if (hasPreparedGeneratedSources(root.pathname)) throw new TypeError("Fixture must generate its runtime");
+if (hasPreparedGeneratedSources(Bun.fileURLToPath(root))) throw new TypeError("Fixture must generate its runtime");
 await writeCapabilityRuntime([{ id: "widgets.list", featureId: "fixture-feature" }], root);
 process.exit(0);\n`,
     );
     symlinkSync(
-      new URL("../../../apps/api/scripts/lib", import.meta.url).pathname,
+      fileURLToPath(new URL("../../../apps/api/scripts/lib", import.meta.url)),
       path.join(root, "apps/api/scripts/lib"),
     );
     write("apps/api/src/handlers/widgets/list.ts", "export default {};\n");

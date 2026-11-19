@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   readGitTree,
@@ -13,8 +15,10 @@ const lint = async (lines: readonly string[], sourcePath = "parser.ts") =>
 
 describe.serial("HTML parser helper ownership", () => {
   test("covers every registered parser owner in the root lint scope", async () => {
-    const root = new URL("../../", import.meta.url).pathname;
-    const configured = await Bun.file(`${root}oxlint.config.ts`).text();
+    const root = fileURLToPath(new URL("../../", import.meta.url));
+    const configured = await Bun.file(
+      path.join(root, "oxlint.config.ts"),
+    ).text();
     const ruleIndex = configured.indexOf(
       '"no-raw-parser-html/no-raw-parser-html": "error"',
     );
@@ -243,13 +247,13 @@ describe.serial("HTML parser helper ownership", () => {
       ]),
     ).toEqual([7]);
 
-    const root = new URL("../../", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../../", import.meta.url));
     const plUodoPath =
       "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts";
     expect(
       await lintSingleRule(
         RULE_NAME,
-        await Bun.file(`${root}${plUodoPath}`).text(),
+        await Bun.file(path.join(root, plUodoPath)).text(),
         { sourcePath: plUodoPath },
       ),
     ).toEqual([]);

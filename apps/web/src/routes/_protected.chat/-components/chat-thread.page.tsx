@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import type { ReactNode } from "react";
 
 import {
   useQuery,
@@ -50,7 +49,6 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
-import { ComposerVeil } from "@/components/chat/composer-veil";
 import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
@@ -71,6 +69,7 @@ import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested-followup-prompts";
+import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
@@ -105,6 +104,7 @@ import {
   createChatThreadId,
   getChatThreadKey,
   resolveChatContextMatterIds,
+  toChatThreadId,
 } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
@@ -126,7 +126,15 @@ import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-b
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
+import { CHAT_READING_COLUMN_CLASS_NAME } from "@/routes/_protected.chat/-components/chat-reading-column";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
+import {
+  CHAT_THREAD_CONVERSATION_CLASS,
+  CHAT_THREAD_MOVE_TO_SIDE_CLASS,
+  CHAT_THREAD_NEW_CHAT_LABEL_CLASS,
+  CHAT_THREAD_TRANSCRIPT_CLASS,
+  ChatThreadShell,
+} from "@/routes/_protected.chat/-components/chat-thread.pending";
 import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
 
@@ -140,6 +148,36 @@ type ChatThreadPageProps = {
 };
 
 const protectedRouteApi = getRouteApi("/_protected");
+const globalThreadRouteApi = getRouteApi("/_protected/chat/$threadId");
+const workspaceThreadRouteApi = getRouteApi(
+  "/_protected/chat/workspaces/$workspaceId/$threadId",
+);
+
+/** The page at `/chat/$threadId`: a chat outside any matter. */
+export const GlobalChatThreadPage = () => {
+  const threadId = globalThreadRouteApi.useParams({
+    select: (params) => toChatThreadId(params.threadId),
+  });
+  return <ChatThreadPage threadRef={{ scope: "global", threadId }} />;
+};
+
+/** The page at `/chat/workspaces/$workspaceId/$threadId`: a matter's chat. */
+export const WorkspaceChatThreadPage = () => {
+  const { threadId, workspaceId } = workspaceThreadRouteApi.useParams({
+    select: (params) => ({
+      threadId: toChatThreadId(params.threadId),
+      workspaceId: params.workspaceId,
+    }),
+  });
+  useWorkspaceChatMentionRegistration(workspaceId);
+
+  return (
+    <ChatThreadPage
+      threadRef={{ scope: "workspace", threadId, workspaceId }}
+      workspaceId={workspaceId}
+    />
+  );
+};
 
 const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
   useMountEffect(() => {
@@ -724,292 +762,284 @@ export const ChatThreadPage = ({
             secretAvailabilityKey,
           }}
         >
-          <div className="relative flex w-full flex-1 flex-col overflow-hidden">
-            <ChromeHeaderActions>
-              <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
-              <MoveToSideButton
-                className="hidden md:inline-flex"
-                onClick={moveToSide}
-              />
-              <ChatHistoryLink />
-              <NewChatButton
-                hasMessages={messages.length > 0}
-                threadRef={threadRef}
-              />
-            </ChromeHeaderActions>
-
-            {/*
-            Page-level stacking order (bottom → top):
-              1. transcript content   — in-flow, z-auto
-              2. sticky user headers  — z-10 (capped inside <Conversation>)
-              3. fade gradient        — z-auto sibling, above the isolated
-                                        <Conversation> stacking context
-              4. composer             — z-20, floats above everything
-            `isolate` on <Conversation> traps every transcript stacking
-            value (sticky headers, scroll button) inside its own context so
-            none of them can leak up and overlay the fade or the composer.
-          */}
-            <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
-            <ChatThreadScrollSurface>
-              {/* Keyed per thread so the viewport remounts and lands pinned
-                to the bottom on every thread switch (a fork lands here from
-                a scrolled-up source thread). The scroll provider above stays
-                mounted: the composer block reads its context. */}
-              <Conversation
-                className="@container isolate min-h-0"
-                key={threadRef.threadId}
-              >
-                <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]">
-                  {messages.length === 0 && !isGenerating && !error ? (
-                    <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
-                      {activeSkill ? (
-                        <ChatActiveSkillIntro
-                          onSelectPrompt={selectPrompt}
-                          skill={activeSkill}
-                        />
-                      ) : (
-                        <PromptSuggestions
-                          onSelect={selectPrompt}
-                          prompts={suggestedSkills}
-                        />
-                      )}
-                      <GuideNudge />
-                    </div>
-                  ) : (
-                    <>
-                      {reconnecting && (
-                        <p
-                          role="status"
-                          className="text-muted-foreground px-4 text-sm"
-                        >
-                          {t("common.reconnecting")}
-                        </p>
-                      )}
-                      <ChatLocalRunQuestionContext
-                        value={{
-                          pause: localRunQuestion,
-                          answer: answerLocalRunQuestion,
-                          threadRef,
-                        }}
-                      >
-                        <ChatThreadMessages
-                          activitySession={activitySession}
-                          onAnswerEdited={refreshAnswers}
-                          answerRewriteAvailability={
-                            data.usedAnonymization ? "anonymized" : "available"
-                          }
-                          approvalPendingMessageId={approvalPendingMessageId}
-                          branchSource={{
-                            contextMatterIds: selectedContextMatterIds,
+          {/* The scroll provider wraps the whole shell and stays mounted
+              across threads: the composer block reads its context. */}
+          <ConversationScrollProvider>
+            <ChatThreadShell
+              headerActions={
+                <ChromeHeaderActions>
+                  <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
+                  <MoveToSideButton
+                    className={CHAT_THREAD_MOVE_TO_SIDE_CLASS}
+                    onClick={moveToSide}
+                  />
+                  <ChatHistoryLink />
+                  <NewChatButton
+                    hasMessages={messages.length > 0}
+                    threadRef={threadRef}
+                  />
+                </ChromeHeaderActions>
+              }
+              banner={
+                <ChatForkedFromBanner forkProvenance={data.forkProvenance} />
+              }
+              transcript={
+                // Keyed per thread so the viewport remounts and lands pinned
+                // to the bottom on every thread switch (a fork lands here from
+                // a scrolled-up source thread).
+                <Conversation
+                  className={CHAT_THREAD_CONVERSATION_CLASS}
+                  key={threadRef.threadId}
+                >
+                  <ConversationContent className={CHAT_THREAD_TRANSCRIPT_CLASS}>
+                    {messages.length === 0 && !isGenerating && !error ? (
+                      <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
+                        {activeSkill ? (
+                          <ChatActiveSkillIntro
+                            onSelectPrompt={selectPrompt}
+                            skill={activeSkill}
+                          />
+                        ) : (
+                          <PromptSuggestions
+                            onSelect={selectPrompt}
+                            prompts={suggestedSkills}
+                          />
+                        )}
+                        <GuideNudge />
+                      </div>
+                    ) : (
+                      <>
+                        {reconnecting && (
+                          <p
+                            role="status"
+                            className="text-muted-foreground px-4 text-sm"
+                          >
+                            {t("common.reconnecting")}
+                          </p>
+                        )}
+                        <ChatLocalRunQuestionContext
+                          value={{
+                            pause: localRunQuestion,
+                            answer: answerLocalRunQuestion,
                             threadRef,
                           }}
-                          error={error}
-                          hasOlderMessages={olderCursor !== null}
-                          isGenerating={isGenerating}
-                          isLoadingOlder={isLoadingOlder}
-                          loadOlderError={loadOlderError}
-                          messages={messages}
-                          onLoadOlder={loadOlder}
-                          onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                          onAskUserEditingChange={handleAskUserEditingChange}
-                          onAskUserSubmit={handleAskUserSubmit}
-                          onCreateDocumentResolve={handleCreateDocumentResolve}
-                          onOpenCreateDocumentDraft={
-                            handleOpenCreateDocumentDraft
-                          }
-                          onOpenCreatedDocument={handleOpenCreatedDocument}
-                          onOpenPlaybook={handleOpenPlaybook}
-                          onContinuePausedTurn={handleContinuePausedTurn}
-                          onResend={resendLatestMessage}
-                          onSendWithoutAnonymization={sendWithoutAnonymization}
-                          queue={queue}
-                          stickyUserMessages
-                          streamdownComponents={streamdownComponents}
-                          computerWait={computerWait}
-                          threadRef={threadRef}
-                          turnSentAt={turnSentAt}
-                          userMessageEdit={userMessageEdit}
-                          workspaceId={workspaceId}
+                        >
+                          <ChatThreadMessages
+                            activitySession={activitySession}
+                            onAnswerEdited={refreshAnswers}
+                            answerRewriteAvailability={
+                              data.usedAnonymization
+                                ? "anonymized"
+                                : "available"
+                            }
+                            approvalPendingMessageId={approvalPendingMessageId}
+                            branchSource={{
+                              contextMatterIds: selectedContextMatterIds,
+                              threadRef,
+                            }}
+                            error={error}
+                            hasOlderMessages={olderCursor !== null}
+                            isGenerating={isGenerating}
+                            isLoadingOlder={isLoadingOlder}
+                            loadOlderError={loadOlderError}
+                            messages={messages}
+                            onLoadOlder={loadOlder}
+                            onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                            onAskUserEditingChange={handleAskUserEditingChange}
+                            onAskUserSubmit={handleAskUserSubmit}
+                            onCreateDocumentResolve={
+                              handleCreateDocumentResolve
+                            }
+                            onOpenCreateDocumentDraft={
+                              handleOpenCreateDocumentDraft
+                            }
+                            onOpenCreatedDocument={handleOpenCreatedDocument}
+                            onOpenPlaybook={handleOpenPlaybook}
+                            onContinuePausedTurn={handleContinuePausedTurn}
+                            onResend={resendLatestMessage}
+                            onSendWithoutAnonymization={
+                              sendWithoutAnonymization
+                            }
+                            queue={queue}
+                            stickyUserMessages
+                            streamdownComponents={streamdownComponents}
+                            computerWait={computerWait}
+                            threadRef={threadRef}
+                            turnSentAt={turnSentAt}
+                            userMessageEdit={userMessageEdit}
+                            workspaceId={workspaceId}
+                          />
+                        </ChatLocalRunQuestionContext>
+                        <ChatBackgroundTasks
+                          generationActive={isGenerating}
+                          threadId={threadRef.threadId}
                         />
-                      </ChatLocalRunQuestionContext>
-                      <ChatBackgroundTasks
-                        generationActive={isGenerating}
-                        threadId={threadRef.threadId}
-                      />
-                      <ChatThreadRecap
-                        activeOrganizationId={activeOrganizationId}
-                        isGenerating={isGenerating}
-                        lastActivityAt={data.lastActivityAt}
-                        lastMessageId={messages.at(-1)?.id ?? null}
-                        lastMessageRole={messages.at(-1)?.role ?? null}
-                        messageCount={messages.length}
-                        threadRef={threadRef}
-                      />
-                    </>
-                  )}
-                </ConversationContent>
-                <ChatTurnNavigator messages={messages} />
-              </Conversation>
-              {/* Outside the transcript's log, whose additions it would
-                  otherwise be read among. */}
-              <ChatTurnAnnouncer
-                hasError={error !== undefined}
-                isGenerating={isGenerating}
-                key={`turn-announcer-${threadRef.threadId}`}
-                messages={messages}
-                turnsStarted={turnsStarted}
-              />
-
-              <ChatAnonymizationLayer
-                editor={controller.editor}
-                enabled={anonymized}
-                focused={composerFocused}
-                ownerKey={threadKey}
-                workspaceId={workspaceId ?? threadRef.threadId}
-              />
-              {/* Soft fade so messages dissolve into the floating composer
-              instead of being clipped at a hard edge. ScrollArea owns the
-              overflow signal; only its transcript root controls this fade,
-              so scrollable tool results cannot keep it visible at bottom. */}
-              {messages.length > 0 && (
-                <div
-                  aria-hidden="true"
-                  className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto hidden h-(--chat-bottom-fade-h) w-full max-w-5xl bg-linear-to-t to-transparent group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:block"
-                  data-chat-bottom-fade=""
-                />
-              )}
-              {/* Top of the page stacking order: must stack above the sticky
-                transcript headers and the fade gradient. `z-20` beats the
-                isolated <Conversation> context (which caps its sticky
-                headers at z-10) and the z-auto fade sibling.
-
-                No bottom padding: the composer block hugs the pane bottom so
-                the glass veil (the shared `ComposerVeil` behind the tray)
-                reaches the bottom edge with no unblurred strip of transcript
-                showing through beneath the status row. The tray wrapper's
-                `p-2` keeps the composer breathing inside the veil.
-                `--composer-block-h` is measured from this block's live
-                height, so transcript clearance and the scroll button's
-                offset track the change automatically. */}
-              <div
-                className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
-                ref={observeComposerBlock}
-              >
-                {/* `px-2` mirrors the tray's `p-2` so the first chip starts on
-                  the composer box's leading edge; `pb-0` because the tray
-                  padding alone separates the chips from the box here. */}
-                <SuggestedFollowupChips
-                  analyticsSurface="chat-thread"
-                  className="px-2 pb-0"
-                  onSelect={(prompt) => {
-                    controller.setContent(composerStoredMarkdown(prompt));
-                    detached(
-                      controller.submit(async (draft) => {
-                        composerModels.openDesktopForSend();
-                        if (!(await ensureAIAvailable())) {
-                          return CHAT_SEND_KEPT;
-                        }
-                        const message = await buildChatRequestMessage(draft);
-                        if (message.isErr()) {
-                          notifyUserError(
-                            message.error,
-                            t("chat.sendErrorMessageEmpty"),
-                          );
-                          return CHAT_SEND_KEPT;
-                        }
-                        return await sendMessage(message.value);
-                      }),
-                      "chat-thread-page.submit",
-                    );
-                  }}
-                  prompts={suggestedFollowupPrompts}
-                  messageId={lastMessageId}
-                  surface="floating"
-                  threadId={threadRef.threadId}
-                />
-                {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
-                <McpReconnectNotice editor={controller.editor} />
-                {/* Glass tray behind the composer + status row: the shared
-                  `ComposerVeil` (one owner of the blur/tint values across
-                  every chat surface) fills this `relative isolate` wrapper
-                  so the floating status-row text stays readable over the
-                  scrolled transcript. */}
-                <div className="relative isolate p-2">
-                  <ComposerVeil />
-                  <ChatInputSurface
-                    sendDisabled={availability !== "available"}
-                    anonymized={anonymized}
-                    autoFocus
-                    context={{ activeOrganizationId, threadRef }}
-                    controller={controller}
-                    guideAnchorsEnabled
-                    isGenerating={isGenerating}
-                    mcpOrganizationId={activeOrganizationId}
-                    models={composerModels.models}
-                    reservedCommands={{
-                      hasPersistedThread: messages.length > 0,
-                    }}
-                    skillChat={{
-                      contextMatterIds: selectedContextMatterIds,
-                      document: null,
-                      runTarget: composerModels.runTarget,
-                      threadRef,
-                      webSearch: {
-                        available: data.webSearchAvailable,
-                        enabled: data.webSearchEnabled,
-                      },
-                    }}
-                    skillsOrganizationId={activeOrganizationId}
-                    onNewThread={messages.length > 0 ? startNewThread : null}
-                    dock={
-                      <ChatComposerDock
-                        data={data}
-                        guideAnchorsEnabled
-                        models={composerModels.models}
-                        leadingContext={
-                          <>
-                            {activeSkill && (
-                              <ChatActiveSkillLabel skill={activeSkill} />
-                            )}
-                            <ChatMatterPicker
-                              matterIds={selectedContextMatterIds}
-                              onChange={(matterIds) =>
-                                setContextMatterIds(
-                                  resolveChatContextMatterIds(
-                                    threadRef,
-                                    matterIds,
-                                  ),
-                                )
-                              }
-                            />
-                          </>
-                        }
-                        onNewThread={
-                          messages.length > 0 ? startNewThread : null
-                        }
-                        status="ready"
-                        threadRef={threadRef}
-                      />
-                    }
-                    onStop={() => {
-                      stop();
-                    }}
-                    stopping={stopPending}
-                    onFocusChange={setComposerFocused}
-                    onSubmit={handleSend}
-                    onQueue={handleQueue}
-                    queueOffered={isChatQueueOffered(
-                      composerSendState({
-                        isGenerating,
-                        turnAwaitsMember,
-                        steering: turnSteering,
-                      }),
+                        <ChatThreadRecap
+                          activeOrganizationId={activeOrganizationId}
+                          isGenerating={isGenerating}
+                          lastActivityAt={data.lastActivityAt}
+                          lastMessageId={messages.at(-1)?.id ?? null}
+                          lastMessageRole={messages.at(-1)?.role ?? null}
+                          messageCount={messages.length}
+                          threadRef={threadRef}
+                        />
+                      </>
                     )}
+                  </ConversationContent>
+                  <ChatTurnNavigator messages={messages} />
+                </Conversation>
+              }
+              overlays={
+                <>
+                  {/* Outside the transcript's log, whose additions it would
+                      otherwise be read among. */}
+                  <ChatTurnAnnouncer
+                    hasError={error !== undefined}
+                    isGenerating={isGenerating}
+                    key={`turn-announcer-${threadRef.threadId}`}
+                    messages={messages}
+                    turnsStarted={turnsStarted}
                   />
-                </div>
-              </div>
-            </ChatThreadScrollSurface>
-          </div>
+
+                  <ChatAnonymizationLayer
+                    editor={controller.editor}
+                    enabled={anonymized}
+                    focused={composerFocused}
+                    ownerKey={threadKey}
+                    workspaceId={workspaceId ?? threadRef.threadId}
+                  />
+                  {/* Soft fade so messages dissolve into the floating
+                      composer instead of being clipped at a hard edge.
+                      ScrollArea owns the overflow signal; only its
+                      transcript root controls this fade, so scrollable tool
+                      results cannot keep it visible at bottom. */}
+                  {messages.length > 0 && (
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        CHAT_READING_COLUMN_CLASS_NAME,
+                        "from-background pointer-events-none absolute inset-x-0 bottom-0 hidden h-(--chat-bottom-fade-h) bg-linear-to-t to-transparent group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:block",
+                      )}
+                      data-chat-bottom-fade=""
+                    />
+                  )}
+                </>
+              }
+              // `--composer-block-h` is measured from the block's live
+              // height, so transcript clearance and the scroll button's
+              // offset track the change automatically.
+              composerBlockRef={observeComposerBlock}
+              aboveComposer={
+                <>
+                  {/* `px-2` mirrors the tray's `p-2` so the first chip
+                      starts on the composer box's leading edge; `pb-0`
+                      because the tray padding alone separates the chips
+                      from the box here. */}
+                  <SuggestedFollowupChips
+                    analyticsSurface="chat-thread"
+                    className="px-2 pb-0"
+                    onSelect={(prompt) => {
+                      controller.setContent(composerStoredMarkdown(prompt));
+                      detached(
+                        controller.submit(async (draft) => {
+                          composerModels.openDesktopForSend();
+                          if (!(await ensureAIAvailable())) {
+                            return CHAT_SEND_KEPT;
+                          }
+                          const message = await buildChatRequestMessage(draft);
+                          if (message.isErr()) {
+                            notifyUserError(
+                              message.error,
+                              t("chat.sendErrorMessageEmpty"),
+                            );
+                            return CHAT_SEND_KEPT;
+                          }
+                          return await sendMessage(message.value);
+                        }),
+                        "chat-thread-page.submit",
+                      );
+                    }}
+                    prompts={suggestedFollowupPrompts}
+                    messageId={lastMessageId}
+                    surface="floating"
+                    threadId={threadRef.threadId}
+                  />
+                  {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
+                  <McpReconnectNotice editor={controller.editor} />
+                </>
+              }
+              composer={
+                <ChatInputSurface
+                  sendDisabled={availability !== "available"}
+                  anonymized={anonymized}
+                  autoFocus
+                  context={{ activeOrganizationId, threadRef }}
+                  controller={controller}
+                  guideAnchorsEnabled
+                  isGenerating={isGenerating}
+                  mcpOrganizationId={activeOrganizationId}
+                  models={composerModels.models}
+                  reservedCommands={{
+                    hasPersistedThread: messages.length > 0,
+                  }}
+                  skillChat={{
+                    contextMatterIds: selectedContextMatterIds,
+                    document: null,
+                    runTarget: composerModels.runTarget,
+                    threadRef,
+                    webSearch: {
+                      available: data.webSearchAvailable,
+                      enabled: data.webSearchEnabled,
+                    },
+                  }}
+                  skillsOrganizationId={activeOrganizationId}
+                  onNewThread={messages.length > 0 ? startNewThread : null}
+                  dock={
+                    <ChatComposerDock
+                      data={data}
+                      guideAnchorsEnabled
+                      models={composerModels.models}
+                      leadingContext={
+                        <>
+                          {activeSkill && (
+                            <ChatActiveSkillLabel skill={activeSkill} />
+                          )}
+                          <ChatMatterPicker
+                            matterIds={selectedContextMatterIds}
+                            onChange={(matterIds) =>
+                              setContextMatterIds(
+                                resolveChatContextMatterIds(
+                                  threadRef,
+                                  matterIds,
+                                ),
+                              )
+                            }
+                          />
+                        </>
+                      }
+                      onNewThread={messages.length > 0 ? startNewThread : null}
+                      status="ready"
+                      threadRef={threadRef}
+                    />
+                  }
+                  onStop={() => {
+                    stop();
+                  }}
+                  stopping={stopPending}
+                  onFocusChange={setComposerFocused}
+                  onSubmit={handleSend}
+                  onQueue={handleQueue}
+                  queueOffered={isChatQueueOffered(
+                    composerSendState({
+                      isGenerating,
+                      turnAwaitsMember,
+                      steering: turnSteering,
+                    }),
+                  )}
+                />
+              }
+            />
+          </ConversationScrollProvider>
         </ChatApprovalContext>
         <UsageLimitModal
           {...usageLimit.modalProps}
@@ -1039,17 +1069,6 @@ const composerSendState = ({
   }
   return isGenerating ? { type: "working", steering } : { type: "idle" };
 };
-
-const ChatThreadScrollSurface = ({ children }: { children: ReactNode }) => (
-  <ConversationScrollProvider>
-    <div
-      className="group/chat-scroll-surface relative flex min-h-0 flex-1 flex-col [--chat-bottom-fade-h:12rem]"
-      data-composer-host=""
-    >
-      {children}
-    </div>
-  </ConversationScrollProvider>
-);
 
 type ChatWebSearchSeedProps = {
   threadRef: ChatThreadRef;
@@ -1121,7 +1140,9 @@ const NewChatButton = ({
     return (
       <Button disabled size="sm" tooltip={t("chat.newChat")} variant="ghost">
         <NewChatIcon />
-        <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
+        <span className={CHAT_THREAD_NEW_CHAT_LABEL_CLASS}>
+          {t("chat.newChat")}
+        </span>
       </Button>
     );
   }
@@ -1133,7 +1154,9 @@ const NewChatButton = ({
         to="/chat/workspaces/$workspaceId/new"
       >
         <NewChatIcon />
-        <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
+        <span className={CHAT_THREAD_NEW_CHAT_LABEL_CLASS}>
+          {t("chat.newChat")}
+        </span>
       </Link>
     );
   }
@@ -1143,7 +1166,9 @@ const NewChatButton = ({
       to="/chat/new"
     >
       <NewChatIcon />
-      <span className="sr-only md:not-sr-only">{t("chat.newChat")}</span>
+      <span className={CHAT_THREAD_NEW_CHAT_LABEL_CLASS}>
+        {t("chat.newChat")}
+      </span>
     </Link>
   );
 };

@@ -12,7 +12,6 @@ import type {
 import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 import { isLanguageCode } from "@stll/locales";
 
-import { env } from "@/api/env";
 import {
   invalidResponse,
   loadTranscriptionAudio,
@@ -24,37 +23,28 @@ import {
 import type { TranscriptionResult } from "@/api/handlers/dictation/provider";
 import { detached } from "@/api/lib/analytics/capture";
 import {
-  deleteElevenLabsTranscript,
   elevenLabsTranscriptionUrl,
   elevenLabsTranscriptUrl,
   fetchElevenLabsTranscription,
 } from "@/api/lib/chat/provider-data-policy";
-import type { ElevenLabsEnvironment } from "@/api/lib/chat/provider-data-policy";
+import { elevenLabsKeepsTranscripts } from "@/api/lib/dictation/elevenlabs-deployment";
+import type { ElevenLabsDeployment } from "@/api/lib/dictation/elevenlabs-deployment";
+import { deleteKeptTranscriptAt } from "@/api/lib/dictation/kept-transcript-delete";
+import {
+  forgetKeptTranscript,
+  recordKeptTranscript,
+} from "@/api/lib/dictation/kept-transcript-store";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { admittedDispatchSignal } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ModelDispatchScope } from "@/api/lib/rate-limit/model-dispatch-admission";
 
-export type ElevenLabsDeployment = {
-  apiKey: string;
-  environment: ElevenLabsEnvironment;
-  /** The account has ElevenLabs zero retention, so every request asks for
-   *  it. Without it ElevenLabs keeps the audio and transcript. */
-  zeroRetention: boolean;
-};
-
-/** The deployment's ElevenLabs key and its environment; `null` offers no
- *  direct ElevenLabs model. */
-export const readElevenLabsDeployment = (): ElevenLabsDeployment | null => {
-  const apiKey = env.ELEVENLABS_API_KEY?.trim();
-  return apiKey === undefined || apiKey === ""
-    ? null
-    : {
-        apiKey,
-        environment: env.ELEVENLABS_ENVIRONMENT,
-        zeroRetention: env.ELEVENLABS_ZERO_RETENTION === "1",
-      };
-};
+const KEPT_TRANSCRIPT_RECORD_FAILED = failureSink({
+  event: "dictation.kept_transcript.record_failed",
+  expected: [],
+});
 
 /**
  * Whether a deployment's ElevenLabs environment serves an endpoint: the EU
@@ -106,42 +96,86 @@ const keptTranscriptId = (body: unknown) => {
 type DeleteKeptTranscriptOptions = {
   deployment: ElevenLabsDeployment;
   transcriptionId: string;
-  fetch?: typeof deleteElevenLabsTranscript | undefined;
+  /** The transcript is recorded for the deletion task, which retries a
+   *  delete this one does not settle. */
+  recorded: boolean;
+  fetch?: Parameters<typeof deleteKeptTranscriptAt>[0]["fetch"];
+  forget?: typeof forgetKeptTranscript | undefined;
 };
 
 /**
  * Deletes, in the background, the audio and transcript ElevenLabs kept for
  * a request made without zero retention. The dictation does not wait for
- * it; a refused delete is logged and a failed one reported, never shown to
- * the speaker. A transcript already gone counts as deleted.
+ * it, and a refusal is never shown to the speaker. A recorded transcript
+ * the delete settles is dropped from the deletion task's queue; one it does
+ * not stays there, and the task retries it and reports one that stays kept.
  */
-export const deleteKeptTranscript = ({
+export const settleKeptTranscript = async ({
   deployment,
   transcriptionId,
-  fetch: fetchProvider = deleteElevenLabsTranscript,
+  recorded,
+  fetch: fetchProvider,
+  forget = forgetKeptTranscript,
 }: DeleteKeptTranscriptOptions) => {
-  detached(async () => {
-    const url = elevenLabsTranscriptUrl(
-      deployment.environment,
-      transcriptionId,
-    );
-    if (url === null) {
-      logger.warn("ElevenLabs kept a transcript under an unexpected id");
-      return;
-    }
-    const response = await fetchProvider(url, {
-      method: "DELETE",
-      headers: { "xi-api-key": deployment.apiKey },
-      redirect: "error",
-      timeout: { type: "headers", ms: PROVIDER_TIMEOUT_MS },
+  const outcome = await deleteKeptTranscriptAt({
+    deployment,
+    environment: deployment.environment,
+    transcriptionId,
+    fetch: fetchProvider,
+  });
+  if (outcome.type === "failed") {
+    logger.warn("ElevenLabs kept a transcript its delete refused", {
+      "keptTranscript.lastErrorCode": outcome.code,
+      "keptTranscript.queued": recorded,
     });
-    await response.body?.cancel();
-    if (!response.ok && response.status !== 404) {
-      logger.warn("ElevenLabs kept a transcript its delete refused", {
-        "http.status_code": response.status,
-      });
-    }
-  }, "dictation.elevenlabs-transcript-delete");
+    return outcome;
+  }
+  if (recorded) {
+    await forget({ transcriptionId });
+  }
+  return outcome;
+};
+
+/** {@link settleKeptTranscript} in the background. */
+export const deleteKeptTranscript = (options: DeleteKeptTranscriptOptions) => {
+  detached(
+    async () => await settleKeptTranscript(options),
+    "dictation.elevenlabs-transcript-delete",
+  );
+};
+
+type RememberKeptTranscriptOptions = {
+  deployment: ElevenLabsDeployment;
+  transcriptionId: string;
+  record: typeof recordKeptTranscript;
+};
+
+/** Records a kept transcript for the deletion task before the answer
+ *  returns. A failure is reported, and the request's own delete still
+ *  runs. An id ElevenLabs would not issue is not recorded; its delete
+ *  refuses it and says so. */
+const rememberKeptTranscript = async ({
+  deployment,
+  transcriptionId,
+  record,
+}: RememberKeptTranscriptOptions) => {
+  if (
+    elevenLabsTranscriptUrl(deployment.environment, transcriptionId) === null
+  ) {
+    return "unexpected_id" as const;
+  }
+  const recorded = await Result.tryPromise(
+    async () =>
+      await record({ environment: deployment.environment, transcriptionId }),
+  );
+  if (recorded.isErr()) {
+    observeFailure(recorded.error, {
+      sink: KEPT_TRANSCRIPT_RECORD_FAILED,
+      ctx: { operation: "dictation.transcribe" },
+    });
+    return "record_failed" as const;
+  }
+  return "recorded" as const;
 };
 
 /**
@@ -206,14 +240,15 @@ type TranscribeWithElevenLabsOptions = {
   scope: ModelDispatchScope;
   signal?: AbortSignal | undefined;
   fetch?: typeof fetchElevenLabsTranscription | undefined;
+  recordKept?: typeof recordKeptTranscript | undefined;
   deleteKept?: typeof deleteKeptTranscript | undefined;
   scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
 /** One audio chunk transcribed by ElevenLabs with the deployment's key, in
  *  its environment, with zero retention when the account has it. Without
- *  it, the transcript ElevenLabs kept is deleted once the answer is in,
- *  whether or not the answer was usable. */
+ *  it, the transcript ElevenLabs kept is recorded for the deletion task and
+ *  deleted once the answer is in, whether or not the answer was usable. */
 export const transcribeWithElevenLabs = async ({
   audio,
   modelId,
@@ -222,6 +257,7 @@ export const transcribeWithElevenLabs = async ({
   scope,
   signal,
   fetch: fetchProvider = fetchElevenLabsTranscription,
+  recordKept = recordKeptTranscript,
   deleteKept = deleteKeptTranscript,
   scheduleTimeout,
 }: TranscribeWithElevenLabsOptions) => {
@@ -281,8 +317,18 @@ export const transcribeWithElevenLabs = async ({
     signal: abortSignal,
     scheduleTimeout,
   });
-  if (!deployment.zeroRetention && kept.transcriptionId !== null) {
-    deleteKept({ deployment, transcriptionId: kept.transcriptionId });
+  if (elevenLabsKeepsTranscripts(deployment) && kept.transcriptionId !== null) {
+    const { transcriptionId } = kept;
+    const remembered = await rememberKeptTranscript({
+      deployment,
+      transcriptionId,
+      record: recordKept,
+    });
+    deleteKept({
+      deployment,
+      transcriptionId,
+      recorded: remembered === "recorded",
+    });
   }
   if (fetched.isErr()) {
     return Result.err(fetched.error);

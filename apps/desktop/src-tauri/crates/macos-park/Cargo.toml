@@ -41,6 +41,13 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSWindow",
   "libc",
 ] }
+objc2-avf-audio = { version = "0.3", default-features = false, features = [
+  "AVAudioBuffer",
+  "AVAudioFile",
+  "AVAudioFormat",
+  "AVAudioTypes",
+  "std",
+] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFBase", "CFMachPort", "CFNumber", "CFPreferences", "CFRunLoop", "CFString", "std"] }
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation", "objc2", "std"] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
@@ -54,6 +61,13 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
 
 [target.'cfg(target_os = "windows")'.dependencies]
 tokio = { version = "1", features = ["net"] }
+windows = { version = "0.62", default-features = false, features = [
+  "Win32_Media_MediaFoundation",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
+  "std",
+] }
 windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Globalization",

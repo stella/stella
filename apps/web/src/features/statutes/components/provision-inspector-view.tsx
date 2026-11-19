@@ -31,11 +31,15 @@ import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-
 import Tooltip from "@/components/tooltip";
 import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
-import { ProvisionHistory } from "@/features/statutes/components/provision-history";
+import {
+  ProvisionHistory,
+  useProvisionHistoryAnchor,
+} from "@/features/statutes/components/provision-history";
+import type { ProvisionHistoryAnchor } from "@/features/statutes/components/provision-history";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
+import { ProvisionVersionMenu } from "@/features/statutes/components/provision-version-menu";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
-import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
   statuteCitationCountsOptions,
@@ -160,6 +164,7 @@ export const ProvisionInspectorView = ({
       "statutes.provision-compare",
     );
   };
+  const openWordingComparison = useOpenWordingComparison(payload.anchorId);
   // The citing list shows this read's failure and its retry; here it only
   // seeds the chat's start, which goes without passages until it lands.
   const leadingView = queryView(
@@ -176,6 +181,11 @@ export const ProvisionInspectorView = ({
   const summarizePreset = useProvisionSummaryPreset({
     passages: leadingDecisions,
     payload,
+  });
+  // The heading the provision's history is filed under, for the menu.
+  const { anchor: historyAnchor } = useProvisionHistoryAnchor({
+    anchorId: payload.anchorId,
+    documentId: payload.documentId,
   });
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -374,7 +384,9 @@ export const ProvisionInspectorView = ({
           onZoom={textScale.zoom}
         >
           <ProvisionVersionBar
+            historyAnchor={historyAnchor}
             onCompare={openComparison}
+            onCompareWording={openWordingComparison}
             onVersionChange={switchVersion}
             selectedVersion={selectedVersion}
             versions={availableVersions}
@@ -386,16 +398,49 @@ export const ProvisionInspectorView = ({
 };
 
 /**
+ * Opens one wording against the one before it: the act's page at a version
+ * that carries it, beside the version just before the wording changed.
+ */
+const useOpenWordingComparison = (provision: string) => {
+  const navigate = useNavigate();
+  return (base: PublicStatuteVersion, previous: PublicStatuteVersion) => {
+    if (previous.versionValidFrom === null) {
+      return;
+    }
+    detached(
+      navigate({
+        ...createStatuteLinkTarget({
+          country: base.country,
+          documentId: base.id,
+          eli: base.eli,
+          slug: base.slug,
+          versionValidFrom: base.versionValidFrom,
+        }),
+        search: { compare: previous.versionValidFrom, provision },
+      }),
+      "statutes.provision-compare-wording",
+    );
+  };
+};
+
+/**
  * The consolidation on screen as one control: its status as a dot, its
  * window as the menu that opens another version or sets one beside it.
  */
 const ProvisionVersionBar = ({
+  historyAnchor,
   onCompare,
+  onCompareWording,
   onVersionChange,
   selectedVersion,
   versions,
 }: {
+  historyAnchor: ProvisionHistoryAnchor;
   onCompare: (versionValidFrom: string) => void;
+  onCompareWording: (
+    base: PublicStatuteVersion,
+    previous: PublicStatuteVersion,
+  ) => void;
   onVersionChange: (documentId: string) => void;
   selectedVersion: PublicStatuteVersion | undefined;
   versions: readonly PublicStatuteVersion[];
@@ -442,9 +487,11 @@ const ProvisionVersionBar = ({
         />
       </Tooltip>
       {versions.length > 1 ? (
-        <StatuteVersionMenu
+        <ProvisionVersionMenu
           currentVersionId={selectedVersion.id}
+          historyAnchor={historyAnchor}
           onCompare={onCompare}
+          onCompareWording={onCompareWording}
           onVersionChange={onVersionChange}
           versions={versions}
         />

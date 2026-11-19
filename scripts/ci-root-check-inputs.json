@@ -165,6 +165,7 @@
     "Release queue history guard": ["**"],
     "Release CLI coupling guard": ["**"],
     "CLI contract changeset guard": ["**"],
+    "MCP released surface compatibility": ["**"],
     "SQL performance suppression summary": ["**"],
     "Release marketing provenance warning": ["**"],
     "Rust format": ["apps/desktop/src-tauri/**"],

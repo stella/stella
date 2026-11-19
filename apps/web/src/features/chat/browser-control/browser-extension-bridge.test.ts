@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
@@ -764,7 +766,7 @@ describe("the bridge outlives every chat surface", () => {
 
 describe("the bridge mount site", () => {
   test("only the app frame host mounts the bridge", async () => {
-    const root = new URL("../../..", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../../..", import.meta.url));
     const mounters: string[] = [];
     for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
       if (
@@ -774,7 +776,7 @@ describe("the bridge mount site", () => {
         continue;
       }
       if (
-        (await Bun.file(`${root}${file}`).text()).includes(
+        (await Bun.file(path.join(root, file)).text()).includes(
           "mountBrowserExtensionBridge",
         )
       ) {
