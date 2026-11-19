@@ -113,7 +113,7 @@ export const MoveToSideIcon: LucideIcon = /* @__PURE__ */ createLucideIcon(
 
 // Published glyphs remain available to package consumers even when no
 // repository component imports them.
-export { CircleOffIcon, DollarSignIcon, ScissorsIcon } from "lucide-react-native";
+export { DollarSignIcon, ScissorsIcon } from "lucide-react-native";
 
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
@@ -164,6 +164,7 @@ export {
   CircleDotIcon,
   CircleHelpIcon,
   CircleIcon,
+  CircleOffIcon,
   CircleUserRoundIcon,
   ClipboardCheckIcon,
   ClipboardCopyIcon,
