@@ -15,7 +15,7 @@ import {
   publicLawPageSearchValue,
   publicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
-import { publicCaseLawHubPathFor } from "@/features/case-law/browse-path";
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-hub-path";
 import {
   createCaseLawIndexPath,
   decisionDateRange,

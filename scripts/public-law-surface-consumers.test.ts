@@ -68,7 +68,7 @@ const CONSUMERS = {
   "apps/mobile/src/state/case-law.ts": "pages",
   // Jurisdiction and court hubs: crawlable pages that link into decisions.
   "apps/api/src/handlers/case-law/decisions/browse-hubs.ts": "pages",
-  "apps/web/src/features/case-law/browse-path.ts": "pages",
+  "apps/web/src/features/case-law/browse-hub-path.ts": "pages",
   "apps/web/src/routes/law/$country/index.tsx": "pages",
   // The jurisdiction hub's page links the statutes of a public jurisdiction.
   "apps/web/src/routes/law/$country/-index.page.tsx": "pages",

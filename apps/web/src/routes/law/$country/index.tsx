@@ -1,11 +1,8 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import {
-  caseLawBrowseCourtSegment,
-  createCaseLawJurisdictionHubPath,
-  hasSearch,
-} from "@/features/case-law/browse-path";
+import { createCaseLawJurisdictionHubPath } from "@/features/case-law/browse-hub-path";
+import { caseLawBrowseCourtSegment } from "@/features/case-law/browse-path";
 import {
   publicCaseLawPageCountryFromParam,
   toCaseLawCountryParam,
@@ -13,13 +10,11 @@ import {
 import { caseLawBrowseCourtsOptions } from "@/features/case-law/queries/browse-hubs";
 import { getFormatter, getTranslator } from "@/i18n/i18n-store";
 import { caseLawCountryName } from "@/lib/case-law-route";
-import { pageTitleLiteral } from "@/lib/page-title";
-import {
-  createLegalCollectionJsonLd,
-  createPublicLawCanonicalUrl,
-  createPublicLawHead,
-} from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import {
+  createPublicLawHubHead,
+  type PublicLawHubHeadData,
+} from "@/routes/law/-components/public-law-hub-head";
 
 import { JurisdictionHubPage } from "./-index.page";
 import { JurisdictionHubPending } from "./-index.pending";
@@ -30,6 +25,21 @@ const missing: () => never = () => {
   return panic("notFound({ throw: true }) returned");
 };
 
+/** What the jurisdiction hub's head says, worked out with its reads. */
+const jurisdictionHubHead = (
+  countryParam: string,
+  scope: string,
+): PublicLawHubHeadData => {
+  const t = getTranslator();
+  const country = caseLawCountryName(getFormatter(), scope);
+  return {
+    description: t("caseLaw.browse.jurisdictionDescription", { country }),
+    items: [],
+    path: createCaseLawJurisdictionHubPath(countryParam),
+    title: t("chat.mention.corpus.caseLaw", { country }),
+  };
+};
+
 /**
  * A jurisdiction's crawlable hub: every court that holds public decisions,
  * each linking down its browse tree, plus the jurisdiction's statutes. The
@@ -38,7 +48,8 @@ const missing: () => never = () => {
  */
 export const Route = createFileRoute("/law/$country/")({
   // The loader and its reads load with the route, not at startup: only the
-  // head (and the pending view) stay in the route tree every visit pays for.
+  // head (and the pending view) stay in the route tree every visit pays for,
+  // so the loader also works out what the head says.
   codeSplitGroupings: [["loader"], ["component"]],
   loader: async ({ context: { queryClient }, params }) => {
     const scope = publicCaseLawPageCountryFromParam(params.country);
@@ -60,37 +71,11 @@ export const Route = createFileRoute("/law/$country/")({
     return {
       scope,
       courts: [...bySegment].map(([segment, name]) => ({ segment, name })),
+      head: jurisdictionHubHead(params.country, scope),
     };
   },
-  head: ({ loaderData, match, params }) => {
-    const t = getTranslator();
-    const country = caseLawCountryName(
-      getFormatter(),
-      loaderData?.scope ?? params.country,
-    );
-    const title = t("chat.mention.corpus.caseLaw", { country });
-    const description = t("caseLaw.browse.jurisdictionDescription", {
-      country,
-    });
-    const path = createCaseLawJurisdictionHubPath(params.country);
-    return createPublicLawHead({
-      // Any query string makes this a variant of the hub, never the hub;
-      // the variant's canonical link names the hub.
-      indexing: hasSearch(match.search) ? "noindex" : "default",
-      canonicalPath: path,
-      description,
-      jsonLd: createLegalCollectionJsonLd({
-        t,
-        canonicalUrl: createPublicLawCanonicalUrl(path),
-        description,
-        kind: "caseLaw",
-        name: title,
-      }),
-      path,
-      title: pageTitleLiteral(title),
-      type: "website",
-    });
-  },
+  head: ({ loaderData, match }) =>
+    createPublicLawHubHead(loaderData?.head, match.search),
   component: JurisdictionHubPage,
   pendingComponent: JurisdictionHubPending,
 });

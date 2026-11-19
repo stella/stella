@@ -7,11 +7,11 @@ import { caseLawCountryName } from "@/lib/case-law-route";
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 import {
   CaseLawBrowseLink,
+  PublicLawHubHeader,
   PublicLawHubItem,
   PublicLawHubScroll,
   PublicLawHubSection,
 } from "@/routes/law/-components/public-law-hub";
-import { PublicLawHubHeader } from "@/routes/law/-components/public-law-hub.pending";
 
 import { JurisdictionHubShell } from "./-index.pending";
 

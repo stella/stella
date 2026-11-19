@@ -13,7 +13,7 @@ import {
 import { STATUTE_QUERY_CAPABILITIES } from "@stll/api-contract/statute-query-capability";
 
 import { env } from "@/env";
-import { createCaseLawJurisdictionHubPath } from "@/features/case-law/browse-path";
+import { createCaseLawJurisdictionHubPath } from "@/features/case-law/browse-hub-path";
 import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   publicCaseLawPageCountryFromParam,

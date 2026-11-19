@@ -7,7 +7,7 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 
-import { publicCaseLawHubPathFor } from "@/features/case-law/browse-path";
+import { publicCaseLawHubPathFor } from "@/features/case-law/browse-hub-path";
 import {
   publicCaseLawCountryFromParam,
   toCaseLawCountryParam,

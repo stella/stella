@@ -24,6 +24,20 @@ export const PublicLawHubScroll = ({ children }: PropsWithChildren) => (
   </main>
 );
 
+/** A hub's heading and its one sentence. */
+export const PublicLawHubHeader = ({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) => (
+  <header className="flex flex-col gap-1">
+    <h1 className="text-lg font-semibold wrap-break-word">{title}</h1>
+    <p className="text-muted-foreground text-sm">{description}</p>
+  </header>
+);
+
 const LINK_CLASS =
   "hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm underline-offset-2 hover:underline focus-visible:ring-2";
 

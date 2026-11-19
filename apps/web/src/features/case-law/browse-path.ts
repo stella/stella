@@ -3,11 +3,6 @@ import { panic } from "better-result";
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 import { Temporal } from "@stll/time";
 
-import {
-  publicCaseLawPageCountryFromParam,
-  toCaseLawCountryParam,
-} from "./case-law-jurisdiction";
-
 /**
  * The crawlable browse tree of a jurisdiction's decisions, as query-free
  * paths. Each level links to the next, so a crawler reaches every listed
@@ -25,7 +20,9 @@ import {
  * reach them; the per-month sitemaps list them.
  *
  * Only the canonical spelling parses (`browse-path-parse.ts`, which only the
- * hub routes' loaders read): a page address has exactly one URL.
+ * hub routes' loaders read): a page address has exactly one URL. The
+ * jurisdiction hub's own address is in `browse-hub-path.ts`, which the route
+ * heads read at startup; this module loads with the hub pages.
  */
 
 export type CaseLawBrowseTarget =
@@ -52,28 +49,6 @@ const pad2 = (value: number): string => String(value).padStart(2, "0");
 /** The court's URL segment: the same fold its decisions' URLs carry. */
 export const caseLawBrowseCourtSegment = (court: string): string =>
   createCaseLawDecisionSlug(court);
-
-export const createCaseLawJurisdictionHubPath = (
-  countryParam: string,
-): `/law/${string}` => `/law/${countryParam}`;
-
-/**
- * The hub a search, filter or home URL scoped to `country` stands in for, or
- * null when the country has no public pages.
- */
-export const publicCaseLawHubPathFor = (
-  country: string | undefined,
-): `/law/${string}` | null => {
-  const scope =
-    country === undefined ? null : publicCaseLawPageCountryFromParam(country);
-  return scope === null
-    ? null
-    : createCaseLawJurisdictionHubPath(toCaseLawCountryParam(scope));
-};
-
-/** Whether a route's parsed search carries any parameter at all. */
-export const hasSearch = (search: object): boolean =>
-  Object.keys(search).length > 0;
 
 const pageSuffix = (page: number): string =>
   page > 1 ? `/page/${String(page)}` : "";

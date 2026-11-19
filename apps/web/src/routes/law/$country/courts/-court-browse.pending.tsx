@@ -11,6 +11,4 @@ import {
 
 export const CourtBrowseShell = PublicLawHubLayout;
 
-const CourtBrowsePendingView = () => <PublicLawHubPending />;
-
-export const CourtBrowsePending = framePendingView(CourtBrowsePendingView);
+export const CourtBrowsePending = framePendingView(PublicLawHubPending);

@@ -22,11 +22,11 @@ import {
   CaseLawBrowseLink,
   CaseLawBrowsePager,
   PublicLawHubCrumbs,
+  PublicLawHubHeader,
   PublicLawHubItem,
   PublicLawHubScroll,
   PublicLawHubSection,
 } from "@/routes/law/-components/public-law-hub";
-import { PublicLawHubHeader } from "@/routes/law/-components/public-law-hub.pending";
 
 import { CourtBrowseShell } from "./-court-browse.pending";
 

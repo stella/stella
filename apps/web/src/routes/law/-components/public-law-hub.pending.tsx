@@ -28,23 +28,9 @@ export const PublicLawHubLayout = ({
   </div>
 );
 
-/** A hub's heading and its one sentence. */
-export const PublicLawHubHeader = ({
-  description,
-  title,
-}: {
-  description: string;
-  title: string;
-}) => (
-  <header className="flex flex-col gap-1">
-    <h1 className="text-lg font-semibold wrap-break-word">{title}</h1>
-    <p className="text-muted-foreground text-sm">{description}</p>
-  </header>
-);
-
 /**
- * The heading and the sentence at their type sizes. The sentence's line is a
- * `div`, not a `p`: a bar is a block, and the HTML parser closes a paragraph
+ * The heading and the sentence at their type sizes (`PublicLawHubHeader` on
+ * the page). The sentence's line is a `div`, not a `p`: a bar is a block, and the HTML parser closes a paragraph
  * at a block, so the server's paint would no longer match the tree the client
  * hydrates.
  */

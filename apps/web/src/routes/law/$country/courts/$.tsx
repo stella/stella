@@ -18,7 +18,6 @@ import {
   caseLawBrowsePeriodLabel,
   type CaseLawBrowseTarget,
   createCaseLawBrowsePath,
-  hasSearch,
 } from "@/features/case-law/browse-path";
 import { parseCaseLawBrowseSplat } from "@/features/case-law/browse-path-parse";
 import {
@@ -33,13 +32,12 @@ import {
 } from "@/features/case-law/queries/browse-hubs";
 import { getFormatter, getTranslator } from "@/i18n/i18n-store";
 import { caseLawCountryName } from "@/lib/case-law-route";
-import { pageTitleLiteral } from "@/lib/page-title";
-import {
-  createLegalCollectionJsonLd,
-  createPublicLawCanonicalUrl,
-  createPublicLawHead,
-} from "@/lib/public-law-seo";
+import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import {
+  createPublicLawHubHead,
+  type PublicLawHubHeadData,
+} from "@/routes/law/-components/public-law-hub-head";
 
 import { CourtBrowsePage } from "./-court-browse.page";
 import { CourtBrowsePending } from "./-court-browse.pending";
@@ -145,9 +143,55 @@ const readPage = async (
   }
 };
 
+/** What a court hub's head says, worked out with the page's reads. */
+const courtBrowseHead = ({
+  countryParam,
+  court,
+  page,
+  scope,
+}: {
+  countryParam: string;
+  court: string;
+  page: BrowsePage;
+  scope: string;
+}): PublicLawHubHeadData => {
+  const t = getTranslator();
+  const format = getFormatter();
+  const country = caseLawCountryName(format, scope);
+  const period = caseLawBrowsePeriodLabel(format, page.target);
+  return {
+    description:
+      period === null
+        ? t("caseLaw.browse.courtDescription", { court, country })
+        : t("caseLaw.browse.periodDescription", { court, country, period }),
+    items:
+      page.kind === "decisions"
+        ? page.decisions.map((decision) => ({
+            name: decision.caseNumber,
+            url: createPublicLawCanonicalUrl(
+              createCaseLawDecisionPath(
+                createCaseLawDecisionRouteParams({
+                  caseNumber: decision.caseNumber,
+                  country: decision.country,
+                  court: decision.court,
+                  decisionId: decision.id,
+                  language: decision.language,
+                  languageAlternates: decision.languageAlternates,
+                  slug: decision.slug,
+                }),
+              ),
+            ),
+          }))
+        : [],
+    path: createCaseLawBrowsePath(countryParam, page.target),
+    title: period === null ? court : `${court} · ${period}`,
+  };
+};
+
 export const Route = createFileRoute("/law/$country/courts/$")({
   // The loader and its reads load with the route, not at startup: only the
-  // head (and the pending view) stay in the route tree every visit pays for.
+  // head (and the pending view) stay in the route tree every visit pays for,
+  // so the loader also works out what the head says.
   codeSplitGroupings: [["loader"], ["component"]],
   loader: async ({ context: { queryClient }, params }) => {
     const scope = publicCaseLawPageCountryFromParam(params.country);
@@ -169,64 +213,21 @@ export const Route = createFileRoute("/law/$country/courts/$")({
     if (court === undefined) {
       missing();
     }
+    const page = await readPage(queryClient, scope, court, target);
     return {
       scope,
       court,
-      page: await readPage(queryClient, scope, court, target),
+      page,
+      head: courtBrowseHead({
+        countryParam: params.country,
+        court,
+        page,
+        scope,
+      }),
     };
   },
-  head: ({ loaderData, match, params }) => {
-    if (loaderData === undefined) {
-      return {};
-    }
-    const t = getTranslator();
-    const format = getFormatter();
-    const { court, page, scope } = loaderData;
-    const country = caseLawCountryName(format, scope);
-    const period = caseLawBrowsePeriodLabel(format, page.target);
-    const title = period === null ? court : `${court} · ${period}`;
-    const description =
-      period === null
-        ? t("caseLaw.browse.courtDescription", { court, country })
-        : t("caseLaw.browse.periodDescription", { court, country, period });
-    const path = createCaseLawBrowsePath(params.country, page.target);
-    return createPublicLawHead({
-      // Any query string makes this a variant of the hub, never the hub;
-      // the variant's canonical link names the hub.
-      indexing: hasSearch(match.search) ? "noindex" : "default",
-      canonicalPath: path,
-      description,
-      jsonLd: createLegalCollectionJsonLd({
-        t,
-        canonicalUrl: createPublicLawCanonicalUrl(path),
-        description,
-        kind: "caseLaw",
-        items:
-          page.kind === "decisions"
-            ? page.decisions.map((decision) => ({
-                name: decision.caseNumber,
-                url: createPublicLawCanonicalUrl(
-                  createCaseLawDecisionPath(
-                    createCaseLawDecisionRouteParams({
-                      caseNumber: decision.caseNumber,
-                      country: decision.country,
-                      court: decision.court,
-                      decisionId: decision.id,
-                      language: decision.language,
-                      languageAlternates: decision.languageAlternates,
-                      slug: decision.slug,
-                    }),
-                  ),
-                ),
-              }))
-            : [],
-        name: title,
-      }),
-      path,
-      title: pageTitleLiteral(title),
-      type: "website",
-    });
-  },
+  head: ({ loaderData, match }) =>
+    createPublicLawHubHead(loaderData?.head, match.search),
   component: CourtBrowsePage,
   pendingComponent: CourtBrowsePending,
 });

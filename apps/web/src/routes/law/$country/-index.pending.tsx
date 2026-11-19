@@ -11,8 +11,4 @@ import {
 
 export const JurisdictionHubShell = PublicLawHubLayout;
 
-const JurisdictionHubPendingView = () => <PublicLawHubPending />;
-
-export const JurisdictionHubPending = framePendingView(
-  JurisdictionHubPendingView,
-);
+export const JurisdictionHubPending = framePendingView(PublicLawHubPending);
