@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { fileURLToPath } from "node:url";
 
 import { load } from "@stll/html";
 import {
@@ -567,7 +568,9 @@ describe("the portal's typesetting, read as a browser lays it out", () => {
   test("the export's line wrapping and indentation never reach a block's text", async () => {
     const names = (
       await Array.fromAsync(
-        new Bun.Glob("pl-tk-case-*.html.gz").scan({ cwd: FIXTURES.pathname }),
+        new Bun.Glob("pl-tk-case-*.html.gz").scan({
+          cwd: fileURLToPath(FIXTURES),
+        }),
       )
     ).toSorted();
     const offenders: string[] = [];

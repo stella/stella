@@ -12600,7 +12600,7 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/workspaces/vocabulary/candidates.test.ts": {
+    "src/lib/workspaces/vocabulary/candidates.test.ts": {
       "peakMb": 182,
       "baselineMb": 182,
       "source": {

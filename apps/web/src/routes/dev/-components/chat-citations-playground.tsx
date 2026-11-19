@@ -137,7 +137,7 @@ export function ChatCitationsPlayground({
       <ChatApprovalContext
         value={createPlaygroundChatApproval("dev-active-organization")}
       >
-        <div className="flex max-w-4xl flex-col gap-4">
+        <div className="flex max-w-3xl flex-col gap-4">
           <div className="flex items-center gap-2">
             <Button
               onClick={() => {

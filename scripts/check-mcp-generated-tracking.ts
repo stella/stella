@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
 export const trackedMcpGeneratedFiles = (files: readonly string[]) =>
   files.filter(
@@ -27,5 +28,5 @@ export const checkMcpGeneratedTracking = (root: string) => {
 };
 
 if (import.meta.main) {
-  checkMcpGeneratedTracking(new URL("..", import.meta.url).pathname);
+  checkMcpGeneratedTracking(fileURLToPath(new URL("..", import.meta.url)));
 }

@@ -8,12 +8,87 @@
 @source "../citation-graph/*.tsx";
 @source "../document-upload/*.tsx";
 @source "../file-comparison/*.tsx";
-@source "../../../decision-reader/src";
 /* Bundles embed this stylesheet; scanning them feeds escaped selectors back in. */
 @source not "../*/generated";
-@source "../../../ui/src";
-@source not "../../../{ui,decision-reader,mcp-apps}/src/**/*.{test,spec,story,stories,fixture}.{ts,tsx}";
-@source not "../../../{ui,decision-reader,mcp-apps}/src/**/fixtures";
+@source not "../**/*.{test,spec,story,stories,fixture}.{ts,tsx}";
+@source not "../**/fixtures";
+/*
+ * Only the shared UI modules the apps import, so a class another surface adds
+ * to a UI module stays out of every app. `scripts/style-sources.ts` derives
+ * the list from the apps' imports; the build fails on a module it misses.
+ */
+/* BEGIN GENERATED MCP APP STYLE SOURCES */
+@source "../../../decision-reader/src/court-name.tsx";
+@source "../../../decision-reader/src/decision-identity.tsx";
+@source "../../../decision-reader/src/decision-title.ts";
+@source "../../../decision-reader/src/display-elision-policy.tsx";
+@source "../../../decision-reader/src/document-ast-text.tsx";
+@source "../../../decision-reader/src/reader-adapters.tsx";
+@source "../../../decision-reader/src/sanitize-href.ts";
+@source "../../../decision-reader/src/source-link-policy.tsx";
+@source "../../../ui/src/components/accordion.tsx";
+@source "../../../ui/src/components/bidi-text.tsx";
+@source "../../../ui/src/components/breadcrumb.tsx";
+@source "../../../ui/src/components/button-classes.ts";
+@source "../../../ui/src/components/button.shared.ts";
+@source "../../../ui/src/components/button.tsx";
+@source "../../../ui/src/components/checkbox.tsx";
+@source "../../../ui/src/components/composer-tokens.ts";
+@source "../../../ui/src/components/court-badge.tsx";
+@source "../../../ui/src/components/court-filter.tsx";
+@source "../../../ui/src/components/date-picker-popover.logic.ts";
+@source "../../../ui/src/components/date-picker-popover.tsx";
+@source "../../../ui/src/components/date-range-filter.tsx";
+@source "../../../ui/src/components/dialog-form-state.tsx";
+@source "../../../ui/src/components/directional-icon.tsx";
+@source "../../../ui/src/components/document-identity-badge.logic.ts";
+@source "../../../ui/src/components/document-identity-badge.tsx";
+@source "../../../ui/src/components/field.tsx";
+@source "../../../ui/src/components/file-input.tsx";
+@source "../../../ui/src/components/form.tsx";
+@source "../../../ui/src/components/input-control.ts";
+@source "../../../ui/src/components/input-group.tsx";
+@source "../../../ui/src/components/input.tsx";
+@source "../../../ui/src/components/kbd.tsx";
+@source "../../../ui/src/components/label.tsx";
+@source "../../../ui/src/components/loader.tsx";
+@source "../../../ui/src/components/pagination.tsx";
+@source "../../../ui/src/components/popover.tsx";
+@source "../../../ui/src/components/preview-card.tsx";
+@source "../../../ui/src/components/prose.tsx";
+@source "../../../ui/src/components/scroll-area.tsx";
+@source "../../../ui/src/components/search-field.tsx";
+@source "../../../ui/src/components/select.tsx";
+@source "../../../ui/src/components/skeleton.tsx";
+@source "../../../ui/src/components/stella-mark.shared.ts";
+@source "../../../ui/src/components/stella-mark.tsx";
+@source "../../../ui/src/components/table-layout.ts";
+@source "../../../ui/src/components/table.tsx";
+@source "../../../ui/src/components/textarea.tsx";
+@source "../../../ui/src/components/time-field.tsx";
+@source "../../../ui/src/components/tooltip-trigger-helper.tsx";
+@source "../../../ui/src/components/tooltip.tsx";
+@source "../../../ui/src/components/truncated-text.tsx";
+@source "../../../ui/src/hooks/use-contained-handler.ts";
+@source "../../../ui/src/hooks/use-content-dir.ts";
+@source "../../../ui/src/hooks/use-latest.ts";
+@source "../../../ui/src/icons.ts";
+@source "../../../ui/src/inspector/layout-tokens.ts";
+@source "../../../ui/src/lib/button-disposition.ts";
+@source "../../../ui/src/lib/control-size.ts";
+@source "../../../ui/src/lib/field-trigger.ts";
+@source "../../../ui/src/lib/file-picker.ts";
+@source "../../../ui/src/lib/menu-row.ts";
+@source "../../../ui/src/lib/overlay-layer.ts";
+@source "../../../ui/src/lib/positioner-sizing.ts";
+@source "../../../ui/src/lib/renders-nothing.ts";
+@source "../../../ui/src/lib/tooltip-content.ts";
+@source "../../../ui/src/lib/utils.ts";
+@source "../../../ui/src/lib/week.ts";
+@source "../../../ui/src/review/review-diff-text.tsx";
+@source "../../../ui/src/review/review-word-diff.ts";
+@source "../../../ui/src/review/text-mark.tsx";
+/* END GENERATED MCP APP STYLE SOURCES */
 
 :root {
   font-family: var(--font-sans);

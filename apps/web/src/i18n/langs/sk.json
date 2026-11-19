@@ -1494,6 +1494,10 @@
       "title": "Vyhľadávanie je dočasne nedostupné"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ak poznáte spisovú značku alebo ECLI rozhodnutia, vyhľadajte ho podľa nich.",
+        "message": "Pre túto citáciu zbierky sa nenašlo presne zodpovedajúce rozhodnutie."
+      },
       "noHits": {
         "hint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
         "message": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá."
@@ -2449,7 +2453,7 @@
       "commandExited": "{command} (návratový kód {code})",
       "consoleLogs": "Výstup konzoly",
       "exactCall": "Presné volanie",
-      "failed": "Tento krok zlyhal; stella si poradí inak.",
+      "failed": "Tento krok zlyhal.",
       "field": "Pole",
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
@@ -2472,6 +2476,8 @@
       "proposedPlan": "Návrh plánu",
       "readFile": "Čítanie súboru",
       "readingLegislation": "Čítam predpisy",
+      "retried": "Skúsilo sa znova",
+      "retriedDetail": "Tento krok neprešiel, stella to skúsila inak.",
       "searchFiles": "Vyhľadávanie v súboroch",
       "searchingCaseLaw": "Hľadám v judikatúre",
       "searchingLegislationAndCaseLaw": "Hľadám v predpisoch a judikatúre",
@@ -6307,6 +6313,7 @@
     "compareUnstructured": "Jedna z verzií je dostupná len ako obyčajný text, preto ich nemožno porovnať.",
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
+    "compareWithPreviousWording": "Porovnať s predchádzajúcim znením",
     "compareWithVersion": "Porovnať so znením {version}",
     "currentWording": "Aktuálne znenie",
     "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
@@ -6320,6 +6327,7 @@
       "withdrawn": "Vydavateľ už neuvádza"
     },
     "inForceSince": "Účinné od {date}",
+    "inForceSinceAtLeast": "Účinné najneskôr od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Kľúčové rozhodnutie",
     "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
@@ -6330,6 +6338,7 @@
     "outlineJumpPlaceholder": "§ 10 alebo názov",
     "pendingChanges": "Nadchádzajúce novely",
     "pendingChangesIncomplete": "Údaje vydavateľa nemusia zahŕňať všetky nadchádzajúce novely.",
+    "provisionAbsentVersions": "{count, plural, one {V tomto znení zákona nie je} few {Nie je v týchto # zneniach zákona} many {Nie je v týchto # zneniach zákona} other {Nie je v týchto # zneniach zákona}}",
     "provisionAskContextPrompt": "\n\nPasáže, ktoré toto ustanovenie aplikujú v najvplyvnejších rozhodnutiach:\n{passages}\n\nPomocou nástrojov pre judikatúru si môžeš prečítať ktorékoľvek z týchto rozhodnutí celé alebo vyhľadať ďalšie rozhodnutia, ktoré ustanovenie citujú.",
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
@@ -6340,7 +6349,14 @@
     "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionRunAlsoFrom": "aj od {date}",
+    "provisionRunShowVersions": "Zobraziť znenia zákona za obdobie {range}",
+    "provisionRunUnchanged": "{count, plural, one {# znenie zákona bez zmeny} few {# znenia zákona bez zmeny} many {# znenia zákona bez zmeny} other {# znení zákona bez zmeny}}",
     "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
+    "provisionVersionsAll": "Všetky znenia zákona",
+    "provisionWordingAdded": "Nové ustanovenie",
+    "provisionWordingChanged": "Zmenené",
+    "provisionWordingEarliest": "Najstaršie dostupné znenie",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchLabel": "Hľadať v právnych predpisoch",

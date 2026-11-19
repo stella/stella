@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
@@ -865,7 +866,7 @@ describe("API deployment health receipt", () => {
     const workflowsDir = new URL("../.github/workflows/", import.meta.url);
     const consumers: { run: string; env: Record<string, unknown> }[] = [];
     for await (const file of new Bun.Glob("*.yml").scan(
-      workflowsDir.pathname,
+      fileURLToPath(workflowsDir),
     )) {
       const steps = workflowSteps(
         Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),

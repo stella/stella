@@ -1494,6 +1494,10 @@
       "title": "A keresés átmenetileg nem érhető el"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ha ismert, keressen a határozat ügyszáma vagy ECLI-azonosítója alapján.",
+        "message": "Nem található a gyűjteményi hivatkozásnak pontosan megfelelő határozat."
+      },
       "noHits": {
         "hint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
         "message": "Semmi nem felel meg a keresés által megkívánt szavaknak."
@@ -2449,7 +2453,7 @@
       "commandExited": "{command} (kilépési kód: {code})",
       "consoleLogs": "Konzolkimenet",
       "exactCall": "Pontos hívás",
-      "failed": "Ez a lépés nem sikerült; a stella másképp oldja meg.",
+      "failed": "Ez a lépés nem sikerült.",
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
@@ -2472,6 +2476,8 @@
       "proposedPlan": "Terv javaslata",
       "readFile": "Fájl olvasása",
       "readingLegislation": "Jogszabályok olvasása",
+      "retried": "Újrapróbálva",
+      "retriedDetail": "Ez a lépés nem sikerült, ezért a stella másképp próbálta meg.",
       "searchFiles": "Keresés a fájlokban",
       "searchingCaseLaw": "Keresés az ítélkezési gyakorlatban",
       "searchingLegislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban",
@@ -6307,6 +6313,7 @@
     "compareUnstructured": "Az egyik változat csak egyszerű szövegként érhető el, ezért a kettő nem hasonlítható össze.",
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
+    "compareWithPreviousWording": "Összehasonlítás az előző szövegváltozattal",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
     "currentWording": "Jelenlegi szöveg",
     "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
@@ -6320,6 +6327,7 @@
       "withdrawn": "A kiadó már nem közli"
     },
     "inForceSince": "Hatályos {date} óta",
+    "inForceSinceAtLeast": "Hatályos legkésőbb {date} óta",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Irányadó határozat",
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
@@ -6330,6 +6338,7 @@
     "outlineJumpPlaceholder": "§ 10 vagy cím",
     "pendingChanges": "Közelgő módosítások",
     "pendingChangesIncomplete": "Előfordulhat, hogy a közzétevő adatai nem tartalmazzák az összes közelgő módosítást.",
+    "provisionAbsentVersions": "{count, plural, one {Nem szerepel a törvény e szövegváltozatában} other {Nem szerepel a törvény e # szövegváltozatában}}",
     "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
@@ -6340,7 +6349,14 @@
     "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "ettől is: {date}",
+    "provisionRunShowVersions": "A törvény szövegváltozatainak megjelenítése, időszak: {range}",
+    "provisionRunUnchanged": "{count, plural, one {változatlan a törvény # szövegváltozatában} other {változatlan a törvény # szövegváltozatában}}",
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
+    "provisionVersionsAll": "A törvény összes szövegváltozata",
+    "provisionWordingAdded": "Új rendelkezés",
+    "provisionWordingChanged": "Módosítva",
+    "provisionWordingEarliest": "Legkorábbi elérhető szövegváltozat",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
     "searchLabel": "Keresés a jogszabályok között",

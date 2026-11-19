@@ -64,9 +64,9 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerEditModeMenuProps } from "@/components/chat/chat-edit-mode-menu";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
+import { ComposerControlSlot } from "@/components/chat/composer-row.pending";
 import {
   DOCKED_CHAT_COLUMN_SLOT,
   DockedChatSurface,

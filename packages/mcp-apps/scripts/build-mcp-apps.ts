@@ -29,6 +29,7 @@ import {
 } from "./lib/mcp-reader-ui-guard";
 import { namespaceMembers } from "./lib/namespace-members";
 import { precompiledMessagesPlugin } from "./lib/precompiled-messages";
+import { STYLE_SOURCES_COMMAND, unscannedStyleSources } from "./style-sources";
 
 const checking = Bun.argv.includes("--check");
 const generatedAssets = new Map<string, string>();
@@ -71,12 +72,13 @@ await writeGenerated(
   `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
 );
 const styleInput = path.resolve(generatedRoot, "../style.css");
-const styles = await postcss([tailwindcss()]).process(
-  await Bun.file(styleInput).text(),
-  { from: styleInput },
-);
+const styleSource = await Bun.file(styleInput).text();
+const styles = await postcss([tailwindcss()]).process(styleSource, {
+  from: styleInput,
+});
 const webRoot = path.resolve(import.meta.dirname, "../../../apps/web");
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
+const canonicalRepoRoot = realpathSync(repoRoot);
 const readerMessages = new Map<string, Map<string, string>>();
 const localeRoot = path.join(webRoot, "src/i18n/langs");
 for (const file of [
@@ -439,6 +441,19 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
   if (messageParserInputs.length > 0) {
     panic(
       `MCP app ${app} bundles the ICU message parser; format precompiled catalogues instead: ${messageParserInputs.join(", ")}`,
+    );
+  }
+  // The stylesheet scans the shared UI modules the apps import, not whole
+  // packages; a module it misses would render without its utilities.
+  const unscanned = unscannedStyleSources(
+    Object.keys(metafile.inputs).map((file) =>
+      repoRelativePath(canonicalRepoRoot, canonicalFile(path.resolve(file))),
+    ),
+    styleSource,
+  );
+  if (unscanned.length > 0) {
+    panic(
+      `MCP app ${app} imports modules its stylesheet does not scan: ${unscanned.join(", ")}. Run ${STYLE_SOURCES_COMMAND}`,
     );
   }
   const apiInputs = Object.keys(metafile.inputs).filter((file) =>

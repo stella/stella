@@ -1494,6 +1494,10 @@
       "title": "La búsqueda no está disponible temporalmente"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Busque por el número de expediente o el ECLI de la resolución, si lo conoce.",
+        "message": "No se ha encontrado ninguna resolución que corresponda exactamente a esta referencia de repertorio."
+      },
       "noHits": {
         "hint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
         "message": "Nada coincide con las palabras que exigió esta búsqueda."
@@ -2449,7 +2453,7 @@
       "commandExited": "{command} (código de salida {code})",
       "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
-      "failed": "Este paso falló; stella lo resolverá de otra manera.",
+      "failed": "Este paso falló.",
       "field": "Campo",
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
@@ -2472,6 +2476,8 @@
       "proposedPlan": "Proponiendo un plan",
       "readFile": "Leyendo un archivo",
       "readingLegislation": "Leyendo la legislación",
+      "retried": "Reintentado",
+      "retriedDetail": "Este paso no salió bien, así que stella lo intentó de otra manera.",
       "searchFiles": "Buscando en archivos",
       "searchingCaseLaw": "Buscando en la jurisprudencia",
       "searchingLegislationAndCaseLaw": "Buscando en la legislación y la jurisprudencia",
@@ -6307,6 +6313,7 @@
     "compareUnstructured": "Una de las versiones solo está disponible como texto plano, por lo que no se pueden comparar.",
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
+    "compareWithPreviousWording": "Comparar con la redacción anterior",
     "compareWithVersion": "Comparar con {version}",
     "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
@@ -6320,6 +6327,7 @@
       "withdrawn": "El editor ya no lo publica"
     },
     "inForceSince": "En vigor desde el {date}",
+    "inForceSinceAtLeast": "En vigor al menos desde el {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Sentencia de referencia",
     "leadingDecisionsExplanation": "La primera mención en cada resolución, ordenada por autoridad de cita: citas recibidas ponderadas y ajustadas según la jerarquía del tribunal, el sentido de la cita y su antigüedad.",
@@ -6330,6 +6338,7 @@
     "outlineJumpPlaceholder": "§ 10 o un título",
     "pendingChanges": "Próximas modificaciones",
     "pendingChangesIncomplete": "Es posible que los datos del editor no incluyan todas las próximas modificaciones.",
+    "provisionAbsentVersions": "{count, plural, one {No figura en esta versión de la ley} many {No figura en estas # versiones de la ley} other {No figura en estas # versiones de la ley}}",
     "provisionAskContextPrompt": "\n\nPasajes que aplican la disposición en las resoluciones de mayor autoridad:\n{passages}\n\nUsa las herramientas de jurisprudencia para leer íntegramente cualquiera de estas resoluciones o para encontrar otras que citen la disposición.",
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
@@ -6340,7 +6349,14 @@
     "provisionPartTextUnavailable": "El texto de {provisionLabel} no está disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionRunAlsoFrom": "también desde el {date}",
+    "provisionRunShowVersions": "Mostrar las versiones de la ley de {range}",
+    "provisionRunUnchanged": "{count, plural, one {sin cambios en # versión de la ley} many {sin cambios en # versiones de la ley} other {sin cambios en # versiones de la ley}}",
     "provisionTextUnavailable": "Texto no disponible para esta versión",
+    "provisionVersionsAll": "Todas las versiones de la ley",
+    "provisionWordingAdded": "Nuevo precepto",
+    "provisionWordingChanged": "Modificado",
+    "provisionWordingEarliest": "Versión más antigua disponible",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
     "searchLabel": "Buscar en la legislación",

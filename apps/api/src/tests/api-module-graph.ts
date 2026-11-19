@@ -9,8 +9,9 @@
  */
 import { existsSync, statSync } from "node:fs";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = new URL("../../../..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 
 export const apiSourceRoot = nodePath.resolve(repoRoot, "apps/api/src");
 

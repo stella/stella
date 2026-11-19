@@ -1,5 +1,7 @@
+import { useSyncExternalStore } from "react";
 import type { ReactElement } from "react";
 
+import type { RouteComponent } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -27,25 +29,60 @@ import {
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { useIntlMounted } from "@/components/pending-text";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
 } from "@/components/sidebar-sizing";
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
+import {
+  rememberedTimeBillingAccess,
+  rememberedTimeBillingAccessHint,
+} from "@/lib/workspaces/time-billing-access-memory";
 
-// The primary entries every signed-in person sees, from the same list the
-// real sidebar renders. Flag-gated entries (inbox, timesheets, case law) join
-// once the real sidebar mounts, rather than flashing in and out here.
-const STATIC_NAV_ITEMS = getWorkspacePrimaryNavItems({
-  includeInbox: false,
-  includePublicLaw: false,
-  includePublicTools: false,
-  includeTimesheets: false,
-  publicKnowledge: false,
-});
+type PrimaryNavItem = ReturnType<typeof getWorkspacePrimaryNavItems>[number];
+
+const neverChanges = () => () => undefined;
+
+/**
+ * The primary entries the real sidebar's first paint shows, from the same
+ * list and the same inputs, so the nav keeps its length when the sidebar
+ * replaces the frame. What the build decides (case law, Knowledge, the inbox
+ * when the deployment ships it) is read as it is: the server and the client
+ * read the same build, so even the server's paint has those entries. What
+ * this browser keeps is read once the page can read it, never during
+ * hydration (the server has no browser storage): the inbox preview switch,
+ * and the member's last time billing answer, which the sidebar also shows
+ * until the server answers again (for the member's organization once the
+ * frame knows it, before that whichever one this browser kept).
+ */
+const usePendingNavItems = (
+  inspectorScope: InspectorStorageScope | undefined,
+): readonly PrimaryNavItem[] => {
+  const includeInbox = usePublicShellInboxEntryEnabled();
+  const includeTimesheets = useSyncExternalStore(
+    neverChanges,
+    () =>
+      inspectorScope === undefined
+        ? rememberedTimeBillingAccessHint()
+        : rememberedTimeBillingAccess(inspectorScope.organizationId),
+    () => false,
+  );
+  return getWorkspacePrimaryNavItems({
+    includeInbox,
+    includePublicLaw: isPublicLawEnabled(),
+    // The app sidebar never lists the public tools catalogue.
+    includePublicTools: false,
+    includeTimesheets,
+    publicKnowledge: isPublicKnowledgeEnabled(),
+  });
+};
 const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 
 // Static, SSR-safe placeholder for the client-only `_protected` subtree.
@@ -55,17 +92,23 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // and the page body. Cookie preferences and the request locale already exist
 // during SSR, so the pending frame uses the same geometry and nav labels. It
 // also tracks the viewport and the saved inspector tabs, so it resizes with
-// the frame it stands in for.
+// the frame it stands in for. `body` is the leaf route's own pending view
+// (`useLeafPendingView`), so the page that loads replaces placeholders
+// already sitting where its content will; a route without one gets the
+// generic column.
 export function ProtectedPendingSkeleton({
+  body,
   content,
   inspectorScope,
 }: {
+  body?: RouteComponent | undefined;
   content?: ReactElement | undefined;
   inspectorScope?: InspectorStorageScope;
 }) {
   if (inspectorScope !== undefined) {
     return (
       <ProtectedPendingSkeletonContent
+        body={body}
         content={content}
         inspectorScope={inspectorScope}
       />
@@ -75,6 +118,7 @@ export function ProtectedPendingSkeleton({
     <ProtectedPendingInspectorScopeContext.Consumer>
       {(contextScope) => (
         <ProtectedPendingSkeletonContent
+          body={body}
           content={content}
           inspectorScope={contextScope}
         />
@@ -83,14 +127,75 @@ export function ProtectedPendingSkeleton({
   );
 }
 
+function PendingPageBody({ body: Body }: { body: RouteComponent | undefined }) {
+  if (Body === undefined) {
+    return (
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
+        <Skeleton className="h-7 w-1/3" />
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
+    );
+  }
+  // Inert: the page's own pending tree may hold its real links and headings,
+  // and nothing in a placeholder frame takes focus or a click.
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" inert>
+      <Body />
+    </div>
+  );
+}
+
+const NavItemLabel = ({
+  labelKey,
+}: {
+  labelKey: PrimaryNavItem["labelKey"];
+}) => {
+  const t = useTranslations();
+  return t(labelKey);
+};
+
+function NavItemText({
+  intlMounted,
+  labelKey,
+  sidebarOpen,
+}: {
+  intlMounted: boolean;
+  labelKey: PrimaryNavItem["labelKey"];
+  sidebarOpen: boolean;
+}) {
+  if (!intlMounted) {
+    // Painted before the app's intl (the server's cold-load frame): the
+    // label's line, its text arriving with intl.
+    return sidebarOpen ? <Skeleton className="h-3 w-20" /> : null;
+  }
+  if (sidebarOpen) {
+    return (
+      <TruncatedText className="text-sm" hint={false}>
+        <NavItemLabel labelKey={labelKey} />
+      </TruncatedText>
+    );
+  }
+  return (
+    <span className="sr-only">
+      <NavItemLabel labelKey={labelKey} />
+    </span>
+  );
+}
+
 function ProtectedPendingSkeletonContent({
+  body,
   content,
   inspectorScope,
 }: {
+  body: RouteComponent | undefined;
   content: ReactElement | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
-  const t = useTranslations();
+  const intlMounted = useIntlMounted();
+  const navItems = usePendingNavItems(inspectorScope);
   const { prefs } = usePresentationPrefs();
   const viewportWidth = useViewportWidth();
   // The restore policy the authenticated frame applies, on the stored tabs:
@@ -151,16 +256,18 @@ function ProtectedPendingSkeletonContent({
           </span>
         </div>
         <div className="flex flex-col gap-1 p-2">
-          {STATIC_NAV_ITEMS.map((item) => (
-            <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
+          {navItems.map((item) => (
+            <div
+              className="flex h-8 items-center gap-2 px-2"
+              data-nav-item={item.id}
+              key={item.id}
+            >
               <item.icon className="text-muted-foreground size-4 shrink-0" />
-              {sidebarOpen ? (
-                <TruncatedText className="text-sm" hint={false}>
-                  {t(item.labelKey)}
-                </TruncatedText>
-              ) : (
-                <span className="sr-only">{t(item.labelKey)}</span>
-              )}
+              <NavItemText
+                intlMounted={intlMounted}
+                labelKey={item.labelKey}
+                sidebarOpen={sidebarOpen}
+              />
             </div>
           ))}
         </div>
@@ -206,13 +313,7 @@ function ProtectedPendingSkeletonContent({
           <Skeleton className="h-4 w-40" />
         </div>
         {content === undefined ? (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-6">
-            <Skeleton className="h-7 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-40 w-full rounded-xl" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-          </div>
+          <PendingPageBody body={body} />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{content}</div>
         )}

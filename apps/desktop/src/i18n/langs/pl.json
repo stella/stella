@@ -35,7 +35,8 @@
     "sessionNeedsAttention": "Wymaga uwagi",
     "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
-    "reconnectAccount": "Połącz ponownie ze stella web…"
+    "reconnectAccount": "Połącz ponownie ze stella web…",
+    "transcribeRecording": "Transkrybuj nagranie…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
@@ -653,10 +654,22 @@
     },
     "language": {
       "title": "Język dyktowania",
-      "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera.",
+      "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera. Gdy jest ich kilka, każde słowo jest rozpoznawane w języku, w którym je wypowiadasz.",
       "automatic": "Automatycznie",
       "automaticWith": "Automatycznie ({languages})",
       "noResults": "Nie znaleziono języków"
+    },
+    "customWords": {
+      "group": "Własne słowa",
+      "title": "Słowa i nazwy, które stella ma pisać poprawnie",
+      "description": "Na przykład nazwiska klientów lub angielskie terminy, których używasz, mówiąc w innym języku. Są przechowywane na tym komputerze dla tego konta i wysyłane tylko z dyktowaniem, do przetwarzania przez stella AI i do poprawiania za pomocą AI. Model mowy na tym komputerze ich nie używa.",
+      "count": "{count, number} z {limit, number}",
+      "input": "Dodaj słowo lub nazwę",
+      "add": "Dodaj",
+      "remove": "Usuń {word}",
+      "duplicate": "To słowo jest już na liście.",
+      "full": "Lista mieści najwyżej {limit, number} słów. Usuń któreś, aby dodać kolejne.",
+      "failed": "Nie udało się zapisać listy. Spróbuj ponownie."
     },
     "modelNeeded": "Model mowy działa na tym komputerze.",
     "speechModel": "Model mowy",
@@ -686,7 +699,13 @@
       "passwordField": "Aktywne jest pole hasła, więc dyktowany tekst nie został zachowany ani wpisany.",
       "cloudTranscription": "stella AI nie przetworzyła tego dyktowania, a modelu mowy nie ma na tym komputerze. Spróbuj ponownie albo w „Przetwarzaj za pomocą” wybierz „Ten komputer” i pobierz model."
     },
-    "failureKeptInHistory": "Tekst jest w historii schowka."
+    "failureKeptInHistory": "Tekst jest w historii schowka.",
+    "transcribeRecording": {
+      "title": "Transkrypcja nagrania",
+      "description": "Zamienia na tekst plik z dyktafonu, notatkę głosową lub nagranie spotkania o długości do 4 godzin.",
+      "open": "Otwórz",
+      "failed": "Nie udało się otworzyć okna. Spróbuj ponownie."
+    }
   },
   "shortcut": {
     "title": "Skrót schowka",
@@ -963,6 +982,86 @@
       "network_folder": "Ten folder znajduje się w udziale sieciowym. Połącz folder z dysku tego komputera.",
       "protected": "Ten folder zawiera własne dane stelli lub folder z umiejętnościami, więc agent nie może w nim pracować.",
       "unreadable": "Nie udało się odczytać tego folderu."
+    }
+  },
+  "transcribe": {
+    "title": "Transkrypcja nagrania",
+    "retry": "Spróbuj ponownie",
+    "drop": {
+      "title": "Upuść tutaj nagranie",
+      "release": "Puść, aby transkrybować",
+      "description": "Pliki z dyktafonu, notatki głosowe, wiadomości głosowe, nagrania spotkań lub dźwięk z wideo.",
+      "choose": "Wybierz plik",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR oraz wideo MP4 lub MOV. Do 4 godzin.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR oraz wideo MP4 lub MOV. Do 4 godzin."
+    },
+    "destination": {
+      "title": "Transkrybuj za pomocą",
+      "thisComputer": "Ten komputer",
+      "cloud": "stella AI",
+      "localDescription": "Nagranie zostaje na tym komputerze.",
+      "cloudDescription": "Dźwięk jest wysyłany do transkrypcji do stella i do dostawcy modelu wybranego w ustawieniach dyktowania. stella go nie przechowuje.",
+      "cloudDescriptionModel": "Dźwięk jest wysyłany do transkrypcji do stella i do dostawcy modelu {model}. stella go nie przechowuje.",
+      "localMissing": "Aby transkrybować na tym komputerze, pobierz model mowy w Ustawieniach, w sekcji Dyktowanie.",
+      "localMissingCloud": "Pobierz model mowy w Ustawieniach, w sekcji Dyktowanie, albo transkrybuj za pomocą stella AI.",
+      "retainsData": "{provider} przechowuje dźwięk i transkrypcję wszystkiego, co trafia do tego modelu. Nie transkrybuj nim poufnych nagrań ani nagrań klientów albo wybierz inny model w Ustawieniach, w sekcji Dyktowanie.",
+      "modelFailed": "Nie udało się odczytać modelu stella AI, więc stella AI nie może teraz transkrybować. Spróbuj ponownie lub transkrybuj na tym komputerze."
+    },
+    "matter": {
+      "title": "Sprawa",
+      "description": "Jej nazwy i sygnatury zostaną zapisane poprawnie, a tekst możesz w niej zapisać.",
+      "none": "Brak",
+      "search": "Szukaj spraw",
+      "clearSearch": "Wyczyść wyszukiwanie",
+      "searching": "Wyszukiwanie…",
+      "noMatters": "Nie znaleziono spraw",
+      "failed": "Nie udało się wczytać spraw. Spróbuj ponownie."
+    },
+    "note": "Pliki DSS i DS2 z dyktafonów Philips lub Olympus najpierw zapisz jako WAV w programie SpeechExec lub ODMS.",
+    "refused": {
+      "unsupported": "stella nie może odczytać pliku {name}. Wybierz nagranie w jednym z formatów podanych wyżej.",
+      "tooLong": "Nagranie {name} trwa dłużej niż 4 godziny. Najpierw podziel je na krótsze.",
+      "unreadable": "Nie udało się odczytać pliku {name}. Może być uszkodzony; wyeksportuj go ponownie i spróbuj jeszcze raz."
+    },
+    "kept": {
+      "ready": "{name} jest gotowy. Sprawdź powyżej, jak zostanie transkrybowany, a potem zacznij.",
+      "start": "Rozpocznij transkrypcję"
+    },
+    "failure": {
+      "start": "Nie udało się rozpocząć transkrypcji. Spróbuj ponownie.",
+      "load": "Nie udało się wczytać tego okna. Spróbuj ponownie.",
+      "modelMissing": "Na tym komputerze nie ma modelu mowy. Pobierz go w Ustawieniach, w sekcji Dyktowanie.",
+      "thisComputer": "Model mowy na tym komputerze nie zdołał transkrybować części nagrania. Dotychczasowy tekst zostaje.",
+      "cloud": "stella AI nie zdołała transkrybować części nagrania. Dotychczasowy tekst zostaje; spróbuj później.",
+      "unreadable": "Nie udało się odczytać nagrania do końca. Dotychczasowy tekst zostaje.",
+      "tooLong": "Nagranie trwa dłużej niż 4 godziny. Dotychczasowy tekst zostaje."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Ten komputer",
+      "cloud": "stella AI, {model}",
+      "matter": "sprawa {name}",
+      "copy": "Kopiuj",
+      "copied": "Skopiowano",
+      "saveAs": "Zapisz jako",
+      "saveWithTimestamps": "Tekst ze znacznikami czasu (.txt)",
+      "saveWithoutTimestamps": "Tekst bez znaczników czasu (.txt)",
+      "saveToMatter": "Zapisz w sprawie",
+      "savingToMatter": "Zapisywanie…",
+      "savedToMatter": "Zapisano w sprawie {matter} jako {fileName}.",
+      "saveToMatterFailed": "Nie udało się zapisać transkrypcji w sprawie. Spróbuj ponownie.",
+      "saveFailed": "Nie udało się skopiować ani zapisać transkrypcji. Spróbuj ponownie.",
+      "noSpeech": "W tym nagraniu nie znaleziono mowy.",
+      "fileName": "{title} – transkrypcja.txt",
+      "documentTitle": "{title} – transkrypcja"
+    },
+    "progress": {
+      "running": "Transkrypcja: {done, number} z {total, number} min",
+      "runningUnknown": "Transkrypcja: dotąd {done, number} min",
+      "stop": "Zatrzymaj",
+      "stopped": "Zatrzymano po {done, number} min. Dotychczasowy tekst zostaje.",
+      "done": "Transkrybowano {total, number} min.",
+      "another": "Transkrybuj kolejne nagranie"
     }
   }
 }

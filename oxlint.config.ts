@@ -954,6 +954,20 @@ const browserSurfaceFiles = [
   "packages/ui/src/**/*.{ts,tsx}",
 ] as const;
 
+// Sources bundled for a browser, webview or React Native host, where
+// `import.meta.url` is not a `file:` URL. Their tests run in Bun.
+const browserBundleFiles = [
+  ...browserSurfaceFiles,
+  "apps/extension/src/**/*.{ts,tsx}",
+  "apps/mobile/src/**/*.{ts,tsx}",
+  "apps/outlook/src/**/*.{ts,tsx}",
+  "apps/visual-preview/browser/**/*.{ts,tsx}",
+  "packages/browser-page/src/**/*.{ts,tsx}",
+  "packages/chat/src/**/*.{ts,tsx}",
+  "packages/mcp-apps/src/**/*.{ts,tsx}",
+  "packages/workspace-ui/src/**/*.{ts,tsx}",
+] as const;
+
 // Shared `no-restricted-imports` entries.
 //
 // Oxlint resolves overrides by replacement, not by merge: for a given file the
@@ -2236,6 +2250,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
+    "./.oxlint-plugins/route-pending-component.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/require-workspace-handler-config.ts",
     "./.oxlint-plugins/require-write-contract.ts",
@@ -2293,6 +2308,7 @@ const config = defineConfig({
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/no-model-timeout-abort-signal.ts",
+    "./.oxlint-plugins/no-module-url-pathname.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
@@ -3171,6 +3187,31 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.pending.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.shell.page.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/route-pending-component.fixture.unpaired.page.fixture.tsx",
+      ],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
+      },
+    },
+    {
       files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
       rules: { "no-ref-mirror/no-ref-mirror": "error" },
     },
@@ -3646,6 +3687,28 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // A module URL is a file: URL wherever code runs from a filesystem
+      // (tooling, servers, the CLI, Bun tests); its pathname is not a native
+      // path. In browser bundles it is an http URL whose pathname is a URL
+      // path, so their sources are out of scope.
+      files: [
+        "apps/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "packages/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      ],
+      excludeFiles: [...browserBundleFiles],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
+    },
+    {
+      // Tests, browser bundle tests included, run in Bun, where
+      // import.meta.url is a file: URL; suites that run in a real browser
+      // stay out of scope.
+      files: ["apps/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}"],
+      excludeFiles: ["**/*.browser.test.{ts,tsx}"],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
     },
     {
       // Pre-install tooling cannot import the workspace path owner before dependencies exist.
@@ -5928,6 +5991,21 @@ const config = defineConfig({
         "no-beforeload-redirect/no-beforeload-redirect": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
         "require-loader-prefetch/require-loader-prefetch": "error",
+        "route-pending-component/route-pending-component": "error",
+      },
+    },
+    {
+      // A route's pending half ships in the entry chunk and renders before
+      // any provider: its imports are closed (see the rule's policy file).
+      files: ["apps/web/src/**/*.pending.tsx"],
+      rules: {
+        "route-pending-component/pending-module-imports": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.page.tsx"],
+      rules: {
+        "route-pending-component/page-module-shell": "error",
       },
     },
     {

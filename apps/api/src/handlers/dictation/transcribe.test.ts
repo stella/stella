@@ -1111,10 +1111,16 @@ describe("a member's labels flag", () => {
       }).success,
     ).toBe(false);
     expect(v.safeParse(desktopDictationBodySchema, upload).success).toBe(false);
+    // A desktop names the matter a recording is filed under; the API adds
+    // that matter's vocabulary to the speaker's own custom words. A
+    // recording's piece names itself, so a retry is counted once.
     expect(Object.keys(desktopDictationBodySchema.entries).toSorted()).toEqual([
       "file",
       "language",
+      "matterId",
       "modelId",
+      "pieceId",
+      "vocabulary",
     ]);
   });
 });

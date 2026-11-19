@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { getColumns, getTableName, isTable, isView } from "drizzle-orm";
+import { fileURLToPath } from "node:url";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -124,8 +125,9 @@ if (import.meta.main) {
   process.exitCode = await writeOrCheckArtifacts(
     [
       {
-        path: new URL("../src/lib/db/status-tables.gen.ts", import.meta.url)
-          .pathname,
+        path: fileURLToPath(
+          new URL("../src/lib/db/status-tables.gen.ts", import.meta.url),
+        ),
         contents,
       },
     ],

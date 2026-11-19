@@ -25,8 +25,8 @@ components/ai-suggestions/file-chat-overlay.tsx
 components/ai-suggestions/host.tsx
 components/chat-input-surface.tsx
 components/inspector/chat-tab-panel.tsx
-routes/_protected.chat/-components/chat-thread-page.tsx
-routes/_protected.chat/index.tsx
+routes/_protected.chat/-components/chat-index.page.tsx
+routes/_protected.chat/-components/chat-thread.page.tsx
 routes/dev/-components/chat-composer-reference-playground.tsx
 routes/dev/-components/chat-long-paste-playground.tsx
 routes/knowledge/-components/template-studio-chat.tsx`;
@@ -67,11 +67,13 @@ const sendEntryPoints = {
     controllerSubmit: 1,
     promptBar: 1,
   },
-  "routes/_protected.chat/-components/chat-thread-page.tsx": {
+  "routes/_protected.chat/-components/chat-thread.page.tsx": {
     chatInputSurface: 1,
     controllerSubmit: 1,
   },
-  "routes/_protected.chat/index.tsx": { chatInputSurface: 1 },
+  "routes/_protected.chat/-components/chat-index.page.tsx": {
+    chatInputSurface: 1,
+  },
   "routes/dev/-components/chat-composer-reference-playground.tsx": {
     chatInputSurface: 1,
   },
@@ -114,7 +116,7 @@ const runOnDeclines = {
 
 const followupSurfaces = `components/ai-suggestions/file-chat-overlay.tsx
 components/inspector/chat-tab-panel.tsx
-routes/_protected.chat/-components/chat-thread-page.tsx`;
+routes/_protected.chat/-components/chat-thread.page.tsx`;
 
 describe("chat composer census", () => {
   test("pins every chat editor module", () => {
@@ -209,8 +211,8 @@ describe("chat composer census", () => {
     );
     expect(strays).toEqual([]);
     for (const surface of [
-      "routes/_protected.chat/index.tsx",
-      "routes/_protected.chat/-components/chat-thread-page.tsx",
+      "routes/_protected.chat/-components/chat-index.page.tsx",
+      "routes/_protected.chat/-components/chat-thread.page.tsx",
       "components/inspector/chat-tab-panel.tsx",
     ]) {
       const source = sourceOf(surface);

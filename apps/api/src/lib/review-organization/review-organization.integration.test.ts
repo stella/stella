@@ -1299,6 +1299,7 @@ describe("review organization reset task", () => {
     const task = createSchedulerTaskRegistry(
       async () => {},
       () => undefined,
+      () => undefined,
       {
         resetReviewOrganization: reset,
       },
@@ -1356,6 +1357,7 @@ describe("review organization reset task", () => {
     const restored = createSchedulerTaskRegistry(
       async () => {},
       () => undefined,
+      () => undefined,
       {
         resetReviewOrganization: createResetReviewOrganizationTask({
           readConfig: () => config(fixture.reviewOrgId),
@@ -1378,6 +1380,7 @@ describe("review organization reset task", () => {
   test("charges every registered reset the same statements, none from its detached work", async () => {
     const task = createSchedulerTaskRegistry(
       async () => {},
+      () => undefined,
       () => undefined,
       {
         resetReviewOrganization: createResetReviewOrganizationTask({

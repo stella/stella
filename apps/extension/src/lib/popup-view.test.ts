@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { DESKTOP_LINK_STATE } from "./desktop-link";
 import {
@@ -309,7 +310,7 @@ test("every locale has exactly the English messages, none left unused", async ()
   const extensionRoot = new URL("../../", import.meta.url);
   const files = [
     ...(await Array.fromAsync(
-      new Bun.Glob("src/**/*.ts").scan({ cwd: extensionRoot.pathname }),
+      new Bun.Glob("src/**/*.ts").scan({ cwd: fileURLToPath(extensionRoot) }),
     )),
     "wxt.config.ts",
   ];

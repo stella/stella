@@ -1,5 +1,7 @@
 // Embed freshly derived contract data; only the npm package consumes shards.
 
+import { fileURLToPath } from "node:url";
+
 import { readRuntimeMode } from "@stll/runtime-mode";
 
 import { CAPABILITY_RUNTIME_INPUTS } from "../../../packages/scripts/src/generated-files";
@@ -28,9 +30,11 @@ export const generateCapabilityCatalogRuntime = async (
 
 if (
   import.meta.main &&
-  !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
+  !hasPreparedGeneratedSources(
+    fileURLToPath(new URL("../../../", import.meta.url)),
+  )
 ) {
-  const root = new URL("../../../", import.meta.url).pathname;
+  const root = fileURLToPath(new URL("../../../", import.meta.url));
   await withGeneratedOutputCache({
     root,
     name: "capability-runtime",
