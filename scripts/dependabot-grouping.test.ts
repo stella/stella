@@ -128,6 +128,11 @@ const ignorePolicies = {
     reason: "Its local patch does not apply past 1.7.20; held until ported.",
     type: "documented_policy",
   },
+  "@tanstack/react-hotkeys": {
+    reason:
+      "0.25 deprecates the platform-taking formatForDisplay re-export; migration is a separate change.",
+    type: "documented_policy",
+  },
   "prosemirror-inputrules": {
     reason:
       "1.6.0 imports prosemirror-model without declaring it; the isolated linker cannot resolve it.",

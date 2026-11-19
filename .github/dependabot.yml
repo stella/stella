@@ -430,6 +430,12 @@ updates:
       - dependency-name: "prosemirror-inputrules"
         versions:
           - "1.6.0"
+      # @tanstack/react-hotkeys 0.25 deprecates the formatForDisplay re-export
+      # that apps/web/src/lib/hotkeys.ts calls with the hydration-safe
+      # platform. Remove this with the change that migrates the formatter.
+      - dependency-name: "@tanstack/react-hotkeys"
+        versions:
+          - ">0.23.1"
     commit-message:
       prefix: "chore"
     reviewers:
