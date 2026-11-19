@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
@@ -29,12 +31,26 @@ export const createSoftLawSyncTask =
     const failed: Authority[] = [];
     for (const authority of authorities()) {
       signal.throwIfAborted();
-      const outcome = await sync({ authority, signal });
+      const attempt = await Result.tryPromise({
+        try: async () => await sync({ authority, signal }),
+        catch: (error: unknown) => error,
+      });
+      // An aborted run stops here; any other rejection fails this source only.
+      signal.throwIfAborted();
+      if (Result.isError(attempt)) {
+        captureError(
+          attempt.error,
+          handlerErrorContext("scheduler.softLawSync", {
+            softLawAuthority: authority,
+          }),
+        );
+      }
+      const status = Result.isError(attempt) ? "failed" : attempt.value.status;
       logger.info("scheduler.soft_law_source_synced", {
         "soft_law.authority": authority,
-        "soft_law.status": outcome.status,
+        "soft_law.status": status,
       });
-      if (outcome.status === "failed") {
+      if (status === "failed") {
         failed.push(authority);
       }
     }
