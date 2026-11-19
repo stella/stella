@@ -954,6 +954,20 @@ const browserSurfaceFiles = [
   "packages/ui/src/**/*.{ts,tsx}",
 ] as const;
 
+// Sources bundled for a browser, webview or React Native host, where
+// `import.meta.url` is not a `file:` URL. Their tests run in Bun.
+const browserBundleFiles = [
+  ...browserSurfaceFiles,
+  "apps/extension/src/**/*.{ts,tsx}",
+  "apps/mobile/src/**/*.{ts,tsx}",
+  "apps/outlook/src/**/*.{ts,tsx}",
+  "apps/visual-preview/browser/**/*.{ts,tsx}",
+  "packages/browser-page/src/**/*.{ts,tsx}",
+  "packages/chat/src/**/*.{ts,tsx}",
+  "packages/mcp-apps/src/**/*.{ts,tsx}",
+  "packages/workspace-ui/src/**/*.{ts,tsx}",
+] as const;
+
 // Shared `no-restricted-imports` entries.
 //
 // Oxlint resolves overrides by replacement, not by merge: for a given file the
@@ -2293,6 +2307,7 @@ const config = defineConfig({
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/no-model-timeout-abort-signal.ts",
+    "./.oxlint-plugins/no-module-url-pathname.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-worker-database-login-posture.ts",
@@ -3646,6 +3661,30 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // A module URL is a file: URL wherever code runs from a filesystem
+      // (tooling, servers, the CLI, Bun tests); its pathname is not a native
+      // path. In browser bundles it is an http URL whose pathname is a URL
+      // path, so their sources are out of scope.
+      files: [
+        "apps/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "packages/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      ],
+      excludeFiles: [...browserBundleFiles],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
+    },
+    {
+      // Tests of browser bundles run in Bun, where import.meta.url is a file:
+      // URL; suites that run in a real browser stay out of scope.
+      files: browserBundleFiles.flatMap((glob) => [
+        glob.replace("*.{ts,tsx}", "*.test.{ts,tsx}"),
+        glob.replace("**/*.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}"),
+      ]),
+      excludeFiles: ["**/*.browser.test.{ts,tsx}"],
+      rules: { "no-module-url-pathname/no-module-url-pathname": "error" },
     },
     {
       // Pre-install tooling cannot import the workspace path owner before dependencies exist.
