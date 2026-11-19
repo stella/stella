@@ -13,7 +13,7 @@ import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launc
  * Knowledge landing, which offers the account and returns here; the
  * section's published catalogue; or a page of the section's own.
  */
-export type KnowledgeVisitorFallback =
+type KnowledgeVisitorFallback =
   | { kind: "landing" }
   | { kind: "catalogue"; to: KnowledgeCataloguePath }
   | { kind: "page"; page: ReactElement };

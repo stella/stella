@@ -253,11 +253,7 @@ const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
 
 // The list's pending phase at the reader's density: the presentation cookie
 // gives it, so the server and the hydrating browser agree.
-export const TemplateListSkeleton = ({
-  layout,
-}: {
-  layout: TemplateListLayout;
-}) => {
+const TemplateListSkeleton = ({ layout }: { layout: TemplateListLayout }) => {
   const {
     prefs: { templateDensity: density },
   } = usePresentationPrefs();

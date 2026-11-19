@@ -787,14 +787,15 @@ describe("Knowledge for every visitor, on one live client", () => {
 
     // Unknown: the page decides.
     expect(await outcome(visitor)).toBe("passed");
-    // A member: nothing to turn away.
-    queryClient.setQueryData(sessionOptions.queryKey, {
-      session: { userId: SESSION_USER.id, activeOrganizationId: "org-a" },
-      user: SESSION_USER,
-    });
+    // A member, as the session read answers: nothing to turn away.
+    session = SIGNED_IN_SESSION;
+    await queryClient.fetchQuery(sessionOptions);
+    expect(queryClient.getQueryData(sessionOptions.queryKey)).not.toBeNull();
     expect(await outcome(visitor)).toBe("passed");
     // Known to have no session: a 301 to the catalogue, or not found.
-    queryClient.setQueryData(sessionOptions.queryKey, null);
+    session = "anonymous";
+    await queryClient.fetchQuery({ ...sessionOptions, staleTime: 0 });
+    expect(queryClient.getQueryData(sessionOptions.queryKey)).toBeNull();
     const redirected = await outcome(visitor);
     expect(router.isRedirect(redirected)).toBe(true);
     if (router.isRedirect(redirected)) {
