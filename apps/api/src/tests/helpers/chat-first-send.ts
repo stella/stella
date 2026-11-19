@@ -58,7 +58,10 @@ import type {
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { sseResponse } from "@/api/lib/sse";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  type TestHandlerContextOverrides,
+} from "@/api/tests/helpers/handler-context";
 import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withPublicLawReaderRole } from "@/api/tests/pglite-test-db";
@@ -346,33 +349,25 @@ export const createFirstSendHarness = async ({
   const workspaceIdOf = (scope: ChatSendScope) =>
     scope === "workspace" ? ids.wsA1 : null;
 
-  const handlerContext = <TContext>({
-    scope,
-    fields,
-  }: {
-    scope: ChatSendScope;
-    fields: Record<string, unknown>;
-  }) =>
-    createTestHandlerContext<TContext>({
-      audit: async () => undefined,
-      getAccessibleWorkspaces: async () => [
-        { id: ids.wsA1, status: "active" },
-        { id: ids.wsA2, status: "active" },
-      ],
-      getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
-      getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
-        workspaceId === ids.wsA1 || workspaceId === ids.wsA2
-          ? { id: workspaceId, status: "active" }
-          : null,
-      orgAIConfig: FIRST_SEND_ORG_AI_CONFIG,
-      pinServerValidatedWorkspaceId: () => false,
-      safeDb,
-      scopedDb,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1, email: "first-send@example.test" },
-      ...(scope === "workspace" ? { workspaceId: ids.wsA1 } : {}),
-      ...fields,
-    });
+  /** The fixture member's handler context, shared by every route below. */
+  const memberContext = {
+    audit: async () => undefined,
+    getAccessibleWorkspaces: async () => [
+      { id: ids.wsA1, status: "active" },
+      { id: ids.wsA2, status: "active" },
+    ],
+    getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
+    getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+      workspaceId === ids.wsA1 || workspaceId === ids.wsA2
+        ? { id: workspaceId, status: "active" }
+        : null,
+    orgAIConfig: FIRST_SEND_ORG_AI_CONFIG,
+    pinServerValidatedWorkspaceId: () => false,
+    safeDb,
+    scopedDb,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1, email: "first-send@example.test" },
+  } satisfies TestHandlerContextOverrides;
 
   const scopeQuery = (scope: ChatSendScope) =>
     scope === "workspace" ? { workspaceId: ids.wsA1 } : {};
@@ -527,13 +522,13 @@ export const createFirstSendHarness = async ({
   }) =>
     outcomeOf(
       await updateThreadModel.handler(
-        handlerContext<Parameters<typeof updateThreadModel.handler>[0]>({
-          scope: "global",
-          fields: {
-            body: { model },
-            params: { threadId },
-            query: scopeQuery(scope),
-          },
+        createTestHandlerContext<
+          Parameters<typeof updateThreadModel.handler>[0]
+        >({
+          ...memberContext,
+          body: { model },
+          params: { threadId },
+          query: scopeQuery(scope),
         }),
       ),
     );
@@ -549,13 +544,11 @@ export const createFirstSendHarness = async ({
   }) =>
     outcomeOf(
       await updateThread.handler(
-        handlerContext<Parameters<typeof updateThread.handler>[0]>({
-          scope: "global",
-          fields: {
-            body: { webSearchEnabled: enabled },
-            params: { threadId },
-            query: scopeQuery(scope),
-          },
+        createTestHandlerContext<Parameters<typeof updateThread.handler>[0]>({
+          ...memberContext,
+          body: { webSearchEnabled: enabled },
+          params: { threadId },
+          query: scopeQuery(scope),
         }),
       ),
     );
@@ -571,13 +564,11 @@ export const createFirstSendHarness = async ({
   }) =>
     outcomeOf(
       await renameThread.handler(
-        handlerContext<Parameters<typeof renameThread.handler>[0]>({
-          scope: "global",
-          fields: {
-            body: { title },
-            params: { threadId },
-            query: scopeQuery(scope),
-          },
+        createTestHandlerContext<Parameters<typeof renameThread.handler>[0]>({
+          ...memberContext,
+          body: { title },
+          params: { threadId },
+          query: scopeQuery(scope),
         }),
       ),
     );
@@ -592,12 +583,10 @@ export const createFirstSendHarness = async ({
   }) =>
     outcomeOf(
       await getMessages.handler(
-        handlerContext<Parameters<typeof getMessages.handler>[0]>({
-          scope: "global",
-          fields: {
-            params: { threadId },
-            query: { allowMissingThread: true, ...scopeQuery(scope) },
-          },
+        createTestHandlerContext<Parameters<typeof getMessages.handler>[0]>({
+          ...memberContext,
+          params: { threadId },
+          query: { allowMissingThread: true, ...scopeQuery(scope) },
         }),
       ),
     );
@@ -606,10 +595,9 @@ export const createFirstSendHarness = async ({
   const rotateTemplate = async (): Promise<SafeId<"chatThread">> => {
     const outcome = outcomeOf(
       await rotateTemplateThread.handler(
-        handlerContext<Parameters<typeof rotateTemplateThread.handler>[0]>({
-          scope: "global",
-          fields: { body: { templateId: ids.templateA } },
-        }),
+        createTestHandlerContext<
+          Parameters<typeof rotateTemplateThread.handler>[0]
+        >({ ...memberContext, body: { templateId: ids.templateA } }),
       ),
     );
     const threadId = chatThreadIdOf(outcome);
@@ -623,16 +611,17 @@ export const createFirstSendHarness = async ({
   ): Promise<SafeId<"chatThread">> => {
     const outcome = outcomeOf(
       await resolveFileThread.handler(
-        handlerContext<Parameters<typeof resolveFileThread.handler>[0]>({
-          scope: "workspace",
-          fields: {
-            body: {
-              entityId: ids.entityA1,
-              fieldId: ids.fileFieldA1,
-              ...(requestedThreadId === undefined
-                ? {}
-                : { threadId: requestedThreadId }),
-            },
+        createTestHandlerContext<
+          Parameters<typeof resolveFileThread.handler>[0]
+        >({
+          ...memberContext,
+          workspaceId: ids.wsA1,
+          body: {
+            entityId: ids.entityA1,
+            fieldId: ids.fileFieldA1,
+            ...(requestedThreadId === undefined
+              ? {}
+              : { threadId: requestedThreadId }),
           },
         }),
       ),

@@ -2,7 +2,11 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import {
+  assertProperty,
+  failAfterTimeLimit,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 import { listSkillMetadata } from "@stll/skills";
 
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
@@ -432,8 +436,7 @@ describe("a chat thread before its first message", () => {
           // Each run drives the real database, so a failure's shrinking is
           // bounded too: past the limit it reports the smallest
           // counterexample found so far instead of hitting the test timeout.
-          interruptAfterTimeLimit: propertyTestTimeout(150_000),
-          markInterruptAsFailure: true,
+          plugins: [failAfterTimeLimit(propertyTestTimeout(150_000))],
         },
       );
     },
