@@ -202,6 +202,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/viewer/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
+  "apps/web/src/features/correspondence/**/*.{ts,tsx}",
   "apps/web/src/features/organization/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
   "apps/web/src/features/guides/**/*.{ts,tsx}",
