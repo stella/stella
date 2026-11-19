@@ -266,10 +266,15 @@ describe("every stored identifier kind remains reachable", () => {
             "stored-owner",
           );
           break;
-        default:
-          return panic(
+        case "incomplete_identifier":
+        case "none":
+          panic(
             `Stored identifier did not resolve to its owner: ${resolution.status}`,
           );
+          break;
+        default:
+          resolution satisfies never;
+          panic("Unexpected resolution status");
       }
       const reference = decisionIdentityReadKeys({
         country,

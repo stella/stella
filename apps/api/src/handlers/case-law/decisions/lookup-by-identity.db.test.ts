@@ -798,7 +798,7 @@ test.each(Object.values(DECISION_IDENTIFIER_TYPES))(
       case "resolved":
         expect(result.document.kind).toBe("decision");
         if (result.document.kind !== "decision") {
-          return panic("Expected a decision");
+          panic("Expected a decision");
         }
         expect(result.document.decisionId).toBe(id);
         break;
@@ -807,10 +807,16 @@ test.each(Object.values(DECISION_IDENTIFIER_TYPES))(
           result.candidates.map((candidate) => candidate.decisionId),
         ).toContain(id);
         break;
-      default:
-        return panic(
+      case "country_unavailable":
+      case "incomplete_identifier":
+      case "not_found":
+        panic(
           `Stored identifier did not resolve to its owner: ${result.status}`,
         );
+        break;
+      default:
+        result satisfies never;
+        panic("Unexpected resolution status");
     }
   },
   DB_TEST_TIMEOUT_MS,
@@ -979,7 +985,7 @@ test(
     const result = await resolveStoredReference("CZE", value);
     expect(result.status).toBe("ambiguous");
     if (result.status !== "ambiguous") {
-      return panic("Expected explicit candidate ambiguity");
+      panic("Expected explicit candidate ambiguity");
     }
     expect(
       result.candidates.map((candidate) => candidate.decisionId),
