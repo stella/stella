@@ -356,7 +356,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ComboboxTrigger` `variant`: `field`, `plain`
 - `CommandItem` `size`: `default`, `row`
 - `ComposerPlaceholder` `stature`: `compact`, `large`
-- `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`
+- `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`, `prose`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`
 - `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
