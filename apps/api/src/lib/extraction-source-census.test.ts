@@ -1,7 +1,9 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SOURCE_ROOT = new URL("../", import.meta.url).pathname;
+const SOURCE_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const EXCLUDED_CREATORS = new Map([
   [
     "handlers/entities/create.ts",
@@ -46,7 +48,9 @@ describe("document extraction source census", () => {
       if (!isProductionSource(relativePath)) {
         continue;
       }
-      const source = await Bun.file(`${SOURCE_ROOT}/${relativePath}`).text();
+      const source = await Bun.file(
+        path.join(SOURCE_ROOT, relativePath),
+      ).text();
       if (!/insert\(entityVersions\)|insertEntityVersion\(/u.test(source)) {
         continue;
       }

@@ -64,6 +64,7 @@ const readFixtures = (directory: string) =>
     });
 
 const fixtures = readFixtures(FIXTURES);
+const EXPECT_ERROR_MARKER = /^\s*\/\/\s*expect-error:/u;
 
 test("fixture discovery reads TypeScript and test fixture suffixes", () => {
   const directory = mkdtempSync(path.join(ROOT, ".fixture-discovery-"));
@@ -89,8 +90,13 @@ for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
       let violations = 0;
       for (const { file, source } of fixtures) {
         for (const [index, line] of source.split("\n").entries()) {
+          // Directive fixtures suppress the hit; expect-error fixtures mark it
+          // (.oxlint-plugins/README.md). Both name the rule on the line above.
           if (
-            !line.includes("oxlint-disable-next-line") ||
+            !(
+              line.includes("oxlint-disable-next-line") ||
+              EXPECT_ERROR_MARKER.test(line)
+            ) ||
             !line.includes(rule)
           ) {
             continue;

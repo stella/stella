@@ -1545,6 +1545,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_SIGNING_IDENTITY",
   // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
   "SOFTHSM2_MODULE",
+  // The desktop transcribe-window browser test saves its screenshots here when set.
+  "TRANSCRIBE_SCREENSHOTS",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const check = (rules: unknown[]) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-environment-"));
@@ -21,7 +22,7 @@ const check = (rules: unknown[]) => {
     return Bun.spawnSync(
       [
         "bash",
-        new URL("check-release-environment.sh", import.meta.url).pathname,
+        fileURLToPath(new URL("check-release-environment.sh", import.meta.url)),
         "stella/stella",
       ],
       {

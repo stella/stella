@@ -4,6 +4,7 @@
 // runner does not prepare apps/api/.env.
 
 import { writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import packageJson from "../package.json" with { type: "json" };
 
@@ -20,4 +21,4 @@ await writeFile(
   `${versionHeader}${JSON.stringify(packageJson.version)};\n`,
 );
 
-process.stderr.write(`Wrote ${versionOutputUrl.pathname}\n`);
+process.stderr.write(`Wrote ${fileURLToPath(versionOutputUrl)}\n`);

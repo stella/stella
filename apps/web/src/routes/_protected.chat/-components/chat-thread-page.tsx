@@ -126,6 +126,10 @@ import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-b
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
+import {
+  CHAT_COMPOSER_COLUMN_CLASS_NAME,
+  CHAT_READING_COLUMN_CLASS_NAME,
+} from "@/routes/_protected.chat/-components/chat-reading-column";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnAnnouncer } from "@/routes/_protected.chat/-components/chat-turn-announcer";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
@@ -759,7 +763,12 @@ export const ChatThreadPage = ({
                 className="@container isolate min-h-0"
                 key={threadRef.threadId}
               >
-                <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]">
+                <ConversationContent
+                  className={cn(
+                    CHAT_READING_COLUMN_CLASS_NAME,
+                    "gap-3 pb-[max(var(--chat-bottom-fade-h),calc(var(--composer-block-h,7rem)+1.5rem))]",
+                  )}
+                >
                   {messages.length === 0 && !isGenerating && !error ? (
                     <div className="m-auto flex w-full max-w-md flex-col gap-6 px-4">
                       {activeSkill ? (
@@ -874,7 +883,10 @@ export const ChatThreadPage = ({
               {messages.length > 0 && (
                 <div
                   aria-hidden="true"
-                  className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto hidden h-(--chat-bottom-fade-h) w-full max-w-5xl bg-linear-to-t to-transparent group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:block"
+                  className={cn(
+                    CHAT_READING_COLUMN_CLASS_NAME,
+                    "from-background pointer-events-none absolute inset-x-0 bottom-0 hidden h-(--chat-bottom-fade-h) bg-linear-to-t to-transparent group-has-[[role=log]>[data-overflow-y-end]]/chat-scroll-surface:block",
+                  )}
                   data-chat-bottom-fade=""
                 />
               )}
@@ -892,7 +904,10 @@ export const ChatThreadPage = ({
                 height, so transcript clearance and the scroll button's
                 offset track the change automatically. */}
               <div
-                className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
+                className={cn(
+                  CHAT_COMPOSER_COLUMN_CLASS_NAME,
+                  "absolute inset-x-0 bottom-0 z-20",
+                )}
                 ref={observeComposerBlock}
               >
                 {/* `px-2` mirrors the tray's `p-2` so the first chip starts on

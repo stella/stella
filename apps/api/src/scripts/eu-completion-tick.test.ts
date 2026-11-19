@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { ValiError } from "valibot";
 
 import { createTestState } from "@stll/test-state";
@@ -39,9 +40,9 @@ describe("scheduled EU completion", () => {
       cmd: [
         process.execPath,
         "--no-env-file",
-        new URL("eu-completion-tick.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("eu-completion-tick.ts", import.meta.url)),
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "test" },
       stdout: "pipe",
       stderr: "pipe",
@@ -61,7 +62,9 @@ describe("scheduled EU completion", () => {
   });
 
   test("production cannot obtain a fixture runner before runtime initialization", async () => {
-    const entry = new URL("eu-completion-tick.ts", import.meta.url).pathname;
+    const entry = fileURLToPath(
+      new URL("eu-completion-tick.ts", import.meta.url),
+    );
     const child = Bun.spawn({
       cmd: [
         process.execPath,
@@ -69,7 +72,7 @@ describe("scheduled EU completion", () => {
         "--eval",
         `const { getEuCompletionFixtureRunner } = await import(${JSON.stringify(entry)}); getEuCompletionFixtureRunner();`,
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "production" },
       stdout: "pipe",
       stderr: "pipe",

@@ -28,13 +28,15 @@
  *   gated, as Bun does not gate them either.
  *
  * Every tracked Cargo.lock is checked the same way against crates.io. Cargo
- * has no release-age gate, and resolving (`cargo update`) runs no crate code,
- * so this check between resolve and build stands in for one. Crates are held
- * to the root bunfig.toml's quarantine; `"cargo:<crate>"` in its
- * `minimumReleaseAgeExcludes` exempts a crate under the same annotation and
- * expiry rules (scripts/crates-io-release-age.ts). Workspace members and path
- * dependencies are local; git sources are reported, not gated. Update crates
- * with `bun run cargo:update`, which pins young versions back at resolve time.
+ * 1.100+ already skips young versions while resolving, per the root
+ * .cargo/config.toml; this check catches a lock resolved without that gate
+ * (an older Cargo, or `CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow`).
+ * Resolving runs no crate code, so checking between resolve and build is
+ * enough. Crates are held to the root bunfig.toml's quarantine;
+ * `"cargo:<crate>"` in its `minimumReleaseAgeExcludes` exempts a crate under
+ * the same annotation and expiry rules (scripts/crates-io-release-age.ts).
+ * Workspace members and path dependencies are local; git sources are
+ * reported, not gated.
  *
  * A registry failure fails the check: a pin that could not be verified is not
  * known to be old enough.
