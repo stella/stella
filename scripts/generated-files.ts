@@ -223,6 +223,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/smoke-session/journey-prerequisites.ts",
     "apps/api/src/lib/smoke-session/store.ts",
     "apps/api/src/lib/templates/lookup-formats/resolve-default.ts",
+    "apps/api/src/lib/workspaces/vocabulary/*",
     "packages/agent-engine/src/*",
     "packages/agent-engine/src/bun-docker/*",
     "packages/agent-engine/src/harness/*",
