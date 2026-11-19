@@ -132,3 +132,14 @@ test("an unreadable body snapshot returns a typed failure, never an empty body",
     ).toBe(true);
   }
 });
+
+test("source-specific part descriptors still satisfy canonical metadata bounds", () => {
+  for (const descriptor of [
+    { ...section, collectionLabel: "a".repeat(257) },
+    { ...section, keywords: Array.from({ length: 129 }, () => "Subject") },
+  ]) {
+    expect(
+      Result.isError(validateCollectionDocumentPart(descriptor, payload)),
+    ).toBe(true);
+  }
+});
