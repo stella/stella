@@ -278,7 +278,9 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
         kind === "message"
           ? {
               ...common,
-              kind: "message",
+              // The query data type is still being inferred here, so a
+              // fresh literal would widen to string.
+              kind: "message" as const,
               files: [
                 { fileName: "Order.pdf", entityId: ENTITY_ID },
                 { fileName: "Exhibit.pdf", entityId: null },
@@ -286,7 +288,7 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
             }
           : {
               ...common,
-              kind: "receipt",
+              kind: "receipt" as const,
               events: [
                 {
                   occurredAt: envelope.acceptedAt,
