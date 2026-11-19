@@ -3,7 +3,10 @@ import { asc, inArray, lte, sql } from "drizzle-orm";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { keptTranscriptDeletions } from "@/api/db/schema";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  withAggregateTransaction,
+  withSkipLockedBatch,
+} from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   elevenLabsKeepsTranscripts,
@@ -49,17 +52,18 @@ const productionDependencies = (): KeptTranscriptDeletionDependencies => ({
 });
 
 /**
- * Reads the due rows, unlocked. The scheduler runs this job on one replica
- * at a time, and a provider delete is idempotent (a transcript already gone
- * counts as deleted), so a row the request's own delete settles meanwhile,
- * or one a run that died left behind, is simply tried again. Attempts count
- * only settled outcomes.
+ * Takes the due rows. The scheduler runs this job on one replica at a time,
+ * and a provider delete is idempotent (a transcript already gone counts as
+ * deleted), so the row locks last only for the read: a row the request's
+ * own delete settles meanwhile, or one a run that died left behind, is
+ * simply tried again. Attempts count only settled outcomes.
  */
 const readDueTranscripts = async (db: SchedulerTaskContext["db"]) =>
-  await withAggregateTransaction(
-    db,
-    async (tx) =>
-      await tx
+  await withSkipLockedBatch({
+    database: db,
+    limit: BATCH_SIZE,
+    select: (tx) =>
+      tx
         .select({
           transcriptionId: keptTranscriptDeletions.transcriptionId,
           environment: keptTranscriptDeletions.environment,
@@ -67,9 +71,9 @@ const readDueTranscripts = async (db: SchedulerTaskContext["db"]) =>
         })
         .from(keptTranscriptDeletions)
         .where(lte(keptTranscriptDeletions.nextAttemptAt, sql`now()`))
-        .orderBy(asc(keptTranscriptDeletions.nextAttemptAt))
-        .limit(BATCH_SIZE),
-  );
+        .$dynamic(),
+    run: async (_tx, rows) => await Promise.resolve(rows),
+  });
 
 type Failure = { transcriptionId: string; attempts: number; code: string };
 
