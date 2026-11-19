@@ -183,20 +183,22 @@ instead of creating workspace drift. Use `bun update <package> --latest` only
 when intentionally changing the declared dependency range. Resolve and preserve
 an intended prerelease version or channel explicitly.
 
-For Rust, use targeted lockfile updates through the release-age quarantine:
+For Rust, use targeted lockfile updates, run from inside the repository:
 
 ```bash
-bun run cargo:update --manifest-path <path/to/Cargo.toml> <crate>
+cargo update --manifest-path <path/to/Cargo.toml> -p <crate>
 ```
 
-It runs `cargo update -p <crate>`, then pins every new crates.io version younger
-than the root `bunfig.toml` quarantine (transitive ones included) back to the
-newest version that has cleared it; CI's lockfile release-age check fails such a
-pin in any `Cargo.lock`. Do not run `cargo update` directly: it takes releases
-published seconds ago. An urgent fix inside the quarantine needs a reasoned
-temporary `"cargo:<crate>"` exclude with a `# quarantine-expires:` annotation in
-the root `bunfig.toml`. Edit the manifest only when the declared requirement
-must change; a full-graph update must be an explicit, reviewed choice.
+The root `.cargo/config.toml` sets `global-min-publish-age` to the root
+`bunfig.toml` quarantine, so Cargo skips crates.io versions younger than it,
+transitive ones included; CI's lockfile release-age check fails such a pin in
+any `Cargo.lock`. An urgent fix inside the quarantine needs a reasoned temporary
+`"cargo:<crate>"` exclude with a `# quarantine-expires:` annotation in the root
+`bunfig.toml`, then
+`CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update --manifest-path <path/to/Cargo.toml> -p <crate> --precise <version>`;
+any other young crate that pulls in needs its own exclude. Edit the manifest
+only when the declared requirement must change; a full-graph update must be an
+explicit, reviewed choice.
 
 For uv, update only the planned packages and review the resulting lockfile:
 

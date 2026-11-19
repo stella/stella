@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { inspectBrowserRuntimeSafety } from "@stll/scripts/src/browser-runtime-safety";
 
@@ -34,10 +35,12 @@ describe("visual sandbox runtime asset", () => {
       ...VISUAL_RUNTIME_BUILD_OPTIONS,
       sourcemap: "external",
       entrypoints: [
-        new URL(
-          "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
-          import.meta.url,
-        ).pathname,
+        fileURLToPath(
+          new URL(
+            "../src/handlers/visual-sandbox/browser/treemap.harness.ts",
+            import.meta.url,
+          ),
+        ),
       ],
     });
     expect(built.success).toBe(true);

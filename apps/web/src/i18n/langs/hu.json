@@ -1233,6 +1233,13 @@
       "treatment": "Későbbi megítélés"
     },
     "analyzing": "Elemzés folyamatban...",
+    "browse": {
+      "courtDescription": "{court} ({country}): határozatok a stella nyilvános jogi adatbázisában, év és hónap szerint.",
+      "courts": "Bíróságok",
+      "days": "Napok",
+      "jurisdictionDescription": "{country}: bírósági határozatok a stella nyilvános jogi adatbázisában, bíróság, év és hónap szerint.",
+      "periodDescription": "{court} ({country}), {period}: határozatok a stella nyilvános jogi adatbázisában."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "A keresés átmenetileg nem érhető el"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ha ismert, keressen a határozat ügyszáma vagy ECLI-azonosítója alapján.",
+        "message": "Nem található a gyűjteményi hivatkozásnak pontosan megfelelő határozat."
+      },
       "noHits": {
         "hint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
         "message": "Semmi nem felel meg a keresés által megkívánt szavaknak."
@@ -2120,6 +2131,7 @@
     },
     "newChat": "Új csevegés",
     "newChatInSidePanel": "Az új csevegés elérhető az oldalsó panelen",
+    "nextSteps": "Következő lépések",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
@@ -2226,7 +2238,6 @@
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
-      "harnessModels": "{harness}-modellek",
       "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
@@ -2236,7 +2247,6 @@
       "localFolderSelection": "Az Ön számítógépe · {harness} · {folder}",
       "localPlace": "Az Ön számítógépe, {harness}",
       "localSelection": "Az Ön számítógépe · {harness}",
-      "modelDefault": "Alapértelmezett (ajánlott)",
       "placeState": "{place}. {state}",
       "stepsCheck": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános › AI-előfizetések részen ellenőrizze ezt az ügynököt: {harness}.",
       "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
@@ -2310,7 +2320,6 @@
     "stopping": "Leállítás…",
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
-    "suggestedFollowupsLabel": "Javasolt követő kérdések",
     "suggestingTitle": "Cím javaslása…",
     "suggestionSeverity": {
       "style": "Stílus",
@@ -2321,7 +2330,6 @@
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
     },
-    "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "tableChart": {
       "bar": "Oszlop",
       "kind": "Diagram típusa",
@@ -2412,6 +2420,7 @@
       "save_document": "Dokumentum mentése",
       "save_matter": "Ügy mentése",
       "save_playbook": "Playbook mentése",
+      "save_skill_package": "Készség mentése",
       "save_task": "Feladat mentése",
       "save_template": "Sablon mentése",
       "save_time_entry": "Időbejegyzés mentése",
@@ -2440,6 +2449,7 @@
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
       "user_message": "Az ügynök munkája közben elküldve",
+      "validate_skill_package": "Készség ellenőrzése",
       "web_search": "Keresés az interneten"
     },
     "toolCall": {
@@ -2450,7 +2460,7 @@
       "commandExited": "{command} (kilépési kód: {code})",
       "consoleLogs": "Konzolkimenet",
       "exactCall": "Pontos hívás",
-      "failed": "Ez a lépés nem sikerült; a stella másképp oldja meg.",
+      "failed": "Ez a lépés nem sikerült.",
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
@@ -2473,6 +2483,8 @@
       "proposedPlan": "Terv javaslata",
       "readFile": "Fájl olvasása",
       "readingLegislation": "Jogszabályok olvasása",
+      "retried": "Újrapróbálva",
+      "retriedDetail": "Ez a lépés nem sikerült, ezért a stella másképp próbálta meg.",
       "searchFiles": "Keresés a fájlokban",
       "searchingCaseLaw": "Keresés az ítélkezési gyakorlatban",
       "searchingLegislationAndCaseLaw": "Keresés a jogszabályokban és az ítélkezési gyakorlatban",
@@ -2741,6 +2753,7 @@
     "done": "Kész",
     "doubleClickToRename": "Kattintson duplán az átnevezéshez",
     "download": "Letöltés",
+    "downloadOriginal": "Eredeti fájl letöltése",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.} other {Az áthelyezés megszakadt. A(z) {itemName} nem lett áthelyezve.}}",
       "droppedOn": "{count, plural, one {A(z) {itemName} a(z) {destinationName} elemre lett ejtve.} other {A(z) {itemName} a(z) {destinationName} elemre lett ejtve.}}",
@@ -3328,6 +3341,8 @@
       "contact": "Kapcsolat: {name}",
       "deliveredAt": "Kézbesítve a fiókba",
       "delivery": "Kézbesítés",
+      "deliveryEvents": "Kézbesítési események",
+      "deliveryReceipt": "Kézbesítési igazolás",
       "directionUnknown": "Ismeretlen irány",
       "messageId": "Üzenetazonosító",
       "moreContacts": "További kapcsolattartók tartoznak ehhez az adatfiókhoz.",
@@ -3340,6 +3355,8 @@
       "sent": "Elküldve",
       "statedInFile": "Adatfiók-üzenet (a fájl szerint)",
       "toHands": "{name} kezéhez",
+      "unlinkedFiles": "A hivatkozás nélkül megjelenő mellékletek megnyitásához töltse le az eredeti ZFO-fájlt.",
+      "unreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "uploaded": "Feltöltött adatfiók-üzenet"
     },
     "deliveredBy": "Kézbesítette: <address>{sender}</address>",
@@ -4042,6 +4059,12 @@
     "versionCreatedDescription": "A(z) {versionNumber}. verzió létrejött. Mindenki folytathatja a szerkesztést.",
     "versionCreatedTitle": "Verzió létrehozva",
     "viewOnly": "Csak megtekintés"
+  },
+  "guidance": {
+    "notCaseLaw": "Szabályozó hatóság által kiadott iránymutatás. Ez nem bírósági határozat.",
+    "openAtPublisher": "Megnyitás a kiadónál",
+    "source": "Forrás: {attribution}",
+    "textUnavailable": "A dokumentum szövege itt nem érhető el. Olvassa el a kiadónál."
   },
   "guides": {
     "action": {
@@ -6308,6 +6331,7 @@
     "compareUnstructured": "Az egyik változat csak egyszerű szövegként érhető el, ezért a kettő nem hasonlítható össze.",
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
+    "compareWithPreviousWording": "Összehasonlítás az előző szövegváltozattal",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
     "currentWording": "Jelenlegi szöveg",
     "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
@@ -6321,6 +6345,7 @@
       "withdrawn": "A kiadó már nem közli"
     },
     "inForceSince": "Hatályos {date} óta",
+    "inForceSinceAtLeast": "Hatályos legkésőbb {date} óta",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Irányadó határozat",
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
@@ -6331,6 +6356,7 @@
     "outlineJumpPlaceholder": "§ 10 vagy cím",
     "pendingChanges": "Közelgő módosítások",
     "pendingChangesIncomplete": "Előfordulhat, hogy a közzétevő adatai nem tartalmazzák az összes közelgő módosítást.",
+    "provisionAbsentVersions": "{count, plural, one {Nem szerepel a törvény e szövegváltozatában} other {Nem szerepel a törvény e # szövegváltozatában}}",
     "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
@@ -6341,7 +6367,14 @@
     "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "ettől is: {date}",
+    "provisionRunShowVersions": "A törvény szövegváltozatainak megjelenítése, időszak: {range}",
+    "provisionRunUnchanged": "{count, plural, one {változatlan a törvény # szövegváltozatában} other {változatlan a törvény # szövegváltozatában}}",
     "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
+    "provisionVersionsAll": "A törvény összes szövegváltozata",
+    "provisionWordingAdded": "Új rendelkezés",
+    "provisionWordingChanged": "Módosítva",
+    "provisionWordingEarliest": "Legkorábbi elérhető szövegváltozat",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
     "searchLabel": "Keresés a jogszabályok között",

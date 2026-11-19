@@ -4,35 +4,16 @@ import os from "node:os";
 import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
+import { REFUSING_SERVER, spawnCliSync } from "../tests/spawn-cli.js";
 import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
   writeCacheFile,
 } from "./registry-cache.js";
 
-const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
-
 // A CLI process with no stored session, no cache, and no server in the
 // environment, so exit codes reflect the argv alone.
-const spawnIsolated = (args: readonly string[]) => {
-  const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-shell-"));
-  const {
-    STELLA_SERVER_URL: _server,
-    STELLA_API_KEY: _key,
-    ...env
-  } = process.env;
-  return Bun.spawnSync({
-    cmd: ["bun", CLI_ENTRYPOINT, ...args],
-    env: {
-      ...env,
-      HOME: home,
-      XDG_CACHE_HOME: path.join(home, ".cache"),
-      XDG_CONFIG_HOME: path.join(home, ".config"),
-    },
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-};
+const spawnIsolated = (args: readonly string[]) => spawnCliSync(args);
 
 describe("stella CLI shell", () => {
   test("--version prints the package version", () => {
@@ -105,7 +86,7 @@ describe("stella CLI shell", () => {
 describe("stella CLI version admission", () => {
   test("a cached below-minimum version refuses commands but permits recovery paths", async () => {
     const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-version-"));
-    const server = "https://version.example";
+    const server = REFUSING_SERVER;
     await writeCacheFile(cachePathFor(server, { XDG_CACHE_HOME: home }), {
       version: CACHE_SCHEMA_VERSION,
       serverOrigin: server,
@@ -115,18 +96,7 @@ describe("stella CLI version admission", () => {
       cliLatest: "999.0.0",
     });
     const run = (args: readonly string[]) =>
-      Bun.spawnSync({
-        cmd: ["bun", CLI_ENTRYPOINT, ...args],
-        env: {
-          ...process.env,
-          HOME: home,
-          XDG_CACHE_HOME: home,
-          XDG_CONFIG_HOME: path.join(home, ".config"),
-          STELLA_SERVER_URL: server,
-        },
-        stderr: "pipe",
-        stdout: "pipe",
-      });
+      spawnCliSync(args, { home, cacheHome: home, server });
 
     const refused = run(["matter", "list", "--schema"]);
     expect(refused.exitCode).toBe(2);
@@ -141,9 +111,10 @@ describe("stella CLI version admission", () => {
 });
 
 // Legacy caller listings cannot project commands in an offline invocation.
-// No token is stored, so nothing reaches the network.
+// No token is stored and the server refuses connections, so a command that
+// checks compatibility fails at once instead of waiting on the network.
 describe("stella CLI: offline registry projection", () => {
-  const SERVER = "https://drift.example";
+  const SERVER = REFUSING_SERVER;
   const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-drift-"));
   const cacheHome = path.join(home, ".cache");
   const REMOVED = ["save_task", "delete_task"];
@@ -180,25 +151,8 @@ describe("stella CLI: offline registry projection", () => {
     );
   });
 
-  const spawnDrifted = (args: readonly string[]) => {
-    const {
-      STELLA_SERVER_URL: _server,
-      STELLA_API_KEY: _key,
-      ...env
-    } = process.env;
-    return Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, ...args],
-      env: {
-        ...env,
-        HOME: home,
-        STELLA_SERVER_URL: SERVER,
-        XDG_CACHE_HOME: cacheHome,
-        XDG_CONFIG_HOME: path.join(home, ".config"),
-      },
-      stderr: "pipe",
-      stdout: "pipe",
-    });
-  };
+  const spawnDrifted = (args: readonly string[]) =>
+    spawnCliSync(args, { home, cacheHome, server: SERVER });
 
   const driftLines = (stderr: string): string[] =>
     stderr.split("\n").filter((line) => line.includes("server registry"));
@@ -252,10 +206,10 @@ describe("stella CLI: offline registry projection", () => {
 });
 
 // The server's feature-omission evidence, once cached for the configured
-// origin, projects the same commands from every listing. No token is stored, so
-// nothing reaches the network.
+// origin, projects the same commands from every listing. No token is stored
+// and the server refuses connections, so nothing waits on the network.
 describe("stella CLI: deployment command discovery", () => {
-  const SERVER = "https://stella.example";
+  const SERVER = REFUSING_SERVER;
   const home = mkdtempSync(path.join(os.tmpdir(), "stella-cli-disabled-"));
   const cacheHome = path.join(home, ".cache");
   beforeAll(async () => {
@@ -270,23 +224,7 @@ describe("stella CLI: deployment command discovery", () => {
   });
 
   const spawnAgainstServer = (args: readonly string[]) => {
-    const {
-      STELLA_SERVER_URL: _server,
-      STELLA_API_KEY: _key,
-      ...env
-    } = process.env;
-    const result = Bun.spawnSync({
-      cmd: ["bun", CLI_ENTRYPOINT, ...args],
-      env: {
-        ...env,
-        HOME: home,
-        STELLA_SERVER_URL: SERVER,
-        XDG_CACHE_HOME: cacheHome,
-        XDG_CONFIG_HOME: path.join(home, ".config"),
-      },
-      stderr: "pipe",
-      stdout: "pipe",
-    });
+    const result = spawnCliSync(args, { home, cacheHome, server: SERVER });
     expect(result.exitCode).toBe(0);
     return result.stdout.toString();
   };

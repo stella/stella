@@ -37,6 +37,7 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { APP_FRAME_SCOPE, matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
 type RouteShellProviderFixtureOptions = {
@@ -71,7 +72,7 @@ const fixtureRouteSchema = v.object({
     validateSearch: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
-        appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
+        appFrame: v.optional(v.picklist(Object.values(APP_FRAME_SCOPE))),
       }),
     ),
   }),
@@ -649,7 +650,6 @@ const loadFixtureRuntime = async (
   const { useAIKeyGate } = await import("@/components/require-ai-key");
   const { useChatEditorManager, useChatEditorExtensions } =
     await import("@/components/chat-editor-provider");
-  const { matchedAppFrameScope } = await import("@/routes/-app-frame-scope");
   const { noopAnalytics } = await import("@/lib/analytics/noop");
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
@@ -744,6 +744,7 @@ const loadFixtureRuntime = async (
     invoiceId: "00000000-0000-4000-8000-000000000007",
     tableId: "00000000-0000-4000-8000-000000000008",
     threadId: "00000000-0000-4000-8000-000000000009",
+    guidanceId: "00000000-0000-4000-8000-00000000000a",
     packId: "general-legal",
     templateId: "nda",
     code: "abcdmnp239",
@@ -788,7 +789,6 @@ const loadFixtureRuntime = async (
     useAIKeyGate,
     useChatEditorManager,
     useChatEditorExtensions,
-    matchedAppFrameScope,
     RouterProvider,
     useMatches,
     ...network,
@@ -957,7 +957,6 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
     useAIKeyGate,
     useChatEditorManager,
     useChatEditorExtensions,
-    matchedAppFrameScope,
     RouterProvider,
     useMatches,
     state,

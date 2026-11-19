@@ -26,8 +26,8 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { reportUnhandledAuthClientError } =
   await import("@/lib/account/auth-code-report");
-const { InvitationRefusal, loadInvitationView } =
-  await import("./-invitation-view");
+const { InvitationRefusal } = await import("./-invitation-view");
+const { loadInvitationView } = await import("./-invitation-view.logic");
 
 const originalFetch = globalThis.fetch;
 

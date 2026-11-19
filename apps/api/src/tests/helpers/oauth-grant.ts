@@ -333,6 +333,30 @@ export const isOAuthTokenActive = async ({
   return v.parse(introspectionSchema, await response.json()).active;
 };
 
+type RevokeOAuthTokenOptions = {
+  client: RegisteredOAuthClient;
+  token: string;
+  /** `none` sends no `token_type_hint`. */
+  tokenTypeHint: "access_token" | "refresh_token" | "none";
+};
+
+/** Present a token at the revocation endpoint (RFC 7009); returns the raw response. */
+export const revokeOAuthToken = async ({
+  client,
+  token,
+  tokenTypeHint,
+}: RevokeOAuthTokenOptions): Promise<Response> =>
+  await getAuth().handler(
+    formRequest("oauth2/revoke", {
+      client_id: client.clientId,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
+      token,
+      ...(tokenTypeHint === "none" ? {} : { token_type_hint: tokenTypeHint }),
+    }),
+  );
+
 type RefreshOAuthGrantOptions = {
   client: RegisteredOAuthClient;
   refreshToken: string;

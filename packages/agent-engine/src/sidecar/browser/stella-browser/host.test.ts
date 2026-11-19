@@ -5,7 +5,6 @@ import {
   existsSync,
   mkdtempSync,
   readdirSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -21,6 +20,7 @@ import {
 import { pageScript } from "@stll/browser-page/page-script";
 import { waitFor } from "@stll/test-kit";
 
+import { readFakeHarnessLog } from "../../../../scripts/fake-harness-peer";
 import { readLocalBrowserResult } from "../local-result";
 import { CDP_METHOD_ALLOWLIST } from "./cdp-client";
 import {
@@ -119,12 +119,9 @@ const start = ({
     const profiles = path.join(root, "browser-profiles");
     return (existsSync(profiles) ? readdirSync(profiles) : []).map((member) => {
       const log = path.join(profiles, member, "profile", "fake-cdp.log");
-      return existsSync(log)
-        ? readFileSync(log, "utf-8")
-            .split("\n")
-            .filter((line) => line !== "")
-            .map((line) => v.parse(receivedSchema, JSON.parse(line)))
-        : [];
+      return readFakeHarnessLog(log).map((entry) =>
+        v.parse(receivedSchema, entry),
+      );
     });
   };
   /** Every message the stand-in browsers received, in order per profile. */

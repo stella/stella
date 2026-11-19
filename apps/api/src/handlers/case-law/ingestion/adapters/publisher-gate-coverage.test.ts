@@ -4,10 +4,7 @@ import nodePath from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-const caseLawRoot = nodePath.resolve(
-  new URL(".", import.meta.url).pathname,
-  "../..",
-);
+const caseLawRoot = nodePath.resolve(import.meta.dirname, "../..");
 
 /**
  * The trees a publisher request can leave from: the crawl, the backfills and

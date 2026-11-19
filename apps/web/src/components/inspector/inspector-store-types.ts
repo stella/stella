@@ -327,6 +327,7 @@ type FileFieldReplacement = {
   id: string;
   fileName?: string | undefined;
   label?: string | undefined;
+  encrypted?: boolean | undefined;
   mimeType?: string | undefined;
   pdfFileId?: string | null | undefined;
   propertyId?: string | undefined;

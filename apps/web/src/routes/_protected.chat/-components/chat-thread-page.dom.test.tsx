@@ -60,7 +60,8 @@ const { setThreadActiveSkill, useThreadActiveSkillStore } =
   await import("@/features/chat/thread-active-skill-store");
 const { toSafeId } = await import("@/lib/safe-id");
 const { skillsOptions } = await import("@/lib/knowledge/queries");
-const { ChatThreadPage } = await import("./chat-thread-page");
+const { ChromeHeaderActionsSlot } = await import("@/lib/chrome-header-actions");
+const { ChatThreadPage } = await import("./chat-thread.page");
 
 const user = {
   activeOrganizationId: "00000000-0000-7000-8000-00000000ffff",
@@ -361,6 +362,10 @@ const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
     path: "/chat/$threadId",
     component: () => (
       <ChatEditorProvider>
+        {/* The shell's header, which the page publishes its actions into. */}
+        <header>
+          <ChromeHeaderActionsSlot />
+        </header>
         <ChatThreadPage threadRef={threadRef} />
       </ChatEditorProvider>
     ),
@@ -585,5 +590,29 @@ test("an empty chat without a skill keeps the general prompts", async () => {
   for (const prompt of openingPrompts) {
     expect(ui.queryByText(prompt.name)).toBeNull();
   }
+  expect(unexpected).toEqual([]);
+});
+
+test("a chat with messages offers New chat once, in the page header, and not again under the composer", async () => {
+  serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
+  const ui = await openThreadPage(createClient());
+  draftPrompt("Which clauses does the lease cover?");
+  await send(ui, 1);
+  await ui.findByText(ANSWER);
+
+  const header = ui.container.querySelector("header");
+  if (header === null) {
+    throw new Error("Expected the shell header to render");
+  }
+  await testing.waitFor(() =>
+    expect(
+      testing.within(header).queryAllByRole("link", {
+        name: messages.chat.newChat,
+      }).length,
+    ).toBe(1),
+  );
+  expect(
+    ui.queryAllByRole("button", { name: messages.chat.newChat }).length,
+  ).toBe(0);
   expect(unexpected).toEqual([]);
 });

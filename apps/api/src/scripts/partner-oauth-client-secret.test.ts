@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodeOs from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Run the minting script without the app environment, as an operator would. */
 const runMint = async (extraEnv: Record<string, string> = {}) => {
@@ -15,7 +16,7 @@ const runMint = async (extraEnv: Record<string, string> = {}) => {
     cmd: [
       process.execPath,
       `--env-file=${emptyEnvFile}`,
-      new URL("partner-oauth-client-secret.ts", import.meta.url).pathname,
+      fileURLToPath(new URL("partner-oauth-client-secret.ts", import.meta.url)),
     ],
     env: { HOME: process.env["HOME"], PATH: process.env["PATH"], ...extraEnv },
   });

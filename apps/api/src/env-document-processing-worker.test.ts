@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   apiSourceRoot,
@@ -23,7 +24,7 @@ const contentEncryptionModuleUrl = new URL(
   "lib/content-encryption.ts",
   import.meta.url,
 ).href;
-const repoRoot = new URL("../../..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const workerEntrypoint = nodePath.resolve(
   apiSourceRoot,
   "scripts/document-processing-worker.ts",

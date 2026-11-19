@@ -7,6 +7,7 @@ import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { czNsCollectionIdentifierValues } from "@stll/api-contract/cz-ns-collection-citation";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -473,6 +474,101 @@ describe("decision legal resolution", () => {
       ],
     });
   });
+
+  test("candidate labels retain the deciding senate, printed reference and typed reporter citations", async () => {
+    const docket = "5 As 104/2013";
+    const referral = {
+      ...row(docket),
+      ecli: null,
+      decisionType: "usnesení",
+      decisionDate: "2015-04-01",
+      publishedCaseNumber: `${docket}-22`,
+    };
+    const extended = {
+      ...row(docket),
+      ecli: null,
+      decisionType: "usnesení",
+      decisionDate: "2016-11-16",
+      senate: "rozšířený senát",
+      publishedCaseNumber: `${docket}-46`,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: "3528/2017 Sb. NSS",
+        },
+        {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: "3528/2017 Sb. NSS",
+        },
+        { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "RS 1/2015" },
+      ],
+    };
+    const answer = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: docket,
+      dependencies: { lookup: lookupRows([referral, extended]) },
+    });
+    expect(answer).toMatchObject({
+      status: "ambiguous",
+      candidates: [
+        { label: `Nejvyšší správní soud, usnesení, 2015-04-01, ${docket}-22` },
+        {
+          label: `Nejvyšší správní soud, usnesení, rozšířený senát, 2016-11-16, ${docket}-46, 3528/2017 Sb. NSS`,
+        },
+      ],
+    });
+    expect(v.safeParse(legalResolveResponseSchema, answer).success).toBe(true);
+    expect(
+      await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier: extended.publishedCaseNumber,
+        dependencies: {
+          lookup: lookupRows([referral, extended]),
+          read: readableDecision,
+        },
+      }),
+    ).toMatchObject({
+      status: "resolved",
+      document: { decisionId: extended.id },
+    });
+  });
+
+  test.each(["primary", "parallel"] as const)(
+    "a full reference resolves its ECLI sheet among bare-docket siblings (%s ECLI)",
+    async (storage) => {
+      const docket = "8 As 40/2020";
+      const siblings = [32, 46, 61].map((sheet) => {
+        const ecli = `ECLI:CZ:NSS:2021:8.As.40.2020.${String(sheet)}`;
+        return {
+          ...row(docket),
+          ecli: storage === "primary" ? ecli : null,
+          identifiers:
+            storage === "parallel"
+              ? [{ type: DECISION_IDENTIFIER_TYPES.ECLI, value: ecli }]
+              : [],
+          sheet,
+        };
+      });
+      for (const sibling of siblings) {
+        expect(
+          await resolveDecision({
+            admission,
+            country: "CZE",
+            identifier: `${docket}-${String(sibling.sheet)}`,
+            dependencies: {
+              lookup: lookupRows(siblings),
+              read: readableDecision,
+            },
+          }),
+        ).toMatchObject({
+          status: "resolved",
+          document: { decisionId: sibling.id },
+        });
+      }
+    },
+  );
 
   test("resolves a Court of Justice case by the docket its adapter stores", async () => {
     // Before 1989 the Court numbered cases without a letter; the adapter

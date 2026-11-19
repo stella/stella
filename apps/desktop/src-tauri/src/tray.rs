@@ -20,6 +20,7 @@ const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
 const RECONNECT_ACCOUNT_ACTION: &str = "reconnect-account";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
 const OPEN_ACTIVITY_ACTION: &str = "open-activity";
+const OPEN_TRANSCRIBE_ACTION: &str = "open-transcribe";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
@@ -391,14 +392,21 @@ fn build_tray_menu_with_activity(
         .build(app)?,
     );
   }
+  let transcribe_enabled = crate::transcribe_recording::available(app);
+  if transcribe_enabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_TRANSCRIBE_ACTION, t("tray.transcribeRecording"))
+        .build(app)?,
+    );
+  }
   let activity_enabled = crate::activity::is_enabled(app);
   if activity_enabled {
-    if clipboard_enabled {
+    if clipboard_enabled || transcribe_enabled {
       builder = builder.separator();
     }
     builder = builder.item(&build_activity_menu(app, activity)?);
   }
-  if clipboard_enabled || activity_enabled {
+  if clipboard_enabled || transcribe_enabled || activity_enabled {
     builder = builder.separator();
   }
 
@@ -577,6 +585,9 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_ACTIVITY_ACTION {
     return MenuAction::OpenActivity;
   }
+  if action == OPEN_TRANSCRIBE_ACTION {
+    return MenuAction::OpenTranscribe;
+  }
   if action == PAUSE_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
   }
@@ -623,6 +634,7 @@ pub enum MenuAction {
   OpenPreferences(PreferencesTab),
   OpenClipboard,
   OpenActivity,
+  OpenTranscribe,
   SetActivityRecording(ActivityRecordingStatus),
   CheckForUpdates,
   OpenEditRoot,

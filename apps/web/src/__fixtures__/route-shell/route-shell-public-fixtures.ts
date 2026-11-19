@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+
+import { publicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -6,6 +9,8 @@ import type { PublicCaseLawDecision } from "@/features/case-law/public-decision"
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import type { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
+import type { Route as CourtBrowseRoute } from "@/routes/law/$country/courts/$";
+import type { Route as JurisdictionHubRoute } from "@/routes/law/$country/index";
 import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
 
 export const publicRouteExceptions: Record<string, string> = {
@@ -131,6 +136,36 @@ const statuteData = {
   work: statute,
 } satisfies typeof StatuteRoute.types.loaderData;
 
+const HUB_SCOPE =
+  publicCaseLawPageCountry("CZE") ?? panic("CZE has public case-law pages");
+
+const jurisdictionHubData = {
+  scope: HUB_SCOPE,
+  courts: [{ name: "Nejvyšší soud", segment: "nejvyssi-soud" }],
+  head: {
+    description: "Courts with public decisions in Czechia.",
+    items: [],
+    path: "/law/cze",
+    title: "Czech case law",
+  },
+} satisfies typeof JurisdictionHubRoute.types.loaderData;
+
+const courtBrowseData = {
+  scope: HUB_SCOPE,
+  court: "Nejvyšší soud",
+  page: {
+    kind: "periods",
+    target: { level: "court", court: "nejvyssi-soud" },
+    periods: [{ value: 2023, count: 0 }],
+  },
+  head: {
+    description: "Decisions of Nejvyšší soud by year.",
+    items: [],
+    path: "/law/cze/courts/nejvyssi-soud",
+    title: "Nejvyšší soud",
+  },
+} satisfies typeof CourtBrowseRoute.types.loaderData;
+
 export const publicFixtureLoaderData = (routeId: string) => {
   switch (routeId) {
     case "/law/$country/cases/$court/$slug":
@@ -139,6 +174,10 @@ export const publicFixtureLoaderData = (routeId: string) => {
     case "/law/$country/statutes/$slug/":
     case "/law/$country/statutes/$slug/v/$version":
       return statuteData;
+    case "/law/$country/":
+      return jurisdictionHubData;
+    case "/law/$country/courts/$":
+      return courtBrowseData;
     default:
       return undefined;
   }
@@ -340,16 +379,26 @@ export const publicFixtureReadyText = (routeId: string) => {
   if (data === undefined) {
     return undefined;
   }
-  return "statute" in data
-    ? data.statute.fulltext.split("\n").at(-1)
-    : data.fulltext;
+  if ("statute" in data) {
+    return data.statute.fulltext.split("\n").at(-1);
+  }
+  // The hubs list links, not a document: their court name is the content.
+  if ("courts" in data) {
+    return data.courts[0]?.name;
+  }
+  if ("page" in data) {
+    return data.court;
+  }
+  return data.fulltext;
 };
 
 export const publicFixtureReadySelector = (
   routeId: string,
   audience: "member" | "anonymous",
 ) => {
-  if (publicFixtureLoaderData(routeId) === undefined) {
+  const data = publicFixtureLoaderData(routeId);
+  // The hubs have no document viewer to wait for.
+  if (data === undefined || "courts" in data || "page" in data) {
     return undefined;
   }
   return audience === "member"

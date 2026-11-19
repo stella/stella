@@ -121,6 +121,13 @@ type CaseLawDecisionsOptions = {
   paragraphs: number;
 };
 
+/** The language each fixture jurisdiction declares for its documents. */
+const DOCUMENT_LANGUAGE = {
+  HUN: "hu",
+  POL: "pl",
+  USA: "en",
+} as const satisfies Record<CaseLawDecisionsOptions["jurisdiction"], string>;
+
 const caseLawDecisions = ({
   manifest,
   jurisdiction,
@@ -150,7 +157,7 @@ const caseLawDecisions = ({
         documentId: Bun.randomUUIDv7(),
         sourceId: SOURCE_ID,
         jurisdiction,
-        language: jurisdiction === "USA" ? "en" : "pl",
+        language: DOCUMENT_LANGUAGE[jurisdiction],
         documentType: "judgment",
         contentHash: "a".repeat(64),
         redistributionEligible: true,

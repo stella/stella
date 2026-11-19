@@ -1233,6 +1233,13 @@
       "treatment": "Późniejsze orzecznictwo"
     },
     "analyzing": "Analizowanie...",
+    "browse": {
+      "courtDescription": "{court} ({country}): orzeczenia w publicznej bazie prawnej stelli według roku i miesiąca.",
+      "courts": "Sądy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: orzeczenia sądów w publicznej bazie prawnej stelli według sądu, roku i miesiąca.",
+      "periodDescription": "{court} ({country}), {period}: orzeczenia w publicznej bazie prawnej stelli."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Wyszukiwanie jest tymczasowo niedostępne"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Wyszukaj orzeczenie po sygnaturze akt lub ECLI, jeśli je znasz.",
+        "message": "Nie znaleziono orzeczenia odpowiadającego dokładnie temu oznaczeniu w zbiorze."
+      },
       "noHits": {
         "hint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
         "message": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie."
@@ -2120,6 +2131,7 @@
     },
     "newChat": "Nowy czat",
     "newChatInSidePanel": "Nowy czat jest dostępny w panelu bocznym",
+    "nextSteps": "Kolejne kroki",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
@@ -2226,7 +2238,6 @@
       "chipLabel": "Gdzie działa: {place}",
       "cloud": "Chmura",
       "cloudDescription": "Działa w chmurze. Dostępne z każdego miejsca.",
-      "harnessModels": "Modele {harness}",
       "hintCheck": "Sprawdź go w stella desktop",
       "hintInstall": "Zainstaluj go w stella desktop",
       "hintOffline": "Otwórz stella desktop na swoim komputerze",
@@ -2236,7 +2247,6 @@
       "localFolderSelection": "Twój komputer · {harness} · {folder}",
       "localPlace": "Twój komputer, {harness}",
       "localSelection": "Twój komputer · {harness}",
-      "modelDefault": "Domyślny (zalecany)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i sprawdź agenta {harness} w sekcji Ustawienia › Ogólne › Subskrypcje AI.",
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
@@ -2310,7 +2320,6 @@
     "stopping": "Zatrzymywanie…",
     "suggestTitle": "Zaproponuj tytuł",
     "suggestTitleUnavailableAnonymized": "Propozycje tytułu są niedostępne dla rozmów zanonimizowanych.",
-    "suggestedFollowupsLabel": "Sugerowane pytania uzupełniające",
     "suggestingTitle": "Proponowanie tytułu…",
     "suggestionSeverity": {
       "style": "Styl",
@@ -2321,7 +2330,6 @@
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
     },
-    "tabToAsk": "→, aby zapytać: „{prompt}”",
     "tableChart": {
       "bar": "Słupkowy",
       "kind": "Typ wykresu",
@@ -2412,6 +2420,7 @@
       "save_document": "Zapisz dokument",
       "save_matter": "Zapisz sprawę",
       "save_playbook": "Zapisz playbook",
+      "save_skill_package": "Zapisz umiejętność",
       "save_task": "Zapisz zadanie",
       "save_template": "Zapisz szablon",
       "save_time_entry": "Zapisz wpis czasu",
@@ -2440,6 +2449,7 @@
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
       "user_message": "Wysłano podczas pracy agenta",
+      "validate_skill_package": "Sprawdź umiejętność",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -2450,7 +2460,7 @@
       "commandExited": "{command} (kod wyjścia {code})",
       "consoleLogs": "Dane wyjściowe konsoli",
       "exactCall": "Dokładne wywołanie",
-      "failed": "Ten krok się nie powiódł; stella poradzi sobie inaczej.",
+      "failed": "Ten krok się nie powiódł.",
       "field": "Pole",
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
@@ -2473,6 +2483,8 @@
       "proposedPlan": "Proponowanie planu",
       "readFile": "Czytanie pliku",
       "readingLegislation": "Odczytywanie przepisów",
+      "retried": "Ponowiono",
+      "retriedDetail": "Ten krok się nie udał, więc stella spróbowała inaczej.",
       "searchFiles": "Przeszukiwanie plików",
       "searchingCaseLaw": "Przeszukiwanie orzecznictwa",
       "searchingLegislationAndCaseLaw": "Przeszukiwanie przepisów i orzecznictwa",
@@ -2741,6 +2753,7 @@
     "done": "Gotowe",
     "doubleClickToRename": "Kliknij dwukrotnie, aby zmienić nazwę",
     "download": "Pobierz",
+    "downloadOriginal": "Pobierz oryginał",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Anulowano przenoszenie. Element {itemName} nie został przeniesiony.} few {Anulowano przenoszenie. {itemName} nie zostały przeniesione.} many {Anulowano przenoszenie. {itemName} nie zostało przeniesionych.} other {Anulowano przenoszenie. {itemName} nie zostało przeniesione.}}",
       "droppedOn": "{count, plural, one {Upuszczono element {itemName} na {destinationName}.} few {Upuszczono {itemName} na {destinationName}.} many {Upuszczono {itemName} na {destinationName}.} other {Upuszczono {itemName} na {destinationName}.}}",
@@ -3328,6 +3341,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dostarczono do skrzynki",
       "delivery": "Doręczenie",
+      "deliveryEvents": "Przebieg doręczenia",
+      "deliveryReceipt": "Potwierdzenie doręczenia",
       "directionUnknown": "Kierunek nieznany",
       "messageId": "Identyfikator wiadomości",
       "moreContacts": "Więcej kontaktów pasuje do tej skrzynki danych.",
@@ -3340,6 +3355,8 @@
       "sent": "Wysłana",
       "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
       "toHands": "Do rąk: {name}",
+      "unlinkedFiles": "Aby otworzyć załączniki wyświetlane bez odnośnika, pobierz oryginalny plik ZFO.",
+      "unreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "uploaded": "Przesłana wiadomość ze skrzynki danych"
     },
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",
@@ -4042,6 +4059,12 @@
     "versionCreatedDescription": "Utworzono wersję {versionNumber}. Wszyscy mogą kontynuować edycję.",
     "versionCreatedTitle": "Wersja utworzona",
     "viewOnly": "Tylko do odczytu"
+  },
+  "guidance": {
+    "notCaseLaw": "Wytyczne wydane przez organ regulacyjny. To nie jest orzeczenie sądu.",
+    "openAtPublisher": "Otwórz u wydawcy",
+    "source": "Źródło: {attribution}",
+    "textUnavailable": "Tekst tego dokumentu nie jest tu dostępny. Przeczytaj go u wydawcy."
   },
   "guides": {
     "action": {
@@ -6308,6 +6331,7 @@
     "compareUnstructured": "Jedna z wersji jest dostępna tylko jako zwykły tekst, więc nie można ich porównać.",
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
+    "compareWithPreviousWording": "Porównaj z poprzednim brzmieniem",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
     "currentWording": "Aktualne brzmienie",
     "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
@@ -6321,6 +6345,7 @@
       "withdrawn": "Wydawca już go nie publikuje"
     },
     "inForceSince": "Obowiązuje od {date}",
+    "inForceSinceAtLeast": "Obowiązuje co najmniej od {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Orzeczenie wiodące",
     "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",
@@ -6331,6 +6356,7 @@
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
     "pendingChanges": "Nadchodzące nowelizacje",
     "pendingChangesIncomplete": "Dane wydawcy mogą nie obejmować wszystkich nadchodzących nowelizacji.",
+    "provisionAbsentVersions": "{count, plural, one {Brak w tej wersji ustawy} few {Brak w tych # wersjach ustawy} many {Brak w tych # wersjach ustawy} other {Brak w tych # wersji ustawy}}",
     "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
     "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
     "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
@@ -6341,7 +6367,14 @@
     "provisionPartTextUnavailable": "Treść {provisionLabel} jest niedostępna",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "provisionRunAlsoFrom": "także od {date}",
+    "provisionRunShowVersions": "Pokaż wersje ustawy z okresu {range}",
+    "provisionRunUnchanged": "{count, plural, one {bez zmian w # wersji ustawy} few {bez zmian w # wersjach ustawy} many {bez zmian w # wersjach ustawy} other {bez zmian w # wersji ustawy}}",
     "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
+    "provisionVersionsAll": "Wszystkie wersje ustawy",
+    "provisionWordingAdded": "Nowy przepis",
+    "provisionWordingChanged": "Zmieniono",
+    "provisionWordingEarliest": "Najstarsza dostępna wersja",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
     "searchLabel": "Szukaj w aktach prawnych",

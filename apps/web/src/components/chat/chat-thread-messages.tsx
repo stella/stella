@@ -195,6 +195,8 @@ import {
 } from "@/features/chat/chat-queue.logic";
 import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
+import { SuggestedFollowups } from "@/features/chat/components/suggested-followups";
+import type { SuggestedFollowupsProps } from "@/features/chat/components/suggested-followups";
 import type { ChatComputerWait } from "@/features/chat/desktop-launch.logic";
 import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -411,6 +413,7 @@ export const ChatThreadMessages = ({
   approvalPendingMessageId,
   branchSource,
   error,
+  followUps,
   hasOlderMessages = false,
   isGenerating = false,
   isLoadingOlder = false,
@@ -593,6 +596,9 @@ export const ChatThreadMessages = ({
                               onAnswerEdited={onAnswerEdited}
                             />
                           </AnswerFooter>
+                          {followUps?.messageId === message.id && (
+                            <SuggestedFollowups {...followUps} />
+                          )}
                         </ChatAnswerDecisionProvider>
                       );
                     case "text":
@@ -912,9 +918,13 @@ const StickyUserTurn = ({
             data-chat-message-id={headerMessage.id}
           >
             <MessageContent className={cn(messageEdit.editing && "hidden")}>
-              <div className="group-data-[stuck=true]/sticky:hidden">
-                <MessageAttachments parts={fileParts} />
-              </div>
+              {/* Only a turn with files draws the row: an empty one would
+                  still take the bubble's gap above the text. */}
+              {fileParts.length > 0 && (
+                <div className="group-data-[stuck=true]/sticky:hidden">
+                  <MessageAttachments parts={fileParts} />
+                </div>
+              )}
               {!hasVisibleText && fileParts.length > 0 && (
                 <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
                   <PaperclipIcon aria-hidden="true" className="size-3" />
@@ -923,16 +933,17 @@ const StickyUserTurn = ({
               )}
               <div
                 className={cn(
-                  // Anchors the idle edit action, which sits in this text box
-                  // as it does in the flat layout's `EditableUserMessage`.
-                  "relative",
-                  "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
+                  // The idle edit action is anchored to the bubble itself
+                  // (`MessageContent`), as in the flat layout's
+                  // `EditableUserMessage`, so it sits outside the text.
+                  // Two of the bubble's 24px lines.
+                  "group-data-[stuck=true]/sticky:max-h-12 group-data-[stuck=true]/sticky:overflow-hidden",
                   // Fade the clipped overflow so a long pinned message dissolves
                   // instead of ending in a hard mid-glyph cut. The absolute-length
-                  // stop (~one line-height) keeps a single-line message wholly
+                  // stop (one line-height) keeps a single-line message wholly
                   // inside the opaque zone so it stays fully visible; the fade only
                   // bites once a second line overflows.
-                  "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.25rem,transparent)]",
+                  "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.5rem,transparent)]",
                 )}
               >
                 {headerMessage.parts.map((part, partIndex) =>
@@ -1707,6 +1718,12 @@ type ChatThreadMessagesProps = {
   assistantTextDensity?: "compact" | "default" | undefined;
   approvalPendingMessageId: string | null;
   /**
+   * What to ask next, drawn at the end of the answer it follows
+   * (`followUps.messageId`), after that answer's actions. The one place
+   * suggestions appear: never over the answer, never in the composer.
+   */
+  followUps?: SuggestedFollowupsProps | undefined;
+  /**
    * The chat this transcript is, for branching from a selection: when
    * present, words selected in a message can be asked about in a new
    * inspector chat or quoted into this chat's composer. Surfaces with their
@@ -2409,6 +2426,12 @@ const AssistantMessageParts = ({
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
+  // A failed step the turn went on past is part of the work; only a turn
+  // that settled without an answer makes the failure its result.
+  const failureOutcome =
+    isTurnActive || isAwaitingUser || hasAnswerContent
+      ? "recovered"
+      : "terminal";
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
   // Start open while this message is actively streaming its reasoning (no
   // answer text yet), but always render the same disclosure so the user can
@@ -2466,6 +2489,9 @@ const AssistantMessageParts = ({
       return (
         <AssistantTextPart
           className={cn(
+            // An answer is read, not scanned: body text one step up from the
+            // UI's, with the line height a paragraph of prose needs.
+            assistantTextDensity === "default" && "text-base/6.5",
             assistantTextDensity === "compact" &&
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
@@ -2493,6 +2519,7 @@ const AssistantMessageParts = ({
         <ToolCallCard
           activeOrganizationId={activeOrganizationId}
           key={part.id}
+          failureOutcome={failureOutcome}
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
@@ -2600,6 +2627,7 @@ const AssistantMessageParts = ({
           action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
+          failureOutcome={failureOutcome}
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}

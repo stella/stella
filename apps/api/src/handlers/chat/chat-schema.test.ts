@@ -23,6 +23,7 @@ import {
 } from "@stll/api-contract/chat";
 import type { AskUserAnswer } from "@stll/api-contract/chat-ask-user";
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import { assertProperty } from "@stll/property-testing";
 
@@ -722,6 +723,28 @@ describe("native AG-UI request envelope", () => {
 });
 
 describe("validateChatFileParts", () => {
+  test.each(LEGAL_FILE_FORMATS)(
+    "accepts a legal file with a generic wire MIME only when the data URL matches it",
+    (format) => {
+      const part = (url: string) =>
+        createChatAttachmentPart({
+          filename: `archive${format.extension}`,
+          mimeType: "application/octet-stream",
+          url,
+        });
+      expect(
+        validateChatFileParts({
+          parts: [part("data:application/octet-stream;base64,AA==")],
+        }).isOk(),
+      ).toBe(true);
+      expect(
+        validateChatFileParts({
+          parts: [part("data:text/plain;base64,AA==")],
+        }).isErr(),
+      ).toBe(true);
+    },
+  );
+
   test("accepts XLSX attachments for server-side text extraction", () => {
     const result = validateChatFileParts({
       parts: createUserFilePart({

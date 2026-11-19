@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 const historicalCatalogConsumers = new Set([
   // These compare a pre-cutover revision or published tarball with the shards.
@@ -65,7 +66,7 @@ test("catalog consumers cannot reintroduce the removed monolithic paths", () => 
         ":(exclude)provenance/**",
       ],
       {
-        cwd: new URL("../", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("../", import.meta.url)),
         stdout: "pipe",
         stderr: "pipe",
       },

@@ -15,7 +15,14 @@ import { readNamedLegislationWorks } from "@/api/lib/legal-search/legislation-wo
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { SECTION_51_VERSION_DATE, seedLegislation } from "./seed-legislation";
+import {
+  SECTION_51_VERSION_DATE,
+  seedLegislation,
+  SYNTHETIC_PROCEDURE_ACT_VERSIONS,
+} from "./seed-legislation";
+
+const VIEWER_ROWS = 4;
+const SEEDED_ROWS = VIEWER_ROWS + SYNTHETIC_PROCEDURE_ACT_VERSIONS.length;
 
 // Measured p95: 16.5 s; this must run and replay the real Postgres seed.
 test("local seeding creates searchable Czech statute versions and converges on replay", async () => {
@@ -36,9 +43,13 @@ test("local seeding creates searchable Czech statute versions and converges on r
     await seedLegislation(scopedDb);
     await seedLegislation(scopedDb);
     const rows = await db.select().from(legislationDocuments);
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(SEEDED_ROWS);
     expect(new Set(rows.map(({ eli }) => eli))).toEqual(
-      new Set(["/eli/cz/sb/2012/89", "/eli/cz/sb/2006/262"]),
+      new Set([
+        "/eli/cz/sb/2012/89",
+        "/eli/cz/sb/2006/262",
+        "/eli/cz/sb/2024/998",
+      ]),
     );
     for (const eli of new Set(rows.map((row) => row.eli))) {
       const versions = rows.filter((row) => row.eli === eli);
@@ -46,9 +57,10 @@ test("local seeding creates searchable Czech statute versions and converges on r
         new Set(versions.map(({ versionValidFrom }) => versionValidFrom)),
       ).toEqual(
         new Set(
-          eli === "/eli/cz/sb/2006/262"
-            ? ["2020-01-01", SECTION_51_VERSION_DATE]
-            : ["2020-01-01", "2024-01-01"],
+          {
+            "/eli/cz/sb/2006/262": ["2020-01-01", SECTION_51_VERSION_DATE],
+            "/eli/cz/sb/2024/998": SYNTHETIC_PROCEDURE_ACT_VERSIONS,
+          }[eli] ?? ["2020-01-01", "2024-01-01"],
         ),
       );
       expect(
@@ -73,7 +85,9 @@ test("local seeding creates searchable Czech statute versions and converges on r
       section51StatuteAst.blocks.map(({ plainText }) => plainText).join("\n\n"),
     );
     expect(historicalWorkVersion?.versionValidTo).toBe(SECTION_51_VERSION_DATE);
-    expect(await db.select().from(legislationSearchDocuments)).toHaveLength(4);
+    expect(await db.select().from(legislationSearchDocuments)).toHaveLength(
+      SEEDED_ROWS,
+    );
     const named = await scopedDb(async (tx) =>
       readNamedLegislationWorks(tx, { query: "89/2012", country: "CZE" }),
     );
@@ -85,7 +99,7 @@ test("local seeding creates searchable Czech statute versions and converges on r
     expect(await db.select().from(legislationFacetCounts)).toEqual([
       expect.objectContaining({
         country: "CZE",
-        works: 2,
+        works: 3,
         documentType: "act",
       }),
     ]);

@@ -9,8 +9,11 @@ import messages from "@/i18n/langs/ar.json" with { type: "json" };
 import csMessages from "@/i18n/langs/cs.json" with { type: "json" };
 import enMessages from "@/i18n/langs/en.json" with { type: "json" };
 
+import type { StepFailureOutcome } from "./tool-call-card";
+
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { cleanup, render, screen } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, screen } =
+  await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -30,6 +33,7 @@ test("tool duration respects the selected numbering system", () => {
         <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
           <ToolCallCard
             activeOrganizationId="test-org"
+            failureOutcome="terminal"
             durationMs={2000}
             part={{
               type: "tool-call",
@@ -58,6 +62,7 @@ test("a running tool is not announced as waiting", () => {
         <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
           <ToolCallCard
             activeOrganizationId="test-org"
+            failureOutcome="terminal"
             part={{
               type: "tool-call",
               id: "running-search",
@@ -85,6 +90,7 @@ test("a call its turn cut off reads as stopped, not as a failure", () => {
         <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
           <ToolCallCard
             activeOrganizationId="test-org"
+            failureOutcome="terminal"
             part={{
               type: "tool-call",
               id: "stopped-search",
@@ -113,6 +119,7 @@ test("a connector call that failed with a plain-text error reads as failed, not 
         <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
           <ToolCallCard
             activeOrganizationId="test-org"
+            failureOutcome="terminal"
             part={{
               type: "tool-call",
               id: "failed-connector",
@@ -144,6 +151,7 @@ test("a coding agent's step its turn cut off reads as stopped, not as failed", (
         <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
           <ToolCallCard
             activeOrganizationId="test-org"
+            failureOutcome="terminal"
             part={{
               type: "tool-call",
               id: "stopped-command",
@@ -173,6 +181,7 @@ test("a coding agent's step that reports it failed reads as failed, not as stopp
         <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
           <ToolCallCard
             activeOrganizationId="test-org"
+            failureOutcome="terminal"
             part={{
               type: "tool-call",
               id: "failed-command",
@@ -200,9 +209,11 @@ test("a coding agent's step that reports it failed reads as failed, not as stopp
 type StepPart = ComponentProps<typeof ToolCallCard>["part"];
 
 const renderStep = ({
+  failureOutcome = "terminal",
   locale,
   part,
 }: {
+  failureOutcome?: StepFailureOutcome;
   locale: "cs" | "en";
   part: StepPart;
 }) =>
@@ -213,7 +224,11 @@ const renderStep = ({
         messages={locale === "cs" ? csMessages : enMessages}
       >
         <FormattingProvider locale={locale} timeZone="UTC">
-          <ToolCallCard activeOrganizationId="test-org" part={part} />
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            failureOutcome={failureOutcome}
+            part={part}
+          />
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
@@ -381,5 +396,51 @@ describe("a finished step sits on the rail; only live and failed steps draw a ma
     expect(
       screen.getByRole("img", { name: enMessages.chat.toolCall.failed }),
     ).toBeDefined();
+  });
+});
+
+describe("a failed step stays calm when its turn went on past it", () => {
+  test("a recovered failure reads as retried, with the reason behind its disclosure", () => {
+    const { container } = renderStep({
+      failureOutcome: "recovered",
+      locale: "cs",
+      part: failedSectionRead(),
+    });
+
+    expect(screen.getByText(csMessages.chat.toolCall.retried)).toBeDefined();
+    expect(container.innerHTML.includes("destructive")).toBe(false);
+    expect(
+      container.textContent.includes(csMessages.chat.toolCall.failed),
+    ).toBe(false);
+    expect(
+      container.textContent.includes(csMessages.chat.toolCall.retriedDetail),
+    ).toBe(false);
+    expect(container.textContent.includes(SECTION_ERROR)).toBe(false);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: csMessages.chat.toolCall.toggleDetails,
+      }),
+    );
+
+    expect(
+      screen.getByText(csMessages.chat.toolCall.retriedDetail),
+    ).toBeDefined();
+    expect(container.textContent.includes(SECTION_ERROR)).toBe(true);
+  });
+
+  test("a failure that ended the turn keeps the failure styling and copy", () => {
+    const { container } = renderStep({
+      failureOutcome: "terminal",
+      locale: "cs",
+      part: failedSectionRead(),
+    });
+
+    expect(container.innerHTML.includes("bg-destructive")).toBe(true);
+    expect(screen.getAllByText(csMessages.chat.toolCall.failed).length).toBe(1);
+    expect(
+      screen.getByRole("img", { name: csMessages.chat.toolCall.failed }),
+    ).toBeDefined();
+    expect(screen.queryByText(csMessages.chat.toolCall.retried)).toBeNull();
   });
 });

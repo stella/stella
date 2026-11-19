@@ -1,5 +1,6 @@
 import { panic, TaggedError } from "better-result";
 import { build } from "bun";
+import { fileURLToPath } from "node:url";
 
 class RenderProbeBundleError extends TaggedError("RenderProbeBundleError")<{
   message: string;
@@ -8,7 +9,9 @@ class RenderProbeBundleError extends TaggedError("RenderProbeBundleError")<{
 
 const result = await build({
   entrypoints: [
-    new URL("../e2e/helpers/render-probe-browser.ts", import.meta.url).pathname,
+    fileURLToPath(
+      new URL("../e2e/helpers/render-probe-browser.ts", import.meta.url),
+    ),
   ],
   target: "browser",
   format: "iife",

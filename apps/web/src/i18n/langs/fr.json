@@ -1233,6 +1233,13 @@
       "treatment": "Traitement ultérieur"
     },
     "analyzing": "Analyse en cours...",
+    "browse": {
+      "courtDescription": "{court} ({country}) : décisions dans la base juridique publique de stella, par année et par mois.",
+      "courts": "Juridictions",
+      "days": "Jours",
+      "jurisdictionDescription": "{country} : décisions de justice dans la base juridique publique de stella, par juridiction, année et mois.",
+      "periodDescription": "{court} ({country}), {period} : décisions dans la base juridique publique de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "La recherche est temporairement indisponible"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Recherchez le numéro de dossier ou l’ECLI de la décision, si vous le connaissez.",
+        "message": "Aucune décision correspondant exactement à cette référence de recueil n’a été trouvée."
+      },
       "noHits": {
         "hint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
         "message": "Aucun résultat ne correspond aux mots exigés par cette recherche."
@@ -2120,6 +2131,7 @@
     },
     "newChat": "Nouvelle conversation",
     "newChatInSidePanel": "La nouvelle conversation est disponible dans le panneau latéral",
+    "nextSteps": "Prochaines étapes",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -2226,7 +2238,6 @@
       "chipLabel": "Exécution : {place}",
       "cloud": "Cloud",
       "cloudDescription": "S’exécute dans le cloud. Fonctionne partout.",
-      "harnessModels": "Modèles {harness}",
       "hintCheck": "Vérifiez-le dans stella desktop",
       "hintInstall": "Installez-le depuis stella desktop",
       "hintOffline": "Ouvrez stella desktop sur votre ordinateur",
@@ -2236,7 +2247,6 @@
       "localFolderSelection": "Votre ordinateur · {harness} · {folder}",
       "localPlace": "Votre ordinateur, {harness}",
       "localSelection": "Votre ordinateur · {harness}",
-      "modelDefault": "Par défaut (recommandé)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et vérifiez {harness} dans Paramètres › Général › Abonnements IA.",
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
@@ -2310,7 +2320,6 @@
     "stopping": "Arrêt en cours…",
     "suggestTitle": "Suggérer un titre",
     "suggestTitleUnavailableAnonymized": "Les suggestions de titre ne sont pas disponibles pour les conversations anonymisées.",
-    "suggestedFollowupsLabel": "Suggestions de questions de suivi",
     "suggestingTitle": "Suggestion d'un titre…",
     "suggestionSeverity": {
       "style": "Style",
@@ -2321,7 +2330,6 @@
       "accepted": "Appliqué",
       "rejected": "Rejeté"
     },
-    "tabToAsk": "→ pour demander : « {prompt} »",
     "tableChart": {
       "bar": "Barres",
       "kind": "Type de graphique",
@@ -2412,6 +2420,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
@@ -2440,6 +2449,7 @@
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "user_message": "Envoyé pendant que l’agent travaillait",
+      "validate_skill_package": "Vérifier la compétence",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -2450,7 +2460,7 @@
       "commandExited": "{command} (code de sortie {code})",
       "consoleLogs": "Sortie de la console",
       "exactCall": "Appel exact",
-      "failed": "Cette étape a échoué ; stella va contourner le problème.",
+      "failed": "Cette étape a échoué.",
       "field": "Champ",
       "input": "Entrée",
       "interrupted": "Interrompu avant la fin",
@@ -2473,6 +2483,8 @@
       "proposedPlan": "Proposition d’un plan",
       "readFile": "Lecture d’un fichier",
       "readingLegislation": "Lecture de la législation",
+      "retried": "Nouvel essai",
+      "retriedDetail": "Cette étape n'a pas abouti, stella a donc essayé autrement.",
       "searchFiles": "Recherche dans les fichiers",
       "searchingCaseLaw": "Recherche dans la jurisprudence",
       "searchingLegislationAndCaseLaw": "Recherche dans la législation et la jurisprudence",
@@ -2741,6 +2753,7 @@
     "done": "Terminé",
     "doubleClickToRename": "Double-cliquez pour renommer",
     "download": "Télécharger",
+    "downloadOriginal": "Télécharger l’original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Déplacement annulé. {itemName} n’a pas été déplacé.} other {Déplacement annulé. {itemName} n’ont pas été déplacés.} many {Déplacement annulé. {itemName} n’ont pas été déplacés.}}",
       "droppedOn": "{count, plural, one {{itemName} a été déposé sur {destinationName}.} other {{itemName} ont été déposés sur {destinationName}.} many {{itemName} ont été déposés sur {destinationName}.}}",
@@ -3328,6 +3341,8 @@
       "contact": "Contact : {name}",
       "deliveredAt": "Remis dans la boîte",
       "delivery": "Remise",
+      "deliveryEvents": "Historique de remise",
+      "deliveryReceipt": "Accusé de réception",
       "directionUnknown": "Sens inconnu",
       "messageId": "Identifiant du message",
       "moreContacts": "D’autres contacts correspondent à cette boîte de données.",
@@ -3340,6 +3355,8 @@
       "sent": "Envoyé",
       "statedInFile": "Message de boîte de données (selon le fichier)",
       "toHands": "À l’attention de {name}",
+      "unlinkedFiles": "Pour ouvrir les pièces jointes sans lien, téléchargez le fichier ZFO d’origine.",
+      "unreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "uploaded": "Message de boîte de données importé"
     },
     "deliveredBy": "Distribué par <address>{sender}</address>",
@@ -4042,6 +4059,12 @@
     "versionCreatedDescription": "La version {versionNumber} a été créée. Tout le monde peut continuer à modifier le document.",
     "versionCreatedTitle": "Version créée",
     "viewOnly": "Lecture seule"
+  },
+  "guidance": {
+    "notCaseLaw": "Lignes directrices émises par un régulateur. Il ne s’agit pas d’une décision de justice.",
+    "openAtPublisher": "Ouvrir chez l’éditeur",
+    "source": "Source : {attribution}",
+    "textUnavailable": "Le texte de ce document n’est pas disponible ici. Consultez-le chez l’éditeur."
   },
   "guides": {
     "action": {
@@ -6308,6 +6331,7 @@
     "compareUnstructured": "L'une des versions n'est disponible qu'en texte brut ; les deux ne peuvent donc pas être comparées.",
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
+    "compareWithPreviousWording": "Comparer avec la rédaction précédente",
     "compareWithVersion": "Comparer avec {version}",
     "currentWording": "Rédaction actuelle",
     "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
@@ -6321,6 +6345,7 @@
       "withdrawn": "N'est plus publié par l'éditeur"
     },
     "inForceSince": "En vigueur depuis le {date}",
+    "inForceSinceAtLeast": "En vigueur au moins depuis le {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Décision de principe",
     "leadingDecisionsExplanation": "La première mention dans chaque décision, classée selon l’autorité de la citation : citations entrantes pondérées, ajustées selon le rang de la juridiction, la polarité de la citation et son ancienneté.",
@@ -6331,6 +6356,7 @@
     "outlineJumpPlaceholder": "§ 10 ou un intitulé",
     "pendingChanges": "Modifications à venir",
     "pendingChangesIncomplete": "Les données de l’éditeur peuvent ne pas inclure toutes les modifications à venir.",
+    "provisionAbsentVersions": "{count, plural, one {Absente de cette version de la loi} many {Absente de ces # versions de la loi} other {Absente de ces # versions de la loi}}",
     "provisionAskContextPrompt": "\n\nPassages appliquant la disposition dans les décisions les plus autorisées :\n{passages}\n\nUtilise les outils de jurisprudence pour lire l’une de ces décisions en entier ou pour trouver d’autres décisions citant la disposition.",
     "provisionAskSummarize": "Résumer l’application de cette disposition par les juridictions",
     "provisionAskSummarizePrompt": "Résume la façon dont les juridictions appliquent {subject}, en citant les décisions retenues.",
@@ -6341,7 +6367,14 @@
     "provisionPartTextUnavailable": "Le texte de {provisionLabel} n’est pas disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), dans sa rédaction en vigueur depuis le {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionRunAlsoFrom": "également à partir du {date}",
+    "provisionRunShowVersions": "Afficher les versions de la loi pour {range}",
+    "provisionRunUnchanged": "{count, plural, one {inchangée dans # version de la loi} many {inchangée dans # versions de la loi} other {inchangée dans # versions de la loi}}",
     "provisionTextUnavailable": "Texte indisponible pour cette version",
+    "provisionVersionsAll": "Toutes les versions de la loi",
+    "provisionWordingAdded": "Nouvelle disposition",
+    "provisionWordingChanged": "Modifiée",
+    "provisionWordingEarliest": "Plus ancienne version disponible",
     "publisherWindowInconsistent": "Aucune version en vigueur ne peut être établie à cette date : les données de l'éditeur sont incohérentes.",
     "resolvedAlias": "Reconnu comme {label}",
     "searchLabel": "Rechercher dans la législation",

@@ -84,6 +84,7 @@ const RESOURCE_PATHS: ReadonlySet<string> = new Set([
   "/_protected/chat/$threadId",
   "/_protected/chat/workspaces/$workspaceId/$threadId",
   "/_protected/contacts/$contactId",
+  "/_protected/guidance/$guidanceId",
   "/_protected/workspaces/$workspaceId",
   "/_protected/workspaces/$workspaceId/$viewId",
   "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
@@ -185,6 +186,16 @@ const PARAM_EXEMPTIONS = [
     path: "/law/$country/statutes/$slug/v/$version",
     reason:
       "Public statute slugs and versions are canonical external identifiers.",
+  },
+  {
+    path: "/law/$country/",
+    reason:
+      "The country code is a public-law namespace rather than a resource id.",
+  },
+  {
+    path: "/law/$country/courts/$",
+    reason:
+      "Court, period and page segments are canonical public-law paths; the hub loader answers notFound for anything else.",
   },
   {
     path: "/law/$country/statutes/",

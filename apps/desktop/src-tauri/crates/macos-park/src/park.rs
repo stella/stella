@@ -124,6 +124,22 @@ fn configure_transient_overlay(ns_window: &NSWindow) {
   ns_window.setHidesOnDeactivate(false);
 }
 
+/// Orders a window in front of every app and on every Space without making
+/// it key or activating the app, so the app the user works in keeps its
+/// caret and stays frontmost; clicks pass through to whatever is underneath.
+/// Returns false when there is no window handle or the call is not on the
+/// main thread.
+pub fn present_passive_overlay<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+  let Some((_, ns_window)) = ns_window(window) else {
+    return false;
+  };
+  configure_transient_overlay(ns_window);
+  ns_window.setIgnoresMouseEvents(true);
+  ns_window.setLevel(NSStatusWindowLevel);
+  ns_window.orderFrontRegardless();
+  true
+}
+
 /// Prepares a disposable overlay without the persistent clipboard panel's
 /// class conversion. The caller uses Tauri's ordinary show/focus lifecycle.
 pub fn prepare_transient_overlay<R: Runtime>(window: &WebviewWindow<R>) {

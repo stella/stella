@@ -12,6 +12,10 @@ import {
 } from "./desktop-dictation-cleanup";
 import fixture from "./desktop-dictation-cleanup.fixture.json";
 import contract from "./desktop-dictation-cleanup.json";
+import {
+  MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+} from "./transcription";
 
 test("the native contract file matches the typed cleanup contract", () => {
   expect(contract).toStrictEqual({
@@ -159,4 +163,36 @@ test("a cleanup request may say where the text goes, bounded by code point", () 
       }).success,
     ).toBe(false);
   }
+});
+
+test("a cleanup may carry the speaker's custom words within the vocabulary limits", () => {
+  const request = (vocabulary: unknown) =>
+    v.safeParse(desktopDictationCleanupRequestSchema, {
+      transcript: "custom terms list",
+      vocabulary,
+    }).success;
+  expect(request(["custom terms list", "Libeňská"])).toBe(true);
+  expect(request([])).toBe(true);
+  expect(
+    request(
+      Array.from(
+        { length: MAX_TRANSCRIPTION_VOCABULARY_TERMS },
+        (_unused, index) => `term ${index}`,
+      ),
+    ),
+  ).toBe(true);
+  expect(
+    request(
+      Array.from(
+        { length: MAX_TRANSCRIPTION_VOCABULARY_TERMS + 1 },
+        (_unused, index) => `term ${index}`,
+      ),
+    ),
+  ).toBe(false);
+  expect(
+    request(["x".repeat(MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH + 1)]),
+  ).toBe(false);
+  expect(request([""])).toBe(false);
+  expect(request(["line\nbreak"])).toBe(false);
+  expect(request("custom terms list")).toBe(false);
 });

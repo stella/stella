@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { DATA_BOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
+
 import {
   getFileTabDisplayState,
-  getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
   shouldRunFileAnonymizationPipeline,
   shouldSurfaceEmailResolutionAlert,
@@ -47,15 +50,43 @@ describe("file anonymization producer", () => {
 });
 
 describe("file tab native preview kind", () => {
+  test.each([
+    ["export.bin", DATA_BOX_FILE_FORMAT.mimeType],
+    ["potvrzení.ZFO", "application/octet-stream"],
+  ])("shows the envelope for %s without conversion", (fileName, mimeType) => {
+    const state = getFileTabDisplayState({
+      activeId: "field",
+      minimized: false,
+      scaleOffsets: new Map(),
+      tab: {
+        type: "pdf",
+        id: "field",
+        entityId: "entity",
+        label: fileName,
+        fileName,
+        mimeType,
+        pdfFileId: null,
+        workspaceId: "matter",
+      },
+    });
+    expect(state.nativePreviewKind).toBe("dataBox");
+    expect(state.needsConversionStatus).toBe(false);
+    expect(state.requiresPdfMeasurement).toBe(false);
+    expect(state.canOpenFullView).toBe(false);
+    expect(
+      nativeFilePreviewKind({ fileName, mimeType, encrypted: true }),
+    ).toBeNull();
+  });
+
   test("uses the stored filename for extension-recovered previews", () => {
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "thread.eml",
         mimeType: "application/octet-stream",
       }),
     ).toBe("email");
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "notes.md",
         mimeType: "application/octet-stream",
       }),
@@ -64,37 +95,37 @@ describe("file tab native preview kind", () => {
 
   test("routes XLSX and PPTX files to the native office viewer", () => {
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "workbook.xlsx",
         mimeType:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
-    ).toBe("office");
+    ).toBe("xlsx");
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "deck.pptx",
         mimeType:
           "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       }),
-    ).toBe("office");
+    ).toBe("pptx");
   });
 
   test("reads a plain-text file without a PDF derivative", () => {
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "notes.txt",
         mimeType: "text/plain",
       }),
     ).toBe("text");
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "Notes.TXT",
         mimeType: "application/octet-stream",
       }),
     ).toBe("text");
     // Markdown sent as text/plain keeps its editor.
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "notes.md",
         mimeType: "text/plain",
       }),
@@ -138,13 +169,13 @@ describe("file tab native preview kind", () => {
     ).toBe(true);
   });
 
-  test("keeps unsupported MIME types on the PDF fallback", () => {
+  test("leaves files requiring a rendition to the fallback", () => {
     expect(
-      getFileTabNativePreviewKind({
+      nativeFilePreviewKind({
         fileName: "workbook.xlsx",
         mimeType: "application/octet-stream",
       }),
-    ).toBe("pdf");
+    ).toBeNull();
   });
 });
 

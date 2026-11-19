@@ -53,7 +53,11 @@ mod dictation_hold_key;
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_models;
 mod dictation_pauses;
+mod dictation_preview;
+mod dictation_trace;
+mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -73,6 +77,7 @@ mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
+mod keep_awake;
 mod keychain;
 mod local_linked_folder_commands;
 mod local_linked_folders;
@@ -100,6 +105,8 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_recording;
+mod transcribe_window;
 mod tray;
 mod types;
 mod updater;
@@ -230,6 +237,8 @@ pub fn run() {
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
+    .manage(transcribe_recording::TranscribeState::default())
+    .manage(dictation_preview::PreviewState::new())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -409,6 +418,9 @@ pub fn run() {
               tray::MenuAction::OpenActivity => {
                 activity_window::show(&handle);
               }
+              tray::MenuAction::OpenTranscribe => {
+                transcribe_window::show(&handle);
+              }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
                   best_effort(
@@ -539,6 +551,7 @@ pub fn run() {
 
       presence::start(handle.clone());
       desktop_runner::watch_state(&handle);
+      keep_awake::watch_power_source();
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
@@ -611,6 +624,7 @@ pub fn run() {
         }
       }
       tauri::RunEvent::Exit => {
+        keep_awake::global().release_for_exit();
         activity::flush_on_exit(app);
         desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]

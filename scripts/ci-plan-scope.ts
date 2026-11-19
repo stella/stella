@@ -979,6 +979,7 @@ export const OUTPUT_RULES = {
           "*/Cargo.lock",
           "Cargo.toml",
           "*/Cargo.toml",
+          ".cargo/config.toml",
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",

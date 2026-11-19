@@ -1570,7 +1570,7 @@ export const FilesystemRow = ({
             />
           );
         }
-        if (file?.mimeType) {
+        if (file) {
           return (
             <DocumentIcon
               className="size-4 shrink-0"
@@ -1764,6 +1764,24 @@ export const FilesystemRow = ({
           onNavigateToFolder(node.entityId);
         } else {
           onToggleFolder(node.entityId);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (
+          isFolder ||
+          event.defaultPrevented ||
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        if (!event.repeat) {
+          dblClickSelectionRef.current = undefined;
+          openInInspector();
         }
       }}
       onDoubleClick={() => {

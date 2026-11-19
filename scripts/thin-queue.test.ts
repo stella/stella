@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
@@ -27,7 +28,7 @@ import {
   thinJobs,
 } from "./main-heavy-plan";
 
-const root = new URL("../", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../", import.meta.url));
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   if: v.optional(v.string()),

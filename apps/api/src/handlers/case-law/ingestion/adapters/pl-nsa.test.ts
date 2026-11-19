@@ -21,6 +21,7 @@ import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createSha256 } from "@stll/sha256/node";
 
@@ -82,7 +83,9 @@ const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 const ROWS_JSON = new URL("pl-nsa-rows.json", FIXTURES_DIR);
-const ROWS_PARQUET = new URL("pl-nsa-rows.parquet", FIXTURES_DIR).pathname;
+const ROWS_PARQUET = fileURLToPath(
+  new URL("pl-nsa-rows.parquet", FIXTURES_DIR),
+);
 
 type RecordedRow = {
   case: string;

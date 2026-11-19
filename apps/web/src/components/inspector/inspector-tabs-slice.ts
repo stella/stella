@@ -193,6 +193,9 @@ const upsertFileTab = (
     existing.mimeType = tab.mimeType;
   }
   normalizeFileTabFacet(existing);
+  if (previousId !== tab.id || tab.encrypted !== undefined) {
+    existing.encrypted = tab.encrypted;
+  }
   existing.pdfFileId = tab.pdfFileId;
   if (
     renderIdPolicy === FILE_TAB_RENDER_ID_POLICY.always ||
@@ -1053,6 +1056,9 @@ export const createInspectorTabsSlice = (
       }
       if (next.mimeType !== undefined) {
         tab.mimeType = next.mimeType;
+      }
+      if (idChanged || next.encrypted !== undefined) {
+        tab.encrypted = next.encrypted;
       }
       if (next.pdfFileId !== undefined) {
         tab.pdfFileId = next.pdfFileId;

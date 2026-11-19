@@ -668,6 +668,7 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
     "apps/desktop/src-tauri/Cargo.lock",
     "packages/scan-engine/Cargo.lock",
     "packages/scan-engine/Cargo.toml",
+    ".cargo/config.toml",
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-stll-quarantine-excludes.ts",

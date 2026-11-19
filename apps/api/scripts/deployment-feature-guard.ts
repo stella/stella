@@ -79,6 +79,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The caller's private saved searches support search on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/data-box",
+    "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/organization-settings/correspondence/data-boxes",
     "Organization data-box settings support matter correspondence on every deployment",
   ],
@@ -101,6 +105,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/skills/save-draft",
     "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
+  ],
+  [
+    "/v1/skills/:skillId/export",
+    "Downloading a skill the caller may read as an Agent Skills archive is available on every deployment",
   ],
   [
     "/v1/dictation/transcribe",
@@ -140,7 +148,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
@@ -250,6 +258,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

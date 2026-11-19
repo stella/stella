@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { createTestState } from "@stll/test-state";
 
@@ -117,7 +118,7 @@ describe("stored agent credential reads", () => {
           }
         `,
       ],
-      cwd: new URL("../../", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: {
         ...process.env,
         CONTENT_ENCRYPTION_KEY:
@@ -167,7 +168,7 @@ describe("stored agent credential reads", () => {
           }
         `,
       ],
-      cwd: new URL("../../", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: {
         ...process.env,
         CONTENT_ENCRYPTION_KEY: "",
