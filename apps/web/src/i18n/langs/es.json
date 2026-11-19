@@ -2310,7 +2310,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "También consultadas ({count, number})"
+      "moreConsulted": "{count, plural, one {+# consultada más} many {+# consultadas más} other {+# consultadas más}}"
     },
     "sourcePlaceholder": "Chat sobre {title}",
     "sourcePlaceholderAction": "Chat sobre",

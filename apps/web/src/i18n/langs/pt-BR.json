@@ -2310,7 +2310,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Também consultadas ({count, number})"
+      "moreConsulted": "{count, plural, one {+# outra consultada} many {+# outras consultadas} other {+# outras consultadas}}"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",

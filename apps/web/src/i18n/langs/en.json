@@ -2310,7 +2310,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Also consulted ({count, number})"
+      "moreConsulted": "+{count, number} more consulted"
     },
     "sourcePlaceholder": "Chat about {title}",
     "sourcePlaceholderAction": "Chat about",

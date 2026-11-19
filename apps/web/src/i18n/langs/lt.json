@@ -2310,7 +2310,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Taip pat peržiūrėta ({count, number})"
+      "moreConsulted": "{count, plural, one {+# dar peržiūrėtas} few {+# dar peržiūrėti} many {+# dar peržiūrėto} other {+# dar peržiūrėtų}}"
     },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",

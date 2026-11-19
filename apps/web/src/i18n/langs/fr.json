@@ -2310,7 +2310,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Également consultés ({count, number})"
+      "moreConsulted": "{count, plural, one {+# autre consultée} many {+# autres consultées} other {+# autres consultées}}"
     },
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",

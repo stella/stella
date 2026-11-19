@@ -2310,7 +2310,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Szintén áttekintve ({count, number})"
+      "moreConsulted": "+{count, number} további átnézett"
     },
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
