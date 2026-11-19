@@ -56,6 +56,7 @@ mod dictation_live;
 mod dictation_pauses;
 #[cfg(dictation)]
 mod dictation_worker;
+mod dictation_words;
 mod document_sessions;
 #[cfg(test)]
 mod e2e;

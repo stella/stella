@@ -28,6 +28,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { typedDictationText } from "@/api/handlers/dictation/cleanup-model";
+import { VOCABULARY_STATUS } from "@/api/handlers/dictation/provider";
 import { desktopDictationBodySchema } from "@/api/handlers/dictation/schema";
 import {
   DEFAULT_DICTATION_DEPENDENCIES,
@@ -134,6 +135,7 @@ export const listDictationModels = (
     if (!labeled) {
       return { id: modelId, displayName };
     }
+    const takes = takesVocabulary(modelId);
     return retention
       ? {
           id: modelId,
@@ -141,8 +143,15 @@ export const listDictationModels = (
           provider,
           outsideRegion,
           retainsData: transcriptionRetainsData(deployment, modelId),
+          takesVocabulary: takes,
         }
-      : { id: modelId, displayName, provider, outsideRegion };
+      : {
+          id: modelId,
+          displayName,
+          provider,
+          outsideRegion,
+          takesVocabulary: takes,
+        };
   });
   if (models.length === 0) {
     // Nothing this deployment can transcribe with, or nothing in the region.
@@ -304,34 +313,48 @@ const readDesktopMatter = async (
   };
 };
 
-/** The matter's vocabulary as a transcription takes it: each term once,
- *  short enough for a hint, the most telling first. */
-export const matterTerms = (
-  candidates: readonly { term: string }[],
-): string[] => {
-  const terms = new Set<string>();
-  for (const { term } of candidates) {
+/** Terms as a transcription takes them: each once whatever its case, the
+ *  first spelling kept, short enough for a hint, in order, at most the
+ *  contract's number. */
+export const transcriptionTerms = (terms: Iterable<string>): string[] => {
+  const kept = new Map<string, string>();
+  for (const term of terms) {
     const trimmed = term.trim();
+    const key = trimmed.toLocaleLowerCase();
     if (
       trimmed.length > 0 &&
-      trimmed.length <= MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH
+      trimmed.length <= MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH &&
+      !kept.has(key)
     ) {
-      terms.add(trimmed);
+      kept.set(key, trimmed);
     }
-    if (terms.size === MAX_TRANSCRIPTION_VOCABULARY_TERMS) {
+    if (kept.size === MAX_TRANSCRIPTION_VOCABULARY_TERMS) {
       break;
     }
   }
-  return [...terms];
+  return [...kept.values()];
 };
+
+/** The matter's vocabulary as a transcription takes it, the most telling
+ *  first. */
+export const matterTerms = (
+  candidates: readonly { term: string }[],
+): string[] => transcriptionTerms(candidates.map(({ term }) => term));
+
+/** What one chunk's model is told to spell right: the speaker's own custom
+ *  words first, then the matter's names, within the contract's limits. */
+export const desktopChunkVocabulary = (
+  own: readonly string[] | undefined,
+  matter: readonly string[],
+): string[] => transcriptionTerms([...(own ?? []), ...matter]);
 
 /** Vocabulary goes only to a model that reads it; another would refuse the
  *  request or ignore the terms. A request without a model gets none. */
-const takesVocabulary = (modelId: string | undefined): boolean =>
+export const takesVocabulary = (modelId: string | undefined): boolean =>
   modelId !== undefined &&
   isTranscriptionModelId(modelId) &&
-  (TRANSCRIPTION_MODELS[modelId].vocabularyMechanism === "groq-prompt" ||
-    TRANSCRIPTION_MODELS[modelId].vocabularyMechanism === "azure-phrase-list");
+  VOCABULARY_STATUS[TRANSCRIPTION_MODELS[modelId].vocabularyMechanism] ===
+    "applied";
 
 /**
  * A recording's piece is counted once however often the desktop sends it:
@@ -349,6 +372,16 @@ const desktopPieceUsageKey = async (
     resourceId: pieceId,
   };
 };
+
+/** The chunk with its vocabulary, for a model that reads one; any other
+ *  gets none, so a custom word never makes a chunk fail. */
+const withVocabulary = <Body extends { modelId?: string | undefined }>(
+  body: Body,
+  vocabulary: readonly string[],
+): Body & { vocabulary?: string[] } =>
+  vocabulary.length > 0 && takesVocabulary(body.modelId)
+    ? { ...body, vocabulary: [...vocabulary] }
+    : body;
 
 type DesktopTranscribeOptions = DesktopDictationOptions & {
   dependencies?: Partial<DictationDependencies>;
@@ -388,7 +421,9 @@ const admitStandardAccount = async (
  * and limits included) and answered with its text only. Neither the audio
  * nor the text is stored. A chunk of a recording filed under a matter names
  * it: the member must see the matter, its usage is the matter's, and a
- * model that takes vocabulary gets the matter's names and case numbers.
+ * model that takes vocabulary gets the matter's names and case numbers,
+ * after the speaker's own custom words the chunk carries. Neither is
+ * logged.
  */
 export const createDesktopDictationTranscribeEndpoint = ({
   dependencies = {},
@@ -412,7 +447,7 @@ export const createDesktopDictationTranscribeEndpoint = ({
       },
       async function* (ctx) {
         const { request } = ctx;
-        const { pieceId, ...body } = ctx.body;
+        const { pieceId, vocabulary: ownWords, ...body } = ctx.body;
         const { account, safeDb, settings, retainingModels } =
           yield* Result.await(authorizeDictation(request, options));
         yield* Result.await(admitStandardAccount(account, readAccountEmail));
@@ -474,14 +509,10 @@ export const createDesktopDictationTranscribeEndpoint = ({
               executeDictation(
                 {
                   ...caller,
-                  body: {
-                    ...body,
-                    ...(matter !== null &&
-                    matter.vocabulary.length > 0 &&
-                    takesVocabulary(body.modelId)
-                      ? { vocabulary: [...matter.vocabulary] }
-                      : {}),
-                  },
+                  body: withVocabulary(
+                    body,
+                    desktopChunkVocabulary(ownWords, matter?.vocabulary ?? []),
+                  ),
                   request,
                   modelAdmission,
                   ...(pieceId === undefined
