@@ -324,7 +324,7 @@
     "prosemirror-dropcursor": "1.8.4",
     "prosemirror-gapcursor": "1.4.1",
     "prosemirror-history": "1.5.1",
-    "prosemirror-inputrules": "1.6.0",
+    "prosemirror-inputrules": "1.5.1",
     "prosemirror-keymap": "1.2.3",
     "prosemirror-model": "1.25.13",
     "prosemirror-state": "1.4.4",
