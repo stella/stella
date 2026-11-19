@@ -49,14 +49,18 @@ describe("external public-law database boundary", () => {
   });
 
   test("permits observed source time only on the published decision projection", () => {
-    const future = publicLawColumnPairs(COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION);
+    const future = publicLawColumnPairs(
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+    );
     const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
     expect(future.length).toBeGreaterThan(0);
     for (const pair of future) {
       expect(pair.grant).toBe("permitted");
       expect(allowed).toContainEqual(pair);
     }
-    expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions).not.toHaveProperty("source_observed_at");
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions,
+    ).not.toHaveProperty("source_observed_at");
   });
 
   test("tolerates future collection-body grants without requiring or widening attachment access", () => {
