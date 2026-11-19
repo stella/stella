@@ -41,7 +41,7 @@ jobs:
             /scripts/retry.sh
       - name: Check out merge-group history for the resolver
         if: github.event_name == 'merge_group'
-        uses: stella/.github/actions/partial-clone-checkout@41fbea3b521bfc57b791003918de97f153d790a7
+        uses: stella/.github/actions/partial-clone-checkout@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc
         timeout-minutes: 2
         with:
           ref: ${{ github.event.merge_group.head_sha }}
