@@ -96,8 +96,6 @@ const packageInputSchema = v.strictObject({
   ),
 });
 
-type PackageInput = v.InferOutput<typeof packageInputSchema>;
-
 const LIMITS_SENTENCE =
   `Per call at most ${String(SKILL_PACKAGE_RESOURCES_PER_CALL_MAX)} files of ` +
   `${String(RESOURCE_CONTENT_MAX_CHARS)} characters; a skill holds ` +
@@ -120,7 +118,7 @@ const SAVE_DESCRIPTION =
 
 /** Read the input the way both tools do: one meaning per combination. */
 const readPackageInput = (
-  input: PackageInput,
+  raw: v.InferInput<typeof packageInputSchema>,
 ): Result<
   | {
       type: "new";
@@ -135,6 +133,17 @@ const readPackageInput = (
     },
   ChatToolError
 > => {
+  // The model's arguments are read here, where the id brands.
+  const parsed = v.safeParse(packageInputSchema, raw);
+  if (!parsed.success) {
+    return Result.err(
+      new ChatToolError({
+        kind: "invalid-input",
+        message: parsed.issues.map(({ message }) => message).join("; "),
+      }),
+    );
+  }
+  const input = parsed.output;
   const invalid = (message: string) =>
     Result.err(new ChatToolError({ kind: "invalid-input", message }));
   // Stored paths are NFC, as an import stores them.

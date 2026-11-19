@@ -214,15 +214,28 @@ export const checkSavedSkillPackage = async ({
   safeDb,
   ...access
 }: SkillAccess & { changes: SkillPackageChanges; safeDb: SafeDb }) =>
-  await safeDb(async (tx) => {
-    const saved = await loadSavedSkillPackage(tx, { ...access, lock: false });
-    return Result.isError(saved)
-      ? saved
-      : Result.ok({
-          check: applyChanges(saved.value, changes).check,
-          skill: { id: saved.value.skill.id },
-        });
-  });
+  await safeDb(
+    async (
+      tx,
+    ): Promise<
+      Result<
+        { check: SkillPackageCheck; skill: { id: SafeId<"agentSkill"> } },
+        HandlerError
+      >
+    > => {
+      const saved = await loadSavedSkillPackage(tx, {
+        ...access,
+        lock: false,
+      });
+      if (Result.isError(saved)) {
+        return Result.err(saved.error);
+      }
+      return Result.ok({
+        check: applyChanges(saved.value, changes).check,
+        skill: { id: saved.value.skill.id },
+      });
+    },
+  );
 
 /** A save that was refused, or what it wrote. */
 export type SkillPackageWriteOutcome =
