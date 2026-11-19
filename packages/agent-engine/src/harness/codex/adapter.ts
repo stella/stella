@@ -191,6 +191,8 @@ type Connection = { client: AppServerClient; version: string | null };
 type ConnectFailure = {
   reason: "harness_unavailable" | "protocol_violation";
   message: string;
+  /** The server did not answer `initialize` in time: a slow start. */
+  timedOut?: true;
 };
 
 type ConnectOptions = {
@@ -262,7 +264,13 @@ const connect = async ({
     await client.kill();
     return Result.err(
       Result.isError(initialized)
-        ? { reason: "harness_unavailable", message: initialized.error.message }
+        ? {
+            reason: "harness_unavailable",
+            message: initialized.error.message,
+            ...(initialized.error.reason === "timed_out"
+              ? { timedOut: true as const }
+              : {}),
+          }
         : {
             reason: "protocol_violation",
             message:
@@ -603,6 +611,25 @@ const startTurn = async (
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
   }
+  // One more start after a slow one: a first launch after an update, or a
+  // busy computer. A refusal is not retried.
+  const first = await startProcessTurn(options, input, standalone.value);
+  if (Result.isOk(first) || !first.error.timedOut) {
+    return Result.isOk(first) ? first : Result.err(first.error.error);
+  }
+  const second = await startProcessTurn(options, input, standalone.value);
+  return Result.isOk(second) ? second : Result.err(second.error.error);
+};
+
+/** Why a new server could not take the turn, and whether it was only slow. */
+type ProcessStartFailure = { error: HarnessStartError; timedOut: boolean };
+
+/** Start a server for the turn and begin it there. */
+const startProcessTurn = async (
+  options: CodexHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  standalone: string,
+): Promise<Result<HarnessTurn, ProcessStartFailure>> => {
   const appServer = new CodexProcess({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
@@ -620,15 +647,26 @@ const startTurn = async (
   });
   if (Result.isError(connected)) {
     session.abandon();
-    return Result.err(new HarnessStartError(connected.error));
+    const { reason, message, timedOut } = connected.error;
+    return Result.err({
+      error: new HarnessStartError({ reason, message }),
+      timedOut: timedOut === true,
+    });
   }
   const { client } = connected.value;
   appServer.attach(client);
   session.attach(client);
-  const fail = async (error: HarnessStartError) => {
+  /**
+   * Up to the turn's own start, a missed deadline is only a slow start; once
+   * the prompt went out, the turn may have begun and is never sent again.
+   */
+  const fail = async (error: HarnessStartError, beforePrompt = true) => {
     session.abandon();
     await client.kill();
-    return Result.err(error);
+    return Result.err({
+      error,
+      timedOut: beforePrompt && client.missedDeadline(),
+    });
   };
 
   const auth = await readAccount(client);
@@ -655,7 +693,7 @@ const startTurn = async (
   appServer.threadId = threadId;
   const prompt = sessionHoldsHistory(continuation)
     ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
-    : standalone;
+    : Result.ok(standalone);
   if (Result.isError(prompt)) {
     return fail(prompt.error);
   }
@@ -667,7 +705,7 @@ const startTurn = async (
     prompt: prompt.value,
     continuation,
   });
-  return Result.isError(begun) ? fail(begun.error) : begun;
+  return Result.isError(begun) ? fail(begun.error, false) : begun;
 };
 
 export const createCodexHarnessAdapter = (

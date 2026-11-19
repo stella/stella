@@ -1362,6 +1362,43 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "start_rejected",
     );
     expect(harness.received().map(({ type }) => type)).not.toContain("user");
+    // A refusal is an answer: the CLI is not started again.
+    expect(harness.startups()).toHaveLength(1);
+  });
+
+  test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
+    for (const scenario of ["slow_first_start", "slow_first_mcp"] as const) {
+      const harness = harnessFor(scenario, { requestTimeoutMs: 2000 });
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir),
+      );
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const events: HarnessEvent[] = [];
+      for await (const event of started.value.events) {
+        events.push(event);
+      }
+      await started.value.dispose();
+      expect(terminal(events)?.type).toBe("turn.completed");
+      expect(harness.startups()).toHaveLength(2);
+      // Only the second launch was given the prompt.
+      expect(
+        harness.received().filter(({ type }) => type === "user"),
+      ).toHaveLength(1);
+    }
+  });
+
+  test("a start that misses its deadline twice fails the turn", async () => {
+    const harness = harnessFor("unresponsive", { requestTimeoutMs: 300 });
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    expect(Result.isError(started) && started.error).toMatchObject({
+      reason: "harness_unavailable",
+      message: "The harness did not answer initialize in time.",
+    });
+    expect(harness.startups()).toHaveLength(2);
   });
 
   test("auth and usage-limit failures map to their typed states", async () => {

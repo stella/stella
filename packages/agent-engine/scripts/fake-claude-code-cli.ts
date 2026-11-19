@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { CLAUDE_STEER_PRIORITY } from "../src/harness/claude-code/protocol";
@@ -66,7 +67,9 @@ export type FakeStep =
 /** A scenario that starts differently when the client resumes a session. */
 type FakeScenario =
   | readonly FakeStep[]
-  | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] };
+  | { resume: readonly FakeStep[]; fresh: readonly FakeStep[] }
+  /** One script for the first launch in the log, another for later ones. */
+  | { firstLaunch: readonly FakeStep[]; laterLaunch: readonly FakeStep[] };
 
 export const FAKE_CLAUDE_VERSION = "2.1.309";
 /** The server name the holder registers the browser tools under. */
@@ -1296,6 +1299,16 @@ export const FAKE_SCENARIOS = {
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   /** Alive but silent: `initialize` is never answered. */
   unresponsive: [{ sleep: 60_000 }],
+  /** A first launch too slow to answer `initialize`; the next one is not. */
+  slow_first_start: {
+    firstLaunch: [{ sleep: 60_000 }],
+    laterLaunch: [...freshTurn(), result()],
+  },
+  /** A first launch that never finishes connecting stella's MCP server. */
+  slow_first_mcp: {
+    firstLaunch: [initialize(), { sleep: 60_000 }],
+    laterLaunch: [...freshTurn(), result()],
+  },
   crash: [
     ...freshTurn(),
     assistant("msg-1", [toolUse("call-x", "Bash", { command: "ls" })]),
@@ -1470,11 +1483,25 @@ const refusedSessionArgs = (args: readonly string[]): string | null => {
 export const stepsFor = (
   scenario: FakeScenario,
   args: readonly string[],
+  earlierLaunches = 0,
 ): readonly FakeStep[] => {
+  if ("firstLaunch" in scenario) {
+    return earlierLaunches === 0 ? scenario.firstLaunch : scenario.laterLaunch;
+  }
   if (!("resume" in scenario)) {
     return scenario;
   }
   return args.includes("--resume") ? scenario.resume : scenario.fresh;
+};
+
+/** How many launches the log recorded before this one. */
+const launchesLogged = () => {
+  const logPath = process.env["FAKE_HARNESS_LOG"] ?? "";
+  return existsSync(logPath)
+    ? readFileSync(logPath, "utf-8")
+        .split("\n")
+        .filter((line) => line.startsWith('{"startup":')).length
+    : 0;
 };
 
 const IncomingSchema = v.looseObject({
@@ -1756,6 +1783,7 @@ export const run = async (
 if (import.meta.main) {
   const scenario = process.argv[2] ?? "";
   const args = process.argv.slice(3);
+  const earlierLaunches = launchesLogged();
   const log = fakeHarnessLog();
   log({
     startup: {
@@ -1777,6 +1805,6 @@ if (import.meta.main) {
     process.stderr.write(`${refused}\n`);
     process.exit(1);
   }
-  await run(stepsFor(FAKE_SCENARIOS[scenario], args), log);
+  await run(stepsFor(FAKE_SCENARIOS[scenario], args, earlierLaunches), log);
   process.exit(0);
 }

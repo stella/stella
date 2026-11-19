@@ -67,6 +67,15 @@ export const respondError = (
  */
 const RETRY_STALL_MS = 10 * 60_000;
 
+/**
+ * How long a turn waits on the model with nothing at all from the harness
+ * before it ends as unanswered: no tool runs and no question waits on the
+ * member, so the harness is waiting on a model request that never answers
+ * (a dropped connection, a gateway holding the request open). Output streams
+ * within seconds, so this is long enough for any slow answer.
+ */
+const SILENCE_MS = 10 * 60_000;
+
 const isTerminal = (event: HarnessEvent) =>
   event.type === "turn.completed" ||
   event.type === "turn.interrupted" ||
@@ -93,6 +102,12 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
   private readonly unsettled = new Set<string>();
   /** Armed by a retry; any other event before it fires is progress. */
   private retryStall: ReturnType<typeof setTimeout> | null = null;
+  /** Armed while the turn waits on the model; anything heard rearms it. */
+  private silence: ReturnType<typeof setTimeout> | null = null;
+  /** Tool calls started and not completed: the turn waits on them. */
+  private readonly runningTools = new Set<string>();
+  /** Approvals and questions waiting on the member. */
+  private readonly waitingOnMember = new Set<string>();
   /** How the terminal event left the process: kept, or ended (`null`). */
   private settled: Promise<HarnessLiveSession | null> | null = null;
   /** A kept process was handed to `release`'s caller. */
@@ -100,6 +115,7 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
 
   readonly gracePeriodMs: number;
   private readonly retryStallMs: number;
+  private readonly silenceMs: number;
   private readonly detached: Detached;
   private readonly shutdownContext: `${string}.shutdown`;
   private readonly background: HarnessTurnBackground<TClient> | null;
@@ -111,11 +127,14 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
     name: string;
     /** See `RETRY_STALL_MS`. */
     retryStallMs?: number;
+    /** See `SILENCE_MS`. */
+    silenceMs?: number;
     /** What the harness runs in the background; nothing when unset. */
     background?: HarnessTurnBackground<TClient>;
   }) {
     this.gracePeriodMs = options.gracePeriodMs;
     this.retryStallMs = options.retryStallMs ?? RETRY_STALL_MS;
+    this.silenceMs = options.silenceMs ?? SILENCE_MS;
     this.detached = options.detached;
     this.shutdownContext = `${options.name}.shutdown`;
     this.background = options.background ?? null;
@@ -143,6 +162,7 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
   /** The turn never started; nothing more is emitted. */
   abandon() {
     this.hasEnded = true;
+    this.quiet();
     this.queue.close();
   }
 
@@ -220,9 +240,11 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
       }
     }
     this.watchRetries(event);
+    this.watchSilence(event);
     this.queue.push(event);
     if (isTerminal(event)) {
       this.hasEnded = true;
+      this.quiet();
       this.queue.close();
       this.terminal.resolve(undefined);
       const settled = this.settle(event);
@@ -282,6 +304,84 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
     }
   }
 
+  /**
+   * The harness wrote something that shows it is alive: output, progress,
+   * bookkeeping of the request. Transport keepalives are not.
+   */
+  heard() {
+    this.rearmSilence();
+  }
+
+  /**
+   * Which calls run and which interactions wait, so silence counts only while
+   * the turn waits on the model. A retry hands the wait to `watchRetries`.
+   */
+  private watchSilence(event: HarnessEvent) {
+    switch (event.type) {
+      case "tool.started":
+        this.runningTools.add(event.toolCall.id);
+        break;
+      case "tool.completed":
+        this.runningTools.delete(event.toolCall.id);
+        break;
+      case "approval.requested":
+      case "question.requested":
+        this.waitingOnMember.add(event.request.requestId);
+        break;
+      case "interaction.resolved":
+        this.waitingOnMember.delete(event.requestId);
+        break;
+      case "retrying":
+        this.clearSilence();
+        return;
+      default:
+        break;
+    }
+    this.rearmSilence();
+  }
+
+  private rearmSilence() {
+    this.clearSilence();
+    if (
+      this.hasEnded ||
+      this.isInterrupting ||
+      this.runningTools.size > 0 ||
+      this.waitingOnMember.size > 0
+    ) {
+      return;
+    }
+    this.silence = setTimeout(() => {
+      this.silence = null;
+      if (this.isInterrupting) {
+        return;
+      }
+      this.emit({
+        type: "turn.failed",
+        failure: {
+          type: "request_unanswered",
+          message:
+            "The model provider did not answer for too long. The connection or a proxy in front of it may be down.",
+        },
+      });
+    }, this.silenceMs);
+  }
+
+  private clearSilence() {
+    if (this.silence !== null) {
+      clearTimeout(this.silence);
+      this.silence = null;
+    }
+  }
+
+  /** No timer of the turn's outlives it. */
+  private quiet() {
+    this.clearSilence();
+    if (this.retryStall !== null) {
+      clearTimeout(this.retryStall);
+      this.retryStall = null;
+    }
+  }
+
   violation(message: string) {
     this.emit({
       type: "turn.failed",
@@ -317,6 +417,7 @@ export class HarnessTurnLifecycle<TClient extends HarnessTurnProcess> {
       return;
     }
     this.isInterrupting = true;
+    this.clearSilence();
     if (
       !(await request(client)) ||
       !(await settlesWithin(this.terminal.promise, this.gracePeriodMs))
