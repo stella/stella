@@ -1762,7 +1762,7 @@ const documentContentWindow = ({
   // cannot ride on the literal: a `satisfies` clause would contextually pin
   // `truncated` to `false`, which the mutation must be able to overwrite. Tie
   // the literal's own inferred type instead.
-  return structuredEgressPlan({
+  return structuredEgressPlan<ReadContentProjection, typeof payload>({
     payload: projectionPayload(READ_CONTENT_ACROSS_MATTERS_PROJECTION, payload),
     textFields: runTextFieldSpecs(
       READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
