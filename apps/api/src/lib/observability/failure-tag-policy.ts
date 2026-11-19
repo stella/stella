@@ -231,6 +231,7 @@ export const TAGGED_FAILURE_REASON = {
   DocumentPacingOutcome: "tagged_failure",
   DocumentProcessingJobError: "tagged_failure",
   DocumentProcessingRunSettledError: "tagged_failure",
+  DocumentPackageError: "request_invalid",
   DocumentPropertiesParseError: "tagged_failure",
   DocumentRunReconcileError: "tagged_failure",
   DocumentTelemetryObserverError: "tagged_failure",

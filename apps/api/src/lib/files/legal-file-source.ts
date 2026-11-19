@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { legalFileFormat } from "@stll/api-contract/document-format";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -13,10 +14,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
+  DOCUMENT_ARCHIVE_MAX_BYTES,
+  isDocumentArchiveMimeType,
+} from "@/api/lib/files/archive-preview-protocol";
+import {
   fileFieldQuery,
   lockLiveVersionField,
 } from "@/api/lib/files/live-version-field";
 import { createFileKey } from "@/api/lib/files/utils";
+import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 export type LegalFileReadOptions = {
   scopedDb: ScopedDb;
@@ -33,6 +39,15 @@ const missingFile = () =>
       status: 404,
       code: HTTP_FAILURE.notFound,
       message: "File not found",
+    }),
+  );
+
+const archiveTooLarge = () =>
+  Result.err(
+    new HandlerError({
+      status: 422,
+      code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+      message: "The archive exceeds the preview size limit",
     }),
   );
 
@@ -73,6 +88,11 @@ export const loadLegalFileSource = async (
       }),
     );
   }
+  const isArchive = isDocumentArchiveMimeType(format.mimeType);
+  if (isArchive && content.sizeBytes > DOCUMENT_ARCHIVE_MAX_BYTES) {
+    return archiveTooLarge();
+  }
+
   const key = createFileKey({
     organizationId,
     workspaceId,
@@ -83,7 +103,18 @@ export const loadLegalFileSource = async (
     key,
     mimeType: content.mimeType,
     fileName: content.fileName,
-  });
+    ...(isArchive ? { maxBytes: DOCUMENT_ARCHIVE_MAX_BYTES } : {}),
+  }).then(
+    (file) => Result.ok(file),
+    (error: unknown) =>
+      isArchive &&
+      (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
+        ? archiveTooLarge()
+        : Promise.reject(error),
+  );
+  if (source.isErr()) {
+    return Result.err(source.error);
+  }
 
   // Parse outside the transaction. Only release a result while the same live
   // source is share-locked, after its delivery has been recorded.
@@ -127,7 +158,7 @@ export const loadLegalFileSource = async (
       return prepared;
     });
   return Result.ok({
-    source,
+    source: source.value,
     mimeType: format.mimeType,
     entityId,
     deliver,

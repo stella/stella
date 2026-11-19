@@ -33,7 +33,11 @@ globalThis.fetch = Object.assign(
         headers: { "content-type": "application/pdf" },
       });
     }
+    if (url.includes("/structured-document/field-structured")) {
+      return Response.json({ text: "İlk sayfa\n法院文件", truncated: true });
+    }
     if (
+      url.includes("/structured-document/field-preview-unavailable") ||
       url.includes("/asic/field-asic-unsupported") ||
       url.includes("/cades/field-cades-unsupported")
     ) {
@@ -528,9 +532,59 @@ test("isolates member names in the Arabic ASiC preview", async () => {
   expect(member.querySelector("bdi")?.textContent).toBe(fileName);
   expect(member.closest('[dir="rtl"]')).toBeTruthy();
   expect(
-    mounted.getByText(arabicMessages.signedFile.previewTruncated),
+    mounted.getByText(arabicMessages.common.previewTruncated),
   ).toBeTruthy();
 });
+
+test.each([".udf", ".ofd"])(
+  "renders a %s text preview with its original download",
+  async (extension) => {
+    const mounted = renderFileTab(
+      {
+        ...pdfTab,
+        id: toSafeId<"field">("field-structured"),
+        fileName: `submission${extension}`,
+        mimeType: "application/octet-stream",
+      },
+      undefined,
+      "ar",
+    );
+
+    const text = await mounted.findByText("İlk sayfa 法院文件");
+    expect(text.getAttribute("dir")).toBe("auto");
+    expect(text.closest('[dir="rtl"]')).toBeTruthy();
+    expect(
+      mounted.getByText(arabicMessages.common.previewTruncated),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText(arabicMessages.structuredDocument.textOnly),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", {
+        name: arabicMessages.common.downloadOriginal,
+      }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test.each([".udf", ".ofd"])(
+  "keeps the %s original available when no text can be previewed",
+  async (extension) => {
+    const mounted = renderFileTab({
+      ...pdfTab,
+      id: toSafeId<"field">("field-preview-unavailable"),
+      fileName: `submission${extension}`,
+      mimeType: "application/octet-stream",
+    });
+    expect(
+      await mounted.findByText("No readable text is available for preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+  },
+);
 
 function renderFileTab(
   tab: typeof docxTab | typeof pdfTab,

@@ -86,7 +86,8 @@ const openDocument = async ({
   if (
     file.value.viewer === "asic" ||
     file.value.viewer === "cades" ||
-    file.value.viewer === "dataBox"
+    file.value.viewer === "dataBox" ||
+    file.value.viewer === "structured-document"
   ) {
     return { status: "legalPreview", file: file.value };
   }
@@ -431,7 +432,9 @@ const LegalFilePreview = ({
   workspaceId: string;
 }) => {
   const t = useTranslations("document");
+  const common = useTranslations("common");
   const signedFile = useTranslations("signedFile");
+  const structuredDocument = useTranslations("structuredDocument");
   const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
@@ -540,9 +543,7 @@ const LegalFilePreview = ({
                   <Text selectable>{text}</Text>
                 ) : null}
                 {status === "truncated" && (
-                  <Text variant="caption">
-                    {signedFile("previewTruncated")}
-                  </Text>
+                  <Text variant="caption">{common("previewTruncated")}</Text>
                 )}
                 {status === "unavailable" && (
                   <Text variant="caption">
@@ -551,6 +552,17 @@ const LegalFilePreview = ({
                 )}
               </View>
             ))}
+          </>
+        );
+      }
+      if (viewer === "structured-document") {
+        return (
+          <>
+            <Text variant="caption">{structuredDocument("textOnly")}</Text>
+            <Text selectable>{preview.value.text}</Text>
+            {preview.value.truncated && (
+              <Text variant="caption">{common("previewTruncated")}</Text>
+            )}
           </>
         );
       }
@@ -563,10 +575,17 @@ const LegalFilePreview = ({
     const requestFailure = isOffline(error)
       ? "failure.offline"
       : "failure.failed";
-    const unreadableMessage =
-      viewer === "dataBox"
-        ? t("failure.dataBoxUnreadable")
-        : signedFile("unreadable");
+    const unreadableMessage = (() => {
+      switch (viewer) {
+        case "dataBox":
+          return t("failure.dataBoxUnreadable");
+        case "structured-document":
+          return structuredDocument("noReadableContent");
+        case "asic":
+        case "cades":
+          return signedFile("unreadable");
+      }
+    })();
     return (
       <EmptyCard
         description={unreadable ? unreadableMessage : t(requestFailure)}

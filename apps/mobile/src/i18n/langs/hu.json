@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben."
+  },
   "tabs": {
     "chat": "Csevegés",
     "close": "Bezárás",
@@ -605,10 +608,13 @@
   "signedFile": {
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
-    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "header": {
     "search": "Keresés"

@@ -344,11 +344,45 @@ describe("reading a document's file", () => {
     },
   );
 
+  test.each([".UDF", ".ofd"])(
+    "reads a %s file through the shared text preview",
+    async (extension) => {
+      const fileName = `submission${extension}`;
+      const preview = { text: "İlk sayfa\n法院文件", truncated: true };
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(
+        file.viewer === "structured-document" && file.preview.unwrap(),
+      ).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/structured-document/field%3F1",
+      ]);
+    },
+  );
+
   test.each([
     {
       viewer: "asic",
       fileName: "Detached.asice",
       mimeType: "application/vnd.etsi.asic-e+zip",
+    },
+    {
+      viewer: "structured-document",
+      fileName: "Submission.udf",
+      mimeType: "application/octet-stream",
+    },
+    {
+      viewer: "structured-document",
+      fileName: "Submission.ofd",
+      mimeType: "application/octet-stream",
     },
     {
       viewer: "dataBox",

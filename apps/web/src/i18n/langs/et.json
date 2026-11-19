@@ -2889,6 +2889,7 @@
     "playbooks": "Playbookid",
     "preparing": "Ettevalmistamine…",
     "preview": "Eelvaade",
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval.",
     "previous": "Eelmine",
     "previousMatch": "Eelmine vaste",
     "print": "Prindi",
@@ -6251,7 +6252,6 @@
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
     "pdfUnavailable": "PDF-i eelvaade pole saadaval.",
-    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval.",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."
@@ -6396,6 +6396,10 @@
     "versionChangesRemoved": "{count, plural, one {# säte välja jäetud} other {# sätet välja jäetud}}",
     "versionChangesWords": "{inserted, plural, one {# sõna lisatud} other {# sõna lisatud}}, {deleted, plural, one {# sõna kustutatud} other {# sõna kustutatud}}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Eelvaates kuvamiseks pole loetavat teksti.",
+    "textOnly": "Teksti eelvaade ilma leheküljekujunduse ja piltideta."
   },
   "styleSets": {
     "create": "Loo",

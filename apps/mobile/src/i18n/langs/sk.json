@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Zavrieť",
@@ -605,10 +608,13 @@
   "signedFile": {
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
-    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii.",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
     "unverified": "Podpisy neboli overené."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Na náhľad nie je k dispozícii čitateľný text.",
+    "textOnly": "Textový náhľad bez rozloženia strany a obrázkov."
   },
   "header": {
     "search": "Hľadať"

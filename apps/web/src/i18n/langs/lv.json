@@ -2889,6 +2889,7 @@
     "playbooks": "Pārbaudes ceļveži",
     "preparing": "Sagatavošana…",
     "preview": "Priekšskatījums",
+    "previewTruncated": "Pilns teksts šajā priekšskatījumā nav pieejams.",
     "previous": "Iepriekšējais",
     "previousMatch": "Iepriekšējā atbilstība",
     "print": "Drukāt",
@@ -6251,7 +6252,6 @@
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
     "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
-    "previewTruncated": "Pilns teksts šajā priekšskatījumā nav pieejams.",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."
@@ -6396,6 +6396,10 @@
     "versionChangesRemoved": "{count, plural, zero {# svītrotu noteikumu} one {# svītrots noteikums} other {# svītroti noteikumi}}",
     "versionChangesWords": "{inserted, plural, zero {# ievietotu vārdu} one {# ievietots vārds} other {# ievietoti vārdi}}, {deleted, plural, zero {# svītrotu vārdu} one {# svītrots vārds} other {# svītroti vārdi}}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms teksts.",
+    "textOnly": "Teksta priekšskatījums bez lapas izkārtojuma un attēliem."
   },
   "styleSets": {
     "create": "Izveidot",

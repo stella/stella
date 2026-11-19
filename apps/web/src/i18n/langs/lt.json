@@ -2889,6 +2889,7 @@
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
+    "previewTruncated": "Visas tekstas šioje peržiūroje nepasiekiamas.",
     "previous": "Ankstesnis",
     "previousMatch": "Ankstesnis atitikmuo",
     "print": "Spausdinti",
@@ -6251,7 +6252,6 @@
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "pdfUnavailable": "PDF peržiūra nepasiekiama.",
-    "previewTruncated": "Visas tekstas šioje peržiūroje nepasiekiamas.",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",
     "unverified": "Parašai nepatikrinti."
@@ -6396,6 +6396,10 @@
     "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
     "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Peržiūrai tinkamo teksto nėra.",
+    "textOnly": "Teksto peržiūra be puslapio maketo ir vaizdų."
   },
   "styleSets": {
     "create": "Kurti",

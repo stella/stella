@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "O texto completo não está disponível nesta prévia."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Fechar",
@@ -605,10 +608,13 @@
   "signedFile": {
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
-    "previewTruncated": "O texto completo não está disponível nesta prévia.",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
     "unverified": "As assinaturas não foram verificadas."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Não há texto legível para exibir na prévia.",
+    "textOnly": "Prévia do texto sem o layout da página nem as imagens."
   },
   "header": {
     "search": "Pesquisar"

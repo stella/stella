@@ -2889,6 +2889,7 @@
     "playbooks": "Playbooky",
     "preparing": "Připravuje se…",
     "preview": "Náhled",
+    "previewTruncated": "Úplný text není v tomto náhledu dostupný.",
     "previous": "Předchozí",
     "previousMatch": "Předchozí výskyt",
     "print": "Tisknout",
@@ -6251,7 +6252,6 @@
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
     "pdfUnavailable": "Náhled PDF není k dispozici.",
-    "previewTruncated": "Úplný text není v tomto náhledu dostupný.",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
     "unverified": "Podpisy nebyly ověřeny."
@@ -6396,6 +6396,10 @@
     "versionChangesRemoved": "{count, plural, one {# vypuštěné ustanovení} few {# vypuštěná ustanovení} many {# vypuštěného ustanovení} other {# vypuštěných ustanovení}}",
     "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložená slova} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypuštěné slovo} few {# vypuštěná slova} many {# vypuštěného slova} other {# vypuštěných slov}}",
     "wordingVersionUnknown": "Datum verze znění není k dispozici"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Pro náhled není k dispozici čitelný text.",
+    "textOnly": "Textový náhled bez rozvržení stránky a obrázků."
   },
   "styleSets": {
     "create": "Vytvořit",

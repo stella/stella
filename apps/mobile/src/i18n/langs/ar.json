@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة."
+  },
   "tabs": {
     "chat": "الدردشة",
     "close": "إغلاق",
@@ -605,10 +608,13 @@
   "signedFile": {
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
-    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة.",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."
+  },
+  "structuredDocument": {
+    "noReadableContent": "لا يتوفر نص قابل للقراءة للمعاينة.",
+    "textOnly": "معاينة نصية من دون تنسيق الصفحة أو الصور."
   },
   "header": {
     "search": "بحث"

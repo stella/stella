@@ -212,6 +212,7 @@ export const FAILURE_TAGS = [
   "DocumentDeadlineScoutError",
   "DocumentOcrError",
   "DocumentPacingOutcome",
+  "DocumentPackageError",
   "DocumentProcessingJobError",
   "DocumentProcessingRunSettledError",
   "DocumentPropertiesParseError",
