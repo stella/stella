@@ -718,6 +718,11 @@
       "p99Seconds": 0,
       "peakRssMiB": 61
     },
+    "Patched dependencies apply": {
+      "minutes": 5,
+      "samples": 0,
+      "peakRssMiB": 128
+    },
     "Test release-channel script": {
       "minutes": 5,
       "samples": 17,

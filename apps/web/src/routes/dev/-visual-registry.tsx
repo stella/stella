@@ -198,6 +198,20 @@ const visualLoaders = {
       };
     },
   },
+  "chat-answer-typography": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_TYPOGRAPHY_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-typography-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_TYPOGRAPHY_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =
