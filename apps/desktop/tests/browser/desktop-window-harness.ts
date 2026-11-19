@@ -175,9 +175,8 @@ const openWindow = async (
     arg: fixture,
     handlers: (data) => ({
       account_get_state: async () =>
-        data.account === null
-          ? Promise.reject(new TypeError("The account could not be read."))
-          : data.account,
+        data.account ??
+        Promise.reject(new TypeError("The account could not be read.")),
       account_record_use: () => null,
       // No connection status: the section stays hidden, as with local agents off.
       chatgpt_auth_get_status: () => null,
