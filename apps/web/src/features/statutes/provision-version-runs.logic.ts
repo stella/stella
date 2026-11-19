@@ -200,8 +200,9 @@ export const runWindow = <V extends DatedVersion>(
     type: "window",
     from: oldest?.versionValidFrom ?? null,
     // The wording outlives the newest version in force when a later one
-    // keeps it, so the window stays open rather than ending the day before.
-    to: future.length > 0 ? null : (past.at(0)?.versionValidTo ?? null),
+    // keeps it, so the window ends with the newest member, open or not,
+    // rather than the day before that later version.
+    to: (future.at(0) ?? past.at(0))?.versionValidTo ?? null,
     count: past.length,
     alsoFrom: future.at(-1)?.versionValidFrom ?? null,
   };

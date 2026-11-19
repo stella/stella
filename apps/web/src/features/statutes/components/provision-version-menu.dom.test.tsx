@@ -239,7 +239,7 @@ test("a row starts only where the provision's wording changed", () => {
 
   expect(rowTexts(list)).toEqual([
     "In force from Jan 1, 2100Changed",
-    "Jan 1, 2024 – present · unchanged through 3 versions of the actIn force · Changedalso from Jan 1, 2099",
+    "Jan 1, 2024 – Dec 31, 2099 · unchanged through 3 versions of the actIn force · Changedalso from Jan 1, 2099",
     "Jan 1, 2023 – Dec 31, 2023",
     `Jan 1, 2022 – Dec 31, 2022${en.statutes.provisionTextUnavailable}`,
     "Jan 1, 2021 – Dec 31, 2021New provision",
@@ -251,7 +251,7 @@ test("a grouped row lists the act's versions inside it from a keyboard-reachable
   const { opened, view } = renderMenu();
   openMenu(view);
   const disclosure = view.getByRole("button", {
-    name: "Show the versions of the act for Jan 1, 2024 – present",
+    name: "Show the versions of the act for Jan 1, 2024 – Dec 31, 2099",
   });
   expect(disclosure.tagName).toBe("BUTTON");
   disclosure.focus();

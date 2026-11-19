@@ -184,6 +184,24 @@ describe("the window a run covers", () => {
     });
   });
 
+  test("a later version that keeps the wording ends the window when it ends", () => {
+    expect(
+      runWindow(
+        [
+          version("future", "2027-09-01", "2029-12-31"),
+          version("now", "2022-01-01", "2027-08-31"),
+        ],
+        isFuture,
+      ),
+    ).toEqual({
+      type: "window",
+      from: "2022-01-01",
+      to: "2029-12-31",
+      count: 1,
+      alsoFrom: "2027-09-01",
+    });
+  });
+
   test("a run only of versions not yet in force is a coming change", () => {
     expect(runWindow([version("future", "2027-09-01")], isFuture)).toEqual({
       type: "future",
