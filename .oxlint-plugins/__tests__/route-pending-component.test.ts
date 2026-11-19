@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import exceptionList from "../route-pending-component-exceptions.json" with { type: "json" };
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintRuleAcrossFiles, lintSingleRule } from "./lint-single-rule.ts";
 
 const PLUGIN = "route-pending-component";
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
@@ -100,11 +100,28 @@ test("routes without a component are not pages", async () => {
   ).toEqual([]);
 });
 
+// The rule checks a module that marks a frame view; the mark goes last so
+// the expected lines stay those of the source.
 const pendingRule = async (source: string) =>
-  await lintSingleRule("pending-module-imports", source, {
-    plugin: PLUGIN,
-    sourcePath: "x.pending.tsx",
-  });
+  await lintSingleRule(
+    "pending-module-imports",
+    `${source}\nexport const XPending = framePendingView(XPendingView);`,
+    { plugin: PLUGIN, sourcePath: "x.pending.tsx" },
+  );
+
+test("a pending view the frame never draws renders inside the providers", async () => {
+  expect(
+    await lintSingleRule(
+      "pending-module-imports",
+      [
+        'import { useTranslations } from "use-intl";',
+        'import { Skeleton } from "@stll/ui/skeleton";',
+        "export const XPending = () => <Skeleton>{useTranslations()('x')}</Skeleton>;",
+      ].join("\n"),
+      { plugin: PLUGIN, sourcePath: "x.pending.tsx" },
+    ),
+  ).toEqual([]);
+});
 
 test("a pending half imports only pending-safe modules", async () => {
   expect(
@@ -199,71 +216,64 @@ test("a route pairs the page and pending view of one module stem", async () => {
   ).toEqual([3]);
 });
 
-test("a page module renders the shell from its sibling pending module", async () => {
-  expect(
-    await lintSingleRule(
-      "page-module-shell",
-      [
-        'import type { ShellProps } from "./chat-index.pending";',
-        'import { ChatIndexShell } from "./chat-index.pending";',
-        "export const ChatIndexPage = (props: ShellProps) => <div {...props} />;",
-      ].join("\n"),
-      { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
-    ),
-  ).toEqual([1]);
-});
-
-test("a page module that imports and renders its sibling shell passes", async () => {
-  expect(
-    await lintSingleRule(
-      "page-module-shell",
-      [
-        'import { ChatIndexShell } from "./chat-index.pending";',
-        "export const ChatIndexPage = () => <ChatIndexShell rows={null} />;",
-      ].join("\n"),
-      { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
-    ),
-  ).toEqual([]);
-});
-
-// The `@/` alias names the same sibling; another directory's module of the
-// same name is another page's shell.
-test("the sibling shell is the same file through either import form", async () => {
-  const nestedPage =
-    "apps/web/src/routes/_protected.chat/-components/chat-index.page.tsx";
-  const sources = [
-    "@/routes/_protected.chat/-components/chat-index.pending",
-    "@/routes/law/-components/chat-index.pending",
-    "../../law/-components/chat-index.pending",
-  ];
-  expect(
-    await Promise.all(
-      sources.map(
-        async (source) =>
-          await lintSingleRule(
-            "page-module-shell",
-            [
-              `import { ChatIndexShell } from "${source}";`,
-              "export const ChatIndexPage = () => <ChatIndexShell />;",
-            ].join("\n"),
-            { plugin: PLUGIN, sourcePath: nestedPage },
-          ),
+// One oxlint run over pages and their siblings: a page with a `.pending`
+// sibling renders the shell that sibling exports, through `./` or the `@/`
+// alias; a same-named module in another directory is another page's.
+test("a page module renders the shell of its own pending sibling", async () => {
+  const chat = "apps/web/src/routes/chat";
+  const pages = {
+    "type-only/chat-index.page.tsx": [
+      'import type { ShellProps } from "./chat-index.pending";',
+      'import { ChatIndexShell } from "./chat-index.pending";',
+      "export const ChatIndexPage = (props: ShellProps) => <div {...props} />;",
+    ],
+    "renders/chat-index.page.tsx": [
+      'import { ChatIndexShell } from "./chat-index.pending";',
+      "export const ChatIndexPage = () => <ChatIndexShell rows={null} />;",
+    ],
+    "other/chat-index.page.tsx": [
+      'import { OtherShell } from "./other.pending";',
+      "export const ChatIndexPage = () => <OtherShell />;",
+    ],
+    "alone/invoice.page.tsx": ["export const InvoicePage = () => <section />;"],
+    [`${chat}/a.page.tsx`]: [
+      'import { AShell } from "@/routes/chat/a.pending";',
+      "export const APage = () => <AShell />;",
+    ],
+    [`${chat}/b.page.tsx`]: [
+      'import { BShell } from "@/routes/law/b.pending";',
+      "export const BPage = () => <BShell />;",
+    ],
+    [`${chat}/c.page.tsx`]: [
+      'import { CShell } from "../law/c.pending";',
+      "export const CPage = () => <CShell />;",
+    ],
+  };
+  const siblings = Object.keys(pages)
+    .filter((name) => !name.startsWith("alone/"))
+    .map((name) => name.replace(/\.page\.tsx$/u, ".pending.tsx"));
+  const results = await lintRuleAcrossFiles(
+    "page-module-shell",
+    {
+      ...Object.fromEntries(
+        Object.entries(pages).map(([name, lines]) => [name, lines.join("\n")]),
       ),
-    ),
-  ).toEqual([[], [1], [1]]);
-});
-
-test("a page module that renders another module's shell fails", async () => {
+      ...Object.fromEntries(siblings.map((name) => [name, ""])),
+    },
+    { plugin: PLUGIN },
+  );
   expect(
-    await lintSingleRule(
-      "page-module-shell",
-      [
-        'import { OtherShell } from "./other.pending";',
-        "export const ChatIndexPage = () => <OtherShell />;",
-      ].join("\n"),
-      { plugin: PLUGIN, sourcePath: "chat-index.page.tsx" },
-    ),
-  ).toEqual([1]);
+    Object.fromEntries(Object.keys(pages).map((name) => [name, results[name]])),
+  ).toEqual({
+    "type-only/chat-index.page.tsx": [1],
+    "renders/chat-index.page.tsx": [],
+    "other/chat-index.page.tsx": [1],
+    // No loading view yet: the route rule's finding, not this rule's.
+    "alone/invoice.page.tsx": [],
+    [`${chat}/a.page.tsx`]: [],
+    [`${chat}/b.page.tsx`]: [1],
+    [`${chat}/c.page.tsx`]: [1],
+  });
 });
 
 test("the exception list names existing route files once each, sorted", () => {

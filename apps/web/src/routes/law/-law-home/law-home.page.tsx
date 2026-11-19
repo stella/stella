@@ -93,7 +93,7 @@ const wantsStatutes = (
 
 const routeApi = getRouteApi("/law/");
 
-function LawHome() {
+export function LawHomePage() {
   const t = useTranslations();
   const format = useFormatter();
   const readingLanguages = useCaseLawReadingLanguages();
@@ -368,6 +368,3 @@ function LawHome() {
     />
   );
 }
-
-// Named for the census baselines, which key its sites by `LawHome`.
-export const LawHomePage = LawHome;

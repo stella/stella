@@ -29,8 +29,11 @@ import type { FileRouteTypes } from "@/routeTree.gen";
  * The route file imports both: `component: XPage, pendingComponent:
  * XPending`. The bundler splits the page into its own chunk (listed in the
  * manifest, so it is preloaded), and the pending half stays in the entry
- * chunk, which is why everything it imports must stay small. The
- * `route-pending-component` lint rules hold all of this.
+ * chunk, which is why everything it imports must stay small (the startup
+ * bundle gate caps each pending module). The `route-pending-component` lint
+ * rules hold the pairing, and the context-free imports of a marked view; a
+ * pending view that is not marked yet renders inside the providers, and the
+ * frame shows its generic body for that route until it is.
  *
  * Route navigations render `XPending` in place; the cold-load frame renders
  * the leaf route's pending view as its body (`LeafPendingView`), so a reload

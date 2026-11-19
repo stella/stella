@@ -36,7 +36,7 @@ const importClosure = (entry: string) => {
   const reached: { from: string; specifier: string }[] = [];
   const start = resolve(entry, RESOLVE_FROM);
   if (start === null) {
-    return { reached, unresolved: true };
+    return { reached, files: new Set<string>(), unresolved: true };
   }
   const pending = [start];
   const seen = new Set<string>();
@@ -59,7 +59,7 @@ const importClosure = (entry: string) => {
       }
     }
   }
-  return { reached, unresolved: false };
+  return { reached, files: seen, unresolved: false };
 };
 
 const banned = (specifier: string) =>
@@ -77,26 +77,39 @@ for (const entry of policy.pendingSafeModules) {
   });
 }
 
-// The pending halves themselves, so a `.logic` module or a re-export they
-// pull in is walked too, not only the allowlisted modules.
-const PENDING_MODULES = [
+// The pending halves the cold-load frame draws (they mark a view with
+// `framePendingView`), so a `.logic` module or a re-export they pull in is
+// walked too, not only the allowlisted modules. Other pending views render
+// inside the providers and are not walked.
+const isFrameModule = (file: string) =>
+  readFileSync(file, "utf-8").includes("framePendingView(");
+const FRAME_MODULES = [
   ...new Bun.Glob("**/*.pending.tsx").scanSync({
     cwd: path.join(REPOSITORY_ROOT, "apps/web/src"),
   }),
-].map((file) => path.join(REPOSITORY_ROOT, "apps/web/src", file));
+]
+  .map((file) => path.join(REPOSITORY_ROOT, "apps/web/src", file))
+  .filter(isFrameModule);
 
-test("the walk finds the route pending halves", () => {
-  expect(PENDING_MODULES.length).toBeGreaterThan(0);
+test("the walk finds the frame pending halves", () => {
+  expect(FRAME_MODULES.length).toBeGreaterThan(0);
 });
 
-for (const module of PENDING_MODULES) {
-  test(`pending half ${repoRelativePath(REPOSITORY_ROOT, module)} reaches nothing heavy`, () => {
-    const { reached, unresolved } = importClosure(module);
+for (const module of FRAME_MODULES) {
+  test(`frame pending half ${repoRelativePath(REPOSITORY_ROOT, module)} reaches nothing heavy`, () => {
+    const { files, reached, unresolved } = importClosure(module);
     expect(unresolved).toBe(false);
     const offenders = reached.flatMap(({ from, specifier }) =>
       banned(specifier) === undefined ? [] : [`${from} -> ${specifier}`],
     );
     expect(offenders).toEqual([]);
+    // The per-file rule checks frame modules only, so a pending module one
+    // imports is a frame module as well.
+    expect(
+      [...files]
+        .filter((file) => file.endsWith(".pending.tsx") && !isFrameModule(file))
+        .map((file) => repoRelativePath(REPOSITORY_ROOT, file)),
+    ).toEqual([]);
   });
 }
 

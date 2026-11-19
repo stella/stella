@@ -5,7 +5,6 @@ import { readFileSync } from "node:fs";
 import {
   checkBaseline,
   checkMigratedMutationTargets,
-  followMovedFiles,
   inspectMutationQueryInvalidation,
 } from "./check-mutation-query-invalidation.ts";
 import { inspectMutationQuerySources } from "./mutation-query-census.ts";
@@ -845,76 +844,6 @@ test("a committed baseline cannot gain sites or rewrite reasons, and can shrink"
       write: true,
     }),
   ).toEqual({ ok: true, entries: {}, errors: [] });
-});
-
-test("a site that moved with its file keeps its committed entry", () => {
-  const committed = {
-    "apps/web/src/routes/chat.tsx:Chat:useMutation:mutation": "Pending.",
-    "apps/web/src/routes/chat.tsx:Route/loader:prefetch:reader": "Pending.",
-  };
-  const movedFrom = new Map([
-    ["apps/web/src/routes/-chat.page.tsx", "apps/web/src/routes/chat.tsx"],
-  ]);
-  const recorded = {
-    "apps/web/src/routes/-chat.page.tsx:Chat:useMutation:mutation": "Pending.",
-    "apps/web/src/routes/chat.tsx:Route/loader:prefetch:reader": "Pending.",
-  };
-  const observed = Object.keys(recorded).map((id) => ({
-    id,
-    file: id.slice(0, id.indexOf(":")),
-    reason: "Pending.",
-    disposition: "legacy" as const,
-  }));
-  const moved = followMovedFiles(
-    committed,
-    movedFrom,
-    new Set(Object.keys(recorded)),
-  );
-  expect(
-    checkBaseline({ observed, recorded, committed: moved, write: false }).ok,
-  ).toBe(true);
-  // Without the move the same entry is growth.
-  expect(
-    checkBaseline({ observed, recorded, committed, write: false }).ok,
-  ).toBe(false);
-  // A move carries only the sites of the file it came from.
-  expect(
-    Object.keys(
-      followMovedFiles(
-        { "apps/web/src/other.tsx:X:useQuery:reader": "Pending." },
-        new Map([["apps/web/src/-x.page.tsx", "apps/web/src/routes/chat.tsx"]]),
-        new Set(["apps/web/src/-x.page.tsx:X:useQuery:reader"]),
-      ),
-    ),
-  ).toEqual(["apps/web/src/other.tsx:X:useQuery:reader"]);
-});
-
-test("a copied site that stays in both files is funded once", () => {
-  const committed = {
-    "apps/web/src/routes/chat.tsx:Chat:useMutation:mutation": "Pending.",
-  };
-  const both = [
-    "apps/web/src/routes/-chat.page.tsx:Chat:useMutation:mutation",
-    "apps/web/src/routes/chat.tsx:Chat:useMutation:mutation",
-  ];
-  const moved = followMovedFiles(
-    committed,
-    new Map([
-      ["apps/web/src/routes/-chat.page.tsx", "apps/web/src/routes/chat.tsx"],
-    ]),
-    new Set(both),
-  );
-  expect(moved).toEqual(committed);
-  const recorded = Object.fromEntries(both.map((id) => [id, "Pending."]));
-  const observed = both.map((id) => ({
-    id,
-    file: id.slice(0, id.indexOf(":")),
-    reason: "Pending.",
-    disposition: "legacy" as const,
-  }));
-  expect(
-    checkBaseline({ observed, recorded, committed: moved, write: false }).ok,
-  ).toBe(false);
 });
 
 test("check mode fails for new and stale entries", () => {

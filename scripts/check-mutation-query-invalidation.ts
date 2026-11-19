@@ -2727,78 +2727,6 @@ const committedBaseline = (revision: string) => {
   return v.parse(committedBaselineSchema, JSON.parse(content));
 };
 
-/**
- * The committed entries as they read after this change's file moves: a site
- * that moved with its code to another file keeps its committed entry under
- * the new path, so a move is neither growth nor a new site. `movedFrom` maps
- * a destination file to the file Git found it was renamed or copied from.
- *
- * One committed entry funds one live site. A site still observed where it
- * was keeps its entry there; otherwise the entry goes to the first
- * destination (in path order) that observes the site, and a copy that
- * leaves the site in both places funds only one of them.
- */
-export const followMovedFiles = (
-  committed: Record<string, string>,
-  movedFrom: ReadonlyMap<string, string>,
-  observedIds: ReadonlySet<string>,
-): Record<string, string> => {
-  const destinationsOf = new Map<string, string[]>();
-  for (const [destination, source] of movedFrom) {
-    destinationsOf.set(source, [
-      ...(destinationsOf.get(source) ?? []),
-      destination,
-    ]);
-  }
-  return Object.fromEntries(
-    Object.entries(committed).map(([id, reason]) => {
-      const separator = id.indexOf(":");
-      const destinations = destinationsOf.get(id.slice(0, separator));
-      if (destinations === undefined || observedIds.has(id)) {
-        return [id, reason] as const;
-      }
-      const site = id.slice(separator);
-      const live = destinations
-        .toSorted(compareCodeUnit)
-        .map((destination) => `${destination}${site}`)
-        .find((movedId) => observedIds.has(movedId));
-      return [live ?? id, reason] as const;
-    }),
-  );
-};
-
-// Files this change moved, as Git detects them: renames, and copies out of
-// a file that stayed (a route file that kept its options and gave its page
-// component a module of its own).
-const movedFiles = (baseRevision: string): ReadonlyMap<string, string> => {
-  const output = git([
-    "diff",
-    "--find-renames",
-    "--find-copies=40%",
-    "--name-status",
-    "-z",
-    baseRevision,
-    "--",
-    "apps",
-    "packages",
-  ]);
-  const movedFrom = new Map<string, string>();
-  if (output === null) {
-    return movedFrom;
-  }
-  const fields = output.split("\0");
-  for (let index = 0; index < fields.length;) {
-    const status = fields[index++] ?? "";
-    const source = fields[index++] ?? "";
-    if (!status.startsWith("R") && !status.startsWith("C")) {
-      continue;
-    }
-    const destination = fields[index++] ?? "";
-    movedFrom.set(destination, source);
-  }
-  return movedFrom;
-};
-
 export const checkBaseline = ({
   observed,
   recorded,
@@ -2953,14 +2881,7 @@ const main = () => {
   const result = checkBaseline({
     observed,
     recorded: baseline.entries,
-    committed:
-      committed === null
-        ? null
-        : followMovedFiles(
-            committed.entries,
-            movedFiles(baseRevision),
-            new Set(observed.map(({ id }) => id)),
-          ),
+    committed: committed?.entries ?? null,
     write: process.argv.includes("--write"),
     identities,
   });

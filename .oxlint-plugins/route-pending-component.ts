@@ -19,18 +19,22 @@
 //   Today's offenders are listed in `route-pending-component-exceptions.json`;
 //   the list only shrinks: a listed file that conforms is reported until its
 //   line is deleted.
-// - `pending-module-imports` (`*.pending.tsx`): imports are closed: other
-//   `.pending` modules, `.logic` modules, type-only imports, and the modules
-//   in `route-pending-component-policy.json`. Because the set is closed, the
-//   per-file check guarantees the whole pending graph. No dynamic import,
+// - `pending-module-imports` (`*.pending.tsx` that marks a view with
+//   `framePendingView`, so the cold-load frame draws it before any provider
+//   mounts; any other pending view renders inside the providers): imports
+//   are closed: other `.pending` modules, `.logic` modules, type-only
+//   imports, and the modules in `route-pending-component-policy.json`. A
+//   `.pending` module a frame view imports is a frame view module too (the
+//   closure test walks that graph). No dynamic import,
 //   no `lazy`, no `useTranslations` (use `PendingText`), no query, navigation
 //   or route hooks, except the loose URL reads `useParams({ strict: false })`
 //   and `useSearch({ strict: false })` and the named synchronous cache
 //   readers in the policy file.
-// - `page-module-shell` (`*.page.tsx`): the page imports its sibling
-//   `.pending` module, where its shell lives.
+// - `page-module-shell` (`*.page.tsx` with a sibling `.pending` module): the
+//   page imports and renders the shell that sibling exports.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import exceptionList from "./route-pending-component-exceptions.json" with { type: "json" };
@@ -88,6 +92,8 @@ const DEFAULT_PENDING = "DefaultPendingComponent";
 const REDIRECT_MARKER = "redirectRouteComponent";
 const LAYOUT_DELEGATE = "LeafPendingView";
 const LAZY_ROUTE_COMPONENT = "lazyRouteComponent";
+// Marks a pending view the cold-load frame may draw before the providers.
+const FRAME_PENDING_VIEW = "framePendingView";
 
 // Hooks a context-free pending half may not call: it renders before any
 // provider, and the closed imports keep most of them out already.
@@ -176,6 +182,13 @@ const isTypeOnlyImport = (node) =>
     ));
 
 const WEB_SOURCE_ROOT = "apps/web/src/";
+
+// Whether the page at `filename` has a `.pending` sibling: a route whose page
+// has no loading view of its own yet is the route rule's finding, not this.
+const hasSiblingPending = (filename: string, stem: string): boolean =>
+  [".pending.tsx", ".pending.fixture.tsx"].some((extension) =>
+    existsSync(path.join(path.dirname(filename), `${stem}${extension}`)),
+  );
 
 // Whether `source` names the `.pending` module beside the page at
 // `filename`: `./x.pending`, or the same file through the `@/` alias. A
@@ -402,6 +415,13 @@ const pendingModuleImports = {
   createOnce(context) {
     // Local names bound to the router's URL hooks, aliases included.
     const urlHookLocals = new Set<string>();
+    // Held until the module is known to mark a frame view: only those
+    // render before the providers.
+    let findings: { node: unknown; messageId: string }[] = [];
+    let marksFrameView = false;
+    const report = (node, messageId: string) => {
+      findings.push({ node, messageId });
+    };
     const checkSource = (node) => {
       if (
         isTypeOnlyImport(node) ||
@@ -410,11 +430,23 @@ const pendingModuleImports = {
       ) {
         return;
       }
-      context.report({ node, messageId: "closedImport" });
+      report(node, "closedImport");
     };
     return {
       Program() {
         urlHookLocals.clear();
+        findings = [];
+        marksFrameView = false;
+      },
+      "Program:exit"() {
+        if (!marksFrameView) {
+          return;
+        }
+        for (const { node, messageId } of findings) {
+          if (isAstNode(node)) {
+            context.report({ node, messageId });
+          }
+        }
       },
       ImportDeclaration(node) {
         for (const specifier of node.specifiers ?? []) {
@@ -438,13 +470,17 @@ const pendingModuleImports = {
         checkSource(node);
       },
       ImportExpression(node) {
-        context.report({ node, messageId: "dynamicImport" });
+        report(node, "dynamicImport");
       },
       CallExpression(node) {
         const callee = node.callee;
+        if (isIdentifier(callee, FRAME_PENDING_VIEW)) {
+          marksFrameView = true;
+          return;
+        }
         if (callee?.type === "Identifier" && urlHookLocals.has(callee.name)) {
           if (!isLooseCall(node)) {
-            context.report({ node, messageId: "bannedCall" });
+            report(node, "bannedCall");
           }
           return;
         }
@@ -455,7 +491,7 @@ const pendingModuleImports = {
               ? getPropertyName(callee.property)
               : null;
         if (name !== null && PENDING_BANNED_CALLS.has(name)) {
-          context.report({ node, messageId: "bannedCall" });
+          report(node, "bannedCall");
         }
       },
     };
@@ -514,7 +550,12 @@ const pageModuleShell = {
       },
       "Program:exit"() {
         const stem = pageStem(context);
-        if (stem !== null && !rendersSibling && isAstNode(firstStatement)) {
+        if (
+          stem !== null &&
+          !rendersSibling &&
+          hasSiblingPending(filenameForContext(context), stem) &&
+          isAstNode(firstStatement)
+        ) {
           context.report({
             node: firstStatement,
             messageId: "missingShellImport",
