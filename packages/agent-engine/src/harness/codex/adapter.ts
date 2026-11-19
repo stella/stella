@@ -614,11 +614,16 @@ const startTurn = async (
   // One more start after a slow one: a first launch after an update, or a
   // busy computer. A refusal is not retried.
   const first = await startProcessTurn(options, input, standalone.value);
-  if (Result.isOk(first) || !first.error.timedOut) {
-    return Result.isOk(first) ? first : Result.err(first.error.error);
+  if (Result.isOk(first)) {
+    return Result.ok(first.value);
+  }
+  if (!first.error.timedOut) {
+    return Result.err(first.error.error);
   }
   const second = await startProcessTurn(options, input, standalone.value);
-  return Result.isOk(second) ? second : Result.err(second.error.error);
+  return Result.isOk(second)
+    ? Result.ok(second.value)
+    : Result.err(second.error.error);
 };
 
 /** Why a new server could not take the turn, and whether it was only slow. */
@@ -705,7 +710,9 @@ const startProcessTurn = async (
     prompt: prompt.value,
     continuation,
   });
-  return Result.isError(begun) ? fail(begun.error, false) : begun;
+  return Result.isError(begun)
+    ? fail(begun.error, false)
+    : Result.ok(begun.value);
 };
 
 export const createCodexHarnessAdapter = (

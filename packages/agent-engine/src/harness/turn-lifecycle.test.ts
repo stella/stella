@@ -139,7 +139,6 @@ describe("a turn whose model request goes unanswered", () => {
     );
     lifecycle.emit({ type: "tool.started", toolCall });
     jest.advanceTimersByTime(5 * SILENCE_MS);
-    expect(events.map(({ type }) => type)).toEqual(["tool.started"]);
     lifecycle.emit({
       type: "tool.completed",
       toolCall,
@@ -147,6 +146,12 @@ describe("a turn whose model request goes unanswered", () => {
     });
     jest.advanceTimersByTime(SILENCE_MS);
     await done;
+    // Silence while the tool ran would have ended the turn before its result.
+    expect(events.map(({ type }) => type)).toEqual([
+      "tool.started",
+      "tool.completed",
+      "turn.failed",
+    ]);
     expect(events.at(-1)).toEqual(UNANSWERED);
   });
 
@@ -185,12 +190,13 @@ describe("a turn whose model request goes unanswered", () => {
     );
     lifecycle.heard();
     lifecycle.emit({ type: "retrying", message: "Reconnecting" });
-    jest.advanceTimersByTime(2 * SILENCE_MS);
-    expect(events.map(({ type }) => type)).toEqual(["retrying"]);
-    jest.advanceTimersByTime(SILENCE_MS);
+    jest.advanceTimersByTime(3 * SILENCE_MS);
     await done;
-    expect(events.at(-1)?.type).toBe("turn.failed");
-    expect(events.at(-1)).not.toEqual(UNANSWERED);
+    // The retry window, longer than the silence one, ended the turn.
+    expect(events.map(({ type }) => type)).toEqual(["retrying", "turn.failed"]);
+    expect(events.at(-1)).toMatchObject({
+      failure: { type: "retry_stalled" },
+    });
   });
 
   test("a stop in progress ends the turn as interrupted, not unanswered", async () => {
