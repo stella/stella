@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { API_OAUTH_ROUTES } from "@/api/lib/auth/api-access-token";
@@ -52,7 +53,7 @@ describe("the routes an API access token opens", () => {
       expect(route).toBeDefined();
 
       const endpoint = handlerConfigOf(
-        await import(new URL(handler, REPO_ROOT).pathname),
+        await import(fileURLToPath(new URL(handler, REPO_ROOT))),
         exportName ?? "default",
       );
       const definition: unknown = route?.definition;

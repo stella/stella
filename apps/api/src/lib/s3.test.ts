@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { envBase } from "@/api/env-base";
 import {
@@ -125,7 +126,7 @@ describe("resolveS3Credentials", () => {
     for (const provider of ["none", "aws-runtime"]) {
       const child = Bun.spawn({
         cmd: [process.execPath, "--no-env-file", "-e", script, provider],
-        cwd: new URL("../..", import.meta.url).pathname,
+        cwd: fileURLToPath(new URL("../..", import.meta.url)),
         env: {
           PATH: process.env["PATH"],
           NODE_ENV: "test",

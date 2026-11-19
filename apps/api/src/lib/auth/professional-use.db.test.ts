@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import {
@@ -109,7 +110,7 @@ describe("professional-use provenance migrations", () => {
     const writers: string[] = [];
     const glob = new Bun.Glob("src/**/*.ts");
     for await (const path of glob.scan({
-      cwd: new URL("../../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../../..", import.meta.url)),
     })) {
       if (path.endsWith(".test.ts")) {
         continue;

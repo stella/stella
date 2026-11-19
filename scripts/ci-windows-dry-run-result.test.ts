@@ -190,6 +190,7 @@ test.skipIf(process.platform === "win32")(
         gh,
         `#!${process.execPath}
 import { readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 const args = process.argv.slice(2);
 const mode = readFileSync(${JSON.stringify(path.join(root, "proof-mode"))}, "utf-8");
 if (mode === "api-failure") process.exit(1);
@@ -231,7 +232,9 @@ if (args[0] === "run") {
         const result = Bun.spawnSync(
           [
             process.execPath,
-            new URL("ci-windows-dry-run-result.ts", import.meta.url).pathname,
+            fileURLToPath(
+              new URL("ci-windows-dry-run-result.ts", import.meta.url),
+            ),
           ],
           {
             cwd: root,

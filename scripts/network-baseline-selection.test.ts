@@ -8,13 +8,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import fixture from "./fixtures/network-baseline-selection/main-history.json" with { type: "json" };
 
-const selector = new URL(
-  "../.github/actions/prepare-network-baseline/select-recording.sh",
-  import.meta.url,
-).pathname;
+const selector = fileURLToPath(
+  new URL(
+    "../.github/actions/prepare-network-baseline/select-recording.sh",
+    import.meta.url,
+  ),
+);
 
 type ReplayOptions = {
   walk?: string[];
