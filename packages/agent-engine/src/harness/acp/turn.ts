@@ -515,7 +515,7 @@ export class AcpTurnSession {
       `${this.sessionId ?? "acp"}:plan:${String(this.planCount)}`,
       {
         name: HARNESS_TOOL_NAMES.nativeTool,
-        input: { tool: PLAN_TOOL, detail: { kind: "plan", items } },
+        input: { tool: PLAN_TOOL, detail: { kind: "plan", items: [...items] } },
       },
     );
     this.emit({ type: "tool.started", toolCall });

@@ -1,5 +1,8 @@
 import { CHAT_LOCAL_RUN_STEP_MAX_BYTES } from "@stll/api-contract/chat-local-run-step-output";
-import { chatLocalRunToolResultContent } from "@stll/api-contract/chat-local-run-tool";
+import {
+  type CHAT_LOCAL_RUN_FILE_CHANGE_KINDS,
+  chatLocalRunToolResultContent,
+} from "@stll/api-contract/chat-local-run-tool";
 
 import type { HarnessToolCall, HarnessToolResult } from "../events";
 import {
@@ -213,7 +216,11 @@ const diffsOf = (call: AcpToolCallState) =>
   call.content.flatMap((entry) => (entry.type === "diff" ? [entry] : []));
 
 /** The files a change touched: its diffs, else its locations. */
-const fileChanges = (call: AcpToolCallState) => {
+type FileChangeKind = (typeof CHAT_LOCAL_RUN_FILE_CHANGE_KINDS)[number];
+
+const fileChanges = (
+  call: AcpToolCallState,
+): { path: string; kind: FileChangeKind }[] => {
   const diffs = diffsOf(call);
   if (diffs.length > 0) {
     return diffs.map((diff) => ({
@@ -221,7 +228,7 @@ const fileChanges = (call: AcpToolCallState) => {
       kind: changeKind(call, diff),
     }));
   }
-  const kind = call.kind === "delete" ? "delete" : "update";
+  const kind: FileChangeKind = call.kind === "delete" ? "delete" : "update";
   return call.locations.map(({ path }) => ({ path, kind }));
 };
 
