@@ -30,6 +30,7 @@ use std::{
     mpsc::{self, Sender},
   },
   thread::{self, JoinHandle},
+  time::Duration,
 };
 
 use crate::{
@@ -75,6 +76,20 @@ impl Transcripts {
   }
 }
 
+/// What one dictation's transcription did, for the local log: counts and
+/// lengths, never audio or text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Tally {
+  /// Stretches that held speech and were transcribed.
+  pub stretches: usize,
+  /// Requests to stella AI.
+  pub requests: usize,
+  /// stella AI failed and this computer transcribed the dictation instead.
+  pub fell_back: bool,
+  /// How much speech was transcribed.
+  pub speech: Duration,
+}
+
 /// One dictation's transcription, stretch by stretch.
 pub struct Transcription<T> {
   transcriber: T,
@@ -89,6 +104,9 @@ pub struct Transcription<T> {
   /// transcribe the whole dictation.
   kept: Vec<(usize, Vec<f32>)>,
   failure: Option<Failure>,
+  tally: Tally,
+  /// 16 kHz samples of speech taken, for the tally.
+  speech_samples: usize,
 }
 
 impl<T: Transcribe> Transcription<T> {
@@ -106,6 +124,8 @@ impl<T: Transcribe> Transcription<T> {
       waiting: None,
       kept: Vec::new(),
       failure: None,
+      tally: Tally::default(),
+      speech_samples: 0,
     }
   }
 
@@ -121,6 +141,8 @@ impl<T: Transcribe> Transcription<T> {
     if !self.wants_audio() || !holds_speech(&samples) {
       return;
     }
+    self.tally.stretches += 1;
+    self.speech_samples += samples.len();
     match self.attempt {
       Attempt::Cloud => match self.waiting.as_mut() {
         Some((_, waiting)) => waiting.extend_from_slice(&samples),
@@ -148,6 +170,7 @@ impl<T: Transcribe> Transcription<T> {
     let Some((index, samples)) = self.waiting.take() else {
       return;
     };
+    self.tally.requests += 1;
     match self.transcriber.cloud(&samples) {
       Some(text) => {
         self.texts.insert(index, &text);
@@ -167,6 +190,7 @@ impl<T: Transcribe> Transcription<T> {
       return;
     }
     self.attempt = Attempt::Local;
+    self.tally.fell_back = true;
     self.texts = Transcripts::default();
     let kept = std::mem::take(&mut self.kept);
     for (kept_index, kept_samples) in kept.into_iter().chain([(index, samples)]) {
@@ -200,15 +224,34 @@ impl<T: Transcribe> Transcription<T> {
     self.kept.iter().map(|(_, samples)| samples.len()).sum()
   }
 
+  /// [`Self::finish_tallied`] without the tally.
+  #[cfg(test)]
+  pub fn finish(self) -> (Result<String, Failure>, T) {
+    let (result, transcriber, _tally) = self.finish_tallied();
+    (result, transcriber)
+  }
+
   /// Recording stopped: sends stella AI what still waits, then the joined
-  /// text, or the failure the dictation reports, and the transcriber back.
-  pub fn finish(mut self) -> (Result<String, Failure>, T) {
+  /// text, or the failure the dictation reports, the transcriber back, and
+  /// what the transcription did.
+  pub fn finish_tallied(mut self) -> (Result<String, Failure>, T, Tally) {
     self.upload();
     let result = match self.failure {
       Some(failure) => Err(failure),
       None => Ok(self.texts.joined()),
     };
-    (result, self.transcriber)
+    let tally = self.tally();
+    (result, self.transcriber, tally)
+  }
+
+  fn tally(&self) -> Tally {
+    let speech = Duration::from_secs_f64(
+      self.speech_samples as f64 / f64::from(MODEL_SAMPLE_RATE),
+    );
+    Tally {
+      speech,
+      ..self.tally
+    }
   }
 
   /// The transcriber back without another request: what waits is dropped.
@@ -231,7 +274,7 @@ pub struct Live<T> {
   stretches: Sender<(usize, Vec<f32>)>,
   next: usize,
   cancelled: Arc<AtomicBool>,
-  thread: JoinHandle<(Ended, T)>,
+  thread: JoinHandle<(Ended, T, Tally)>,
 }
 
 impl<T: Transcribe + Send + 'static> Live<T> {
@@ -267,9 +310,10 @@ impl<T: Transcribe + Send + 'static> Live<T> {
           transcription.upload_due();
         }
         if discarded() {
-          return (Ended::Cancelled, transcription.discard());
+          let tally = transcription.tally();
+          return (Ended::Cancelled, transcription.discard(), tally);
         }
-        let (result, transcriber) = transcription.finish();
+        let (result, transcriber, tally) = transcription.finish_tallied();
         let ended = if discarded() {
           Ended::Cancelled
         } else {
@@ -278,7 +322,7 @@ impl<T: Transcribe + Send + 'static> Live<T> {
             Err(failure) => Ended::Failed(failure),
           }
         };
-        (ended, transcriber)
+        (ended, transcriber, tally)
       })?;
     Ok(Self {
       stretches,
@@ -299,8 +343,20 @@ impl<T: Transcribe + Send + 'static> Live<T> {
   /// Waits for every queued stretch, then how the transcription ended and
   /// the transcriber back; `None` if the thread did not survive.
   pub fn finish(self) -> Option<(Ended, T)> {
+    self
+      .finish_tallied()
+      .map(|(ended, transcriber, _tally)| (ended, transcriber))
+  }
+
+  /// [`Self::finish`], with what the transcription did.
+  pub fn finish_tallied(self) -> Option<(Ended, T, Tally)> {
     drop(self.stretches);
     self.thread.join().ok()
+  }
+
+  /// Stretches queued so far, silent ones included.
+  pub const fn sent(&self) -> usize {
+    self.next
   }
 
   /// Discards the dictation: queued stretches are dropped, the one in
@@ -397,6 +453,20 @@ mod tests {
       transcription.upload_due();
     }
     transcription.finish()
+  }
+
+  /// Long stretches to stella AI, with the tally.
+  fn run_tallied(
+    fake: Fake,
+    installed: bool,
+    count: usize,
+  ) -> (Result<String, Failure>, Fake, Tally) {
+    let mut transcription = Transcription::new(fake, Destination::Cloud, installed);
+    for index in 0..count {
+      transcription.add(index, long(index + 1));
+      transcription.upload_due();
+    }
+    transcription.finish_tallied()
   }
 
   /// One-second stretches.
@@ -576,6 +646,36 @@ mod tests {
     let (result, fake) = run_long(fake, true, 3);
     assert_eq!(result, Err(Failure::CloudTranscription));
     assert_eq!(fake.local_calls, vec![1]);
+  }
+
+  #[test]
+  fn the_tally_counts_speech_requests_and_a_fallback() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Cloud, true);
+    transcription.add(0, vec![0.0; SECOND]);
+    for index in 1..=6 {
+      transcription.add(index, stretch(index));
+      transcription.upload_due();
+    }
+    let (_, _, tally) = transcription.finish_tallied();
+    // The silent stretch is not counted; five seconds made one request
+    // while recording went on, the sixth went with the last one.
+    assert_eq!(
+      tally,
+      Tally {
+        stretches: 6,
+        requests: 2,
+        fell_back: false,
+        speech: Duration::from_secs(6),
+      }
+    );
+    let fake = Fake {
+      cloud_fails: vec![1],
+      ..Fake::default()
+    };
+    let (result, _, tally) = run_tallied(fake, true, 2);
+    assert_eq!(result, Ok("local1 local2".to_string()));
+    assert_eq!((tally.requests, tally.fell_back), (1, true));
   }
 
   #[test]

@@ -183,6 +183,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "desktop-edit-session-expiry.ts",
     "Expires sessions past their token lifetime, recorded as a service.",
   ),
+  "dictation.deleteKeptTranscripts": platform(
+    "kept-transcript-deletion.ts",
+    "Deletes transcripts a transcription provider kept; reads provider ids only.",
+  ),
   "documentProcessing.dispatchOcr": platform(
     "document-processing-ocr.ts",
     "Hands queued document processing runs to their queue.",
@@ -302,6 +306,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "sanctions.drainMonitoring": platform(
     "sanctions-monitoring.ts",
     "Processes organization-scoped contact screening marks without a member run.",
+  ),
+  "softLaw.sync": platform(
+    "soft-law-sync.ts",
+    "Syncs public regulator guidance from served sources.",
   ),
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",

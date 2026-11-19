@@ -7681,6 +7681,26 @@
   },
   {
     "schema": "public",
+    "table": "kept_transcript_deletions",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "kept_transcript_deletions",
+    "policy": "kept_transcript_deletions_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('kept_transcript_deletions'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('kept_transcript_deletions'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "legal_graph_edges",
     "policy": "entity_feature_gate_maintenance",
     "command": "ALL",

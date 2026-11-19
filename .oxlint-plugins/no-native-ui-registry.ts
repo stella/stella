@@ -158,6 +158,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("menu"),
     "a context menu is a menu opened by the pointer",
   ),
+  "control-face": noNative("unavailable faces of controls for loading views"),
   "control-size": notComponent("control size tokens"),
   "copy-button": noNative(
     "a Button with clipboard feedback; its markup is the button rule's",
@@ -268,6 +269,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   list: noNative(
     "grouped settings rows; a plain <ul> or <ol> is ordinary markup",
   ),
+  "list-shell": noNative("the grouped list's shell and its pending rows"),
   loader: owned(LOADER_RULE, "hand-rolled spinners are reported there"),
   "matter-colors": notComponent("matter colour tokens"),
   "matter-icon": owned(
@@ -562,6 +564,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "context-menu": webOnly(
     "a phone opens a context menu through the platform (expo-router Link.Menu)",
   ),
+  "control-face": webOnly(
+    "faces for the web's server-painted loading views; the app has none",
+  ),
   "copy-button": webOnly(
     "a Button with clipboard feedback the app does not offer yet",
   ),
@@ -639,6 +644,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "landing-shell": webOnly("the landing layout of the web home screens"),
   list: webOnly(
     'the app\'s lists are FlatList rows of Button size="row" divided by Separator',
+  ),
+  "list-shell": webOnly(
+    "the web list's shell for loading views; the app's lists are FlatList rows",
   ),
   loader: renderer("Loader from @stll/ui/loader", ["ActivityIndicator"]),
   "matter-icon": renderer("MatterIcon from @stll/ui/matter-icon", []),

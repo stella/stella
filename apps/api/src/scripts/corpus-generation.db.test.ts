@@ -242,6 +242,7 @@ const run = async ({
         }),
       // A held page stops the run at once instead of waiting.
       maxWaitMs: 0,
+      maxLockWaitMs: 0,
     },
     searchEndpoint: () => searchEndpoint,
     retireEngine: () => retireEngine,

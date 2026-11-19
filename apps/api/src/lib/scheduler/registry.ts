@@ -170,6 +170,10 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  DELETE_KEPT_TRANSCRIPTS_TASK,
+  deleteKeptTranscripts,
+} from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
+import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   backfillLegislationExpressionIds,
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
@@ -241,6 +245,7 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import {
   REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
   refreshStatuteSitemapShardsTask,
@@ -277,6 +282,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 
 const SCHEDULER_TASKS = {
   [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
+  [DELETE_KEPT_TRANSCRIPTS_TASK]: deleteKeptTranscripts,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
@@ -369,9 +375,15 @@ type SchedulerTaskRegistryOptions = {
   dataExportMaintenance?: DataExportMaintenanceDependencies;
 };
 
+/*
+ * Tasks whose work lives in a handler slice arrive as parameters: the
+ * composition root builds them, so scheduler code keeps its dependencies
+ * pointing from handlers to lib.
+ */
 const schedulerTasks = (
   reapOwnerlessChatTurns: SchedulerTask,
   refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
   options: SchedulerTaskRegistryOptions = {},
 ) => ({
   ...SCHEDULER_TASKS,
@@ -380,6 +392,7 @@ const schedulerTasks = (
   ),
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
+  [SYNC_SOFT_LAW_TASK]: syncSoftLaw,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -391,17 +404,23 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask, noopTask)),
+  Object.keys(schedulerTasks(noopTask, noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
   refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
     Object.entries(
-      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage, options),
+      schedulerTasks(
+        reapOwnerlessChatTurns,
+        refreshCaseLawCoverage,
+        syncSoftLaw,
+        options,
+      ),
     ).map(([name, registered]) => {
       const entry =
         name === RESET_REVIEW_ORGANIZATION_TASK

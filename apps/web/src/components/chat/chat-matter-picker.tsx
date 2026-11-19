@@ -7,8 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
-import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
-import { ChevronDownIcon, ExternalLinkIcon } from "@stll/ui/icons";
+import { ExternalLinkIcon } from "@stll/ui/icons";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
@@ -19,11 +18,14 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { SearchField } from "@stll/ui/search-field";
-import { Skeleton } from "@stll/ui/skeleton";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import {
+  MatterPickerChevron,
+  MatterPickerTriggerPendingContent,
+} from "@/components/chat/chat-matter-picker.pending";
 import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
 import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -103,10 +105,7 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
 
   switch (props.status) {
     case "pending":
-      icon = <MatterIcon className="size-3 shrink-0" variant="none" />;
-      label = <Skeleton className="h-3 w-16" />;
-      extra = null;
-      break;
+      return <MatterPickerTriggerPendingContent />;
     case "ready":
       if (props.allSelected) {
         icon = <MatterIcon className="size-3 shrink-0" variant="all" />;
@@ -137,22 +136,10 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
       {icon}
       {label}
       {extra}
-      <ChevronDownIcon
-        aria-hidden="true"
-        className="size-3 shrink-0 opacity-70"
-      />
+      <MatterPickerChevron />
     </>
   );
 };
-
-export const ChatMatterPickerPending = () => (
-  <div
-    aria-hidden="true"
-    className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
-  >
-    <MatterPickerTriggerContent status="pending" />
-  </div>
-);
 
 type MatterPickerSearchProps = {
   search: string;
