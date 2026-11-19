@@ -86,8 +86,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
-import type { FollowupSurface } from "@/lib/analytics/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import {
   areDraftDocsEqual,
   createChatDraftState,
@@ -116,17 +115,6 @@ const CHAT_PLACEHOLDER_CHANGED_META = "chatPlaceholderChanged";
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
-
-// Wrap an interpolated value in Unicode directional isolates (FSI…PDI) so an
-// embedded run keeps its own direction inside a translated string of the
-// opposite direction — e.g. a Latin suggestion inside the Arabic "tab to ask"
-// placeholder, whose trailing "?" would otherwise reorder to the wrong side.
-// The plain-string equivalent of wrapping in <bdi>.
-// U+2068 FIRST STRONG ISOLATE, U+2069 POP DIRECTIONAL ISOLATE.
-const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
-const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
-const isolateBidi = (value: string): string =>
-  `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
 type ChatDraftFileAttachment = {
   type: "file";
@@ -790,47 +778,24 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
-  followupAnalytics,
   onDraftStart,
   placeholder,
   sentMessageHistory,
   threadRef,
-  suggestedFollowupPrompt,
 }: {
-  followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistory?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
-  suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
-  const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const defaultPlaceholder = t("chat.placeholder");
-  const tabToAskText = suggestedFollowupPrompt
-    ? t("chat.tabToAsk", { prompt: isolateBidi(suggestedFollowupPrompt) })
-    : undefined;
-  const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
+  // Suggested follow-ups live under the answer they follow
+  // (`SuggestedFollowups`), never in the composer as ghost text.
+  const resolvedPlaceholder = placeholder ?? t("chat.placeholder");
   const placeholderRef = useRef(resolvedPlaceholder);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: the imperative editor's Placeholder plugin reads placeholderRef.current out-of-render, so it must hold this render's value
   placeholderRef.current = resolvedPlaceholder;
-  const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
-  // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
-  suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
-  // The editor's key handler is installed once; this reads the current
-  // surface when Tab accepts the suggestion.
-  const reportGhostAccepted = useLatestCallback(() => {
-    if (followupAnalytics === undefined) {
-      return;
-    }
-    analytics.captureFollowupSelected({
-      index: 0,
-      source: "generated",
-      surface: followupAnalytics.surface,
-      via: "ghost-tab",
-    });
-  });
   const submitHandlerRef = useRef<ChatComposerSubmitHandler | null>(null);
   const confirmedCredentialSendRef = useRef(false);
   const fileIdCounterRef = useRef(0);
@@ -1244,32 +1209,6 @@ export const useChatEditor = ({
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {
         return true;
-      }
-
-      // ArrowRight or Tab + empty editor + suggested followup: accept the
-      // suggestion without auto-submitting (so the user can review and press
-      // Enter). Tab is intercepted only in this narrow state — a suggestion
-      // on offer and the input empty — so it still moves focus normally (for
-      // keyboard and screen-reader users) everywhere else, including the
-      // moment the suggestion is gone.
-      if (
-        (event.key === "ArrowRight" || event.key === "Tab") &&
-        !event.shiftKey &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.isComposing
-      ) {
-        const suggestion = suggestedFollowupPromptRef.current;
-        const targetEditor = editorRef.current;
-        if (suggestion && targetEditor?.isEmpty) {
-          event.preventDefault();
-          reportGhostAccepted();
-          targetEditor.commands.setContent(
-            createChatComposerDocument(suggestion),
-          );
-          return true;
-        }
       }
 
       // Submit on Enter (the plain send) or Cmd/Ctrl+Enter (the queue

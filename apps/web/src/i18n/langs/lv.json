@@ -2120,6 +2120,7 @@
     },
     "newChat": "Jauna tērzēšana",
     "newChatInSidePanel": "Jaunā tērzēšana ir pieejama sānu panelī",
+    "nextSteps": "Nākamie soļi",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -2310,7 +2311,6 @@
     "stopping": "Aptur…",
     "suggestTitle": "Ieteikt nosaukumu",
     "suggestTitleUnavailableAnonymized": "Anonimizētām sarunām nosaukuma ieteikumi nav pieejami.",
-    "suggestedFollowupsLabel": "Ieteiktie papildjautājumi",
     "suggestingTitle": "Notiek nosaukuma ieteikšana…",
     "suggestionSeverity": {
       "style": "Stils",
@@ -2321,7 +2321,6 @@
       "accepted": "Lietots",
       "rejected": "Noraidīts"
     },
-    "tabToAsk": "→, lai jautātu: “{prompt}”",
     "tableChart": {
       "bar": "Stabiņu",
       "kind": "Diagrammas veids",

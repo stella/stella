@@ -2120,6 +2120,7 @@
     },
     "newChat": "Nový chat",
     "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
+    "nextSteps": "Ďalšie kroky",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
@@ -2310,7 +2311,6 @@
     "stopping": "Zastavujem…",
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
-    "suggestedFollowupsLabel": "Navrhované nadväzujúce otázky",
     "suggestingTitle": "Navrhujem názov…",
     "suggestionSeverity": {
       "style": "Štýl",
@@ -2321,7 +2321,6 @@
       "accepted": "Použité",
       "rejected": "Odmietnuté"
     },
-    "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "tableChart": {
       "bar": "Stĺpcový",
       "kind": "Typ grafu",

@@ -2120,6 +2120,7 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
@@ -2310,7 +2311,6 @@
     "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
-    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
@@ -2321,7 +2321,6 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
-    "tabToAsk": "→ للسؤال: «{prompt}»",
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",

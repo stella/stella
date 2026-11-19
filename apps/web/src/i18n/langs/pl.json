@@ -2120,6 +2120,7 @@
     },
     "newChat": "Nowy czat",
     "newChatInSidePanel": "Nowy czat jest dostępny w panelu bocznym",
+    "nextSteps": "Kolejne kroki",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
@@ -2310,7 +2311,6 @@
     "stopping": "Zatrzymywanie…",
     "suggestTitle": "Zaproponuj tytuł",
     "suggestTitleUnavailableAnonymized": "Propozycje tytułu są niedostępne dla rozmów zanonimizowanych.",
-    "suggestedFollowupsLabel": "Sugerowane pytania uzupełniające",
     "suggestingTitle": "Proponowanie tytułu…",
     "suggestionSeverity": {
       "style": "Styl",
@@ -2321,7 +2321,6 @@
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
     },
-    "tabToAsk": "→, aby zapytać: „{prompt}”",
     "tableChart": {
       "bar": "Słupkowy",
       "kind": "Typ wykresu",

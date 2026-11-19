@@ -66,7 +66,6 @@ import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
 import { ChatActiveSkillIntro } from "@/features/chat/components/chat-active-skill-intro";
 import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
-import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -369,7 +368,6 @@ export const ChatThreadPage = ({
   const {
     handleAskUserEditingChange,
     lastMessageId,
-    suggestedFollowupPrompt,
     suggestedPrompts: suggestedFollowupPrompts,
   } = useSuggestedFollowupPrompts({
     activeOrganizationId,
@@ -425,9 +423,7 @@ export const ChatThreadPage = ({
     }
   };
   const controller = useChatEditor({
-    followupAnalytics: { surface: "chat-thread" },
     sentMessageHistory,
-    suggestedFollowupPrompt,
     threadRef,
   });
 
@@ -801,6 +797,36 @@ export const ChatThreadPage = ({
                             threadRef,
                           }}
                           error={error}
+                          followUps={{
+                            analyticsSurface: "chat-thread",
+                            messageId: lastMessageId,
+                            onSelect: (prompt) => {
+                              controller.setContent(
+                                composerStoredMarkdown(prompt),
+                              );
+                              detached(
+                                controller.submit(async (draft) => {
+                                  composerModels.openDesktopForSend();
+                                  if (!(await ensureAIAvailable())) {
+                                    return CHAT_SEND_KEPT;
+                                  }
+                                  const message =
+                                    await buildChatRequestMessage(draft);
+                                  if (message.isErr()) {
+                                    notifyUserError(
+                                      message.error,
+                                      t("chat.sendErrorMessageEmpty"),
+                                    );
+                                    return CHAT_SEND_KEPT;
+                                  }
+                                  return await sendMessage(message.value);
+                                }),
+                                "chat-thread-page.submit",
+                              );
+                            },
+                            prompts: suggestedFollowupPrompts,
+                            threadId: threadRef.threadId,
+                          }}
                           hasOlderMessages={olderCursor !== null}
                           isGenerating={isGenerating}
                           isLoadingOlder={isLoadingOlder}
@@ -892,38 +918,6 @@ export const ChatThreadPage = ({
                 className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
                 ref={observeComposerBlock}
               >
-                {/* `px-2` mirrors the tray's `p-2` so the first chip starts on
-                  the composer box's leading edge; `pb-0` because the tray
-                  padding alone separates the chips from the box here. */}
-                <SuggestedFollowupChips
-                  analyticsSurface="chat-thread"
-                  className="px-2 pb-0"
-                  onSelect={(prompt) => {
-                    controller.setContent(composerStoredMarkdown(prompt));
-                    detached(
-                      controller.submit(async (draft) => {
-                        composerModels.openDesktopForSend();
-                        if (!(await ensureAIAvailable())) {
-                          return CHAT_SEND_KEPT;
-                        }
-                        const message = await buildChatRequestMessage(draft);
-                        if (message.isErr()) {
-                          notifyUserError(
-                            message.error,
-                            t("chat.sendErrorMessageEmpty"),
-                          );
-                          return CHAT_SEND_KEPT;
-                        }
-                        return await sendMessage(message.value);
-                      }),
-                      "chat-thread-page.submit",
-                    );
-                  }}
-                  prompts={suggestedFollowupPrompts}
-                  messageId={lastMessageId}
-                  surface="floating"
-                  threadId={threadRef.threadId}
-                />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
                 <McpReconnectNotice editor={controller.editor} />
                 {/* Glass tray behind the composer + status row: the shared
