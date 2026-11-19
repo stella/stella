@@ -258,7 +258,7 @@ describe("the stored payload is an envelope of every response read", () => {
     });
     const recover = czRegionalAdapter.buildStoredDocument;
     if (recover === undefined) {
-      return panic("Regional recovery required");
+      panic("Regional stored-document constructor required");
     }
     testFetchState.set(
       asFetchMock(

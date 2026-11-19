@@ -2873,7 +2873,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         detail: "Fresh regional document did not retain its raw envelope",
       };
     }
-    const reparsed = await reparseCzRegionalStoredRaw({
+    const reparsed = reparseCzRegionalStoredRaw({
       ...stored,
       raw: new TextEncoder().encode(
         encodeSourceRawEnvelope({
