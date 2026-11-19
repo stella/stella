@@ -172,14 +172,12 @@ const unchangedReadOutcomeMetadata = (
 ) => {
   const unreadOutcome = unreadOutcomeOf(result);
   if (unreadOutcome !== undefined) {
-    return { metadata: recordReadOutcome(unreadOutcome) };
+    return recordReadOutcome(unreadOutcome);
   }
   if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] !== undefined) {
-    return {
-      metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
-    };
+    return sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`;
   }
-  return {};
+  return undefined;
 };
 
 /**
@@ -205,11 +203,10 @@ const advancePartialObservationWatermark = async ({
       sourceObservedAt: observedAt,
       sourceObservationOrder: observationOrder,
       sourceObservationHash: result.rawHash,
-      ...(unreadOutcome === undefined
-        ? {}
-        : {
-            metadata: recordReadOutcome(unreadOutcome),
-          }),
+      metadata:
+        unreadOutcome === undefined
+          ? undefined
+          : recordReadOutcome(unreadOutcome),
       updatedAt: sql`${caseLawDecisions.updatedAt}`,
     });
     // audit: skip — background case-law observation watermark; public data
@@ -265,7 +262,7 @@ const advanceUnchangedObservationWatermark = async ({
       sourceObservationHash: result.rawHash,
       sourceHash: result.rawHash,
       sourceHashVersion: sourceFingerprintVersion,
-      ...unchangedReadOutcomeMetadata(existing, result),
+      metadata: unchangedReadOutcomeMetadata(existing, result),
       // Drizzle applies the schema's on-update value unless this column is
       // explicit. A watermark-only replay is not a content modification.
       updatedAt: sql`${caseLawDecisions.updatedAt}`,
