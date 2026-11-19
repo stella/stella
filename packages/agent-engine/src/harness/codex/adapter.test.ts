@@ -2260,6 +2260,43 @@ describe("Codex background terminals after a turn", () => {
     expect(methods).toContain("thread/backgroundTerminals/clean");
   });
 
+  test("a next turn at another model and effort runs in the kept process", async () => {
+    const { adapter, workspaceDir, received, logPath, turn } =
+      await completedTurn("background_terminal");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        model: "gpt-test-2",
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const collected = collect(next.value);
+    await collected.done;
+    expect(terminal(collected.events)).toMatchObject({
+      type: "turn.completed",
+    });
+    const startups = readFileSync(logPath, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes('"startup"'));
+    expect(startups).toHaveLength(1);
+    const turnStarts = received().filter(
+      ({ method }) => method === "turn/start",
+    );
+    expect(turnStarts[0]?.params).not.toHaveProperty("model");
+    expect(turnStarts[1]?.params).toMatchObject({
+      threadId: FAKE_THREAD_ID,
+      model: "gpt-test-2",
+      effort: "high",
+    });
+  });
+
   test("a kept process ends by itself once its last background command exits", async () => {
     const { turn, received } = await completedTurn("background_terminal_exits");
     const live = await turn.release();

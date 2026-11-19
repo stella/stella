@@ -2609,6 +2609,70 @@ describe("Claude Code background commands after a turn", () => {
     ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
   });
 
+  test("a next turn at another model and effort switches the kept process to them", async () => {
+    const { adapter, workspaceDir, startups, turn, controlRequests } =
+      await completedTurn("background_command_switched");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        model: "opus",
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The server it holds was not ended for the switch.
+    expect(startups()).toHaveLength(1);
+    expect(controlRequests("stop_task")).toEqual([]);
+    expect(controlRequests("set_model").map(({ request }) => request)).toEqual([
+      { subtype: "set_model", model: "opus" },
+    ]);
+    expect(
+      controlRequests("apply_flag_settings").map(({ request }) => request),
+    ).toEqual([
+      { subtype: "apply_flag_settings", settings: { effortLevel: "high" } },
+    ]);
+  });
+
+  test("a switch the CLI refuses resumes the session in a new process", async () => {
+    const { adapter, workspaceDir, startups, turn } = await completedTurn(
+      "background_command_switch_refused",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    await next.value.dispose();
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    const [, resumed] = startups();
+    const args = resumed?.args ?? [];
+    expect(args[args.indexOf("--resume") + 1]).toBe(live.sessionId);
+    expect(args[args.indexOf("--effort") + 1]).toBe("high");
+  });
+
   test("a sub-agent is stopped at the turn's end and a turn the CLI opens itself is interrupted", async () => {
     const { turn, controlRequests } = await completedTurn(
       "background_own_turn",
