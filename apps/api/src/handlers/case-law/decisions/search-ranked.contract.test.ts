@@ -306,7 +306,7 @@ describe.skipIf(!runEngineTests)(
           corpusIndexDecisionTerms(MANIFEST) ??
           panic("v11 maps decision terms");
         return built.map((document) =>
-          document.is_opening === true
+          document.is_opening
             ? {
                 ...document,
                 [decisionTerms.field]: String(document.text_stem),
