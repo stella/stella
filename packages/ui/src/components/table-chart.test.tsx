@@ -48,6 +48,50 @@ describe("table chart presentation", () => {
     }
   });
 
+  test("groups the bars of several series per category and labels each category once", () => {
+    const markup = renderToStaticMarkup(
+      <TableChart
+        kind="bar"
+        xMode="category"
+        title="Hours by month"
+        summary="June has 12 hours billed."
+        points={[
+          { label: "June", x: 0, y: 12, series: "Billed" },
+          { label: "June", x: 0, y: 1.5, series: "Written off" },
+          { label: "July", x: 1, y: 8, series: "Billed" },
+          { label: "July", x: 1, y: 0, series: "Written off" },
+        ]}
+        formatNumber={String}
+      />,
+    );
+    const labels = [
+      ...markup.matchAll(
+        /<text[^>]*data-slot="chart-x-tick"[^>]*>([^<]+)<\/text>/gu,
+      ),
+    ].map((match) => match[1]);
+    expect(labels).toEqual(["June", "July"]);
+    expect(markup.match(/data-slot="chart-bar-group"/gu)).toHaveLength(2);
+    expect(markup.match(/data-slot="chart-bar"/gu)).toHaveLength(4);
+    // Within a group the series stand side by side, never on top of each
+    // other, and each keeps its own colour.
+    const bars = [
+      ...markup.matchAll(
+        /<rect[^>]*data-slot="chart-bar"[^>]*x="([^"]+)"[^>]*width="([^"]+)"[^>]*fill="([^"]+)"/gu,
+      ),
+    ].map((match) => ({
+      x: Number(match[1]),
+      width: Number(match[2]),
+      fill: match[3],
+    }));
+    const [juneBilled, juneWrittenOff, julyBilled] = bars;
+    expect(juneWrittenOff?.x).toBeCloseTo(
+      (juneBilled?.x ?? 0) + (juneBilled?.width ?? 0),
+    );
+    expect(juneBilled?.fill).not.toBe(juneWrittenOff?.fill);
+    expect(julyBilled?.fill).toBe(juneBilled?.fill);
+    expect(markup).toContain("June: 1.5 (Written off)");
+  });
+
   test("groups connected lines by series while scatter remains unconnected", () => {
     const grouped = points.map((point, index) => ({
       ...point,

@@ -409,6 +409,18 @@
       }
     },
     {
+      "id": "google/gemini-4-neon",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-neon:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "google/gemini-nano-banana-2.1",
       "reasoning": {
         "default_effort": "minimal"

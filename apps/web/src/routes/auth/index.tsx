@@ -5,17 +5,12 @@ import * as v from "valibot";
 
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { SIGN_IN_ENTRY_METHOD } from "@/components/auth/sign-in-panel.logic";
-import {
-  getOauthHashFragment,
-  getSignedOauthQuery,
-  getSignedOauthQueryFromHash,
-  hasOauthPrompt,
-  hasSignedOauthQuery,
-} from "@/lib/oauth-provider";
+import { getSignedOauthQuery, hasOauthPrompt } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
+import { getOauthPostLoginRedirectTo } from "@/routes/auth/-index.logic";
 
 const DevQuickStartButton = import.meta.env.DEV
   ? React.lazy(async () => {
@@ -95,22 +90,3 @@ function LoginOrSignup() {
     </div>
   );
 }
-
-const getOauthPostLoginRedirectTo = ({
-  hash,
-  searchStr,
-}: {
-  hash: string;
-  searchStr: string;
-}) => {
-  const bridgedQuery = getSignedOauthQueryFromHash(hash);
-  if (bridgedQuery) {
-    return `/auth/organization#${getOauthHashFragment(bridgedQuery)}`;
-  }
-
-  if (!hasSignedOauthQuery(searchStr)) {
-    return null;
-  }
-
-  return `/auth/organization${searchStr}`;
-};

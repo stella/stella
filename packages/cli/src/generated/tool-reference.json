@@ -590,7 +590,7 @@
   {
     "access": "read",
     "command": ["capability", "case-law", "ingestion-get"],
-    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
+    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities), and whether the source is parked: failing the same way for so long that it asks its publisher once a day, since when, and its next attempt. The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
     "name": "capability:case-law.ingestion.get",
     "title": "case-law.ingestion.get"
   },

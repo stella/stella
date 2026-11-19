@@ -25,6 +25,7 @@ import { TableChart } from "@stll/ui/table-chart";
 import {
   chartTableFromNode,
   tableChartPoints,
+  tableChartValueLabel,
 } from "@/components/chat/table-chart.logic";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -243,10 +244,7 @@ const ChartableTable = ({
             chart.columns.find(({ role }) => role === "x" || role === "label")
               ?.index ?? 0,
           )}
-          yLabel={chart.columns
-            .filter(({ role }) => role === "y")
-            .map(({ index }) => table.headers.at(index))
-            .join(" / ")}
+          yLabel={tableChartValueLabel({ table, plan: chart })}
           formatNumber={(value) => formatter.number(value)}
         />
       )}

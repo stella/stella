@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
+  ignoredSendThreadFields,
   resolveSendThreadFields,
   resolveSendThreadSkill,
   type SendThreadFields,
@@ -194,5 +195,76 @@ describe("the fields a send runs its thread with", () => {
 
     expect(sendThreadFieldsChanged(placeholder, adopted)).toBe(false);
     expect(sendThreadFieldsAuditChanges(placeholder, adopted)).toEqual({});
+  });
+});
+
+describe("the carried fields a send's thread does not run with", () => {
+  const ignoredFor = (
+    request: SendThreadFieldsRequest,
+    stored: Parameters<typeof resolveSendThreadFields>[0]["stored"],
+  ) =>
+    ignoredSendThreadFields({
+      request,
+      resolved: resolveSendThreadFields({ request, stored }),
+    });
+
+  const skillOnly: SendThreadFieldsRequest = {
+    ...emptySend,
+    activeSkill: builderSkill,
+  };
+
+  test("a send that creates or adopts its thread ignores nothing it carries", () => {
+    const storedBeforeFirstMessage = [
+      null,
+      { fields: placeholder, hasMessages: false },
+      {
+        fields: {
+          ...placeholder,
+          activeSkill: reviewSkill,
+          subjectDecisionId: decisionB,
+        },
+        hasMessages: false,
+      },
+    ];
+    for (const stored of storedBeforeFirstMessage) {
+      for (const request of [fullSend, emptySend, skillOnly]) {
+        expect(ignoredFor(request, stored)).toEqual([]);
+      }
+    }
+  });
+
+  test("a thread that holds a message names each carried field it keeps its own value for", () => {
+    const started = {
+      fields: {
+        ...placeholder,
+        activeSkill: builderSkill,
+        subjectDecisionId: decisionB,
+      },
+      hasMessages: true,
+    };
+
+    expect(ignoredFor(fullSend, started)).toEqual([
+      "activeSkill",
+      "subjectDecisionId",
+    ]);
+    expect(
+      ignoredFor({ ...fullSend, subjectDecisionId: null }, started),
+    ).toEqual(["activeSkill"]);
+    // Restating the thread's own values, or carrying none, ignores nothing.
+    expect(
+      ignoredFor(
+        {
+          ...fullSend,
+          activeSkill: builderSkill,
+          subjectDecisionId: decisionB,
+        },
+        started,
+      ),
+    ).toEqual([]);
+    expect(ignoredFor(emptySend, started)).toEqual([]);
+    // An ordinary chat keeps no skill when a later send names one.
+    expect(
+      ignoredFor(skillOnly, { fields: placeholder, hasMessages: true }),
+    ).toEqual(["activeSkill"]);
   });
 });
