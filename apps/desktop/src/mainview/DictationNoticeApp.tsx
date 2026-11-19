@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DictateIcon, XIcon } from "@stll/ui/icons";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -23,10 +24,13 @@ import type {
   DictationNoticeSnapshot,
 } from "./dictation-notice";
 
+/** Mirrors `CHANGED_EVENT` in `dictation_notice.rs`; payload-free. */
+const NOTICE_CHANGED_EVENT = "dictation-notice-changed";
+
 /**
- * The panel shown where the speaker works when dictation could not hear the
- * microphone: what happened and the one action that fixes it. The native
- * side places it and closes it.
+ * The panel shown where the speaker works when a dictation heard nothing:
+ * what happened, the input device it listened to, and the one action that
+ * helps. The native side places it and closes it.
  */
 const DictationNoticeApp = () => {
   const t = useTranslations("dictation.notice");
@@ -46,21 +50,29 @@ const DictationNoticeApp = () => {
       if (Result.isError(result) || !isDictationNoticeSnapshot(result.value)) {
         reportFailure();
         // Still say what happened; only the action is unknown.
-        setSnapshot({ fix: null });
+        setSnapshot({ fix: null, inputDevice: null, kind: "microphone" });
         return;
       }
       setSnapshot(result.value);
     };
+    const stopListening = subscribeDesktopEvent({
+      event: NOTICE_CHANGED_EVENT,
+      handler: () => {
+        void read();
+      },
+      onError: reportFailure,
+    });
     void read();
     return () => {
       disposed = true;
+      stopListening();
     };
   }, []);
 
   if (snapshot === null) {
     return <main className="dictation-notice-window" />;
   }
-  const copy = dictationNoticeCopy(snapshot.fix, DESKTOP_PLATFORM);
+  const copy = dictationNoticeCopy(snapshot, DESKTOP_PLATFORM);
 
   return (
     <main
@@ -72,10 +84,15 @@ const DictationNoticeApp = () => {
         className="text-destructive-foreground mt-0.5 size-5 shrink-0"
       />
       <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-        <p className="text-sm font-medium">{t("title")}</p>
+        <p className="text-sm font-medium">{t(copy.title)}</p>
         <p className="text-muted-foreground text-xs leading-snug">
           {t(copy.body)}
         </p>
+        {snapshot.inputDevice === null ? null : (
+          <p className="text-muted-foreground text-xs">
+            {t("inputDevice", { device: snapshot.inputDevice })}
+          </p>
+        )}
         {copy.action === null ? null : (
           <Button
             className="mt-1"

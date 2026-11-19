@@ -313,6 +313,7 @@ pub fn run() {
         app.manage(installation);
       }
       harness_commands::manage(&handle);
+      dictation_notice::listen_for_clicks(&handle);
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));

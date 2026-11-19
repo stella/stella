@@ -689,7 +689,8 @@
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
       "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
       "passwordField": "A password field has focus, so the dictation was not kept or typed.",
-      "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
+      "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model.",
+      "nothingHeard": "stella did not hear any speech. Check the input device in Sound settings."
     },
     "failureKeptInHistory": "The text is in clipboard history.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Allow microphone",
       "openSettingsMac": "Open System Settings",
       "openSettingsPc": "Open Settings",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "nothingTitle": "stella did not hear any speech",
+      "nothingBody": "Speak while you hold the key, or choose another input in Sound settings.",
+      "inputDevice": "Input: {device}",
+      "openSoundMac": "Open Sound settings",
+      "openSoundPc": "Open sound settings"
     }
   },
   "shortcut": {

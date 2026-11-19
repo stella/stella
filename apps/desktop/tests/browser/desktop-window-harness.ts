@@ -260,7 +260,11 @@ export const openOnboardingWindow = async (
 /** Opens the panel dictation shows when it could not hear the microphone. */
 export const openDictationNoticeWindow = async (
   page: Page,
-  fix: "openSettings" | "request" | null,
+  notice: {
+    fix: "openSettings" | "openSound" | "request" | null;
+    inputDevice: string | null;
+    kind: "microphone" | "nothingHeard";
+  },
   options: WindowVariant,
 ) => {
   await openWindow(page, {
@@ -270,7 +274,7 @@ export const openDictationNoticeWindow = async (
       appState: APP_STATE,
       cloudModels: CLOUD_MODELS,
       dictation: DICTATION_READY,
-      dictationNotice: { fix },
+      dictationNotice: notice,
       language: options.language,
       onboarding: null,
       permissions: PERMISSIONS,

@@ -689,7 +689,8 @@
       "focusUnconfirmed": "A stella nem tudta megállapítani, melyik alkalmazás aktív, ezért semmi sem lett beírva. Próbálja újra.",
       "shortcutHeld": "Engedje fel a billentyűparancs gombjait a gépeléshez. Semmi sem lett beírva; próbálja újra.",
       "passwordField": "Jelszómező van kijelölve, ezért a diktálás nem lett megőrizve vagy beírva.",
-      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt."
+      "cloudTranscription": "A stella AI nem tudta átírni ezt a diktálást, és a beszédmodell nincs ezen a számítógépen. Próbálja újra, vagy az „Átírás ezzel” beállításnál válassza az „Ez a számítógép” lehetőséget, és töltse le a modellt.",
+      "nothingHeard": "A stella nem hallott beszédet. Ellenőrizze a bemeneti eszközt a Hang beállításaiban."
     },
     "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Mikrofon engedélyezése",
       "openSettingsMac": "Rendszerbeállítások megnyitása",
       "openSettingsPc": "Beállítások megnyitása",
-      "dismiss": "Bezárás"
+      "dismiss": "Bezárás",
+      "nothingTitle": "A stella nem hallott beszédet",
+      "nothingBody": "Beszéljen, amíg lenyomva tartja a billentyűt, vagy válasszon másik bemenetet a Hang beállításaiban.",
+      "inputDevice": "Bemenet: {device}",
+      "openSoundMac": "Hangbeállítások megnyitása",
+      "openSoundPc": "Hangbeállítások megnyitása"
     }
   },
   "shortcut": {

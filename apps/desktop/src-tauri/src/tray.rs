@@ -856,6 +856,14 @@ mod tests {
   }
 
   #[test]
+  fn the_dictation_submenu_opens_the_transcribe_window() {
+    assert!(matches!(
+      handle_menu_action(OPEN_TRANSCRIBE_ACTION),
+      MenuAction::OpenTranscribe
+    ));
+  }
+
+  #[test]
   fn both_dictation_items_open_its_settings_page() {
     assert!(matches!(
       handle_menu_action(OPEN_DICTATION_SETTINGS_ACTION),

@@ -689,7 +689,8 @@
       "focusUnconfirmed": "stella nevarēja pārliecināties, kurā lietotnē ir fokuss, tāpēc nekas netika ievadīts. Mēģiniet vēlreiz.",
       "shortcutHeld": "Atlaidiet īsinājumtaustiņus, lai varētu ievadīt tekstu. Nekas netika ievadīts; mēģiniet vēlreiz.",
       "passwordField": "Ir atlasīts paroles lauks, tāpēc diktētais netika saglabāts vai ievadīts.",
-      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli."
+      "cloudTranscription": "stella AI neizdevās pārvērst šo diktātu tekstā, un runas modeļa šajā datorā nav. Mēģiniet vēlreiz vai pie “Pārvērst ar” izvēlieties “Šo datoru” un lejupielādējiet modeli.",
+      "nothingHeard": "stella nedzirdēja runu. Pārbaudiet ievades ierīci skaņas iestatījumos."
     },
     "failureKeptInHistory": "Teksts ir starpliktuves vēsturē.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Atļaut mikrofonu",
       "openSettingsMac": "Atvērt sistēmas iestatījumus",
       "openSettingsPc": "Atvērt iestatījumus",
-      "dismiss": "Aizvērt"
+      "dismiss": "Aizvērt",
+      "nothingTitle": "stella nedzirdēja runu",
+      "nothingBody": "Runājiet, kamēr turat taustiņu, vai skaņas iestatījumos izvēlieties citu ievadi.",
+      "inputDevice": "Ievade: {device}",
+      "openSoundMac": "Atvērt skaņas iestatījumus",
+      "openSoundPc": "Atvērt skaņas iestatījumus"
     }
   },
   "shortcut": {

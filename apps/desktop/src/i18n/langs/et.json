@@ -689,7 +689,8 @@
       "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
       "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti.",
       "passwordField": "Fookuses on paroolivali, seega dikteeritut ei säilitatud ega sisestatud.",
-      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
+      "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla.",
+      "nothingHeard": "stella ei kuulnud kõnet. Kontrollige heliseadetes sisendseadet."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Luba mikrofon",
       "openSettingsMac": "Ava süsteemiseaded",
       "openSettingsPc": "Ava sätted",
-      "dismiss": "Sulge"
+      "dismiss": "Sulge",
+      "nothingTitle": "stella ei kuulnud kõnet",
+      "nothingBody": "Rääkige klahvi all hoides või valige heliseadetes muu sisend.",
+      "inputDevice": "Sisend: {device}",
+      "openSoundMac": "Ava heliseaded",
+      "openSoundPc": "Ava heliseaded"
     }
   },
   "shortcut": {

@@ -37,6 +37,7 @@ import {
 } from "../shared/use-clipboard-shortcut";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
+import { DictationInputFix } from "./DictationInputFix";
 import {
   SettingsGroup,
   SettingsPageHeader,
@@ -90,6 +91,7 @@ export type DictationSnapshot = {
     | "focusUnconfirmed"
     | "microphone"
     | "modelMissing"
+    | "nothingHeard"
     | "passwordField"
     | "shortcutHeld"
     | "transcription"
@@ -380,6 +382,11 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           {/* Two sentences, each translated whole. */}
           {snapshot.failureKeptInHistory && ` ${t("failureKeptInHistory")}`}
         </p>
+      )}
+      {(snapshot.failure === "microphone" ||
+        snapshot.failure === "nothingHeard") && (
+        // Keyed by the failure, so a new one reads its action afresh.
+        <DictationInputFix key={snapshot.failure} />
       )}
       {snapshot.enabled && (
         <>

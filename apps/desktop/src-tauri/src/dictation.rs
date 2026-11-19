@@ -129,6 +129,9 @@ pub enum Failure {
   /// A password field had focus at the press or before typing: the
   /// dictation was neither kept nor typed.
   PasswordField,
+  /// The microphone delivered sound but no speech came of it: nothing
+  /// loud enough, or a model that heard no words.
+  NothingHeard,
 }
 
 /// A dictation that went wrong, and whether its text is in stella's
@@ -528,9 +531,22 @@ pub fn context_sharing(app: &AppHandle) -> Sharing {
 /// Records the failure for Settings → Dictation and, where the speaker would
 /// otherwise see nothing, tells them at once.
 pub fn report_failure(app: &AppHandle, failed: impl Into<Failed>) {
+  report_input_failure(app, failed, None);
+}
+
+/// `report_failure`, naming the input device the dictation listened to.
+pub fn report_input_failure(
+  app: &AppHandle,
+  failed: impl Into<Failed>,
+  input_device: Option<String>,
+) {
   let failed = failed.into();
+  if matches!(failed.failure, Failure::Microphone | Failure::NothingHeard) {
+    // The outcome only: never the device name or any text.
+    tracing::info!(failure = ?failed.failure, "dictation heard no speech");
+  }
   change(app, |inner| inner.failure = Some(failed));
-  crate::dictation_notice::on_failure(app, failed.failure);
+  crate::dictation_notice::on_failure(app, failed.failure, input_device);
 }
 
 pub fn clear_failure(app: &AppHandle) {
@@ -1156,6 +1172,7 @@ mod tests {
       (Failure::ShortcutHeld, "shortcutHeld"),
       (Failure::PasswordField, "passwordField"),
       (Failure::CloudTranscription, "cloudTranscription"),
+      (Failure::NothingHeard, "nothingHeard"),
     ] {
       assert_eq!(
         serde_json::to_value(failure).unwrap(),

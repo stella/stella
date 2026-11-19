@@ -689,7 +689,8 @@
       "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut.",
       "passwordField": "Ein Passwortfeld ist ausgewählt, daher wurde das Diktat weder behalten noch eingegeben.",
-      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter."
+      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter.",
+      "nothingHeard": "stella hat keine Sprache gehört. Prüfen Sie das Eingabegerät in den Ton-Einstellungen."
     },
     "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Mikrofon erlauben",
       "openSettingsMac": "Systemeinstellungen öffnen",
       "openSettingsPc": "Einstellungen öffnen",
-      "dismiss": "Schließen"
+      "dismiss": "Schließen",
+      "nothingTitle": "stella hat keine Sprache gehört",
+      "nothingBody": "Sprechen Sie, während Sie die Taste halten, oder wählen Sie in den Ton-Einstellungen einen anderen Eingang.",
+      "inputDevice": "Eingang: {device}",
+      "openSoundMac": "Ton-Einstellungen öffnen",
+      "openSoundPc": "Soundeinstellungen öffnen"
     }
   },
   "shortcut": {

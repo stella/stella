@@ -689,7 +689,8 @@
       "focusUnconfirmed": "stella nemohla overiť, ktorá aplikácia je aktívna, takže sa nič nenapísalo. Skúste to znova.",
       "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova.",
       "passwordField": "Je vybrané pole na heslo, preto sa diktát neuložil ani nenapísal.",
-      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite."
+      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite.",
+      "nothingHeard": "stella nepočula žiadnu reč. Skontrolujte vstupné zariadenie v nastaveniach Zvuku."
     },
     "failureKeptInHistory": "Text nájdete v histórii schránky.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Povoliť mikrofón",
       "openSettingsMac": "Otvoriť Systémové nastavenia",
       "openSettingsPc": "Otvoriť Nastavenia",
-      "dismiss": "Zavrieť"
+      "dismiss": "Zavrieť",
+      "nothingTitle": "stella nepočula žiadnu reč",
+      "nothingBody": "Hovorte, kým držíte kláves, alebo v nastaveniach Zvuku vyberte iný vstup.",
+      "inputDevice": "Vstup: {device}",
+      "openSoundMac": "Otvoriť nastavenia Zvuku",
+      "openSoundPc": "Otvoriť nastavenia zvuku"
     }
   },
   "shortcut": {

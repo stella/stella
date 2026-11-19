@@ -41,6 +41,7 @@ const SHELL_INVOKE_SOURCES = [
 const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
+    "src/mainview/DictationInputFix.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
     "src/mainview/LocalSkillFoldersSection.tsx",
     "src/mainview/PermissionsSection.tsx",

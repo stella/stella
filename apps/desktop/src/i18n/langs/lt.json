@@ -689,7 +689,8 @@
       "focusUnconfirmed": "stella negalėjo patvirtinti, kuri programa yra aktyvi, todėl nieko nebuvo įvesta. Bandykite dar kartą.",
       "shortcutHeld": "Atleiskite sparčiųjų klavišų mygtukus, kad būtų galima įvesti tekstą. Nieko nebuvo įvesta; bandykite dar kartą.",
       "passwordField": "Pasirinktas slaptažodžio laukas, todėl diktuotas tekstas nebuvo išsaugotas ar įvestas.",
-      "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį."
+      "cloudTranscription": "stella AI nepavyko paversti šio diktavimo tekstu, o kalbos modelio šiame kompiuteryje nėra. Bandykite dar kartą arba ties „Paversti naudojant“ pasirinkite „Šį kompiuterį“ ir atsisiųskite modelį.",
+      "nothingHeard": "„stella“ negirdėjo jokios kalbos. Patikrinkite įvesties įrenginį garso nustatymuose."
     },
     "failureKeptInHistory": "Tekstas yra iškarpinės istorijoje.",
     "transcribeRecording": {
@@ -706,7 +707,12 @@
       "allow": "Leisti mikrofoną",
       "openSettingsMac": "Atidaryti sistemos nustatymus",
       "openSettingsPc": "Atidaryti nustatymus",
-      "dismiss": "Uždaryti"
+      "dismiss": "Uždaryti",
+      "nothingTitle": "„stella“ negirdėjo jokios kalbos",
+      "nothingBody": "Kalbėkite laikydami klavišą arba garso nustatymuose pasirinkite kitą įvestį.",
+      "inputDevice": "Įvestis: {device}",
+      "openSoundMac": "Atidaryti garso nustatymus",
+      "openSoundPc": "Atidaryti garso nustatymus"
     }
   },
   "shortcut": {
