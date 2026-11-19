@@ -50,6 +50,7 @@
 @source "../../../ui/src/components/input-group.tsx";
 @source "../../../ui/src/components/input.tsx";
 @source "../../../ui/src/components/kbd.tsx";
+@source "../../../ui/src/components/label-classes.ts";
 @source "../../../ui/src/components/label.tsx";
 @source "../../../ui/src/components/loader.tsx";
 @source "../../../ui/src/components/pagination.tsx";
@@ -66,6 +67,7 @@
 @source "../../../ui/src/components/table.tsx";
 @source "../../../ui/src/components/textarea.tsx";
 @source "../../../ui/src/components/time-field.tsx";
+@source "../../../ui/src/components/toggle-classes.ts";
 @source "../../../ui/src/components/tooltip-trigger-helper.tsx";
 @source "../../../ui/src/components/tooltip.tsx";
 @source "../../../ui/src/components/truncated-text.tsx";
