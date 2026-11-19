@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "sha256": "8eb6d264884cf1ef3602da47d0a43f53c55791ba8fb0764e1bf64913909fb62c",
+  "note": "ISIR_PUBLIC_WS getIsirWsPublicIdDataRequest response composed from recorded actions 65000401, 65000689 (2024-02-28), 81000529 (2026-10-20) and 81530365 (2026-11-19), which carry no personal data, with authored actions in their shape: a final-date update, person and address service actions with invented values, a claim, and a decision of a proceeding the page strikes off"
+}

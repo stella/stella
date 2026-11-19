@@ -170,6 +170,10 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     fixture: brTjdftFixture,
     part: "detail",
   },
+  "cz-isir": {
+    driver: "unsupported",
+    reason: "PDF geometry requires a text-layer driver.",
+  },
   "cz-ns-sbirka": {
     driver: "html",
     fixture: czNsSbirkaFixture,

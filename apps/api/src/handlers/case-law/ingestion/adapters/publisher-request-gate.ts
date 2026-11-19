@@ -57,6 +57,7 @@ const PUBLISHER_GATE_TIMEOUT_LABEL = {
   "fcl-uk": "fcl-uk publisher gate reservation",
   "tjdft-jus-br": "tjdft-jus-br publisher gate reservation",
   "nsoud-sbirka-cz": "nsoud-sbirka-cz publisher gate reservation",
+  "isir-justice-cz": "isir-justice-cz publisher gate reservation",
   "tst-jus-br": "tst-jus-br publisher gate reservation",
   "suip-cz": "suip-cz publisher gate reservation",
   "uoou-sk": "uoou-sk publisher gate reservation",

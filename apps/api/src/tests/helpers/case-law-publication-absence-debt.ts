@@ -65,6 +65,7 @@ export const TYPED_ABSENCE_DEBT = {
   "cz-uohs": [],
   "br-tjdft": [],
   "cz-ns-sbirka": [],
+  "cz-isir": [],
   "br-tst": [],
   "us-courtlistener": unclassified,
 } as const satisfies Record<

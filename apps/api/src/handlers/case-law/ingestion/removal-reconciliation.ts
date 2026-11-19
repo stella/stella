@@ -9,6 +9,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { probeCzIsirRemoval } from "@/api/handlers/case-law/ingestion/adapters/cz-isir-removal";
 import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   parsePublisherRetryAfter,
@@ -74,6 +75,7 @@ type RemovalProbe = (
 ) => Promise<Result<PublisherRemovalRead, AdapterFetchError>>;
 const REMOVAL_SOURCE_PROBES = {
   [ADAPTER_KEYS.UK_FCL]: probeUkFclRemoval,
+  [ADAPTER_KEYS.CZ_ISIR]: probeCzIsirRemoval,
 } as const satisfies Record<string, RemovalProbe>;
 
 type SweepOptions = {

@@ -154,6 +154,7 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { buildCzIsirFixtureDecision } from "@/api/tests/helpers/cz-isir-fixture";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -3309,6 +3310,15 @@ export const czNsSbirkaFixture = (): EnrolledAdapterFixture => ({
     ),
 });
 
+/**
+ * A high court's appeal decision in an insolvency file, read as the walk reads
+ * it: the feed page names it, its document is read and stored as anonymised
+ * paragraphs (`tests/helpers/cz-isir-fixture.ts`).
+ */
+export const czIsirFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: buildCzIsirFixtureDecision,
+});
+
 export const ukFclFixture = (
   documentUrl = new URL(
     "../../handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
@@ -3466,6 +3476,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
   [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaFixture,
+  [ADAPTER_KEYS.CZ_ISIR]: czIsirFixture,
   [ADAPTER_KEYS.BR_TST]: brTstFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,

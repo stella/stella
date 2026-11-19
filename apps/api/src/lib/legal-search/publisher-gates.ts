@@ -191,6 +191,17 @@ export const PUBLISHER_GATES = {
     intervalMs: 1000,
     hosts: ["sbirka.nsoud.cz"],
   },
+  /**
+   * The insolvency register's public web service and its document servlet.
+   * Its operating terms let the Ministry block a user sending more than
+   * 3,000 requests a day or 50 a minute; forty seconds apart is 2,160 a day,
+   * which leaves room for the register lookups other features make.
+   */
+  "isir-justice-cz": {
+    publisher: "Ministerstvo spravedlnosti",
+    intervalMs: 40_000,
+    hosts: ["isir.justice.cz"],
+  },
   /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {
     publisher: "Nejvyšší správní soud",

@@ -94,6 +94,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_UOKIK]: "uokik-gov-pl",
   [ADAPTER_KEYS.BR_TJDFT]: "tjdft-jus-br",
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: "nsoud-sbirka-cz",
+  [ADAPTER_KEYS.CZ_ISIR]: "isir-justice-cz",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** The hosts an adapter's publisher serves from. */

@@ -39,6 +39,7 @@ export const COURT_IDENTITY_REPAIR_ADAPTERS = [
   "cz-regional",
   "cz-ns",
   "cz-ns-sbirka",
+  "cz-isir",
   "cz-nss",
   "cz-us",
   "cz-uohs",

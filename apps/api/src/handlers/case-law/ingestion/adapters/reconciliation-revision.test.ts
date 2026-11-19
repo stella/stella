@@ -81,6 +81,22 @@ const IDENTITY_REVISION_PAYLOADS = {
     { uuid: "00000000-0000-4000-8000-000000000002" },
   ],
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: [{ postId: "9586" }, { postId: "5819" }],
+  [ADAPTER_KEYS.CZ_ISIR]: [
+    {
+      id: 65_000_689,
+      documentId: "65350048",
+      eventType: 373,
+      fileMark: "INS 10782/2023",
+      note: {},
+    },
+    {
+      id: 65_000_689,
+      documentId: "65350049",
+      eventType: 373,
+      fileMark: "INS 10782/2023",
+      note: {},
+    },
+  ],
   [ADAPTER_KEYS.BR_TST]: [
     { id: "00000000000000000000000000000001", dispositivo: "provido" },
     { id: "00000000000000000000000000000001", dispositivo: "desprovido" },

@@ -8,6 +8,10 @@ import {
 
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
+  CZ_ISIR_METADATA_KEY,
+  czIsirDecisionMetadataSchema,
+} from "@/api/lib/legal-search/cz-isir-decision";
+import {
   CZ_NS_COLLECTION_METADATA_KEY,
   storedCzNsCollectionEntrySchema,
 } from "@/api/lib/legal-search/cz-ns-collection-entry";
@@ -94,6 +98,18 @@ export const HELD_DECISION_ATTACHMENTS: Readonly<
   // The Supreme Court's collection reprints decisions the Czech courts'
   // databases already publish; its dates and its hosts' sometimes disagree
   // for one decision, so a docket held under another date waits for review.
+  // The insolvency register republishes, unanonymised, decisions the
+  // courts' database and the Supreme Court's collection publish too: a
+  // register copy of a decision already held enriches that decision. A high
+  // court decides many times under one senate mark, so the same docket on
+  // another date is another decision.
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    hostAdapterKeys: otherSourcesOf(ADAPTER_KEYS.CZ_ISIR),
+    metadataKey: CZ_ISIR_METADATA_KEY,
+    metadataSchema: czIsirDecisionMetadataSchema,
+    declaredIdentifierTypes: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
+    docketHeldUnderOtherDate: "own-row",
+  },
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
     hostAdapterKeys: otherSourcesOf(ADAPTER_KEYS.CZ_NS_SBIRKA),
     metadataKey: CZ_NS_COLLECTION_METADATA_KEY,
