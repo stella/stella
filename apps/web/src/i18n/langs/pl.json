@@ -1494,6 +1494,10 @@
       "title": "Wyszukiwanie jest tymczasowo niedostępne"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Wyszukaj orzeczenie po sygnaturze akt lub ECLI, jeśli je znasz.",
+        "message": "Nie znaleziono orzeczenia odpowiadającego dokładnie temu oznaczeniu w zbiorze."
+      },
       "noHits": {
         "hint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
         "message": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie."

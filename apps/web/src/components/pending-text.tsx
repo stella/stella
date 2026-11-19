@@ -29,6 +29,11 @@ type PendingTextKey =
   | "chat.greeting"
   | "chat.landing.recentChats"
   | "chat.landing.skills"
+  | "chat.newChat"
+  | "chat.placeholder"
+  | "common.history"
+  | "common.search"
+  | "common.selectAMatter"
   | "lawHome.prompt"
   | "lawHome.recent"
   | "lawHome.signals"
@@ -56,8 +61,13 @@ export const PendingText = ({
     <TranslatedText id={id} />
   ) : (
     // One line box of the surrounding text, so the bar keeps the label's
-    // height inside a flex row as well as in running text.
-    <span aria-hidden="true" className="inline-flex h-[1lh] items-center">
+    // height inside a flex row as well as in running text. Top-aligned: on
+    // the baseline, an inline box with no text of its own adds a descent and
+    // grows the line by a pixel.
+    <span
+      aria-hidden="true"
+      className="inline-flex h-[1lh] items-center align-top"
+    >
       <Skeleton className={cn("h-[0.75em]", barClassName)} />
     </span>
   );

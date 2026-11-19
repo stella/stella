@@ -249,6 +249,7 @@ export const searchAnswer = ({
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
     partialHitCount,
+    hitOrder,
     filters: narrowingFilters(body),
     // With the partial matches unread, an empty page has not shown that
     // nothing matched.
