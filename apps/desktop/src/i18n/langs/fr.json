@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon",
     "reconnectAccount": "Se reconnecter à stella web…",
-    "transcribeRecording": "Transcrire un enregistrement…"
+    "transcribeRecording": "Transcrire un enregistrement…",
+    "dictation": "Dictée",
+    "dictationHint": "Maintenez {key} pour dicter",
+    "dictationSettings": "Réglages de la dictée…",
+    "dictationTurnOn": "Activer la dictée…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
@@ -693,6 +697,16 @@
       "description": "Convertit en texte un fichier de dictaphone, un mémo vocal ou l’enregistrement d’une réunion jusqu’à 4 heures.",
       "open": "Ouvrir",
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez."
+    },
+    "notice": {
+      "title": "stella n'entend pas votre micro",
+      "allowBody": "Autorisez l'accès au micro, puis réessayez.",
+      "checkBodyMac": "Vérifiez l'accès au micro dans les Réglages Système, puis réessayez.",
+      "checkBodyPc": "Vérifiez l'accès au micro dans les Paramètres Windows, puis réessayez.",
+      "allow": "Autoriser le micro",
+      "openSettingsMac": "Ouvrir les Réglages Système",
+      "openSettingsPc": "Ouvrir les Paramètres",
+      "dismiss": "Fermer"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "Configurer ce PC",
     "permissionsBody": "Chaque autorisation est votre choix. Vous pourrez les modifier plus tard dans les Réglages.",
     "neverRequested": "Jamais demandé :",
-    "tryTitle": "Essayez maintenant",
-    "tryBody": "Copiez un texte, puis appuyez sur {shortcut}.",
+    "tryTitle": "Essayez l'historique du presse-papiers",
+    "tryBody": "Copiez un texte, puis appuyez sur {shortcut} pour ouvrir l'historique du presse-papiers.",
     "tryWaiting": "En attente du raccourci",
     "tryKeepGoing": "Continuez…",
     "tryExtraModifier": "C'est {pressed}. Utilisez {shortcut}.",

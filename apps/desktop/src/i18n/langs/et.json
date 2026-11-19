@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
     "reconnectAccount": "Ühenda stella webiga uuesti…",
-    "transcribeRecording": "Transkribeeri salvestis…"
+    "transcribeRecording": "Transkribeeri salvestis…",
+    "dictation": "Dikteerimine",
+    "dictationHint": "Dikteerimiseks hoidke all {key}",
+    "dictationSettings": "Dikteerimise seaded…",
+    "dictationTurnOn": "Lülita dikteerimine sisse…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
@@ -693,6 +697,16 @@
       "description": "Muudab kuni 4 tunni pikkuse diktofonifaili, häälmärkme või koosoleku salvestise tekstiks.",
       "open": "Ava",
       "failed": "Akent ei õnnestunud avada. Proovige uuesti."
+    },
+    "notice": {
+      "title": "stella ei kuule teie mikrofoni",
+      "allowBody": "Lubage juurdepääs mikrofonile ja proovige uuesti.",
+      "checkBodyMac": "Kontrollige mikrofoni juurdepääsu süsteemiseadetes ja proovige uuesti.",
+      "checkBodyPc": "Kontrollige mikrofoni juurdepääsu Windowsi sätetes ja proovige uuesti.",
+      "allow": "Luba mikrofon",
+      "openSettingsMac": "Ava süsteemiseaded",
+      "openSettingsPc": "Ava sätted",
+      "dismiss": "Sulge"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "Seadistage see arvuti",
     "permissionsBody": "Iga õigus on teie valik. Saate neid hiljem seadetes muuta.",
     "neverRequested": "Ei küsita kunagi:",
-    "tryTitle": "Proovige kohe",
-    "tryBody": "Kopeerige mis tahes tekst ja vajutage siis {shortcut}.",
+    "tryTitle": "Proovige lõikelaua ajalugu",
+    "tryBody": "Kopeerige mis tahes tekst ja vajutage {shortcut}, et avada lõikelaua ajalugu.",
     "tryWaiting": "Ootan otseteed",
     "tryKeepGoing": "Jätkake…",
     "tryExtraModifier": "See on {pressed}. Kasutage otseteed {shortcut}.",

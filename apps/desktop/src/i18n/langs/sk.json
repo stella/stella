@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Otváranie v Office",
     "sessionSavingDraft": "Ukladanie konceptu",
     "reconnectAccount": "Znova pripojiť k stella web…",
-    "transcribeRecording": "Prepísať nahrávku…"
+    "transcribeRecording": "Prepísať nahrávku…",
+    "dictation": "Diktovanie",
+    "dictationHint": "Na diktovanie podržte {key}",
+    "dictationSettings": "Nastavenia diktovania…",
+    "dictationTurnOn": "Zapnúť diktovanie…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmeny zostávajú lokálne a budú automaticky zopakované",
@@ -693,6 +697,16 @@
       "description": "Súbor z diktafónu, hlasovú poznámku alebo záznam z rokovania do 4 hodín prevedie na text.",
       "open": "Otvoriť",
       "failed": "Okno sa nepodarilo otvoriť. Skúste to znova."
+    },
+    "notice": {
+      "title": "stella nepočuje váš mikrofón",
+      "allowBody": "Povoľte prístup k mikrofónu a skúste to znova.",
+      "checkBodyMac": "Skontrolujte prístup k mikrofónu v Systémových nastaveniach a skúste to znova.",
+      "checkBodyPc": "Skontrolujte prístup k mikrofónu v Nastaveniach Windows a skúste to znova.",
+      "allow": "Povoliť mikrofón",
+      "openSettingsMac": "Otvoriť Systémové nastavenia",
+      "openSettingsPc": "Otvoriť Nastavenia",
+      "dismiss": "Zavrieť"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "permissionsBody": "Každé povolenie je na vás. Neskôr ich môžete zmeniť v Nastaveniach.",
     "neverRequested": "Nikdy nevyžadované:",
-    "tryTitle": "Vyskúšajte to",
-    "tryBody": "Skopírujte ľubovoľný text a stlačte {shortcut}.",
+    "tryTitle": "Vyskúšajte históriu schránky",
+    "tryBody": "Skopírujte ľubovoľný text a stlačením {shortcut} otvorte históriu schránky.",
     "tryWaiting": "Čakám na skratku",
     "tryKeepGoing": "Pokračujte…",
     "tryExtraModifier": "To je {pressed}. Použite {shortcut}.",

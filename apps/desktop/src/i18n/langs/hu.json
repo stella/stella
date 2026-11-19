@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése",
     "reconnectAccount": "Újracsatlakozás a stella webhez…",
-    "transcribeRecording": "Felvétel átírása…"
+    "transcribeRecording": "Felvétel átírása…",
+    "dictation": "Diktálás",
+    "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
+    "dictationSettings": "Diktálási beállítások…",
+    "dictationTurnOn": "Diktálás bekapcsolása…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: a változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
@@ -693,6 +697,16 @@
       "description": "Legfeljebb 4 órás diktafonfájlt, hangjegyzetet vagy értekezlet-felvételt alakít szöveggé.",
       "open": "Megnyitás",
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra."
+    },
+    "notice": {
+      "title": "A stella nem hallja a mikrofont",
+      "allowBody": "Engedélyezze a mikrofon-hozzáférést, majd próbálja újra.",
+      "checkBodyMac": "Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban, majd próbálja újra.",
+      "checkBodyPc": "Ellenőrizze a mikrofon-hozzáférést a Windows beállításaiban, majd próbálja újra.",
+      "allow": "Mikrofon engedélyezése",
+      "openSettingsMac": "Rendszerbeállítások megnyitása",
+      "openSettingsPc": "Beállítások megnyitása",
+      "dismiss": "Bezárás"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "A számítógép beállítása",
     "permissionsBody": "Minden engedélyről Ön dönt. Később a Beállításokban módosíthatja őket.",
     "neverRequested": "Az alkalmazás soha nem kéri:",
-    "tryTitle": "Próbálja ki most",
-    "tryBody": "Másoljon ki egy tetszőleges szöveget, majd nyomja le ezt: {shortcut}.",
+    "tryTitle": "Próbálja ki a vágólap előzményeit",
+    "tryBody": "Másoljon ki egy tetszőleges szöveget, majd a vágólap előzményeinek megnyitásához nyomja le ezt: {shortcut}.",
     "tryWaiting": "Billentyűparancsra vár",
     "tryKeepGoing": "Folytassa…",
     "tryExtraModifier": "Ezt nyomta le: {pressed}. Használja ezt: {shortcut}.",

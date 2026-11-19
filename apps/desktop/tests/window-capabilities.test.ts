@@ -56,6 +56,9 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/transcribe/TranscribeApp.tsx",
     "src/transcribe/TranscribeMatterPicker.tsx",
   ],
+  "src-tauri/capabilities/dictation-notice.json": [
+    "src/mainview/DictationNoticeApp.tsx",
+  ],
   "src-tauri/capabilities/onboarding.json": [
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",

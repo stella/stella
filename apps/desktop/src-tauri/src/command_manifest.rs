@@ -59,6 +59,8 @@ macro_rules! with_stella_commands {
       transcribe_recording::transcribe_save_text => "transcribe_save_text",
       transcribe_recording::transcribe_search_matters => "transcribe_search_matters",
       transcribe_recording::transcribe_save_to_matter => "transcribe_save_to_matter",
+      dictation_notice::dictation_notice_get_state => "dictation_notice_get_state",
+      dictation_notice::dictation_notice_respond => "dictation_notice_respond",
       clipboard_shortcut::shortcut_get_snapshot => "shortcut_get_snapshot",
       clipboard_shortcut::shortcut_check => "shortcut_check",
       clipboard_shortcut::shortcut_pause => "shortcut_pause",

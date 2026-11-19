@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis",
     "reconnectAccount": "Iš naujo prisijungti prie stella web…",
-    "transcribeRecording": "Transkribuoti įrašą…"
+    "transcribeRecording": "Transkribuoti įrašą…",
+    "dictation": "Diktavimas",
+    "dictationHint": "Norėdami diktuoti, laikykite {key}",
+    "dictationSettings": "Diktavimo nustatymai…",
+    "dictationTurnOn": "Įjungti diktavimą…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: pakeitimai lieka vietiniai ir bus automatiškai bandomi iš naujo",
@@ -693,6 +697,16 @@
       "description": "Iki 4 valandų trukmės diktofono failą, balso pastabą ar susitikimo įrašą paverčia tekstu.",
       "open": "Atidaryti",
       "failed": "Nepavyko atidaryti lango. Bandykite dar kartą."
+    },
+    "notice": {
+      "title": "„stella“ negirdi mikrofono",
+      "allowBody": "Leiskite prieigą prie mikrofono ir bandykite dar kartą.",
+      "checkBodyMac": "Patikrinkite prieigą prie mikrofono sistemos nustatymuose ir bandykite dar kartą.",
+      "checkBodyPc": "Patikrinkite prieigą prie mikrofono „Windows“ nustatymuose ir bandykite dar kartą.",
+      "allow": "Leisti mikrofoną",
+      "openSettingsMac": "Atidaryti sistemos nustatymus",
+      "openSettingsPc": "Atidaryti nustatymus",
+      "dismiss": "Uždaryti"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "Nustatykite šį kompiuterį",
     "permissionsBody": "Kiekvienas leidimas yra jūsų pasirinkimas. Vėliau galėsite juos pakeisti nustatymuose.",
     "neverRequested": "Niekada neprašoma:",
-    "tryTitle": "Išbandykite dabar",
-    "tryBody": "Nukopijuokite bet kokį tekstą, tada paspauskite {shortcut}.",
+    "tryTitle": "Išbandykite iškarpinės istoriją",
+    "tryBody": "Nukopijuokite bet kokį tekstą, tada paspauskite {shortcut}, kad atidarytumėte iškarpinės istoriją.",
     "tryWaiting": "Laukiama sparčiojo klavišo",
     "tryKeepGoing": "Tęskite…",
     "tryExtraModifier": "Tai {pressed}. Naudokite {shortcut}.",

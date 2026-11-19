@@ -53,6 +53,7 @@ mod dictation_hold_key;
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_notice;
 mod dictation_pauses;
 #[cfg(dictation)]
 mod dictation_worker;
@@ -233,6 +234,7 @@ pub fn run() {
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
     .manage(transcribe_recording::TranscribeState::default())
+    .manage(dictation_notice::DictationNotice::default())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -646,6 +648,7 @@ pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PreferencesTab {
   General,
+  Dictation,
   Agents,
   Activity,
   About,
@@ -653,11 +656,18 @@ pub(crate) enum PreferencesTab {
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 4] = [Self::General, Self::Agents, Self::Activity, Self::About];
+  const ALL: [Self; 5] = [
+    Self::General,
+    Self::Dictation,
+    Self::Agents,
+    Self::Activity,
+    Self::About,
+  ];
 
   const fn id(self) -> &'static str {
     match self {
       Self::General => "general",
+      Self::Dictation => "dictation",
       Self::Agents => "agents",
       Self::Activity => "activity",
       Self::About => "about",

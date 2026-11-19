@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
     "reconnectAccount": "Połącz ponownie ze stella web…",
-    "transcribeRecording": "Transkrybuj nagranie…"
+    "transcribeRecording": "Transkrybuj nagranie…",
+    "dictation": "Dyktowanie",
+    "dictationHint": "Przytrzymaj {key}, aby dyktować",
+    "dictationSettings": "Ustawienia dyktowania…",
+    "dictationTurnOn": "Włącz dyktowanie…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
@@ -693,6 +697,16 @@
       "description": "Zamienia na tekst plik z dyktafonu, notatkę głosową lub nagranie spotkania o długości do 4 godzin.",
       "open": "Otwórz",
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie."
+    },
+    "notice": {
+      "title": "stella nie słyszy mikrofonu",
+      "allowBody": "Zezwól na dostęp do mikrofonu i spróbuj ponownie.",
+      "checkBodyMac": "Sprawdź dostęp do mikrofonu w Ustawieniach systemowych i spróbuj ponownie.",
+      "checkBodyPc": "Sprawdź dostęp do mikrofonu w Ustawieniach systemu Windows i spróbuj ponownie.",
+      "allow": "Zezwól na mikrofon",
+      "openSettingsMac": "Otwórz Ustawienia systemowe",
+      "openSettingsPc": "Otwórz Ustawienia",
+      "dismiss": "Zamknij"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "Skonfiguruj ten komputer",
     "permissionsBody": "Każde uprawnienie to Twój wybór. Możesz je później zmienić w Ustawieniach.",
     "neverRequested": "Aplikacja nigdy nie prosi o:",
-    "tryTitle": "Wypróbuj teraz",
-    "tryBody": "Skopiuj dowolny tekst, a potem naciśnij {shortcut}.",
+    "tryTitle": "Wypróbuj historię schowka",
+    "tryBody": "Skopiuj dowolny tekst, a potem naciśnij {shortcut}, aby otworzyć historię schowka.",
     "tryWaiting": "Czekam na skrót",
     "tryKeepGoing": "Dalej…",
     "tryExtraModifier": "To jest {pressed}. Użyj {shortcut}.",

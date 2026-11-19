@@ -370,6 +370,23 @@ const fn stored_switch(enabled: bool) -> &'static str {
   }
 }
 
+/// What the tray offers for dictation: `None` wherever the Settings window
+/// shows no Dictation page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrayDictation {
+  pub enabled: bool,
+  pub hold_key: HoldChoice,
+}
+
+pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
+  available(app).then(|| {
+    app.state::<DictationState>().update(|inner| TrayDictation {
+      enabled: inner.enabled,
+      hold_key: inner.hold_key,
+    })
+  })
+}
+
 /// A build that can run the model, for an account the server enabled.
 pub(crate) fn available(app: &AppHandle) -> bool {
   SUPPORTED
@@ -508,9 +525,12 @@ pub fn context_sharing(app: &AppHandle) -> Sharing {
   })
 }
 
+/// Records the failure for Settings → Dictation and, where the speaker would
+/// otherwise see nothing, tells them at once.
 pub fn report_failure(app: &AppHandle, failed: impl Into<Failed>) {
   let failed = failed.into();
   change(app, |inner| inner.failure = Some(failed));
+  crate::dictation_notice::on_failure(app, failed.failure);
 }
 
 pub fn clear_failure(app: &AppHandle) {
@@ -710,6 +730,8 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
     stop(app);
   }
   change(app, |_inner| ());
+  // The tray's Dictation entry follows the same decision.
+  crate::activity::refresh_tray(app);
 }
 
 /// The snapshot a window reads, with the languages inferred right now.
@@ -761,6 +783,7 @@ pub fn dictation_set_enabled(
     } else {
       stop(&app);
     }
+    crate::activity::refresh_tray(&app);
   }
   Ok(read_snapshot(&app, &state))
 }
@@ -905,6 +928,8 @@ pub fn dictation_set_hold_key(
       send_command(&app, Command::Cancel);
       listen(&app);
     }
+    // The tray names the key to hold.
+    crate::activity::refresh_tray(&app);
   }
   Ok(read_snapshot(&app, &state))
 }

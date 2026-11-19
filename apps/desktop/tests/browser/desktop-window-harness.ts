@@ -10,7 +10,10 @@ import type {
 } from "../../src/shared/permissions";
 import type { AppSnapshot, DesktopAccountSnapshot } from "../../src/shared/rpc";
 import type { ClipboardShortcutSnapshot } from "../../src/shared/shortcut-keys";
-import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
+import {
+  DESKTOP_WINDOW_SIZES,
+  DICTATION_NOTICE_SIZE,
+} from "../desktop-window-sizes";
 import type { DesktopWindowSize } from "../desktop-window-sizes";
 import {
   ACCOUNT,
@@ -124,12 +127,15 @@ export const ONBOARDING_SCREENS = [
 type WindowFixture = {
   /** The activity settings, or null while the feature is off. */
   activity: ActivitySettingsSnapshot | null;
-  account: DesktopAccountSnapshot;
+  /** The linked account, or null when reading it fails. */
+  account: DesktopAccountSnapshot | null;
   appState: AppSnapshot;
   /** The region's stella AI transcription models. */
   cloudModels: unknown;
   /** The dictation snapshot. */
   dictation: unknown;
+  /** What the dictation notice panel offers, where that window is open. */
+  dictationNotice?: unknown;
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
@@ -168,7 +174,10 @@ const openWindow = async (
     unhandled: "rejectAsUnexpected",
     arg: fixture,
     handlers: (data) => ({
-      account_get_state: () => data.account,
+      account_get_state: async () =>
+        data.account === null
+          ? Promise.reject(new TypeError("The account could not be read."))
+          : data.account,
       account_record_use: () => null,
       // No connection status: the section stays hidden, as with local agents off.
       chatgpt_auth_get_status: () => null,
@@ -198,6 +207,8 @@ const openWindow = async (
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
       dictation_get_snapshot: () => data.dictation,
+      dictation_notice_get_state: () => data.dictationNotice,
+      dictation_notice_respond: () => null,
       dictation_get_cloud_models: () => data.cloudModels,
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
@@ -246,6 +257,37 @@ export const openOnboardingWindow = async (
   await settle(page);
 };
 
+/** Opens the panel dictation shows when it could not hear the microphone. */
+export const openDictationNoticeWindow = async (
+  page: Page,
+  fix: "openSettings" | "request" | null,
+  options: WindowVariant,
+) => {
+  await openWindow(page, {
+    fixture: {
+      account: ACCOUNT,
+      activity: null,
+      appState: APP_STATE,
+      cloudModels: CLOUD_MODELS,
+      dictation: DICTATION_READY,
+      dictationNotice: { fix },
+      language: options.language,
+      onboarding: null,
+      permissions: PERMISSIONS,
+      requestOutcome: "granted",
+      shortcut: SHORTCUT,
+      signingDriver: null,
+    },
+    path: "/",
+    platform: options.platform,
+    scheme: options.scheme,
+    size: DICTATION_NOTICE_SIZE,
+    windowLabel: "dictation-notice",
+  });
+  await expect(page.getByRole("alert")).toBeVisible();
+  await settle(page);
+};
+
 /** The pages every platform shows; Signing is macOS only. */
 export const SETTINGS_PAGES = [
   "general",
@@ -268,11 +310,16 @@ export type SettingsPage =
 export const openSettingsWindow = async (
   page: Page,
   tab: SettingsPage,
-  options: WindowVariant,
+  options: WindowVariant & {
+    /** Another account state than the linked fixture account. */
+    account?: DesktopAccountSnapshot | null;
+    /** Another inner width, such as the window's smallest. */
+    width?: number;
+  },
 ) => {
   await openWindow(page, {
     fixture: {
-      account: ACCOUNT,
+      account: options.account === undefined ? ACCOUNT : options.account,
       // On for every page, so each one is checked with the Activity and
       // Dictation pages in the sidebar.
       activity: ACTIVITY_SETTINGS,
@@ -289,14 +336,17 @@ export const openSettingsWindow = async (
     path: `/#${tab}`,
     platform: options.platform,
     scheme: options.scheme,
-    size: DESKTOP_WINDOW_SIZES.settings,
+    size: {
+      ...DESKTOP_WINDOW_SIZES.settings,
+      width: options.width ?? DESKTOP_WINDOW_SIZES.settings.width,
+    },
     windowLabel: "main",
   });
   await expect(
     page.locator(`[data-slot=settings-page][data-page=${tab}]`),
   ).toBeVisible();
   // Every page reads its data from the native side before it settles.
-  if (tab === "general") {
+  if (tab === "general" && options.account === undefined) {
     await expect(page.getByText(ACCOUNT.account.email)).toBeVisible();
     await expect(page.getByRole("switch").first()).toBeVisible();
   }
@@ -487,7 +537,18 @@ export const windowGeometryViolations = async (page: Page, inset: number) =>
       }
       const range = document.createRange();
       range.selectNodeContents(node);
-      check(range.getBoundingClientRect(), owner, `text ${label(node)}`);
+      // Text that ends in an ellipsis is cut on purpose, by its own box:
+      // what a reader sees is that box.
+      const ownerStyle = getComputedStyle(owner);
+      const ellipsized =
+        ownerStyle.textOverflow === "ellipsis" && clips(ownerStyle, "x");
+      check(
+        ellipsized
+          ? owner.getBoundingClientRect()
+          : range.getBoundingClientRect(),
+        owner,
+        `text ${label(node)}`,
+      );
     }
     for (const control of document.querySelectorAll(
       "button, input, img, svg, [role=switch], [role=checkbox], [role=combobox], [role=tab]",

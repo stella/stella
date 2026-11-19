@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Abrindo no Office",
     "sessionSavingDraft": "Salvando rascunho",
     "reconnectAccount": "Reconectar ao stella web…",
-    "transcribeRecording": "Transcrever uma gravação…"
+    "transcribeRecording": "Transcrever uma gravação…",
+    "dictation": "Ditado",
+    "dictationHint": "Segure {key} para ditar",
+    "dictationSettings": "Configurações de ditado…",
+    "dictationTurnOn": "Ativar o ditado…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: as alterações permanecem locais e serão reenviadas automaticamente",
@@ -693,6 +697,16 @@
       "description": "Converte em texto um arquivo de gravador, um memorando de voz ou a gravação de uma reunião de até 4 horas.",
       "open": "Abrir",
       "failed": "Não foi possível abrir a janela. Tente novamente."
+    },
+    "notice": {
+      "title": "A stella não consegue ouvir seu microfone",
+      "allowBody": "Permita o acesso ao microfone e tente de novo.",
+      "checkBodyMac": "Verifique o acesso ao microfone nos Ajustes do Sistema e tente de novo.",
+      "checkBodyPc": "Verifique o acesso ao microfone nas Configurações do Windows e tente de novo.",
+      "allow": "Permitir microfone",
+      "openSettingsMac": "Abrir Ajustes do Sistema",
+      "openSettingsPc": "Abrir Configurações",
+      "dismiss": "Fechar"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "Configure este computador",
     "permissionsBody": "Cada permissão é escolha sua. Você pode alterá-las depois nas Configurações.",
     "neverRequested": "Nunca solicitado:",
-    "tryTitle": "Experimente agora",
-    "tryBody": "Copie qualquer texto e pressione {shortcut}.",
+    "tryTitle": "Experimente o histórico da área de transferência",
+    "tryBody": "Copie qualquer texto e pressione {shortcut} para abrir o histórico da área de transferência.",
     "tryWaiting": "Aguardando o atalho",
     "tryKeepGoing": "Continue…",
     "tryExtraModifier": "Isso é {pressed}. Use {shortcut}.",

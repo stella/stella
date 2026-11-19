@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
     "sessionSavingDraft": "حفظ المسودة",
     "reconnectAccount": "إعادة الاتصال بـ stella web…",
-    "transcribeRecording": "تحويل تسجيل إلى نص…"
+    "transcribeRecording": "تحويل تسجيل إلى نص…",
+    "dictation": "الإملاء",
+    "dictationHint": "اضغط مع الاستمرار على {key} للإملاء",
+    "dictationSettings": "إعدادات الإملاء…",
+    "dictationTurnOn": "تشغيل الإملاء…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
@@ -693,6 +697,16 @@
       "description": "يحوّل ملف جهاز إملاء أو مذكرة صوتية أو تسجيل اجتماع حتى 4 ساعات إلى نص.",
       "open": "فتح",
       "failed": "تعذّر فتح النافذة. حاول مرة أخرى."
+    },
+    "notice": {
+      "title": "تعذّر على stella سماع الميكروفون",
+      "allowBody": "اسمح بالوصول إلى الميكروفون، ثم حاول مرة أخرى.",
+      "checkBodyMac": "تحقق من الوصول إلى الميكروفون في إعدادات النظام، ثم حاول مرة أخرى.",
+      "checkBodyPc": "تحقق من الوصول إلى الميكروفون في إعدادات Windows، ثم حاول مرة أخرى.",
+      "allow": "السماح بالميكروفون",
+      "openSettingsMac": "فتح إعدادات النظام",
+      "openSettingsPc": "فتح الإعدادات",
+      "dismiss": "إغلاق"
     }
   },
   "shortcut": {
@@ -792,8 +806,8 @@
     "permissionsTitlePc": "إعداد هذا الحاسوب",
     "permissionsBody": "كل إذن خيارك. يمكنك تغييرها لاحقاً في الإعدادات.",
     "neverRequested": "لا يُطلب أبداً:",
-    "tryTitle": "جرّبه الآن",
-    "tryBody": "انسخ أي نص، ثم اضغط {shortcut}.",
+    "tryTitle": "جرّب سجل الحافظة",
+    "tryBody": "انسخ أي نص، ثم اضغط {shortcut} لفتح سجل الحافظة.",
     "tryWaiting": "في انتظار الاختصار",
     "tryKeepGoing": "تابع…",
     "tryExtraModifier": "هذا {pressed}. استخدم {shortcut}.",
