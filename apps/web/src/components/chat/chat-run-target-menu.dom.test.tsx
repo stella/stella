@@ -264,7 +264,11 @@ const openEfforts = async (view: ReturnType<typeof render>, shown: string) => {
     }
     return found;
   });
-  fireEvent.click(trigger);
+  // Choosing an effort keeps its menu open, and activating an open
+  // submenu's trigger closes it: open it only when it is closed.
+  if (!Object.hasOwn(trigger.dataset, "popupOpen")) {
+    fireEvent.click(trigger);
+  }
   return await waitFor(() => {
     const menus = view.getAllByRole("menu");
     const submenu = menus.at(-1);
