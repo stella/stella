@@ -12,6 +12,8 @@ use crate::SystemAudioError;
 
 /// Frames decoded per read: about a second at common rates.
 const BLOCK_FRAMES: u32 = 32_768;
+/// How far short of its estimated length a compressed file may end.
+const END_ESTIMATE_SLACK_SECONDS: i64 = 2;
 
 /// A recording open for reading through AVFoundation.
 pub struct SystemAudioReader {
@@ -85,13 +87,19 @@ impl SystemAudioReader {
       return Ok(false);
     }
     // SAFETY: the buffer was made with the file's processing format.
-    if unsafe { self.file.readIntoBuffer_error(&self.buffer) }.is_err() {
+    if let Err(error) = unsafe { self.file.readIntoBuffer_error(&self.buffer) } {
       // A compressed file's length is an estimate (an AMR file's runs a few
-      // packets long), so a read that fails in its last stretch is its end.
+      // packets long), so a decoder failure within its last seconds is its
+      // end. A failure earlier than that, or one reading the file itself,
+      // is an error: the rest of the recording would be lost unnoticed.
+      let domain = error.domain().to_string();
+      if domain == "NSPOSIXErrorDomain" || domain == "NSCocoaErrorDomain" {
+        return Err(SystemAudioError::Unreadable);
+      }
       // SAFETY: reads the open file's position and length.
       let (position, length) =
         unsafe { (self.file.framePosition(), self.file.length()) };
-      let slack = (length / 20).max(i64::from(self.rate));
+      let slack = i64::from(self.rate).saturating_mul(END_ESTIMATE_SLACK_SECONDS);
       if position > 0 && length - position <= slack {
         return Ok(false);
       }

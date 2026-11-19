@@ -6,7 +6,10 @@ use opus_decoder::OpusDecoder;
 use symphonia::core::{
   codecs::{
     CodecParameters,
-    audio::{AudioDecoder, AudioDecoderOptions, well_known::CODEC_ID_OPUS},
+    audio::{
+      AudioCodecParameters, AudioDecoder, AudioDecoderOptions,
+      well_known::CODEC_ID_OPUS,
+    },
   },
   errors::Error as SymphoniaError,
   formats::{FormatOptions, FormatReader, TrackType, probe::Hint},
@@ -20,6 +23,10 @@ const OPUS_RATE: u32 = crate::PIECE_SAMPLE_RATE;
 const OPUS_MAX_FRAME: usize = 1_920;
 /// A stream this damaged is not worth decoding on.
 const MAX_SKIPPED_PACKETS: usize = 1_000;
+/// The highest rate a recording may declare. Real recorders stop at 384 kHz;
+/// a header claiming more is damaged, and resampling from it would allocate
+/// a filter table far larger than the audio.
+const MAX_SAMPLE_RATE: u32 = 384_000;
 
 /// Why a recording could not be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,6 +133,12 @@ impl SymphoniaSource {
         Some(frames * 1_000 / u64::from(rate))
       });
     let (codec, rate) = if params.codec == CODEC_ID_OPUS {
+      if !is_single_stream_opus(params) {
+        // A multistream (surround) Opus recording needs its channel mapping,
+        // which this decoder does not apply; refusing here lets the system
+        // decoder try it instead.
+        return Err(DecodeError::Unsupported);
+      }
       let decoder =
         OpusDecoder::new(OPUS_RATE, 1).map_err(|_error| DecodeError::Unreadable)?;
       (
@@ -135,7 +148,7 @@ impl SymphoniaSource {
     } else {
       let rate = params
         .sample_rate
-        .filter(|rate| *rate > 0)
+        .filter(|rate| (1..=MAX_SAMPLE_RATE).contains(rate))
         .ok_or(DecodeError::Unsupported)?;
       let decoder = symphonia::default::get_codecs()
         .make_audio_decoder(params, &AudioDecoderOptions::default())?;
@@ -160,6 +173,23 @@ impl SymphoniaSource {
       return Err(DecodeError::Unreadable);
     }
     Ok(())
+  }
+}
+
+/// Whether an Opus track is one elementary stream (mono or stereo), which
+/// the decoder reads directly. The identification header (RFC 7845 §5.1)
+/// gives the mapping family at byte 18 and, past family 0, the stream count
+/// at byte 19; without it, more than two channels means several streams.
+fn is_single_stream_opus(params: &AudioCodecParameters) -> bool {
+  match params.extra_data.as_deref() {
+    Some(head) if head.len() >= 19 => match head[18] {
+      0 => true,
+      _ => head.get(19) == Some(&1),
+    },
+    _ => params
+      .channels
+      .as_ref()
+      .is_none_or(|channels| channels.count() <= 2),
   }
 }
 
@@ -270,6 +300,36 @@ mod tests {
     let mut out = Vec::new();
     while source.read(&mut out).unwrap() {}
     out
+  }
+
+  #[test]
+  fn a_rate_past_any_recorder_is_refused() {
+    let bytes = wav(&[0.0; 64], 1_000_000, 1);
+    assert_eq!(source(bytes).err(), Some(DecodeError::Unsupported));
+  }
+
+  /// An Opus identification header with `family`, `channels` and `streams`.
+  fn opus_head(family: u8, channels: u8, streams: u8) -> AudioCodecParameters {
+    let mut head = b"OpusHead".to_vec();
+    head.extend_from_slice(&[1, channels, 0, 0, 0x80, 0x3e, 0, 0, 0, 0, family]);
+    if family != 0 {
+      head.extend_from_slice(&[streams, 0]);
+      head.extend(0..channels);
+    }
+    let mut params = AudioCodecParameters::new();
+    params.with_extra_data(head.into_boxed_slice());
+    params
+  }
+
+  #[test]
+  fn only_single_stream_opus_goes_to_the_opus_decoder() {
+    assert!(is_single_stream_opus(&opus_head(0, 2, 1)));
+    assert!(is_single_stream_opus(&opus_head(1, 2, 1)));
+    assert!(!is_single_stream_opus(&opus_head(1, 6, 4)));
+    let mut surround = AudioCodecParameters::new();
+    surround.with_channels(symphonia::core::audio::Channels::Discrete(6));
+    assert!(!is_single_stream_opus(&surround));
+    assert!(is_single_stream_opus(&AudioCodecParameters::new()));
   }
 
   #[test]
