@@ -117,7 +117,7 @@ const nullableString = v.nullable(v.string());
 export const storedCzNsCollectionEntrySchema = v.object({
   postId: v.string(),
   title: v.string(),
-  reportEdition: v.optional(reportEditionSchema),
+  reportEdition: v.exactOptional(reportEditionSchema),
   kind: nullableString,
   part: v.nullable(v.picklist(CZ_NS_COLLECTION_PARTS)),
   number: nullableString,
