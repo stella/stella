@@ -1757,9 +1757,22 @@ const physicalAdvisoryKey = (row: unknown): string => {
 /** Blocking acquisitions ascend; explicit nonblocking requests retain the high-water on success. */
 export const withAggregateLock = async (
   options: AggregateLockOptions,
+): Promise<AggregateLockResult> => await acquireAggregateLock(options);
+
+/**
+ * `alongside` is one further blocking transaction-scoped advisory lock this
+ * module owns, evaluated in the same statement right after the aggregate's
+ * own lock, so a pair that is always taken together costs one round trip.
+ */
+const acquireAggregateLock = async (
+  options: AggregateLockOptions,
+  alongside?: SQL,
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
   const wait = options.wait ?? "block";
+  if (alongside !== undefined && wait !== "block") {
+    return panic("A companion advisory lock only blocks");
+  }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   if (!isRowLockOptions(options)) {
@@ -1801,6 +1814,9 @@ export const withAggregateLock = async (
     ) {
       history.aliases.set(logicalKey, key);
       retainReservation(history, lock);
+      if (alongside !== undefined) {
+        await tx.execute(sql`SELECT ${alongside}`);
+      }
       return { status: "locked" };
     }
     if (
@@ -1835,7 +1851,9 @@ export const withAggregateLock = async (
     history.status = "acquiring";
     const rows = executedRows(
       await tx.execute(
-        sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`,
+        alongside === undefined
+          ? sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired`
+          : sql`SELECT ${resource.first} AS key1, ${resource.second} AS key2, ${statements[mode][wait]} AS acquired, ${alongside} AS alongside`,
       ),
     );
     const row = rows.at(0);
@@ -1854,6 +1872,9 @@ export const withAggregateLock = async (
     }
     completeAcquisition(history);
     return acquired ? { status: "locked" } : busy(aggregate);
+  }
+  if (alongside !== undefined) {
+    return panic("A companion advisory lock accompanies an advisory aggregate");
   }
   const mode = options.mode;
   const lock = rowLock(options, mode);
@@ -3578,17 +3599,37 @@ export const lockTimerMatterAccessRows = async ({
  * other during a rolling deploy. Retire it once no running API build predates
  * the registered fence.
  */
-export const lockLegacyOrganizationObjectIntentKey = async (
+const legacyOrganizationObjectIntentLock = (
+  organizationId: SafeId<"organization">,
+  mode: AdvisoryLockMode,
+): SQL => {
+  const key = organizationObjectIntentLockKey(organizationId);
+  return mode === "shared"
+    ? sql`pg_advisory_xact_lock_shared(hashtext(${key}))`
+    : sql`pg_advisory_xact_lock(hashtext(${key}))`;
+};
+
+/**
+ * Take the organization's object-intent fence: the registered aggregate lock,
+ * then the previous build's one-key lock in the same mode, in one statement.
+ */
+export const lockOrganizationObjectIntentFence = async (
   tx: ExecuteTransaction,
   organizationId: SafeId<"organization">,
-  mode: "shared" | "exclusive",
+  mode: AdvisoryLockMode,
 ): Promise<void> => {
-  const key = organizationObjectIntentLockKey(organizationId);
-  await tx.execute(
-    mode === "shared"
-      ? sql`SELECT pg_advisory_xact_lock_shared(hashtext(${key}))`
-      : sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`,
+  const result = await acquireAggregateLock(
+    {
+      aggregate: "organizationObjectIntent",
+      id: organizationId,
+      mode,
+      tx,
+    },
+    legacyOrganizationObjectIntentLock(organizationId, mode),
   );
+  if (result.status !== "locked") {
+    return panic("Organization object-intent fence was not acquired");
+  }
 };
 
 type LockCaseLawSourceIngestionLeaseOptions = {
@@ -4075,16 +4116,7 @@ export const lockOrganizationObjectIntentsForLifecycle = async (
   if (lifecycleLockedOrganizations.get(tx)?.has(organizationId) === true) {
     return;
   }
-  const result = await withAggregateLock({
-    aggregate: "organizationObjectIntent",
-    id: organizationId,
-    mode: "exclusive",
-    tx,
-  });
-  if (result.status !== "locked") {
-    return panic("Organization object-intent lifecycle fence was not acquired");
-  }
-  await lockLegacyOrganizationObjectIntentKey(tx, organizationId, "exclusive");
+  await lockOrganizationObjectIntentFence(tx, organizationId, "exclusive");
   noteLifecycleLock(tx, organizationId);
 };
 

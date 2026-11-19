@@ -107,13 +107,25 @@ beforeEach(() => {
 /** Advisory lock statements return the physical key the lock owner checks. */
 const advisoryLockRows = (statement: SQL) => {
   const query = new PgDialect().sqlToQuery(statement);
-  if (query.sql.includes("AS key1")) {
+  // The previous build's one-key fence, still taken during a rolling deploy:
+  // it rides in the registered lock's statement, evaluated after that lock.
+  if (query.params.includes(`buffer-object:${organizationId}`)) {
+    const legacy =
+      /(pg_advisory_xact_lock(?:_shared)?)\(hashtext\(\$\d+\)\) AS alongside/u.exec(
+        query.sql,
+      );
+    const afterRegistered =
+      query.sql.includes("AS key1") &&
+      query.sql.indexOf("AS acquired") < query.sql.indexOf("AS alongside");
+    legacyFenceLocks.push(
+      legacy?.[1] !== undefined && afterRegistered
+        ? `${legacy[1]} after the registered lock`
+        : query.sql,
+    );
     return aggregateExecutionRows(statement);
   }
-  // The previous build's one-key fence, still taken during a rolling deploy.
-  if (query.params.includes(`buffer-object:${organizationId}`)) {
-    legacyFenceLocks.push(query.sql);
-    return [];
+  if (query.sql.includes("AS key1")) {
+    return aggregateExecutionRows(statement);
   }
   return null;
 };
@@ -226,7 +238,7 @@ test("reserves multi-workspace ownership under one ordered lock", async () => {
   // one ordered read.
   expect(lockQueries).toBe(0);
   expect(legacyFenceLocks).toEqual([
-    "SELECT pg_advisory_xact_lock_shared(hashtext($1))",
+    "pg_advisory_xact_lock_shared after the registered lock",
   ]);
   expect(matterLocks).toEqual(["share"]);
   expect(insertedRows).toEqual([
@@ -294,15 +306,15 @@ test("reserves several objects in one transaction, each under every owner", asyn
   if (Result.isError(result)) {
     throw result.error;
   }
-  // One transaction, one organization fence (the registered lock and the
-  // previous build's key), one check and one insert for both objects.
+  // One transaction, one organization fence statement (the registered lock
+  // and the previous build's key), one check and one insert for both objects.
   expect({ transactions, advisoryLocks, workspaceReads }).toEqual({
     transactions: 1,
-    advisoryLocks: 2,
+    advisoryLocks: 1,
     workspaceReads: 1,
   });
   expect(legacyFenceLocks).toEqual([
-    "SELECT pg_advisory_xact_lock_shared(hashtext($1))",
+    "pg_advisory_xact_lock_shared after the registered lock",
   ]);
   expect(inserts).toHaveLength(1);
   const rows = inserts[0] ?? [];

@@ -1,15 +1,10 @@
-import { panic } from "better-result";
-
 import type { Transaction } from "@/api/db/root";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  lockLegacyOrganizationObjectIntentKey,
-  withAggregateLock,
-} from "@/api/lib/db/aggregate-lock";
+import { lockOrganizationObjectIntentFence } from "@/api/lib/db/aggregate-lock";
 
 // Production CopyObject calls abort after 30 seconds. Renewal before and after
 // every bounded storage batch keeps the live-writer lease far beyond that
@@ -48,14 +43,5 @@ export const lockOrganizationObjectIntentsForWriter = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  const result = await withAggregateLock({
-    aggregate: "organizationObjectIntent",
-    id: organizationId,
-    mode: "shared",
-    tx,
-  });
-  if (result.status !== "locked") {
-    return panic("Organization object-intent writer fence was not acquired");
-  }
-  await lockLegacyOrganizationObjectIntentKey(tx, organizationId, "shared");
+  await lockOrganizationObjectIntentFence(tx, organizationId, "shared");
 };
