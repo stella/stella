@@ -213,7 +213,7 @@ describe("save_skill_package", () => {
             ? diagnostic.type
             : null,
         )
-        .toSorted(),
+        .toSorted((left, right) => (String(left) < String(right) ? -1 : 1)),
     ).toEqual(["name_invalid", "resource_duplicate"]);
     expect(await storedResources(skillId)).toEqual(before);
     const [row] = await testDb

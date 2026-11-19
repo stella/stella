@@ -55,7 +55,7 @@ describe("renderSkillFile", () => {
     const text = fc.string({ maxLength: 40 });
     const nonBlank = text.filter((value) => value.trim().length > 0);
     assertProperty(
-      "a rendered SKILL.md parses back to its stored columns",
+      "reads back to the columns it was written from",
       fc.property(
         fc.record({
           body: text.map((value) => value.trim()),

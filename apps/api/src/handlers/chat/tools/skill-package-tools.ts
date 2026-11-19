@@ -205,26 +205,20 @@ const toChatToolError = (error: HandlerError | SafeDbError): ChatToolError => {
       cause: error,
     });
   }
-  switch (error.status) {
-    case 404:
-      return new ChatToolError({
-        kind: "not-found",
-        message: `${error.message}. Pass a skillId save_skill_package returned, or omit it to make a new skill.`,
-      });
-    case 400:
-    case 403:
-    case 409:
-      return new ChatToolError({
-        kind: "invalid-input",
-        message: error.message,
-      });
-    default:
-      return new ChatToolError({
+  if (error.status === 404) {
+    return new ChatToolError({
+      kind: "not-found",
+      message: `${error.message}. Pass a skillId save_skill_package returned, or omit it to make a new skill.`,
+    });
+  }
+  // A refusal the model fixes by changing its call; anything else is ours.
+  return error.status === 400 || error.status === 403 || error.status === 409
+    ? new ChatToolError({ kind: "invalid-input", message: error.message })
+    : new ChatToolError({
         kind: "server-defect",
         message: error.message,
         cause: error,
       });
-  }
 };
 
 const unwrap = <T>(result: Result<T, HandlerError | SafeDbError>): T =>
