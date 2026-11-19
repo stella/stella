@@ -29,6 +29,7 @@
     "allow-dictation-set-share-window-title",
     "allow-dictation-set-share-text-before-cursor",
     "allow-dictation-set-language",
+    "allow-dictation-set-custom-words",
     "allow-dictation-set-destination",
     "allow-dictation-set-hold-key",
     "allow-dictation-get-cloud-models",

@@ -170,6 +170,10 @@ export const TABLE_RETENTION = {
   organization_file_usage: {
     boundedBy: "Organization-owned file accounting and deletion.",
   },
+  kept_transcript_deletions: {
+    boundedBy:
+      "One provider id per transcript still kept at the provider, deleted once the provider confirms its delete; dictation.deleteKeptTranscripts retries the rest and reports any kept past an hour.",
+  },
   hosted_customer_erasures: {
     boundedBy:
       "One reference-only intent per deleted organization, settled by the erasure task.",

@@ -1,8 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
-
 import { chatThreadOptions } from "@/features/chat/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
@@ -19,11 +16,8 @@ import {
 } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { routePresentation } from "@/routes/-route-presentation";
-import {
-  CHAT_COMPOSER_COLUMN_CLASS_NAME,
-  CHAT_READING_COLUMN_CLASS_NAME,
-} from "@/routes/_protected.chat/-components/chat-reading-column";
-import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
+import { GlobalChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread.page";
+import { ChatThreadPending } from "@/routes/_protected.chat/-components/chat-thread.pending";
 import { loadThreadOrRedirect } from "@/routes/_protected.chat/-thread-scope-redirect-boundary";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
@@ -121,76 +115,12 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
   staticData: {
     presentation: routePresentation({ type: "entity", entity: "chat" }),
   },
-  component: ThreadRoute,
+  component: GlobalChatThreadPage,
   pendingComponent: ChatThreadPending,
-  // Most threads load instantly from cache, so hold the skeleton back for
-  // 1s — it only appears when the load actually stalls, avoiding a flash
-  // between two consecutive chats.
+  // Most threads load instantly from cache, so hold the pending view back
+  // for 1s: it only appears when the load actually stalls, avoiding a flash
+  // between two consecutive chats. A cold load draws it from the first
+  // frame regardless.
   pendingMs: 1000,
   head: () => ({ meta: [{ title: pageTitle("navigation.chat") }] }),
 });
-
-function ThreadRoute() {
-  const threadId = Route.useParams({
-    select: (params) => toChatThreadId(params.threadId),
-  });
-
-  return <ChatThreadPage threadRef={{ scope: "global", threadId }} />;
-}
-
-const CHAT_SKELETON_BUBBLES = [
-  { key: "a", side: "user" },
-  { key: "b", side: "assistant" },
-  { key: "c", side: "user" },
-  { key: "d", side: "assistant" },
-] as const;
-
-// Mirrors the ChatThreadPage shell: top bar, conversation area, and the input
-// surface — so the chat structure is visible immediately instead of a logo.
-function ChatThreadPending() {
-  return (
-    <div className="flex w-full flex-1 flex-col overflow-hidden">
-      <div
-        className={cn(
-          CHAT_READING_COLUMN_CLASS_NAME,
-          "flex items-center justify-between gap-2 py-2",
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-24 rounded-md" />
-          <Skeleton className="h-8 w-32 rounded-md" />
-        </div>
-        <div className="flex items-center gap-1">
-          <Skeleton className="size-8 rounded-md" />
-          <Skeleton className="size-8 rounded-md" />
-          <Skeleton className="size-8 rounded-md" />
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          CHAT_READING_COLUMN_CLASS_NAME,
-          "flex flex-1 flex-col gap-4 overflow-hidden py-4",
-        )}
-      >
-        {CHAT_SKELETON_BUBBLES.map((bubble) =>
-          bubble.side === "user" ? (
-            <div className="flex justify-end" key={bubble.key}>
-              <Skeleton className="h-12 w-2/5 rounded-2xl" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2" key={bubble.key}>
-              <Skeleton className="h-4 w-4/5" />
-              <Skeleton className="h-4 w-3/5" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          ),
-        )}
-      </div>
-
-      <div className={cn(CHAT_COMPOSER_COLUMN_CLASS_NAME, "py-4")}>
-        <Skeleton className="mx-2 h-24 rounded-xl" />
-      </div>
-    </div>
-  );
-}

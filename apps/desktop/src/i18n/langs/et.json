@@ -658,10 +658,22 @@
     },
     "language": {
       "title": "Dikteerimise keel",
-      "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
+      "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli. Kui neid on mitu, tuntakse iga sõna ära selles keeles, milles te selle ütlete.",
       "automatic": "Automaatne",
       "automaticWith": "Automaatne ({languages})",
       "noResults": "Keeli ei leitud"
+    },
+    "customWords": {
+      "group": "Omad sõnad",
+      "title": "Sõnad ja nimed, mida stella peab õigesti kirjutama",
+      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Selle arvuti kõnemudel neid ei kasuta.",
+      "count": "{count, number} / {limit, number}",
+      "input": "Lisa sõna või nimi",
+      "add": "Lisa",
+      "remove": "Eemalda {word}",
+      "duplicate": "See sõna on juba loendis.",
+      "full": "Loendisse mahub kuni {limit, number} sõna. Uue lisamiseks eemaldage mõni.",
+      "failed": "Loendit ei õnnestunud salvestada. Proovige uuesti."
     },
     "modelNeeded": "Kõnemudel töötab selles arvutis.",
     "speechModel": "Kõnemudel",

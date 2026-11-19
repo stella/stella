@@ -29,6 +29,7 @@
 @source "../../../ui/src/components/accordion.tsx";
 @source "../../../ui/src/components/bidi-text.tsx";
 @source "../../../ui/src/components/breadcrumb.tsx";
+@source "../../../ui/src/components/button-classes.ts";
 @source "../../../ui/src/components/button.shared.ts";
 @source "../../../ui/src/components/button.tsx";
 @source "../../../ui/src/components/checkbox.tsx";

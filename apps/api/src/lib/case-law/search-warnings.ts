@@ -1,4 +1,7 @@
+import { panic } from "better-result";
+
 import type {
+  CaseLawHitOrder,
   CaseLawSearchWarning,
   CaseLawSearchWarningCode,
 } from "@stll/api-contract/search";
@@ -34,6 +37,8 @@ type CaseLawSearchWarningsOptions = {
    */
   droppedFunctionWords: readonly string[];
   partialHitCount?: number;
+  /** The order the page's hits are in, which decides how partial hits are told. */
+  hitOrder: CaseLawHitOrder;
   /** Filters the request narrowed with, empty for an unnarrowed search. */
   filters: CaseLawSearchFilterNames;
   /**
@@ -84,6 +89,7 @@ const noHitsFilteredWarning = (
 export const caseLawSearchWarnings = ({
   droppedFunctionWords,
   partialHitCount = 0,
+  hitOrder,
   filters,
   emptyResultSet,
 }: CaseLawSearchWarningsOptions): CaseLawSearchWarning[] => {
@@ -93,9 +99,10 @@ export const caseLawSearchWarnings = ({
   }
   if (partialHitCount > 0) {
     warnings.push(
-      partialMatchesAppendedWarning({
+      partialMatchesWarning({
         partial: partialHitCount,
         countsStrictSet: true,
+        order: hitOrder,
       }),
     );
   }
@@ -379,9 +386,16 @@ export const provisionScopeUnreadWarning = ({
   hint: "Repeat this search to try again, or omit queries to list every decision citing it, with pagination.",
 });
 
-export const partialMatchesAppendedWarning = ({
+/**
+ * The warning for a page that holds partial matches, chosen by where the page
+ * put them. A page that lists them after the full matches and one that ranks
+ * them among the full matches are told apart, because "appended after" read
+ * off a page in score order sends the caller to the wrong end of the list.
+ */
+export const partialMatchesWarning = ({
   partial,
   countsStrictSet,
+  order,
 }: {
   /** How many returned hits hold only some of the phrasing's words. */
   partial: number;
@@ -391,11 +405,31 @@ export const partialMatchesAppendedWarning = ({
    * uncounted and the facets describe the first phrasing only).
    */
   countsStrictSet: boolean;
-}): CaseLawSearchWarning => ({
-  code: "partial_matches_appended",
-  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did${countsStrictSet ? "; the total and facets count only the decisions holding every word" : ""}.`,
-  hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
-});
+  /** The order the page's hits are in. */
+  order: CaseLawHitOrder;
+}): CaseLawSearchWarning => {
+  const hits = `${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms"`;
+  const counted = countsStrictSet
+    ? "; the total and facets count only the decisions holding every word"
+    : "";
+  switch (order) {
+    case "all_words_first":
+      return {
+        code: "partial_matches_appended",
+        message: `Few decisions held every word, so ${hits} ${partial === 1 ? "was" : "were"} appended after the ones that did${counted}.`,
+        hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
+      };
+    case "score":
+      return {
+        code: "partial_matches_ranked",
+        message: `${hits} ${partial === 1 ? "holds" : "hold"} only some of the words and ${partial === 1 ? "is" : "are"} ranked among the decisions holding every word, by how many of the words and how rare${counted}.`,
+        hint: "Each hit's terms say which words it holds and which it lacks; pass strict: true to search only for decisions holding every word.",
+      };
+    default:
+      order satisfies never;
+      return panic("Unhandled case-law hit order");
+  }
+};
 
 /**
  * The values a facet counted for an empty page's filters, appended to its
@@ -429,7 +463,17 @@ export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
   partial_matches_appended: () =>
-    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
+    partialMatchesWarning({
+      partial: 3,
+      countsStrictSet: true,
+      order: "all_words_first",
+    }),
+  partial_matches_ranked: () =>
+    partialMatchesWarning({
+      partial: 3,
+      countsStrictSet: true,
+      order: "score",
+    }),
 } as const satisfies Record<
   CaseLawSearchWarningCode,
   () => CaseLawSearchWarning

@@ -658,10 +658,22 @@
     },
     "language": {
       "title": "Diktálás nyelve",
-      "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja.",
+      "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja. Ha több ilyen van, minden szót azon a nyelven ismer fel, amelyen kimondja.",
       "automatic": "Automatikus",
       "automaticWith": "Automatikus ({languages})",
       "noResults": "Nem található nyelv"
+    },
+    "customWords": {
+      "group": "Saját szavak",
+      "title": "Szavak és nevek, amelyeket a stella helyesen írjon",
+      "description": "Például ügyfelek nevei vagy angol kifejezések, amelyeket más nyelven beszélve használ. Ezen a számítógépen tárolódnak ehhez a fiókhoz, és csak a diktálással együtt kerülnek elküldésre: a stella AI átíráshoz és az AI-jal végzett javításhoz. A számítógép beszédmodellje nem használja őket.",
+      "count": "{count, number} / {limit, number}",
+      "input": "Szó vagy név hozzáadása",
+      "add": "Hozzáadás",
+      "remove": "{word} eltávolítása",
+      "duplicate": "Ez a szó már szerepel a listán.",
+      "full": "A lista legfeljebb {limit, number} szót tartalmazhat. Újabb hozzáadásához távolítson el egyet.",
+      "failed": "A listát nem sikerült menteni. Próbálja újra."
     },
     "modelNeeded": "A beszédmodell ezen a számítógépen fut.",
     "speechModel": "Beszédmodell",

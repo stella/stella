@@ -13,6 +13,7 @@ import {
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
@@ -116,13 +117,27 @@ const decisionText = (
 };
 
 /**
- * A candidate's label: court, kind of decision and date. One docket can
- * hold a judgment and the Advocate General's opinion on it, decided by the
- * same court, so without the kind two candidates differ only by date.
+ * Publisher identity evidence distinguishes siblings of a docket even when
+ * the court, kind and date coincide. Reporter references remain typed: a
+ * cited docket or a parallel case number is not a publication label.
  */
 const candidateLabel = (row: DecisionIdentityRow): string =>
-  [row.court, row.decisionType, row.decisionDate ?? row.caseNumber]
-    .filter((part) => part !== null && part !== "")
+  [
+    row.court,
+    row.decisionType,
+    row.senate,
+    row.decisionDate ?? row.caseNumber,
+    row.publishedCaseNumber,
+    ...new Set(
+      row.identifiers
+        .filter(
+          ({ type }) => type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        )
+        .map(({ value }) => value)
+        .toSorted(compareCodeUnit),
+    ),
+  ]
+    .filter((part) => typeof part === "string" && part !== "")
     .join(", ");
 
 /**

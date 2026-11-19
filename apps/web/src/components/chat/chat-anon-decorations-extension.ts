@@ -13,7 +13,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
  *
  * The extension doesn't run the wasm pipeline. It receives pairs
  * via `setChatAnonDecorationPairs` — the live-preview hook in
- * `chat-thread-page.tsx` is responsible for pushing them.
+ * `chat-thread.page.tsx` is responsible for pushing them.
  *
  * `update: "manual"` means the decoration manager only rebuilds
  * when `setChatAnonDecorationPairs` forces it; between rebuilds it
