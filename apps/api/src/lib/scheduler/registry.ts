@@ -170,6 +170,10 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  DELETE_KEPT_TRANSCRIPTS_TASK,
+  deleteKeptTranscripts,
+} from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
+import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   backfillLegislationExpressionIds,
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
@@ -277,6 +281,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 
 const SCHEDULER_TASKS = {
   [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
+  [DELETE_KEPT_TRANSCRIPTS_TASK]: deleteKeptTranscripts,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,

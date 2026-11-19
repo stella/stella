@@ -1010,6 +1010,8 @@
       "COMPOSER_PICKER_TRIGGER_CLASS",
       "COMPOSER_PLACEHOLDER_CLASS",
       "COMPOSER_SEND_BUTTON_CLASS",
+      "COMPOSER_STATUS_ROW_CENTERED_CLASS",
+      "COMPOSER_STATUS_ROW_CLASS",
       "COMPOSER_TEXT_CLASS",
       "ComposerPicker",
       "ComposerPlaceholder",
@@ -1029,9 +1031,22 @@
       "COMPOSER_PICKER_TRIGGER_CLASS",
       "COMPOSER_PLACEHOLDER_CLASS",
       "COMPOSER_SEND_BUTTON_CLASS",
+      "COMPOSER_STATUS_ROW_CENTERED_CLASS",
+      "COMPOSER_STATUS_ROW_CLASS",
       "COMPOSER_TEXT_CLASS"
     ],
     "./context-menu": ["ContextMenu", "ContextMenuActionItems"],
+    "./control-face": [
+      "ButtonFace",
+      "FaceLabelPending",
+      "InputFace",
+      "SPLIT_BUTTON_PRIMARY_CLASS",
+      "SPLIT_BUTTON_ROOT_CLASS",
+      "SPLIT_BUTTON_TRIGGER_CLASS",
+      "SplitButtonChevron",
+      "SplitButtonFace",
+      "buttonFaceClassName"
+    ],
     "./control-size": ["CONTROL_SIZE", "CONTROL_SIZES"],
     "./copy-button": [
       "COPIED_RESET_MS",
@@ -1606,6 +1621,16 @@
       "ListItemStatus",
       "ListItemTitle"
     ],
+    "./list-shell": [
+      "LIST_ITEM_ROW_CLASS",
+      "List",
+      "ListGroup",
+      "ListGroupHeader",
+      "ListGroupHeading",
+      "ListGroupTitle",
+      "ListGroupTitlePending",
+      "ListItemSkeleton"
+    ],
     "./loader": ["Loader", "LoaderState"],
     "./matter-colors": [
       "MATTER_SWATCHES",
@@ -2005,6 +2030,37 @@
       "plain",
       "secondary"
     ],
+    "ButtonFace.size": [
+      "chip",
+      "default",
+      "icon",
+      "icon-2xs",
+      "icon-lg",
+      "icon-round",
+      "icon-sm",
+      "icon-xl",
+      "icon-xs",
+      "inline",
+      "inspector-row",
+      "lg",
+      "sm",
+      "touch",
+      "xl",
+      "xs"
+    ],
+    "ButtonFace.variant": [
+      "composer",
+      "default",
+      "destructive",
+      "destructive-ghost",
+      "destructive-outline",
+      "ghost",
+      "link",
+      "muted",
+      "muted-destructive",
+      "outline",
+      "secondary"
+    ],
     "ButtonTextRun.layout": ["wrap"],
     "ButtonTextRun.variant": ["link", "plain"],
     "Checkbox.appearance": ["cell", "default"],
@@ -2015,7 +2071,7 @@
     "ComboboxTrigger.variant": ["field", "plain"],
     "CommandItem.size": ["default", "row"],
     "ComposerPlaceholder.stature": ["compact", "large"],
-    "CourtBadge.size": ["default", "inline"],
+    "CourtBadge.size": ["default", "inline", "prose"],
     "CourtBadge.weight": ["dashed", "outline", "solid", "tinted"],
     "DatePickerPopover.layer": [
       "chrome",
@@ -2084,7 +2140,7 @@
       "search",
       "search-child"
     ],
-    "DocumentIdentityBadge.size": ["default", "inline"],
+    "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
       "csv",
       "excel",
@@ -2126,6 +2182,7 @@
     "LandingRowIcon.tone": ["matter", "muted"],
     "ListItemDescription.variant": ["code", "paragraph", "text"],
     "ListItemMedia.variant": ["icon", "initial"],
+    "ListItemSkeleton.trailing": ["text"],
     "ListItemStatus.tone": ["destructive", "neutral", "success", "warning"],
     "ListItemTitle.variant": ["name", "statement"],
     "Loader.animation": ["none", "spin"],
@@ -2220,6 +2277,7 @@
     "SortableHead.sortDirection": ["asc", "desc"],
     "SplitButton.size": ["md", "sm"],
     "SplitButton.surface": ["menu", "popover"],
+    "SplitButtonFace.size": ["md", "sm"],
     "StatusMark.status": ["done", "failed", "pending", "running"],
     "Step.status": ["completed", "current", "upcoming"],
     "Steps.variant": ["compact", "default", "progress"],

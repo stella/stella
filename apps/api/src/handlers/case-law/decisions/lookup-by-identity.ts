@@ -197,6 +197,8 @@ export type DecisionIdentityRow = {
    * can hold several, which a list of candidates has to tell apart.
    */
   decisionType: string | null;
+  /** The publisher's designation of the deciding senate or chamber. */
+  senate?: string | null;
   /** Bounded publisher headnote or classification, where recorded. */
   subjectSummary?: string | null;
   ecli: string | null;
@@ -589,6 +591,9 @@ export const lookupDecisionsByIdentity = async ({
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
         decisionType: publishedCaseLawDecisions.decisionType,
+        senate: sql<
+          string | null
+        >`${publishedCaseLawDecisions.metadata} ->> 'senate'`,
         // The publisher's classification text goes to the model, so a
         // source that allows showing its text but not AI use returns none.
         subjectSummary: sql<

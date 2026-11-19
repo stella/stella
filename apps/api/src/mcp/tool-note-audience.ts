@@ -11,6 +11,7 @@ export const MCP_NOTE_AUDIENCE = {
   no_hits_filtered: "agent",
   collection_citation_unresolved: "agent",
   partial_matches_appended: "agent",
+  partial_matches_ranked: "agent",
   filter_read: "agent",
   filter_dropped: "agent",
   filter_unread: "agent",

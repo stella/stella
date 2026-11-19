@@ -24,6 +24,7 @@ const ENABLED_SNAPSHOT = {
   cleanup: true,
   cloudAvailable: false,
   cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: true,
   keepsInHistory: true,
@@ -1028,4 +1029,95 @@ test("a dictation refused in a password field says nothing was recorded", async 
   expect(
     getByText(defaultMessages.dictation.failure.passwordField),
   ).toBeTruthy();
+});
+
+const customWords = defaultMessages.dictation.customWords;
+
+const sentWords = (payload: unknown): string[] =>
+  typeof payload === "object" &&
+  payload !== null &&
+  "words" in payload &&
+  Array.isArray(payload.words)
+    ? payload.words.filter((word): word is string => typeof word === "string")
+    : [];
+
+test("custom words are added and removed through the native side, which answers with the stored list", async () => {
+  const calls: unknown[] = [];
+  const { findByRole, getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (command, payload) => {
+      if (command !== "dictation_set_custom_words") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, customWords: sentWords(payload) };
+    },
+  );
+  const input = getByRole("textbox", { name: customWords.input });
+
+  fireEvent.change(input, { target: { value: "  custom terms list " } });
+  await act(async () => {
+    fireEvent.click(getByRole("button", { name: customWords.add }));
+  });
+
+  const remove = await findByRole("button", {
+    name: customWords.remove.replace("{word}", "custom terms list"),
+  });
+  expect(calls).toEqual([{ words: ["custom terms list"] }]);
+  expect(input instanceof HTMLInputElement && input.value).toBe("");
+  expect(input.getAttribute("maxlength")).toBe("100");
+
+  await act(async () => {
+    fireEvent.click(remove);
+  });
+
+  expect(calls.at(-1)).toEqual({ words: [] });
+});
+
+test("a custom word already listed, whatever its case, is not sent again", async () => {
+  const calls: unknown[] = [];
+  const { findByRole, getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, customWords: ["Libeňská"] },
+    (command, payload) => {
+      if (command === "dictation_set_custom_words") {
+        calls.push(payload);
+      }
+      return undefined;
+    },
+  );
+
+  fireEvent.change(getByRole("textbox", { name: customWords.input }), {
+    target: { value: "libeňská" },
+  });
+  await act(async () => {
+    fireEvent.click(getByRole("button", { name: customWords.add }));
+  });
+
+  expect((await findByRole("alert")).textContent).toBe(customWords.duplicate);
+  expect(calls).toEqual([]);
+});
+
+test("a full list of custom words takes no more", async () => {
+  const full = Array.from({ length: 100 }, (_unused, index) => `w${index}`);
+  const { getByRole } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    customWords: full,
+  });
+
+  fireEvent.change(getByRole("textbox", { name: customWords.input }), {
+    target: { value: "one more" },
+  });
+
+  expect(
+    getByRole("button", { name: customWords.add }).hasAttribute("disabled"),
+  ).toBe(true);
+});
+
+test("custom words are offered only while stella AI transcribes or cleanup runs", async () => {
+  const { queryByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    cleanup: false,
+  });
+
+  expect(queryByText(customWords.title)).toBeNull();
 });

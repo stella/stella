@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Diktēšanas valoda",
-      "description": "Automātiski izmanto šī datora displeja un tastatūru valodas.",
+      "description": "Automātiski izmanto šī datora displeja un tastatūru valodas. Ja to ir vairākas, katrs vārds tiek atpazīts tajā valodā, kurā to izrunājat.",
       "automatic": "Automātiski",
       "automaticWith": "Automātiski ({languages})",
       "noResults": "Valodas netika atrastas"
+    },
+    "customWords": {
+      "group": "Savi vārdi",
+      "title": "Vārdi un nosaukumi, kas stella jāraksta pareizi",
+      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Šī datora runas modelis tos neizmanto.",
+      "count": "{count, number} no {limit, number}",
+      "input": "Pievienot vārdu vai nosaukumu",
+      "add": "Pievienot",
+      "remove": "Noņemt {word}",
+      "duplicate": "Šis vārds jau ir sarakstā.",
+      "full": "Sarakstā var būt ne vairāk kā {limit, number} vārdi. Lai pievienotu citu, noņemiet kādu.",
+      "failed": "Sarakstu neizdevās saglabāt. Mēģiniet vēlreiz."
     },
     "modelNeeded": "Runas modelis darbojas šajā datorā.",
     "speechModel": "Runas modelis",

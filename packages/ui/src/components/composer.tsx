@@ -4,7 +4,11 @@ import type { ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { COMPOSER_PLACEHOLDER_CLASS } from "./composer-tokens";
+import {
+  COMPOSER_PLACEHOLDER_CLASS,
+  COMPOSER_STATUS_ROW_CENTERED_CLASS,
+  COMPOSER_STATUS_ROW_CLASS,
+} from "./composer-tokens";
 import {
   Menu,
   MenuPopup,
@@ -29,6 +33,8 @@ export {
   COMPOSER_LEADING_GROUP_CLASS,
   COMPOSER_SEND_BUTTON_CLASS,
   COMPOSER_PICKER_TRIGGER_CLASS,
+  COMPOSER_STATUS_ROW_CENTERED_CLASS,
+  COMPOSER_STATUS_ROW_CLASS,
 } from "./composer-tokens";
 
 /** Where the placeholder sits over the editor, in each stature. */
@@ -94,12 +100,7 @@ export const ComposerStatusRow = ({
 
   if (center !== undefined) {
     return (
-      <div
-        className={cn(
-          "text-muted-foreground @container mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-1 text-xs",
-          className,
-        )}
-      >
+      <div className={cn(COMPOSER_STATUS_ROW_CENTERED_CLASS, className)}>
         <div className="flex min-w-0 items-center">{start}</div>
         <div className="flex items-center justify-center">{center}</div>
         <div className="flex min-w-0 items-center justify-end">{end}</div>
@@ -108,12 +109,7 @@ export const ComposerStatusRow = ({
   }
 
   return (
-    <div
-      className={cn(
-        "text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs",
-        className,
-      )}
-    >
+    <div className={cn(COMPOSER_STATUS_ROW_CLASS, className)}>
       {start}
       {end !== undefined && <div className="ms-auto">{end}</div>}
     </div>

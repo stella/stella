@@ -339,7 +339,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.100.0
           targets: ${{ matrix.rust_targets }}
 
       # The locked crates for every target download once, retried as a unit;

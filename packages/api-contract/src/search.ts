@@ -208,7 +208,11 @@ export const countedSearchTotal = (
  *   rather than subject matter, and did not require them. The response's
  *   `queryUsed` is what it did require.
  * - `partial_matches_appended`: some hits match only part of the required
- *   terms; each hit carries its own match classification.
+ *   terms, and the page lists them after every hit that matches all of them
+ *   (`all_words_first`); each hit carries its own match classification.
+ * - `partial_matches_ranked`: some hits match only part of the required
+ *   terms, and the page ranks them among the full matches by score
+ *   (`score`); each hit carries its own match classification.
  * - `no_hits`: nothing matched the words the query required.
  * - `no_hits_filtered`: nothing matched under the filters the request
  *   narrowed with, which is a different answer from `no_hits` because the
@@ -219,6 +223,7 @@ export const countedSearchTotal = (
 export const CASE_LAW_SEARCH_WARNING_CODES = [
   "function_words_optional",
   "partial_matches_appended",
+  "partial_matches_ranked",
   "no_hits",
   "no_hits_filtered",
   "collection_citation_unresolved",
