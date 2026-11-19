@@ -515,8 +515,7 @@ export type CorpusProjectionRevisionBlock = {
   decisionTerms: CorpusProjectionDecisionTermsWritten;
 };
 
-export type CorpusProjectionDecisionTermsWritten =
-  "not_mapped" | "whole" | "prefix";
+type CorpusProjectionDecisionTermsWritten = "not_mapped" | "whole" | "prefix";
 
 /** Read off the documents as the engine receives them: the opening carries the mark. */
 const decisionTermsWritten = (
