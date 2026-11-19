@@ -235,9 +235,15 @@ describe("a decision whose decision field the projection cut", () => {
     expect(plan.partialQuery).toBe(
       "is_opening:true AND decision_terms_partial:true",
     );
-    expect(plan.passageWordQuery(1)).toBe(
-      `("hypotéka" OR text_stem:"${stemLegalTerm("hypotéka", "cs")}")`,
-    );
+    // Under every language Czech decisions are declared in.
+    const leaves = [
+      ...new Set([
+        '"hypotéka"',
+        `text_stem:"${stemLegalTerm("hypotéka", "cs")}"`,
+        `text_stem:"${stemLegalTerm("hypotéka", "en")}"`,
+      ]),
+    ];
+    expect(plan.passageWordQuery(1)).toBe(`(${leaves.join(" OR ")})`);
     // Not scoped to the opening passage: the cut words are on the others.
     expect(plan.passageWordQuery(1)).not.toContain("is_opening");
   });
