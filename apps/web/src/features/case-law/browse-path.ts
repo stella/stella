@@ -195,8 +195,13 @@ export const caseLawBrowseDateRange = (
  * the web app's path aliases.
  */
 type Formatter = {
-  dateTime: (value: number, options: Intl.DateTimeFormatOptions) => string;
+  dateTime: (value: number, options: CaseLawBrowsePeriodFormat) => string;
 };
+
+/** The two ways a period is named: a month with its year, or a whole day. */
+type CaseLawBrowsePeriodFormat =
+  | { month: "long"; timeZone: "UTC"; year: "numeric" }
+  | { dateStyle: "long"; timeZone: "UTC" };
 
 /** A calendar day as the instant its UTC midnight is, for the formatter. */
 const utcDay = (year: number, month: number, day = 1): number =>

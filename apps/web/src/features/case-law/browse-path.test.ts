@@ -13,7 +13,7 @@ const court = "nejvyssi-soud";
 
 const hub = "/law/cze/courts/nejvyssi-soud";
 
-const targets: [CaseLawBrowseTarget, string][] = [
+const targets: [CaseLawBrowseTarget, `/law/${string}`][] = [
   [{ level: "court", court }, hub],
   [{ level: "year", court, year: 2023 }, `${hub}/2023`],
   [{ level: "month", court, year: 2023, month: 5, page: 1 }, `${hub}/2023/05`],
