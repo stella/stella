@@ -614,6 +614,7 @@
     "descriptionCloud": "Maintenez {shortcut} et parlez. Le texte apparaît dans l’application que vous utilisez. La parole est transcrite par stella AI et n’est pas conservée par stella.",
     "lede": "Maintenez <key>{shortcut}</key> et parlez. Le texte apparaît là où vous écrivez.",
     "groups": {
+      "shortcut": "Raccourci",
       "transcription": "Transcription",
       "cleanup": "Correction",
       "thisComputer": "Sur cet ordinateur"
@@ -667,6 +668,13 @@
     "downloadFailed": "Le modèle vocal n'a pas pu être téléchargé.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Une autre application utilise {shortcut}.",
+    "holdKey": {
+      "title": "Touche à maintenir",
+      "description": "Maintenez-la seule pour dicter. Un appui bref ou un raccourci qui l'utilise ne fait rien.",
+      "right": "{key} droite",
+      "waiting": "stella détecte {shortcut} dès qu'il a accès à l'Accessibilité.",
+      "unavailable": "stella ne peut pas détecter {shortcut} sur cet ordinateur. Choisissez une autre touche."
+    },
     "failure": {
       "accessibility": "Autorisez l'accès Accessibilité pour que stella puisse écrire dans d'autres applications.",
       "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
@@ -675,6 +683,7 @@
       "focusChanged": "Vous êtes passé à une autre application avant que le texte soit prêt, rien n’a donc été saisi. Réessayez.",
       "focusUnconfirmed": "stella n’a pas pu confirmer quelle application est au premier plan, rien n’a donc été saisi. Réessayez.",
       "shortcutHeld": "Relâchez les touches du raccourci pour saisir le texte. Rien n’a été saisi ; réessayez.",
+      "passwordField": "Un champ de mot de passe est actif : la dictée n'a été ni conservée ni saisie.",
       "cloudTranscription": "stella AI n’a pas pu transcrire cette dictée et le modèle vocal n’est pas sur cet ordinateur. Réessayez, ou choisissez « Cet ordinateur » pour « Transcrire avec » et téléchargez le modèle."
     },
     "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers."
@@ -817,6 +826,7 @@
       "screenRecording": "Enregistrement de l'écran",
       "camera": "Caméra",
       "keystrokes": "Frappes au clavier",
+      "keystrokesWithoutHoldKey": "Frappes au clavier, sauf si vous choisissez une touche à maintenir",
       "fullDiskAccess": "Accès complet au disque",
       "administrator": "Droits d'administrateur"
     }

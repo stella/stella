@@ -17,7 +17,7 @@ import {
   usePublicLawTableLayout,
 } from "@/components/public-law-table/use-public-law-table-layout";
 import type { TableFindColumnRow } from "@/components/workspaces/table/table-find-bar";
-import { StatuteColumnIcon } from "@/features/statutes/components/statute-table";
+import { StatuteColumnIcon } from "@/features/statutes/components/statute-table.pending";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_COLUMN_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
 import {

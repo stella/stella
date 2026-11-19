@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { Switch } from "@stll/ui/switch";
 import { Text } from "@stll/ui/text";
 
+import { DictationSetting } from "@/components/dictation-setting";
 import { screenStyles } from "@/components/empty-state-screen";
 import { accountPageUrl } from "@/connection/account-page";
 import type { StoredSession } from "@/connection/session";
@@ -49,6 +50,13 @@ const SettingsScreen = () => {
       {TIMER_ACTIVITY_PUSH && session !== null ? (
         <TimerDetailsSetting key={session.signInId} session={session} />
       ) : null}
+      {session === null || state.status !== "signed-in" ? null : (
+        <DictationSetting
+          key={session.signInId}
+          session={session}
+          source={state.source}
+        />
+      )}
       {session === null ? null : (
         <View className="gap-2">
           <Button

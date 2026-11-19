@@ -8,6 +8,7 @@ import type { RequestClass } from "@/api/lib/observability/request-metrics";
 // latency SLO. Stream setup does not measure the duration of the stream.
 export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/dictation/transcribe": "ai",
+  "POST /v1/dictation/cleanup": "ai",
   "DELETE /mcp": "search",
   "DELETE /v1/contacts": "batch",
   "DELETE /mcp-anonymized": "search",
@@ -212,6 +213,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/desktop/presence": "crud",
   "GET /v1/desktop/runner": "stream",
   "GET /v1/dev/public-law-connection": "crud",
+  "GET /v1/dictation/models": "crud",
   "GET /v1/dev/seed": "crud",
   "GET /v1/dev/seed-firm-knowledge": "crud",
   "GET /v1/document-types": "crud",

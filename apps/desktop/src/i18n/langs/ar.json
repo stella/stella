@@ -614,6 +614,7 @@
     "descriptionCloud": "اضغط مع الاستمرار على {shortcut} وتحدّث. يظهر النص في التطبيق الذي تستخدمه. يحوّل stella AI الكلام إلى نص ولا تحتفظ به stella.",
     "lede": "اضغط باستمرار على <key>{shortcut}</key> وتحدث. يظهر النص حيث تكتب.",
     "groups": {
+      "shortcut": "الاختصار",
       "transcription": "التحويل إلى نص",
       "cleanup": "التنقيح",
       "thisComputer": "على هذا الكمبيوتر"
@@ -667,6 +668,13 @@
     "downloadFailed": "تعذّر تنزيل نموذج الكلام.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "يستخدم تطبيق آخر {shortcut}.",
+    "holdKey": {
+      "title": "المفتاح الذي تضغط عليه",
+      "description": "اضغط عليه وحده باستمرار للإملاء. النقرة القصيرة أو اختصار يستخدمه لا يفعل شيئًا.",
+      "right": "{key} الأيمن",
+      "waiting": "يلتقط stella المفتاح {shortcut} بمجرد حصوله على إذن تسهيلات الاستخدام.",
+      "unavailable": "لا يمكن لـ stella مراقبة {shortcut} على هذا الكمبيوتر. اختر مفتاحًا آخر."
+    },
     "failure": {
       "accessibility": "اسمح بالوصول إلى إمكانية الوصول حتى تتمكن stella من الكتابة في التطبيقات الأخرى.",
       "microphone": "تعذّر على stella سماع الميكروفون. تحقق من الوصول إلى الميكروفون في إعدادات النظام.",
@@ -675,6 +683,7 @@
       "focusChanged": "انتقلت إلى تطبيق آخر قبل أن يصبح النص جاهزًا، لذلك لم تُكتب أي كلمة. حاول مرة أخرى.",
       "focusUnconfirmed": "تعذّر على stella التأكد من التطبيق النشط، لذلك لم تُكتب أي كلمة. حاول مرة أخرى.",
       "shortcutHeld": "حرّر مفاتيح الاختصار ليُكتب النص. لم تُكتب أي كلمة؛ حاول مرة أخرى.",
+      "passwordField": "حقل كلمة مرور محدد، لذلك لم يُحفظ الإملاء ولم يُكتب.",
       "cloudTranscription": "تعذّر على stella AI تحويل هذا الإملاء إلى نص، ونموذج الكلام غير موجود على هذا الكمبيوتر. حاول مرة أخرى، أو اختر «هذا الكمبيوتر» في «التحويل باستخدام» ونزّل النموذج."
     },
     "failureKeptInHistory": "النص موجود في سجل الحافظة."
@@ -817,6 +826,7 @@
       "screenRecording": "تسجيل الشاشة",
       "camera": "الكاميرا",
       "keystrokes": "ضغطات المفاتيح",
+      "keystrokesWithoutHoldKey": "ضغطات المفاتيح، إلا إذا اخترت مفتاحًا تضغط عليه باستمرار",
       "fullDiskAccess": "الوصول الكامل إلى القرص",
       "administrator": "صلاحيات المسؤول"
     }

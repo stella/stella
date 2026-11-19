@@ -5,8 +5,9 @@ import { inArray } from "drizzle-orm";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getMessages from "@/api/handlers/chat/messages/list";
 import {
   loadThread,
@@ -140,6 +141,17 @@ describe("a thread keeps the skill it started with", () => {
     if (Result.isError(created)) {
       throw new TypeError(`Thread creation failed: ${created.error.message}`);
     }
+    // The builder has started: its first message is stored.
+    await testDb.insert(chatMessages).values({
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "Draft a playbook." }],
+      }),
+      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+      role: "user",
+      threadId,
+      userId: ids.userA1,
+      workspaceId: null,
+    });
 
     const reopened = await createThread(threadId, { skillName: "review" });
     expect(Result.isOk(reopened)).toBe(true);

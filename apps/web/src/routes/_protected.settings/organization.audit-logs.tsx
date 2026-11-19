@@ -7,10 +7,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
-import type {
-  AuditPerformerFilter,
-  AuditResource,
-} from "@stll/api-contract/audit-log";
+import type { AuditResource } from "@stll/api-contract/audit-log";
 import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -55,6 +52,12 @@ import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { routePresentation } from "@/routes/-route-presentation";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import {
+  ALL_PERFORMERS,
+  DEFAULT_PERFORMER_FILTER,
+  toPerformerChoice,
+} from "@/routes/_protected.settings/-organization.audit-logs.logic";
+import type { PerformerChoice } from "@/routes/_protected.settings/-organization.audit-logs.logic";
 import {
   AuditChangeDetails,
   AuditChangeSummary,
@@ -116,23 +119,6 @@ export const Route = createFileRoute(
 
 const AUDIT_LOG_PAGE_LIMIT = 20;
 const AUDIT_LOG_COLUMN_COUNT = 6;
-
-// Background services write far more rows than people do; the log opens on
-// what members did and shows automations on request.
-const DEFAULT_PERFORMER_FILTER = AUDIT_PERFORMER_FILTER.people;
-const ALL_PERFORMERS = "all";
-
-type PerformerChoice = AuditPerformerFilter | typeof ALL_PERFORMERS;
-
-const toPerformerChoice = (value: string | null): PerformerChoice => {
-  if (value === AUDIT_PERFORMER_FILTER.automations) {
-    return AUDIT_PERFORMER_FILTER.automations;
-  }
-  if (value === ALL_PERFORMERS) {
-    return ALL_PERFORMERS;
-  }
-  return DEFAULT_PERFORMER_FILTER;
-};
 
 function AuditPersonFilter({
   value,

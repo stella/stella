@@ -15,6 +15,7 @@ export const SHARED_LEDGER_PATHS = [
   "apps/api/src/tests/security/public-response-text-bounds.allowlist.json",
   "packages/property-testing/property-seeds.json",
   "scripts/app-boundary-exceptions.json",
+  "scripts/bundle-startup-ledger.json",
   "scripts/calendar-day-ledger.json",
   "scripts/contract-domain-ledger.json",
   "scripts/dead-columns.allowlist.json",

@@ -614,6 +614,7 @@
     "descriptionCloud": "Hoidke all klahvi {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne teisendab stella AI ja stella seda ei salvesta.",
     "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
     "groups": {
+      "shortcut": "Kiirklahv",
       "transcription": "Transkribeerimine",
       "cleanup": "Parandamine",
       "thisComputer": "Selles arvutis"
@@ -667,6 +668,13 @@
     "downloadFailed": "Kõnemudelit ei saanud alla laadida.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
+    "holdKey": {
+      "title": "Allhoitav klahv",
+      "description": "Hoidke ainult seda all, et dikteerida. Lühike vajutus või seda kasutav otsetee ei tee midagi.",
+      "right": "Parem {key}",
+      "waiting": "stella märkab klahvi {shortcut}, kui tal on hõlbustusfunktsioonide juurdepääs.",
+      "unavailable": "stella ei saa selles arvutis klahvi {shortcut} jälgida. Valige teine klahv."
+    },
     "failure": {
       "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",
       "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
@@ -675,6 +683,7 @@
       "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti.",
       "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
       "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti.",
+      "passwordField": "Fookuses on paroolivali, seega dikteeritut ei säilitatud ega sisestatud.",
       "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos."
@@ -817,6 +826,7 @@
       "screenRecording": "Ekraanisalvestus",
       "camera": "Kaamera",
       "keystrokes": "Klahvivajutused",
+      "keystrokesWithoutHoldKey": "Klahvivajutused, kui te ei vali allhoitavat klahvi",
       "fullDiskAccess": "Täielik kettale juurdepääs",
       "administrator": "Administraatori õigused"
     }
