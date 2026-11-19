@@ -37,7 +37,7 @@ export const antigravityTokenPath = (configDir: string) =>
   path.join(configDir, "antigravity-acp", "acp_token.json");
 
 /** Signing in with a Google account, the method stella offers. */
-export const ANTIGRAVITY_SIGN_IN_METHOD = "oauth-personal";
+const ANTIGRAVITY_SIGN_IN_METHOD = "oauth-personal";
 
 const LOST_THINKING_SIGNATURE =
   /thinking\.signature|invalid `?signature`? in `?thinking`? block/iu;
