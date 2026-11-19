@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-notifications";
 import type {
   SchedulerDb,
+  SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import {
@@ -226,6 +227,11 @@ export const expireDesktopEditSessions = async (
   if (signal.aborted) {
     panic("SchedulerAborted");
   }
+};
+
+/** The registered sweep, with the production notification publisher. */
+export const expireDesktopEditSessionsTask: SchedulerTask = async (context) => {
+  await expireDesktopEditSessions(context);
 };
 
 const publishAndMarkExpiryNotifications = async (
