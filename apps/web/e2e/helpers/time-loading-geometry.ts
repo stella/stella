@@ -203,6 +203,7 @@ export const measureLoadingGeometry = async ({
                   ? surface.landmarks.firstRow
                   : surface.landmarks.heading;
               await expect(page.locator(rowSelector).first()).toBeVisible();
+              await expect(busy).toHaveCount(0);
               const loaded = await captureLandmarks(page, surface.landmarks);
 
               if (surface.type === "steady") {

@@ -139,7 +139,14 @@ export const DocumentTypesCard = () => {
   };
 
   if (settingsView.type === "pending") {
-    return <DocumentTypesCardPending />;
+    return (
+      <>
+        <div className="sr-only">
+          <QueryViewFeedback view={settingsView} />
+        </div>
+        <DocumentTypesCardPending />
+      </>
+    );
   }
   if (settingsView.type === "error") {
     return <QueryViewFeedback view={settingsView} />;

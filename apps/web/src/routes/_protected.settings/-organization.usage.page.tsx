@@ -1,7 +1,9 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -41,28 +43,43 @@ export function UsageSettingsPage() {
     env.VITE_FEATURE_USAGE,
     entitlementView,
   );
-  if (availability.status === "disabled") {
-    return null;
+  let content: ReactNode;
+  let packsPurchasable = false;
+  switch (availability.status) {
+    case "disabled":
+      return null;
+    case "pending":
+      content = <EntitlementPending />;
+      break;
+    case "error":
+      content = <QueryViewFeedback view={entitlementView} />;
+      break;
+    case "ready": {
+      const data = availability.value;
+      const entitlement = data?.entitlement;
+      packsPurchasable =
+        entitlement?.source === "hosted" &&
+        (entitlement.status === "active" || entitlement.status === "trialing");
+      content = (
+        <>
+          <QueryViewFeedback view={entitlementView} />
+          {data?.entitlement ? (
+            <ActiveEntitlementCard data={data} />
+          ) : (
+            <EmptyStateCard />
+          )}
+        </>
+      );
+      break;
+    }
+    default:
+      availability satisfies never;
+      return panic("Unknown usage entitlement availability");
   }
-  const data = availability.status === "ready" ? availability.value : undefined;
-  const entitlement = data?.entitlement;
-  const packsPurchasable =
-    entitlement?.source === "hosted" &&
-    (entitlement.status === "active" || entitlement.status === "trialing");
 
   return (
     <UsageShell plans={<UsagePlansCard packsPurchasable={packsPurchasable} />}>
-      {availability.status === "pending" ? (
-        <EntitlementPending />
-      ) : (
-        <QueryViewFeedback view={entitlementView} />
-      )}
-      {availability.status === "ready" &&
-        (data?.entitlement ? (
-          <ActiveEntitlementCard data={data} />
-        ) : (
-          <EmptyStateCard />
-        ))}
+      {content}
     </UsageShell>
   );
 }

@@ -82,7 +82,12 @@ export const NativeToolsList = () => {
         value={search}
       />
       {view.type === "pending" ? (
-        <NativeToolsRowsPending />
+        <>
+          <div className="sr-only">
+            <QueryViewFeedback view={view} />
+          </div>
+          <NativeToolsRowsPending />
+        </>
       ) : (
         <QueryViewFeedback view={view} />
       )}

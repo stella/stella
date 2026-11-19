@@ -526,7 +526,7 @@ test("records loading landmarks in English and Czech", async ({
       if ("pending" in sample) {
         expect
           .soft(
-            sample.pending?.[landmark],
+            sample.pending[landmark],
             `${sample.locale} ${sample.route} pending ${landmark}`,
           )
           .toMatchObject(origin);

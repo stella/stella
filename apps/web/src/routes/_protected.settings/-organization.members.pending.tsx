@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { useSearch } from "@tanstack/react-router";
 
@@ -27,7 +27,7 @@ export type SortKey = "name" | "role" | "joined";
 export type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 type MemberColumn = {
-  id: "user" | "role" | "billing" | "joined" | "actions";
+  id: string;
   className?: string;
 } & (
   | {
@@ -38,7 +38,7 @@ type MemberColumn = {
   | { sortKey?: undefined; label?: undefined; labelWidth?: undefined }
 );
 
-const MEMBER_COLUMNS: readonly MemberColumn[] = [
+const MEMBER_COLUMNS = [
   { id: "user", sortKey: "name", label: "common.user", labelWidth: "w-10" },
   { id: "role", sortKey: "role", label: "common.role", labelWidth: "w-10" },
   { id: "billing" },
@@ -50,23 +50,25 @@ const MEMBER_COLUMNS: readonly MemberColumn[] = [
     className: "hidden sm:table-cell",
   },
   { id: "actions" },
-];
+] as const satisfies readonly MemberColumn[];
+
+type MemberColumnId = (typeof MEMBER_COLUMNS)[number]["id"];
 
 export const INITIAL_MEMBERS_SORT: Sort = { key: "name", dir: "asc" };
 
 export const MembersTableRow = ({
   cells,
 }: {
-  cells: Record<MemberColumn["id"], ReactNode>;
+  cells: Record<MemberColumnId, ReactNode>;
 }) => (
   <TableRow className="group">
-    {MEMBER_COLUMNS.map(({ id, className }) => (
+    {MEMBER_COLUMNS.map((column) => (
       <TableCellFace
-        align={id === "actions" ? "end" : undefined}
-        className={className}
-        key={id}
+        align={column.id === "actions" ? "end" : undefined}
+        className={cn("className" in column && column.className)}
+        key={column.id}
       >
-        {cells[id]}
+        {cells[column.id]}
       </TableCellFace>
     ))}
   </TableRow>
@@ -82,14 +84,16 @@ const MembersTableHeader = ({
   renderSortableHead,
 }: {
   renderSortableHead?:
-    ((options: MembersSortFaceOptions) => ReactNode) | undefined;
+    ((options: MembersSortFaceOptions) => ReactElement) | undefined;
 }) => (
   <TableHeader>
     <TableRow>
-      {MEMBER_COLUMNS.map(({ id, className, sortKey, label, labelWidth }) => {
-        if (sortKey === undefined) {
-          return <TableHead className={className} key={id} />;
+      {MEMBER_COLUMNS.map((column) => {
+        const className = cn("className" in column && column.className);
+        if (!("sortKey" in column)) {
+          return <TableHead className={className} key={column.id} />;
         }
+        const { id, sortKey, label, labelWidth } = column;
         const text = <PendingText id={label} barClassName={labelWidth} />;
         return renderSortableHead === undefined ? (
           <TableHead className={className} key={id}>
@@ -146,7 +150,7 @@ export const MembersShell = ({
   busy?: boolean;
   toolbar: ReactNode;
   renderSortableHead?:
-    ((options: MembersSortFaceOptions) => ReactNode) | undefined;
+    ((options: MembersSortFaceOptions) => ReactElement) | undefined;
   children: ReactNode;
   invitations: ReactNode;
 }) => (
@@ -197,12 +201,12 @@ const MEMBER_PLACEHOLDERS = {
   billing: <Skeleton className="size-4.5 rounded-sm sm:size-4" />,
   joined: <Skeleton className="h-4 w-24" />,
   actions: null,
-} satisfies Record<MemberColumn["id"], ReactNode>;
+} satisfies Record<MemberColumnId, ReactNode>;
 
-const MEMBER_SKELETON_COLUMNS = MEMBER_COLUMNS.map(({ id, className }) => ({
-  id,
-  className,
-  placeholder: MEMBER_PLACEHOLDERS[id],
+const MEMBER_SKELETON_COLUMNS = MEMBER_COLUMNS.map((column) => ({
+  id: column.id,
+  className: "className" in column ? column.className : undefined,
+  placeholder: MEMBER_PLACEHOLDERS[column.id],
 }));
 const MEMBERS_SKELETON_ROW_COUNT = 8;
 

@@ -1,8 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import type { UseQueryResult } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
@@ -38,6 +37,7 @@ import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView, routeRowsPhase } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
 import {
   ALL_PERFORMERS,
@@ -181,10 +181,8 @@ function AuditPerformerSelect({
 export function AuditLogsPage() {
   const t = useTranslations();
   const user = useAuthenticatedUser();
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>(
-    [],
-  );
+  const [cursors, setCursors] = useState<readonly string[]>([]);
+  const cursor = cursors.at(-1);
   const [filterAction, setFilterAction] = useState<string>("");
   const [filterResourceType, setFilterResourceType] = useState<string>("");
   const [filterPerson, setFilterPerson] = useState<MemberOption | null>(null);
@@ -204,8 +202,7 @@ export function AuditLogsPage() {
 
   const handleFilterChange = <T,>(setter: (val: T) => void, val: T) => {
     setter(val);
-    setCursor(undefined);
-    setCursorHistory([]);
+    setCursors([]);
   };
 
   const queryParams: AuditLogsPageKey = {
@@ -224,7 +221,7 @@ export function AuditLogsPage() {
     error: queryError,
     isPending,
     isPlaceholderData,
-    isError,
+    status,
     isFetching,
     refetch,
   } = useQuery({
@@ -242,20 +239,34 @@ export function AuditLogsPage() {
   });
   const pagingDisabled = isFetching || isPlaceholderData;
 
+  let tableRows: AuditTableRows;
+  switch (status) {
+    case "pending":
+      tableRows = { type: "pending", previousPageEmpty: false };
+      break;
+    case "error":
+      tableRows = { type: "error", error: queryError, retry: refetch };
+      break;
+    case "success":
+      tableRows =
+        phase === "skeleton"
+          ? { type: "pending", previousPageEmpty: true }
+          : { type: "rows", items: data.items };
+      break;
+    default:
+      status satisfies never;
+      return panic("Unknown audit log query status");
+  }
+
   const handleNextPage = () => {
-    if (data?.nextCursor) {
-      setCursorHistory((prev) => [...prev, cursor]);
-      setCursor(data.nextCursor);
+    const nextCursor = data?.nextCursor;
+    if (nextCursor) {
+      setCursors((previous) => [...previous, nextCursor]);
     }
   };
 
   const handlePrevPage = () => {
-    setCursorHistory((prev) => {
-      const nextHistory = [...prev];
-      const prevCursor = nextHistory.pop();
-      setCursor(prevCursor);
-      return nextHistory;
-    });
+    setCursors((previous) => previous.slice(0, -1));
   };
 
   const handleExport = async () => {
@@ -442,101 +453,81 @@ export function AuditLogsPage() {
       }
       previous={
         <Button
-          disabled={cursorHistory.length === 0 || pagingDisabled}
+          disabled={cursors.length === 0 || pagingDisabled}
           onClick={handlePrevPage}
           variant="outline"
         >
           {t("common.previous")}
         </Button>
       }
-      rows={
-        <AuditLogsTableBody
-          pending={phase === "skeleton"}
-          previousPageEmpty={isPlaceholderData}
-          isError={isError}
-          error={queryError}
-          retry={refetch}
-          data={data}
-        />
-      }
+      rows={<AuditLogsTableBody state={tableRows} />}
     />
   );
 }
 
-type AuditLogsTableBodyProps = {
-  pending: boolean;
-  previousPageEmpty: boolean;
-  isError: boolean;
-  error: Error | null;
-  retry: UseQueryResult<unknown, Error | null>["refetch"];
-  data: Awaited<ReturnType<typeof fetchAuditLogs>> | undefined;
-};
+type AuditLogPage = Awaited<ReturnType<typeof fetchAuditLogs>>;
+type AuditLogItem = AuditLogPage["items"][number];
 
-function AuditLogsTableBody({
-  pending,
-  previousPageEmpty,
-  isError,
-  error,
-  retry,
-  data,
-}: AuditLogsTableBodyProps) {
+type AuditTableRows =
+  | { type: "pending"; previousPageEmpty: boolean }
+  | Extract<QueryView<AuditLogPage, Error>, { type: "error" }>
+  | { type: "rows"; items: readonly AuditLogItem[] };
+
+function AuditLogsTableBody({ state }: { state: AuditTableRows }) {
   const t = useTranslations();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
 
-  if (pending) {
-    return <AuditLogSkeletonRows previousPageEmpty={previousPageEmpty} />;
-  }
-
-  if (isError) {
-    return (
-      <TableRow>
-        <TableCell
-          className="text-destructive h-24 text-center font-medium"
-          colSpan={AUDIT_LOG_COLUMN_COUNT}
-        >
-          <QueryViewFeedback view={{ type: "error", error, retry }} />
-        </TableCell>
-      </TableRow>
-    );
-  }
-
-  if (data === undefined || data.items.length === 0) {
-    return (
-      <TableRow>
-        <TableCell
-          className="text-muted-foreground h-24 text-center"
-          colSpan={AUDIT_LOG_COLUMN_COUNT}
-        >
-          {t("settings.organization.auditLogsEmpty")}
-        </TableCell>
-      </TableRow>
-    );
-  }
-
-  const toggle = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (!next.delete(id)) {
-        next.add(id);
+  switch (state.type) {
+    case "pending":
+      return (
+        <AuditLogSkeletonRows previousPageEmpty={state.previousPageEmpty} />
+      );
+    case "error":
+      return (
+        <TableRow>
+          <TableCell
+            className="text-destructive h-24 text-center font-medium"
+            colSpan={AUDIT_LOG_COLUMN_COUNT}
+          >
+            <QueryViewFeedback view={state} />
+          </TableCell>
+        </TableRow>
+      );
+    case "rows": {
+      if (state.items.length === 0) {
+        return (
+          <TableRow>
+            <TableCell
+              className="text-muted-foreground h-24 text-center"
+              colSpan={AUDIT_LOG_COLUMN_COUNT}
+            >
+              {t("settings.organization.auditLogsEmpty")}
+            </TableCell>
+          </TableRow>
+        );
       }
-      return next;
-    });
-
-  return (
-    <>
-      {data.items.map((log) => (
+      const toggle = (id: string) =>
+        setExpanded((current) => {
+          const next = new Set(current);
+          if (!next.delete(id)) {
+            next.add(id);
+          }
+          return next;
+        });
+      return state.items.map((log) => (
         <AuditLogRow
           isExpanded={expanded.has(log.id)}
           key={log.id}
           log={log}
           onToggle={() => toggle(log.id)}
         />
-      ))}
-    </>
-  );
+      ));
+    }
+    default:
+      state satisfies never;
+      return panic("Unknown audit log table state");
+  }
 }
-
-type AuditLogItem = Awaited<ReturnType<typeof fetchAuditLogs>>["items"][number];
 
 function AuditLogRow({
   log,

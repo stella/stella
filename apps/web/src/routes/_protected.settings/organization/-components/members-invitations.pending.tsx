@@ -10,27 +10,18 @@ import {
   TableRow,
   TableSkeletonRows,
 } from "@stll/ui/table-shell";
+import { cn } from "@stll/ui/utils";
 
 import { PendingText } from "@/components/pending-text";
 
-type InvitationColumnLabel =
-  | "common.email"
-  | "common.role"
-  | "common.status"
-  | "organization.invitations.invited"
-  | "organization.invitations.expires";
-
 type InvitationColumn = {
-  id: "email" | "role" | "status" | "invited" | "expires" | "actions";
+  id: string;
   className?: string;
-} & (
-  | { label: InvitationColumnLabel; bar: string }
-  | { label?: undefined; placeholder: null }
-);
+} & ({ label: string; bar: string } | { placeholder: null });
 
 const SECONDARY_COLUMN_CLASS = "hidden sm:table-cell";
 
-const INVITATION_COLUMNS: readonly InvitationColumn[] = [
+const INVITATION_COLUMNS = [
   { id: "email", label: "common.email", bar: "w-24" },
   { id: "role", label: "common.role", bar: "w-12" },
   { id: "status", label: "common.status", bar: "w-12" },
@@ -47,23 +38,29 @@ const INVITATION_COLUMNS: readonly InvitationColumn[] = [
     className: SECONDARY_COLUMN_CLASS,
   },
   { id: "actions", placeholder: null },
-];
+] as const satisfies readonly InvitationColumn[];
+
+type InvitationColumnId = (typeof INVITATION_COLUMNS)[number]["id"];
+type InvitationColumnLabel = Extract<
+  (typeof INVITATION_COLUMNS)[number],
+  { label: string }
+>["label"];
 
 const INVITATIONS_SKELETON_ROW_COUNT = 3;
 
 export const InvitationsTableRow = ({
   cells,
 }: {
-  cells: Record<InvitationColumn["id"], ReactNode>;
+  cells: Record<InvitationColumnId, ReactNode>;
 }) => (
   <TableRow>
-    {INVITATION_COLUMNS.map(({ id, className }) => (
+    {INVITATION_COLUMNS.map((column) => (
       <TableCellFace
-        align={id === "actions" ? "end" : undefined}
-        className={className}
-        key={id}
+        align={column.id === "actions" ? "end" : undefined}
+        className={cn("className" in column && column.className)}
+        key={column.id}
       >
-        {cells[id]}
+        {cells[column.id]}
       </TableCellFace>
     ))}
   </TableRow>
@@ -83,8 +80,11 @@ export const InvitationsTableFrame = ({
       <TableHeader>
         <TableRow>
           {INVITATION_COLUMNS.map((column) => (
-            <TableHead className={column.className} key={column.id}>
-              {column.label === undefined ? null : label(column.label)}
+            <TableHead
+              className={cn("className" in column && column.className)}
+              key={column.id}
+            >
+              {"label" in column ? label(column.label) : null}
             </TableHead>
           ))}
         </TableRow>

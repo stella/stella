@@ -21,7 +21,9 @@ export const SettingsPageHeader = ({
   >
     <div className="flex min-w-0 flex-1 flex-col gap-1">
       <h1 className="text-xl font-semibold">{title}</h1>
-      {description ? (
+      {description !== undefined &&
+      description !== null &&
+      description !== "" ? (
         <p className="text-muted-foreground text-sm">{description}</p>
       ) : null}
     </div>
