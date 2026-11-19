@@ -80,7 +80,7 @@ const searchGuidanceArgsSchema = nullAsAbsent(
         v.minLength(LIMITS.mcpNonEmptyMin),
         v.maxLength(LIMITS.softLawAuthorityMaxLength),
         v.description(
-          "Issuing authority, as returned in issuer.authority (for example eu-edpb)",
+          "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr)",
         ),
       ),
     ),
@@ -136,8 +136,9 @@ const SOFT_LAW_TOOL_DEFINITIONS = [
     },
     description:
       "Search regulator guidance (soft law): methodologies, opinions, guidelines, " +
-      "recommendations, FAQs and similar documents issued by data-protection and " +
-      "labour regulators. Results are guidance, never court decisions: for case law use " +
+      "recommendations and FAQs from data-protection, labour, tax and administrative " +
+      "authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative " +
+      "procedure. Results are guidance, never court decisions: for case law use " +
       "search_case_law. Each result carries documentClass, issuer, kind, reference, " +
       "issuedOn, validity, source_url and the attribution to show with it. Filter by " +
       "authority, jurisdiction, kind, date_from and date_to. A source served as metadata " +
@@ -167,8 +168,8 @@ const SOFT_LAW_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read one regulator guidance document by document_id. It is guidance, not a " +
-      "court decision. Returns the issuer, kind, reference, issue date, validity as " +
+      "Read one regulator guidance document (data-protection, labour, tax or " +
+      "administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as " +
       "the publisher states it, source_url, the attribution and any conditions to " +
       "show with it, and its text. When you summarize this text, show " +
       "attribution.text and any attribution.summaryDisclaimer with the summary. " +

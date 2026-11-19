@@ -55,10 +55,8 @@ import {
 } from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import {
-  ChatMatterPicker,
-  ChatMatterPickerPending,
-} from "@/components/chat/chat-matter-picker";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker.pending";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";

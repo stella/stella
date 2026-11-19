@@ -51,6 +51,10 @@ export const desktopDictationModelsSchema = v.strictObject({
        *  the deployment's or organization's key has no zero data retention.
        *  The desktop warns where it is chosen. Never the default. */
       retainsData: v.optional(v.boolean()),
+      /** The model reads vocabulary as spelling hints; the desktop sends
+       *  the speaker's custom words with a chunk only for such a model, and
+       *  only to an API that lists this field. */
+      takesVocabulary: v.optional(v.boolean()),
     }),
   ),
   /** The model a request without one gets; null when none is offered. */

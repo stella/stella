@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Diktavimo kalba",
-      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas.",
+      "description": "Automatinis naudoja šio kompiuterio ekrano ir klaviatūrų kalbas. Jei jų kelios, kiekvienas žodis atpažįstamas ta kalba, kuria jį ištariate.",
       "automatic": "Automatiškai",
       "automaticWith": "Automatiškai ({languages})",
       "noResults": "Kalbų nerasta"
+    },
+    "customWords": {
+      "group": "Savi žodžiai",
+      "title": "Žodžiai ir vardai, kuriuos stella turi rašyti teisingai",
+      "description": "Pavyzdžiui, klientų vardai ar angliški terminai, kuriuos vartojate kalbėdami kita kalba. Jie saugomi šiame kompiuteryje šiai paskyrai ir siunčiami tik su jūsų diktavimu: pavertimui naudojant stella AI ir taisymui su DI. Šio kompiuterio kalbos modelis jų nenaudoja.",
+      "count": "{count, number} iš {limit, number}",
+      "input": "Pridėti žodį ar vardą",
+      "add": "Pridėti",
+      "remove": "Pašalinti {word}",
+      "duplicate": "Šis žodis jau yra sąraše.",
+      "full": "Sąraše telpa daugiausia {limit, number} žodžių. Norėdami pridėti kitą, vieną pašalinkite.",
+      "failed": "Sąrašo išsaugoti nepavyko. Bandykite dar kartą."
     },
     "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
     "speechModel": "Kalbos modelis",
@@ -693,6 +705,11 @@
       "description": "Iki 4 valandų trukmės diktofono failą, balso pastabą ar susitikimo įrašą paverčia tekstu.",
       "open": "Atidaryti",
       "failed": "Nepavyko atidaryti lango. Bandykite dar kartą."
+    },
+    "preview": {
+      "label": "Iki šiol padiktuotas tekstas",
+      "listening": "Klausomasi…",
+      "finishing": "Baigiama…"
     }
   },
   "shortcut": {

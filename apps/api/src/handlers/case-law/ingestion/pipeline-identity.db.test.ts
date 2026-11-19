@@ -2141,6 +2141,74 @@ if (!databaseUrl || !runPostgresTests) {
       );
     });
 
+    test.each(["unchanged", "partial"] as const)(
+      "an identical %s watermark replay leaves the stored row unchanged",
+      async (observationKind) => {
+        const publisherId = `watermark-fixed-point-${observationKind}`;
+        const initial = decisionAt("Stored detail", publisherId);
+        (
+          await processDecision({
+            input: initial,
+            observationOrder: 10n,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:06:00.000Z"),
+          })
+        ).unwrap();
+        const input =
+          observationKind === "unchanged"
+            ? initial
+            : plainTextIngestionResult({
+                ...initial,
+                fulltext: undefined,
+                isListingOnly: true,
+                metadata: { listedOnly: true },
+                rawHash: "partial-watermark-fixed-point",
+              });
+        const observation = {
+          input,
+          observationOrder: 11n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:06:01.000Z"),
+        };
+        (await processDecision(observation)).unwrap();
+        const before = await db
+          .select({
+            version: sql<string>`xmin::text`,
+            order: caseLawDecisions.sourceObservationOrder,
+            updatedAt: caseLawDecisions.updatedAt,
+            sourceHash: caseLawDecisions.sourceHash,
+            metadata: caseLawDecisions.metadata,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, publisherId),
+            ),
+          );
+        expect(before.at(0)?.order).toBe(11n);
+        (await processDecision(observation)).unwrap();
+        const after = await db
+          .select({
+            version: sql<string>`xmin::text`,
+            order: caseLawDecisions.sourceObservationOrder,
+            updatedAt: caseLawDecisions.updatedAt,
+            sourceHash: caseLawDecisions.sourceHash,
+            metadata: caseLawDecisions.metadata,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, publisherId),
+            ),
+          );
+        expect(after).toEqual(before);
+      },
+    );
+
     test("a watermark replay reconciles content changed after its read", async () => {
       const publisherId = "watermark-contention";
       const initial = decisionAt("Initial content", publisherId);

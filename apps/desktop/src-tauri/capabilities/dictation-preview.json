@@ -1,0 +1,14 @@
+{
+  "identifier": "dictation-preview",
+  "description": "Panel under the status icon that shows the running transcript while the dictation key is held",
+  "windows": ["dictation-preview"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-account-record-use",
+    "allow-desktop-report-error",
+    "allow-dictation-preview-get-snapshot"
+  ]
+}

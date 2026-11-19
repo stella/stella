@@ -1501,6 +1501,10 @@
       "title": "La recherche est temporairement indisponible"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Recherchez le numéro de dossier ou l’ECLI de la décision, si vous le connaissez.",
+        "message": "Aucune décision correspondant exactement à cette référence de recueil n’a été trouvée."
+      },
       "noHits": {
         "hint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
         "message": "Aucun résultat ne correspond aux mots exigés par cette recherche."
@@ -2419,6 +2423,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
@@ -2447,6 +2452,7 @@
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "user_message": "Envoyé pendant que l’agent travaillait",
+      "validate_skill_package": "Vérifier la compétence",
       "web_search": "Recherche web"
     },
     "toolCall": {
@@ -4051,6 +4057,12 @@
     "versionCreatedDescription": "La version {versionNumber} a été créée. Tout le monde peut continuer à modifier le document.",
     "versionCreatedTitle": "Version créée",
     "viewOnly": "Lecture seule"
+  },
+  "guidance": {
+    "notCaseLaw": "Lignes directrices émises par un régulateur. Il ne s’agit pas d’une décision de justice.",
+    "openAtPublisher": "Ouvrir chez l’éditeur",
+    "source": "Source : {attribution}",
+    "textUnavailable": "Le texte de ce document n’est pas disponible ici. Consultez-le chez l’éditeur."
   },
   "guides": {
     "action": {
