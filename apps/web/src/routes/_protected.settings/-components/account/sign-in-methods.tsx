@@ -155,16 +155,16 @@ export const SignInMethods = () => {
 
   return (
     <SignInMethodsGroup>
-      {/* While either read loads, the rows' placeholders hold their place;
-          only a failed read speaks. */}
-      {loading ? (
-        <SignInMethodsRowsPending />
-      ) : (
-        <>
-          <QueryViewFeedback view={accountsView} />
-          <QueryViewFeedback view={capabilitiesView} />
-        </>
+      {/* While either read loads, the rows' placeholders hold their place.
+          A failed read offers its retry on its own, whatever the other read
+          is doing; neither prints a loading line. */}
+      {accountsView.type !== "pending" && (
+        <QueryViewFeedback view={accountsView} />
       )}
+      {capabilitiesView.type !== "pending" && (
+        <QueryViewFeedback view={capabilitiesView} />
+      )}
+      {loading && <SignInMethodsRowsPending />}
       {dataReady && (
         <List>
           {capabilitiesView.items.emailOtp && (

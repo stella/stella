@@ -200,7 +200,9 @@ const ProfilePendingView = () => (
             </span>
           }
         >
-          <FieldTriggerFace className={LOCALE_PREFERENCE_TRIGGER_CLASS} />
+          <FieldTriggerFace className={LOCALE_PREFERENCE_TRIGGER_CLASS}>
+            <FaceLabelPending className="w-24" />
+          </FieldTriggerFace>
         </PreferenceRow>
       ))}
       timeZone={

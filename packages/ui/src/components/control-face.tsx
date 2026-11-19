@@ -239,7 +239,8 @@ export const TabsFace = ({
     className={cn(
       TABS_LIST_BASE_CLASS,
       TABS_LIST_DEFAULT_CLASS,
-      "pointer-events-none",
+      // Decoration: it never scrolls, it stays inside its box.
+      "pointer-events-none overflow-hidden",
     )}
     data-slot="tabs-face"
   >

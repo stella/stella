@@ -376,7 +376,7 @@ function ProfilePageBody() {
               async () => await updateDisplayName.mutateAsync(),
             );
             if (Result.isError(saved)) {
-              getAnalytics().captureError(saved.error, {
+              getAnalytics().captureError(saved.error.cause, {
                 fingerprintKey: "ProfilePageBody:failure",
                 scope: {
                   type: "handler",
@@ -438,7 +438,7 @@ function ProfilePageBody() {
               async () => await updateWordEditIdentity.mutateAsync(),
             );
             if (Result.isError(saved)) {
-              getAnalytics().captureError(saved.error, {
+              getAnalytics().captureError(saved.error.cause, {
                 fingerprintKey: "ProfilePageBody:failure-2",
                 scope: {
                   type: "handler",
