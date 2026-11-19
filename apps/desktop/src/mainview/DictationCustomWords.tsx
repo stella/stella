@@ -144,7 +144,7 @@ export const DictationCustomWords = ({
           <ul aria-label={t("group")} className="flex flex-wrap gap-1.5">
             {words.map((word) => (
               <li
-                className="bg-muted flex max-w-full items-center gap-0.5 rounded-md py-0.5 ps-2 pe-0.5 text-sm"
+                className="bg-muted flex max-w-full items-center gap-0.5 rounded-lg ps-2.5 text-sm"
                 key={word}
               >
                 <TruncatedText className="min-w-0">{word}</TruncatedText>
@@ -153,7 +153,8 @@ export const DictationCustomWords = ({
                   onClick={() => {
                     void save(words.filter((known) => known !== word));
                   }}
-                  size="icon-xs"
+                  // The page's controls share one height.
+                  size="icon"
                   variant="ghost"
                 >
                   <XIcon />
