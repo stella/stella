@@ -1022,6 +1022,7 @@ test.each(
       {
         id,
         sourceId,
+        sourceDocumentId: `legacy-${mode}-${storedZero ? "zero" : "bare"}`,
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",
@@ -1035,6 +1036,7 @@ test.each(
       {
         id: positiveId,
         sourceId: openSourceId,
+        sourceDocumentId: `positive-${mode}-${storedZero ? "zero" : "bare"}`,
         country: "CZE",
         court: "Nejvyšší soud",
         language: "cs",
