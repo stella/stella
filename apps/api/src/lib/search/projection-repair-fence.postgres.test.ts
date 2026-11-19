@@ -28,6 +28,12 @@ import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-del
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+/** Timeout labels for each kind's old projection source snapshot wait. */
+const OLD_SOURCE_SNAPSHOT_LABELS = {
+  contact: "contact old projection source snapshot",
+  workspace: "workspace old projection source snapshot",
+} as const;
+
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -129,7 +135,7 @@ if (!databaseUrl || !runPostgresTests) {
             limit: 1,
           });
           await withTimeout(async () => await oldSourceRead.promise, {
-            label: `${kind} old projection source snapshot`,
+            label: OLD_SOURCE_SNAPSHOT_LABELS[kind],
             timeoutMs: 3000,
           });
 
