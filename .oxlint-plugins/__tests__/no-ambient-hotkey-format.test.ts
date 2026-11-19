@@ -11,6 +11,15 @@ test("rejects ambient platform detection and display formatting imports", async 
   ).toEqual([1, 1]);
 });
 
+test("rejects the formatter hook that reads the provider's platform", async () => {
+  expect(
+    await lintSingleRule(
+      "no-ambient-hotkey-format",
+      'import { useFormatForDisplay } from "@tanstack/react-hotkeys";',
+    ),
+  ).toEqual([1]);
+});
+
 test("rejects namespace access to ambient hotkey APIs", async () => {
   expect(
     await lintSingleRule(
