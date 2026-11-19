@@ -163,17 +163,20 @@ export const skillMdName = (skillMd: unknown): string | null => {
   if (typeof skillMd !== "string") {
     return null;
   }
-  const lines = skillMd.split(/\r?\n/u);
-  if (lines[0]?.trimEnd() !== "---") {
+  const lines = skillMd.split("\n").map((line) => line.trimEnd());
+  if (lines[0] !== "---") {
     return null;
   }
   for (const line of lines.slice(1)) {
-    if (line.trimEnd() === "---") {
+    if (line === "---") {
       return null;
     }
-    const match = /^name:\s*(?:"([^"]*)"|'([^']*)'|(.*\S))\s*$/u.exec(line);
-    if (match !== null) {
-      return match[1] ?? match[2] ?? match[3] ?? null;
+    if (line.startsWith("name:")) {
+      const value = line.slice("name:".length).trim();
+      const quote = value.at(0);
+      return (quote === '"' || quote === "'") && value.endsWith(quote)
+        ? value.slice(1, -1)
+        : value;
     }
   }
   return null;

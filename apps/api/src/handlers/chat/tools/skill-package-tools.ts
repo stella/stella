@@ -7,6 +7,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import {
   blockingSkillPackageDiagnostics,
   checkSkillPackage,
@@ -33,7 +34,7 @@ export const VALIDATE_SKILL_PACKAGE_TOOL_NAME = "validate_skill_package";
 export const SAVE_SKILL_PACKAGE_TOOL_NAME = "save_skill_package";
 
 /** Files one call carries; a larger package goes over several calls. */
-export const SKILL_PACKAGE_RESOURCES_PER_CALL_MAX = 50;
+const SKILL_PACKAGE_RESOURCES_PER_CALL_MAX = 50;
 /** One file is written whole, as a model holds it at once. */
 const RESOURCE_CONTENT_MAX_CHARS =
   SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars;
@@ -80,6 +81,7 @@ const packageInputSchema = v.strictObject({
       v.maxLength(SKILL_PACKAGE_RESOURCES_PER_CALL_MAX),
       v.description("Files to add or replace by path."),
     ),
+    [],
   ),
   deletePaths: v.optional(
     v.pipe(
@@ -93,6 +95,7 @@ const packageInputSchema = v.strictObject({
       v.maxLength(SKILL_PACKAGE_LIMITS.resourcesPerSkillMax),
       v.description("Saved files to remove."),
     ),
+    [],
   ),
 });
 
@@ -147,11 +150,11 @@ const readPackageInput = (
   const invalid = (message: string) =>
     Result.err(new ChatToolError({ kind: "invalid-input", message }));
   // Stored paths are NFC, as an import stores them.
-  const resources = (input.resources ?? []).map(({ content, path }) => ({
+  const resources = input.resources.map(({ content, path }) => ({
     content,
     path: normalizeUnicode(path, "NFC"),
   }));
-  const deletePaths = (input.deletePaths ?? []).map((path) =>
+  const deletePaths = input.deletePaths.map((path) =>
     normalizeUnicode(path, "NFC"),
   );
   if (resources.some(({ path }) => path === SKILL_FILE_NAME)) {
@@ -224,16 +227,10 @@ const toChatToolError = (error: HandlerError | SafeDbError): ChatToolError => {
   }
 };
 
-const unwrap = <T>(result: Result<T, HandlerError | SafeDbError>): T => {
-  if (Result.isError(result)) {
-    throw toChatToolError(result.error);
-  }
-  return result.value;
-};
-
-const raise = (error: ChatToolError): never => {
-  throw error;
-};
+const unwrap = <T>(result: Result<T, HandlerError | SafeDbError>): T =>
+  Result.isError(result)
+    ? raiseChatToolError(toChatToolError(result.error))
+    : result.value;
 
 /** Where the user opens a saved skill. */
 const skillUrl = (skillId: SafeId<"agentSkill">) =>
@@ -279,7 +276,9 @@ export const createSkillPackageTools = ({
     inputSchema: toTanStackToolSchema(packageInputSchema),
   }).server(async (input) => {
     const read = readPackageInput(input);
-    const target = Result.isError(read) ? raise(read.error) : read.value;
+    const target = Result.isError(read)
+      ? raiseChatToolError(read.error)
+      : read.value;
     switch (target.type) {
       case "new": {
         const check = checkSkillPackage({
@@ -318,14 +317,16 @@ export const createSkillPackageTools = ({
   }).server(async (input) => {
     const auditRecorder =
       recordAuditEvent ??
-      raise(
+      raiseChatToolError(
         new ChatToolError({
           kind: "server-defect",
           message: "Saving a skill needs an approved, audited chat turn.",
         }),
       );
     const read = readPackageInput(input);
-    const target = Result.isError(read) ? raise(read.error) : read.value;
+    const target = Result.isError(read)
+      ? raiseChatToolError(read.error)
+      : read.value;
     switch (target.type) {
       case "new": {
         const outcome = unwrap(

@@ -76,6 +76,7 @@ import {
 } from "@/api/handlers/chat/tools/show-app-tool";
 import type { TurnAppLedger } from "@/api/handlers/chat/tools/show-app-tool";
 import { createShowVisualTools } from "@/api/handlers/chat/tools/show-visual-tools";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import {
   businessRegistryCallScope,
   restrictChatToolsToSourceScope,
@@ -108,7 +109,6 @@ import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools"
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
-import { createSkillPackageTools } from "@/api/lib/agent-skills/skill-package-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";

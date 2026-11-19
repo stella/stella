@@ -10,6 +10,7 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import createSkill from "@/api/handlers/skills/create";
 import createSkillFromBlueprint from "@/api/handlers/skills/from-blueprint/create";
 import reviewSkillProposal from "@/api/handlers/skills/proposals/review";
@@ -25,7 +26,6 @@ import {
 } from "@/api/lib/agent-skills/binding";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
-import { createSkillPackageTools } from "@/api/lib/agent-skills/skill-package-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";

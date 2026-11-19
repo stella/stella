@@ -30,7 +30,7 @@ export type SkillPackageInput = {
   skillMd: string;
 };
 
-export const SKILL_PACKAGE_CHECK_STATUS = {
+const SKILL_PACKAGE_CHECK_STATUS = {
   accepted: "accepted",
   rejected: "rejected",
 } as const;

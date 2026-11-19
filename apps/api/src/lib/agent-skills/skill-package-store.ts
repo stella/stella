@@ -9,8 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillScope } from "@/api/db/schema";
-import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
-import { uniqueSlug } from "@/api/handlers/skills/slug";
+import { canManageSkill } from "@/api/lib/agent-skills/access";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import {
@@ -52,7 +51,6 @@ export type SkillPackageChanges = {
 
 type StoredResource = {
   chars: number;
-  id: SafeId<"agentSkillResource">;
   path: string;
   sizeBytes: number;
 };
@@ -133,14 +131,16 @@ const loadSavedSkillPackage = async (
       }),
     );
   }
-  const manager = requireSkillManager({
-    action: "edit",
-    memberRole,
-    skill,
-    userId,
-  });
-  if (Result.isError(manager)) {
-    return manager;
+  if (!canManageSkill({ memberRole, skill, spends: "update", userId })) {
+    return Result.err(
+      new HandlerError({
+        status: 403,
+        message:
+          skill.scope === "team"
+            ? "Only admins and owners can edit team skills"
+            : "Only the skill's author can edit it",
+      }),
+    );
   }
   const editable = requireEditableSkillOrigin(skill.origin);
   if (Result.isError(editable)) {
@@ -149,7 +149,6 @@ const loadSavedSkillPackage = async (
   const resources = await tx
     .select({
       chars: sql<number>`char_length(${agentSkillResources.content})`,
-      id: agentSkillResources.id,
       path: agentSkillResources.path,
       sizeBytes: agentSkillResources.sizeBytes,
     })
@@ -285,30 +284,34 @@ export const writeSavedSkillPackage = async ({
             return Result.ok({ type: "rejected", check });
           }
 
-          const storedByPath = new Map(
-            saved.resources.map((resource) => [resource.path, resource]),
-          );
-          const created: string[] = [];
-          const updated: string[] = [];
-          for (const { content, path } of changes.resources) {
-            const sizeBytes = UTF8_ENCODER.encode(content).byteLength;
-            const stored = storedByPath.get(path);
-            if (stored === undefined) {
-              await innerTx.insert(agentSkillResources).values({
-                content,
-                organizationId: access.organizationId,
-                path,
-                sizeBytes,
-                skillId: saved.skill.id,
+          const storedPaths = new Set(saved.resources.map(({ path }) => path));
+          const created = changes.resources
+            .filter(({ path }) => !storedPaths.has(path))
+            .map(({ path }) => path);
+          const updated = changes.resources
+            .filter(({ path }) => storedPaths.has(path))
+            .map(({ path }) => path);
+          if (changes.resources.length > 0) {
+            // One statement for the batch; a replaced file keeps its row id,
+            // which other records may reference.
+            await innerTx
+              .insert(agentSkillResources)
+              .values(
+                changes.resources.map(({ content, path }) => ({
+                  content,
+                  organizationId: access.organizationId,
+                  path,
+                  sizeBytes: byteLength(content),
+                  skillId: saved.skill.id,
+                })),
+              )
+              .onConflictDoUpdate({
+                target: [agentSkillResources.skillId, agentSkillResources.path],
+                set: {
+                  content: sql`excluded.content`,
+                  sizeBytes: sql`excluded.size_bytes`,
+                },
               });
-              created.push(path);
-            } else {
-              await innerTx
-                .update(agentSkillResources)
-                .set({ content, sizeBytes })
-                .where(eq(agentSkillResources.id, stored.id));
-              updated.push(path);
-            }
           }
           if (deleted.length > 0) {
             await innerTx
@@ -330,7 +333,7 @@ export const writeSavedSkillPackage = async ({
           });
           await innerTx
             .update(agentSkills)
-            .set({ ...fields?.columns, ...fields?.slug, contentHash })
+            .set({ ...fields?.columns, contentHash })
             .where(eq(agentSkills.id, saved.skill.id));
 
           await recordAuditEvent(innerTx, {
@@ -351,7 +354,7 @@ export const writeSavedSkillPackage = async ({
                 },
               },
             },
-            metadata: { slug: fields?.slug?.slug ?? saved.skill.slug },
+            metadata: { slug: saved.skill.slug },
           });
           return Result.ok({
             type: "saved",
@@ -372,6 +375,7 @@ export const writeSavedSkillPackage = async ({
 /**
  * The stored columns a replacement SKILL.md sets. A name the stored one
  * already writes as (a display name and its slugified form) is no rename.
+ * The slug stays: it is the skill's tool name, and references use it.
  */
 const skillFieldsOf = (skillMd: string | undefined, saved: SavedSkill) => {
   if (skillMd === undefined) {
@@ -394,7 +398,6 @@ const skillFieldsOf = (skillMd: string | undefined, saved: SavedSkill) => {
       name: renamed ? metadata.name : saved.name,
       version: metadata.version,
     },
-    slug: renamed ? { slug: uniqueSlug(metadata.name) } : undefined,
   };
 };
 
@@ -501,7 +504,6 @@ export const createSkillPackage = async ({
         safeDb,
         scope,
         session: { activeOrganizationId: organizationId },
-        slug: uniqueSlug(parsed.name),
         user: { id: userId },
       }),
     );
