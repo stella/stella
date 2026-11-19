@@ -725,6 +725,11 @@
       "inputDevice": "الإدخال: {device}",
       "openSoundMac": "فتح إعدادات الصوت",
       "openSoundPc": "فتح إعدادات الصوت"
+    },
+    "preview": {
+      "label": "ما أمليته حتى الآن",
+      "listening": "جارٍ الاستماع…",
+      "finishing": "جارٍ الإنهاء…"
     }
   },
   "shortcut": {

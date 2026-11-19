@@ -725,6 +725,11 @@
       "inputDevice": "Įvestis: {device}",
       "openSoundMac": "Atidaryti garso nustatymus",
       "openSoundPc": "Atidaryti garso nustatymus"
+    },
+    "preview": {
+      "label": "Iki šiol padiktuotas tekstas",
+      "listening": "Klausomasi…",
+      "finishing": "Baigiama…"
     }
   },
   "shortcut": {

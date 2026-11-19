@@ -725,6 +725,11 @@
       "inputDevice": "Ievade: {device}",
       "openSoundMac": "Atvērt skaņas iestatījumus",
       "openSoundPc": "Atvērt skaņas iestatījumus"
+    },
+    "preview": {
+      "label": "Līdz šim diktētais teksts",
+      "listening": "Klausās…",
+      "finishing": "Tiek pabeigts…"
     }
   },
   "shortcut": {

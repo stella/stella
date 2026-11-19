@@ -725,6 +725,11 @@
       "inputDevice": "Sisend: {device}",
       "openSoundMac": "Ava heliseaded",
       "openSoundPc": "Ava heliseaded"
+    },
+    "preview": {
+      "label": "Seni dikteeritud tekst",
+      "listening": "Kuulan…",
+      "finishing": "Lõpetan…"
     }
   },
   "shortcut": {

@@ -725,6 +725,11 @@
       "inputDevice": "Bemenet: {device}",
       "openSoundMac": "Hangbeállítások megnyitása",
       "openSoundPc": "Hangbeállítások megnyitása"
+    },
+    "preview": {
+      "label": "Az eddig diktált szöveg",
+      "listening": "Figyelés…",
+      "finishing": "Befejezés…"
     }
   },
   "shortcut": {

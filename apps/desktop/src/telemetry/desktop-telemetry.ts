@@ -468,6 +468,7 @@ export const desktopTelemetryWindowFromLabel = (
     // The dictation notice belongs to the Dictation settings.
     case "dictation-notice":
     case "main":
+    case "dictation-preview":
       return DESKTOP_TELEMETRY_WINDOWS.main;
     case "selfhost-connect-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.selfHostConnectDialog;

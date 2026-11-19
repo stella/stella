@@ -55,6 +55,7 @@ mod dictation_language;
 mod dictation_live;
 mod dictation_notice;
 mod dictation_pauses;
+mod dictation_preview;
 mod dictation_trace;
 mod dictation_words;
 #[cfg(dictation)]
@@ -237,6 +238,7 @@ pub fn run() {
     .manage(dictation::DictationState::load())
     .manage(transcribe_recording::TranscribeState::default())
     .manage(dictation_notice::DictationNotice::default())
+    .manage(dictation_preview::PreviewState::new())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))

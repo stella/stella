@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
+import { createTestState } from "@stll/test-state";
 
 import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
 
+import { SOFT_LAW_PERMISSION_GATED_AUTHORITIES } from "./soft-law-permission-gated";
 import {
   hasSoftLawSetting,
   SOFT_LAW_AI_USE,
+  SOFT_LAW_FULL_TEXT_ON_PERMISSION,
   SOFT_LAW_READ_SURFACE,
   SOFT_LAW_SERVE_MODE,
   SOFT_LAW_SERVING_SETTINGS,
@@ -17,7 +20,16 @@ import {
 } from "./soft-law-serving";
 import { SOFT_LAW_AUTHORITIES } from "./soft-law-types";
 
-const SERVED_SOURCES = ["cz-suip", "cz-uoou", "eu-edpb"];
+const SERVED_SOURCES = [
+  "cz-gfr",
+  "cz-mf",
+  "cz-mv-psmv",
+  "cz-suip",
+  "cz-uoou",
+  "eu-edpb",
+];
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const attribution = {
   text: "Publisher",
@@ -140,6 +152,35 @@ describe("soft-law access", () => {
           .map(({ authority }) => authority)
           .toSorted(),
       ).toEqual(SERVED_SOURCES);
+    }
+  });
+
+  test("MV závěry reach every surface as a listing only, until a permission is recorded", () => {
+    const entries = (surface: keyof typeof SOFT_LAW_READ_SURFACE) =>
+      softLawSurfaceEntries(surface).find(
+        ({ authority }) => authority === "cz-mv-psmv",
+      );
+    for (const surface of Object.values(SOFT_LAW_READ_SURFACE)) {
+      expect(entries(surface)?.access).toBe("metadata");
+    }
+    testState.setEnv("SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES", "cz-mv-psmv");
+    for (const surface of Object.values(SOFT_LAW_READ_SURFACE)) {
+      expect(entries(surface)?.access).toBe("text");
+    }
+    // The permission widens only the source it names.
+    expect(softLawServingSettingOf("cz-uoou")).toBe(
+      SOFT_LAW_SERVING_SETTINGS["cz-uoou"],
+    );
+  });
+
+  test("every permission-gated source has a listing setting and a full-text setting", () => {
+    for (const authority of SOFT_LAW_PERMISSION_GATED_AUTHORITIES) {
+      expect(SOFT_LAW_SERVING_SETTINGS[authority].serve).toBe(
+        SOFT_LAW_SERVE_MODE.metadataLink,
+      );
+      expect(SOFT_LAW_FULL_TEXT_ON_PERMISSION[authority].serve).toBe(
+        SOFT_LAW_SERVE_MODE.full,
+      );
     }
   });
 

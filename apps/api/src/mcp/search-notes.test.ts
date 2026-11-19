@@ -4,6 +4,7 @@ import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
+  collectionCitationUnresolvedWarning,
   DECISION_QUERY_WARNING_PRODUCERS,
 } from "../lib/case-law/search-warnings";
 import { searchNotesForCall } from "./search-notes";
@@ -61,6 +62,19 @@ describe("search note audiences", () => {
     ]);
     expect(result.slice(1).every(({ warnings }) => warnings.length === 0)).toBe(
       true,
+    );
+  });
+
+  test("different unresolved collection citations keep their own phrasing notes", () => {
+    const warnings = ["Rc 60/2015", "č. 3528/2017 Sb. NSS"].map(
+      collectionCitationUnresolvedWarning,
+    );
+    const result = searchNotesForCall(
+      warnings.map((warning) => ({ warnings: [warning] })),
+      [],
+    );
+    expect(result.map(({ warnings: notes }) => notes)).toEqual(
+      warnings.map((warning) => [{ ...warning, audience: "agent" }]),
     );
   });
 

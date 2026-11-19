@@ -15,6 +15,7 @@ import {
   resolveAppleSignIn,
 } from "@/api/env-apple-sign-in";
 import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
+import { softLawFullTextPermittedSourcesSchema } from "@/api/env-soft-law";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -973,6 +974,9 @@ export const envApiServerSchema = {
    * and the package falls back to its own `content/` mount.
    */
   TEMPLATE_PACKS_CONTENT_DIR: v.optional(v.string()),
+
+  /** See `env-soft-law.ts`; read there so ingestion scripts need no API environment. */
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: softLawFullTextPermittedSourcesSchema,
 
   /**
    * Agent-sandbox engine config. The schema keeps these optional

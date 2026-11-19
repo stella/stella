@@ -725,6 +725,11 @@
       "inputDevice": "Vstup: {device}",
       "openSoundMac": "Otvoriť nastavenia Zvuku",
       "openSoundPc": "Otvoriť nastavenia zvuku"
+    },
+    "preview": {
+      "label": "Čo ste zatiaľ nadiktovali",
+      "listening": "Počúvam…",
+      "finishing": "Dokončujem…"
     }
   },
   "shortcut": {

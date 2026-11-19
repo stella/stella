@@ -725,6 +725,11 @@
       "inputDevice": "Wejście: {device}",
       "openSoundMac": "Otwórz ustawienia Dźwięku",
       "openSoundPc": "Otwórz ustawienia dźwięku"
+    },
+    "preview": {
+      "label": "Dotychczas podyktowany tekst",
+      "listening": "Słucham…",
+      "finishing": "Kończenie…"
     }
   },
   "shortcut": {

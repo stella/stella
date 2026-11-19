@@ -725,6 +725,11 @@
       "inputDevice": "Eingang: {device}",
       "openSoundMac": "Ton-Einstellungen öffnen",
       "openSoundPc": "Soundeinstellungen öffnen"
+    },
+    "preview": {
+      "label": "Bisher Diktiertes",
+      "listening": "Hört zu…",
+      "finishing": "Wird abgeschlossen…"
     }
   },
   "shortcut": {
