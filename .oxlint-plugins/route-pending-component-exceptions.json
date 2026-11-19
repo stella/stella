@@ -1,10 +1,5 @@
 [
   "apps/web/src/routes/_protected.admin/route.tsx",
-  "apps/web/src/routes/_protected.chat/$threadId.tsx",
-  "apps/web/src/routes/_protected.chat/history.tsx",
-  "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/$threadId.tsx",
-  "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/new.tsx",
-  "apps/web/src/routes/_protected.chat_.new.tsx",
   "apps/web/src/routes/_protected.contacts/$contactId.tsx",
   "apps/web/src/routes/_protected.contacts/import.tsx",
   "apps/web/src/routes/_protected.contacts/route.tsx",
@@ -58,7 +53,6 @@
   "apps/web/src/routes/auth/two-factor.tsx",
   "apps/web/src/routes/consent.tsx",
   "apps/web/src/routes/dev.tsx",
-  "apps/web/src/routes/index.tsx",
   "apps/web/src/routes/invoice-link.tsx",
   "apps/web/src/routes/knowledge/clauses.tsx",
   "apps/web/src/routes/knowledge/company-formats.$registry.$companyId.tsx",

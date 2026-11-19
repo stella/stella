@@ -42,6 +42,7 @@ macro_rules! with_stella_commands {
       dictation::dictation_set_share_window_title => "dictation_set_share_window_title",
       dictation::dictation_set_share_text_before_cursor => "dictation_set_share_text_before_cursor",
       dictation::dictation_set_language => "dictation_set_language",
+      dictation::dictation_set_custom_words => "dictation_set_custom_words",
       dictation::dictation_set_destination => "dictation_set_destination",
       dictation::dictation_set_hold_key => "dictation_set_hold_key",
       dictation::dictation_get_cloud_models => "dictation_get_cloud_models",

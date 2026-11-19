@@ -18,27 +18,31 @@
 //   hides the page chunk from the manifest's preloads) are banned there.
 //   Today's offenders are listed in `route-pending-component-exceptions.json`;
 //   the list only shrinks: a listed file that conforms is reported until its
-//   line is deleted.
-// - `pending-module-imports` (`*.pending.tsx` that marks a view with
-//   `framePendingView`, so the cold-load frame draws it before any provider
-//   mounts; any other pending view renders inside the providers): imports
-//   are closed: other `.pending` modules, `.logic` modules, type-only
-//   imports, and the modules in `route-pending-component-policy.json`. A
-//   `.pending` module a frame view imports is a frame view module too (the
-//   closure test walks that graph). No dynamic import,
+//   line is deleted. The pending view a route names is a frame view: its
+//   module marks it with `framePendingView`, unless the module is listed in
+//   `route-pending-component-unmarked.json` (below).
+// - `pending-module-imports` (every `*.pending.tsx`, which the cold-load
+//   frame may draw before any provider mounts): imports are closed: other
+//   `.pending` modules, `.logic` modules, type-only imports, and the modules
+//   in `route-pending-component-policy.json`. No dynamic import,
 //   no `lazy`, no `useTranslations` (use `PendingText`), no query, navigation
 //   or route hooks, except the loose URL reads `useParams({ strict: false })`
 //   and `useSearch({ strict: false })` and the named synchronous cache
-//   readers in the policy file.
+//   readers in the policy file. Today's pending modules that render only
+//   inside the providers (their views are not marked) are listed in
+//   `route-pending-component-unmarked.json` and go unchecked; that list only
+//   shrinks: a listed module that marks a view is reported until its line is
+//   deleted, so a new pending module is context-free from its first line.
 // - `page-module-shell` (`*.page.tsx` with a sibling `.pending` module): the
 //   page imports and renders the shell that sibling exports.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import exceptionList from "./route-pending-component-exceptions.json" with { type: "json" };
 import policy from "./route-pending-component-policy.json" with { type: "json" };
+import unmarkedList from "./route-pending-component-unmarked.json" with { type: "json" };
 import {
   elementName,
   filenameForContext,
@@ -50,6 +54,11 @@ import {
 } from "./utils.ts";
 
 const EXCEPTED_FILES: ReadonlySet<string> = new Set(exceptionList);
+// Pending modules whose views render only inside the providers, by
+// repository path; matched as a path suffix, as the frame's own files are.
+const UNMARKED_MODULES: readonly string[] = unmarkedList;
+const isUnmarkedModule = (filename: string): boolean =>
+  UNMARKED_MODULES.some((file) => filename.endsWith(file));
 const PENDING_SAFE_MODULES: ReadonlySet<string> = new Set(
   policy.pendingSafeModules,
 );
@@ -245,6 +254,40 @@ const importsOnlySafeNames = (node) => {
   );
 };
 
+// The file a route's `.pending` import names, or null when it names no
+// module this rule can read (a package, or a file that is not there).
+const pendingModuleFile = (
+  routeFilename: string,
+  source: string,
+): string | null => {
+  const bare = source.replace(/\.(?:tsx?|jsx?)$/u, "");
+  let base: string | null = null;
+  if (bare.startsWith(".")) {
+    base = path.join(path.dirname(routeFilename), bare);
+  } else if (bare.startsWith("@/")) {
+    const rootAt = routeFilename.lastIndexOf(`/${WEB_SOURCE_ROOT}`);
+    base =
+      rootAt === -1
+        ? null
+        : path.join(
+            routeFilename.slice(0, rootAt + WEB_SOURCE_ROOT.length + 1),
+            bare.slice("@/".length),
+          );
+  }
+  if (base === null) {
+    return null;
+  }
+  return (
+    [".tsx", ".fixture.tsx"]
+      .map((extension) => `${base}${extension}`)
+      .find((file) => existsSync(file)) ?? null
+  );
+};
+
+// Whether a module's source marks a view for the frame.
+const marksFrameView = (file: string): boolean =>
+  readFileSync(file, "utf-8").includes(`${FRAME_PENDING_VIEW}(`);
+
 // The page a `x.page.tsx` module (or its fixture copy) is named for.
 const pageStem = (context): string | null => {
   const name = filenameForContext(context).split("/").at(-1) ?? "";
@@ -269,6 +312,8 @@ const routePendingComponent = {
         "Only a layout (a route file rendering `<Outlet />`) delegates its pending view to its page with `LeafPendingView`.",
       conformingException:
         "This route file now declares its pending view: delete its line from .oxlint-plugins/route-pending-component-exceptions.json.",
+      unmarkedPendingView:
+        "A route's pending view is a frame view, drawn on a cold load before the providers mount: mark it with `framePendingView` in its `.pending` module. Only the modules listed in .oxlint-plugins/route-pending-component-unmarked.json render inside the providers, and that list only shrinks.",
     },
     // `census: true` reports every offender, ignoring the exception list,
     // so the list can be regenerated from a full run.
@@ -394,6 +439,21 @@ const routePendingComponent = {
         component.value.name !== pending.value.name;
       if (!paired) {
         findings.push({ node: pending, messageId: "pageModulePair" });
+        return;
+      }
+      // The pending view must be one the frame can draw, unless its module
+      // is one of today's listed exceptions.
+      const source = importSources.get(pending.value.name);
+      const file =
+        source === undefined
+          ? null
+          : pendingModuleFile(filenameForContext(context), source);
+      if (
+        file !== null &&
+        !isUnmarkedModule(file.replaceAll("\\", "/")) &&
+        !marksFrameView(file)
+      ) {
+        findings.push({ node: pending, messageId: "unmarkedPendingView" });
       }
     }
   },
@@ -409,16 +469,19 @@ const pendingModuleImports = {
         "A pending half loads nothing lazily: it is the view shown while the page loads.",
       bannedCall:
         "A pending half is context-free: no translations hook (use `PendingText`), no query, router or route hook, no `lazy`.",
+      conformingUnmarked:
+        "This pending module now marks a frame view: delete its line from .oxlint-plugins/route-pending-component-unmarked.json.",
     },
     schema: [],
   },
   createOnce(context) {
     // Local names bound to the router's URL hooks, aliases included.
     const urlHookLocals = new Set<string>();
-    // Held until the module is known to mark a frame view: only those
-    // render before the providers.
+    // Held until the module is known: a listed module that marks no frame
+    // view renders only inside the providers and goes unchecked.
     let findings: { node: unknown; messageId: string }[] = [];
-    let marksFrameView = false;
+    let marksView = false;
+    let program: unknown = null;
     const report = (node, messageId: string) => {
       findings.push({ node, messageId });
     };
@@ -433,13 +496,19 @@ const pendingModuleImports = {
       report(node, "closedImport");
     };
     return {
-      Program() {
+      Program(node) {
         urlHookLocals.clear();
         findings = [];
-        marksFrameView = false;
+        marksView = false;
+        program = node;
       },
       "Program:exit"() {
-        if (!marksFrameView) {
+        if (isUnmarkedModule(filenameForContext(context))) {
+          // Listed: it renders inside the providers until it marks a view,
+          // and then its line goes.
+          if (marksView && isAstNode(program)) {
+            context.report({ node: program, messageId: "conformingUnmarked" });
+          }
           return;
         }
         for (const { node, messageId } of findings) {
@@ -475,7 +544,7 @@ const pendingModuleImports = {
       CallExpression(node) {
         const callee = node.callee;
         if (isIdentifier(callee, FRAME_PENDING_VIEW)) {
-          marksFrameView = true;
+          marksView = true;
           return;
         }
         if (callee?.type === "Identifier" && urlHookLocals.has(callee.name)) {

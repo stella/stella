@@ -40,6 +40,7 @@ use crate::{
   dictation_context::{self, Sharing},
   dictation_hold_key::{self, Action, Gesture, HoldChoice},
   dictation_language::{self, Choice, LanguageSnapshot},
+  dictation_words,
   feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
@@ -165,6 +166,9 @@ pub struct DictationSnapshot {
   /// user paused it or the organization turned it off.
   keeps_in_history: bool,
   language: LanguageSnapshot,
+  /// The speaker's custom words, kept on this computer for the dictation
+  /// account.
+  custom_words: Vec<String>,
   /// Whether the server enables stella AI transcription for this account;
   /// without it the window offers no choice of destination.
   cloud_available: bool,
@@ -296,6 +300,7 @@ impl DictationState {
       text_before_cursor_available: dictation_context::TEXT_BEFORE_CURSOR_SUPPORTED,
       keeps_in_history,
       language: LanguageSnapshot::new(&inner.language, inferred),
+      custom_words: Vec::new(),
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
@@ -720,12 +725,16 @@ fn read_snapshot(app: &AppHandle, state: &DictationState) -> DictationSnapshot {
   } else {
     Vec::new()
   };
-  state.snapshot(
+  let mut snapshot = state.snapshot(
     available,
     cloud_available(app),
     inferred,
     crate::clipboard::keeps_dictations(app),
-  )
+  );
+  if available {
+    snapshot.custom_words = dictation_words::words(app);
+  }
+  snapshot
 }
 
 #[tauri::command]
@@ -846,6 +855,23 @@ pub fn dictation_set_language(
     choice.stored(),
     |inner| inner.language = choice,
   )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The speaker's custom words for the dictation account, replacing the
+/// list stored before; refused whole when a word or the list is beyond what
+/// stella AI accepts.
+#[tauri::command]
+pub fn dictation_set_custom_words(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  words: Vec<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  dictation_words::store(&app, &words)?;
+  publish(&app);
   Ok(read_snapshot(&app, &state))
 }
 
