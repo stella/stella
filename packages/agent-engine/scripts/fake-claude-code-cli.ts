@@ -40,6 +40,12 @@ export type FakeStep =
    * as the CLI does once a message written mid-turn joins the turn.
    */
   | { echoUser: true }
+  /**
+   * About a user message taken, the last one unless `index` names another:
+   * `echo` it, as the CLI does when it starts a steer it held past its
+   * result as a turn of its own, or report its lifecycle state.
+   */
+  | { aboutUser: "echo" | "started" | "cancelled"; index?: number }
   | { emit: object }
   /** Send a control request and wait for the client's response. */
   | { control: object }
@@ -1202,6 +1208,49 @@ export const FAKE_SCENARIOS = {
       },
     },
   ],
+  /**
+   * The CLI writes its result while it holds the message written mid-turn,
+   * then reads it and answers it as a turn of its own.
+   */
+  steer_held_past_result: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    assistant("msg-2", [{ type: "text", text: "Only the notes are here." }]),
+    result(),
+    { aboutUser: "started" },
+    { aboutUser: "echo" },
+    assistant("msg-3", [{ type: "text", text: "The annex is not here." }]),
+    result(),
+  ],
+  /**
+   * Two messages written mid-turn are held past the result: the CLI reads
+   * the first and drops the second, then answers the first.
+   */
+  steers_read_and_dropped_past_result: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    result(),
+    // The first of the two; the prompt was the first user message taken.
+    { aboutUser: "started", index: -2 },
+    { aboutUser: "echo", index: -2 },
+    { aboutUser: "cancelled" },
+    assistant("msg-3", [{ type: "text", text: "The annex is not here." }]),
+    result(),
+  ],
+  /** As above, but the CLI drops the held message unread. */
+  steer_dropped_past_result: [
+    ...freshTurn(),
+    assistant("msg-1", [toolUse("call-long", "Bash", { command: "ls" })]),
+    { expectUser: true },
+    toolResult("call-long", "notes.md"),
+    result(),
+    { aboutUser: "cancelled" },
+  ],
   /** The turn ends before it takes the message written mid-turn. */
   steer_too_late: [
     ...freshTurn(),
@@ -1511,6 +1560,30 @@ const refusedSessionArgs = (args: readonly string[]): string | null => {
   return null;
 };
 
+/** What the CLI writes about a user message it took (`lastUser` steps). */
+const aboutUser = (
+  { aboutUser: what, index = -1 }: Extract<FakeStep, { aboutUser: unknown }>,
+  users: readonly Record<string, unknown>[],
+) => {
+  const user = users.at(index);
+  return what === "echo"
+    ? {
+        type: "user",
+        message: user?.["message"],
+        parent_tool_use_id: null,
+        session_id: "s",
+        uuid: user?.["uuid"],
+        isReplay: true,
+      }
+    : {
+        type: "command_lifecycle",
+        command_uuid: user?.["uuid"],
+        state: what,
+        uuid: crypto.randomUUID(),
+        session_id: "s",
+      };
+};
+
 export const stepsFor = (
   scenario: FakeScenario,
   args: readonly string[],
@@ -1711,6 +1784,7 @@ export const run = async (
   let registeredServers: unknown = undefined;
   /** The client's answer to the last control request a step sent. */
   let lastResponse: { response?: unknown } | null = null;
+  const users: Record<string, unknown>[] = [];
   const queue = [...steps];
   for (let step = queue.shift(); step !== undefined; step = queue.shift()) {
     if ("expect" in step) {
@@ -1730,9 +1804,13 @@ export const run = async (
         response: controlAnswer(step, message.request_id, message.request),
       });
     } else if ("expectUser" in step) {
-      if ((await take("users")) === null) {
+      const user = await take("users");
+      if (user === null) {
         return;
       }
+      users.push(user);
+    } else if ("aboutUser" in step) {
+      write(aboutUser(step, users));
     } else if ("echoUser" in step) {
       const message = await take("users");
       if (message === null) {

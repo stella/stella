@@ -111,6 +111,7 @@ const CLAUDE_MESSAGE_TYPES = [
   "conversation_reset",
   "active_goal",
   "keep_alive",
+  "command_lifecycle",
 ] as const;
 export type ClaudeMessageType = (typeof CLAUDE_MESSAGE_TYPES)[number];
 
@@ -270,6 +271,24 @@ export const UserMessageSchema = v.object({
 export const CLAUDE_STOPPED_TOOL_KINDS: ReadonlySet<string> = new Set([
   "cancelled",
   "interrupted",
+]);
+
+/**
+ * What became of a message written to stdin with a uuid: `started` once the
+ * CLI reads it into the conversation; `cancelled`, `discarded` or `refused`
+ * when it drops it unread.
+ */
+export const CommandLifecycleSchema = v.object({
+  type: v.literal("command_lifecycle"),
+  command_uuid: v.string(),
+  state: v.string(),
+});
+
+/** The states of a message the CLI dropped without reading it. */
+export const CLAUDE_DROPPED_COMMAND_STATES: ReadonlySet<string> = new Set([
+  "cancelled",
+  "discarded",
+  "refused",
 ]);
 
 export const ResultMessageSchema = v.object({
