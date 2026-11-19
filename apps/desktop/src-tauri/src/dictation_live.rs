@@ -4,9 +4,10 @@
 //! gets one chunk at a time, and recording never waits for either.
 //!
 //! This computer transcribes each stretch as it is cut. stella AI admits a
-//! set number of requests a minute, so its stretches ride together: a request
-//! goes out once `UPLOAD_MILLIS` of audio waits, with every stretch cut by
-//! then, and the rest goes when recording stops.
+//! set number of requests a minute, so its stretches ride together: the
+//! first request goes out once `FIRST_UPLOAD_MILLIS` of audio waits, every
+//! later one once `UPLOAD_MILLIS` does, each with every stretch cut by then,
+//! and the rest goes when recording stops.
 //!
 //! The texts are joined only once recording stops, so nothing is typed
 //! before then; meanwhile the text so far goes to the preview, which shows
@@ -40,12 +41,16 @@ use crate::{
   dictation_cloud::{self, Attempt, Destination},
 };
 
-/// The least audio one request to stella AI carries while recording goes on.
-/// The server admits 30 transcription requests a minute for one person, and a
-/// request for every one-second stretch would spend them within a single
-/// dictation. Twelve a minute leaves room for the last request of each
-/// dictation and for dictation elsewhere on the same account.
+/// The least audio one request to stella AI carries while recording goes on,
+/// after the first. The server admits 30 transcription requests a minute for
+/// one person, and a request for every one-second stretch would spend them
+/// within a single dictation. With the first request sooner, a minute of
+/// speech is at most thirteen requests, the last one at the release
+/// included, which leaves room for dictation elsewhere on the same account.
 const UPLOAD_MILLIS: usize = 5_000;
+/// The least audio the first request carries: the text starts to show, and a
+/// short dictation has less left to send at the release.
+const FIRST_UPLOAD_MILLIS: usize = 3_000;
 
 /// What turns one stretch of 16 kHz audio into text, or `None` when it
 /// cannot.
@@ -161,9 +166,15 @@ impl<T: Transcribe> Transcription<T> {
   }
 
   /// Sends stella AI the stretches that wait, once they are worth a request
-  /// while recording goes on.
+  /// while recording goes on: sooner for the first request of the
+  /// dictation.
   pub fn upload_due(&mut self) {
-    let due = samples_in(UPLOAD_MILLIS, MODEL_SAMPLE_RATE);
+    let millis = if self.tally.requests == 0 {
+      FIRST_UPLOAD_MILLIS
+    } else {
+      UPLOAD_MILLIS
+    };
+    let due = samples_in(millis, MODEL_SAMPLE_RATE);
     if self
       .waiting
       .as_ref()
@@ -401,8 +412,10 @@ mod tests {
   use super::*;
 
   const SECOND: usize = MODEL_SAMPLE_RATE as usize;
-  /// The audio that is worth a request to stella AI.
+  /// The audio that is worth a request to stella AI after the first.
   const UPLOAD: usize = UPLOAD_MILLIS / 1_000 * SECOND;
+  /// The audio that is worth the first request.
+  const FIRST_UPLOAD: usize = FIRST_UPLOAD_MILLIS / 1_000 * SECOND;
 
   /// Speech of `length` samples whose first sample names it.
   fn speech(name: usize, length: usize) -> Vec<f32> {
@@ -576,29 +589,69 @@ mod tests {
   fn short_stretches_wait_and_go_to_stella_ai_in_one_request() {
     let mut transcription =
       Transcription::new(Fake::default(), Destination::Cloud, true);
-    for index in 0..3 {
+    for index in 0..2 {
       transcription.add(index, stretch(index + 1));
       transcription.upload_due();
     }
-    // Three seconds are not worth a request while recording goes on.
+    // Two seconds are not worth a request while recording goes on.
     assert!(transcription.transcriber.cloud_calls.is_empty());
     let (result, fake) = transcription.finish();
     assert_eq!(result, Ok("cloud1".to_string()));
-    assert_eq!(fake.cloud_lengths, vec![3 * SECOND]);
+    assert_eq!(fake.cloud_lengths, vec![2 * SECOND]);
+  }
+
+  #[test]
+  fn the_first_request_goes_after_three_seconds_and_the_others_after_five() {
+    let mut transcription =
+      Transcription::new(Fake::default(), Destination::Cloud, true);
+    // The second at which each request went out while recording went on.
+    let mut sent_at = Vec::new();
+    for second in 1..=14 {
+      transcription.add(second - 1, stretch(second));
+      let before = transcription.transcriber.cloud_calls.len();
+      transcription.upload_due();
+      if transcription.transcriber.cloud_calls.len() > before {
+        sent_at.push(second);
+      }
+    }
+    assert_eq!(sent_at, vec![3, 8, 13]);
+    let (result, fake) = transcription.finish();
+    assert_eq!(result, Ok("cloud1 cloud4 cloud9 cloud14".to_string()));
+    assert_eq!(
+      fake.cloud_lengths,
+      vec![FIRST_UPLOAD, UPLOAD, UPLOAD, SECOND]
+    );
   }
 
   #[test]
   fn a_request_goes_to_stella_ai_once_enough_audio_waits() {
     let (result, fake) = run(Fake::default(), Destination::Cloud, true, 12);
-    assert_eq!(result, Ok("cloud1 cloud6 cloud11".to_string()));
-    assert_eq!(fake.cloud_lengths, vec![UPLOAD, UPLOAD, 2 * SECOND]);
+    assert_eq!(result, Ok("cloud1 cloud4 cloud9".to_string()));
+    assert_eq!(fake.cloud_lengths, vec![FIRST_UPLOAD, UPLOAD, 4 * SECOND]);
   }
 
   #[test]
-  fn a_minute_of_one_second_stretches_is_twelve_requests() {
+  fn a_minute_of_continuous_speech_stays_within_fourteen_requests() {
     let (_, fake) = run(Fake::default(), Destination::Cloud, false, 60);
-    assert_eq!(fake.cloud_calls.len(), 12);
+    // At 3 s, then every 5 s up to 58 s, and the last 2 s at the release.
+    assert_eq!(fake.cloud_calls.len(), 13);
     assert_eq!(fake.cloud_lengths.iter().sum::<usize>(), 60 * SECOND);
+    // However the pauses cut the speech, a minute stays within the bound.
+    for millis in [300, 500, 1_500, 2_500, 3_000, 4_000, 7_000] {
+      let length = samples_in(millis, MODEL_SAMPLE_RATE);
+      let mut transcription =
+        Transcription::new(Fake::default(), Destination::Cloud, false);
+      for index in 0..(60 * SECOND).div_ceil(length) {
+        transcription.add(index, speech(index + 1, length));
+        transcription.upload_due();
+      }
+      let (_, fake) = transcription.finish();
+      assert!(
+        fake.cloud_calls.len() <= 14,
+        "{millis} ms stretches made {} requests",
+        fake.cloud_calls.len()
+      );
+    }
   }
 
   #[test]
@@ -691,8 +744,8 @@ mod tests {
       transcription.upload_due();
     }
     let (_, _, tally) = transcription.finish_tallied();
-    // The silent stretch is not counted; five seconds made one request
-    // while recording went on, the sixth went with the last one.
+    // The silent stretch is not counted; three seconds made the first
+    // request while recording went on, the other three went at the release.
     assert_eq!(
       tally,
       Tally {
@@ -780,10 +833,11 @@ mod tests {
   #[test]
   fn the_preview_grows_with_each_request_stella_ai_answers() {
     let (_, fake) = run(Fake::default(), Destination::Cloud, true, 12);
-    // Five seconds ride in each request; the last two go on release.
+    // Three seconds ride in the first request and five in the next; the
+    // last four go on release.
     assert_eq!(
       fake.previews,
-      previews(&["cloud1", "cloud1 cloud6", "cloud1 cloud6 cloud11"])
+      previews(&["cloud1", "cloud1 cloud4", "cloud1 cloud4 cloud9"])
     );
   }
 

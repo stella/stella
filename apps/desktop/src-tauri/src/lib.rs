@@ -53,6 +53,7 @@ mod dictation_hold_key;
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_models;
 mod dictation_pauses;
 mod dictation_preview;
 mod dictation_trace;
