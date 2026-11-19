@@ -194,9 +194,13 @@ function ProfilePageBody() {
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
       });
-      // A failed sign-out is expected here: the server may already have
-      // ended the session with the account.
-      await Result.tryPromise(async () => await authClient.signOut());
+      const signedOut = await Result.tryPromise(
+        async () => await authClient.signOut(),
+      );
+      if (Result.isError(signedOut)) {
+        // Expected: the server may already have ended the session with the
+        // account. The page leaves for sign-in either way.
+      }
       forgetUserStorage(deletedUserId);
       signalSessionChange();
       hideSessionDocument();
