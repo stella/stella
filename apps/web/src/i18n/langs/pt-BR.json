@@ -2412,6 +2412,7 @@
       "save_document": "Salvar documento",
       "save_matter": "Salvar caso",
       "save_playbook": "Salvar playbook",
+      "save_skill_package": "Salvar habilidade",
       "save_task": "Salvar tarefa",
       "save_template": "Salvar modelo",
       "save_time_entry": "Salvar entrada de tempo",
@@ -2440,6 +2441,7 @@
       "use-browser": "Usando seu navegador",
       "use_connector_secret": "Usando a credencial do conector",
       "user_message": "Enviado enquanto o agente trabalhava",
+      "validate_skill_package": "Verificar habilidade",
       "web_search": "Pesquisando na web"
     },
     "toolCall": {

@@ -108,6 +108,7 @@ import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools"
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
+import { createSkillPackageTools } from "@/api/lib/agent-skills/skill-package-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -339,6 +340,7 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
+type SkillPackageTools = ReturnType<typeof createSkillPackageTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
@@ -406,6 +408,7 @@ type BuiltInChatTools = OrgTools &
   ConnectorTools &
   ChatExecutionTools &
   SkillTools &
+  SkillPackageTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
   CounterpartyCheckTools &
@@ -1124,6 +1127,13 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     skills: skillMetadata,
     userId,
   });
+  const skillPackageTools = createSkillPackageTools({
+    memberRole,
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    userId,
+  });
   // Unified business-registry tool: register once with a dynamic
   // `jurisdiction` enum derived from the per-adapter native-tool
   // enablement. Adapters are filtered by organization/deployment credential
@@ -1482,6 +1492,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...connectorTools,
       ...executionTools,
       ...skillTools,
+      ...skillPackageTools,
       ...businessRegistryTools,
       ...counterpartyCheckTools,
       ...boeTools,

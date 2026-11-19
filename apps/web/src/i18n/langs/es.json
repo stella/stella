@@ -2412,6 +2412,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -2440,6 +2441,7 @@
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
       "user_message": "Enviado mientras el agente trabajaba",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
     },
     "toolCall": {

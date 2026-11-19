@@ -2412,6 +2412,7 @@
       "save_document": "Salvesta dokument",
       "save_matter": "Salvesta toimik",
       "save_playbook": "Salvesta playbook",
+      "save_skill_package": "Salvesta oskus",
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
@@ -2440,6 +2441,7 @@
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
       "user_message": "Saadetud agendi töö ajal",
+      "validate_skill_package": "Kontrolli oskust",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
