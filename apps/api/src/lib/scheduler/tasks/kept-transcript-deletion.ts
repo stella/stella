@@ -35,7 +35,7 @@ const MAX_BACKOFF_MINUTES = 60;
 /** From this many failed attempts on, every further failure is reported. */
 export const KEPT_TRANSCRIPT_REPORT_ATTEMPTS = 5;
 /** A transcript still kept this long after it was recorded is reported. */
-export const KEPT_TRANSCRIPT_OVERDUE_MS = 60 * 60 * 1000;
+const KEPT_TRANSCRIPT_OVERDUE_MS = 60 * 60 * 1000;
 const OVERDUE_REPORT_CAP = 100;
 const OVERDUE_REPORT_IDS = 10;
 
@@ -193,18 +193,22 @@ const deleteDueBatch = async (
 
 /** Reports every transcript still kept past the bound, oldest first. */
 const reportOverdue = async ({ db, logger }: SchedulerTaskContext) => {
-  const overdue = await readBounded(
-    db
-      .select({
-        transcriptionId: keptTranscriptDeletions.transcriptionId,
-        createdAt: keptTranscriptDeletions.createdAt,
-      })
-      .from(keptTranscriptDeletions)
-      .where(
-        sql`${keptTranscriptDeletions.createdAt} < now() - (${KEPT_TRANSCRIPT_OVERDUE_MS} * interval '1 millisecond')`,
-      )
-      .orderBy(asc(keptTranscriptDeletions.createdAt)),
-    OVERDUE_REPORT_CAP,
+  const overdue = await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({
+            transcriptionId: keptTranscriptDeletions.transcriptionId,
+            createdAt: keptTranscriptDeletions.createdAt,
+          })
+          .from(keptTranscriptDeletions)
+          .where(
+            sql`${keptTranscriptDeletions.createdAt} < now() - (${KEPT_TRANSCRIPT_OVERDUE_MS} * interval '1 millisecond')`,
+          )
+          .orderBy(asc(keptTranscriptDeletions.createdAt)),
+        OVERDUE_REPORT_CAP,
+      ),
   );
   if (overdue.type === "overflow") {
     logger.error(KEPT_TRANSCRIPT_EVENTS.overdue, {

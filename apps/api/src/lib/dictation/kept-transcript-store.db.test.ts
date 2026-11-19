@@ -38,6 +38,10 @@ const KEPT: ElevenLabsDeployment = {
 };
 
 let db: TestDatabase;
+// The store takes the owner connection's shape; the migrated test database
+// runs the same statements.
+const storeDb = () =>
+  asTestRaw<NonNullable<Parameters<typeof recordKeptTranscript>[0]["db"]>>(db);
 
 beforeAll(async () => {
   db = await getTestDb();
@@ -122,12 +126,12 @@ const rows = async () =>
 describe("kept transcript store", () => {
   test("records the provider id only, due after the request's own delete had its chance, once per id", async () => {
     await recordKeptTranscript({
-      db,
+      db: storeDb(),
       environment: "eu",
       transcriptionId: "mkIIQ7dqfmic6Mpb0fWR",
     });
     await recordKeptTranscript({
-      db,
+      db: storeDb(),
       environment: "eu",
       transcriptionId: "mkIIQ7dqfmic6Mpb0fWR",
     });
@@ -144,7 +148,10 @@ describe("kept transcript store", () => {
       KEPT_TRANSCRIPT_FIRST_SWEEP_DELAY_MS - 60_000,
     );
 
-    await forgetKeptTranscript({ db, transcriptionId: "mkIIQ7dqfmic6Mpb0fWR" });
+    await forgetKeptTranscript({
+      db: storeDb(),
+      transcriptionId: "mkIIQ7dqfmic6Mpb0fWR",
+    });
     expect(await rows()).toEqual([]);
   });
 
@@ -152,7 +159,7 @@ describe("kept transcript store", () => {
     expect(
       await rejectionOf(
         recordKeptTranscript({
-          db,
+          db: storeDb(),
           environment: "default",
           transcriptionId: "../escape",
         }),
