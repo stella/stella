@@ -2002,7 +2002,7 @@
     "ComboboxTrigger.variant": ["field", "plain"],
     "CommandItem.size": ["default", "row"],
     "ComposerPlaceholder.stature": ["compact", "large"],
-    "CourtBadge.size": ["default", "inline"],
+    "CourtBadge.size": ["default", "inline", "prose"],
     "CourtBadge.weight": ["dashed", "outline", "solid", "tinted"],
     "DatePickerPopover.layer": [
       "chrome",
@@ -2071,7 +2071,7 @@
       "search",
       "search-child"
     ],
-    "DocumentIdentityBadge.size": ["default", "inline"],
+    "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
       "csv",
       "excel",
