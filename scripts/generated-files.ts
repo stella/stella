@@ -210,6 +210,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/bbox/*",
     "apps/api/src/lib/business-registries/desktop/*",
     "apps/api/src/lib/db/operator-registrations/input.ts",
+    "apps/api/src/lib/dictation/*",
     "apps/api/src/lib/files/pdf-signing/*",
     "apps/api/src/lib/files/pdf-signing/fonts/*",
     "apps/api/src/lib/files/pdf-signing/trust/*",
