@@ -78,3 +78,54 @@ export const desktopDictationTranscriptSchema = v.strictObject({
     ),
   ),
 });
+
+/** Where a linked desktop files a recording's transcript in a matter. */
+export const DESKTOP_DICTATION_TRANSCRIPTS_PATH =
+  `${STELLA_API_VERSION_PREFIX}/desktop/dictation/transcripts` as const;
+
+/** A recording is at most four hours, cut into pieces of at least fifteen
+ *  seconds, so its transcript has at most this many paragraphs; a paragraph
+ *  joins a few pieces of speech. */
+export const DESKTOP_DICTATION_TRANSCRIPT_LIMITS = {
+  titleLength: 200,
+  paragraphs: 2000,
+  paragraphLength: 10_000,
+  /** Four hours of speech, with room for fast speakers. */
+  totalLength: 1_000_000,
+  /** Four hours, in milliseconds. */
+  maxStartMs: 4 * 60 * 60 * 1000,
+} as const;
+
+/** A transcript's paragraphs, each with where it starts in the recording. */
+export const desktopDictationTranscriptParagraphsSchema = v.pipe(
+  v.array(
+    v.strictObject({
+      startMs: v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(0),
+        v.maxValue(DESKTOP_DICTATION_TRANSCRIPT_LIMITS.maxStartMs),
+      ),
+      text: v.pipe(
+        v.string(),
+        v.maxLength(DESKTOP_DICTATION_TRANSCRIPT_LIMITS.paragraphLength),
+      ),
+    }),
+  ),
+  v.minLength(1),
+  v.maxLength(DESKTOP_DICTATION_TRANSCRIPT_LIMITS.paragraphs),
+  v.check(
+    (paragraphs) =>
+      paragraphs.reduce((total, { text }) => total + text.length, 0) <=
+      DESKTOP_DICTATION_TRANSCRIPT_LIMITS.totalLength,
+    "The transcript is longer than a recording of four hours",
+  ),
+);
+
+/** What a filed transcript is called in the matter. */
+export const desktopDictationTranscriptSavedSchema = v.strictObject({
+  fileName: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+});
+export type DesktopDictationTranscriptSaved = v.InferOutput<
+  typeof desktopDictationTranscriptSavedSchema
+>;

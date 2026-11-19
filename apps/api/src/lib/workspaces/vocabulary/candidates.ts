@@ -13,7 +13,7 @@ export const VOCABULARY_KINDS = [
   "glossary",
 ] as const;
 
-export type VocabularyKind = (typeof VOCABULARY_KINDS)[number];
+type VocabularyKind = (typeof VOCABULARY_KINDS)[number];
 
 export const VOCABULARY_WEIGHTS = {
   "matter-name": 1,

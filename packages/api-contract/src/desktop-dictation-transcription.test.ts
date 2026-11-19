@@ -6,7 +6,10 @@ import {
   DESKTOP_DICTATION_MODELS_PATH,
   DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
   DESKTOP_DICTATION_TRANSCRIBE_PATH,
+  DESKTOP_DICTATION_TRANSCRIPT_LIMITS,
+  DESKTOP_DICTATION_TRANSCRIPTS_PATH,
   desktopDictationModelsSchema,
+  desktopDictationTranscriptParagraphsSchema,
 } from "./desktop-dictation-transcription";
 import contract from "./desktop-dictation-transcription.json";
 import {
@@ -20,6 +23,7 @@ test("the typed transcription contract reads the native one", () => {
     modelsLabeledQuery: DESKTOP_DICTATION_MODELS_LABELED_QUERY,
     modelsRetentionQuery: DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
     transcribePath: DESKTOP_DICTATION_TRANSCRIBE_PATH,
+    transcriptsPath: DESKTOP_DICTATION_TRANSCRIPTS_PATH,
     maxAudioBytes: MAX_TRANSCRIPTION_AUDIO_BYTES,
     maxAudioSeconds: MAX_TRANSCRIPTION_AUDIO_SECONDS,
   });
@@ -53,4 +57,43 @@ test("a model may name its provider and that it runs outside the region", () => 
       models: [{ ...listed.models[1], provider: "" }],
     }).success,
   ).toBe(false);
+});
+
+test("a transcript has paragraphs within a four-hour recording", () => {
+  const paragraph = { startMs: 0, text: "Memo to file." };
+  const valid = (paragraphs: unknown) =>
+    v.safeParse(desktopDictationTranscriptParagraphsSchema, paragraphs).success;
+  expect(valid([paragraph])).toBe(true);
+  expect(valid([])).toBe(false);
+  expect(valid([{ ...paragraph, startMs: -1 }])).toBe(false);
+  expect(valid([{ ...paragraph, startMs: 1.5 }])).toBe(false);
+  expect(
+    valid([
+      {
+        ...paragraph,
+        startMs: DESKTOP_DICTATION_TRANSCRIPT_LIMITS.maxStartMs + 1,
+      },
+    ]),
+  ).toBe(false);
+  expect(
+    valid([
+      {
+        ...paragraph,
+        text: "a".repeat(DESKTOP_DICTATION_TRANSCRIPT_LIMITS.paragraphLength),
+      },
+    ]),
+  ).toBe(true);
+  const longest = "a".repeat(
+    DESKTOP_DICTATION_TRANSCRIPT_LIMITS.paragraphLength,
+  );
+  const tooMuch = Array.from(
+    {
+      length:
+        DESKTOP_DICTATION_TRANSCRIPT_LIMITS.totalLength /
+          DESKTOP_DICTATION_TRANSCRIPT_LIMITS.paragraphLength +
+        1,
+    },
+    (_unused, index) => ({ startMs: index * 1000, text: longest }),
+  );
+  expect(valid(tooMuch)).toBe(false);
 });
