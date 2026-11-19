@@ -181,15 +181,14 @@
     "handoffExpired": "Platnost odkazu na dokument vypršela dříve, než byl stella desktop připojen. Začněte znovu ze stelly."
   },
   "settings": {
-    "about": "O aplikaci",
-    "accountLinked": "Účet propojen",
+    "accountLinked": "Propojeno",
+    "disconnect": "Odpojit",
     "connectionExpired": "Platnost připojení vypršela",
     "reconnectToStella": "Znovu připojit ke stella web",
     "connectionExpiredDescription": "Platnost připojení vypršela. Připojte se znovu ke stella web.",
     "connectToStella": "Připojit ke stella web",
     "connectToStellaDescription": "Propojte tento počítač s aktuálním účtem stella bez otevírání dokumentu.",
     "desktopBenefit": "Dokumenty Office a místní historie schránky",
-    "disconnectAccount": "Odpojit účet",
     "errorDisconnectAccount": "Aplikaci stella desktop se nepodařilo odpojit váš účet.",
     "errorReadAccount": "Aplikaci stella desktop se nepodařilo ověřit připojení účtu.",
     "stellaWebAccount": "Účet stella web",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Technické chyby, časové údaje a shrnutí pádů; žádné dokumenty, obsah schránky ani údaje o aktivitě.",
     "errorReadTelemetry": "Nastavení hlášení se nepodařilo načíst. Zkuste to znovu.",
     "errorSaveTelemetry": "Nastavení hlášení se nepodařilo uložit. Zkuste to znovu.",
-    "general": "Obecné",
     "lastVerified": "Naposledy ověřeno",
     "language": "Jazyk",
-    "languageDescription": "Zvolte jazyk desktopové aplikace.",
     "setupGuide": "Průvodce nastavením",
     "setupGuideDescription": "Projděte nastavení znovu: co aplikace dělá, oprávnění a zkratku schránky.",
     "setupGuideAction": "Spustit nastavení znovu",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Podpora",
     "title": "Nastavení",
-    "serverLabel": "Server",
+    "pages": {
+      "general": "Obecné",
+      "dictation": "Diktování",
+      "clipboard": "Schránka",
+      "agents": "AI a agenti",
+      "signing": "Podepisování",
+      "activity": "Aktivita",
+      "notifications": "Oznámení",
+      "permissions": "Oprávnění",
+      "about": "O aplikaci"
+    },
+    "account": "Účet",
+    "app": "Aplikace",
+    "privacy": "Soukromí",
+    "pageEmpty": "Na tomto počítači tu není co nastavit.",
     "connectToHost": "Připojit k {host}",
     "connectToHostDescription": "Otevře {host} v prohlížeči, kde tento počítač schválíte.",
     "reconnectNeeded": "Je potřeba znovu připojit",
     "reconnect": "Znovu připojit",
     "reconnectHostDescription": "Propojení s {host} je třeba obnovit. Schvalte tento počítač znovu v prohlížeči.",
-    "permissions": "Oprávnění",
     "permissionNotificationsDescription": "Upozorní vás, když je dokument připravený nebo synchronizace vyžaduje pozornost.",
     "permissionAccessibility": "Zpřístupnění",
     "permissionAccessibilityDescription": "Umožní přehledu aktivity zaznamenávat názvy oken.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Povoleno",
     "permissionAllow": "Povolit",
     "permissionOpenSettings": "Otevřít nastavení",
-    "permissionDenied": "Vypnuto v nastavení systému.",
+    "permissionTurnedOff": "Vypnuto",
+    "permissionsDescription": "Každé je vaše volba a odemyká jednu věc.",
+    "neverRequested": "Nikdy nevyžadováno",
     "permissionManaged": "Spravuje vaše organizace",
     "errorUpdateAutostart": "Aplikaci stella desktop se nepodařilo nastavit spouštění při přihlášení.",
     "errorPermissions": "stella desktop nemohl přečíst nebo změnit toto oprávnění.",
@@ -600,6 +612,13 @@
     "title": "Diktování",
     "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
     "descriptionCloud": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč převádí stella AI a stella ji neukládá.",
+    "lede": "Podržte <key>{shortcut}</key> a mluvte. Text se objeví tam, kde píšete.",
+    "groups": {
+      "shortcut": "Zkratka",
+      "transcription": "Přepis",
+      "cleanup": "Úprava",
+      "thisComputer": "Na tomto počítači"
+    },
     "cleanup": {
       "title": "Upravit pomocí AI",
       "description": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“ nebo „tučně“, a přizpůsobí text aplikaci, například e-mailu. Přes stellu se poskytovateli AI vaší organizace odešle jen text, ne zvuk; stella ho neukládá.",
@@ -607,11 +626,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Sdílet název okna s úpravou pomocí AI",
+        "title": "Sdílet název okna",
         "description": "Pomůže odlišit smlouvu od interní poznámky. Názvy oken mohou obsahovat jména klientů nebo věcí."
       },
       "textBeforeCursor": {
-        "title": "Sdílet text před kurzorem s úpravou pomocí AI",
+        "title": "Sdílet text před kurzorem",
         "description": "Nejvýše {limit, number} znaků dokumentu, ve kterém jste, aby diktát navázal na to, co píšete."
       }
     },
@@ -620,6 +639,7 @@
       "title": "Převádět pomocí",
       "local": "Tento počítač",
       "cloud": "stella AI",
+      "localDescription": "Řeč se převádí na tomto počítači a neukládá se.",
       "cloudDescription": "Zvuk opustí tento počítač: k převodu se odešle do stelly a přes poskytovatele AI stelly k poskytovateli vybraného modelu. stella ho neukládá.",
       "unavailableRegion": "stella AI zatím v oblasti vaší organizace převod řeči nenabízí.",
       "unavailableProvider": "Poskytovatel AI vaší organizace převod řeči nenabízí.",
@@ -627,7 +647,6 @@
       "model": "Model převodu",
       "chooseModel": "Zvolte model",
       "outsideRegion": "Mimo váš region",
-      "outsideRegionNote": "Tento model zpracovává zvuk mimo region vaší organizace.",
       "retainsData": "Uchovává váš zvuk",
       "retainsDataTitle": "{provider} si ponechává, co diktujete",
       "retainsDataWarning": "Tento model běží na účtu bez nulového uchovávání dat. {provider} ukládá zvuk i přepis všeho, co nadiktujete, podle vlastních podmínek a mimo kontrolu stella. Nediktujte s ním důvěrné ani klientské informace."
@@ -640,6 +659,7 @@
       "noResults": "Žádné jazyky nenalezeny"
     },
     "modelNeeded": "Řečový model běží na tomto počítači.",
+    "speechModel": "Model řeči",
     "modelInstalled": "Model řeči ({size} MB) je v tomto počítači.",
     "removeModel": "Odstranit",
     "removeFailed": "Model řeči se nepodařilo odstranit. Zkuste to znovu.",
@@ -648,6 +668,13 @@
     "downloadFailed": "Řečový model se nepodařilo stáhnout.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Zkratku {shortcut} používá jiná aplikace.",
+    "holdKey": {
+      "title": "Klávesa k podržení",
+      "description": "Podržte ji samotnou a mluvte. Krátké stisknutí ani zkratka, která ji používá, nic nespustí.",
+      "right": "Pravý {key}",
+      "waiting": "stella zaznamená {shortcut}, jakmile bude mít přístup ke Zpřístupnění.",
+      "unavailable": "stella na tomto počítači nemůže sledovat {shortcut}. Zvolte jinou klávesu."
+    },
     "failure": {
       "accessibility": "Povolte přístup Zpřístupnění, aby stella mohla psát do jiných aplikací.",
       "microphone": "stella neslyší váš mikrofon. Zkontrolujte přístup k mikrofonu v Nastavení systému.",
@@ -656,6 +683,7 @@
       "focusChanged": "Než byl text připraven, přepnuli jste do jiné aplikace, takže se nic nenapsalo. Zkuste to znovu.",
       "focusUnconfirmed": "stella nemohla ověřit, která aplikace je aktivní, takže se nic nenapsalo. Zkuste to znovu.",
       "shortcutHeld": "Pusťte klávesy zkratky, aby se text mohl napsat. Nic se nenapsalo, zkuste to znovu.",
+      "passwordField": "Je vybrané pole pro heslo, proto se diktát neuložil ani nenapsal.",
       "cloudTranscription": "stella AI tento diktát nepřevedla a řečový model v tomto počítači není. Zkuste to znovu, nebo u „Převádět pomocí“ zvolte „Tento počítač“ a model stáhněte."
     },
     "failureKeptInHistory": "Text najdete v historii schránky."
@@ -798,6 +826,7 @@
       "screenRecording": "Záznam obrazovky",
       "camera": "Kamera",
       "keystrokes": "Stisky kláves",
+      "keystrokesWithoutHoldKey": "Stisky kláves, pokud si nezvolíte klávesu k podržení",
       "fullDiskAccess": "Plný přístup k disku",
       "administrator": "Oprávnění správce"
     }

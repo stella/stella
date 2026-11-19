@@ -21,7 +21,7 @@ import {
 } from "@stll/playwright-tools/marketing-locales";
 import { repoRelativePath } from "@stll/portable-path";
 
-import { seedSidebarState } from "../helpers/sidebar-state";
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import {
   anchorMarketingAgentFinalTurn,
   getMarketingAgentThreadId,
@@ -1026,7 +1026,6 @@ const recordCapture = async ({
   });
   try {
     await recordCaptureInContext({ capture, context, theme, views });
-    return;
   } finally {
     // Closing the page never unmounts the editor, so an editor take's lock
     // would outlive it and badge the document in later scenes. Release it
@@ -1494,12 +1493,11 @@ const createRecordingContext = async ({
     viewport,
   });
   await context.addCookies(cookies);
-  if (collapsedSidebar) {
-    await seedSidebarState({ baseURL: WEB_URL, context, state: "collapsed" });
-  }
-  await context.addInitScript((nextTheme) => {
-    localStorage.setItem("theme", nextTheme);
-  }, theme);
+  await setPresentationPrefs({
+    context,
+    url: WEB_URL,
+    patch: { sidebarOpen: !collapsedSidebar, theme },
+  });
   if (cursor === "visible") {
     await context.addInitScript(installCursorOverlay, CURSOR_OVERLAY_ID);
   }

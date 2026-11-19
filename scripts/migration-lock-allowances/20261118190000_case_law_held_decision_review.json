@@ -1,0 +1,3 @@
+{
+  "add-constraint": "Both CHECK constraints on case_law_held_decision_attachments are added NOT VALID, enforcing new writes without scanning rows (the table is new and holds none in any environment yet); each catalog change is bounded by the 1s lock_timeout and 30s statement_timeout."
+}

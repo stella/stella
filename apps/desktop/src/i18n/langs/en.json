@@ -181,15 +181,14 @@
     "handoffExpired": "The document link expired before stella desktop was connected. Start again from stella."
   },
   "settings": {
-    "about": "About",
-    "accountLinked": "Account linked",
+    "accountLinked": "Linked",
+    "disconnect": "Disconnect",
     "connectionExpired": "Connection expired",
     "reconnectToStella": "Reconnect to stella web",
     "connectionExpiredDescription": "Connection expired. Reconnect to stella web.",
     "connectToStella": "Connect to stella web",
     "connectToStellaDescription": "Link this computer to your current stella account without opening a document.",
     "desktopBenefit": "Office files and local clipboard history",
-    "disconnectAccount": "Disconnect account",
     "errorDisconnectAccount": "stella desktop could not disconnect your account.",
     "errorReadAccount": "stella desktop could not check your account connection.",
     "stellaWebAccount": "stella web account",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Technical errors, timings and crash summaries; no documents, clipboard or activity data.",
     "errorReadTelemetry": "Could not read the reporting preference. Try again.",
     "errorSaveTelemetry": "Could not save the reporting preference. Try again.",
-    "general": "General",
     "lastVerified": "Last verified",
     "language": "Language",
-    "languageDescription": "Choose the language used by the desktop app.",
     "setupGuide": "Setup guide",
     "setupGuideDescription": "Go through setup again: what the app does, permissions and the clipboard shortcut.",
     "setupGuideAction": "Run setup again",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Support",
     "title": "Settings",
-    "serverLabel": "Server",
+    "pages": {
+      "general": "General",
+      "dictation": "Dictation",
+      "clipboard": "Clipboard",
+      "agents": "AI and agents",
+      "signing": "Signing",
+      "activity": "Activity",
+      "notifications": "Notifications",
+      "permissions": "Permissions",
+      "about": "About"
+    },
+    "account": "Account",
+    "app": "App",
+    "privacy": "Privacy",
+    "pageEmpty": "Nothing to set up here on this computer.",
     "connectToHost": "Connect to {host}",
     "connectToHostDescription": "Opens {host} in your browser so you can approve this computer.",
     "reconnectNeeded": "Reconnect needed",
     "reconnect": "Reconnect",
     "reconnectHostDescription": "The link to {host} has to be renewed. Approve this computer again in your browser.",
-    "permissions": "Permissions",
     "permissionNotificationsDescription": "Tells you when a document is ready or a sync needs attention.",
     "permissionAccessibility": "Accessibility",
     "permissionAccessibilityDescription": "Lets the activity timeline record window titles.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Allowed",
     "permissionAllow": "Allow",
     "permissionOpenSettings": "Open settings",
-    "permissionDenied": "Turned off in system settings.",
+    "permissionTurnedOff": "Turned off",
+    "permissionsDescription": "Each one is your choice and unlocks one thing.",
+    "neverRequested": "Never requested",
     "permissionManaged": "Managed by your organization",
     "errorUpdateAutostart": "stella desktop could not update start-on-login.",
     "errorPermissions": "stella desktop could not read or change this permission.",
@@ -600,6 +612,13 @@
     "title": "Dictation",
     "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored.",
     "descriptionCloud": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed by stella AI and is not stored by stella.",
+    "lede": "Hold <key>{shortcut}</key> and speak. The text appears where you are typing.",
+    "groups": {
+      "shortcut": "Shortcut",
+      "transcription": "Transcription",
+      "cleanup": "Clean up",
+      "thisComputer": "On this computer"
+    },
     "cleanup": {
       "title": "Clean up with AI",
       "description": "Fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email. Only the text, not the audio, is sent through stella to your organization’s AI provider; stella does not store it.",
@@ -607,11 +626,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Share the window title with AI cleanup",
+        "title": "Share the window title",
         "description": "Helps tell a contract from a memo. Window titles can contain client or matter names."
       },
       "textBeforeCursor": {
-        "title": "Share text before the cursor with AI cleanup",
+        "title": "Share text before the cursor",
         "description": "Up to {limit, number} characters of the document you are in, so the dictation fits what you are writing."
       }
     },
@@ -620,6 +639,7 @@
       "title": "Transcribe with",
       "local": "This computer",
       "cloud": "stella AI",
+      "localDescription": "Speech is transcribed on this computer and is not stored.",
       "cloudDescription": "Audio leaves this computer: it is sent to stella and, through stella’s AI provider, to the provider of the selected model for transcription. stella does not store it.",
       "unavailableRegion": "stella AI does not offer transcription in your organization’s region yet.",
       "unavailableProvider": "Your organization’s AI provider does not offer transcription.",
@@ -627,7 +647,6 @@
       "model": "Transcription model",
       "chooseModel": "Choose a model",
       "outsideRegion": "Outside your region",
-      "outsideRegionNote": "This model processes audio outside your organization’s region.",
       "retainsData": "Keeps your audio",
       "retainsDataTitle": "{provider} keeps what you dictate",
       "retainsDataWarning": "This model runs on an account without zero data retention. {provider} stores the audio and transcript of everything you dictate under its own terms, outside stella’s control. Don’t dictate confidential or client information with it."
@@ -640,6 +659,7 @@
       "noResults": "No languages found"
     },
     "modelNeeded": "The speech model runs on this computer.",
+    "speechModel": "Speech model",
     "modelInstalled": "The speech model ({size} MB) is on this computer.",
     "removeModel": "Remove",
     "removeFailed": "The speech model could not be removed. Try again.",
@@ -648,6 +668,13 @@
     "downloadFailed": "The speech model could not be downloaded.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Another app is using {shortcut}.",
+    "holdKey": {
+      "title": "Key to hold",
+      "description": "Hold it on its own to dictate. A quick tap, or a shortcut that uses it, does nothing.",
+      "right": "Right {key}",
+      "waiting": "stella notices {shortcut} once it has Accessibility access.",
+      "unavailable": "stella cannot watch {shortcut} on this computer. Choose another key."
+    },
     "failure": {
       "accessibility": "Allow Accessibility access so stella can type into other apps.",
       "microphone": "stella could not hear your microphone. Check Microphone access in System Settings.",
@@ -656,6 +683,7 @@
       "focusChanged": "You switched to another app before the text was ready, so nothing was typed. Try again.",
       "focusUnconfirmed": "stella could not confirm which app has focus, so nothing was typed. Try again.",
       "shortcutHeld": "Release the shortcut keys to type. Nothing was typed; try again.",
+      "passwordField": "A password field has focus, so the dictation was not kept or typed.",
       "cloudTranscription": "stella AI could not transcribe this dictation, and the speech model is not on this computer. Try again, or set “Transcribe with” to “This computer” and download the model."
     },
     "failureKeptInHistory": "The text is in clipboard history."
@@ -798,6 +826,7 @@
       "screenRecording": "Screen recording",
       "camera": "Camera",
       "keystrokes": "Keystrokes",
+      "keystrokesWithoutHoldKey": "Keystrokes, unless you choose a key to hold",
       "fullDiskAccess": "Full Disk Access",
       "administrator": "Administrator rights"
     }

@@ -29,6 +29,13 @@ const authBaseUrl = (origin: string) =>
 export const getAuthIssuerUrl = () =>
   authBaseUrl(env.PUBLIC_URL ?? env.BETTER_AUTH_URL);
 
+/**
+ * The OAuth redirect URI bound to every agent client: an internal,
+ * handler-less path under our own issuer that is never navigated to.
+ */
+export const getAgentRedirectUri = () =>
+  `${getAuthIssuerUrl()}/agent/internal/code-sink` as const;
+
 /** Active auth transport used for browser callbacks and JWKS discovery. */
 export const getAuthEndpointUrl = (path: string) =>
   new URL(path, withTrailingSlash(authBaseUrl(env.BETTER_AUTH_URL))).toString();

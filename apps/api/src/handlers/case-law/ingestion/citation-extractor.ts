@@ -1203,6 +1203,21 @@ const normalizeDashes = (text: string): string => text.replace(DASH_RE, "-");
  * dot normalization, splitting it into its three components so the dedup
  * key can rebuild them with one canonical separator.
  */
+/**
+ * Registers whose decisions the publisher stores under another spelling than
+ * the one the courts print, keyed by the printed spelling (lowercased). The
+ * Czech Supreme Court's insolvency register is printed "NSČR" in judgments
+ * ("sen. zn. 29 NSČR 112/2013"), while its own database, and the ECLI it
+ * assigns (`29.NSCR.112.2013`), spell it "NSCR"; the stored case number takes
+ * that spelling. Without the fold a citation keyed `29nsčr/…` never meets the
+ * decision keyed `29nscr/…`. The fold is per register rather than a blanket
+ * diacritic strip, because other registers (the Slovak "Sžo") are stored with
+ * their diacritic and their stored keys must keep matching.
+ */
+const REGISTER_KEY_SPELLINGS: ReadonlyMap<string, string> = new Map([
+  ["nsčr", "nscr"],
+]);
+
 const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
@@ -1441,13 +1456,18 @@ const canonicalizeDedupKey = (text: string): string => {
 
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
   if (numeric?.groups) {
-    const canonical = `${requiredGroup(numeric.groups, "number")}${requiredGroup(numeric.groups, "registry")}/${requiredGroup(numeric.groups, "docket")}`;
+    const registry = requiredGroup(numeric.groups, "registry").toLowerCase();
+    const canonical = `${requiredGroup(numeric.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(numeric.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
-    const canonical = `${requiredGroup(consolidated.groups, "number")}${requiredGroup(consolidated.groups, "registry")}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
+    const registry = requiredGroup(
+      consolidated.groups,
+      "registry",
+    ).toLowerCase();
+    const canonical = `${requiredGroup(consolidated.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 

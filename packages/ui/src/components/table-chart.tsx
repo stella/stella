@@ -95,8 +95,13 @@ const CartesianPlot = ({
   const keyedPoints = identifyPoints(points);
   const groups = Map.groupBy(keyedPoints, ({ point }) => point.series ?? "");
   const seriesNames = [...groups.keys()];
-  const barStep = PLOT.width / points.length;
-  const labelStep = Math.max(1, Math.ceil(points.length / 8));
+  // Bars stand in one group per category, side by side within it, so a
+  // category with several series is labelled once rather than once per bar.
+  const barGroups = [...Map.groupBy(keyedPoints, ({ point }) => point.x)];
+  const barSlot = PLOT.width / barGroups.length;
+  const barsPerGroup = Math.max(...barGroups.map(([, group]) => group.length));
+  const barWidth = (barSlot * 0.7) / barsPerGroup;
+  const barLabelStep = Math.max(1, Math.ceil(barGroups.length / 8));
   const categories = [
     ...new Map(points.map((point) => [point.x, point] as const)).values(),
   ];
@@ -143,33 +148,45 @@ const CartesianPlot = ({
             y2={y(0)}
             stroke="var(--muted-foreground)"
           />
-          {keyedPoints.map(({ point, key }, index) => (
-            <g key={key}>
-              <rect
-                data-slot="chart-bar"
-                x={PLOT.x + index * barStep + barStep * 0.15}
-                y={Math.min(y(point.y), y(0))}
-                width={barStep * 0.7}
-                height={Math.abs(y(point.y) - y(0))}
-                fill={color(seriesNames.indexOf(point.series ?? ""))}
-              >
-                <title>{`${point.label}: ${formatNumber(point.y)}${point.series ? ` (${point.series})` : ""}`}</title>
-              </rect>
-              {index % labelStep === 0 && (
-                <text
-                  x={PLOT.x + (index + 0.5) * barStep}
-                  y={PLOT.y + PLOT.height + 20}
-                  textAnchor="middle"
-                  fill="var(--muted-foreground)"
-                  style={{ unicodeBidi: "plaintext" }}
-                >
-                  {point.label.length > 16
-                    ? `${point.label.slice(0, 15)}…`
-                    : point.label}
-                </text>
-              )}
-            </g>
-          ))}
+          {barGroups.map(([position, group], groupIndex) => {
+            const first = group[0]?.point;
+            return (
+              <g key={position} data-slot="chart-bar-group">
+                {group.map(({ point, key }, barIndex) => (
+                  <rect
+                    key={key}
+                    data-slot="chart-bar"
+                    x={
+                      PLOT.x +
+                      groupIndex * barSlot +
+                      barSlot * 0.15 +
+                      barIndex * barWidth
+                    }
+                    y={Math.min(y(point.y), y(0))}
+                    width={barWidth}
+                    height={Math.abs(y(point.y) - y(0))}
+                    fill={color(seriesNames.indexOf(point.series ?? ""))}
+                  >
+                    <title>{`${point.label}: ${formatNumber(point.y)}${point.series ? ` (${point.series})` : ""}`}</title>
+                  </rect>
+                ))}
+                {first !== undefined && groupIndex % barLabelStep === 0 && (
+                  <text
+                    data-slot="chart-x-tick"
+                    x={PLOT.x + (groupIndex + 0.5) * barSlot}
+                    y={PLOT.y + PLOT.height + 20}
+                    textAnchor="middle"
+                    fill="var(--muted-foreground)"
+                    style={{ unicodeBidi: "plaintext" }}
+                  >
+                    {first.label.length > 16
+                      ? `${first.label.slice(0, 15)}…`
+                      : first.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </>
       ) : (
         <>

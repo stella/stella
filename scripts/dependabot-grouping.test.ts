@@ -85,6 +85,28 @@ const ignorePolicies = {
   "react-native-screens": {
     type: "expo_sdk",
   },
+  "react-native-svg": {
+    type: "expo_sdk",
+  },
+  "oxlint-tsgolint": {
+    reason:
+      "Stays on the release that pairs with oxlint 1.90 while oxlint is held.",
+    type: "documented_policy",
+  },
+  oxlint: {
+    reason:
+      "1.93 makes the root-script type-aware lint about 3x slower; held at 1.90.",
+    type: "documented_policy",
+  },
+  "@oxlint/plugins": {
+    reason: "Moves with oxlint, which is held at 1.90.",
+    type: "documented_policy",
+  },
+  "lucide-static": {
+    reason:
+      "Its glyphs are native mobile assets; a bump waits for the next store build.",
+    type: "documented_policy",
+  },
 } as const satisfies Record<string, IgnorePolicy>;
 
 type IgnorePolicyDependency = keyof typeof ignorePolicies;

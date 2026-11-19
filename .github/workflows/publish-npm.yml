@@ -112,12 +112,14 @@ jobs:
   release-trigger:
     name: Resolve release trigger
     # A workflow_run trigger is accepted only from this repository's own
-    # release workflow, started by a tag push or a manual dispatch.
+    # release workflow, started by a tag push or a manual dispatch. A release
+    # run whose jobs were all skipped carries no receipt and is ignored.
     if: >-
       github.event_name != 'workflow_run'
       || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
-      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && github.event.workflow_run.conclusion != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

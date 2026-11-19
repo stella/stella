@@ -19,6 +19,7 @@ import {
 import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import {
   getMarketingAgentThreadId,
   settleMarketingAgentThread,
@@ -38,14 +39,6 @@ import {
 import { marketingSeedIds } from "./seed-ids";
 import { uiText } from "./ui-text";
 
-// Duplicated from apps/web/src/consts.ts, exactly as
-// apps/web/public/prepaint-init.js duplicates it: the e2e project has no
-// `@/` path alias. Writing any other key silently leaves the app on its
-// system colour-scheme preference.
-const THEME_STORAGE_KEY = "stella-ui-theme";
-// The language picker's persisted store (apps/web/src/i18n/i18n-store.ts,
-// `getStorageKey("i18n")`), which prepaint-init.js reads as I18N_STORAGE_KEY.
-const I18N_STORAGE_KEY = "stella-i18n";
 const INSPECTOR_STORAGE_PREFIXES = [
   "stella:inspector-minimized:v1:",
   "stella:inspector-state:v1:",
@@ -247,23 +240,24 @@ const captureLocale = async ({
 
   // The active organization is set server-side in authenticateMarketingSession
   // (via better-auth's set-active endpoint), so the workspace routes below are
-  // already org-scoped — no org-picker UI to drive. Land on a real page first:
-  // a fresh page sits on about:blank, where the localStorage access in the
-  // theme loop below throws a SecurityError.
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  // Choose the language the way the language picker does: its persisted
-  // store, which every later navigation boots from. The browser locale
-  // (test.use above) already matches, for regional formatting.
-  await page.evaluate(
-    ([storageKey, lang]) => {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ state: { lang }, version: 0 }),
-      );
+  // already org-scoped — no org-picker UI to drive. Choose the language the
+  // way the language picker does: the account's locale, which every later
+  // server render reads. The browser locale (test.use above) already
+  // matches, for regional formatting.
+  const localeResponse = await page.request.post(
+    `${MARKETING_URLS.apiUrl}/api/auth/update-user`,
+    {
+      data: { locale },
+      headers: { Origin: MARKETING_URLS.webUrl },
     },
-    [I18N_STORAGE_KEY, locale] as const,
   );
-  await page.reload({ waitUntil: "domcontentloaded" });
+  expect(localeResponse.ok()).toBe(true);
+  await setPresentationPrefs({
+    context,
+    url: MARKETING_URLS.webUrl,
+    patch: { visitorLocale: locale },
+  });
+  await page.goto("/law", { waitUntil: "domcontentloaded" });
   // `domcontentloaded` only means the document parsed; on a cold dev server the
   // client still has to compile and hydrate the app before anything but the
   // splash paints (measured at ~11s locally, several times that on a CI
@@ -313,16 +307,11 @@ const captureLocale = async ({
 
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme });
-    // Pin the stored theme as well as the media preference. localStorage is
-    // origin-scoped, so this survives the navigations below; both inputs must
-    // agree because prepaint-init.js reads the stored value first and only
-    // falls back to the media query.
-    await page.evaluate(
-      ([storageKey, nextTheme]) => {
-        localStorage.setItem(storageKey, nextTheme);
-      },
-      [THEME_STORAGE_KEY, theme] as const,
-    );
+    await setPresentationPrefs({
+      context: page.context(),
+      url: MARKETING_URLS.webUrl,
+      patch: { theme },
+    });
 
     for (const capture of captures) {
       if (requestedCapture && capture.name !== requestedCapture) {

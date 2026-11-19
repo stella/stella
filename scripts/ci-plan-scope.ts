@@ -607,8 +607,13 @@ const deriveNormalScopeFacts = (
     "apps/web/*",
     "packages/*",
     "patches/*",
+    // The bundle gates run in web-build. A pull request builds the web app
+    // only when browser specs or armed route smoke select it
+    // (web_build_pr_required); these inputs select web-build for the merge
+    // queue and main, where the gates block a regression before it lands.
     "scripts/bundle-baseline.ts",
     "scripts/bundle-baseline.json",
+    "scripts/bundle-startup-*",
     "VERSION",
     "bun.lock",
     "bunfig.toml",

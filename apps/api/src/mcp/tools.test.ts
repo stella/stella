@@ -5860,7 +5860,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 minLength: 1,
                 maxLength: 256,
                 description:
-                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes.",
+                  "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes.",
               },
               as_of: {
                 type: "string",
@@ -6171,6 +6171,103 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("read_statute keeps every annex in a bounded outline, and an annex reads by its number", async () => {
+    // A long act: more section headings than the outline holds, then the
+    // annexes, as 134/2016 Sb. stores them.
+    const sections = Array.from(
+      { length: LIMITS.legislationOutlineHeadingsMax + 40 },
+      (_, index) => ({
+        id: `s${String(index)}`,
+        anchorId: `par_${String(index + 1)}`,
+        type: "heading" as const,
+        level: 3 as const,
+        inlines: [{ type: "text" as const, text: `§ ${String(index + 1)}` }],
+        plainText: `§ ${String(index + 1)}`,
+      }),
+    );
+    const annexes = [1, 2, 3].map((number) => ({
+      id: `a${String(number)}`,
+      anchorId: `pril_${String(number)}`,
+      type: "heading" as const,
+      level: 1 as const,
+      inlines: [
+        { type: "text" as const, text: `Příloha č. ${String(number)}` },
+      ],
+      plainText: `Příloha č. ${String(number)}`,
+    }));
+    const annexBody = {
+      id: "a3-body",
+      anchorId: "pril_3-frag_8775881",
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text: "Trestné činy" }],
+      plainText: "Trestné činy",
+    };
+    const documentAst = {
+      ...createStatuteAst(),
+      blocks: [...sections, ...annexes, annexBody],
+    };
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      documentAst,
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_statute",
+      }),
+    );
+    const statute = isRecord(payload) ? payload["statute"] : undefined;
+    const outline =
+      isRecord(statute) && Array.isArray(statute["outline"])
+        ? statute["outline"].flatMap((entry) =>
+            isRecord(entry) && typeof entry["anchorId"] === "string"
+              ? [entry["anchorId"]]
+              : [],
+          )
+        : [];
+    expect(isRecord(statute) && statute["outlineTruncated"]).toBe(true);
+    expect(outline).toHaveLength(LIMITS.legislationOutlineHeadingsMax);
+    expect(outline.slice(-3)).toEqual(["pril_1", "pril_2", "pril_3"]);
+    expect(outline.at(0)).toBe("par_1");
+
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(documentAst.blocks);
+    const provisions = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            { eli: STATUTE_ELI, anchor: "priloha_3" },
+            { eli: STATUTE_ELI, anchor: "příloha č. 9" },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+    expect(provisions).toMatchObject({
+      items: [
+        { status: "found", text: "Příloha č. 3\nTrestné činy" },
+        {
+          status: "provision_not_found",
+          message: expect.stringContaining(
+            "Its annex anchors: pril_1, pril_2, pril_3.",
+          ),
+        },
+      ],
+    });
+  });
+
   test("read_statute emits navigation once and reassembles every text window", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
       type: "expression",
@@ -6313,6 +6410,54 @@ describe("OpenAI-compatible MCP tools", () => {
           "The source licence does not permit AI use of the full text.",
         truncated: false,
       },
+    });
+  });
+
+  test("read_statute and read_statute_provisions read a Work held only as promulgated and say so", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "promulgated-only",
+      id: STATUTE_ID,
+    });
+    readPublicLegislationHandlerMock.mockResolvedValue({
+      ...createStatuteReadResult(),
+      expressionKind: "promulgated",
+    });
+    listStatuteVersionsHandlerMock.mockResolvedValue(
+      createStatuteVersionsPage(),
+    );
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      { ...createProvisionVersionRow(), expressionKind: "promulgated" },
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    expect(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { eli: STATUTE_ELI },
+          context: createContext(),
+          toolName: "read_statute",
+        }),
+      ),
+    ).toMatchObject({
+      statute: { documentId: STATUTE_ID, expressionKind: "promulgated" },
+    });
+    expect(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { items: [{ anchor: PROVISION_ANCHOR, eli: STATUTE_ELI }] },
+          context: createContext(),
+          toolName: "read_statute_provisions",
+        }),
+      ),
+    ).toMatchObject({
+      items: [
+        {
+          documentId: STATUTE_ID,
+          expressionKind: "promulgated",
+          status: "found",
+          windowDisposition: "effective",
+        },
+      ],
     });
   });
 

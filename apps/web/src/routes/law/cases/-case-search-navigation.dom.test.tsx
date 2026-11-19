@@ -12,7 +12,7 @@ plugin({
     build.onLoad(
       {
         filter:
-          /(?:-case-law-index-page|-case-law-index-error|-statutes-index-error|statutes[/\\]index|public-law-list-failure)\.tsx$/u,
+          /(?:-case-law-index\.page|-case-law-index\.pending|-case-law-index-error|-statutes-index-error|statutes[/\\](?:index|-index\.page|-index\.pending)|public-law-list-failure)\.tsx$/u,
       },
       async ({ path }) => {
         const source = await Bun.file(path).text();

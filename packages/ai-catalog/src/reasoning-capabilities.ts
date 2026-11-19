@@ -173,6 +173,22 @@ export const MODEL_REASONING_CAPABILITIES = {
       },
     ],
   },
+  "openai/gpt-6.2-astra": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
+  "openai/gpt-6.2-sol": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
   "openai/gpt-6.1-sol": {
     support: "supported",
     emittedFormats: ["none"],
@@ -380,6 +396,34 @@ export const MODEL_REASONING_CAPABILITIES = {
     openAIStore: null,
     anthropicThinking: "none",
     replayCompatibility: [],
+  },
+  "gpt-6.2-astra": {
+    support: "supported",
+    emittedFormats: ["openai-encrypted-content"],
+    openAIIncludeEncryptedContent: true,
+    openAIStore: false,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "openai",
+        model: "gpt-6.2-astra",
+        format: "openai-encrypted-content",
+      },
+    ],
+  },
+  "gpt-6.2-sol": {
+    support: "supported",
+    emittedFormats: ["openai-encrypted-content"],
+    openAIIncludeEncryptedContent: true,
+    openAIStore: false,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "openai",
+        model: "gpt-6.2-sol",
+        format: "openai-encrypted-content",
+      },
+    ],
   },
   "gpt-6.1-sol": {
     support: "supported",

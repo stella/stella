@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /**
  * Lazy adapter module registry.
@@ -65,6 +66,8 @@ export const ADAPTER_MODULES = {
     (await import("./pl-uokik")).plUokikAdapter,
   [ADAPTER_KEYS.BR_TJDFT]: async () =>
     (await import("./br-tjdft")).brTjdftAdapter,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: async () =>
+    (await import("./cz-ns-sbirka")).czNsSbirkaAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

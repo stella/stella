@@ -181,15 +181,14 @@
     "handoffExpired": "El enlace al documento caducó antes de conectar stella desktop. Vuelve a empezar desde stella."
   },
   "settings": {
-    "about": "Acerca de",
-    "accountLinked": "Cuenta vinculada",
+    "accountLinked": "Vinculada",
+    "disconnect": "Desconectar",
     "connectionExpired": "Conexión caducada",
     "reconnectToStella": "Volver a conectar con stella web",
     "connectionExpiredDescription": "La conexión ha caducado. Vuelve a conectar con stella web.",
     "connectToStella": "Conectar con stella web",
     "connectToStellaDescription": "Vincule este ordenador a su cuenta actual de stella sin abrir un documento.",
     "desktopBenefit": "Archivos de Office e historial local del portapapeles",
-    "disconnectAccount": "Desconectar cuenta",
     "errorDisconnectAccount": "stella desktop no pudo desconectar su cuenta.",
     "errorReadAccount": "stella desktop no pudo comprobar la conexión de su cuenta.",
     "stellaWebAccount": "Cuenta de stella web",
@@ -209,10 +208,8 @@
     "sendCrashReportsDescription": "Errores técnicos, tiempos y resúmenes de fallos; sin documentos, contenido del portapapeles ni datos de actividad.",
     "errorReadTelemetry": "No se pudo leer la preferencia de envío de informes. Inténtalo de nuevo.",
     "errorSaveTelemetry": "No se pudo guardar la preferencia de envío de informes. Inténtalo de nuevo.",
-    "general": "General",
     "lastVerified": "Última verificación",
     "language": "Idioma",
-    "languageDescription": "Elija el idioma de la aplicación de escritorio.",
     "setupGuide": "Guía de configuración",
     "setupGuideDescription": "Vuelva a recorrer la configuración: qué hace la aplicación, los permisos y el atajo del portapapeles.",
     "setupGuideAction": "Volver a configurar",
@@ -236,13 +233,26 @@
     "stellaDesktop": "stella desktop",
     "support": "Soporte",
     "title": "Configuración",
-    "serverLabel": "Servidor",
+    "pages": {
+      "general": "General",
+      "dictation": "Dictado",
+      "clipboard": "Portapapeles",
+      "agents": "IA y agentes",
+      "signing": "Firma",
+      "activity": "Actividad",
+      "notifications": "Notificaciones",
+      "permissions": "Permisos",
+      "about": "Acerca de"
+    },
+    "account": "Cuenta",
+    "app": "Aplicación",
+    "privacy": "Privacidad",
+    "pageEmpty": "Aquí no hay nada que configurar en este ordenador.",
     "connectToHost": "Conectar con {host}",
     "connectToHostDescription": "Abre {host} en el navegador para que apruebes este equipo.",
     "reconnectNeeded": "Hay que volver a conectar",
     "reconnect": "Volver a conectar",
     "reconnectHostDescription": "Hay que renovar la conexión con {host}. Vuelve a aprobar este equipo en el navegador.",
-    "permissions": "Permisos",
     "permissionNotificationsDescription": "Le avisa cuando un documento está listo o una sincronización requiere atención.",
     "permissionAccessibility": "Accesibilidad",
     "permissionAccessibilityDescription": "Permite que la cronología de actividad registre títulos de ventanas.",
@@ -251,7 +261,9 @@
     "permissionAllowed": "Permitido",
     "permissionAllow": "Permitir",
     "permissionOpenSettings": "Abrir ajustes",
-    "permissionDenied": "Desactivado en los ajustes del sistema.",
+    "permissionTurnedOff": "Desactivado",
+    "permissionsDescription": "Cada uno es decisión tuya y activa una sola cosa.",
+    "neverRequested": "Nunca se solicita",
     "permissionManaged": "Gestionado por su organización",
     "errorUpdateAutostart": "stella desktop no pudo actualizar el inicio de la aplicación al iniciar sesión.",
     "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso.",
@@ -600,6 +612,13 @@
     "title": "Dictado",
     "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda.",
     "descriptionCloud": "Mantenga pulsado {shortcut} y hable. El texto aparece en la aplicación que está usando. stella AI transcribe la voz y stella no la guarda.",
+    "lede": "Mantén pulsado <key>{shortcut}</key> y habla. El texto aparece donde estás escribiendo.",
+    "groups": {
+      "shortcut": "Atajo",
+      "transcription": "Transcripción",
+      "cleanup": "Corrección",
+      "thisComputer": "En este ordenador"
+    },
     "cleanup": {
       "title": "Corregir con IA",
       "description": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo. Solo el texto, no el audio, se envía a través de stella al proveedor de IA de tu organización; stella no lo guarda.",
@@ -607,11 +626,11 @@
     },
     "context": {
       "windowTitle": {
-        "title": "Compartir el título de la ventana con la corrección con IA",
+        "title": "Compartir el título de la ventana",
         "description": "Ayuda a distinguir un contrato de una nota interna. Los títulos de ventana pueden contener nombres de clientes o asuntos."
       },
       "textBeforeCursor": {
-        "title": "Compartir el texto antes del cursor con la corrección con IA",
+        "title": "Compartir el texto antes del cursor",
         "description": "Hasta {limit, number} caracteres del documento en el que estás, para que el dictado encaje con lo que escribes."
       }
     },
@@ -620,6 +639,7 @@
       "title": "Transcribir con",
       "local": "Este ordenador",
       "cloud": "stella AI",
+      "localDescription": "La voz se transcribe en este ordenador y no se guarda.",
       "cloudDescription": "El audio sale de este ordenador: se envía a stella y, a través del proveedor de IA de stella, al proveedor del modelo seleccionado para transcribirlo. stella no lo guarda.",
       "unavailableRegion": "stella AI aún no ofrece transcripción en la región de su organización.",
       "unavailableProvider": "El proveedor de IA de su organización no ofrece transcripción.",
@@ -627,7 +647,6 @@
       "model": "Modelo de transcripción",
       "chooseModel": "Elige un modelo",
       "outsideRegion": "Fuera de tu región",
-      "outsideRegionNote": "Este modelo procesa el audio fuera de la región de tu organización.",
       "retainsData": "Conserva tu audio",
       "retainsDataTitle": "{provider} conserva lo que dictas",
       "retainsDataWarning": "Este modelo funciona con una cuenta sin retención cero de datos. {provider} guarda el audio y la transcripción de todo lo que dictas según sus propias condiciones, fuera del control de stella. No dictes con él información confidencial ni datos de clientes."
@@ -640,6 +659,7 @@
       "noResults": "No se encontraron idiomas"
     },
     "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
+    "speechModel": "Modelo de voz",
     "modelInstalled": "El modelo de voz ({size} MB) está en este ordenador.",
     "removeModel": "Eliminar",
     "removeFailed": "No se pudo eliminar el modelo de voz. Inténtalo de nuevo.",
@@ -648,6 +668,13 @@
     "downloadFailed": "No se pudo descargar el modelo de voz.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Otra aplicación está usando {shortcut}.",
+    "holdKey": {
+      "title": "Tecla para mantener",
+      "description": "Mantenla pulsada sola para dictar. Una pulsación breve o un atajo que la use no hace nada.",
+      "right": "{key} derecha",
+      "waiting": "stella detecta {shortcut} en cuanto tiene acceso a Accesibilidad.",
+      "unavailable": "stella no puede detectar {shortcut} en este ordenador. Elige otra tecla."
+    },
     "failure": {
       "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",
       "microphone": "stella no oye tu micrófono. Comprueba el acceso al micrófono en Ajustes del Sistema.",
@@ -656,6 +683,7 @@
       "focusChanged": "Cambió a otra aplicación antes de que el texto estuviera listo, así que no se escribió nada. Inténtelo de nuevo.",
       "focusUnconfirmed": "stella no pudo confirmar qué aplicación tiene el foco, así que no se escribió nada. Inténtalo de nuevo.",
       "shortcutHeld": "Suelta las teclas del atajo para escribir. No se escribió nada; inténtalo de nuevo.",
+      "passwordField": "Hay un campo de contraseña seleccionado, así que el dictado no se guardó ni se escribió.",
       "cloudTranscription": "stella AI no pudo transcribir este dictado y el modelo de voz no está en este ordenador. Vuelve a intentarlo o, en «Transcribir con», elige «Este ordenador» y descarga el modelo."
     },
     "failureKeptInHistory": "El texto está en el historial del portapapeles."
@@ -798,6 +826,7 @@
       "screenRecording": "Grabación de pantalla",
       "camera": "Cámara",
       "keystrokes": "Pulsaciones de teclas",
+      "keystrokesWithoutHoldKey": "Pulsaciones de teclas, salvo que elija una tecla para mantener",
       "fullDiskAccess": "Acceso total al disco",
       "administrator": "Derechos de administrador"
     }

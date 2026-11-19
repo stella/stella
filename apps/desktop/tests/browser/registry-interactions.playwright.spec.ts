@@ -1687,24 +1687,27 @@ for (const language of ["en", "ar"] as const) {
       test(`${status} Settings header keeps its complete subtitle at the native window size`, async ({
         page,
       }) => {
-        await page.setViewportSize({ width: 480, height: 460 });
+        // The smallest the settings window can be made.
+        await page.setViewportSize({ width: 640, height: 460 });
         await installNativeBoundary(
           page,
           status === "connected" ? connected() : { status: "disconnected" },
           { settings: true },
         );
         await page.goto("/#general");
-        const subtitle = page.getByText(
+        const settingsPage = page.locator("[data-slot=settings-page]");
+        const subtitle =
           status === "connected"
-            ? "member@example.test"
-            : withHost(messages.settings.connectToHostDescription),
-          { exact: true },
-        );
+            ? settingsPage.locator("#desktop-account-description")
+            : settingsPage.getByText(
+                withHost(messages.settings.connectToHostDescription),
+                { exact: true },
+              );
         await expect(subtitle).toHaveCount(1);
         await expect(subtitle).toBeVisible();
         if (status === "connected") {
           await expect(
-            page.getByText("Synthetic Member", { exact: true }),
+            settingsPage.getByText("Synthetic Member", { exact: true }),
           ).toBeVisible();
         } else {
           await expect(
@@ -1714,9 +1717,13 @@ for (const language of ["en", "ar"] as const) {
             }),
           ).toHaveCount(1);
         }
+        if (status === "connected") {
+          await expect(subtitle).toContainText("member@example.test");
+        }
+        // The email and server read left to right in any interface language.
         await expect(subtitle).toHaveCSS(
           "direction",
-          language === "ar" ? "rtl" : "ltr",
+          language === "ar" && status === "disconnected" ? "rtl" : "ltr",
         );
         const geometry = await subtitle.evaluate((element) => {
           const style = getComputedStyle(element);
@@ -1803,7 +1810,11 @@ test("foreground Settings interactions record use without passing event data", a
   await installNativeBoundary(page, connected(), { settings: true });
   await page.goto("/#general");
   await page
-    .getByRole("tab", { name: enMessages.settings.general, exact: true })
+    .getByRole("navigation")
+    .getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    })
     .click();
   await expect
     .poll(async () =>

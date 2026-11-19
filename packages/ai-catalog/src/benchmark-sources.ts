@@ -82,6 +82,8 @@ export const MODEL_BENCHMARK_SOURCES = {
   ],
   // Only the preview snapshot is ranked; the offered GA release may differ.
   "gemini-3.1-flash-lite": [],
+  "openai/gpt-6.2-astra": [],
+  "openai/gpt-6.2-sol": [],
   "openai/gpt-6.1-sol": [],
   "openai/gpt-6.1-terra": [],
   "openai/gpt-6-astra": [
@@ -141,6 +143,8 @@ export const MODEL_BENCHMARK_SOURCES = {
   "openai/gpt-5.4-mini": [
     { sourceModelId: "gpt-5.4-mini-high", reasoningEffort: "high" },
   ],
+  "gpt-6.2-astra": [],
+  "gpt-6.2-sol": [],
   "gpt-6.1-sol": [],
   "gpt-6.1-terra": [],
   "gpt-6-astra": [{ sourceModelId: "gpt-6-astra-max", reasoningEffort: "max" }],
@@ -274,6 +278,8 @@ export const MODEL_UNRATED_REASON = {
   "gemini-4-carbon": "too_new",
   "gemini-4-argon": "too_new",
   "gemini-3.1-flash-lite": "preview_only",
+  "openai/gpt-6.2-astra": "too_new",
+  "openai/gpt-6.2-sol": "too_new",
   "openai/gpt-6.1-sol": "too_new",
   "openai/gpt-6.1-terra": "too_new",
   "google/gemini-4-hydrogen": "too_new",
@@ -284,6 +290,8 @@ export const MODEL_UNRATED_REASON = {
   "google/gemini-3.1-flash-lite": "preview_only",
   "anthropic/claude-sonnet-5.5": "too_new",
   "anthropic/claude-sonnet-4.6": "named_default_effort",
+  "gpt-6.2-astra": "too_new",
+  "gpt-6.2-sol": "too_new",
   "gpt-6.1-sol": "too_new",
   "gpt-6.1-terra": "too_new",
   "claude-sonnet-5-5": "too_new",

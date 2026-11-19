@@ -9,6 +9,7 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StatedEcliIdentity } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
@@ -139,6 +140,8 @@ export type ProcessDecisionAttemptOptions = {
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
   statedEcliIdentity: StatedEcliIdentity;
+  /** See `HeldDecisionAttachment`; null for a source that does not declare one. */
+  heldDecisionAttachment: HeldDecisionAttachment<string> | null;
   retention: SourceRetention;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
@@ -175,6 +178,7 @@ export type ProcessDecisionOptions = Omit<
   | "refresh"
   | "metadataUrlSchema"
   | "statedEcliIdentity"
+  | "heldDecisionAttachment"
   | "retention"
   | "sourceFingerprintVersion"
   | "sourceFingerprintFromStoredRaw"

@@ -501,7 +501,10 @@
       ".github/**",
       "scripts/**"
     ],
-    "Test cancellation evidence": ["scripts/ci-cancellation-contract*"],
+    "Test cancellation evidence": [
+      "scripts/ci-cancellation-contract*",
+      ".github/workflows/cancel-failed-run.yml"
+    ],
     "Test thin merge queue contracts": [
       "scripts/thin-queue*",
       "scripts/main-heavy-plan.ts",
@@ -723,6 +726,11 @@
       "@stll/sha256",
       "scripts/**"
     ],
+    "Check grant release order against the production release": [
+      "@stll/api",
+      "scripts/check-grant-release-order.ts",
+      "scripts/check-grant-release-order.test.ts"
+    ],
     "Test dead-columns reference matching": [
       "@stll/api",
       "scripts/**",
@@ -840,6 +848,7 @@
       "scripts/**"
     ],
     "SHA-256 migration ledger": ["**"],
+    "Startup bundle ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
     "Guard rollout scope tests": ["**"],

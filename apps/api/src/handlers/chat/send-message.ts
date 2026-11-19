@@ -162,6 +162,10 @@ import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
 } from "@/api/handlers/chat/local-run-plan";
+import {
+  loadLocalRunSkillTools,
+  type LocalRunSkillTool,
+} from "@/api/handlers/chat/local-run-skills";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -181,10 +185,15 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import {
+  adoptEmptyThread,
   loadThread,
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import {
+  CHAT_SEND_CONTEXT_IGNORED_EVENT,
+  ignoredSendThreadFields,
+} from "@/api/handlers/chat/send-thread-fields";
 import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import {
   hydrateMessages,
@@ -341,6 +350,7 @@ import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/conn
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import {
@@ -449,6 +459,32 @@ const usableWorkspaceIds = (
     }
   }
   return ids;
+};
+
+/**
+ * One warning for a send that carried context its thread does not run with: a
+ * thread that holds a message keeps its own skill and subject decision. Names
+ * the fields only, never what they carried.
+ */
+const warnIgnoredSendContext = ({
+  body,
+  thread,
+}: {
+  body: Pick<ChatSendRequest, "activeDecision" | "activeSkill">;
+  thread: ChatThreadState;
+}): void => {
+  const ignoredFields = ignoredSendThreadFields({
+    request: {
+      activeSkill: body.activeSkill,
+      subjectDecisionId: body.activeDecision?.decisionId ?? null,
+    },
+    resolved: thread.data.sendFields,
+  });
+  if (ignoredFields.length > 0) {
+    logger.warn(CHAT_SEND_CONTEXT_IGNORED_EVENT, {
+      "chat.send.ignored_fields": ignoredFields,
+    });
+  }
 };
 
 const validateActiveDraftContext = async ({
@@ -2091,7 +2127,9 @@ const prepareValidatedIncomingMessage = async ({
           activeDraftContext === null
             ? []
             : activeDraftContext.originDataWorkspaceIds,
-        initialContextMatterIds: requestedContextMatterIds,
+        // The pins as sent (validated with `requestedContextMatterIds`);
+        // undefined when the send names none.
+        initialContextMatterIds: body.contextMatterIds,
         initialActiveSkill: body.activeSkill,
         organizationId,
         recordAuditEvent,
@@ -2107,31 +2145,31 @@ const prepareValidatedIncomingMessage = async ({
     // enclosing finally is the sole rollback boundary for every later
     // return, error, or SDK short-circuit before that persistence succeeds.
     lifecycle.adoptThread(thread);
+    warnIgnoredSendContext({ body, thread });
 
     const activeDraft = body.activeDraft;
     if (activeDraft !== undefined) {
-      const hasPersistedContext =
-        thread.type === "created"
-          ? false
-          : yield* Result.await(
-              safeDb(async (tx) =>
-                hasPersistedGeneratedDocumentActiveDraftContext({
-                  generatedDraft: {
-                    originChatMessageId: activeDraft.originChatMessageId,
-                    originChatThreadId: activeDraft.originChatThreadId,
-                    toolCallId: activeDraft.toolCallId,
-                  },
-                  organizationId,
-                  threadId: thread.data.id,
-                  tx,
-                  userId,
-                }),
-              ),
-            );
+      const hasPersistedContext = thread.data.firstSend
+        ? false
+        : yield* Result.await(
+            safeDb(async (tx) =>
+              hasPersistedGeneratedDocumentActiveDraftContext({
+                generatedDraft: {
+                  originChatMessageId: activeDraft.originChatMessageId,
+                  originChatThreadId: activeDraft.originChatThreadId,
+                  toolCallId: activeDraft.toolCallId,
+                },
+                organizationId,
+                threadId: thread.data.id,
+                tx,
+                userId,
+              }),
+            ),
+          );
       if (
         !canUseChatThreadForGeneratedDocumentDraft({
+          firstSend: thread.data.firstSend,
           hasPersistedContext,
-          threadType: thread.type,
         })
       ) {
         return Result.err(
@@ -2152,10 +2190,11 @@ const prepareValidatedIncomingMessage = async ({
       }),
     };
 
-    // Existing-thread pin changes are durable side effects, so stop before
-    // applying them when any earlier validation or thread read observed a
-    // client disconnect. Created threads still need their rollback token
-    // cleaned up on this exit path.
+    // Existing-thread pin changes and the adoption of a thread stored before
+    // its first message are durable side effects, so stop before applying
+    // them when any earlier validation or thread read observed a client
+    // disconnect. Created threads still need their rollback token cleaned up
+    // on this exit path.
     if (isClientConnectionAborted()) {
       return Result.err(
         new HandlerError({
@@ -2164,6 +2203,16 @@ const prepareValidatedIncomingMessage = async ({
         }),
       );
     }
+    yield* Result.await(
+      adoptEmptyThread({
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        thread,
+        userId,
+        workspaceId,
+      }),
+    );
 
     // The thread's persisted chat-model override wins over the org/instance
     // default, but the dev-only body override still wins over everything
@@ -2362,6 +2411,9 @@ const assembleTurnSystemPrompt = ({
 
 export type SendMessageDependencies = {
   caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
+  legislationDb?: Parameters<
+    typeof buildChatSystemPromptParts
+  >[0]["legislationDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
@@ -2373,6 +2425,8 @@ export type SendMessageDependencies = {
    * to this process's own.
    */
   localRunRuntime?: ResolveChatLocalRunOptions["runtime"];
+  /** The skill tools a run on the member's computer is served over MCP. */
+  loadLocalRunSkillTools?: typeof loadLocalRunSkillTools;
   /**
    * Rebuilds live authority when a delayed registry tool runs. Defaults to
    * fresh credential-boundary membership, matter, and database scopes.
@@ -2440,6 +2494,7 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
  */
 const turnPromptTarget = (
   runTarget: ChatRunTarget | undefined,
+  skillTools: readonly LocalRunSkillTool[],
 ): ChatPromptTarget =>
   runTarget === undefined || runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
     ? CLOUD_PROMPT_TARGET
@@ -2449,7 +2504,30 @@ const turnPromptTarget = (
           CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS[runTarget.harness][
             runTarget.approvals
           ],
+        skillTools,
       };
+
+/**
+ * The turn's prompt target. A run on the member's computer lists the skill
+ * tools its own MCP session will be served, read the way that session reads
+ * them.
+ */
+const loadTurnPromptTarget = async ({
+  loadSkillTools,
+  localRun,
+  runTarget,
+  ...run
+}: Parameters<typeof loadLocalRunSkillTools>[0] & {
+  loadSkillTools: typeof loadLocalRunSkillTools;
+  localRun: LocalChatRun | undefined;
+  runTarget: ChatRunTarget | undefined;
+}): Promise<Result<ChatPromptTarget, HandlerError<500>>> => {
+  if (localRun === undefined) {
+    return Result.ok(turnPromptTarget(runTarget, []));
+  }
+  const skillTools = await loadSkillTools(run);
+  return skillTools.map((tools) => turnPromptTarget(runTarget, tools));
+};
 
 const turnCopiesFiles = (
   localRun: LocalChatRun | undefined,
@@ -3301,10 +3379,25 @@ export const createSendMessage = (
           });
           return skillToolNames;
         };
+        const promptTarget = await loadTurnPromptTarget({
+          loadSkillTools:
+            dependencies.loadLocalRunSkillTools ?? loadLocalRunSkillTools,
+          localRun,
+          organizationId: session.activeOrganizationId,
+          runId: body.runId,
+          runTarget: body.runTarget,
+          userId: user.id,
+          workspaceIds: toolWorkspaceIds,
+        });
+        if (Result.isError(promptTarget)) {
+          await lifecycle.failCurrentTurn("internal", true);
+          return Result.err(promptTarget.error);
+        }
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
+          legislationDb: dependencies.legislationDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
-          promptTarget: turnPromptTarget(body.runTarget),
+          promptTarget: promptTarget.value,
           recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
@@ -3455,6 +3548,7 @@ export const createSendMessage = (
             load: async () =>
               loadRequestedSkillsPrompt({
                 activeSkillContext: chatContext.activeSkillContext,
+                promptTarget: promptTarget.value,
                 bindingScope: chatContext.skillBindingScope,
                 catalog: chatContext.skillMetadata,
                 messages: chatContext.hydratedMessages,
@@ -3545,7 +3639,11 @@ export const createSendMessage = (
           }
 
           if (
-            thread.type === "created" &&
+            // A thread stored before its first message (a setting chosen
+            // first) is titled like one this send created, unless its title
+            // was already set some other way.
+            thread.data.firstSend &&
+            thread.data.title === initialThreadTitle &&
             body.sendMode !== CHAT_SEND_MODE.anonymized
           ) {
             const title = async () =>
@@ -3848,6 +3946,7 @@ const turnRunModeOf = (
 
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
+  legislationDb?: SendMessageDependencies["legislationDb"];
   copiesFilesToComputer: boolean;
   promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
@@ -3954,6 +4053,7 @@ const auditedLocalRunAttachments = async ({
 
 const prepareChatContext = async ({
   caseLawDb,
+  legislationDb,
   copiesFilesToComputer,
   promptTarget,
   recordAuditEvent,
@@ -4000,6 +4100,7 @@ const prepareChatContext = async ({
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
         ...(caseLawDb === undefined ? {} : { caseLawDb }),
+        ...(legislationDb === undefined ? {} : { legislationDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,

@@ -151,7 +151,7 @@ for (const outcome of ["granted", "denied"] as const) {
       await expect(card.getByText(en.settings.permissionAllowed)).toBeVisible();
       return;
     }
-    await expect(card.getByText(en.settings.permissionDenied)).toBeVisible();
+    await expect(card.getByText(en.settings.permissionTurnedOff)).toBeVisible();
     await expect(
       card.getByRole("button", {
         name: en.settings.permissionOpenSettings,

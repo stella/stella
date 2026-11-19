@@ -48,6 +48,7 @@ mod dictation_context;
 mod dictation_engine;
 mod dictation_focus;
 mod dictation_format;
+mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;
@@ -627,38 +628,40 @@ pub fn run() {
 
 /// The settings window's size. The browser harness reads these lines and
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
-const SETTINGS_WINDOW_WIDTH: f64 = 600.0;
+const SETTINGS_WINDOW_WIDTH: f64 = 760.0;
 const SETTINGS_WINDOW_HEIGHT: f64 = 620.0;
 /// The smallest the settings window can be resized to.
-const SETTINGS_WINDOW_MIN_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_MIN_WIDTH: f64 = 640.0;
 const SETTINGS_WINDOW_MIN_HEIGHT: f64 = 460.0;
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
-/// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
-/// in `src/mainview/App.tsx`.
+/// A Settings window page native code opens; the ids are `SETTINGS_PAGES`
+/// in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PreferencesTab {
   General,
+  Agents,
   Activity,
   About,
 }
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 3] = [Self::General, Self::Activity, Self::About];
+  const ALL: [Self; 4] = [Self::General, Self::Agents, Self::Activity, Self::About];
 
   const fn id(self) -> &'static str {
     match self {
       Self::General => "general",
+      Self::Agents => "agents",
       Self::Activity => "activity",
       Self::About => "about",
     }
   }
 }
 
-/// Where on General the Settings window scrolls to for the coding agents:
-/// their whole group, or one agent's card. The ids are `AGENT_SETTINGS_FOCUS`
-/// in `src/mainview/App.tsx`.
+/// Where on the AI and agents page the Settings window scrolls to for the
+/// coding agents: their whole group, or one agent's card. The ids are
+/// `AGENT_SETTINGS_FOCUS` in `src/mainview/settings-pages.ts`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AgentSettingsFocus {
   All,
@@ -685,7 +688,7 @@ impl AgentSettingsFocus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingsView {
   Tab(PreferencesTab),
-  /// General, scrolled to the coding agents' sign-ins and installs.
+  /// AI and agents, scrolled to the coding agents' sign-ins and installs.
   Agents(AgentSettingsFocus),
 }
 
@@ -695,7 +698,7 @@ impl SettingsView {
     match self {
       Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
       Self::Agents(focus) => serde_json::json!({
-        "tab": PreferencesTab::General.id(),
+        "tab": PreferencesTab::Agents.id(),
         "focus": focus.id(),
       }),
     }
@@ -771,12 +774,12 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
 mod preferences_tab_tests {
   use super::{AgentSettingsFocus, PreferencesTab};
 
-  /// The ids in one `const NAME = [...]` array literal of `App.tsx`.
+  /// The ids in one `const NAME = [...]` array literal of `settings-pages.ts`.
   fn declared(name: &str) -> &'static str {
-    let source = include_str!("../../src/mainview/App.tsx");
+    let source = include_str!("../../src/mainview/settings-pages.ts");
     let (_, declaration) = source
       .split_once(&format!("const {name} = ["))
-      .expect("App.tsx declares the array");
+      .expect("settings-pages.ts declares the array");
     declaration
       .split_once(']')
       .expect("the array is one array literal")
@@ -796,12 +799,12 @@ mod preferences_tab_tests {
   }
 
   #[test]
-  fn native_tabs_are_tabs_the_settings_window_declares() {
-    let declaration = declared("PREFERENCES_TABS");
+  fn native_pages_are_pages_the_settings_window_declares() {
+    let declaration = declared("SETTINGS_PAGES");
     for tab in PreferencesTab::ALL {
       assert!(
         declaration.contains(&format!("\"{}\"", tab.id())),
-        "{} is not a Settings window tab",
+        "{} is not a Settings window page",
         tab.id()
       );
     }

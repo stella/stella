@@ -1,11 +1,8 @@
 import { lazy, Suspense } from "react";
 
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
 import * as v from "valibot";
-
-import { Button } from "@stll/ui/button";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
@@ -24,6 +21,7 @@ import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
+import { ToolEntryNotFound } from "@/routes/knowledge/-tool-entry-not-found";
 
 const LazyMemberSkillEditorPage = lazy(async () => {
   const module =
@@ -153,20 +151,5 @@ function ToolEntryPage() {
         </Suspense>
       )}
     />
-  );
-}
-
-function ToolEntryNotFound() {
-  const t = useTranslations();
-
-  return (
-    <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-muted-foreground text-sm">
-        {t("publicTools.notFound")}
-      </p>
-      <Button render={<Link to="/knowledge/tools" />}>
-        {t("common.back")}
-      </Button>
-    </main>
   );
 }
