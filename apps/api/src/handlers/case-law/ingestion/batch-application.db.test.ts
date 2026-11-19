@@ -978,6 +978,36 @@ describe("crawl cancellation", () => {
     }
   });
 
+  test("a decision allowance cannot mask a failed corpus write", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: failingTransfer(),
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.outcome).toBe(CYCLE_OUTCOME.FAILED);
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
+      expect(result.pauseReason).toBeUndefined();
+      expect(result.s3UploadFailures).toBeGreaterThan(0);
+      expect(result.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
 
   test("an admission pause holds the page without recording failures", async () => {
     const sourceId = await crawlSource();

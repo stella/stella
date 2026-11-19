@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CYCLE_OUTCOME,
-  type CycleOutcome,
   INGESTION_PAUSE_REASON,
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -29,7 +28,7 @@ import {
 } from "./cycle-progress";
 import { ingestionHealthRecord } from "./ingestion-health";
 
-const OUTCOMES = Object.values(CYCLE_OUTCOME) satisfies readonly CycleOutcome[];
+const OUTCOMES = Object.values(CYCLE_OUTCOME);
 
 /** Rows written in a cycle, spanning none through many. */
 const INSERTED = [0, 1, 250] as const;

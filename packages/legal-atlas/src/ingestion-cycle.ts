@@ -16,7 +16,7 @@ export const CYCLE_OUTCOMES = [
   "failed",
   "timeout",
 ] as const;
-export type CycleOutcome = (typeof CYCLE_OUTCOMES)[number];
+type CycleOutcome = (typeof CYCLE_OUTCOMES)[number];
 
 export const CYCLE_OUTCOME = {
   COMPLETED: "completed",
@@ -31,7 +31,7 @@ export const INGESTION_PAUSE_REASON = {
   DECISION_ALLOWANCE_EXHAUSTED: "decision_allowance_exhausted",
 } as const;
 
-export type IngestionPauseReason =
+type IngestionPauseReason =
   (typeof INGESTION_PAUSE_REASON)[keyof typeof INGESTION_PAUSE_REASON];
 
 export type IngestionCycleTermination =
