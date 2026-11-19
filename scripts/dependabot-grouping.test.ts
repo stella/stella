@@ -128,6 +128,11 @@ const ignorePolicies = {
     reason: "Its local patch does not apply past 1.7.20; held until ported.",
     type: "documented_policy",
   },
+  "prosemirror-inputrules": {
+    reason:
+      "1.6.0 imports prosemirror-model without declaring it; the isolated linker cannot resolve it.",
+    type: "documented_policy",
+  },
 } as const satisfies Record<string, IgnorePolicy>;
 
 type IgnorePolicyDependency = keyof typeof ignorePolicies;

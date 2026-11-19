@@ -424,6 +424,12 @@ updates:
       - dependency-name: "@better-auth/oauth-provider"
         versions:
           - ">1.7.20"
+      # prosemirror-inputrules 1.6.0 imports prosemirror-model without
+      # declaring it, which the isolated linker cannot resolve. Remove this
+      # when a release declares the dependency.
+      - dependency-name: "prosemirror-inputrules"
+        versions:
+          - "1.6.0"
     commit-message:
       prefix: "chore"
     reviewers:
