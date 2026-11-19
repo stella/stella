@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
 
 import { ChevronDownIcon, ChevronsUpDownIcon } from "../icons";
+import { CONTROL_SIZE } from "../lib/control-size";
+import type { ControlSize } from "../lib/control-size";
 import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
   BUTTON_FACE_SIZE_CLASS_NAMES,
+  BUTTON_LAYOUT_CLASS_NAMES,
   BUTTON_VARIANT_CLASS_NAMES,
   type ButtonFaceSize,
 } from "./button-classes";
@@ -13,9 +16,10 @@ import type { ButtonTokenVariant } from "./button.shared";
 import {
   INPUT_CONTROL_CLASS_NAME,
   INPUT_ELEMENT_CLASS_NAME,
+  INPUT_SIZE_CLASS_NAMES,
 } from "./input-control";
 import { LABEL_VARIANT_CLASS_NAME } from "./label-classes";
-import { SkeletonInline } from "./skeleton";
+import { InlineSkeleton } from "./skeleton";
 import {
   TABS_INDICATOR_DEFAULT_CLASS,
   TABS_LIST_BASE_CLASS,
@@ -46,6 +50,7 @@ const FACE_UNAVAILABLE_CLASS = "pointer-events-none opacity-64";
 type ButtonFaceProps = {
   children?: ReactNode;
   className?: string | undefined;
+  layout?: keyof typeof BUTTON_LAYOUT_CLASS_NAMES;
   size: ButtonFaceSize;
   variant: ButtonTokenVariant;
 };
@@ -66,6 +71,7 @@ export const buttonFaceClassName = ({
     BUTTON_BASE_CLASS,
     BUTTON_FACE_SIZE_CLASS_NAMES[size],
     BUTTON_VARIANT_CLASS_NAMES[variant],
+    size === "inline" && variant === "link" && "underline",
     FACE_UNAVAILABLE_CLASS,
   );
 
@@ -73,12 +79,17 @@ export const buttonFaceClassName = ({
 export const ButtonFace = ({
   children,
   className,
+  layout,
   size,
   variant,
 }: ButtonFaceProps) => (
   <span
     aria-hidden="true"
-    className={cn(buttonFaceClassName({ size, variant }), className)}
+    className={cn(
+      buttonFaceClassName({ size, variant }),
+      layout === undefined ? undefined : BUTTON_LAYOUT_CLASS_NAMES[layout],
+      className,
+    )}
     data-slot="button-face"
   >
     {children}
@@ -98,10 +109,10 @@ export const FaceLabelPending = ({
 }) => (
   <span
     aria-hidden="true"
-    className="inline-flex h-[1lh] items-center"
+    className="inline-flex h-[1lh] items-center align-top"
     data-slot="face-label-skeleton"
   >
-    <SkeletonInline className={cn("h-[0.75em]", className)} />
+    <InlineSkeleton className={cn("h-[0.75em]", className)} />
   </span>
 );
 
@@ -111,10 +122,16 @@ type InputFaceProps = {
   /** The placeholder line, as the field shows it while empty. */
   children?: ReactNode;
   className?: string | undefined;
+  size?: ControlSize;
 };
 
-/** A text field's face at its default size: the box and the placeholder. */
-export const InputFace = ({ children, className, icon }: InputFaceProps) => (
+/** A text field's face: its box and the placeholder. */
+export const InputFace = ({
+  children,
+  className,
+  icon,
+  size = CONTROL_SIZE.default,
+}: InputFaceProps) => (
   <span
     aria-hidden="true"
     className={cn(
@@ -133,6 +150,7 @@ export const InputFace = ({ children, className, icon }: InputFaceProps) => (
     <span
       className={cn(
         INPUT_ELEMENT_CLASS_NAME,
+        INPUT_SIZE_CLASS_NAMES[size],
         "text-foreground-placeholder flex items-center overflow-hidden whitespace-nowrap",
         icon !== undefined && "ps-8",
       )}

@@ -7,7 +7,9 @@ import { professionalUseOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { destinationNavigation, redirectToSchema } from "@/lib/redirect";
 import { routeSearchSchema } from "@/route-search-params";
-import { ProfessionalUsePanel } from "@/routes/auth/-components/professional-use-panel";
+
+import { ProfessionalUsePage } from "./-professional-use.page";
+import { ProfessionalUsePending } from "./-professional-use.pending";
 
 const searchSchema = routeSearchSchema({
   redirectTo: redirectToSchema,
@@ -41,11 +43,6 @@ export const Route = createFileRoute("/auth/professional-use")({
         return panic("Unhandled professional-use state");
     }
   },
-  component: ProfessionalUse,
+  component: ProfessionalUsePage,
+  pendingComponent: ProfessionalUsePending,
 });
-
-function ProfessionalUse() {
-  const userId = Route.useRouteContext({ select: (context) => context.userId });
-  const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
-  return <ProfessionalUsePanel redirectTo={redirectTo} userId={userId} />;
-}

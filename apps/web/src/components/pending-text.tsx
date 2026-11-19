@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { SkeletonInline } from "@stll/ui/skeleton";
+import { InlineSkeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 // Whether the app's intl is mounted above. A pending view also renders where
@@ -36,13 +36,35 @@ export type PendingTextKey =
   | "appearance.numbers"
   | "appearance.regionalFormat"
   | "appearance.weekStart"
+  | "auth.continueWithEmail"
+  | "auth.emailPlaceholder"
+  | "auth.error.generic"
+  | "auth.error.providerUnavailable"
+  | "auth.error.title"
+  | "auth.handoffTitle"
+  | "auth.headline"
+  | "auth.invitation.title"
+  | "auth.professionalUse.title"
+  | "auth.professionalUseStatement"
+  | "auth.reauthenticationRequired"
+  | "auth.signIn"
+  | "auth.signInBeforeInvitation"
+  | "auth.subtitle"
+  | "auth.twoFactor.enterAuthenticatorCode"
+  | "auth.twoFactor.title"
+  | "auth.twoFactor.useBackupCode"
+  | "auth.useDifferentEmail"
   | "chat.greeting"
   | "chat.landing.recentChats"
   | "chat.landing.skills"
   | "chat.newChat"
   | "chat.placeholder"
+  | "common.accept"
   | "common.active"
   | "common.add"
+  | "common.cancel"
+  | "common.confirm"
+  | "common.decline"
   | "common.displayName"
   | "common.history"
   | "common.language"
@@ -51,8 +73,11 @@ export type PendingTextKey =
   | "common.search"
   | "common.selectAMatter"
   | "common.sessions"
+  | "common.signOut"
   | "common.stale"
   | "common.timeBilling"
+  | "common.tryAgain"
+  | "common.verify"
   | "common.workflows"
   | "guidance.notCaseLaw"
   | "knowledge.sections.workflows.description"
@@ -148,6 +173,6 @@ export const PendingText = ({
       aria-hidden="true"
       className="inline-flex h-[1lh] items-center align-top"
     >
-      <SkeletonInline className={cn("h-[0.75em]", barClassName)} />
+      <InlineSkeleton className={cn("h-[0.75em]", barClassName)} />
     </span>
   );

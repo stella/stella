@@ -3,7 +3,7 @@
 import type * as React from "react";
 
 import { cn } from "../lib/utils";
-import { Skeleton, SkeletonInline } from "./skeleton";
+import { InlineSkeleton, Skeleton } from "./skeleton";
 
 /*
  * The grouped list's shell (./list.tsx): the group, its header and title, and
@@ -166,7 +166,7 @@ const ListGroupTitlePending = () => (
     className="flex h-5 items-center"
     data-slot="list-group-title-skeleton"
   >
-    <SkeletonInline className="h-3.5 w-24" />
+    <InlineSkeleton className="h-3.5 w-24" />
   </span>
 );
 

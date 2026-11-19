@@ -7,17 +7,23 @@
     "@stll/ui/directional-icon",
     "@stll/ui/frame",
     "@stll/ui/icons",
+    "@stll/ui/input-otp-face",
     "@stll/ui/landing-shell",
     "@stll/ui/list-shell",
     "@stll/ui/matter-icon",
+    "@stll/ui/separator",
     "@stll/ui/stella-mark",
+    "@stll/ui/stella-wordmark",
     "@stll/ui/utils",
+    "@/components/auth/inbox-quick-jump-face",
+    "@/components/auth/otp-panel-text",
     "@/components/pending-text",
     "@/routes/_protected.chat/-components/chat-reading-column"
   ],
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
   "pendingSafeNamedImports": {
     "@tanstack/react-router": ["useParams", "useSearch"],
+    "@/lib/redirect": ["isAcceptInvitationRedirect", "normalizeRedirectTo"],
     "@/lib/chrome-header-actions": ["ChromeHeaderActions"]
   },
   "$syncCacheReadersComment": "Synchronous reads of data already in the query cache, by export name from any module, so a pending view can show the controls the loaded page will (no fetch, no subscription).",

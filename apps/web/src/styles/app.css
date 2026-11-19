@@ -32,6 +32,14 @@
 
 @source "../../../../packages/decision-reader/src/**/*.{ts,tsx}";
 
+.auth-gradient {
+  background: linear-gradient(
+    to bottom,
+    var(--background) 40%,
+    var(--auth-gradient-end)
+  );
+}
+
 .pele {
   --pele-bg: var(--background);
   --pele-fg: var(--foreground);
