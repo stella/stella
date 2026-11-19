@@ -2321,6 +2321,11 @@
       "accepted": "Applied",
       "rejected": "Rejected"
     },
+    "switcher": {
+      "allChats": "All chats",
+      "searchPlaceholder": "Find a chat…",
+      "trigger": "Switch chat"
+    },
     "tabToAsk": "→ to ask: \"{prompt}\"",
     "tableChart": {
       "bar": "Bar",

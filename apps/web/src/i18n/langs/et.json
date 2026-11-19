@@ -2321,6 +2321,11 @@
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
     },
+    "switcher": {
+      "allChats": "Kõik vestlused",
+      "searchPlaceholder": "Leia vestlus…",
+      "trigger": "Vaheta vestlust"
+    },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "tableChart": {
       "bar": "Tulpdiagramm",

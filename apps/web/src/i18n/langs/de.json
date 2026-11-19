@@ -2321,6 +2321,11 @@
       "accepted": "Angewendet",
       "rejected": "Abgelehnt"
     },
+    "switcher": {
+      "allChats": "Alle Chats",
+      "searchPlaceholder": "Chat suchen…",
+      "trigger": "Chat wechseln"
+    },
     "tabToAsk": "→ zum Fragen: „{prompt}“",
     "tableChart": {
       "bar": "Balken",

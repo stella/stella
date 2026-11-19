@@ -2321,6 +2321,11 @@
       "accepted": "Appliqué",
       "rejected": "Rejeté"
     },
+    "switcher": {
+      "allChats": "Toutes les conversations",
+      "searchPlaceholder": "Rechercher une conversation…",
+      "trigger": "Changer de conversation"
+    },
     "tabToAsk": "→ pour demander : « {prompt} »",
     "tableChart": {
       "bar": "Barres",

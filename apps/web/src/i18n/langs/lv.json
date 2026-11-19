@@ -2321,6 +2321,11 @@
       "accepted": "Lietots",
       "rejected": "Noraidīts"
     },
+    "switcher": {
+      "allChats": "Visas tērzēšanas",
+      "searchPlaceholder": "Atrast tērzēšanu…",
+      "trigger": "Mainīt tērzēšanu"
+    },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
     "tableChart": {
       "bar": "Stabiņu",

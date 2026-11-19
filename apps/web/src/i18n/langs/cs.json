@@ -2321,6 +2321,11 @@
       "accepted": "Použito",
       "rejected": "Odmítnuto"
     },
+    "switcher": {
+      "allChats": "Všechny chaty",
+      "searchPlaceholder": "Najít chat…",
+      "trigger": "Přepnout chat"
+    },
     "tabToAsk": "→ pro dotaz: \"{prompt}\"",
     "tableChart": {
       "bar": "Sloupcový",

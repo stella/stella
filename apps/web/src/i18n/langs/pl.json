@@ -2321,6 +2321,11 @@
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
     },
+    "switcher": {
+      "allChats": "Wszystkie czaty",
+      "searchPlaceholder": "Znajdź czat…",
+      "trigger": "Przełącz czat"
+    },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
     "tableChart": {
       "bar": "Słupkowy",

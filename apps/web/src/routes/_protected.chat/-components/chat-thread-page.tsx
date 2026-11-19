@@ -125,7 +125,6 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
-import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import {
   CHAT_COMPOSER_COLUMN_CLASS_NAME,
   CHAT_READING_COLUMN_CLASS_NAME,
@@ -735,7 +734,6 @@ export const ChatThreadPage = ({
                 className="hidden md:inline-flex"
                 onClick={moveToSide}
               />
-              <ChatHistoryLink />
               <NewChatButton
                 hasMessages={messages.length > 0}
                 threadRef={threadRef}

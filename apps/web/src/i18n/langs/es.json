@@ -2321,6 +2321,11 @@
       "accepted": "Aplicado",
       "rejected": "Rechazado"
     },
+    "switcher": {
+      "allChats": "Todos los chats",
+      "searchPlaceholder": "Buscar un chat…",
+      "trigger": "Cambiar de chat"
+    },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",

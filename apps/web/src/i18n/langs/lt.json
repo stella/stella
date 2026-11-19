@@ -2321,6 +2321,11 @@
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
     },
+    "switcher": {
+      "allChats": "Visi pokalbiai",
+      "searchPlaceholder": "Rasti pokalbį…",
+      "trigger": "Pakeisti pokalbį"
+    },
     "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "tableChart": {
       "bar": "Stulpelinė",

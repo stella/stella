@@ -2321,6 +2321,11 @@
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
     },
+    "switcher": {
+      "allChats": "Összes csevegés",
+      "searchPlaceholder": "Csevegés keresése…",
+      "trigger": "Csevegés váltása"
+    },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "tableChart": {
       "bar": "Oszlop",

@@ -60,6 +60,7 @@ const { setThreadActiveSkill, useThreadActiveSkillStore } =
   await import("@/features/chat/thread-active-skill-store");
 const { toSafeId } = await import("@/lib/safe-id");
 const { skillsOptions } = await import("@/lib/knowledge/queries");
+const { ChromeHeaderActionsSlot } = await import("@/lib/chrome-header-actions");
 const { ChatThreadPage } = await import("./chat-thread-page");
 
 const user = {
@@ -361,6 +362,10 @@ const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
     path: "/chat/$threadId",
     component: () => (
       <ChatEditorProvider>
+        {/* The shell's header, which the page publishes its actions into. */}
+        <header>
+          <ChromeHeaderActionsSlot />
+        </header>
         <ChatThreadPage threadRef={threadRef} />
       </ChatEditorProvider>
     ),
@@ -585,5 +590,26 @@ test("an empty chat without a skill keeps the general prompts", async () => {
   for (const prompt of openingPrompts) {
     expect(ui.queryByText(prompt.name)).toBeNull();
   }
+  expect(unexpected).toEqual([]);
+});
+
+test("the chat header has no history button of its own: the title's switcher reaches the history", async () => {
+  serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
+  const ui = await openThreadPage(createClient());
+
+  const header = ui.container.querySelector("header");
+  if (header === null) {
+    throw new Error("Expected the shell header to render");
+  }
+  // The header's actions have landed once its New chat shows.
+  await testing.waitFor(() =>
+    expect(header.textContent.includes(messages.chat.newChat)).toBe(true),
+  );
+  expect(header.querySelector('a[href="/chat/history"]')).toBeNull();
+  expect(
+    testing.within(header).queryAllByRole("button", {
+      name: messages.common.history,
+    }).length,
+  ).toBe(0);
   expect(unexpected).toEqual([]);
 });
