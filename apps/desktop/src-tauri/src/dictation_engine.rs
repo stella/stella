@@ -226,10 +226,13 @@ impl Capture {
   fn log_hold(&self, app: &AppHandle, trace: &mut Trace) {
     let duration = trace.release();
     let globe_key = (dictation::hold_key(app) == HoldChoice::Fn).then(globe_key);
+    // Audio still waiting on the tape counts too: it is transcribed with
+    // the rest once recording stops.
+    let frames = self.recorded + self.recorder.waiting_frames();
     Line::Hold {
       duration,
       audio: Duration::from_secs_f64(
-        self.recorded as f64 / f64::from(self.recorder.rate.max(1)),
+        frames as f64 / f64::from(self.recorder.rate.max(1)),
       ),
       stretches: self.live.sent(),
       globe_key,
@@ -616,6 +619,11 @@ impl Recorder {
   /// The audio captured since the last take, in whole frames.
   fn take(&self) -> Vec<f32> {
     take_frames(&mut lock(&self.tape), self.channels)
+  }
+
+  /// Whole frames captured and not taken yet, left on the tape.
+  fn waiting_frames(&self) -> usize {
+    lock(&self.tape).samples.len() / self.channels.max(1)
   }
 
   /// Stops the stream and takes the last of its audio; `None` when capture
