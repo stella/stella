@@ -127,6 +127,7 @@ const storedReads = new Map<string, Promise<StoredChoice>>();
 /** The composer over a thread whose stored choice the query reads. */
 const renderComposer = (
   initial: Promise<StoredChoice> = Promise.resolve(AUTO_ON_STELLA),
+  { opensNewChats = false }: { opensNewChats?: boolean } = {},
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -146,6 +147,7 @@ const renderComposer = (
         threadRef,
         stored: data,
         queryKey: stored.queryKey,
+        opensNewChats,
       });
     },
     {
@@ -315,10 +317,10 @@ test("a new chat starts on the member's last Run on choice, and a send carries i
 });
 
 test("before its first read, a new chat shows where it will start, and decides nothing on it", async () => {
-  const server = serve();
+  const server = serve({ computers: codexReady });
   rememberRunTarget(ORGANIZATION_ID, CODEX);
   const read = Promise.withResolvers<StoredChoice>();
-  const { result } = renderComposer(read.promise, { startsOnLastChoice: true });
+  const { result } = renderComposer(read.promise, { opensNewChats: true });
   // The row lays out for the computer (no web search switch) from the first
   // render, while the menus stay pending: the chip says nothing yet.
   expect(result.current.models.state).toBe("loading");

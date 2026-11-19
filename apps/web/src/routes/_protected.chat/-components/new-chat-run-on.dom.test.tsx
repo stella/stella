@@ -56,7 +56,7 @@ const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { Route: ChatIndexRoute } = await import("../index");
 const { Route: NewChatRoute } = await import("../../_protected.chat_.new");
-const { ChatThreadPage } = await import("./chat-thread-page");
+const { ChatThreadPage } = await import("./chat-thread.page");
 const desktopBridge = await import("@/lib/desktop-bridge");
 
 const user = {

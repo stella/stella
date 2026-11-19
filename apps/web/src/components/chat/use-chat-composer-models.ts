@@ -76,6 +76,14 @@ type UseChatComposerModelsOptions = {
    * no Run on, and its turns run on stella whatever the thread stores.
    */
   runOn?: "choice" | "cloud_only";
+  /**
+   * For a surface that mostly opens new chats (the new-chat page, an
+   * inspector chat tab): before the chat's first read, its row lays out for
+   * the member's last Run on choice. On every surface, a chat the server
+   * holds no row for when first read starts on that choice; this only
+   * shapes the row while that read is pending.
+   */
+  opensNewChats?: boolean;
 };
 
 export type ChatComposerModels = {
@@ -217,6 +225,7 @@ export const useChatComposerModels = ({
   stored,
   queryKey,
   runOn = "choice",
+  opensNewChats = false,
 }: UseChatComposerModelsOptions): ChatComposerModels => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -297,7 +306,7 @@ export const useChatComposerModels = ({
   // and the model chip stay pending until then.
   const shownTarget =
     shown?.runTarget ??
-    (runOn === "choice" && startsOnLastChoice
+    (runOn === "choice" && opensNewChats && stored === undefined
       ? rememberedRunTarget(activeOrganizationId)
       : undefined);
   const choiceTarget = useEffectiveRunTarget(

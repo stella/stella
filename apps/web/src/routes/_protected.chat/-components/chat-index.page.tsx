@@ -263,6 +263,7 @@ export function ChatIndexPage() {
     threadRef,
     stored: chatDraftMeta,
     queryKey: draftMetaQueryKey,
+    opensNewChats: true,
   });
   const { getRunTarget } = composerModels;
   // The capability set `ChatThreadPage` passes, so the runtime the first
