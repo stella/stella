@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Dikteerimise keel",
-      "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli.",
+      "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli. Kui neid on mitu, tuntakse iga sõna ära selles keeles, milles te selle ütlete.",
       "automatic": "Automaatne",
       "automaticWith": "Automaatne ({languages})",
       "noResults": "Keeli ei leitud"
+    },
+    "customWords": {
+      "group": "Omad sõnad",
+      "title": "Sõnad ja nimed, mida stella peab õigesti kirjutama",
+      "description": "Näiteks klientide nimed või ingliskeelsed terminid, mida kasutate teises keeles rääkides. Need hoitakse selles arvutis selle konto jaoks ja saadetakse ainult koos dikteerimisega: stella AI abil teisendamiseks ja tehisintellektiga parandamiseks. Selle arvuti kõnemudel neid ei kasuta.",
+      "count": "{count, number} / {limit, number}",
+      "input": "Lisa sõna või nimi",
+      "add": "Lisa",
+      "remove": "Eemalda {word}",
+      "duplicate": "See sõna on juba loendis.",
+      "full": "Loendisse mahub kuni {limit, number} sõna. Uue lisamiseks eemaldage mõni.",
+      "failed": "Loendit ei õnnestunud salvestada. Proovige uuesti."
     },
     "modelNeeded": "Kõnemudel töötab selles arvutis.",
     "speechModel": "Kõnemudel",
@@ -693,6 +705,11 @@
       "description": "Muudab kuni 4 tunni pikkuse diktofonifaili, häälmärkme või koosoleku salvestise tekstiks.",
       "open": "Ava",
       "failed": "Akent ei õnnestunud avada. Proovige uuesti."
+    },
+    "preview": {
+      "label": "Seni dikteeritud tekst",
+      "listening": "Kuulan…",
+      "finishing": "Lõpetan…"
     }
   },
   "shortcut": {
@@ -971,6 +988,14 @@
       "protected": "Selles kaustas on stella enda andmed või oskuste kaust, seega ei saa agent selles töötada.",
       "unreadable": "Seda kausta ei õnnestunud lugeda."
     }
+  },
+  "keepAwake": {
+    "title": "Hoia ärkvel",
+    "enabled": "Hoia see arvuti ärkvel, kui agendid töötavad",
+    "description": "Kuni selles arvutis töötab agent, ei lähe arvuti jõudeoleku tõttu unerežiimi ja pikad tööd jätkuvad. Ekraan võib endiselt välja lülituda. Mac-sülearvuti läheb kaane sulgemisel siiski unerežiimi.",
+    "onBattery": "Ka akutoitel",
+    "onBatteryDescription": "Kui see on välja lülitatud, läheb arvuti akutoitel tavapäraselt unerežiimi, isegi kui agent töötab.",
+    "errorSave": "Seda seadet ei õnnestunud salvestada. Proovige uuesti."
   },
   "transcribe": {
     "title": "Salvestise transkribeerimine",

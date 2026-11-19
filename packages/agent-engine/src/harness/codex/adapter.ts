@@ -35,7 +35,7 @@ import {
   type AppServerLaunch,
   startAppServer,
 } from "./app-server-client";
-import { CodexProcess } from "./background";
+import { CodexProcess, type CodexProcessSettings } from "./background";
 import { usageLimitResetsAt } from "./errors";
 import {
   CODEX_CLIENT_INFO,
@@ -191,6 +191,8 @@ type Connection = { client: AppServerClient; version: string | null };
 type ConnectFailure = {
   reason: "harness_unavailable" | "protocol_violation";
   message: string;
+  /** The server did not answer `initialize` in time: a slow start. */
+  timedOut?: true;
 };
 
 type ConnectOptions = {
@@ -262,7 +264,13 @@ const connect = async ({
     await client.kill();
     return Result.err(
       Result.isError(initialized)
-        ? { reason: "harness_unavailable", message: initialized.error.message }
+        ? {
+            reason: "harness_unavailable",
+            message: initialized.error.message,
+            ...(initialized.error.reason === "timed_out"
+              ? { timedOut: true as const }
+              : {}),
+          }
         : {
             reason: "protocol_violation",
             message:
@@ -485,6 +493,7 @@ const beginTurn = async ({
   threadId,
   prompt,
   continuation,
+  model,
 }: {
   client: AppServerClient;
   input: HarnessTurnInput;
@@ -492,11 +501,14 @@ const beginTurn = async ({
   threadId: string;
   prompt: string;
   continuation: HarnessContinuation;
+  /** Another model than the thread's, for this turn and later ones. */
+  model?: string;
 }): Promise<Result<HarnessTurn, HarnessStartError>> => {
   const files = await filesTheModelReads(client, input);
   const started = await client.request("turn/start", {
     threadId,
     input: turnInputItems(files, prompt),
+    ...(model === undefined ? {} : { model }),
     // Codex keeps it for later turns of the process, so a capacity
     // continuation runs at it too; omitted, the harness's own setting holds.
     ...(input.reasoningEffort === null
@@ -551,6 +563,21 @@ const continueTurn = async (
     });
   }
   const client = appServer.client;
+  // The approval mode is fixed with the thread, and an effort left unset
+  // would keep the last turn's: either needs a new process.
+  const ran = appServer.settings;
+  if (
+    ran === null ||
+    ran.approvals !== input.policy.approvals ||
+    (input.reasoningEffort === null && ran.effort !== null)
+  ) {
+    await settlesWithin(appServer.stop(client), options.gracePeriodMs);
+    await client.kill();
+    return startTurn(options, {
+      ...input,
+      continuation: { type: "resume", sessionId: live.sessionId },
+    });
+  }
   const session = turnSession(options, input, appServer);
   session.attach(client);
   const prompt = buildTurnPrompt({
@@ -573,9 +600,20 @@ const continueTurn = async (
     threadId,
     prompt: prompt.value,
     continuation: { type: "resumed" },
+    ...(input.model === ran.model ? {} : { model: input.model }),
   });
-  return Result.isError(begun) ? fail(begun.error) : begun;
+  if (Result.isError(begun)) {
+    return fail(begun.error);
+  }
+  appServer.settings = settingsOf(input);
+  return begun;
 };
+
+const settingsOf = (input: HarnessTurnInput): CodexProcessSettings => ({
+  model: input.model,
+  effort: input.reasoningEffort,
+  approvals: input.policy.approvals,
+});
 
 const startTurn = async (
   options: CodexHarnessAdapterOptions,
@@ -603,6 +641,30 @@ const startTurn = async (
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
   }
+  // One more start after a slow one: a first launch after an update, or a
+  // busy computer. A refusal is not retried.
+  const first = await startProcessTurn(options, input, standalone.value);
+  if (Result.isOk(first)) {
+    return Result.ok(first.value);
+  }
+  if (!first.error.timedOut) {
+    return Result.err(first.error.error);
+  }
+  const second = await startProcessTurn(options, input, standalone.value);
+  return Result.isOk(second)
+    ? Result.ok(second.value)
+    : Result.err(second.error.error);
+};
+
+/** Why a new server could not take the turn, and whether it was only slow. */
+type ProcessStartFailure = { error: HarnessStartError; timedOut: boolean };
+
+/** Start a server for the turn and begin it there. */
+const startProcessTurn = async (
+  options: CodexHarnessAdapterOptions,
+  input: HarnessTurnInput,
+  standalone: string,
+): Promise<Result<HarnessTurn, ProcessStartFailure>> => {
   const appServer = new CodexProcess({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
@@ -620,15 +682,26 @@ const startTurn = async (
   });
   if (Result.isError(connected)) {
     session.abandon();
-    return Result.err(new HarnessStartError(connected.error));
+    const { reason, message, timedOut } = connected.error;
+    return Result.err({
+      error: new HarnessStartError({ reason, message }),
+      timedOut: timedOut === true,
+    });
   }
   const { client } = connected.value;
   appServer.attach(client);
   session.attach(client);
-  const fail = async (error: HarnessStartError) => {
+  /**
+   * Up to the turn's own start, a missed deadline is only a slow start; once
+   * the prompt went out, the turn may have begun and is never sent again.
+   */
+  const fail = async (error: HarnessStartError, beforePrompt = true) => {
     session.abandon();
     await client.kill();
-    return Result.err(error);
+    return Result.err({
+      error,
+      timedOut: beforePrompt && client.missedDeadline(),
+    });
   };
 
   const auth = await readAccount(client);
@@ -653,9 +726,10 @@ const startTurn = async (
   }
   const { threadId, continuation } = opened.value;
   appServer.threadId = threadId;
+  appServer.settings = settingsOf(input);
   const prompt = sessionHoldsHistory(continuation)
     ? buildTurnPrompt({ transcript: input.transcript, mode: "resumed" })
-    : standalone;
+    : Result.ok(standalone);
   if (Result.isError(prompt)) {
     return fail(prompt.error);
   }
@@ -667,7 +741,9 @@ const startTurn = async (
     prompt: prompt.value,
     continuation,
   });
-  return Result.isError(begun) ? fail(begun.error) : begun;
+  return Result.isError(begun)
+    ? fail(begun.error, false)
+    : Result.ok(begun.value);
 };
 
 export const createCodexHarnessAdapter = (

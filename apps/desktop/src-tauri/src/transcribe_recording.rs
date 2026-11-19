@@ -1371,6 +1371,7 @@ mod tests {
       display_name: "Scribe v3".to_string(),
       provider: Some("ElevenLabs".to_string()),
       retains_data: true,
+      takes_vocabulary: false,
       account: account.to_string(),
     }
   }

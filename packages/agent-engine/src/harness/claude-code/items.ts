@@ -44,6 +44,7 @@ type ClaudeMessageHandling =
   | "system"
   | "stream"
   | "rate_limit"
+  | "command"
   | "ignore";
 
 /** What stella does with each pinned message type. */
@@ -63,6 +64,9 @@ export const claudeMessageHandling = (
       return "stream";
     case "rate_limit_event":
       return "rate_limit";
+    case "command_lifecycle":
+      // What became of a message written to stdin: a steer read or dropped.
+      return "command";
     // Each type below is dropped on purpose.
     case "auth_status":
       // Progress of a sign-in flow; stella never starts one in a turn.
@@ -488,6 +492,75 @@ export const resultText = (block: ClaudeToolResult) => {
   return block.content
     .flatMap((part) => (part.type === "text" ? [part.text ?? ""] : []))
     .join("");
+};
+
+const AGENT_ID = "agentId: ";
+const WORKTREE_LINES = ["worktreePath: ", "worktreeBranch: "] as const;
+
+/** Whether `line` names the agent as the CLI does: an id, then a note. */
+const isAgentIdLine = (line: string) => {
+  const rest = line.slice(AGENT_ID.length);
+  const space = rest.indexOf(" ");
+  return (
+    line.startsWith(AGENT_ID) &&
+    rest !== "" &&
+    space !== 0 &&
+    (space === -1 || (rest.slice(space).startsWith(" (") && rest.endsWith(")")))
+  );
+};
+
+/**
+ * `text` without the notes the CLI appends to a subagent's result for the
+ * parent model, at its very end: the agent id it can be continued by (with
+ * any worktree it ran in), then the block of what it used.
+ */
+const withoutTrailer = (text: string) => {
+  const at = text.lastIndexOf(AGENT_ID);
+  if (at === -1) {
+    return text;
+  }
+  const [first = "", ...rest] = text.slice(at).trimEnd().split("\n");
+  const worktree = rest.findIndex(
+    (line) => !WORKTREE_LINES.some((prefix) => line.startsWith(prefix)),
+  );
+  const usage = (worktree === -1 ? [] : rest.slice(worktree)).join("\n");
+  const hasUsage = usage.startsWith("<usage>") && usage.endsWith("</usage>");
+  // The CLI's trailer always ends in its usage block; a report that only
+  // ends with an agent id is the subagent's own text.
+  if (!isAgentIdLine(first) || !hasUsage) {
+    return text;
+  }
+  const report = text.slice(0, at);
+  return report.endsWith("\n") ? report.slice(0, -1) : report;
+};
+
+/** The line that opens a report the CLI frames for the parent model. */
+const HAND_BACK_FRAME = "[Subagent hand-back]";
+
+/** The indent the CLI gives every line of a framed report. */
+const HAND_BACK_INDENT = "  ";
+
+/**
+ * A subagent's report as it wrote it, from the result the CLI returned for
+ * the parent model: without the trailer, and out of the hand-back frame
+ * (the notes above it, the frame line and the indent of every line) that
+ * newer releases put around it. The model still gets the whole result.
+ */
+export const subagentReport = (result: string) => {
+  const report = withoutTrailer(result);
+  const lines = report.split("\n");
+  const frame = lines.findIndex((line) => line.startsWith(HAND_BACK_FRAME));
+  if (frame === -1) {
+    return report;
+  }
+  return lines
+    .slice(frame + 1)
+    .map((line) =>
+      line.startsWith(HAND_BACK_INDENT)
+        ? line.slice(HAND_BACK_INDENT.length)
+        : line,
+    )
+    .join("\n");
 };
 
 const status = (failed: boolean): HarnessToolResult["status"] =>

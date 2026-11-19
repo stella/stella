@@ -1233,6 +1233,13 @@
       "treatment": "Tratamento posterior"
     },
     "analyzing": "Analisando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): decisões na base jurídica pública da stella, por ano e mês.",
+      "courts": "Tribunais",
+      "days": "Dias",
+      "jurisdictionDescription": "{country}: decisões judiciais na base jurídica pública da stella, por tribunal, ano e mês.",
+      "periodDescription": "{court} ({country}), {period}: decisões na base jurídica pública da stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "A pesquisa está temporariamente indisponível"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Pesquise pelo número do processo ou pelo ECLI da decisão, se souber.",
+        "message": "Nenhuma decisão correspondente exatamente a esta referência de coletânea foi encontrada."
+      },
       "noHits": {
         "hint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
         "message": "Nada corresponde às palavras exigidas por esta pesquisa."
@@ -2132,6 +2143,7 @@
     },
     "newChat": "Novo chat",
     "newChatInSidePanel": "O novo chat está disponível no painel lateral",
+    "nextSteps": "Próximos passos",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -2238,7 +2250,6 @@
       "chipLabel": "Executa em: {place}",
       "cloud": "Nuvem",
       "cloudDescription": "Roda na nuvem. Funciona de qualquer lugar.",
-      "harnessModels": "Modelos do {harness}",
       "hintCheck": "Verifique-o no stella desktop",
       "hintInstall": "Instale pelo stella desktop",
       "hintOffline": "Abra o stella desktop no seu computador",
@@ -2248,7 +2259,6 @@
       "localFolderSelection": "Seu computador · {harness} · {folder}",
       "localPlace": "Seu computador, {harness}",
       "localSelection": "Seu computador · {harness}",
-      "modelDefault": "Padrão (recomendado)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e verifique o {harness} em Configurações › Geral › Assinaturas de IA.",
       "stepsInstall": "Abrindo o stella desktop. Se ele não abrir, abra-o no seu computador e, em Configurações › Geral, escolha Instalar para o {harness}.",
@@ -2322,7 +2332,6 @@
     "stopping": "Parando…",
     "suggestTitle": "Sugerir um título",
     "suggestTitleUnavailableAnonymized": "Sugestões de título não estão disponíveis para conversas anonimizadas.",
-    "suggestedFollowupsLabel": "Sugestões de perguntas de acompanhamento",
     "suggestingTitle": "Sugerindo um título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2333,7 +2342,6 @@
       "accepted": "Aplicado",
       "rejected": "Rejeitado"
     },
-    "tabToAsk": "→ para perguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -2424,6 +2432,7 @@
       "save_document": "Salvar documento",
       "save_matter": "Salvar caso",
       "save_playbook": "Salvar playbook",
+      "save_skill_package": "Salvar habilidade",
       "save_task": "Salvar tarefa",
       "save_template": "Salvar modelo",
       "save_time_entry": "Salvar entrada de tempo",
@@ -2452,6 +2461,7 @@
       "use-browser": "Usando seu navegador",
       "use_connector_secret": "Usando a credencial do conector",
       "user_message": "Enviado enquanto o agente trabalhava",
+      "validate_skill_package": "Verificar habilidade",
       "web_search": "Pesquisando na web"
     },
     "toolCall": {
@@ -2755,6 +2765,7 @@
     "done": "Concluído",
     "doubleClickToRename": "Clique duas vezes para renomear",
     "download": "Baixar",
+    "downloadOriginal": "Baixar original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimentação cancelada. {itemName} não foi movido.} other {Movimentação cancelada. {itemName} não foram movidos.} many {Movimentação cancelada. {itemName} não foram movidos.}}",
       "droppedOn": "{count, plural, one {{itemName} foi solto sobre {destinationName}.} other {{itemName} foram soltos sobre {destinationName}.} many {{itemName} foram soltos sobre {destinationName}.}}",
@@ -3342,6 +3353,8 @@
       "contact": "Contato: {name}",
       "deliveredAt": "Entregue na caixa",
       "delivery": "Entrega",
+      "deliveryEvents": "Histórico de entrega",
+      "deliveryReceipt": "Comprovante de entrega",
       "directionUnknown": "Direção desconhecida",
       "messageId": "ID da mensagem",
       "moreContacts": "Há mais contatos associados a esta caixa de dados.",
@@ -3354,6 +3367,8 @@
       "sent": "Enviada",
       "statedInFile": "Mensagem de caixa de dados (conforme o arquivo)",
       "toHands": "Aos cuidados de {name}",
+      "unlinkedFiles": "Para abrir os anexos exibidos sem link, baixe o arquivo ZFO original.",
+      "unreadable": "Não foi possível ler o arquivo como uma mensagem da caixa de dados nem como um comprovante de entrega.",
       "uploaded": "Mensagem de caixa de dados enviada"
     },
     "deliveredBy": "Entregue por <address>{sender}</address>",
@@ -4056,6 +4071,12 @@
     "versionCreatedDescription": "A versão {versionNumber} foi criada. Todos podem continuar editando.",
     "versionCreatedTitle": "Versão criada",
     "viewOnly": "Somente leitura"
+  },
+  "guidance": {
+    "notCaseLaw": "Orientação emitida por um órgão regulador. Não é uma decisão judicial.",
+    "openAtPublisher": "Abrir no site do editor",
+    "source": "Fonte: {attribution}",
+    "textUnavailable": "O texto deste documento não está disponível aqui. Leia-o no site do editor."
   },
   "guides": {
     "action": {

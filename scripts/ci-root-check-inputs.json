@@ -29,6 +29,7 @@
     "Tauri package alignment": ["@stll/desktop"],
     "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
     "Lockfile release-age guard": ["**"],
+    "Check script test declarations": ["**"],
     "Restore generated sources": ["**"],
     "Download generated sources": ["**"],
     "API test timeout guard": [

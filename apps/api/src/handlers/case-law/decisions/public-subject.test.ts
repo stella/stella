@@ -23,6 +23,11 @@ const SUBJECT_FREE_ROUTES = [
   // the redistribution gate the subject factory would apply per row is
   // applied once, to the source catalogue, so a withheld feed reaches none
   // of the figures.
+  // The browse tree names courts and periods, never a decision: its court
+  // list reads the policy-filtered folded counts, and its calendar counts
+  // rows of a court the court list admitted.
+  "GET /case/browse/calendar",
+  "GET /case/browse/courts",
   "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/facets",

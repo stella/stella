@@ -41,8 +41,10 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {
   createDesktopDictationModelsEndpoint,
   createDesktopDictationTranscribeEndpoint,
+  desktopChunkVocabulary,
   listDictationModels,
   matterTerms,
+  takesVocabulary,
 } from "./desktop-transcription";
 import type { DictationDependencies } from "./transcribe";
 
@@ -144,6 +146,7 @@ test("a labeling desktop also gets the models outside its region, after the regi
       displayName: TRANSCRIPTION_MODELS[model.id].displayName,
       provider: TRANSCRIPTION_MODELS[model.id].provider,
       outsideRegion: outside.some((id) => id === model.id),
+      takesVocabulary: takesVocabulary(model.id),
     });
   }
   // The default never leaves the region.
@@ -183,6 +186,7 @@ test("the deployment's ElevenLabs key offers Scribe v3 in its environment's regi
     displayName: "Scribe v3",
     provider: "ElevenLabs",
     outsideRegion: true,
+    takesVocabulary: false,
   });
   // An organization on its own AI provider still gets the direct model, on
   // stella's key as stella usage.
@@ -209,6 +213,7 @@ test("the deployment's ElevenLabs key offers Scribe v3 in its environment's regi
         displayName: "Scribe v3",
         provider: "ElevenLabs",
         outsideRegion: false,
+        takesVocabulary: false,
       },
     ],
     defaultModelId: direct,
@@ -252,6 +257,7 @@ test("a key without zero retention is listed only to a desktop that warns, marke
     provider: "ElevenLabs",
     outsideRegion: false,
     retainsData: true,
+    takesVocabulary: false,
   });
   expect(warned.defaultModelId).not.toBe(direct);
   for (const model of warned.models) {
@@ -466,6 +472,7 @@ const exerciseTranscribe = async ({
   matterId,
   readMatter,
   pieceId,
+  vocabulary,
   audioMs = 1234,
 }: {
   withhold?: () => void;
@@ -476,6 +483,7 @@ const exerciseTranscribe = async ({
   matterId?: string;
   readMatter?: DesktopTranscribeReadMatter;
   pieceId?: string;
+  vocabulary?: string;
   audioMs?: number;
 } = {}) => {
   withhold();
@@ -539,6 +547,9 @@ const exerciseTranscribe = async ({
   }
   if (matterId !== undefined) {
     form.set("matterId", matterId);
+  }
+  if (vocabulary !== undefined) {
+    form.set("vocabulary", vocabulary);
   }
   const response = await server.fetch(
     new Request("http://localhost/transcribe", { method: "POST", body: form }),
@@ -739,6 +750,86 @@ test("a matter's vocabulary is each term once, short enough for a hint, and boun
   expect(
     matterTerms(
       Array.from({ length: 150 }, (_unused, index) => ({ term: `t${index}` })),
+    ),
+  ).toHaveLength(100);
+});
+
+test("a labeling desktop learns which models read vocabulary", () => {
+  const listed = listModels(
+    { orgAIConfig: null, managedAIResidency: "eu" },
+    { labeled: true },
+  );
+  expect(listed.models.some((model) => model.takesVocabulary === true)).toBe(
+    true,
+  );
+  for (const model of listed.models) {
+    expect(model.takesVocabulary).toBe(takesVocabulary(model.id));
+  }
+  expect(takesVocabulary(VOCABULARY_MODEL)).toBe(true);
+  expect(takesVocabulary("elevenlabs-direct/scribe-v3")).toBe(false);
+  expect(takesVocabulary(undefined)).toBe(false);
+});
+
+test("the speaker's custom words reach a model that reads vocabulary, before the matter's names", async () => {
+  const readMatter = matterReader(true);
+  const { response, transcribe } = await exerciseTranscribe({
+    modelId: VOCABULARY_MODEL,
+    matterId: MATTER_ID,
+    readMatter: asTestRaw<DesktopTranscribeReadMatter>(readMatter),
+    vocabulary: JSON.stringify(["custom terms list", "libeňská"]),
+  });
+  expect(response.status).toBe(200);
+  expect(transcribe.mock.calls.at(0)?.[0].vocabulary).toEqual([
+    "custom terms list",
+    "libeňská",
+    "Novák v Stavby Praha",
+    "22 Cdo 120/2026",
+  ]);
+  const unfiled = await exerciseTranscribe({
+    modelId: VOCABULARY_MODEL,
+    vocabulary: JSON.stringify(["custom terms list"]),
+  });
+  expect(unfiled.response.status).toBe(200);
+  expect(unfiled.transcribe.mock.calls.at(0)?.[0].vocabulary).toEqual([
+    "custom terms list",
+  ]);
+});
+
+test("custom words sent with a model that reads no vocabulary are dropped, never a refusal", async () => {
+  const { response, transcribe } = await exerciseTranscribe({
+    vocabulary: JSON.stringify(["custom terms list"]),
+  });
+  expect(response.status).toBe(200);
+  expect(transcribe.mock.calls.at(0)?.[0].vocabulary).toBeUndefined();
+});
+
+test("custom words beyond the contract's limits are refused before any audio is sent", async () => {
+  for (const vocabulary of [
+    JSON.stringify(
+      Array.from({ length: 101 }, (_unused, index) => `w${index}`),
+    ),
+    JSON.stringify(["x".repeat(101)]),
+    JSON.stringify([""]),
+    "not json",
+  ]) {
+    const { response, transcribe } = await exerciseTranscribe({
+      modelId: VOCABULARY_MODEL,
+      vocabulary,
+    });
+    expect(response.status).toBe(422);
+    expect(transcribe).not.toHaveBeenCalled();
+  }
+});
+
+test("a chunk's vocabulary keeps each term once whatever its case, own words first, bounded", () => {
+  expect(
+    desktopChunkVocabulary(["Libeňská", " NDA "], ["libeňská", "Novák", "nda"]),
+  ).toEqual(["Libeňská", "NDA", "Novák"]);
+  expect(desktopChunkVocabulary(undefined, ["Novák"])).toEqual(["Novák"]);
+  expect(
+    desktopChunkVocabulary(
+      Array.from({ length: 80 }, (_unused, index) => `own${index}`),
+      Array.from({ length: 80 }, (_unused, index) => `matter${index}`),
     ),
   ).toHaveLength(100);
 });

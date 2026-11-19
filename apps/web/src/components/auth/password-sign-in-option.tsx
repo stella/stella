@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { PasswordSignInForm } from "./password-sign-in-form";
+import { SignInMethodSwitch } from "./sign-in-panel-face.pending";
 
 /**
  * Password sign-in for the one account a deployment lets use a password,
@@ -30,15 +31,16 @@ export const PasswordSignInOption = ({
         redirectTo={redirectTo}
       />
       {onUseEmailCode && (
-        <Button
-          className="self-center"
-          onClick={onUseEmailCode}
-          size="sm"
-          type="button"
-          variant="link"
-        >
-          {t("auth.useEmailCode")}
-        </Button>
+        <SignInMethodSwitch>
+          <Button
+            onClick={onUseEmailCode}
+            size="sm"
+            type="button"
+            variant="link"
+          >
+            {t("auth.useEmailCode")}
+          </Button>
+        </SignInMethodSwitch>
       )}
     </>
   );

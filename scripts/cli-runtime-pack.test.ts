@@ -42,7 +42,8 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_DIRECTORY = "packages/cli";
 const COMMAND_TIMEOUT_MS = 180_000;
 // Each pack derives the capability catalog from the API handler graph after
-// building the MCP Apps it imports; this test packs the head four times.
+// building the MCP Apps it imports; this test packs the base once and the
+// head three times.
 const TEST_TIMEOUT_MS = 240_000;
 const RUNTIME_SOURCES = [
   "src/generated/route-map.ts",
@@ -686,30 +687,30 @@ test(
         expect(headRuntime).toBe(readBuiltRuntime(base));
       }
 
-      // A tracked source addition derives its source and compiler outputs.
+      // A tracked source addition derives its source and compiler outputs,
+      // and an untracked fixture can enter npm's broad src allowlist but never
+      // the expected inventory derived from tracked inputs and build outputs.
+      // One pack answers both: each pack rebuilds the runtime, so a pack per
+      // question would only repeat that build.
       const probe = "src/pack-probe.ts";
       writeFileSync(
         path.join(head.root, CLI_DIRECTORY, probe),
         "export const packProbe = 1;\n",
       );
-      const addedFiles = packedFiles(head);
-      const expectedAdded = expectedPackedFiles(head, [probe]);
-      expect(addedFiles).toEqual(expectedAdded);
-      expect(addedFiles).toContain(probe);
-      expect(addedFiles).toContain("dist/pack-probe.js");
-
-      // An untracked fixture can enter npm's broad src allowlist, but never
-      // the expected inventory derived from tracked inputs and build outputs.
       const scratch = "src/pack-scratch.txt";
       writeFileSync(
         path.join(head.root, CLI_DIRECTORY, scratch),
         "unexpected fixture\n",
       );
       const contaminated = packedFiles(head);
+      const expectedAdded = expectedPackedFiles(head, [probe]);
+      expect(expectedAdded).toContain(probe);
+      expect(expectedAdded).toContain("dist/pack-probe.js");
+      expect(expectedAdded).not.toContain(scratch);
       expect(contaminated).toEqual([...expectedAdded, scratch].toSorted());
-      expect(() =>
-        expect(contaminated).toEqual(expectedPackedFiles(head, [probe])),
-      ).toThrow("toEqual");
+      expect(() => expect(contaminated).toEqual(expectedAdded)).toThrow(
+        "toEqual",
+      );
 
       // Publishing must also work after every ignored output has been removed.
       for (const file of RUNTIME_SOURCES) {

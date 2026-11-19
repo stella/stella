@@ -198,6 +198,7 @@ export type CorpusIndexProjectionAppendMode =
 export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "payload_unavailable",
   "revision_too_large",
+  "document_language_undeclared",
   "append_unknown",
   "append_rejected",
   "append_transient",

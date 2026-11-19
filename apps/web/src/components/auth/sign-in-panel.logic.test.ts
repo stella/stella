@@ -60,7 +60,6 @@ describe("sign-in panel options", () => {
       showMicrosoft: false,
       showApple: false,
       showSocialProviders: false,
-      hasAboveEmailOptions: false,
     });
   });
 
@@ -83,7 +82,6 @@ describe("sign-in panel options", () => {
     ).toMatchObject({
       showGoogle: true,
       showSocialProviders: true,
-      hasAboveEmailOptions: true,
     });
   });
 

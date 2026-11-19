@@ -99,6 +99,7 @@
     "displayName": { "prefix": "pr-heavy-gate", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
+      "Check script test declarations",
       "Check workflow job classifications",
       "Checkout",
       "Checkout workflow classification tooling",
@@ -234,6 +235,7 @@
       "Check AI verification guards",
       "Check local base selection",
       "Check local skill overrides",
+      "Check script test declarations",
       "Checkout",
       "Configure flaky-test quarantine",
       "Download generated sources",
@@ -1067,6 +1069,7 @@
     "displayName": { "prefix": "ci-quick-checks", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
+      "Check script test declarations",
       "Check workflow job classifications",
       "Checkout",
       "Checkout workflow classification tooling",

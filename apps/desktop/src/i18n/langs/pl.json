@@ -654,10 +654,22 @@
     },
     "language": {
       "title": "Język dyktowania",
-      "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera.",
+      "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera. Gdy jest ich kilka, każde słowo jest rozpoznawane w języku, w którym je wypowiadasz.",
       "automatic": "Automatycznie",
       "automaticWith": "Automatycznie ({languages})",
       "noResults": "Nie znaleziono języków"
+    },
+    "customWords": {
+      "group": "Własne słowa",
+      "title": "Słowa i nazwy, które stella ma pisać poprawnie",
+      "description": "Na przykład nazwiska klientów lub angielskie terminy, których używasz, mówiąc w innym języku. Są przechowywane na tym komputerze dla tego konta i wysyłane tylko z dyktowaniem, do przetwarzania przez stella AI i do poprawiania za pomocą AI. Model mowy na tym komputerze ich nie używa.",
+      "count": "{count, number} z {limit, number}",
+      "input": "Dodaj słowo lub nazwę",
+      "add": "Dodaj",
+      "remove": "Usuń {word}",
+      "duplicate": "To słowo jest już na liście.",
+      "full": "Lista mieści najwyżej {limit, number} słów. Usuń któreś, aby dodać kolejne.",
+      "failed": "Nie udało się zapisać listy. Spróbuj ponownie."
     },
     "modelNeeded": "Model mowy działa na tym komputerze.",
     "speechModel": "Model mowy",
@@ -693,6 +705,11 @@
       "description": "Zamienia na tekst plik z dyktafonu, notatkę głosową lub nagranie spotkania o długości do 4 godzin.",
       "open": "Otwórz",
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie."
+    },
+    "preview": {
+      "label": "Dotychczas podyktowany tekst",
+      "listening": "Słucham…",
+      "finishing": "Kończenie…"
     }
   },
   "shortcut": {
@@ -971,6 +988,14 @@
       "protected": "Ten folder zawiera własne dane stelli lub folder z umiejętnościami, więc agent nie może w nim pracować.",
       "unreadable": "Nie udało się odczytać tego folderu."
     }
+  },
+  "keepAwake": {
+    "title": "Nie usypiaj",
+    "enabled": "Nie usypiaj tego komputera, gdy pracują agenci",
+    "description": "Gdy na tym komputerze pracuje agent, komputer nie przechodzi w uśpienie z powodu bezczynności, więc długie zadania działają dalej. Ekran nadal może się wyłączać. Laptop Mac i tak przejdzie w uśpienie po zamknięciu pokrywy.",
+    "onBattery": "Również na baterii",
+    "onBatteryDescription": "Gdy ta opcja jest wyłączona, komputer na baterii usypia jak zwykle, nawet gdy pracuje agent.",
+    "errorSave": "Nie udało się zapisać tego ustawienia. Spróbuj ponownie."
   },
   "transcribe": {
     "title": "Transkrypcja nagrania",

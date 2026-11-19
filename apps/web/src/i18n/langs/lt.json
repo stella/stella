@@ -1233,6 +1233,13 @@
       "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
+    "browse": {
+      "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
+      "courts": "Teismai",
+      "days": "Dienos",
+      "jurisdictionDescription": "{country}: teismų sprendimai viešoje stella teisės duomenų bazėje pagal teismą, metus ir mėnesį.",
+      "periodDescription": "{court} ({country}), {period}: sprendimai viešoje stella teisės duomenų bazėje."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Paieška laikinai nepasiekiama"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ieškokite pagal bylos numerį arba sprendimo ECLI, jei jį žinote.",
+        "message": "Nerasta sprendimo, tiksliai atitinkančio šią rinkinio nuorodą."
+      },
       "noHits": {
         "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
         "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."
@@ -2132,6 +2143,7 @@
     },
     "newChat": "Naujas pokalbis",
     "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
+    "nextSteps": "Tolesni žingsniai",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
@@ -2238,7 +2250,6 @@
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
-      "harnessModels": "{harness} modeliai",
       "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
@@ -2248,7 +2259,6 @@
       "localFolderSelection": "Jūsų kompiuteris · {harness} · {folder}",
       "localPlace": "Jūsų kompiuteris, {harness}",
       "localSelection": "Jūsų kompiuteris · {harness}",
-      "modelDefault": "Numatytasis (rekomenduojamas)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir patikrinkite agentą {harness} skiltyje Nustatymai › Bendra › DI prenumeratos.",
       "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
@@ -2322,7 +2332,6 @@
     "stopping": "Stabdoma…",
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
-    "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
     "suggestingTitle": "Siūlomas pavadinimas…",
     "suggestionSeverity": {
       "style": "Stilius",
@@ -2333,7 +2342,6 @@
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
     },
-    "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "tableChart": {
       "bar": "Stulpelinė",
       "kind": "Diagramos tipas",
@@ -2424,6 +2432,7 @@
       "save_document": "Išsaugoti dokumentą",
       "save_matter": "Išsaugoti bylą",
       "save_playbook": "Išsaugoti peržiūros vadovą",
+      "save_skill_package": "Išsaugoti įgūdį",
       "save_task": "Išsaugoti užduotį",
       "save_template": "Išsaugoti šabloną",
       "save_time_entry": "Išsaugoti laiko įrašą",
@@ -2452,6 +2461,7 @@
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "user_message": "Išsiųsta agentui dirbant",
+      "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -2755,6 +2765,7 @@
     "done": "Atlikta",
     "doubleClickToRename": "Spustelėkite du kartus, kad pervadintumėte",
     "download": "Atsisiųsti",
+    "downloadOriginal": "Atsisiųsti originalą",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Perkėlimas atšauktas: {itemName}.} few {Perkėlimas atšauktas: {itemName}.} other {Perkėlimas atšauktas: {itemName}.} many {Perkėlimas atšauktas: {itemName}.}}",
       "droppedOn": "{count, plural, one {Numetimas ant {destinationName} baigtas: {itemName}.} few {Numetimas ant {destinationName} baigtas: {itemName}.} other {Numetimas ant {destinationName} baigtas: {itemName}.} many {Numetimas ant {destinationName} baigtas: {itemName}.}}",
@@ -3342,6 +3353,8 @@
       "contact": "Kontaktas: {name}",
       "deliveredAt": "Pristatyta į dėžutę",
       "delivery": "Įteikimas",
+      "deliveryEvents": "Pristatymo eiga",
+      "deliveryReceipt": "Pristatymo patvirtinimas",
       "directionUnknown": "Kryptis nežinoma",
       "messageId": "Pranešimo ID",
       "moreContacts": "Su šia duomenų dėžute susieta daugiau kontaktų.",
@@ -3354,6 +3367,8 @@
       "sent": "Išsiųstas",
       "statedInFile": "Duomenų dėžutės pranešimas (pagal failą)",
       "toHands": "Asmeniškai: {name}",
+      "unlinkedFiles": "Norėdami atidaryti priedus, prie kurių nėra nuorodos, atsisiųskite originalų ZFO failą.",
+      "unreadable": "Failo nepavyko perskaityti nei kaip duomenų dėžutės pranešimo, nei kaip pristatymo patvirtinimo.",
       "uploaded": "Įkeltas duomenų dėžutės pranešimas"
     },
     "deliveredBy": "Pristatė <address>{sender}</address>",
@@ -4056,6 +4071,12 @@
     "versionCreatedDescription": "Sukurta {versionNumber} versija. Visi gali toliau redaguoti.",
     "versionCreatedTitle": "Versija sukurta",
     "viewOnly": "Tik peržiūra"
+  },
+  "guidance": {
+    "notCaseLaw": "Reguliavimo institucijos paskelbtos gairės. Tai nėra teismo sprendimas.",
+    "openAtPublisher": "Atidaryti leidėjo svetainėje",
+    "source": "Šaltinis: {attribution}",
+    "textUnavailable": "Šio dokumento teksto čia nėra. Perskaitykite jį leidėjo svetainėje."
   },
   "guides": {
     "action": {

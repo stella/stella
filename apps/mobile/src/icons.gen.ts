@@ -71,6 +71,11 @@ export { CopyIcon as DuplicateIcon } from "lucide-react-native";
 // mobile composer's round button shows it while there is nothing to send.
 export { MicIcon as DictateIcon } from "lucide-react-native";
 
+// A suggested next question under an answer: an arrow turning down from the
+// answer into what comes after it. Draw it through DirectionalIcon so it
+// turns the other way under RTL.
+export { CornerDownRightIcon as FollowUpIcon } from "lucide-react-native";
+
 // Opening a document's pages to reorder, rotate, crop or delete them: a stack
 // of pages with no pen, so it never reads as signing the document.
 export { FileStackIcon as EditPagesIcon } from "lucide-react-native";

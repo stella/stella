@@ -1233,6 +1233,13 @@
       "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
+    "browse": {
+      "courtDescription": "{court} ({country}): lahendid stella avalikus õigusandmebaasis aasta ja kuu kaupa.",
+      "courts": "Kohtud",
+      "days": "Päevad",
+      "jurisdictionDescription": "{country}: kohtulahendid stella avalikus õigusandmebaasis kohtu, aasta ja kuu kaupa.",
+      "periodDescription": "{court} ({country}), {period}: lahendid stella avalikus õigusandmebaasis."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Otsing pole ajutiselt saadaval"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Kui teate kohtuasja numbrit või lahendi ECLI-t, otsige selle järgi.",
+        "message": "Sellele kogumikuviitele täpselt vastavat kohtulahendit ei leitud."
+      },
       "noHits": {
         "hint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
         "message": "Miski ei vasta sõnadele, mida see otsing nõudis."
@@ -2132,6 +2143,7 @@
     },
     "newChat": "Uus vestlus",
     "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
+    "nextSteps": "Järgmised sammud",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -2238,7 +2250,6 @@
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
-      "harnessModels": "{harness} mudelid",
       "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",
@@ -2248,7 +2259,6 @@
       "localFolderSelection": "Sinu arvuti · {harness} · {folder}",
       "localPlace": "Sinu arvuti, {harness}",
       "localSelection": "Sinu arvuti · {harness}",
-      "modelDefault": "Vaikimisi (soovitatud)",
       "placeState": "{place}. {state}",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
@@ -2322,7 +2332,6 @@
     "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
-    "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
     "suggestingTitle": "Pealkirja pakkumine…",
     "suggestionSeverity": {
       "style": "Stiil",
@@ -2333,7 +2342,6 @@
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
     },
-    "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "tableChart": {
       "bar": "Tulpdiagramm",
       "kind": "Diagrammi tüüp",
@@ -2424,6 +2432,7 @@
       "save_document": "Salvesta dokument",
       "save_matter": "Salvesta toimik",
       "save_playbook": "Salvesta playbook",
+      "save_skill_package": "Salvesta oskus",
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
@@ -2452,6 +2461,7 @@
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
       "user_message": "Saadetud agendi töö ajal",
+      "validate_skill_package": "Kontrolli oskust",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
@@ -2755,6 +2765,7 @@
     "done": "Valmis",
     "doubleClickToRename": "Topeltklõpsa ümbernimetamiseks",
     "download": "Laadi alla",
+    "downloadOriginal": "Laadi originaal alla",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Teisaldamine tühistati. Üksust {itemName} ei teisaldatud.} other {Teisaldamine tühistati. {itemName} ei teisaldatud.}}",
       "droppedOn": "{count, plural, one {Üksus {itemName} asetati sihtkohale {destinationName}.} other {{itemName} asetati sihtkohale {destinationName}.}}",
@@ -3342,6 +3353,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Postkasti toimetatud",
       "delivery": "Kättetoimetamine",
+      "deliveryEvents": "Kättetoimetamise käik",
+      "deliveryReceipt": "Kättetoimetamistõend",
       "directionUnknown": "Suund teadmata",
       "messageId": "Sõnumi ID",
       "moreContacts": "Selle andmepostkastiga on seotud veel kontakte.",
@@ -3354,6 +3367,8 @@
       "sent": "Saadetud",
       "statedInFile": "Andmepostkasti sõnum (faili andmetel)",
       "toHands": "Isiklikult: {name}",
+      "unlinkedFiles": "Ilma lingita manuste avamiseks laadige alla algne ZFO-fail.",
+      "unreadable": "Faili ei saanud lugeda andmepostkasti sõnumi ega kättetoimetamistõendina.",
       "uploaded": "Üleslaaditud andmepostkasti sõnum"
     },
     "deliveredBy": "Edastas <address>{sender}</address>",
@@ -4056,6 +4071,12 @@
     "versionCreatedDescription": "Versioon {versionNumber} loodi. Kõik saavad redigeerimist jätkata.",
     "versionCreatedTitle": "Versioon loodud",
     "viewOnly": "Ainult vaatamiseks"
+  },
+  "guidance": {
+    "notCaseLaw": "Järelevalveasutuse välja antud juhend. See ei ole kohtulahend.",
+    "openAtPublisher": "Ava väljaandja juures",
+    "source": "Allikas: {attribution}",
+    "textUnavailable": "Selle dokumendi tekst ei ole siin saadaval. Lugege seda väljaandja juures."
   },
   "guides": {
     "action": {

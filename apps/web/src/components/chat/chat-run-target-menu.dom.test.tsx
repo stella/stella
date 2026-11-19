@@ -21,8 +21,9 @@ const { IntlProvider } = await import("use-intl");
 const { Menu, MenuPopup, MenuTrigger } = await import("@stll/ui/menu");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { localRunnersOptions } = await import("@/features/chat/queries");
-const { ChatRunTargetMenu, LocalModelOptions } =
-  await import("./chat-run-target-menu");
+const { ChatRunTargetMenu } = await import("./chat-run-target-menu");
+const { ChatModelOptionsMenu } = await import("./chat-model-options-menu");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 const desktopBridge = await import("@/lib/desktop-bridge");
 const { DESKTOP_PING_URL } =
   await import("@/features/chat/desktop-launch.logic");
@@ -147,13 +148,27 @@ const renderModels = (selected: ChatLocalRunTarget) => {
           <Menu open>
             <MenuTrigger />
             <MenuPopup>
-              <LocalModelOptions
-                activeOrganizationId={ORGANIZATION_ID}
+              <ChatModelOptionsMenu
                 enabled={false}
-                onSelect={(next) => {
-                  chosen.push(next);
+                models={{
+                  activeOrganizationId: ORGANIZATION_ID,
+                  threadRef: {
+                    scope: "global",
+                    threadId: toChatThreadId("thread-local-run"),
+                  },
+                  state: "ready",
+                  selectedModel: null,
+                  selectedReasoningEffort: null,
+                  selectModel: () => undefined,
+                  runTarget: {
+                    type: "choice",
+                    selected: target,
+                    select: (next) => {
+                      chosen.push(next);
+                    },
+                  },
                 }}
-                selected={target}
+                open
               />
             </MenuPopup>
           </Menu>
@@ -236,33 +251,53 @@ test("choosing a permission mode keeps the harness and model, and the stored cho
   );
 });
 
-test("the model chip offers the model's reasoning efforts beside the harness default, and a choice keeps the model and permissions", async () => {
+/** Open the reasoning effort submenu of the model row showing `shown`. */
+const openEfforts = async (view: ReturnType<typeof render>, shown: string) => {
+  const trigger = await waitFor(() => {
+    const found = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot="menu-sub-trigger"]',
+      ),
+    ].find((candidate) => candidate.textContent.trim() === shown);
+    if (found === undefined) {
+      throw new Error(`no effort trigger showing ${shown}`);
+    }
+    return found;
+  });
+  // Choosing an effort keeps its menu open, and activating an open
+  // submenu's trigger closes it: open it only when it is closed.
+  if (!Object.hasOwn(trigger.dataset, "popupOpen")) {
+    fireEvent.click(trigger);
+  }
+  return await waitFor(() => {
+    const menus = view.getAllByRole("menu");
+    const submenu = menus.at(-1);
+    if (submenu === undefined || menus.length < 2) {
+      throw new Error("no effort submenu");
+    }
+    return submenu;
+  });
+};
+
+test("the model chip offers the model's reasoning efforts in the row's effort menu, as stella's models do, and a choice keeps the model and permissions", async () => {
   const { view, chosen, rerender } = renderModels(LOCAL);
-  expect(await waitFor(() => view.getByText("Reasoning effort"))).toBeTruthy();
-  // The effort's own Default, not the recommended model above it.
-  const effortDefault = async () =>
-    await waitFor(() => {
-      const item = view
-        .getAllByRole("menuitemradio")
-        .find(
-          (candidate) =>
-            candidate.textContent.replace(/^Selected/u, "") === "Default",
-        );
-      if (item === undefined) {
-        throw new Error("no Default effort");
-      }
-      return item;
-    });
-  const harnessDefault = await effortDefault();
-  expect(harnessDefault.getAttribute("aria-checked")).toBe("true");
-  expect(view.queryByText("Medium")).toBeNull();
+  // The row says its effort; the harness's own until one is chosen.
+  const efforts = await openEfforts(view, "Default");
+  const names = within(efforts)
+    .getAllByRole("menuitemradio")
+    .map((item) => item.textContent.replace(/^Selected/u, ""));
+  expect(names).toEqual(["Default", "Low", "High"]);
+  expect(within(efforts).queryByText("Medium")).toBeNull();
   fireEvent.click(await radioItem(view, "High"));
   expect(chosen).toEqual([{ ...LOCAL, reasoningEffort: "high" }]);
+
   rerender({ ...LOCAL, reasoningEffort: "high" });
-  expect((await radioItem(view, "High")).getAttribute("aria-checked")).toBe(
-    "true",
-  );
-  fireEvent.click(await effortDefault());
+  const chosenEfforts = await openEfforts(view, "High");
+  const high = within(chosenEfforts)
+    .getAllByRole("menuitemradio")
+    .find((item) => item.textContent.replace(/^Selected/u, "") === "High");
+  expect(high?.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(await radioItem(view, "Default"));
   expect(chosen.at(-1)).toEqual(LOCAL);
 });
 

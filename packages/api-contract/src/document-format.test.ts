@@ -41,6 +41,7 @@ describe("documentFormat", () => {
       ["export.csv", "csv"],
       ["scan.PNG", "image"],
       ["message.eml", "email"],
+      ["datová zpráva.ZFO", "dataBox"],
       ["readme.md", "markdown"],
       ["notes.txt", "text"],
       ["archive.zip", "file"],

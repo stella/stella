@@ -64,9 +64,9 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerEditModeMenuProps } from "@/components/chat/chat-edit-mode-menu";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
+import { ComposerControlSlot } from "@/components/chat/composer-row.pending";
 import {
   DOCKED_CHAT_COLUMN_SLOT,
   DockedChatSurface,
@@ -258,13 +258,6 @@ type PromptBarProps = {
    * forget — a control. Omit on surfaces with no status row.
    */
   dock?: ReactNode | undefined;
-  /**
-   * Follow-up-prompt chips stacked above the bar (typically
-   * `SuggestedFollowupChips`). Routed through `DockedComposer` so the
-   * chip offset stays owned in one place instead of each surface
-   * hand-positioning it. Omit on surfaces without follow-up chips.
-   */
-  followupChips?: ReactNode | undefined;
   /**
    * Opt in to the shared (+) composer menu on the left (attach files via
    * the controller's picker). Only surfaces that thread `files` through
@@ -550,7 +543,6 @@ export const PromptBar = (props: PromptBarProps) => {
     sendDisabledReason,
     queueWhileGenerating = false,
     dock,
-    followupChips,
     attachmentsEnabled = false,
     models,
     onNewThread,
@@ -1008,17 +1000,13 @@ export const PromptBar = (props: PromptBarProps) => {
   );
 
   // One docked layout for every surface: `DockedComposer` owns the bar's
-  // position, width, the follow-up-chip offset, and the status-row
+  // position, width, and the status-row
   // placement, so the inspector chat and the file-overlay chat are
   // positionally identical by construction. Surface-specific features
   // (preset chips, the pending badge, the thread-toggle chevron) stay
   // gated on props above; only geometry is unified here.
   return (
-    <DockedComposer
-      bar={shell}
-      {...(followupChips === undefined ? {} : { chips: followupChips })}
-      {...(dock === undefined ? {} : { dock })}
-    />
+    <DockedComposer bar={shell} {...(dock === undefined ? {} : { dock })} />
   );
 };
 
