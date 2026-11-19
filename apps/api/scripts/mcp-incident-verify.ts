@@ -2,7 +2,7 @@ import { Ajv } from "ajv";
 import addFormats from "ajv-formats";
 import { Ajv2019 } from "ajv/dist/2019";
 import { Ajv2020 } from "ajv/dist/2020";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as v from "valibot";
@@ -201,6 +201,9 @@ export const classifyMcpIncident = (fresh: FreshProbe, stale: StaleList) => {
         stale: `${stale.source} · ${previous.detail}`,
       };
     }
+    default:
+      fresh satisfies never;
+      return panic("Unhandled fresh probe result");
   }
 };
 
@@ -209,13 +212,13 @@ class IncidentProbeError extends TaggedError("IncidentProbeError")<{
   status?: number;
 }> {}
 
-const readJson = (
+const readJson = async (
   fetcher: CanaryFetcher,
   request: Request,
   timeoutMs: number,
   signal = AbortSignal.timeout(timeoutMs),
 ) =>
-  Result.tryPromise({
+  await Result.tryPromise({
     try: async () => {
       const response = await fetcher(request, {
         signal,
@@ -442,9 +445,11 @@ const readStaleList = async (
 };
 
 const canaryVerdict = (): string => {
+  // GitHub reads go through the repository's retry owner.
   const output = commandOutput(
     [
-      "gh",
+      "bash",
+      path.join(REPO_ROOT, "scripts/gh-retry.sh"),
       "run",
       "list",
       "--repo",
@@ -556,7 +561,7 @@ const run = async (): Promise<number> => {
   const fetcher = createDeploymentFetcher({ baseUrl: target });
   const health = await readJson(
     fetcher,
-    new Request(new URL("/health", target)),
+    new Request(new URL("/health", target).href),
     HEALTH_TIMEOUT_MS,
   );
   const parsedHealth = health.isOk()
