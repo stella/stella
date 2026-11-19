@@ -92,6 +92,7 @@ import {
   type SidecarRunInput,
   type SidecarRunStart,
 } from "./protocol";
+import { SKIPPED_CAPTURE, SlowCheckpointFolders } from "./slow-folders";
 import { keepStepOutput, stepOutputRunDir } from "./step-outputs";
 import { createStepUploads, stepContentUploader } from "./step-uploads";
 
@@ -668,6 +669,7 @@ export class SidecarHost {
   >();
   /** Kept harness processes by their chat's folder, resolved. */
   private readonly live = new Map<string, LiveFolder>();
+  private readonly slowFolders = new SlowCheckpointFolders();
   /** Kept processes being ended, by folder, until each is gone. */
   private readonly endingLive = new Map<string, Promise<void>>();
   private stopping = false;
@@ -1325,19 +1327,26 @@ export class SidecarHost {
     }
     // After the copies and before the harness: the folder as the member left
     // it, attachments included, so the turn's changes can be undone.
-    run.checkpoint = await captureCheckpoint({
-      workspaceDir: run.workspaceDir,
-      runId: message.runId,
-      memberFiles: copied.value,
-      protectedPaths: [
-        message.configDir,
-        message.cacheDir,
-        message.stepOutputDir,
-        ...message.skillFolders.map((folder) => folder.path),
-      ],
-      signal: run.stopCopying.signal,
-      log: this.options.log,
-    });
+    // A folder that keeps running out of time is spared the wait for a while.
+    const capturedAt = Temporal.Now.instant().epochMilliseconds;
+    run.checkpoint = this.slowFolders.skips(run.workspaceDir, capturedAt)
+      ? SKIPPED_CAPTURE
+      : await captureCheckpoint({
+          workspaceDir: run.workspaceDir,
+          runId: message.runId,
+          memberFiles: copied.value,
+          protectedPaths: [
+            message.configDir,
+            message.cacheDir,
+            message.stepOutputDir,
+            ...message.skillFolders.map((folder) => folder.path),
+          ],
+          signal: run.stopCopying.signal,
+          log: this.options.log,
+        });
+    if (run.checkpoint !== SKIPPED_CAPTURE) {
+      this.slowFolders.record(run.workspaceDir, run.checkpoint, capturedAt);
+    }
     if (run.checkpoint.status === "unavailable") {
       this.options.log(
         `a run's folder was not saved: ${run.checkpoint.reason}`,
