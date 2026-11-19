@@ -46,6 +46,7 @@ import {
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
 import type { FakeScenario as FakeCodexScenario } from "../../../scripts/fake-codex-app-server";
+import { readFakeHarnessLog } from "../../../scripts/fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
@@ -158,10 +159,7 @@ const harnessFor = (
     platform,
   });
   const entries = () =>
-    readFileSync(logPath, "utf-8")
-      .split("\n")
-      .filter((line) => line !== "")
-      .map((line) => v.parse(LogEntrySchema, JSON.parse(line)));
+    readFakeHarnessLog(logPath).map((entry) => v.parse(LogEntrySchema, entry));
   /** Messages the fake CLI received, in order. */
   const received = () =>
     entries().flatMap(({ received: message }) =>
