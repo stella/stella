@@ -42,7 +42,7 @@ const fixture = async () => {
   const client = await registerOAuthClient(undefined, "none");
   const grant = await grantOAuthClient(browser, client);
   expect(grant.scope.split(" ")).toContain("offline_access");
-  return { client, grant, userId: browser.userId };
+  return { browser, client, grant, userId: browser.userId };
 };
 
 const rotate = async (client: RegisteredOAuthClient, refreshToken: string) => {
@@ -137,6 +137,77 @@ describe("OAuth refresh token revocation", () => {
     expect(
       (await refreshOAuthGrant({ client, refreshToken: grant.refreshToken }))
         .status,
+    ).toBe(200);
+  });
+});
+
+describe("OAuth revocation by another client", () => {
+  test.each(["current", "rotated"] as const)(
+    "another client presenting the owner's %s tokens changes neither client's grant",
+    async (state) => {
+      const { browser, client, grant, userId } = await fixture();
+      const rotated = await rotate(client, grant.refreshToken);
+      const presented = state === "current" ? rotated : grant.refreshToken;
+      const other = await registerOAuthClient(undefined, "none");
+      const otherGrant = await grantOAuthClient(browser, other);
+      const ownerRows = await countTokenRows(client.clientId, userId);
+      const otherRows = await countTokenRows(other.clientId, userId);
+      expect(ownerRows.refresh).toBe(2);
+
+      for (const [token, tokenTypeHint] of [
+        [presented, "refresh_token"],
+        [presented, "none"],
+        [grant.accessToken, "access_token"],
+      ] as const) {
+        const revoked = await revokeOAuthToken({
+          client: other,
+          token,
+          tokenTypeHint,
+        });
+        expect(revoked.status).toBeLessThan(500);
+      }
+
+      expect(await countTokenRows(client.clientId, userId)).toEqual(ownerRows);
+      expect(await countTokenRows(other.clientId, userId)).toEqual(otherRows);
+      expect(
+        (await refreshOAuthGrant({ client, refreshToken: rotated })).status,
+      ).toBe(200);
+      expect(
+        (
+          await refreshOAuthGrant({
+            client: other,
+            refreshToken: otherGrant.refreshToken,
+          })
+        ).status,
+      ).toBe(200);
+    },
+  );
+
+  test("the owner revoking its token ends its family and leaves another client's grant", async () => {
+    const { browser, client, grant, userId } = await fixture();
+    const rotated = await rotate(client, grant.refreshToken);
+    const other = await registerOAuthClient(undefined, "none");
+    const otherGrant = await grantOAuthClient(browser, other);
+    const otherRows = await countTokenRows(other.clientId, userId);
+
+    const revoked = await revokeOAuthToken({
+      client,
+      token: rotated,
+      tokenTypeHint: "refresh_token",
+    });
+    expect(revoked.status).toBe(200);
+    expect(await countTokenRows(client.clientId, userId)).toEqual({
+      refresh: 0,
+      access: 0,
+    });
+    expect(await countTokenRows(other.clientId, userId)).toEqual(otherRows);
+    expect(
+      (
+        await refreshOAuthGrant({
+          client: other,
+          refreshToken: otherGrant.refreshToken,
+        })
+      ).status,
     ).toBe(200);
   });
 });
