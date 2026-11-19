@@ -29,6 +29,10 @@ import {
   settledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
+  activeAttachmentIdentifierClaimSql,
+  reconcileHostIdentifierClaimsTx,
+} from "@/api/handlers/case-law/decision-identifier-claims-persistence";
+import {
   decisionIdentifiersFromStoredMetadata,
   decisionIdentifierTypeOfCitation,
   normalizeDecisionIdentifierIn,
@@ -37,10 +41,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
-import {
-  activeAttachmentIdentifierClaimSql,
-  reconcileHostIdentifierClaimsTx,
-} from "@/api/lib/case-law/decision-identifier-claims-persistence";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -279,7 +279,7 @@ const ensureCheckpoint = async (rootDb: CaseLawRootHandle): Promise<void> => {
 };
 
 type DecisionRow = {
-  id: string;
+  id: SafeId<"caseLawDecision">;
   caseNumber: string;
   country: string;
   caseNumberType: DecisionPrimaryReferenceType;
@@ -332,7 +332,7 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
     (typeof row["createdAt"] === "string" || row["createdAt"] instanceof Date)
       ? [
           {
-            id: row["id"],
+            id: brandPersistedCaseLawDecisionId(row["id"]),
             caseNumber: row["caseNumber"],
             country: row["country"],
             caseNumberType: primaryReferenceTypeFromStored(

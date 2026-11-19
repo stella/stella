@@ -156,6 +156,7 @@ const UNSELECTED_REPORTER_COLUMNS = [
   // Normalization, alias provenance and ingestion time do not describe the publication.
   "normalizedValue",
   "declaredAt",
+  "independentClaims",
   "createdAt",
 ] as const satisfies readonly (keyof ReporterIdentifierRow)[];
 type MissingReporterColumn = UnprojectedColumns<

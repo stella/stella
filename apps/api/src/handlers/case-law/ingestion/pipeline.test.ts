@@ -49,6 +49,7 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import {
   absentDecisionTextFields,
   absentTextField,
@@ -2206,6 +2207,9 @@ describe("processDecision — fields on an existing row", () => {
                     {
                       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
                       normalizedValue: bareCitationKey("X/1/2026"),
+                      value: "X/1/2026",
+                      declaredAt: null,
+                      independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
                     },
                   ],
                 }

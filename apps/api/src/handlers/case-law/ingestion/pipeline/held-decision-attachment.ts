@@ -21,6 +21,10 @@ import {
   type CitationGraphTransaction,
   runCitationGraphTransaction,
 } from "@/api/handlers/case-law/citation-graph-transaction";
+import {
+  declareDecisionIdentifiersTx,
+  withdrawAttachmentIdentifiersTx,
+} from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import { normalizeDecisionIdentifierIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   lockSourceIdentitiesTx,
@@ -38,10 +42,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
-import {
-  declareDecisionIdentifiersTx,
-  withdrawAttachmentIdentifiersTx,
-} from "@/api/lib/case-law/decision-identifier-claims-persistence";
 import { ecliPublisherSpellings } from "@/api/lib/case-law/ecli-spellings";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
