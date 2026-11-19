@@ -442,7 +442,7 @@ CMD ["bun", "--no-env-file", "/app/server.js"]
 # below re-selects the runner and forces this stage into the build by copying
 # its marker.
 FROM builder AS runtime-asset-fixtures
-RUN cd apps/api && bun -e 'import { zfoFile } from "./src/tests/fixtures/zfo"; await Bun.write("/tmp/image-smoke.zfo", await zfoFile())'
+RUN cd apps/api && bun src/tests/fixtures/write-image-smoke-zfo.ts /tmp/image-smoke.zfo
 
 FROM runner AS runtime-asset-smoke
 COPY --from=runtime-asset-fixtures /tmp/image-smoke.zfo /tmp/image-smoke.zfo
