@@ -4049,7 +4049,7 @@ export const lockLegalHoldOrganizations = async ({
  * reserving storage; a lifecycle (matter or organization teardown) takes it
  * exclusively.
  */
-export const organizationObjectIntentLockKey = (
+const organizationObjectIntentLockKey = (
   organizationId: SafeId<"organization">,
 ): string => `buffer-object:${organizationId}`;
 
