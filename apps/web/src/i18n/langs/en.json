@@ -2416,6 +2416,7 @@
       "save_document": "Save document",
       "save_matter": "Save matter",
       "save_playbook": "Save playbook",
+      "save_skill_package": "Save skill",
       "save_task": "Save task",
       "save_template": "Save template",
       "save_time_entry": "Save time entry",
@@ -2444,6 +2445,7 @@
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
       "user_message": "Sent while the agent was working",
+      "validate_skill_package": "Check skill",
       "web_search": "Searching the web"
     },
     "toolCall": {

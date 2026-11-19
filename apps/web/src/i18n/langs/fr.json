@@ -2416,6 +2416,7 @@
       "save_document": "Enregistrer le document",
       "save_matter": "Enregistrer le dossier",
       "save_playbook": "Enregistrer le playbook",
+      "save_skill_package": "Enregistrer la compétence",
       "save_task": "Enregistrer la tâche",
       "save_template": "Enregistrer le modèle",
       "save_time_entry": "Enregistrer l’entrée de temps",
@@ -2444,6 +2445,7 @@
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
       "user_message": "Envoyé pendant que l’agent travaillait",
+      "validate_skill_package": "Vérifier la compétence",
       "web_search": "Recherche web"
     },
     "toolCall": {

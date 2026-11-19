@@ -35,6 +35,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
+import { skillMdName } from "@/components/chat/tool-approval-summary";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -236,6 +237,9 @@ const getToolSubtitle = ({
       return "SKILL.md";
     case "update-current-skill-resource":
       return getStringInputValue({ key: "path", part }) ?? null;
+    case "save_skill_package":
+    case "validate_skill_package":
+      return skillMdName(getStringInputValue({ key: "skillMd", part }));
     case "fetch_url": {
       const url = getStringInputValue({ key: "url", part });
       if (!url) {
