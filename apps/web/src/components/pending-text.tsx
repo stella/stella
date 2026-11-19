@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
+import { InlineSkeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 // Whether the app's intl is mounted above. A pending view also renders where
@@ -26,6 +26,32 @@ export const PendingTextIntlScope = ({ children }: PropsWithChildren) => (
 // translator's key type small (`t` checks each one is a real message); a
 // page adds its labels here as it gains a pending view.
 type PendingTextKey =
+  | "auth.continueWithEmail"
+  | "auth.emailPlaceholder"
+  | "auth.error.generic"
+  | "auth.error.providerUnavailable"
+  | "auth.error.title"
+  | "auth.handoffTitle"
+  | "auth.headline"
+  | "auth.invitation.title"
+  | "auth.orSignInWithEmail"
+  | "auth.professionalUse.title"
+  | "auth.professionalUseStatement"
+  | "auth.reauthenticationRequired"
+  | "auth.signIn"
+  | "auth.signInBeforeInvitation"
+  | "auth.subtitle"
+  | "auth.twoFactor.enterAuthenticatorCode"
+  | "auth.twoFactor.title"
+  | "auth.twoFactor.useBackupCode"
+  | "auth.useDifferentEmail"
+  | "common.accept"
+  | "common.cancel"
+  | "common.confirm"
+  | "common.decline"
+  | "common.signOut"
+  | "common.tryAgain"
+  | "common.verify"
   | "chat.greeting"
   | "chat.landing.recentChats"
   | "chat.landing.skills"
@@ -69,6 +95,6 @@ export const PendingText = ({
       aria-hidden="true"
       className="inline-flex h-[1lh] items-center align-top"
     >
-      <Skeleton className={cn("h-[0.75em]", barClassName)} />
+      <InlineSkeleton className={cn("h-[0.75em]", barClassName)} />
     </span>
   );

@@ -225,7 +225,9 @@ export function LeafPendingView({
 
 /** Renders a route's pending view: a component the route declared, not one
  *  made during render. */
-const PendingViewOf = ({ view: View }: { view: RouteComponent }) => <View />;
+export const PendingViewOf = ({ view: View }: { view: RouteComponent }) => (
+  <View />
+);
 
 type RedirectRoute = {
   /** The route the visitor is sent to: its pending view (and its frame)

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -10,18 +10,12 @@ import * as v from "valibot";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 
 import { socialProviderName } from "@/components/auth/access-reset.logic";
 import type { SocialProvider } from "@/components/auth/access-reset.logic";
 import { OTPPanel } from "@/components/auth/otp-panel";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
@@ -30,6 +24,37 @@ import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { afterSignInNavigation } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
+
+import { reportOAuthCallbackError } from "./-error-report";
+import {
+  authErrorDescriptionId,
+  AuthErrorShell,
+  RecoveryEmailFields,
+} from "./-error.pending";
+
+const routeApi = getRouteApi("/auth/error");
+
+export function AuthErrorPage() {
+  const t = useTranslations();
+  const search = routeApi.useSearch({
+    select: ({ error, linkProvider, redirectTo }) => ({
+      error,
+      linkProvider,
+      redirectTo,
+    }),
+  });
+  const session = routeApi.useRouteContext({
+    select: (context) => context.session,
+  });
+  const hint = routeApi.useLoaderData();
+  useMountEffect(() => {
+    reportOAuthCallbackError({
+      errorCode: search.error,
+      fallback: t("errors.actionFailed"),
+    });
+  });
+  return <SocialRecoveryPanel {...search} signedIn={!!session} hint={hint} />;
+}
 
 const renderProvider = (chunks: ReactNode) => (
   <BidiText direction="ltr">{chunks}</BidiText>
@@ -130,36 +155,34 @@ export const SocialRecoveryPanel = ({
 
   if (error === "account_not_linked" && step.type === "connect") {
     return (
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>
-            {t.rich("auth.socialLink.connect", {
-              identity: renderProvider,
-              provider: socialProviderName(step.provider),
-            })}
-          </FrameTitle>
-        </FrameHeader>
-        <FramePanel className="flex flex-col gap-3">
-          <Button
-            className="w-full"
-            loading={connect.isPending}
-            disabled={connect.isPending}
-            onClick={() => connect.mutate(step.provider)}
-          >
-            {t.rich("auth.socialLink.connectButton", {
-              identity: renderProvider,
-              provider: socialProviderName(step.provider),
-            })}
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={connect.isPending}
-            onClick={() => detached(finish(), "social-link.skip")}
-          >
-            {t("auth.socialLink.skip")}
-          </Button>
-        </FramePanel>
-      </Frame>
+      <AuthErrorShell
+        title={t.rich("auth.socialLink.connect", {
+          identity: renderProvider,
+          provider: socialProviderName(step.provider),
+        })}
+        panel={
+          <div className="flex flex-col gap-3">
+            <Button
+              className="w-full"
+              loading={connect.isPending}
+              disabled={connect.isPending}
+              onClick={() => connect.mutate(step.provider)}
+            >
+              {t.rich("auth.socialLink.connectButton", {
+                identity: renderProvider,
+                provider: socialProviderName(step.provider),
+              })}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={connect.isPending}
+              onClick={() => detached(finish(), "social-link.skip")}
+            >
+              {t("auth.socialLink.skip")}
+            </Button>
+          </div>
+        }
+      />
     );
   }
 
@@ -169,27 +192,19 @@ export const SocialRecoveryPanel = ({
         method: socialProviderName(method),
       })
     : t("auth.socialLink.emailProof");
-  // The provider itself was down: retrying soon is the whole remedy, and
-  // saying so keeps a provider outage from reading as a broken account.
-  const failureDescription =
-    error === "temporarily_unavailable" || error === "server_error"
-      ? t("auth.error.providerUnavailable")
-      : t("auth.error.generic");
   const description =
-    error === "account_not_linked" ? proofDescription : failureDescription;
+    error === "account_not_linked"
+      ? proofDescription
+      : t(authErrorDescriptionId(error));
 
   return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>
-          {error === "account_not_linked"
-            ? t("auth.signIn")
-            : t("auth.error.title")}
-        </FrameTitle>
-        <FrameDescription>{description}</FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        {error === "account_not_linked" ? (
+    <AuthErrorShell
+      title={t(
+        error === "account_not_linked" ? "auth.signIn" : "auth.error.title",
+      )}
+      description={description}
+      panel={
+        error === "account_not_linked" ? (
           <Form
             density="snug"
             onSubmit={(event) => {
@@ -197,30 +212,38 @@ export const SocialRecoveryPanel = ({
               sendCode.mutate();
             }}
           >
-            <Input
-              aria-label={t("common.email")}
-              autoComplete="email"
-              autoFocus
-              dir="ltr"
-              type="email"
-              required
-              placeholder={t("auth.emailPlaceholder")}
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={sendCode.isPending}
-            />
-            <Button
-              type="submit"
-              className="w-full"
-              loading={sendCode.isPending}
-              disabled={
-                sendCode.isPending ||
-                !v.safeParse(emailSchema(t("validation.invalidEmail")), email)
-                  .success
+            <RecoveryEmailFields
+              email={
+                <Input
+                  aria-label={t("common.email")}
+                  autoComplete="email"
+                  autoFocus
+                  dir="ltr"
+                  type="email"
+                  required
+                  placeholder={t("auth.emailPlaceholder")}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={sendCode.isPending}
+                />
               }
-            >
-              {t("auth.continueWithEmail")}
-            </Button>
+              submit={
+                <Button
+                  type="submit"
+                  className="w-full"
+                  loading={sendCode.isPending}
+                  disabled={
+                    sendCode.isPending ||
+                    !v.safeParse(
+                      emailSchema(t("validation.invalidEmail")),
+                      email,
+                    ).success
+                  }
+                >
+                  {t("auth.continueWithEmail")}
+                </Button>
+              }
+            />
           </Form>
         ) : (
           <Button
@@ -234,8 +257,8 @@ export const SocialRecoveryPanel = ({
           >
             {t("common.tryAgain")}
           </Button>
-        )}
-      </FramePanel>
-    </Frame>
+        )
+      }
+    />
   );
 };

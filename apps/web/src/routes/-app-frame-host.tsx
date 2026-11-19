@@ -6,6 +6,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { StellaWordmark } from "@/components/stella-wordmark";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -26,6 +27,10 @@ import {
   useLeafPendingView,
   useLeafRedirectFrameScope,
 } from "@/routes/-route-pending-view";
+import {
+  AuthFrameShell,
+  AuthPickersPending,
+} from "@/routes/auth/-auth-frame.pending";
 
 // The signed-in frame (sidebar, inspector, chat and their registrations) loads
 // only once a member is known, so sign-in and pages for visitors never
@@ -40,6 +45,11 @@ const LazyProtectedAppFrame = lazy(async () => {
 const LazyKnowledgePublicFrame = lazy(async () => {
   const module = await import("@/routes/-knowledge-public-frame");
   return { default: module.KnowledgePublicFrame };
+});
+
+const AuthFramePickers = lazy(async () => {
+  const module = await import("@/routes/auth/-auth-frame-pickers");
+  return { default: module.AuthFramePickers };
 });
 
 const ROUTE_ID_SEPARATOR = "\n";
@@ -215,6 +225,19 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       // A page the same for every visitor shows inside the skeleton, so it
       // is there in the server render before either frame mounts.
       return <ProtectedPendingSkeleton content={children} />;
+    case "auth":
+      return (
+        <AuthFrameShell
+          pickers={
+            <Suspense fallback={<AuthPickersPending />}>
+              <AuthFramePickers />
+            </Suspense>
+          }
+          wordmark={StellaWordmark}
+        >
+          {children}
+        </AuthFrameShell>
+      );
     case "none":
       return children;
     default: {

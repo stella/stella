@@ -6,17 +6,15 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
+import { InputOTP, InputOTPSlot } from "@stll/ui/input-otp";
 import { cn } from "@stll/ui/utils";
 
+import {
+  AUTH_CODE_LENGTH,
+  AuthCodeSlots,
+  AuthCodeVerification,
+} from "@/components/auth/code-verification-face.pending";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -26,15 +24,11 @@ import { transformUnknownError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
+import { TwoFactorRouteShell } from "./-two-factor.pending";
+
 type TwoFactorMode = "totp" | "backupCode";
 
-type TwoFactorPanelProps = {
-  className?: string;
-};
-
-const TOTP_LENGTH = 6;
-
-export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
+export function TwoFactorPage() {
   const t = useTranslations();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
@@ -98,8 +92,80 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
     setBackupCode("");
   };
 
+  const isTotpComplete = totp.length === AUTH_CODE_LENGTH;
+  const verification =
+    mode === "totp" ? (
+      <AuthCodeVerification
+        input={
+          <InputOTP
+            autoFocus
+            containerClassName={cn(
+              "rounded-md",
+              isTotpPulsing && "ring-primary ring-2",
+            )}
+            maxLength={AUTH_CODE_LENGTH}
+            onChange={setTotp}
+            onComplete={(code: string) => {
+              setTotp(code);
+              verifyTwoFactor.mutate({ code, mode: "totp" });
+            }}
+            value={totp}
+          >
+            <AuthCodeSlots Slot={InputOTPSlot} />
+          </InputOTP>
+        }
+        verify={
+          <Button
+            aria-disabled={!isTotpComplete || undefined}
+            className={cn(!isTotpComplete && "cursor-not-allowed opacity-64")}
+            disabled={verifyTwoFactor.isPending}
+            loading={verifyTwoFactor.isPending}
+            onClick={() => {
+              if (!isTotpComplete) {
+                pulseTotp();
+                return;
+              }
+              verifyTwoFactor.mutate({ code: totp, mode: "totp" });
+            }}
+          >
+            {t("common.verify")}
+          </Button>
+        }
+      />
+    ) : (
+      <div className="mx-auto flex w-full max-w-xs flex-col gap-2">
+        <Input
+          autoFocus
+          className="text-center tracking-widest"
+          dir="ltr"
+          onChange={(event) => setBackupCode(event.target.value.trim())}
+          placeholder={t("auth.twoFactor.backupCodePlaceholder")}
+          value={backupCode}
+        />
+        <Button
+          aria-disabled={backupCode.length === 0 || undefined}
+          className={cn(
+            backupCode.length === 0 && "cursor-not-allowed opacity-64",
+          )}
+          disabled={verifyTwoFactor.isPending}
+          loading={verifyTwoFactor.isPending}
+          onClick={() => {
+            if (backupCode.length === 0) {
+              return;
+            }
+            verifyTwoFactor.mutate({
+              code: backupCode,
+              mode: "backupCode",
+            });
+          }}
+        >
+          {t("common.verify")}
+        </Button>
+      </div>
+    );
+
   return (
-    <Frame className={cn("w-full max-w-md", className)}>
+    <>
       <DialogFormState
         dirty={totp !== "" || backupCode !== ""}
         onDiscard={() => {
@@ -108,91 +174,8 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
           setMode("totp");
         }}
       />
-      <FrameHeader>
-        <FrameTitle>{t("auth.twoFactor.title")}</FrameTitle>
-        <FrameDescription>
-          {mode === "totp"
-            ? t("auth.twoFactor.enterAuthenticatorCode")
-            : t("auth.twoFactor.enterBackupCode")}
-        </FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        {mode === "totp" ? (
-          <div className="mx-auto flex w-fit flex-col items-stretch gap-2">
-            <InputOTP
-              autoFocus
-              containerClassName={cn(
-                "rounded-md",
-                isTotpPulsing && "ring-primary ring-2",
-              )}
-              maxLength={TOTP_LENGTH}
-              onChange={setTotp}
-              onComplete={(code: string) => {
-                setTotp(code);
-                verifyTwoFactor.mutate({ code, mode: "totp" });
-              }}
-              value={totp}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-            <Button
-              aria-disabled={totp.length !== TOTP_LENGTH || undefined}
-              className={cn(
-                totp.length !== TOTP_LENGTH && "cursor-not-allowed opacity-64",
-              )}
-              disabled={verifyTwoFactor.isPending}
-              loading={verifyTwoFactor.isPending}
-              onClick={() => {
-                if (totp.length !== TOTP_LENGTH) {
-                  pulseTotp();
-                  return;
-                }
-                verifyTwoFactor.mutate({ code: totp, mode: "totp" });
-              }}
-            >
-              {t("common.verify")}
-            </Button>
-          </div>
-        ) : (
-          <div className="mx-auto flex w-full max-w-xs flex-col gap-2">
-            <Input
-              autoFocus
-              className="text-center tracking-widest"
-              dir="ltr"
-              onChange={(event) => setBackupCode(event.target.value.trim())}
-              placeholder={t("auth.twoFactor.backupCodePlaceholder")}
-              value={backupCode}
-            />
-            <Button
-              aria-disabled={backupCode.length === 0 || undefined}
-              className={cn(
-                backupCode.length === 0 && "cursor-not-allowed opacity-64",
-              )}
-              disabled={verifyTwoFactor.isPending}
-              loading={verifyTwoFactor.isPending}
-              onClick={() => {
-                if (backupCode.length === 0) {
-                  return;
-                }
-                verifyTwoFactor.mutate({
-                  code: backupCode,
-                  mode: "backupCode",
-                });
-              }}
-            >
-              {t("common.verify")}
-            </Button>
-          </div>
-        )}
-
-        <div className="mt-3 flex justify-center">
+      <TwoFactorRouteShell
+        alternate={
           <Button
             disabled={verifyTwoFactor.isPending}
             onClick={() =>
@@ -205,8 +188,15 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
               ? t("auth.twoFactor.useBackupCode")
               : t("auth.twoFactor.useAuthenticatorApp")}
           </Button>
-        </div>
-      </FramePanel>
-    </Frame>
+        }
+        description={
+          mode === "totp"
+            ? t("auth.twoFactor.enterAuthenticatorCode")
+            : t("auth.twoFactor.enterBackupCode")
+        }
+        title={t("auth.twoFactor.title")}
+        verification={verification}
+      />
+    </>
   );
-};
+}
