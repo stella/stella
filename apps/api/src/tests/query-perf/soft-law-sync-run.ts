@@ -141,8 +141,8 @@ export const measureSoftLawSyncHistory = async (
                 // of its rolled-back measurement transaction.
                 scopedDb: async (work) => await context.db.transaction(work),
                 signal,
-                writeRaw: (options) =>
-                  Promise.resolve(rawSourcePayloadKey(options)),
+                writeRaw: async (options) =>
+                  await Promise.resolve(rawSourcePayloadKey(options)),
               }),
           })(context),
       }).get(SYNC_SOFT_LAW_TASK) ?? panic("Soft-law sync is unregistered");
