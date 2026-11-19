@@ -122,7 +122,11 @@ function AuditPersonFilter({
         selectedFallback={value}
         value={value?.userId ?? null}
       />
-      {organizationView.type === "error" && (
+      {organizationView.type === "pending" ? (
+        <div className="sr-only">
+          <QueryViewFeedback view={organizationView} />
+        </div>
+      ) : (
         <QueryViewFeedback view={organizationView} />
       )}
     </div>
