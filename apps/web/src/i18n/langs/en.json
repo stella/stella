@@ -1494,6 +1494,10 @@
       "title": "Search is temporarily unavailable"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Search by the decision’s case number or ECLI, if known.",
+        "message": "No exact decision was found for this collection citation."
+      },
       "noHits": {
         "hint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
         "message": "Nothing matched the words this search required."

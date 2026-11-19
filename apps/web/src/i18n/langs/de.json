@@ -1494,6 +1494,10 @@
       "title": "Die Suche ist vorübergehend nicht verfügbar"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Suchen Sie nach dem Aktenzeichen oder der ECLI der Entscheidung, sofern bekannt.",
+        "message": "Zu dieser Fundstelle wurde keine genau passende Entscheidung gefunden."
+      },
       "noHits": {
         "hint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
         "message": "Nichts entspricht den Wörtern, die diese Suche verlangt hat."

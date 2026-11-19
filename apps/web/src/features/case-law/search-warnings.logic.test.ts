@@ -86,6 +86,18 @@ describe("which warning drives the empty table", () => {
     });
   });
 
+  test("an unresolved collection citation offers an identity lookup instead of broader words", () => {
+    const { emptyState, resultsLine } = caseLawWarningSurfaces(
+      answered("collection_citation_unresolved"),
+    );
+    expect(resultsLine).toBeNull();
+    expect(emptyState).toEqual({
+      surface: "emptyState",
+      messageKey: "caseLaw.searchWarnings.collectionCitationUnresolved.message",
+      hintKey: "caseLaw.searchWarnings.collectionCitationUnresolved.hint",
+    });
+  });
+
   test("the two empty readings stay distinct", () => {
     const nothing = caseLawWarningSurfaces(answered("no_hits")).emptyState;
     const filtered = caseLawWarningSurfaces(

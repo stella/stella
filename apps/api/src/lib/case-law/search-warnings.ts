@@ -10,11 +10,9 @@ import type {
  * The agent-facing wording of each case-law search warning.
  *
  * A warning never fails a search: the page it rides on is the page the search
- * found. It exists because the three ways a case-law search surprises its
- * caller are all invisible in the result alone — a query that required fewer
- * words than it carried, an empty page a filter caused, and an empty page
- * nothing caused — and a caller that cannot tell them apart cannot act on
- * any of them. So every code names its corrective action in `hint`.
+ * found. It explains query interpretation and why a page is empty; a caller
+ * that cannot distinguish those outcomes cannot act on them. Every code
+ * names its corrective action in `hint`.
  *
  * The codes are the contract's (`@stll/api-contract/search`), shared with the
  * web, which renders its own translated wording from the same code. This
@@ -57,6 +55,14 @@ export const functionWordsWarning = (
   // question needs to know which words it stopped requiring, not how many.
   message: `The search did not require these words, which are grammar rather than subject matter: ${dropped.join(", ")}.`,
   hint: "Pass strict: true to require every word, or quote a phrase to require its words adjacently.",
+});
+
+export const collectionCitationUnresolvedWarning = (
+  citation: string,
+): CaseLawSearchWarning => ({
+  code: "collection_citation_unresolved",
+  message: `No exact decision identity was found for the collection citation ${citation}.`,
+  hint: "Call resolve_case_law_decision with the citation and country CZE to check coverage, or supply the decision’s docket or ECLI.",
 });
 
 const noHitsWarning = (): CaseLawSearchWarning => ({
@@ -460,6 +466,8 @@ export const withFacetValues = (
  */
 export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   function_words_optional: () => functionWordsWarning(["na"]),
+  collection_citation_unresolved: () =>
+    collectionCitationUnresolvedWarning("Rc 60/2015"),
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
   partial_matches_appended: () =>
