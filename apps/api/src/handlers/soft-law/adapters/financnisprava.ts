@@ -86,11 +86,14 @@ const normalizedReference = (series: string, number: string) =>
     .replace(/\s|[-–]/gu, "")
     .replace("GFŘD", "GFŘ-D")}-${number}`;
 const referenceIn = (pattern: RegExp, text: string) => {
-  const match = pattern.exec(text);
-  const series = match?.slice(1).find((part) => part !== undefined) ?? null;
-  const index = match?.slice(1).indexOf(series ?? "") ?? -1;
-  const number = match?.at(index + 2);
-  return series && number ? normalizedReference(series, number) : null;
+  // The patterns alternate, so the matched pair sits after unmatched groups.
+  const groups = [...(pattern.exec(text) ?? [])].slice(1);
+  const index = groups.findIndex(Boolean);
+  const series = groups.at(index);
+  const number = groups.at(index + 1);
+  return index !== -1 && series && number
+    ? normalizedReference(series, number)
+    : null;
 };
 const isoDate = (match: RegExpExecArray | null) => {
   if (!match) {

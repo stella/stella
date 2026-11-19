@@ -14,7 +14,10 @@ import {
   softLawAccessOf,
   softLawServingSettingOf,
 } from "@/api/lib/legal-search/soft-law-serving";
-import type { SoftLawEntry } from "@/api/lib/legal-search/soft-law-types";
+import type {
+  SoftLawDiscoveryEntry,
+  SoftLawEntry,
+} from "@/api/lib/legal-search/soft-law-types";
 
 import { MV_PSMV_PAGE_URL, mvPsmvAdapter, parseMvPsmvListing } from "./mv-psmv";
 
@@ -69,11 +72,15 @@ const publisher = async () => {
     return url === ZAVER_190 ? pdf : undefined;
   });
 };
-const walk = async (fetch: SoftLawFetch, start: string | null = null) => {
+type DiscoveredPage = {
+  entries: readonly SoftLawDiscoveryEntry[];
+  nextCursor: string | null;
+};
+const walk = async (fetch: SoftLawFetch) => {
   const entries: SoftLawEntry[] = [];
-  let cursor = start;
+  let cursor: string | null = null;
   do {
-    const page = (
+    const page: DiscoveredPage = (
       await mvPsmvAdapter.discover({ cursor, signal: signal(), fetch })
     ).unwrap();
     for (const entry of page.entries) {
