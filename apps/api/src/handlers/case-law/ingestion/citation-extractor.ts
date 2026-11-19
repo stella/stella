@@ -15,6 +15,7 @@ import {
   polishConstitutionalDocketKey,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
+import { CZ_NSS_REPORTER_SOURCE } from "@stll/api-contract/decision-reporter-grammar";
 import {
   canonicalUsReporterCitation,
   readsUsReporterCitations,
@@ -205,7 +206,7 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 // (a dropped diacritic, likely an encoding fallback) is the same class.
 const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
 
-export const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+export const CZECH_REPORTER_CITATION_SOURCE = String.raw`(?:${CZ_NSS_REPORTER_SOURCE}|[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NS(?![\p{L}\d])))`;
 
 const CZECH_REPORTER_CITATION_RE = new RegExp(
   `^${CZECH_REPORTER_CITATION_SOURCE}$`,

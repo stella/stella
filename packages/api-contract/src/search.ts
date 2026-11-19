@@ -213,12 +213,15 @@ export const countedSearchTotal = (
  * - `no_hits_filtered`: nothing matched under the filters the request
  *   narrowed with, which is a different answer from `no_hits` because the
  *   caller can drop a filter.
+ * - `collection_citation_unresolved`: a recognized collection citation has
+ *   no exact held identity; token lookalikes are not search results.
  */
 export const CASE_LAW_SEARCH_WARNING_CODES = [
   "function_words_optional",
   "partial_matches_appended",
   "no_hits",
   "no_hits_filtered",
+  "collection_citation_unresolved",
 ] as const;
 
 export type CaseLawSearchWarningCode =

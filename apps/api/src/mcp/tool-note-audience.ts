@@ -9,6 +9,7 @@ export const MCP_NOTE_AUDIENCE = {
   function_words_optional: "agent",
   no_hits: "agent",
   no_hits_filtered: "agent",
+  collection_citation_unresolved: "agent",
   partial_matches_appended: "agent",
   filter_read: "agent",
   filter_dropped: "agent",

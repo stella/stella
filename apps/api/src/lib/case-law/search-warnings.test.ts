@@ -10,6 +10,7 @@ import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
+  collectionCitationUnresolvedWarning,
   DECISION_QUERY_WARNING_CODES,
   DECISION_QUERY_WARNING_PRODUCERS,
 } from "@/api/lib/case-law/search-warnings";
@@ -90,6 +91,7 @@ describe("caseLawSearchWarnings", () => {
 describe("warning code census", () => {
   test("every declared code is produced by a search that earns it", () => {
     const produced = new Set<CaseLawSearchWarningCode>([
+      collectionCitationUnresolvedWarning("Rc 60/2015").code,
       ...caseLawSearchWarnings({
         droppedFunctionWords: ["na"],
         filters: [],

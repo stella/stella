@@ -1494,6 +1494,10 @@
       "title": "A pesquisa está temporariamente indisponível"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Pesquise pelo número do processo ou pelo ECLI da decisão, se souber.",
+        "message": "Nenhuma decisão correspondente exatamente a esta referência de coletânea foi encontrada."
+      },
       "noHits": {
         "hint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
         "message": "Nada corresponde às palavras exigidas por esta pesquisa."

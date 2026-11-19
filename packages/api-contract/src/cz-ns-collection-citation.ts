@@ -3,7 +3,6 @@ import { panic, Result } from "better-result";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
 import { foldDecisionIdentifierInput } from "./decision-docket-grammar";
-import type { DecisionReporterGrammar } from "./decision-query-intent";
 
 /**
  * The Supreme Court's official collection, the Sbírka soudních rozhodnutí a
@@ -91,7 +90,7 @@ const PART_PHRASE = String.raw`(?:,?\s(?:v\s)?část(?:i|í)?\s(?<partPhrase>civ
 const SPELLINGS: readonly RegExp[] = [
   // `R 9/1971`, `Rc 45/2012`, `Rt 45/2012`, `R 45/2012 civ.`, `R 45/2012 tr.`
   new RegExp(
-    String.raw`^R(?<prefixPart>c|t)?\.?\s?${NUMBER_YEAR}(?:\s${PART_WORD})?$`,
+    String.raw`^R(?<prefixPart>c|t)?\.?\s?${NUMBER_YEAR}(?:\s${COLLECTION_ABBREVIATION})?(?:\s${PART_WORD})?$`,
     "iu",
   ),
   // `č. 45/2012 Sb. rozh. obč.`, `45/2012 Sb. rozh. tr.`, `č. 9/1971 Sb. rozh.`
@@ -198,9 +197,4 @@ export const canonicalCzNsCollectionCitation = (
 ): string | null => {
   const citation = parseCzNsCollectionCitation(text);
   return citation === null ? null : formatCzNsCollectionCitation(citation);
-};
-
-/** The Czech reporter grammar: the Supreme Court's collection. */
-export const CZ_NS_COLLECTION_GRAMMAR: DecisionReporterGrammar = {
-  canonicalCitation: canonicalCzNsCollectionCitation,
 };
