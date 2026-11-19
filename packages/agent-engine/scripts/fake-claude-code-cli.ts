@@ -1201,8 +1201,9 @@ export const FAKE_SCENARIOS = {
     { expectUser: true },
     toolResult("call-long", "notes.md"),
     result(),
-    { aboutUser: "started", index: 0 },
-    { aboutUser: "echo", index: 0 },
+    // The first of the two; the prompt was the first user message taken.
+    { aboutUser: "started", index: -2 },
+    { aboutUser: "echo", index: -2 },
     { aboutUser: "cancelled" },
     assistant("msg-3", [{ type: "text", text: "The annex is not here." }]),
     result(),
