@@ -2,7 +2,7 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 ALTER TABLE "case_law_decision_identifiers"
-  ADD COLUMN "independent_claims" varchar(32)[] NOT NULL DEFAULT ARRAY['unverified']::varchar[];--> statement-breakpoint
+  ADD COLUMN "independent_claims" varchar(32)[] NOT NULL DEFAULT '{unverified}'::varchar(32)[];--> statement-breakpoint
 
 ALTER TABLE "case_law_decision_identifiers"
   ADD CONSTRAINT "case_law_decision_identifiers_independent_claims"
