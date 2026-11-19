@@ -6346,7 +6346,7 @@
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
     "provisionRunAlsoFrom": "i od {date}",
     "provisionRunShowVersions": "Zobrazit znění zákona za období {range}",
-    "provisionRunUnchanged": "{count, plural, one {beze změny v # znění zákona} few {beze změny v průběhu # znění zákona} many {beze změny v průběhu # znění zákona} other {beze změny v průběhu # znění zákona}}",
+    "provisionRunUnchanged": "{count, plural, one {# znění zákona beze změny} few {# znění zákona beze změny} many {# znění zákona beze změny} other {# znění zákona beze změny}}",
     "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "provisionVersionsAll": "Všechna znění zákona",
     "provisionWordingAdded": "Nové ustanovení",
