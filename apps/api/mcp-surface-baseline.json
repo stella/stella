@@ -238,9 +238,9 @@
       "default": {"title": 12, "description": 130, "inputSchema": 161, "outputSchema": 1247, "annotations": 90, "payloadUtf8Bytes": 1782}
     },
     "read_content_across_matters": {
-      "advanced": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 422, "annotations": 105, "payloadUtf8Bytes": 1347},
-      "anonymized": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 422, "annotations": 105, "payloadUtf8Bytes": 1347},
-      "default": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 422, "annotations": 105, "payloadUtf8Bytes": 1347}
+      "advanced": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 587, "annotations": 105, "payloadUtf8Bytes": 1512},
+      "anonymized": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 587, "annotations": 105, "payloadUtf8Bytes": 1512},
+      "default": {"title": 27, "description": 338, "inputSchema": 298, "outputSchema": 587, "annotations": 105, "payloadUtf8Bytes": 1512}
     },
     "read_document": {
       "advanced": {"title": 13, "description": 600, "inputSchema": 727, "outputSchema": 2791, "annotations": 91, "payloadUtf8Bytes": 4365},

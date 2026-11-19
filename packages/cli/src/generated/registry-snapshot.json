@@ -1235,8 +1235,7 @@
                 "type": "string"
               }
             },
-            "required": ["position", "entityId"],
-            "additionalProperties": false
+            "required": ["position", "entityId"]
           }
         },
         "charCount": {
