@@ -639,6 +639,13 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  * decisions of one file can be issued on one day, so nothing here ever
  * prefers a candidate by its date or its court.
  */
+export const DECISION_IDENTITY_READ = {
+  COMPLETE: "complete",
+  TRUNCATED: "truncated",
+} as const;
+export type DecisionIdentityRead =
+  (typeof DECISION_IDENTITY_READ)[keyof typeof DECISION_IDENTITY_READ];
+
 export type DecisionIdentityResolution<THit> =
   | { readonly status: "none" }
   | {
@@ -888,7 +895,7 @@ const resolvedAmong = <THit>(
  */
 type ResolveDecisionIdentityOptions = ExactDecisionMatchesOptions & {
   /** Whether the lookup reached every holder of the exact stored identifier key. */
-  readonly exactIdentityRead?: "complete" | "truncated" | undefined;
+  readonly exactIdentityRead?: DecisionIdentityRead | undefined;
   /**
    * The sheet sources a selector is read from; every one when absent. A
    * reader that adjudicates sheets from only some of them (the citation
@@ -903,7 +910,7 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   options: ResolveDecisionIdentityOptions = {},
 ): DecisionIdentityResolution<THit> => {
   const family = exactDecisionMatches(identifier, hits, options);
-  if (options.exactIdentityRead === "truncated") {
+  if (options.exactIdentityRead === DECISION_IDENTITY_READ.TRUNCATED) {
     return {
       status: "ambiguous",
       candidates: family,
@@ -922,7 +929,7 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     if (
       only !== undefined &&
       rest.length === 0 &&
-      options.exactIdentityRead === "complete" &&
+      options.exactIdentityRead === DECISION_IDENTITY_READ.COMPLETE &&
       only.identifiers?.some(
         ({ type, value }) =>
           type === DECISION_IDENTIFIER_TYPES.CASE_NUMBER &&

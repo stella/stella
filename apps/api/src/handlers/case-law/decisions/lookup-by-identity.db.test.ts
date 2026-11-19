@@ -808,7 +808,9 @@ test.each(Object.values(DECISION_IDENTIFIER_TYPES))(
         ).toContain(id);
         break;
       default:
-        expect(result.status).toBe("resolved");
+        return panic(
+          `Stored identifier did not resolve to its owner: ${result.status}`,
+        );
     }
   },
   DB_TEST_TIMEOUT_MS,

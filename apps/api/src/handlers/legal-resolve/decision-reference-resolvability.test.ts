@@ -15,6 +15,7 @@
  *    keeps the decision.
  */
 
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { resolveDecisionIdentity } from "@stll/api-contract/decision-query-intent";
@@ -266,7 +267,9 @@ describe("every stored identifier kind remains reachable", () => {
           );
           break;
         default:
-          expect(resolution.status).toBe("unique");
+          return panic(
+            `Stored identifier did not resolve to its owner: ${resolution.status}`,
+          );
       }
       const reference = decisionIdentityReadKeys({
         country,

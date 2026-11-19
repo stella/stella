@@ -33,7 +33,11 @@ import {
   decisionDocketTailSpellings,
   docketFamilyKeyOf,
 } from "@stll/api-contract/decision-docket-reference";
-import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import {
+  DECISION_IDENTITY_READ,
+  type DecisionIdentifierIntent,
+  type DecisionIdentityRead,
+} from "@stll/api-contract/decision-query-intent";
 import { czechReporterLookupSpellings } from "@stll/api-contract/decision-reporter-grammar";
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -205,7 +209,7 @@ export type DecisionIdentityRow = {
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
   /** Completeness of the exact typed identifier-key scan, before family expansion. */
-  exactIdentityRead?: "complete" | "truncated";
+  exactIdentityRead?: DecisionIdentityRead;
   /** The reference as the court published it, sheet included, if recorded. */
   publishedCaseNumber?: string | null;
   /** The sheet the court published the decision on, if recorded. */
@@ -659,8 +663,8 @@ export const lookupDecisionsByIdentity = async ({
       scannedDecisions.length <= IDENTITY_CANDIDATE_SCAN_MAX ||
       (exactDocketIds !== null &&
         scannedDecisions.some((decision) => !decision.exactDocketIdentity))
-        ? "complete"
-        : "truncated";
+        ? DECISION_IDENTITY_READ.COMPLETE
+        : DECISION_IDENTITY_READ.TRUNCATED;
     const decisions = scannedDecisions.slice(0, IDENTITY_CANDIDATE_SCAN_MAX);
 
     if (decisions.length === 0) {
