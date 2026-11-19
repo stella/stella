@@ -64,7 +64,7 @@ export function TwoFactorPage() {
           }
           notifyUserError(failure, message);
         }
-        return readQueryResult(Result.err(failure));
+        readQueryResult(Result.err(failure));
       }
 
       // The redirect target's `beforeLoad` (see routes/auth/two-factor.tsx)

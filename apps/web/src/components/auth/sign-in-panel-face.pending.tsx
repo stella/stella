@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending, InputFace } from "@stll/ui/control-face";
 import { TextSeparator } from "@stll/ui/separator";
@@ -98,11 +98,15 @@ export const SignInHeading = ({
 );
 
 // The bootstrap form has a 12px gap after its divider; other layouts use the panel gap.
-export const SignInEmailDivider = ({ children }: { children?: ReactNode }) => (
+export const SignInEmailDivider = ({
+  children,
+}: {
+  children: ReactElement | string | false;
+}) => (
   <div
     className={cn("min-h-4", configuredSocialProviders.length === 0 && "-mb-5")}
   >
-    {children && <TextSeparator>{children}</TextSeparator>}
+    {children !== false && <TextSeparator>{children}</TextSeparator>}
   </div>
 );
 

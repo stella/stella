@@ -81,6 +81,9 @@ const enabledProviders = (
       return new Set(configured.slice(-1));
     case "none":
       return new Set<string>();
+    default:
+      availability satisfies never;
+      throw new TypeError("Unexpected provider availability");
   }
 };
 
