@@ -127,8 +127,8 @@ export const isRecordingModel = (value: unknown): value is RecordingModel =>
 
 export const isShownModel = (value: unknown): value is ShownModel =>
   isRecord(value) &&
-  isRecordingModel(value) &&
-  typeof value["ticket"] === "number";
+  typeof value["ticket"] === "number" &&
+  isRecordingModel(value);
 
 type ReadyChoice = Extract<FileChoice, { status: "ready" }>;
 
