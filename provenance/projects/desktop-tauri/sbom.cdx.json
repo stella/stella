@@ -4793,7 +4793,7 @@
       "version": "0.5.0"
     },
     {
-      "bom-ref": "pkg:cargo/csscolorparser@0.9.0",
+      "bom-ref": "pkg:cargo/csscolorparser@0.9.1",
       "evidence": {
         "identity": [
           {
@@ -4814,7 +4814,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "75c9db70df93ea049adaa5ef1a727079ada6ccb33d4b358f262923aef4fcac8c"
+          "content": "b3c89b58e3eb25afa9d30ccc8ab8ca2b9b1d3158659b061af1d58ec9bd57feab"
         }
       ],
       "licenses": [
@@ -4836,12 +4836,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/csscolorparser@0.9.0",
+      "purl": "pkg:cargo/csscolorparser@0.9.1",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "0.9.0"
+      "version": "0.9.1"
     },
     {
       "bom-ref": "pkg:cargo/cssparser@0.37.0",
@@ -33556,7 +33556,7 @@
       "version": "0.11.7"
     },
     {
-      "bom-ref": "pkg:cargo/zip@9.5.0",
+      "bom-ref": "pkg:cargo/zip@9.5.1",
       "evidence": {
         "identity": [
           {
@@ -33577,7 +33577,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0700e6c427aff64acdbf02e85fbfd946c2ee12319d1af013092f3a2178914ff8"
+          "content": "e3476fd497ac8af5b1ec7b51acab7bef380f7e8dd8e0487595bafd839417a302"
         }
       ],
       "licenses": [
@@ -33594,9 +33594,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zip@9.5.0",
+      "purl": "pkg:cargo/zip@9.5.1",
       "type": "library",
-      "version": "9.5.0"
+      "version": "9.5.1"
     },
     {
       "bom-ref": "pkg:cargo/zlib-rs@0.6.8",
@@ -34710,7 +34710,7 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/uncased@0.9.10"
       ],
-      "ref": "pkg:cargo/csscolorparser@0.9.0"
+      "ref": "pkg:cargo/csscolorparser@0.9.1"
     },
     {
       "dependsOn": [
@@ -37455,7 +37455,7 @@
         "pkg:cargo/clipboard-rs@0.3.5",
         "pkg:cargo/clipboard-win@5.4.3",
         "pkg:cargo/cpal@0.18.2",
-        "pkg:cargo/csscolorparser@0.9.0",
+        "pkg:cargo/csscolorparser@0.9.1",
         "pkg:cargo/dhat@0.3.3",
         "pkg:cargo/dirs@7.0.0",
         "pkg:cargo/flate2@1.1.11",
@@ -37513,7 +37513,7 @@
         "pkg:cargo/winsafe@0.0.29",
         "pkg:cargo/zbus-secret-service-keyring-store@1.0.1",
         "pkg:cargo/zeroize@1.9.1",
-        "pkg:cargo/zip@9.5.0"
+        "pkg:cargo/zip@9.5.1"
       ],
       "ref": "pkg:cargo/stella-desktop@0.0.1"
     },
@@ -38020,7 +38020,7 @@
         "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows-sys@0.61.2",
-        "pkg:cargo/zip@9.5.0"
+        "pkg:cargo/zip@9.5.1"
       ],
       "ref": "pkg:cargo/tauri-plugin-updater@2.14.1"
     },
@@ -39281,7 +39281,7 @@
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/zeroize@1.9.1"
       ],
-      "ref": "pkg:cargo/zip@9.5.0"
+      "ref": "pkg:cargo/zip@9.5.1"
     },
     {
       "dependsOn": [],

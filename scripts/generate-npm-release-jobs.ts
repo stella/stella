@@ -7,7 +7,7 @@ import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 export const NPM_RELEASE_WORKFLOW =
-  "stella/.github/.github/workflows/npm-independent-release.yml@41fbea3b521bfc57b791003918de97f153d790a7";
+  "stella/.github/.github/workflows/npm-independent-release.yml@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc";
 const START = "  # npm-release-jobs:start";
 const END = "  # npm-release-jobs:end";
 const SUMMARY_NEEDS = "    # npm-release-summary-needs";

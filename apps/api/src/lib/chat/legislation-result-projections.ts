@@ -91,6 +91,7 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
           truncated: v.boolean(),
           versionValidFrom: v.nullable(v.string()),
           versionValidTo: v.nullable(v.string()),
+          ...statuteExpressionLabel,
         }),
       ),
       ...PROVISION_ABSENCE_STATUSES.map((status) =>
