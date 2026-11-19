@@ -70,7 +70,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
 } as const;
 
 export type PublicLawRelation =
-  (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
+  | (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT]
+  | keyof typeof COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION;
 
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
