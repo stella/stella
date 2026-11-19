@@ -742,6 +742,11 @@
       "hearing": "Te oímos.",
       "noSound": "No llega sonido de {device}.",
       "checkAccess": "Comprobar el acceso al micrófono"
+    },
+    "preview": {
+      "label": "Lo que ha dictado hasta ahora",
+      "listening": "Escuchando…",
+      "finishing": "Terminando…"
     }
   },
   "shortcut": {

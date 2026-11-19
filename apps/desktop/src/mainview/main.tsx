@@ -48,6 +48,9 @@ const AccessibilityGuideApp = lazy(
   async () => import("../onboarding/AccessibilityGuideApp"),
 );
 const DictationNoticeApp = lazy(async () => import("./DictationNoticeApp"));
+const DictationPreviewApp = lazy(
+  async () => import("../dictation/DictationPreviewApp"),
+);
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
   typeof value === "object" &&
@@ -149,6 +152,12 @@ const Root = () => {
     content = (
       <Suspense fallback={null}>
         <DictationNoticeApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "dictation-preview") {
+    content = (
+      <Suspense fallback={null}>
+        <DictationPreviewApp />
       </Suspense>
     );
   } else if (windowLabel === "onboarding") {

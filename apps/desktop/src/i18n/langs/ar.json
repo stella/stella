@@ -742,6 +742,11 @@
       "hearing": "نسمعك.",
       "noSound": "لا يصل صوت من {device}.",
       "checkAccess": "التحقق من الوصول إلى الميكروفون"
+    },
+    "preview": {
+      "label": "ما أمليته حتى الآن",
+      "listening": "جارٍ الاستماع…",
+      "finishing": "جارٍ الإنهاء…"
     }
   },
   "shortcut": {

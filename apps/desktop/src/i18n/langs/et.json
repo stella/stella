@@ -742,6 +742,11 @@
       "hearing": "Kuuleme teid.",
       "noSound": "Seadmest {device} ei tule heli.",
       "checkAccess": "Kontrolli mikrofoni juurdepääsu"
+    },
+    "preview": {
+      "label": "Seni dikteeritud tekst",
+      "listening": "Kuulan…",
+      "finishing": "Lõpetan…"
     }
   },
   "shortcut": {

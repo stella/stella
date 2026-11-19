@@ -742,6 +742,11 @@
       "hearing": "Nous vous entendons.",
       "noSound": "Aucun son de {device}.",
       "checkAccess": "Vérifier l'accès au micro"
+    },
+    "preview": {
+      "label": "Ce que vous avez dicté jusqu’ici",
+      "listening": "Écoute…",
+      "finishing": "Finalisation…"
     }
   },
   "shortcut": {

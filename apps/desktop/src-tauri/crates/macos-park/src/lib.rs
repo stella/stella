@@ -131,4 +131,5 @@ mod park;
 pub use park::{
   disable_occlusion_detection, is_panel_presented, park_window,
   prepare_transient_overlay, present_activating_window, present_key_panel,
+  present_passive_overlay,
 };

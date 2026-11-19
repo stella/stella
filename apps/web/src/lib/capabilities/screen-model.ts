@@ -51,6 +51,7 @@ export const ROUTE_PARAM_DISPOSITIONS = {
   bucket: notAResource("a sitemap partition"),
   code: notAResource("a verification code"),
   tableId: notAResource("a case-law research table"),
+  guidanceId: notAResource("a public regulator guidance document"),
 } as const satisfies Record<string, RouteParamDisposition>;
 
 // Routes whose search parameters say which resource has focus. `Extract`

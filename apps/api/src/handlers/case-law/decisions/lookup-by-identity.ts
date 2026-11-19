@@ -34,10 +34,12 @@ import {
   docketFamilyKeyOf,
 } from "@stll/api-contract/decision-docket-reference";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
+import { czechReporterLookupSpellings } from "@stll/api-contract/decision-reporter-grammar";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
   type DecisionPrimaryReferenceType,
+  normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -160,23 +162,20 @@ export const docketFamilyCitationKeys = (
 ];
 
 /**
- * The identifier rows each kind of reference is stored under. A stored
- * reference is whatever a decision displays as its own: its docket, an
- * authority's decision number, a commission's case number.
+ * Each stored identifier's specialized lookup. An unclaimed displayed value
+ * is read as a reference across every stored kind; a recognized citation is
+ * restricted to its own kind, so a docket cannot impersonate a reporter.
  */
-const IDENTIFIER_TYPES_OF_LOCATOR_KIND = {
-  docket: [DECISION_IDENTIFIER_TYPES.CASE_NUMBER],
-  ecli: [DECISION_IDENTIFIER_TYPES.ECLI],
-  neutral: [DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION],
-  reporter: [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
-  reference: [
-    DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
-    DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
-  ],
+const LOCATOR_KIND_OF_IDENTIFIER_TYPE = {
+  [DECISION_IDENTIFIER_TYPES.CASE_NUMBER]: "docket",
+  [DECISION_IDENTIFIER_TYPES.ECLI]: "ecli",
+  [DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION]: "neutral",
+  [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION]: "reporter",
+  [DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER]: "reference",
+  [DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER]: "reference",
 } as const satisfies Record<
-  DecisionIdentityLocator["kind"],
-  readonly [DecisionIdentifierType, ...DecisionIdentifierType[]]
+  DecisionIdentifierType,
+  DecisionIdentityLocator["kind"]
 >;
 
 /**
@@ -243,7 +242,7 @@ const identifierRowKeysOf = ({
 }: {
   /** Whose key the column holds: the jurisdiction the reference is read in. */
   jurisdiction: string | undefined;
-  types: readonly [DecisionIdentifierType, ...DecisionIdentifierType[]];
+  types: readonly DecisionIdentifierType[];
   /** As the reference spells them; normalized here for the column. */
   values: readonly string[];
 }) =>
@@ -251,9 +250,15 @@ const identifierRowKeysOf = ({
     type,
     keys: [
       ...new Set(
-        values.map((value) =>
+        values.flatMap((value) => [
           normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
-        ),
+          // Old Czech reporter rows predate the canonical writer. Remove
+          // these aliases only after their stored keys have been migrated.
+          ...(jurisdiction === "CZE" &&
+          type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+            ? [normalizeStructuredDecisionIdentifier({ type, value })]
+            : []),
+        ]),
       ),
     ],
   }));
@@ -334,6 +339,19 @@ const ownColumnKeysOf = (
   }
 };
 
+const identifierLookupSpellings = (
+  locator: DecisionIdentityLocator,
+  country: string | undefined,
+) => {
+  if (locator.kind === "docket") {
+    return docketSpellingsOf(locator);
+  }
+  if (locator.kind === "reporter" && country === "CZE") {
+    return czechReporterLookupSpellings(locator.value);
+  }
+  return [locator.value];
+};
+
 /**
  * Every stored key a reference is read under: the identifier rows' keys per
  * type and the decision's own column. What `decisionIdsNamedBy` turns into
@@ -349,9 +367,12 @@ export const decisionIdentityReadKeys = ({
 }) => ({
   identifierRows: identifierRowKeysOf({
     jurisdiction: country,
-    types: IDENTIFIER_TYPES_OF_LOCATOR_KIND[locator.kind],
-    values:
-      locator.kind === "docket" ? docketSpellingsOf(locator) : [locator.value],
+    types: Object.values(DECISION_IDENTIFIER_TYPES).filter(
+      (type) =>
+        locator.kind === "reference" ||
+        LOCATOR_KIND_OF_IDENTIFIER_TYPE[type] === locator.kind,
+    ),
+    values: identifierLookupSpellings(locator, country),
   }),
   ownColumn: ownColumnKeysOf(locator),
 });

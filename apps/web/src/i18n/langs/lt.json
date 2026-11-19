@@ -1494,6 +1494,10 @@
       "title": "Paieška laikinai nepasiekiama"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ieškokite pagal bylos numerį arba sprendimo ECLI, jei jį žinote.",
+        "message": "Nerasta sprendimo, tiksliai atitinkančio šią rinkinio nuorodą."
+      },
       "noHits": {
         "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
         "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."
@@ -2412,6 +2416,7 @@
       "save_document": "Išsaugoti dokumentą",
       "save_matter": "Išsaugoti bylą",
       "save_playbook": "Išsaugoti peržiūros vadovą",
+      "save_skill_package": "Išsaugoti įgūdį",
       "save_task": "Išsaugoti užduotį",
       "save_template": "Išsaugoti šabloną",
       "save_time_entry": "Išsaugoti laiko įrašą",
@@ -2440,6 +2445,7 @@
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "user_message": "Išsiųsta agentui dirbant",
+      "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -4044,6 +4050,12 @@
     "versionCreatedDescription": "Sukurta {versionNumber} versija. Visi gali toliau redaguoti.",
     "versionCreatedTitle": "Versija sukurta",
     "viewOnly": "Tik peržiūra"
+  },
+  "guidance": {
+    "notCaseLaw": "Reguliavimo institucijos paskelbtos gairės. Tai nėra teismo sprendimas.",
+    "openAtPublisher": "Atidaryti leidėjo svetainėje",
+    "source": "Šaltinis: {attribution}",
+    "textUnavailable": "Šio dokumento teksto čia nėra. Perskaitykite jį leidėjo svetainėje."
   },
   "guides": {
     "action": {

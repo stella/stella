@@ -742,6 +742,11 @@
       "hearing": "Mēs jūs dzirdam.",
       "noSound": "No ierīces {device} nenāk skaņa.",
       "checkAccess": "Pārbaudīt piekļuvi mikrofonam"
+    },
+    "preview": {
+      "label": "Līdz šim diktētais teksts",
+      "listening": "Klausās…",
+      "finishing": "Tiek pabeigts…"
     }
   },
   "shortcut": {

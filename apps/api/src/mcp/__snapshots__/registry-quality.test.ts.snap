@@ -1607,7 +1607,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -1631,7 +1631,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -1710,7 +1710,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,
@@ -9214,7 +9214,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -9238,7 +9238,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -9317,7 +9317,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,
@@ -17247,7 +17247,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -17271,7 +17271,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -17350,7 +17350,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,
@@ -19550,7 +19550,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "annotations": {
       "title": "Search regulator guidance",
       "destructiveHint": false,
@@ -19574,7 +19574,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "description": "Issuing authority, as returned in issuer.authority (for example eu-edpb or cz-gfr). Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
           "x-stella-agent-input": {
             "kind": "filter"
           }
@@ -19653,7 +19653,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read regulator guidance is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "annotations": {
       "title": "Read regulator guidance",
       "destructiveHint": false,

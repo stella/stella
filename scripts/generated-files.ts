@@ -672,6 +672,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
     "apps/api/src/env-schema.ts",
+    "apps/api/src/env-soft-law.ts",
     "apps/api/src/db/role-names.ts",
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",

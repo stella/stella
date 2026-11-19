@@ -1494,6 +1494,10 @@
       "title": "La búsqueda no está disponible temporalmente"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Busque por el número de expediente o el ECLI de la resolución, si lo conoce.",
+        "message": "No se ha encontrado ninguna resolución que corresponda exactamente a esta referencia de repertorio."
+      },
       "noHits": {
         "hint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
         "message": "Nada coincide con las palabras que exigió esta búsqueda."
@@ -2412,6 +2416,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -2440,6 +2445,7 @@
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
       "user_message": "Enviado mientras el agente trabajaba",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -4044,6 +4050,12 @@
     "versionCreatedDescription": "Se creó la versión {versionNumber}. Todos pueden seguir editando.",
     "versionCreatedTitle": "Versión creada",
     "viewOnly": "Solo lectura"
+  },
+  "guidance": {
+    "notCaseLaw": "Orientación emitida por un organismo regulador. No es una resolución judicial.",
+    "openAtPublisher": "Abrir en el sitio del editor",
+    "source": "Fuente: {attribution}",
+    "textUnavailable": "El texto de este documento no está disponible aquí. Consúltelo en el sitio del editor."
   },
   "guides": {
     "action": {

@@ -742,6 +742,11 @@
       "hearing": "Estamos ouvindo você.",
       "noSound": "Nenhum som de {device}.",
       "checkAccess": "Verificar acesso ao microfone"
+    },
+    "preview": {
+      "label": "O que você ditou até agora",
+      "listening": "Ouvindo…",
+      "finishing": "Finalizando…"
     }
   },
   "shortcut": {

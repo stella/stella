@@ -38,6 +38,13 @@ export const SKILL_FROM_CHAT_REFUSAL_CODE = {
 } as const;
 
 /**
+ * A chat skill package tool named a skill the caller has no editable skill
+ * under: absent, in another organization, or not theirs to edit.
+ */
+export const SKILL_PACKAGE_SKILL_NOT_FOUND_CODE =
+  "skill_package_skill_not_found";
+
+/**
  * The kinds of name a skill draft is checked for before it is stored. A name
  * in a skill reaches everyone the skill is shared with, so the author approves
  * each one.

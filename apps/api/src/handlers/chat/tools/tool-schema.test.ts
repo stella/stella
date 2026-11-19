@@ -1265,6 +1265,71 @@ describe("chat tool schemas", () => {
     }
   });
 
+  test("offers skill package tools to skill authors, the save behind approval", () => {
+    const toolsFor = (
+      role: "intern" | "member" | "owner",
+      recordAuditEvent: typeof noopAuditRecorder | undefined,
+    ) =>
+      getChatTools({
+        workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
+        orgAIConfig: null,
+        managedAIResidency: "eu" as const,
+        memberRole: sessionMemberRole(role),
+        organizationId,
+        requestWorkspaceId: workspaceId,
+        thirdPartyBoundary: { type: "raw" },
+        refRegistry: createChatRefRegistry(),
+        toolDefectMemo: createChatToolDefectMemo(),
+        safeDb: unusedSafeDb,
+        scopedDb: unusedScopedDb,
+        threadId,
+        pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
+        workspaceId: null,
+        userId,
+        userEmail: "standard@example.test",
+        toolWorkspaceIds: resolveToolWorkspaceIds({
+          pinnedIds: [],
+          accessibleWorkspaceIds: [workspaceId],
+        }),
+        hasActiveDocxEditClient: false,
+        hasActiveDocxFileClient: false,
+        docxSuggestionSurface: "template-studio",
+        webSearchEnabled: false,
+        webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+        recordAuditEvent,
+        resolveMemorySourceWorkspaceIds: () => [],
+      });
+
+    for (const role of ["member", "owner"] as const) {
+      const tools = toolsFor(role, noopAuditRecorder);
+      const validate = tools["validate_skill_package"];
+      const save = tools["save_skill_package"];
+      if (!validate || !save) {
+        throw new Error(`Expected skill package tools for ${role}`);
+      }
+      expect(getChatToolPolicy(validate)).toEqual({
+        kind: "internal",
+        needsApproval: false,
+        requiresAnonymization: false,
+      });
+      expect(save.needsApproval).toBe(true);
+      expect(getChatToolPolicy(save)).toEqual({
+        kind: "mutation",
+        needsApproval: true,
+        requiresAnonymization: false,
+      });
+    }
+
+    const intern = toolsFor("intern", noopAuditRecorder);
+    expect(intern["validate_skill_package"]).toBeUndefined();
+    expect(intern["save_skill_package"]).toBeUndefined();
+
+    // A save is audited; a tool set that records no audit offers only the check.
+    const unaudited = toolsFor("member", undefined);
+    expect(unaudited["validate_skill_package"]).toBeDefined();
+    expect(unaudited["save_skill_package"]).toBeUndefined();
+  });
+
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
       workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),

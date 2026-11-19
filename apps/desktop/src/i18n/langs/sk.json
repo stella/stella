@@ -742,6 +742,11 @@
       "hearing": "Počujeme vás.",
       "noSound": "Zo zariadenia {device} nejde žiadny zvuk.",
       "checkAccess": "Skontrolovať prístup k mikrofónu"
+    },
+    "preview": {
+      "label": "Čo ste zatiaľ nadiktovali",
+      "listening": "Počúvam…",
+      "finishing": "Dokončujem…"
     }
   },
   "shortcut": {

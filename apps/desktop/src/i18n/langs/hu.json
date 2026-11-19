@@ -742,6 +742,11 @@
       "hearing": "Halljuk Önt.",
       "noSound": "Nem jön hang innen: {device}.",
       "checkAccess": "Mikrofon-hozzáférés ellenőrzése"
+    },
+    "preview": {
+      "label": "Az eddig diktált szöveg",
+      "listening": "Figyelés…",
+      "finishing": "Befejezés…"
     }
   },
   "shortcut": {

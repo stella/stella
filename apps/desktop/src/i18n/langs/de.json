@@ -742,6 +742,11 @@
       "hearing": "Wir hören Sie.",
       "noSound": "Kein Ton von {device}.",
       "checkAccess": "Mikrofonzugriff prüfen"
+    },
+    "preview": {
+      "label": "Bisher Diktiertes",
+      "listening": "Hört zu…",
+      "finishing": "Wird abgeschlossen…"
     }
   },
   "shortcut": {

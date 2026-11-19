@@ -742,6 +742,11 @@
       "hearing": "Jus girdime.",
       "noSound": "Iš {device} negaunama garso.",
       "checkAccess": "Patikrinti prieigą prie mikrofono"
+    },
+    "preview": {
+      "label": "Iki šiol padiktuotas tekstas",
+      "listening": "Klausomasi…",
+      "finishing": "Baigiama…"
     }
   },
   "shortcut": {

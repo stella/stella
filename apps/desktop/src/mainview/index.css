@@ -63,6 +63,56 @@ body:has(.dictation-notice-window) {
   min-height: 100dvh;
 }
 
+/* The dictation preview is a borderless transparent window that lets clicks
+ * through; its card grows from the edge nearest the status icon. */
+body:has(.dictation-preview-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
+.dictation-preview-window[data-anchor="top"] {
+  align-items: flex-start;
+}
+
+.dictation-preview-window[data-anchor="bottom"] {
+  align-items: flex-end;
+}
+
+/* The newest words stay in view: older lines leave through the top edge,
+ * which fades once the text outgrows the card. */
+.dictation-preview-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(1.375em * 5);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.dictation-preview-text[data-overflowing="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    var(--color-black) 1.375em
+  );
+}
+
+.dictation-preview-dot[data-stage="listening"] {
+  animation: dictation-preview-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dictation-preview-dot[data-stage="listening"] {
+    animation: none;
+  }
+}
+
+@keyframes dictation-preview-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 body:has(.clipboard-editor-window) {
   overflow: hidden;
 }

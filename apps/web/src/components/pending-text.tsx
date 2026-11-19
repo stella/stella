@@ -34,6 +34,7 @@ type PendingTextKey =
   | "common.history"
   | "common.search"
   | "common.selectAMatter"
+  | "guidance.notCaseLaw"
   | "lawHome.prompt"
   | "lawHome.recent"
   | "lawHome.signals"

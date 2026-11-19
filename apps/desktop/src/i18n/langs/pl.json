@@ -742,6 +742,11 @@
       "hearing": "Słyszymy cię.",
       "noSound": "Brak dźwięku z {device}.",
       "checkAccess": "Sprawdź dostęp do mikrofonu"
+    },
+    "preview": {
+      "label": "Dotychczas podyktowany tekst",
+      "listening": "Słucham…",
+      "finishing": "Kończenie…"
     }
   },
   "shortcut": {

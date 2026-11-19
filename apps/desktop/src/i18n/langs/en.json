@@ -742,6 +742,11 @@
       "hearing": "We hear you.",
       "noSound": "No sound from {device}.",
       "checkAccess": "Check Microphone access"
+    },
+    "preview": {
+      "label": "What you have said so far",
+      "listening": "Listening…",
+      "finishing": "Finishing…"
     }
   },
   "shortcut": {
