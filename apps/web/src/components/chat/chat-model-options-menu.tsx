@@ -1,4 +1,10 @@
-import { type ReactNode, useId, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useId,
+  useRef,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -407,7 +413,7 @@ type ModelPickerProps<TData> = {
   /** Why the place offers no model now, in place of the list. */
   unavailable: string | null;
   /** What a failed read of the place's models says; the generic one if `null`. */
-  failed: ReactNode;
+  failed: ReactElement | null;
   /** The chosen model when the place no longer offers it: listed, not choosable. */
   gone: { value: string; label: string } | null;
   open: boolean;
