@@ -59,9 +59,9 @@ export type Finished =
 export type Paragraph = { startMs: number; text: string };
 
 /** A pause at least this long between two pieces starts a new paragraph. */
-export const PARAGRAPH_PAUSE_MS = 1500;
+const PARAGRAPH_PAUSE_MS = 1500;
 /** A paragraph that already covers this much speech ends at the next piece. */
-export const PARAGRAPH_MAX_MS = 90_000;
+const PARAGRAPH_MAX_MS = 90_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

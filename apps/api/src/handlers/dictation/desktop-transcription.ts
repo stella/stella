@@ -42,7 +42,6 @@ import {
   transcriptionServed,
   transcriptionServedAnywhere,
 } from "@/api/handlers/dictation/transcription-deployment";
-import { readVocabularyHandler } from "@/api/handlers/workspaces/vocabulary/get";
 import {
   loadOrgSettingsForAuth,
   type OrgSettingsForAuth,
@@ -65,6 +64,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import { readVocabularyHandler } from "@/api/lib/workspaces/vocabulary/read";
 
 // Its own invitation: dictation alone keeps speech on the computer, and only
 // this decision lets a linked desktop send audio. The registry makes

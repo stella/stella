@@ -9,6 +9,7 @@ import {
   desktopDictationTranscriptSavedSchema,
 } from "@stll/api-contract/desktop-dictation-transcription";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
+import { classifyFailure } from "@stll/errors";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
@@ -192,12 +193,17 @@ export const createDesktopDictationTranscriptEndpoint = ({
           markdownToStellaDocx(transcriptMarkdown(body)).then((result) =>
             Result.mapError(
               result,
+              // The renderer's own tagged error says what failed.
               (cause) =>
-                new HandlerError({
-                  status: 500,
-                  message: "The transcript could not be laid out as a document",
-                  cause,
-                }),
+                classifyFailure(
+                  new HandlerError({
+                    status: 500,
+                    message:
+                      "The transcript could not be laid out as a document",
+                    cause,
+                  }),
+                  "tagged_failure",
+                ),
             ),
           ),
         );

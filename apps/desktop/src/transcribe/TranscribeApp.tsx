@@ -374,8 +374,8 @@ const ChooseScreen = ({
           aria-label={t("drop.title")}
           className={
             dragging
-              ? "border-foreground-disabled bg-muted/60 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center transition-colors"
-              : "border-border bg-muted/20 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center transition-colors"
+              ? "border-foreground-disabled bg-muted/60 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center"
+              : "border-border bg-muted/20 flex min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-6 text-center"
           }
         >
           <RecordingTile size="large" />

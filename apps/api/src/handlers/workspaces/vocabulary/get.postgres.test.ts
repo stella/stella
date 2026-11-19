@@ -9,6 +9,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { VOCABULARY_LIMITS } from "@/api/lib/workspaces/vocabulary/candidates";
+import { readVocabularyHandler } from "@/api/lib/workspaces/vocabulary/read";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import {
@@ -16,9 +18,6 @@ import {
   seedMatterVocabulary,
 } from "@/api/tests/read-scaling/matter-vocabulary";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
-
-import { VOCABULARY_LIMITS } from "./candidates";
-import { readVocabularyHandler } from "./get";
 
 // Document visibility currently follows matter membership; documents in a
 // matter outside that membership must contribute no titles to this sample.
