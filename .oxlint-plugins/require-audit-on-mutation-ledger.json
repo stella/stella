@@ -868,7 +868,7 @@
     "reason": "Document storage step called by an audited operation; confirm the caller records the event."
   },
   {
-    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.ts::claimReconciliationCandidates",
+    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.ts::reconcileAbandonedOrganizationFileReservations",
     "writes": {
       "update:organizationFileObjects": 1
     },
