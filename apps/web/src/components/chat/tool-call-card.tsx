@@ -11,6 +11,7 @@ import {
   localRunStepFailed,
   localRunToolView,
 } from "@stll/api-contract/chat-local-run-steps";
+import { withoutChatStepLedger } from "@stll/api-contract/chat-step-ledger";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
@@ -35,7 +36,16 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
+import type { ChatAnswerCitations } from "@/components/chat/source-chips.logic";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
+import {
+  STEP_DIGEST_NOT_RECORDED_KEY,
+  ToolCallStepDigest,
+} from "@/components/chat/tool-call-step-digest";
+import {
+  type StepDigest,
+  stepDigestOf,
+} from "@/components/chat/tool-call-step-digest.logic";
 import {
   advanceToolCallTiming,
   createToolCallTiming,
@@ -57,6 +67,7 @@ import { findInstalledSkillDisplayName } from "@/components/inspector/skill-disp
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
@@ -65,6 +76,13 @@ import { useQueryViewError } from "@/lib/use-query-view";
 
 /** A stella or connector tool's call, or a coding agent's own step. */
 type ToolPart = ChatToolCallPart | HarnessChatToolCallPart;
+
+/** A card rendered outside an answer (a fixture, an approval) cites nothing. */
+const NO_ANSWER_CITATIONS: ChatAnswerCitations = {
+  appOrigins: new Set(),
+  decisionIds: new Set(),
+  hrefKeys: new Set(),
+};
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
@@ -442,6 +460,7 @@ export type StepFailureOutcome = "recovered" | "terminal";
 const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
+  answerCitations,
   durationMs,
   failureOutcome,
   turnStatus = "finished",
@@ -451,6 +470,8 @@ const ToolCallCardComponent = ({
 }: {
   action?: ToolCallAction | undefined;
   activeOrganizationId: string;
+  /** What the answer of this step's message cites, for "used in the answer". */
+  answerCitations?: ChatAnswerCitations | undefined;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
   /** What a failure of this step means for its turn. */
@@ -467,6 +488,8 @@ const ToolCallCardComponent = ({
   const format = useFormatter();
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
+  const showTechnicalDetails =
+    usePresentationPrefs().prefs.chatTechnicalDetails;
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
   const catalogDataQuery = useQuery({
@@ -580,18 +603,21 @@ const ToolCallCardComponent = ({
   const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource({ input: toolInput, name });
-  const showCodeToolOutput = isCodeToolName(name) && hasOutput;
   const showMcpExactCall = mcpToolInfo !== null && toolInput !== undefined;
   const skillResourceOutput =
     isSkillResourceOutputToolName(name) && hasOutput
       ? getSkillResourceOutput(part)
       : undefined;
-  const canExpand =
-    showMcpExactCall ||
-    codeToolSource !== undefined ||
-    showCodeToolOutput ||
-    toolInput !== undefined ||
-    hasOutput;
+  const { canExpand, digest, technicalDetails } = toolCallDetailsView({
+    answerCitations,
+    failed: hasError,
+    hasRecoveredNote: failure === "recovered",
+    isLocalRun: localRunTool !== null,
+    part: { input: toolInput, name, output },
+    showMcpExactCall,
+    showTechnicalDetails,
+    technical: codeToolSource !== undefined || toolInput !== undefined,
+  });
   const headerOpensSkillResource = skillResourceOutput !== undefined;
   const headerInteractive = headerOpensSkillResource || canExpand;
   // A finished step is part of the rail; only one still running, waiting or
@@ -715,9 +741,11 @@ const ToolCallCardComponent = ({
         <ToolCallDetails
           activeOrganizationId={activeOrganizationId}
           codeToolSource={codeToolSource}
+          digest={digest}
           note={failure === "recovered" ? failureNote : undefined}
           part={part}
           showMcpExactCall={showMcpExactCall}
+          showTechnicalDetails={technicalDetails}
           threadId={threadId}
         />
       )}
@@ -735,6 +763,55 @@ const ToolCallCardComponent = ({
 // A response can stream many tool calls, and each new chunk re-renders the
 // message's part list: a card whose call did not change skips that render.
 export const ToolCallCard = memo(ToolCallCardComponent);
+
+/**
+ * What an opened step shows. A person reads what it looked up and found;
+ * its call and raw result show only with the technical details setting on.
+ * A coding agent's step opens onto what its computer stored instead.
+ */
+const toolCallDetailsView = ({
+  answerCitations,
+  failed,
+  hasRecoveredNote,
+  isLocalRun,
+  part,
+  showMcpExactCall,
+  showTechnicalDetails,
+  technical,
+}: {
+  answerCitations: ChatAnswerCitations | undefined;
+  failed: boolean;
+  hasRecoveredNote: boolean;
+  isLocalRun: boolean;
+  part: { input: unknown; name: string; output: unknown };
+  showMcpExactCall: boolean;
+  showTechnicalDetails: boolean;
+  /** Whether the call carries a script or an input to show. */
+  technical: boolean;
+}) => {
+  const hasOutput = part.output !== undefined;
+  const isCodeStep = isCodeToolName(part.name) && hasOutput;
+  const digest = isLocalRun
+    ? null
+    : stepDigestOf({
+        citations: answerCitations ?? NO_ANSWER_CITATIONS,
+        failed,
+        part,
+      });
+  const technicalDetails =
+    showTechnicalDetails && (showMcpExactCall || technical || hasOutput);
+  return {
+    // A code step with no ledger still opens, to say it kept none.
+    canExpand:
+      digest !== null ||
+      isCodeStep ||
+      isLocalRun ||
+      hasRecoveredNote ||
+      technicalDetails,
+    digest,
+    technicalDetails,
+  };
+};
 
 /** The header's label and elapsed time. The colour is set here, since the
  *  header button paints none of its own and the row owns the hover tint. */
@@ -808,22 +885,90 @@ const RecoveredStepDot = () => (
   </span>
 );
 
-/** What a step was given and returned, behind the row's disclosure. */
+/** What a step looked up and found, behind the row's disclosure; its code
+ *  and raw result only with the technical details setting on. */
 const ToolCallDetails = ({
   activeOrganizationId,
   codeToolSource,
+  digest,
   note,
   part,
   showMcpExactCall,
+  showTechnicalDetails,
   threadId,
 }: {
   activeOrganizationId: string;
   codeToolSource: string | undefined;
-  /** A plain line about the step, above its raw call and result. */
+  digest: StepDigest | null;
+  /** A plain line about the step, above what it found. */
   note: string | undefined;
   part: ToolPart;
   showMcpExactCall: boolean;
+  showTechnicalDetails: boolean;
   threadId: string | undefined;
+}) => {
+  const t = useTranslations();
+  const [technicalOpen, setTechnicalOpen] = useState(false);
+  return (
+    <div className="space-y-2 ps-3 pt-1 pb-2">
+      {note !== undefined && (
+        <p className="text-muted-foreground text-2xs leading-relaxed">{note}</p>
+      )}
+      {digest === null ? (
+        isCodeToolName(part.name) &&
+        part.output !== undefined && (
+          <p className="text-muted-foreground text-2xs leading-relaxed">
+            {t(STEP_DIGEST_NOT_RECORDED_KEY)}
+          </p>
+        )
+      ) : (
+        <ToolCallStepDigest digest={digest} />
+      )}
+      <LocalRunStepOutputDetails
+        activeOrganizationId={activeOrganizationId}
+        part={part}
+        threadId={threadId}
+      />
+      {showTechnicalDetails && (
+        <Collapsible onOpenChange={setTechnicalOpen} open={technicalOpen}>
+          <CollapsibleTrigger render={<Button size="xs" variant="muted" />}>
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform duration-150",
+                technicalOpen && "rotate-90",
+              )}
+              flip={!technicalOpen}
+              icon={ChevronRightIcon}
+            />
+            {t("chat.stepDigest.technicalDetails")}
+          </CollapsibleTrigger>
+          <CollapsiblePanel>
+            {/* Mounted only while open: a script and its raw result can be
+                long, and a closed section has nothing to show. */}
+            {technicalOpen && (
+              <ToolCallTechnicalDetails
+                codeToolSource={codeToolSource}
+                part={part}
+                showMcpExactCall={showMcpExactCall}
+              />
+            )}
+          </CollapsiblePanel>
+        </Collapsible>
+      )}
+    </div>
+  );
+};
+
+/** A step's call and raw result as the tool saw them, for people who build
+ *  with stella. */
+const ToolCallTechnicalDetails = ({
+  codeToolSource,
+  part,
+  showMcpExactCall,
+}: {
+  codeToolSource: string | undefined;
+  part: ToolPart;
+  showMcpExactCall: boolean;
 }) => {
   const t = useTranslations();
   const toolInput = getToolInput(part);
@@ -831,10 +976,7 @@ const ToolCallDetails = ({
   const codeToolLogs =
     isCodeToolName(part.name) && hasOutput ? getCodeToolLogs(part) : [];
   return (
-    <div className="space-y-1 ps-3 pt-1 pb-2">
-      {note !== undefined && (
-        <p className="text-muted-foreground text-2xs leading-relaxed">{note}</p>
-      )}
+    <div className="space-y-1 pt-1">
       {showMcpExactCall && (
         <ToolCallCodeBlock
           code={JSON.stringify({ input: toolInput, tool: part.name }, null, 2)}
@@ -872,17 +1014,12 @@ const ToolCallDetails = ({
       )}
       {hasOutput && (
         <ToolCallCodeBlock
-          code={JSON.stringify(part.output, null, 2)}
+          code={JSON.stringify(withoutChatStepLedger(part.output), null, 2)}
           label={t("chat.toolCall.output")}
           language="json"
           tone="result"
         />
       )}
-      <LocalRunStepOutputDetails
-        activeOrganizationId={activeOrganizationId}
-        part={part}
-        threadId={threadId}
-      />
     </div>
   );
 };
@@ -935,12 +1072,15 @@ export const ToolCallFailureDetails = ({
 }) => {
   const t = useTranslations();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // The raw error is written for the model; a person reads the line above,
+  // and only the technical details setting shows the rest.
+  const showRawError = usePresentationPrefs().prefs.chatTechnicalDetails;
   return (
     <div className="max-w-xl py-1 ps-3">
       <p className="text-destructive text-2xs leading-relaxed">
         {errorMessage}
       </p>
-      {rawErrorDetails !== undefined && (
+      {showRawError && rawErrorDetails !== undefined && (
         <div className="text-2xs">
           <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
             <CollapsibleTrigger render={<Button variant="plain" />}>

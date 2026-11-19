@@ -426,7 +426,9 @@ describe("a failed step stays calm when its turn went on past it", () => {
     expect(
       screen.getByText(csMessages.chat.toolCall.retriedDetail),
     ).toBeDefined();
-    expect(container.textContent.includes(SECTION_ERROR)).toBe(true);
+    // The raw error was written for the model; only the technical details
+    // setting shows it.
+    expect(container.textContent.includes(SECTION_ERROR)).toBe(false);
   });
 
   test("a failure that ended the turn keeps the failure styling and copy", () => {

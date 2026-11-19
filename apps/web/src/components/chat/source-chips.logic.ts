@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { isBusinessRegistrySlug } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
@@ -7,6 +7,11 @@ import {
   isCaseLawDecisionId,
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
+import { readChatStepLedger } from "@stll/api-contract/chat-step-ledger";
+import type {
+  ChatStepLedger,
+  ChatStepRef,
+} from "@stll/api-contract/chat-step-ledger";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { unwrapUntrustedContentFence } from "@stll/api-contract/untrusted-content-fence";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
@@ -24,6 +29,7 @@ import type {
   CaseLawDecisionSourceReference,
   ExternalSourceReference,
 } from "@/components/chat/external-source-store";
+import { isCodeToolName } from "@/components/chat/tool-call-title.logic";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { entityReferenceHref } from "@/components/references/reference.logic";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
@@ -554,6 +560,7 @@ export const collectSourceChipEntries = ({
   parts: ChatMessage["parts"];
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
 }): {
+  citations: ChatAnswerCitations;
   entries: SourceChipEntry[];
   uniqueExternalSources: ExternalSourceEntry[];
   uniqueSources: SourceDocumentEntry[];
@@ -570,6 +577,15 @@ export const collectSourceChipEntries = ({
     }
     const toolOutput = getToolOutput(part);
     collectSourceDocuments(toolOutput, sources);
+    // A code step names what its reads found in its ledger, whatever the
+    // script returned; its returned value is the model's and is not read.
+    const ledger = isCodeToolName(part.name)
+      ? readChatStepLedger(toolOutput)
+      : null;
+    if (ledger !== null) {
+      externalSources.push(...ledgerExternalSources(ledger));
+      continue;
+    }
     const mcpToolInfo = getMcpToolInfo(part);
     const toolExternalSources: ExternalSourceEntry[] = [];
     collectExternalSources(toolOutput, toolExternalSources);
@@ -594,25 +610,13 @@ export const collectSourceChipEntries = ({
     return true;
   });
   const uniqueExternalSources = dedupeExternalSources(externalSources);
-  const markdownDocuments = chatAnswerMarkdownDocuments({ parts });
-  const hrefs = new Set(markdownDocuments.flatMap(chatAnswerCitationHrefs));
-  const decisionIds = new Set(
-    chatAnswerDecisionTargets({
-      markdownDocuments,
-      sources: uniqueExternalSources,
-      appOrigins,
-    }).flatMap((target) => (target.type === "id" ? [target.decisionId] : [])),
-  );
+  const citations = chatAnswerCitations({
+    appOrigins,
+    parts,
+    sources: uniqueExternalSources,
+  });
   const isLinked = (urls: readonly (string | undefined)[]) =>
-    urls.some(
-      (url) =>
-        url !== undefined &&
-        [...hrefs].some(
-          (href) =>
-            citationUrlKey(url, appOrigins) ===
-            citationUrlKey(href, appOrigins),
-        ),
-    );
+    urlsAreCited(urls, citations);
   const entries: SourceChipEntry[] = [];
   for (const source of uniqueSources) {
     const canonicalHref =
@@ -635,13 +639,7 @@ export const collectSourceChipEntries = ({
     });
   }
   for (const source of uniqueExternalSources) {
-    const relation =
-      isLinked([source.url, source.sourceUrl]) ||
-      [source.caseLaw?.decisionId, source.caseLawDecision?.decisionId].some(
-        (decisionId) => decisionId !== undefined && decisionIds.has(decisionId),
-      )
-        ? "cited"
-        : "consulted";
+    const relation = sourceIsCited(source, citations) ? "cited" : "consulted";
     if (source.caseLaw !== undefined) {
       entries.push({
         relation,
@@ -654,8 +652,142 @@ export const collectSourceChipEntries = ({
     }
   }
   return {
+    citations,
     entries,
     uniqueExternalSources,
     uniqueSources,
   };
 };
+
+/** What an answer cites: the links its text makes, by link and decision. */
+export type ChatAnswerCitations = {
+  appOrigins: ReadonlySet<string>;
+  decisionIds: ReadonlySet<string>;
+  hrefKeys: ReadonlySet<string>;
+};
+
+/**
+ * The citations an answer's text makes. `sources` lets a decision link that
+ * names its publisher's page resolve to the stella decision it is.
+ */
+export const chatAnswerCitations = ({
+  appOrigins,
+  parts,
+  sources,
+}: {
+  appOrigins: ReadonlySet<string>;
+  parts: ChatMessage["parts"];
+  sources: readonly ExternalSourceEntry[];
+}): ChatAnswerCitations => {
+  const markdownDocuments = chatAnswerMarkdownDocuments({ parts });
+  return {
+    appOrigins,
+    hrefKeys: new Set(
+      markdownDocuments
+        .flatMap(chatAnswerCitationHrefs)
+        .map((href) => citationUrlKey(href, appOrigins)),
+    ),
+    decisionIds: new Set(
+      chatAnswerDecisionTargets({
+        markdownDocuments,
+        sources: [...sources],
+        appOrigins,
+      }).flatMap((target) => (target.type === "id" ? [target.decisionId] : [])),
+    ),
+  };
+};
+
+const urlsAreCited = (
+  urls: readonly (string | undefined)[],
+  citations: ChatAnswerCitations,
+): boolean =>
+  urls.some(
+    (url) =>
+      url !== undefined &&
+      citations.hrefKeys.has(citationUrlKey(url, citations.appOrigins)),
+  );
+
+/** Whether the answer cites `source`, by its links or its decision. */
+export const sourceIsCited = (
+  source: ExternalSourceEntry,
+  citations: ChatAnswerCitations,
+): boolean =>
+  urlsAreCited([source.url, source.sourceUrl], citations) ||
+  [source.caseLaw?.decisionId, source.caseLawDecision?.decisionId].some(
+    (decisionId) =>
+      decisionId !== undefined && citations.decisionIds.has(decisionId),
+  );
+
+const sanitizedOrUndefined = (url: string | null): string | undefined =>
+  url === null ? undefined : (sanitizeHref(url) ?? undefined);
+
+/**
+ * The source a step ledger item opens through, the shape the source tray
+ * and inline citations already open. A decision keeps its stella id, so it
+ * opens in the reader whatever its link says. A matter item carries no id,
+ * so it opens nowhere.
+ */
+export const stepRefSource = (ref: ChatStepRef): ExternalSourceEntry | null => {
+  switch (ref.type) {
+    case "decision": {
+      const url = sanitizeHref(ref.url ?? ref.sourceUrl ?? "");
+      if (!url) {
+        return null;
+      }
+      const courtShortCode = decisionCitationCourtLabel({
+        court: ref.court,
+        country: ref.country,
+        courtAbbreviation: ref.courtAbbreviation ?? undefined,
+        ecli: ref.ecli,
+      });
+      return {
+        url,
+        title: ref.caseNumber,
+        sourceUrl: sanitizedOrUndefined(ref.sourceUrl),
+        caseLawDecision: {
+          caseNumber: ref.caseNumber,
+          decisionId: ref.decisionId,
+          citation: {
+            court: ref.court,
+            courtShortCode,
+            decisionDate: ref.decisionDate,
+          },
+        },
+        caseLaw: {
+          caseNumber: ref.caseNumber,
+          court: ref.court,
+          courtShortCode,
+          decisionDate: ref.decisionDate,
+          decisionId: ref.decisionId,
+          holding: ref.summary ?? undefined,
+          tier: courtTierForSource(courtShortCode),
+        },
+      };
+    }
+    case "statute": {
+      const url = sanitizeHref(ref.url ?? ref.sourceUrl ?? "");
+      return url
+        ? {
+            url,
+            title: ref.label,
+            sourceUrl: sanitizedOrUndefined(ref.sourceUrl),
+          }
+        : null;
+    }
+    case "document":
+    case "matter":
+      return null;
+    default:
+      ref satisfies never;
+      return panic("Unhandled step ledger item");
+  }
+};
+
+/** Every source a step ledger found, for the answer's source tray. */
+const ledgerExternalSources = (ledger: ChatStepLedger): ExternalSourceEntry[] =>
+  ledger.calls.flatMap((call) =>
+    call.found.flatMap((ref) => {
+      const source = stepRefSource(ref);
+      return source === null ? [] : [source];
+    }),
+  );

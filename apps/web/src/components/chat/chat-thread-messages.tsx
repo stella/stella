@@ -77,6 +77,7 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
@@ -155,6 +156,7 @@ import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
+import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import {
@@ -2423,6 +2425,14 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
+  // What the settled answer cites, so an opened step can say which of its
+  // finds the answer used; a streaming answer has not settled what it cites.
+  const answerCitations = isTurnActive
+    ? undefined
+    : collectSourceChipEntries({
+        appOrigins: chatAppOrigins(),
+        parts: message.parts,
+      }).citations;
   // A coding agent's subagent shows as one group holding the steps it took.
   const toolCallEntries = toToolCallRenderEntries(renderEntries);
   const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
@@ -2498,6 +2508,7 @@ const AssistantMessageParts = ({
       return (
         <ToolCallCard
           activeOrganizationId={activeOrganizationId}
+          answerCitations={answerCitations}
           key={part.id}
           failureOutcome={failureOutcome}
           part={part}
@@ -2606,6 +2617,7 @@ const AssistantMessageParts = ({
         <ToolCallCard
           action={action}
           activeOrganizationId={activeOrganizationId}
+          answerCitations={answerCitations}
           key={part.id}
           failureOutcome={failureOutcome}
           part={part}
