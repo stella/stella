@@ -135,6 +135,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
   "apps/api/src/lib/data-export/**/*.ts",
+  "apps/api/src/lib/dictation/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",

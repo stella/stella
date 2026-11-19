@@ -1,0 +1,7 @@
+# Queueing kept provider transcripts for deletion
+
+Generated from `scripts/ownership/kept-transcript-deletions.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                    | Owner                                                 | Enforcement                                                               | Summary                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kept-transcript-deletions` — Queueing kept provider transcripts for deletion | `apps/api/src/lib/dictation/kept-transcript-store.ts` | import `@/api/lib/dictation/kept-transcript-store` (plus 2 allowed files) | The denied deletion table records the id of each transcript a transcription provider kept, before the answer returns, and drops it once the provider confirms the delete. The scheduler's deletion task retries the rest on its own connection. |
