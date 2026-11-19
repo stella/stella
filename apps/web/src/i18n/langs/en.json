@@ -2415,6 +2415,7 @@
       "save_document": "Save document",
       "save_matter": "Save matter",
       "save_playbook": "Save playbook",
+      "save_skill_package": "Save skill",
       "save_task": "Save task",
       "save_template": "Save template",
       "save_time_entry": "Save time entry",
@@ -2443,6 +2444,7 @@
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
       "user_message": "Sent while the agent was working",
+      "validate_skill_package": "Check skill",
       "web_search": "Searching the web"
     },
     "toolCall": {
@@ -4047,6 +4049,12 @@
     "versionCreatedDescription": "Version {versionNumber} was created. Everyone can keep editing.",
     "versionCreatedTitle": "Version created",
     "viewOnly": "View only"
+  },
+  "guidance": {
+    "notCaseLaw": "Guidance issued by a regulator. This is not a court decision.",
+    "openAtPublisher": "Open at the publisher",
+    "source": "Source: {attribution}",
+    "textUnavailable": "The text of this document is not available here. Read it at the publisher."
   },
   "guides": {
     "action": {

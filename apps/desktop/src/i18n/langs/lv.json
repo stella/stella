@@ -705,6 +705,11 @@
       "description": "Līdz 4 stundām garu diktofona failu, balss piezīmi vai sanāksmes ierakstu pārvērš tekstā.",
       "open": "Atvērt",
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz."
+    },
+    "preview": {
+      "label": "Līdz šim diktētais teksts",
+      "listening": "Klausās…",
+      "finishing": "Tiek pabeigts…"
     }
   },
   "shortcut": {

@@ -705,6 +705,11 @@
       "description": "Wandelt eine Diktiergerätdatei, ein Sprachmemo oder eine Besprechungsaufnahme von bis zu 4 Stunden in Text um.",
       "open": "Öffnen",
       "failed": "Das Fenster konnte nicht geöffnet werden. Versuchen Sie es erneut."
+    },
+    "preview": {
+      "label": "Bisher Diktiertes",
+      "listening": "Hört zu…",
+      "finishing": "Wird abgeschlossen…"
     }
   },
   "shortcut": {

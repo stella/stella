@@ -705,6 +705,11 @@
       "description": "Soubor z diktafonu, hlasovou poznámku nebo záznam jednání až do 4 hodin převede na text.",
       "open": "Otevřít",
       "failed": "Okno se nepodařilo otevřít. Zkuste to znovu."
+    },
+    "preview": {
+      "label": "Co jste zatím nadiktovali",
+      "listening": "Poslouchám…",
+      "finishing": "Dokončuji…"
     }
   },
   "shortcut": {

@@ -705,6 +705,11 @@
       "description": "Convierte en texto un archivo de dictáfono, una nota de voz o la grabación de una reunión de hasta 4 horas.",
       "open": "Abrir",
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo."
+    },
+    "preview": {
+      "label": "Lo que ha dictado hasta ahora",
+      "listening": "Escuchando…",
+      "finishing": "Terminando…"
     }
   },
   "shortcut": {

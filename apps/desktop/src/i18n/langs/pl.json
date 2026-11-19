@@ -705,6 +705,11 @@
       "description": "Zamienia na tekst plik z dyktafonu, notatkę głosową lub nagranie spotkania o długości do 4 godzin.",
       "open": "Otwórz",
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie."
+    },
+    "preview": {
+      "label": "Dotychczas podyktowany tekst",
+      "listening": "Słucham…",
+      "finishing": "Kończenie…"
     }
   },
   "shortcut": {

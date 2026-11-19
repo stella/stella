@@ -2415,6 +2415,7 @@
       "save_document": "Zapisz dokument",
       "save_matter": "Zapisz sprawę",
       "save_playbook": "Zapisz playbook",
+      "save_skill_package": "Zapisz umiejętność",
       "save_task": "Zapisz zadanie",
       "save_template": "Zapisz szablon",
       "save_time_entry": "Zapisz wpis czasu",
@@ -2443,6 +2444,7 @@
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
       "user_message": "Wysłano podczas pracy agenta",
+      "validate_skill_package": "Sprawdź umiejętność",
       "web_search": "Wyszukiwanie w sieci"
     },
     "toolCall": {
@@ -4047,6 +4049,12 @@
     "versionCreatedDescription": "Utworzono wersję {versionNumber}. Wszyscy mogą kontynuować edycję.",
     "versionCreatedTitle": "Wersja utworzona",
     "viewOnly": "Tylko do odczytu"
+  },
+  "guidance": {
+    "notCaseLaw": "Wytyczne wydane przez organ regulacyjny. To nie jest orzeczenie sądu.",
+    "openAtPublisher": "Otwórz u wydawcy",
+    "source": "Źródło: {attribution}",
+    "textUnavailable": "Tekst tego dokumentu nie jest tu dostępny. Przeczytaj go u wydawcy."
   },
   "guides": {
     "action": {

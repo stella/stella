@@ -705,6 +705,11 @@
       "description": "Converte em texto um arquivo de gravador, um memorando de voz ou a gravação de uma reunião de até 4 horas.",
       "open": "Abrir",
       "failed": "Não foi possível abrir a janela. Tente novamente."
+    },
+    "preview": {
+      "label": "O que você ditou até agora",
+      "listening": "Ouvindo…",
+      "finishing": "Finalizando…"
     }
   },
   "shortcut": {
