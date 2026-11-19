@@ -193,6 +193,21 @@ describe("the case-law identity canary", () => {
     });
   });
 
+  test("the seed search asks for court facets", async () => {
+    const seeds: unknown[] = [];
+    const recording: CallCaseLawTool = async (name, args) => {
+      if (name === "search_case_law" && args["court"] === undefined) {
+        seeds.push(args["facets"]);
+      }
+      return await deployment(exact)(name, args);
+    };
+    await sampleCaseLawIdentities(recording);
+    expect(seeds.length).toBeGreaterThan(0);
+    for (const facets of seeds) {
+      expect(facets).toContain("court");
+    }
+  });
+
   test("a country whose search is closed has nothing to sample", async () => {
     expect((await outcomeFor(exact, "AUT"))?.status).toBe("not_applicable");
   });

@@ -4,6 +4,7 @@ import { IntlProvider, useTranslations } from "use-intl";
 
 import { DialogProvider } from "@stll/ui/dialog";
 
+import { PendingTextIntlScope } from "@/components/pending-text";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
@@ -80,7 +81,9 @@ export const I18nProvider = ({ children }: PropsWithChildren) => {
       timeZone={timeZone}
     >
       <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
-        <DialogTranslations>{children}</DialogTranslations>
+        <PendingTextIntlScope>
+          <DialogTranslations>{children}</DialogTranslations>
+        </PendingTextIntlScope>
       </FormattingProvider>
     </IntlProvider>
   );

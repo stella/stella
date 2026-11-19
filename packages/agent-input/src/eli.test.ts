@@ -108,4 +108,47 @@ describe("legislation identifiers", () => {
       value: "https://www.e-sbirka.cz/eli/cz/sb/9999/1",
     });
   });
+
+  describe("works named by a URN", () => {
+    const URN_WORK = "urn:hu:magyar-kozlony:2013-evi-v-torveny";
+    const withUrns = (input: unknown): Normalized<string> =>
+      normalizeEli(input, {
+        hosts: HOSTS,
+        urnPrefixes: ["urn:hu:magyar-kozlony:"],
+        readCitation: (text) =>
+          text === "2013. évi V. törvény" ? URN_WORK : undefined,
+      });
+
+    test("a work URN under a known prefix is taken as it is", () => {
+      expect(withUrns(URN_WORK)).toEqual({ ok: true, value: URN_WORK });
+    });
+
+    test("a URN spelled in another case or padded reads as the stored one", () => {
+      expect(withUrns(" URN:HU:Magyar-Kozlony:2013-EVI-V-TORVENY ")).toEqual({
+        ok: true,
+        value: URN_WORK,
+        note: `Read " URN:HU:Magyar-Kozlony:2013-EVI-V-TORVENY " as "${URN_WORK}".`,
+      });
+    });
+
+    test("a citation the caller reads as a URN is read through it", () => {
+      expect(outcome(withUrns("2013. évi V. törvény"))).toBe(URN_WORK);
+    });
+
+    test.each([
+      "urn:hu:magyar-kozlony:",
+      "urn:hu:magyar-kozlony:2013. évi V. törvény",
+      "urn:hu:magyar-kozlony:2013-evi-v-torveny/sz_1",
+    ])("%s is not one work's URN and asks", (input) => {
+      expect(outcome(withUrns(input))).toBe(
+        "ask: Pass the eli a search result returned.",
+      );
+    });
+
+    test("without the prefix configured, a URN is not an ELI", () => {
+      expect(outcome(read(URN_WORK))).toBe(
+        "ask: Pass the eli a search result returned.",
+      );
+    });
+  });
 });
