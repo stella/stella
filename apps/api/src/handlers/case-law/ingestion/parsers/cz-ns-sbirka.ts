@@ -28,6 +28,7 @@
  */
 import { Result, TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
@@ -384,7 +385,11 @@ const reportEdition = (
       extent: "section",
       number,
       sectionPart: {
-        sectionNumber: Number(first.number),
+        sectionNumber: parseIntegerToken(first.number, {
+          sign: "unsigned",
+        }).unwrap(
+          "A matched subsection number contains at most six decimal digits",
+        ),
         firstBlock: secondChapter + 1,
         afterLastBlock: thirdChapter,
         collectionLabel: label.plainText,
