@@ -984,6 +984,14 @@
       "unreadable": "No se ha podido leer esta carpeta."
     }
   },
+  "keepAwake": {
+    "title": "Mantener activo",
+    "enabled": "Mantener este ordenador activo mientras trabajan los agentes",
+    "description": "Mientras un agente trabaja en este ordenador, no entra en reposo por inactividad, así que las tareas largas siguen en marcha. La pantalla puede seguir apagándose. Un portátil Mac entra en reposo de todos modos al cerrar la tapa.",
+    "onBattery": "También con batería",
+    "onBatteryDescription": "Si está desactivado, el ordenador entra en reposo como siempre cuando funciona con batería, aunque un agente esté trabajando.",
+    "errorSave": "No se ha podido guardar este ajuste. Inténtelo de nuevo."
+  },
   "transcribe": {
     "title": "Transcribir una grabación",
     "retry": "Intentar de nuevo",

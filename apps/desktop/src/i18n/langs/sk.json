@@ -984,6 +984,14 @@
       "unreadable": "Tento priečinok sa nepodarilo prečítať."
     }
   },
+  "keepAwake": {
+    "title": "Udržať v prevádzke",
+    "enabled": "Nechať počítač zapnutý, kým pracujú agenti",
+    "description": "Kým v tomto počítači pracuje agent, počítač pri nečinnosti nezaspí, takže dlhé úlohy dobehnú. Displej sa môže ďalej vypínať. Notebook Mac po zatvorení veka zaspí aj tak.",
+    "onBattery": "Aj na batérii",
+    "onBatteryDescription": "Keď je táto voľba vypnutá, počítač na batérii zaspáva ako zvyčajne, aj keď agent pracuje.",
+    "errorSave": "Toto nastavenie sa nepodarilo uložiť. Skúste to znova."
+  },
   "transcribe": {
     "title": "Prepísať nahrávku",
     "retry": "Skúsiť znova",

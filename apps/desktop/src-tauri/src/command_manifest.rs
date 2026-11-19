@@ -146,6 +146,8 @@ macro_rules! with_stella_commands {
       local_linked_folder_commands::local_linked_folders_get => "local_linked_folders_get",
       local_linked_folder_commands::local_linked_folders_pick => "local_linked_folders_pick",
       local_linked_folder_commands::local_linked_folders_remove => "local_linked_folders_remove",
+      keep_awake::keep_awake_get_settings => "keep_awake_get_settings",
+      keep_awake::keep_awake_set_settings => "keep_awake_set_settings",
       chatgpt_auth_commands::chatgpt_auth_get_status => "chatgpt_auth_get_status",
       chatgpt_auth_commands::chatgpt_auth_start => "chatgpt_auth_start",
       chatgpt_auth_commands::chatgpt_auth_cancel => "chatgpt_auth_cancel",
