@@ -8,12 +8,12 @@ import { LEAD_IN_MAX_LENGTH } from "@/components/references/citation-lead-in.log
  * citation reads to tell whether the answer already named its court
  * (`leadInNamesCourt`). React receives it as `data-lead-in`.
  */
-export const CITATION_LEAD_IN_PROPERTY = "dataLeadIn";
+const CITATION_LEAD_IN_PROPERTY = "dataLeadIn";
 export const CITATION_LEAD_IN_ATTRIBUTE = "data-lead-in";
 
 // Elements a sentence runs through; anything else (a paragraph, a list item,
 // a cell, a heading) ends the prose a link can be introduced by.
-const INLINE_ELEMENTS = new Set([
+const INLINE_ELEMENTS: ReadonlySet<string> = new Set([
   "abbr",
   "b",
   "bdi",
@@ -34,7 +34,7 @@ const INLINE_ELEMENTS = new Set([
   "u",
 ]);
 
-const SKIPPED_ELEMENTS = new Set(["code", "pre"]);
+const SKIPPED_ELEMENTS: ReadonlySet<string> = new Set(["code", "pre"]);
 
 type Parent = Root | Element;
 
