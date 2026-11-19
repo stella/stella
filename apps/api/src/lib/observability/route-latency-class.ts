@@ -376,6 +376,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/skills": "crud",
   "GET /v1/skills/:skillId": "crud",
   "GET /v1/skills/:skillId/comments": "crud",
+  "GET /v1/skills/:skillId/export": "crud",
   "GET /v1/skills/:skillId/proposals": "crud",
   "GET /v1/skills/:skillId/proposals/:proposalId": "crud",
   "GET /v1/skills/:skillId/revisions": "crud",

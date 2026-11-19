@@ -781,6 +781,10 @@
       "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
+      "id": "GET /v1/skills/:skillId/export",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
       "id": "GET /v1/skills/:skillId/proposals",
       "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },

@@ -19,6 +19,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const config = {
@@ -145,7 +146,7 @@ const exportSkill = createSafeRootHandler(
         ]),
         contentType: "application/zip",
         disposition: "attachment",
-        fileName: `${folder}.zip`,
+        fileName: sanitizeFilename(`${folder}.zip`),
       }),
     );
   },
