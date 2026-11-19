@@ -9,10 +9,7 @@ import { LAW_YEAR_BOUNDS } from "@stll/api-contract/law-year";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
-import {
-  isMagyarKozlonyCollection,
-  MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN,
-} from "@stll/api-contract/magyar-kozlony-designation";
+import { MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN } from "@stll/api-contract/magyar-kozlony-designation";
 import { STATUTE_ELI_IDENTITY_PATTERN } from "@stll/api-contract/statute-identity";
 import {
   STATUTE_LIST_SORT_KEY_KINDS,
@@ -49,10 +46,10 @@ import {
 } from "@/api/lib/custom-schema";
 import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
 import {
+  ACT_COLLECTION_PATTERN,
   ACT_NUMBER_PATTERN,
   actNumberCondition,
   actYearCondition,
-  ELI_COLLECTION_RE,
 } from "@/api/lib/legal-search/legislation-act-number";
 import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import {
@@ -116,11 +113,7 @@ export const listStatutesQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.maxLength(64),
-      v.check(
-        (collection) =>
-          ELI_COLLECTION_RE.test(collection) ||
-          isMagyarKozlonyCollection(collection),
-      ),
+      v.regex(new RegExp(ACT_COLLECTION_PATTERN.source, "u")),
     ),
   ),
   /** Calendar date whose applicable consolidation each work should return. */

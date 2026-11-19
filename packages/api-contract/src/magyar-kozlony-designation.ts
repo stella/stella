@@ -177,10 +177,14 @@ const slugOf = (text: string): string =>
 /** The series laws are numbered in, as a list filters by it. */
 export const MAGYAR_KOZLONY_LAW_COLLECTION = "torveny";
 
+const NUMBERED_COLLECTION_SOURCE = `[a-z0-9]+(?:-[a-z0-9]+)*-(?:${HUNGARIAN_NUMBERED_ACT_FORMS.join("|")})`;
 const NUMBERED_COLLECTION_RE = new RegExp(
-  `^[a-z0-9]+(?:-[a-z0-9]+)*-(?:${HUNGARIAN_NUMBERED_ACT_FORMS.join("|")})$`,
+  `^${NUMBERED_COLLECTION_SOURCE}$`,
   "u",
 );
+
+/** A Magyar Közlöny series key, unanchored: `torveny` or `korm-rendelet`. */
+export const MAGYAR_KOZLONY_COLLECTION_SOURCE = `(?:${MAGYAR_KOZLONY_LAW_COLLECTION}|${NUMBERED_COLLECTION_SOURCE})`;
 
 /**
  * The series an act is numbered in, as a list filters by it: `torveny` for

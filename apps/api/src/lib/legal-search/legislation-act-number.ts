@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
+  MAGYAR_KOZLONY_COLLECTION_SOURCE,
   MAGYAR_KOZLONY_WORK_URN_PREFIX,
   magyarKozlonyWorkPattern,
   magyarKozlonyYearPattern,
@@ -19,6 +20,12 @@ export const ACT_NUMBER_PATTERN = /^([0-9]{1,5})\/([0-9]{4})$/u;
 
 /** An ELI collection segment: `sb`, `zz`, `sm`. */
 export const ELI_COLLECTION_RE = /^[a-z0-9]{1,8}$/u;
+
+/** What a list may filter an act number by: an ELI collection or a Magyar Közlöny series. */
+export const ACT_COLLECTION_PATTERN = new RegExp(
+  `^(?:[a-z0-9]{1,8}|${MAGYAR_KOZLONY_COLLECTION_SOURCE})$`,
+  "u",
+);
 
 type ActNumberConditionOptions = {
   number: string;

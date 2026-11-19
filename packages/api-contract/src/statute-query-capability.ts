@@ -75,13 +75,8 @@ export type StatuteDefaultCollection<Country extends StatuteGazetteCountry> =
 /** Whether a supported country reads gazette numbers (`89/2012 Sb.`). */
 export const isStatuteGazetteCountry = (
   country: StatuteQueryCountry,
-): country is StatuteGazetteCountry => {
-  const capability: StatuteQueryCapability =
-    STATUTE_QUERY_CAPABILITIES[country];
-  return (
-    capability.type === "supported" && capability.grammar === "gazette_number"
-  );
-};
+): country is StatuteGazetteCountry =>
+  STATUTE_QUERY_CAPABILITIES[country].grammar === "gazette_number";
 
 /**
  * What the statute box can do for a country code as a caller holds it.
