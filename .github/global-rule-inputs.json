@@ -101,6 +101,8 @@
     "scripts/check-oxlint-test-timeouts.test.ts",
     "scripts/check-parser-versions.test.ts",
     "scripts/check-parser-versions.ts",
+    "scripts/check-patched-dependencies.test.ts",
+    "scripts/check-patched-dependencies.ts",
     "scripts/check-playwright-config-scope.test.ts",
     "scripts/check-playwright-config-scope.ts",
     "scripts/check-policy-evidence.test.ts",
