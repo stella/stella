@@ -137,8 +137,9 @@ const statuteProvisionVersion = {
 /**
  * read_provision_history. Source of truth: `handleReadProvisionHistoryTool`
  * (`legislation-tools.ts`) over `readProvisionHistoryHandler`. A version in
- * which the anchor is absent is dropped by that handler, so every item here
- * has an occurrence; whether its wording travels is a separate publisher
+ * which the anchor is absent is dropped by that handler, and one whose
+ * structure could not be read by the tool, so every item here has an
+ * occurrence; whether its wording travels is a separate publisher
  * permission, so the items are discriminated on the same `status` vocabulary
  * the batch provision read answers in.
  */

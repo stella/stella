@@ -101,6 +101,7 @@
     "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
+    "./landing-shell": "./src/components/landing-shell.tsx",
     "./document-mark": {
       "react-native": "./src/components/document-mark.native.tsx",
       "default": "./src/components/document-mark.tsx"

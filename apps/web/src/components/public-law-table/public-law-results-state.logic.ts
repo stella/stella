@@ -1,3 +1,5 @@
+import type { RouteState } from "@/routes/-route-pending-view";
+
 /**
  * Whether the results route holds a navigation until its rows arrive.
  *
@@ -26,12 +28,6 @@ export const publicLawLoadMode = ({
 }: PublicLawLoadModeInput): PublicLawLoadMode =>
   hasCachedPages || cause === "stay" ? "background" : "await";
 
-/**
- * Whether the router has this page's rows yet. Both renders are the same page:
- * pending is the page the URL describes, before any row exists.
- */
-export type PublicLawRouteState = "pending" | "loaded";
-
 /** What the results region shows while the page around it stays put. */
 export type PublicLawRowsPhase =
   /** There are no rows to draw: the grid stands in skeleton. */
@@ -42,7 +38,7 @@ export type PublicLawRowsPhase =
   | "rows";
 
 type PublicLawRowsPhaseInput = {
-  routeState: PublicLawRouteState;
+  routeState: RouteState;
   /** Whether the row query has yet to resolve anything for this search. */
   isLoading: boolean;
   /** Whether the rows on screen were kept from the previous search. */
