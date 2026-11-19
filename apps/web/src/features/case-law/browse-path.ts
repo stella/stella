@@ -5,8 +5,6 @@ import { CASE_LAW_BROWSE_MAX_PAGES } from "@stll/api-contract/case-law-browse-hu
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 import { Temporal } from "@stll/time";
 
-import type { getFormatter } from "@/i18n/i18n-store";
-
 import {
   publicCaseLawPageCountryFromParam,
   toCaseLawCountryParam,
@@ -191,7 +189,14 @@ export const caseLawBrowseDateRange = (
   };
 };
 
-type Formatter = ReturnType<typeof getFormatter>;
+/**
+ * The part of the page's formatter the labels use. Kept structural so the
+ * repo scripts that read the crawl policy can type-check this module without
+ * the web app's path aliases.
+ */
+type Formatter = {
+  dateTime: (value: number, options: Intl.DateTimeFormatOptions) => string;
+};
 
 /** A calendar day as the instant its UTC midnight is, for the formatter. */
 const utcDay = (year: number, month: number, day = 1): number =>
