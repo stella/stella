@@ -4,7 +4,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
-import type { DataBoxDeliveryEvent, DataBoxEnvelope } from "@stll/api-contract/data-box";
+import type {
+  DataBoxDeliveryEvent,
+  DataBoxEnvelope,
+} from "@stll/api-contract/data-box";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -16,6 +19,7 @@ import {
   fields,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { withDataBoxDirection } from "@/api/lib/email/correspondence/data-box/direction";
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
@@ -71,7 +75,7 @@ const readFiledAttachments = async ({
   // An entity link opens its current file. Multiple candidates or an edited file
   // cannot identify the bytes this envelope contained.
   // Registration is per entity. The payload hash binds these ordinals to the selected version.
-  const links = await tx
+  const query = tx
     .select({
       ordinal: correspondenceAttachments.ordinal,
       entityId: correspondenceAttachments.entityId,
@@ -123,15 +127,15 @@ const readFiledAttachments = async ({
         eq(correspondence.channel, "data_box"),
         eq(correspondence.contentHash, message.contentHash),
       ),
-    )
-    .limit(FILED_ATTACHMENT_ROW_CAP + 1);
+    );
+  const links = await readBounded(query, FILED_ATTACHMENT_ROW_CAP);
   // More rows than two files per member cannot name one file per ordinal.
-  if (links.length > FILED_ATTACHMENT_ROW_CAP) {
+  if (links.type === "overflow") {
     return new Map<number, SafeId<"entity">>();
   }
   const unique = new Map<number, SafeId<"entity">>();
   const seen = new Set<number>();
-  for (const { ordinal, entityId, hash, encrypted } of links) {
+  for (const { ordinal, entityId, hash, encrypted } of links.rows) {
     if (seen.has(ordinal)) {
       unique.delete(ordinal);
     } else if (!encrypted && hash === message.files.at(ordinal)?.sha256Hex) {
@@ -218,44 +222,46 @@ export const readDataBoxFile = async (
       readEmbeddedFiles = true;
     }
   }
-  return await deliver(async (tx): Promise<Result<DataBoxFileRead, HandlerError>> => {
-    const boxIds = await readOrganizationDataBoxIds(tx, organizationId);
-    const envelope = withDataBoxDirection(doc.envelope, boxIds);
-    const byOrdinal =
-      doc.kind === "message"
-        ? await readFiledAttachments({
-            tx,
-            sourceEntityId: entityId,
-            workspaceId,
-            message: doc,
-          })
-        : new Map<number, SafeId<"entity">>();
-    if (
-      purpose === "agent" &&
-      doc.kind === "message" &&
-      !readEmbeddedFiles &&
-      byOrdinal.size !== doc.files.length
-    ) {
-      return legalSourceChanged();
-    }
-    if (doc.kind === "receipt") {
+  return await deliver(
+    async (tx): Promise<Result<DataBoxFileRead, HandlerError>> => {
+      const boxIds = await readOrganizationDataBoxIds(tx, organizationId);
+      const envelope = withDataBoxDirection(doc.envelope, boxIds);
+      const byOrdinal =
+        doc.kind === "message"
+          ? await readFiledAttachments({
+              tx,
+              sourceEntityId: entityId,
+              workspaceId,
+              message: doc,
+            })
+          : new Map<number, SafeId<"entity">>();
+      if (
+        purpose === "agent" &&
+        doc.kind === "message" &&
+        !readEmbeddedFiles &&
+        byOrdinal.size !== doc.files.length
+      ) {
+        return legalSourceChanged();
+      }
+      if (doc.kind === "receipt") {
+        return Result.ok({
+          kind: doc.kind,
+          annotation: doc.annotation,
+          envelope,
+          events: doc.events,
+          text,
+        } as const);
+      }
       return Result.ok({
         kind: doc.kind,
         annotation: doc.annotation,
         envelope,
-        events: doc.events,
         text,
+        files: doc.files.map(({ fileName }, index) => ({
+          fileName,
+          entityId: byOrdinal.get(index) ?? null,
+        })),
       } as const);
-    }
-    return Result.ok({
-      kind: doc.kind,
-      annotation: doc.annotation,
-      envelope,
-      text,
-      files: doc.files.map(({ fileName }, index) => ({
-        fileName,
-        entityId: byOrdinal.get(index) ?? null,
-      })),
-    } as const);
-  });
+    },
+  );
 };

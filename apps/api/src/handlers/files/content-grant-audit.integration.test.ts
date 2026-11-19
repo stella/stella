@@ -890,7 +890,9 @@ describe("CAdES file delivery", () => {
     expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array(bytes),
+    );
     await expectOneContentRow(file.entityId, {
       action: "access",
       metadata: { format: "cades", fieldId: file.fieldId },

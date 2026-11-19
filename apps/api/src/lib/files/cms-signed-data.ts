@@ -143,10 +143,11 @@ const certificateSubjectKey = (certificate: pkijs.Certificate) => {
   const extensions = certificate.extensions?.filter(
     ({ extnID }) => extnID === SUBJECT_KEY_IDENTIFIER_OID,
   );
-  if (extensions?.length !== 1) {
+  const identifier = extensions?.at(0);
+  if (identifier === undefined || extensions?.length !== 1) {
     return null;
   }
-  const extension = extensions[0].extnValue.valueBlock.valueHexView;
+  const extension = identifier.extnValue.valueBlock.valueHexView;
   const parsed = Result.try(() => asn1js.fromBER(extension));
   if (parsed.isErr() || parsed.value.offset !== extension.byteLength) {
     return null;
@@ -161,16 +162,18 @@ const certificateSubjectKey = (certificate: pkijs.Certificate) => {
 
 const readSigners = (signedData: pkijs.SignedData): CmsSigner[] => {
   const certificates = new Map<string, pkijs.Certificate | null>();
-  for (const certificate of signedData.certificates ?? []) {
-    if (!(certificate instanceof pkijs.Certificate)) {
-      continue;
-    }
-    for (const key of [
-      issuerAndSerialKey(certificate.issuer, certificate.serialNumber),
-      certificateSubjectKey(certificate),
-    ]) {
-      if (key !== null) {
-        certificates.set(key, certificates.has(key) ? null : certificate);
+  if (signedData.certificates !== undefined) {
+    for (const certificate of signedData.certificates) {
+      if (!(certificate instanceof pkijs.Certificate)) {
+        continue;
+      }
+      for (const key of [
+        issuerAndSerialKey(certificate.issuer, certificate.serialNumber),
+        certificateSubjectKey(certificate),
+      ]) {
+        if (key !== null) {
+          certificates.set(key, certificates.has(key) ? null : certificate);
+        }
       }
     }
   }

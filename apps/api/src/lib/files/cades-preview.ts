@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
+import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
@@ -111,10 +112,13 @@ export const readCadesPreview = async (
   return parsed.success
     ? Result.ok(parsed.output)
     : Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Invalid response from the CAdES reader",
-        }),
+        classifyFailure(
+          new HandlerError({
+            status: 500,
+            message: "Invalid response from the CAdES reader",
+          }),
+          "response_invalid",
+        ),
       );
 };
 
@@ -128,10 +132,13 @@ export const readCadesPdf = async (
   }
   if (!declaredMimeMatchesMagic(PDF_MIME_TYPE, result.value)) {
     return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Invalid PDF response from the CAdES reader",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 500,
+          message: "Invalid PDF response from the CAdES reader",
+        }),
+        "response_invalid",
+      ),
     );
   }
   return result;

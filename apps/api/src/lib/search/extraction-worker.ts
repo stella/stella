@@ -18,7 +18,7 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { panic, Result } from "better-result";
+import { panic, Result, type UnhandledException } from "better-result";
 import type * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
@@ -311,7 +311,10 @@ type LegalTextReadOptions = {
 };
 
 type LegalTextReadError =
-  FileScanFailedError | FileScanRejectedError | P7mParseError;
+  | FileScanFailedError
+  | FileScanRejectedError
+  | P7mParseError
+  | UnhandledException;
 
 const extractDataBoxText = async ({
   fileBytes,
@@ -544,7 +547,7 @@ const extractCadesPayloadText = async (file: ScannedFile, maxChars: number) => {
         return Result.ok(null);
     }
   }
-  throw content.error;
+  return Result.err(content.error);
 };
 
 type CadesWorkerOptions = {
@@ -564,26 +567,26 @@ const writeCadesPreview = async ({
   if (payload.isErr()) {
     switch (payload.error._tag) {
       case "P7mParseError":
-        return CADES_WORKER_EXIT.unreadable;
+        return Result.ok(CADES_WORKER_EXIT.unreadable);
       case "FileScanRejectedError":
-        return CADES_WORKER_EXIT.rejected;
+        return Result.ok(CADES_WORKER_EXIT.rejected);
       case "FileScanFailedError":
-        throw payload.error;
+        return Result.err(payload.error);
     }
   }
   const { file, layers } = payload.value;
   const bytes = new Uint8Array(file.bytes);
   if (mode === CADES_WORKER_MODE.pdf) {
     if (file.mimeType !== PDF_MIME_TYPE) {
-      return CADES_WORKER_EXIT.unreadable;
+      return Result.ok(CADES_WORKER_EXIT.unreadable);
     }
     await writeWorkerStdout(bytes);
-    return 0;
+    return Result.ok(0);
   }
 
   const content = await extractCadesPayloadText(file, maxChars);
   if (content.isErr()) {
-    throw content.error;
+    return content;
   }
   const preview = {
     fileName: sanitizeFilename(file.fileName),
@@ -592,8 +595,17 @@ const writeCadesPreview = async ({
     text: content.value ?? "",
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
-  return 0;
+  return Result.ok(0);
 };
+
+function exitWithWorkerError(error: unknown): never {
+  const errorClass = getWorkerErrorClass(error);
+  const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
+  process.stderr.write(
+    `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
+  );
+  process.exit(1);
+}
 
 // ── Main ──────────────────────────────────────────────────
 
@@ -609,14 +621,16 @@ try {
     mimeType === CADES_WORKER_MODE.preview ||
     mimeType === CADES_WORKER_MODE.pdf
   ) {
-    process.exit(
-      await writeCadesPreview({
-        mode: mimeType,
-        fileBytes,
-        fileName: process.argv[4] ?? "",
-        maxChars,
-      }),
-    );
+    const preview = await writeCadesPreview({
+      mode: mimeType,
+      fileBytes,
+      fileName: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
   }
   const result = await extract({
     fileBytes,
@@ -625,22 +639,12 @@ try {
     includeContainerAttachments: process.argv[4] === STANDALONE_ATTACHMENT_MODE,
   });
   if (result.isErr()) {
-    const errorClass = getWorkerErrorClass(result.error);
-    const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
-    process.stderr.write(
-      `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
-    );
-    process.exit(1);
+    exitWithWorkerError(result.error);
   }
   if (result.value) {
     await writeWorkerStdout(result.value);
   }
   process.exit(0);
 } catch (error) {
-  const errorClass = getWorkerErrorClass(error);
-  const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
-  process.stderr.write(
-    `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
-  );
-  process.exit(1);
+  exitWithWorkerError(error);
 }

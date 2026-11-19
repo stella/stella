@@ -12,7 +12,12 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  readBodyJsonWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -20,6 +25,7 @@ import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { PDF_MIME } from "@/lib/consts";
 import {
   APIError,
+  type ApiResponse,
   shouldRetryAPIRequest,
   unwrapApiResponse,
 } from "@/lib/errors/api";
@@ -273,15 +279,46 @@ export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
         apiUrl(
           `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
         ),
-        { credentials: "include", signal, timeoutMs: 60_000 },
+        {
+          credentials: "include",
+          signal,
+          timeout: { type: "headers", ms: 60_000 },
+        },
       );
-      if (!response.ok || response.headers.get("content-type") !== PDF_MIME) {
-        throw new APIError({
-          status: response.status,
-          message: "Failed to preview PDF inside signed file",
+      let result: ApiResponse<ArrayBuffer>;
+      if (!response.ok) {
+        const value = await readBodyJsonWithIdleDeadline(response, {
+          idleMs: 30_000,
+          maxBytes: 64 * 1024,
+          signal,
         });
+        result = { data: null, error: { status: response.status, value } };
+      } else if (response.headers.get("content-type") !== PDF_MIME) {
+        await Promise.allSettled([response.body?.cancel()]);
+        result = {
+          data: null,
+          error: {
+            status: 502,
+            value: {
+              message: "Invalid PDF response from the signed file preview",
+            },
+          },
+        };
+      } else {
+        const bytes = await readBodyWithIdleDeadline(response, {
+          idleMs: 30_000,
+          maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+          signal,
+        });
+        result = {
+          data:
+            bytes.buffer instanceof ArrayBuffer
+              ? bytes.buffer
+              : new Uint8Array(bytes).buffer,
+          error: null,
+        };
       }
-      return await response.arrayBuffer();
+      return unwrapApiResponse(result);
     },
   });
 
