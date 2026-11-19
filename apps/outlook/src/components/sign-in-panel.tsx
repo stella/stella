@@ -34,7 +34,7 @@ const FAILURE_MESSAGE = {
 
 /**
  * Signed out: the stella sign-in every app shares (the web's auth layout,
- * apps/web/src/routes/auth/route.tsx, and the mobile sign-in,
+ * apps/web/src/styles/app.css, and the mobile sign-in,
  * apps/mobile/src/app/sign-in.tsx): the wordmark, the
  * light headline and caption over the auth backdrop, and the sign-in
  * button with the terms under it, at the pane's width.

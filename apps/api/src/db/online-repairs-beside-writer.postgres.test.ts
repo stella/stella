@@ -65,6 +65,8 @@ const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
 const VAT_ID = "CZ12345678";
 /** An offline revision committed with the fault its record stores. */
 const OFFLINE_COMMITTED_INTENT_INSERT = `INSERT INTO corpus_index_projection_intents (id, family, generation, entity_id, epoch, fingerprint, index_id, status, append_started_at, append_committed_at, append_publish_barrier_at, append_delivery, append_request_id, append_request_revision_count, expected_document_count, append_fault) VALUES ('${ID}', 'case_law', 'case_law_v1', '${ID_2}', 1, repeat('a', 64), 'i', 'append_committed', now(), now(), now(), 'offline_indexer', '${ID_3}', 1, 1, 'none')`;
+/** A projection state blocked under the failure kind the replaced check admits. */
+const BLOCKED_PROJECTION_STATE_INSERT = `INSERT INTO corpus_index_projection_states (family, generation, entity_id, desired_action, desired_epoch, desired_fingerprint, desired_index_id, work_status, failure_attempts, last_failure_kind, last_failure_message) VALUES ('case_law', 'case_law_v1', '${ID_2}', 'upsert', 1, repeat('a', 64), 'i', 'blocked', 1, 'document_language_undeclared', 'fixture')`;
 /** A citation-form rule already holding its typed kind and neutral polarity. */
 const POLARITY_FORM_RULE_INSERT = `INSERT INTO case_law_polarity_rules (id, pattern, polarity, language, kind) VALUES ('${ID}', 'fixture', 'neutral', 'cs', 'form')`;
 /** A citation carrying every classifier provenance column at a valid value. */
@@ -572,6 +574,11 @@ const SEEDS = {
     "corpus_index_projection_intents",
     "corpus_index_projection_intents_append_fault_shape",
     OFFLINE_COMMITTED_INTENT_INSERT,
+  ),
+  corpus_index_projection_states_failure_kind_values: noRowSeed(
+    "corpus_index_projection_states",
+    "corpus_index_projection_states_failure_kind_values",
+    BLOCKED_PROJECTION_STATE_INSERT,
   ),
   "entity-feature-row-gates": {
     kind: "row-work",

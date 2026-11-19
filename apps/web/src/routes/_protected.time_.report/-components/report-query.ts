@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import {
   TIME_ENTRY_REPORT_TOO_LARGE_CODE,
   type TimeEntryReport,
@@ -9,6 +10,7 @@ import {
 
 import { api } from "@/lib/api";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 import type { ReportRange } from "./report.logic";
 
@@ -29,19 +31,25 @@ export const timeReportOptions = (
   userId: string,
   filter: ReportFilter,
 ) =>
-  queryOptions({
-    queryKey: ["timeReport", organizationId, userId, filter],
-    queryFn: async ({ signal }): Promise<TimeReportResult> => {
-      const response = await api["time-entries"].report.get({
-        query: filter,
-        fetch: { signal },
-      });
-      if (
-        response.error !== null &&
-        toAPIError(response.error).code === TIME_ENTRY_REPORT_TOO_LARGE_CODE
-      ) {
-        return { type: "too-large" };
-      }
-      return { type: "report", report: unwrapApiResponse(response) };
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: ["timeReport", organizationId, userId, filter],
+      queryFn: async ({ signal }): Promise<TimeReportResult> => {
+        const response = await api["time-entries"].report.get({
+          query: filter,
+          fetch: { signal },
+        });
+        if (
+          response.error !== null &&
+          toAPIError(response.error).code === TIME_ENTRY_REPORT_TOO_LARGE_CODE
+        ) {
+          return { type: "too-large" };
+        }
+        return { type: "report", report: unwrapApiResponse(response) };
+      },
+    }),
+    {
+      resources: [RESOURCE_TYPE.TIME_ENTRY],
+      scope: { type: "organization", organizationId, userId },
     },
-  });
+  );

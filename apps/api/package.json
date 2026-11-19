@@ -41,6 +41,7 @@
     "canary:ai-provider:cassette": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/ai-provider-cassette-probe.ts",
     "record:provider-cassettes": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/record-provider-cassettes.ts",
     "canary:mcp": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example src/scripts/mcp-canary.ts",
+    "incident:verify": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/mcp-incident-verify.ts",
     "mcp:surface-baseline": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/mcp-surface-baseline.ts",
     "mcp:surface-token-calibration": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/mcp-surface-token-calibration.ts",
     "bench:case-law-ranked-arms": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example scripts/case-law-ranked-arm-latency.ts",

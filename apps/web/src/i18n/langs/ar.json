@@ -1233,6 +1233,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -2124,6 +2131,7 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
@@ -2230,7 +2238,6 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
-      "harnessModels": "نماذج {harness}",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2240,7 +2247,6 @@
       "localFolderSelection": "حاسوبك · {harness} · {folder}",
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
-      "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
@@ -2314,7 +2320,6 @@
     "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
-    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
@@ -2325,7 +2330,6 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
-    "tabToAsk": "→ للسؤال: «{prompt}»",
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",
@@ -2749,6 +2753,7 @@
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
+    "downloadOriginal": "تنزيل الملف الأصلي",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",
       "droppedOn": "{count, plural, zero {تم إفلات {itemName} على {destinationName}.} one {تم إفلات {itemName} على {destinationName}.} two {تم إفلات {itemName} على {destinationName}.} few {تم إفلات {itemName} على {destinationName}.} many {تم إفلات {itemName} على {destinationName}.} other {تم إفلات {itemName} على {destinationName}.}}",
@@ -3336,6 +3341,8 @@
       "contact": "جهة الاتصال: {name}",
       "deliveredAt": "سُلّمت إلى الصندوق",
       "delivery": "التسليم",
+      "deliveryEvents": "سجلّ التسليم",
+      "deliveryReceipt": "إيصال التسليم",
       "directionUnknown": "الاتجاه غير معروف",
       "messageId": "معرّف الرسالة",
       "moreContacts": "هناك جهات اتصال أخرى مرتبطة بصندوق البيانات هذا.",
@@ -3348,6 +3355,8 @@
       "sent": "مُرسلة",
       "statedInFile": "رسالة صندوق البيانات (كما وردت في الملف)",
       "toHands": "لعناية {name}",
+      "unlinkedFiles": "لفتح المرفقات التي تظهر من دون رابط، نزّل ملف ZFO الأصلي.",
+      "unreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "uploaded": "رسالة صندوق بيانات مرفوعة"
     },
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",

@@ -1009,6 +1009,14 @@
       "unreadable": "Dieser Ordner konnte nicht gelesen werden."
     }
   },
+  "keepAwake": {
+    "title": "Wach halten",
+    "enabled": "Diesen Computer wach halten, während Agenten arbeiten",
+    "description": "Solange ein Coding-Agent auf diesem Computer arbeitet, geht er bei Inaktivität nicht in den Ruhezustand, damit lange Aufgaben weiterlaufen. Der Bildschirm kann sich weiterhin ausschalten. Ein Mac-Notebook schläft trotzdem ein, wenn Sie den Deckel schließen.",
+    "onBattery": "Auch im Akkubetrieb",
+    "onBatteryDescription": "Ist dies aus, geht der Computer im Akkubetrieb wie gewohnt in den Ruhezustand, auch während ein Agent arbeitet.",
+    "errorSave": "Diese Einstellung konnte nicht gespeichert werden. Versuchen Sie es erneut."
+  },
   "transcribe": {
     "title": "Aufnahme transkribieren",
     "retry": "Erneut versuchen",

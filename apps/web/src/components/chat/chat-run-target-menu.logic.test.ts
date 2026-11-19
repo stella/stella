@@ -20,7 +20,6 @@ import {
   localRunTargetFor,
   localRunTargetState,
   permissionView,
-  reasoningEffortChoices,
   runTargetValue,
   sameRunTarget,
   withRunFolder,
@@ -275,23 +274,6 @@ describe("the reasoning effort choice", () => {
       { id: "haiku", label: "Haiku", reasoningEfforts: [] },
     ],
   } as const satisfies Extract<ChatLocalHarnessOption, { state: "ready" }>;
-
-  test("offers the selected model's efforts, and nothing for a model without a choice, a cloud turn or a harness that cannot run", () => {
-    expect(reasoningEffortChoices(CLAUDE, [withEfforts])).toEqual([
-      "low",
-      "high",
-      "max",
-    ]);
-    expect(
-      reasoningEffortChoices({ ...CLAUDE, model: "haiku" }, [withEfforts]),
-    ).toBeNull();
-    expect(reasoningEffortChoices({ kind: "cloud" }, [withEfforts])).toBeNull();
-    expect(
-      reasoningEffortChoices(CLAUDE, [
-        { harness: "claude-code", state: "offline" },
-      ]),
-    ).toBeNull();
-  });
 
   test("a picked model keeps the effort it offers, and leaves one it lacks to the harness", () => {
     const pick = (
@@ -605,18 +587,19 @@ describe("a linked folder", () => {
     };
     const target = inFolder(folderComputer);
 
-    expect(
-      reasoningEffortChoices(
-        target,
-        chatLocalHarnessOptionsFor(both, target) ?? [],
-      ),
-    ).toEqual(["low"]);
-    expect(
-      reasoningEffortChoices(
-        LOCAL,
-        chatLocalHarnessOptionsFor(both, LOCAL) ?? [],
-      ),
-    ).toEqual(["low", "high"]);
+    // The model picker lists the efforts of the options read here.
+    const effortsOf = (options: ChatLocalHarnessOption[] | null) => {
+      const codex = options?.find(({ harness }) => harness === "codex");
+      return codex?.state === "ready"
+        ? codex.models.map(({ reasoningEfforts }) => reasoningEfforts)
+        : null;
+    };
+    expect(effortsOf(chatLocalHarnessOptionsFor(both, target))).toEqual([
+      ["low"],
+    ]);
+    expect(effortsOf(chatLocalHarnessOptionsFor(both, LOCAL))).toEqual([
+      ["low", "high"],
+    ]);
   });
 
   test("stays with the chat when another model is picked, and differs from the chat's own folder", () => {

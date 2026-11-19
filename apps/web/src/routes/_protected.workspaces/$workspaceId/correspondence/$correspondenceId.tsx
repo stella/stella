@@ -1,19 +1,19 @@
 import type { ReactNode } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { openEntityInInspector } from "@/components/chat/entity-open";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { CorrespondenceAttachments } from "@/features/correspondence/correspondence-attachments";
+import { DataBoxEnvelope } from "@/features/correspondence/data-box-envelope";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { detached } from "@/lib/detached";
 import { loadRouteResource } from "@/lib/errors/route-resource";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -26,12 +26,10 @@ import {
 } from "@/lib/workspaces/queries/correspondence";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
-import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceAssigneeField } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
-import { DataBoxEnvelope } from "@/routes/_protected.workspaces/$workspaceId/-components/data-box-envelope";
 import { UploadedSource } from "@/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
@@ -56,7 +54,6 @@ export const Route = createFileRoute(
 
 function CorrespondenceDetailPage() {
   const t = useTranslations();
-  const router = useRouter();
   const format = useFormatter();
   const { workspaceId, correspondenceId } = Route.useParams({
     select: (params) => ({
@@ -222,52 +219,14 @@ function CorrespondenceDetailPage() {
             </section>
           )}
 
-          {attachments.length > 0 && (
-            <section className="rounded-lg border p-4">
-              <h2 className="mb-3 text-sm font-medium">
-                {t("emailViewer.attachments")}
-              </h2>
-              <ul className="divide-y">
-                {attachments.map((attachment) => (
-                  <li
-                    className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
-                    key={attachment.entityId}
-                  >
-                    <Button
-                      className="min-w-0"
-                      onClick={() =>
-                        detached(
-                          openEntityInInspector({
-                            documentOnScreen: getCurrentWorkspaceDocument(
-                              router.state.matches,
-                            ),
-                            entityId: attachment.entityId,
-                            label: attachment.filename,
-                            workspaceId,
-                          }),
-                          "correspondence.open-attachment",
-                        )
-                      }
-                      size="sm"
-                      type="button"
-                      variant="link"
-                    >
-                      <TruncatedText dir="auto" render={<bdi />}>
-                        {attachment.filename}
-                      </TruncatedText>
-                    </Button>
-                    <span className="text-muted-foreground text-xs">
-                      {format.number(attachment.byteSize, {
-                        style: "unit",
-                        unit: "byte",
-                        unitDisplay: "short",
-                      })}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          <CorrespondenceAttachments
+            files={attachments.map(({ entityId, filename, byteSize }) => ({
+              entityId,
+              fileName: filename,
+              byteSize,
+            }))}
+            workspaceId={workspaceId}
+          />
 
           {filers.length > 0 && (
             <section className="rounded-lg border p-4">

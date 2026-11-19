@@ -321,6 +321,32 @@ resources live. Terse and factual, under hard character budgets asserted in
 `instructions.test.ts` (the anonymized and law variants drop the feedback
 pointer, because neither surface carries the tools).
 
+## Verify a reported tool failure
+
+Run the verifier before escalating a tool failure or schema mismatch. Set
+`MCP_CANARY_TOKEN` to a bearer token for the target API. The command lists the
+tools afresh and executes the requested call once, so use a read-only
+reproduction when possible.
+
+```sh
+bun run incident:verify --tool search_case_law --args '{"query":"náhrada škody"}'
+```
+
+The target defaults to `https://api.stll.app`. To use `--base-url` for another
+deployment, set `MCP_CANARY_CONFIGURED_BASE_URL` to that API origin and use its
+credential. Pass `--stale-list path/to/tools-list.json` to compare against the
+reporter's saved list. Relative paths start at the repository root. Otherwise
+the command looks for the prior stable tag's registry snapshot in local Git. A missing snapshot leaves only the fresh
+result available. The evidence includes the server version and commit, schema
+verdicts, and the latest canary run if `gh` can read it.
+
+| Classification        | Exit | Meaning                                                                               |
+| --------------------- | ---- | ------------------------------------------------------------------------------------- |
+| `ALL CLIENTS BROKEN`  | 1    | The fresh probe could not list the tool or its result failed the advertised schema.   |
+| `STALE SESSIONS ONLY` | 2    | The fresh response passes and the earlier schema rejects that same result.            |
+| `NOT REPRODUCED`      | 0    | The fresh call works, and no mismatch was found against the available earlier schema. |
+| `SERVER ERROR`        | 3    | The call returned an error or setup prevented the probe.                              |
+
 ## Surface size
 
 `apps/api/mcp-surface-baseline.json` holds one row per tool and audience (the

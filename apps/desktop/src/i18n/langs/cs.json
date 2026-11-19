@@ -1009,6 +1009,14 @@
       "unreadable": "Tuto složku se nepodařilo přečíst."
     }
   },
+  "keepAwake": {
+    "title": "Udržet v provozu",
+    "enabled": "Nechat počítač vzhůru, dokud pracují agenti",
+    "description": "Dokud v tomto počítači pracuje agent, počítač při nečinnosti neusne, takže dlouhé úlohy doběhnou. Displej se může dál vypínat. Notebook Mac po zavření víka usne i tak.",
+    "onBattery": "I na baterii",
+    "onBatteryDescription": "Když je tato volba vypnutá, počítač na baterii usíná jako obvykle, i když agent pracuje.",
+    "errorSave": "Toto nastavení se nepodařilo uložit. Zkuste to znovu."
+  },
   "transcribe": {
     "title": "Přepsat nahrávku",
     "retry": "Zkusit znovu",

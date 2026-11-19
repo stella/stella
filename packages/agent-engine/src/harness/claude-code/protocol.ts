@@ -391,6 +391,8 @@ export type ClaudeHostControlRequest =
   | "get_usage"
   | "mcp_set_servers"
   | "set_permission_mode"
+  | "set_model"
+  | "apply_flag_settings"
   | "stop_task";
 
 /**

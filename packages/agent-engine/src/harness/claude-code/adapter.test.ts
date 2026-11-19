@@ -1362,6 +1362,43 @@ describe("Claude Code adapter over stream-json stdio", () => {
       "start_rejected",
     );
     expect(harness.received().map(({ type }) => type)).not.toContain("user");
+    // A refusal is an answer: the CLI is not started again.
+    expect(harness.startups()).toHaveLength(1);
+  });
+
+  test("a start too slow for its deadline is tried once more, and the turn runs", async () => {
+    for (const scenario of ["slow_first_start", "slow_first_mcp"] as const) {
+      const harness = harnessFor(scenario, { requestTimeoutMs: 2000 });
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir),
+      );
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const events: HarnessEvent[] = [];
+      for await (const event of started.value.events) {
+        events.push(event);
+      }
+      await started.value.dispose();
+      expect(terminal(events)?.type).toBe("turn.completed");
+      expect(harness.startups()).toHaveLength(2);
+      // Only the second launch was given the prompt.
+      expect(
+        harness.received().filter(({ type }) => type === "user"),
+      ).toHaveLength(1);
+    }
+  });
+
+  test("a start that misses its deadline twice fails the turn", async () => {
+    const harness = harnessFor("unresponsive", { requestTimeoutMs: 300 });
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    expect(Result.isError(started) && started.error).toMatchObject({
+      reason: "harness_unavailable",
+      message: "The harness did not answer initialize in time.",
+    });
+    expect(harness.startups()).toHaveLength(2);
   });
 
   test("auth and usage-limit failures map to their typed states", async () => {
@@ -2607,6 +2644,70 @@ describe("Claude Code background commands after a turn", () => {
     expect(
       controlRequests("set_permission_mode").map(({ request }) => request),
     ).toEqual([{ subtype: "set_permission_mode", mode: "acceptEdits" }]);
+  });
+
+  test("a next turn at another model and effort switches the kept process to them", async () => {
+    const { adapter, workspaceDir, startups, turn, controlRequests } =
+      await completedTurn("background_command_switched");
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        model: "opus",
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    // The server it holds was not ended for the switch.
+    expect(startups()).toHaveLength(1);
+    expect(controlRequests("stop_task")).toEqual([]);
+    expect(controlRequests("set_model").map(({ request }) => request)).toEqual([
+      { subtype: "set_model", model: "opus" },
+    ]);
+    expect(
+      controlRequests("apply_flag_settings").map(({ request }) => request),
+    ).toEqual([
+      { subtype: "apply_flag_settings", settings: { effortLevel: "high" } },
+    ]);
+  });
+
+  test("a switch the CLI refuses resumes the session in a new process", async () => {
+    const { adapter, workspaceDir, startups, turn } = await completedTurn(
+      "background_command_switch_refused",
+    );
+    const live = await turn.release();
+    if (live === null) {
+      throw new Error("The turn did not keep its process.");
+    }
+    const next = await adapter.startTurn(
+      turnInput(workspaceDir, {
+        reasoningEffort: "high",
+        continuation: { type: "live", session: live },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    const events: HarnessEvent[] = [];
+    for await (const event of next.value.events) {
+      events.push(event);
+    }
+    await next.value.dispose();
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    const [, resumed] = startups();
+    const args = resumed?.args ?? [];
+    expect(args[args.indexOf("--resume") + 1]).toBe(live.sessionId);
+    expect(args[args.indexOf("--effort") + 1]).toBe("high");
   });
 
   test("a sub-agent is stopped at the turn's end and a turn the CLI opens itself is interrupted", async () => {

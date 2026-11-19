@@ -63,10 +63,13 @@ const batchElis = (args: Record<string, unknown>): unknown[] => {
 type CorpusReadToolName = Extract<
   RegistryReadToolName,
   | "search_case_law"
+  | "resolve_case_law_decision"
   | "case_law_coverage"
   | "read_case_law_decision"
   | "read_case_law_citations"
+  | "verify_quote"
   | "search_legislation"
+  | "resolve_law_citation"
   | "read_statute"
   | "read_statute_provisions"
   | "read_provision_history"
@@ -74,6 +77,10 @@ type CorpusReadToolName = Extract<
 
 const CORPUS_READ_TOOLS = {
   search_case_law: {
+    corpus: "case_law",
+    country: { type: "argument", field: "country", optional: false },
+  },
+  resolve_case_law_decision: {
     corpus: "case_law",
     country: { type: "argument", field: "country", optional: false },
   },
@@ -89,7 +96,15 @@ const CORPUS_READ_TOOLS = {
     corpus: "case_law",
     country: { type: "decision", keys: (args) => keysAt(args, "decision_id") },
   },
+  verify_quote: {
+    corpus: "case_law",
+    country: { type: "decision", keys: (args) => keysAt(args, "decision_id") },
+  },
   search_legislation: {
+    corpus: "legislation",
+    country: { type: "argument", field: "country", optional: false },
+  },
+  resolve_law_citation: {
     corpus: "legislation",
     country: { type: "argument", field: "country", optional: false },
   },

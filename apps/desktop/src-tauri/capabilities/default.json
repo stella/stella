@@ -64,6 +64,8 @@
     "allow-local-skill-folders-get",
     "allow-local-skill-folders-pick",
     "allow-local-skill-folders-remove",
+    "allow-keep-awake-get-settings",
+    "allow-keep-awake-set-settings",
     "allow-signing-driver-get",
     "allow-signing-driver-pick",
     "allow-signing-driver-remove",

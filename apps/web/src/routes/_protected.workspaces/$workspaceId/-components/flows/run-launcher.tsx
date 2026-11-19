@@ -38,6 +38,7 @@ import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
 import { filterEntitiesByName } from "./run-launcher.logic";
+import { RunLauncherFrame, RunLauncherSkeleton } from "./run-launcher.pending";
 
 type RunLauncherProps = {
   workspaceId: string;
@@ -139,7 +140,11 @@ export const RunLauncher = ({
     onStarted(response.data.runId);
   };
 
-  if (flowsDataView.type === "pending" || flowsDataView.type === "error") {
+  if (flowsDataView.type === "pending") {
+    return <RunLauncherSkeleton />;
+  }
+
+  if (flowsDataView.type === "error") {
     return <QueryViewFeedback view={flowsDataView} />;
   }
 
@@ -157,7 +162,7 @@ export const RunLauncher = ({
   }
 
   return (
-    <div className="grid gap-4 rounded-lg border p-4">
+    <RunLauncherFrame>
       <QueryViewFeedback view={flowsDataView} />
       <div className="grid gap-1.5">
         <Label htmlFor="flow-run-definition">
@@ -261,6 +266,6 @@ export const RunLauncher = ({
           {t("common.start")}
         </Button>
       </div>
-    </div>
+    </RunLauncherFrame>
   );
 };

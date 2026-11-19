@@ -136,6 +136,35 @@ const SubagentMessageSchema = v.looseObject({
  * The call that started the subagent a message belongs to, read before the
  * message's own schema, or `null` for a message of the main thread.
  */
+/**
+ * System messages about background work: they may come from tasks an
+ * earlier turn left running, so they say nothing about this turn's request.
+ */
+const BACKGROUND_PROGRESS: ReadonlySet<string> = new Set([
+  "task_started",
+  "task_updated",
+  "task_progress",
+  "task_notification",
+  "background_tasks_changed",
+]);
+
+const SystemSubtypeSchema = v.looseObject({ subtype: v.string() });
+
+/**
+ * Whether a message shows that the turn's model request is alive: anything
+ * but a transport keepalive or the progress of background work.
+ */
+const showsRequestProgress = (type: string, raw: unknown) => {
+  if (type === "keep_alive") {
+    return false;
+  }
+  if (type !== "system") {
+    return true;
+  }
+  const system = v.safeParse(SystemSubtypeSchema, raw);
+  return !system.success || !BACKGROUND_PROGRESS.has(system.output.subtype);
+};
+
 const subagentCallOf = (raw: unknown): string | null => {
   const parsed = v.safeParse(SubagentMessageSchema, raw);
   return parsed.success ? parsed.output.parent_tool_use_id : null;
@@ -570,6 +599,9 @@ export class ClaudeCodeTurnSession {
   }
 
   private message(type: string, raw: unknown) {
+    if (showsRequestProgress(type, raw)) {
+      this.lifecycle.heard();
+    }
     if (!isClaudeMessageType(type)) {
       this.unsupported(type);
       return;

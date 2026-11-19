@@ -3,13 +3,13 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillProposals,
   agentSkillResources,
   agentSkills,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import createSkill from "@/api/handlers/skills/create";
 import createSkillFromBlueprint from "@/api/handlers/skills/from-blueprint/create";
@@ -205,10 +205,14 @@ const runSkillEditTool = async ({
 
 const savePackage = async (input: Record<string, unknown>) => {
   const tools = createSkillPackageTools({
+    offer: { type: "every" },
     memberRole: sessionMemberRole("member"),
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+    scopedDb: asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [], ids.orgA, ids.userA1),
+    ),
     userId: ids.userA1,
   });
   const tool = asTestExecutable<Record<string, unknown>, { skillId?: unknown }>(

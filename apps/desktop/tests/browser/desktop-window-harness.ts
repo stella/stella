@@ -211,6 +211,8 @@ const openWindow = async (
       dictation_get_cloud_models: () => data.cloudModels,
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
+      // The native defaults: awake while agents work, not on battery.
+      keep_awake_get_settings: () => ({ enabled: true, onBattery: false }),
       // Consent given, so Settings lays out its stella AI drafting rows too.
       billing_draft_get_settings: () => ({
         scopeKey: '["org_fixture","user_fixture"]',

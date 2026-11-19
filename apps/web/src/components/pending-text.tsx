@@ -2,43 +2,162 @@ import { createContext, use } from "react";
 import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
+import { createFormatter, type DateTimeFormatOptions } from "use-intl/core";
 
-import { Skeleton } from "@stll/ui/skeleton";
+import { parsePlainDate } from "@stll/time";
+import { FaceLabelPending } from "@stll/ui/control-face";
+import { InlineSkeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 // Whether the app's intl is mounted above. A pending view also renders where
 // it is not (the server's cold-load paint, the locale gate), so it may not
 // call `useTranslations` itself.
-const PendingIntlContext = createContext(false);
+const PendingIntlContext = createContext<
+  ReturnType<typeof createFormatter> | undefined
+>(undefined);
 
 /**
  * Whether the app's intl is mounted above, for a label `PendingText` cannot
  * name (a frame's nav label): render its text only then.
  */
-export const useIntlMounted = (): boolean => use(PendingIntlContext);
+export const useIntlMounted = (): boolean =>
+  use(PendingIntlContext) !== undefined;
 
 /** Marks the subtree where the app's intl provider has its messages. */
-export const PendingTextIntlScope = ({ children }: PropsWithChildren) => (
-  <PendingIntlContext value>{children}</PendingIntlContext>
-);
+export const PendingTextIntlScope = ({
+  children,
+  formattingLocale,
+}: PropsWithChildren<{ formattingLocale: string }>) => {
+  const formatter = createFormatter({
+    locale: formattingLocale,
+    timeZone: "UTC",
+  });
+  return <PendingIntlContext value={formatter}>{children}</PendingIntlContext>;
+};
 
 // The static labels pending views show. A closed union keeps the
 // translator's key type small (`t` checks each one is a real message); a
 // page adds its labels here as it gains a pending view.
 type PendingTextKey =
+  | "auth.continueWithEmail"
+  | "auth.emailPlaceholder"
+  | "auth.error.generic"
+  | "auth.error.providerUnavailable"
+  | "auth.error.title"
+  | "auth.handoffTitle"
+  | "auth.headline"
+  | "auth.invitation.title"
+  | "auth.professionalUse.title"
+  | "auth.professionalUseStatement"
+  | "auth.reauthenticationRequired"
+  | "auth.signIn"
+  | "auth.signInBeforeInvitation"
+  | "auth.subtitle"
+  | "auth.twoFactor.enterAuthenticatorCode"
+  | "auth.twoFactor.title"
+  | "auth.twoFactor.useBackupCode"
+  | "auth.useDifferentEmail"
+  | "bilingualTranslate.rows.title"
+  | "billing.addEntry"
+  | "billing.amount"
+  | "billing.approval.everyone"
+  | "billing.approval.myTime"
+  | "billing.approval.returnComment"
+  | "billing.approval.timeEntries"
+  | "billing.approval.title"
+  | "billing.approve"
+  | "billing.codes.manageCodes"
+  | "billing.hours"
+  | "billing.invoiceComposer.billedHours"
+  | "billing.invoiceComposer.continueToDetails"
+  | "billing.invoiceComposer.include"
+  | "billing.invoiceComposer.noCharge"
+  | "billing.invoiceComposer.rate"
+  | "billing.invoiceComposer.steps.issue"
+  | "billing.invoiceComposer.steps.items"
+  | "billing.invoiceComposer.timeEntries"
+  | "billing.invoiceComposer.title"
+  | "billing.invoices.createInvoice"
+  | "billing.invoices.dueDate"
+  | "billing.invoices.invoiceDate"
+  | "billing.invoices.invoiceDetail"
+  | "billing.invoices.invoiceNumber"
+  | "billing.invoices.linkedTimeEntries"
+  | "billing.invoices.totalAmount"
+  | "billing.narrative"
+  | "billing.rates.rates"
+  | "billing.revertToDraft"
+  | "billing.timeReport.billableHours"
+  | "billing.timeReport.billableShare"
+  | "billing.timeReport.pendingEntries"
+  | "billing.timeReport.privacy"
+  | "billing.timeReport.title"
+  | "billing.timeReport.total"
+  | "billing.timesheets"
+  | "chat.composerMenu.context"
   | "chat.greeting"
   | "chat.landing.recentChats"
   | "chat.landing.skills"
   | "chat.newChat"
   | "chat.placeholder"
+  | "clauses.export"
+  | "common.accept"
+  | "common.actions"
+  | "common.add"
+  | "common.back"
+  | "common.cancel"
+  | "common.category"
+  | "common.columns"
+  | "common.confirm"
+  | "common.date"
+  | "common.decline"
+  | "common.description"
+  | "common.details"
+  | "common.expenses"
   | "common.history"
+  | "common.invoices"
+  | "common.logTime"
+  | "common.matter"
+  | "common.name"
+  | "common.next"
+  | "common.previous"
+  | "common.reference"
   | "common.search"
   | "common.selectAMatter"
+  | "common.signOut"
+  | "common.start"
+  | "common.status"
+  | "common.today"
+  | "common.tryAgain"
+  | "common.verify"
+  | "common.workflows"
+  | "flows.runs.history"
+  | "flows.runs.launch"
+  | "flows.runs.selectFlow"
+  | "folio.listsGroup"
   | "guidance.notCaseLaw"
+  | "inspector.matterPicker.allMatters"
   | "lawHome.prompt"
   | "lawHome.recent"
   | "lawHome.signals"
-  | "lawHome.topCourts";
+  | "lawHome.topCourts"
+  | "organization.roles.member"
+  | "search.dateFrom"
+  | "search.dateTo"
+  | "search.kinds.task"
+  | "search.timeFilterCustom"
+  | "settings.organization.activeMembers"
+  | "tasks.dueDate"
+  | "tasks.priority"
+  | "tasks.status"
+  | "templates.addItem"
+  | "timesheets.week.title"
+  | "workspaces.parties.client"
+  | "workspaces.views.calendar.month"
+  | "workspaces.views.calendar.week"
+  | "workspaces.views.exportCsv"
+  | "workspaces.views.reportExport.title"
+  | "workspaces.views.timeline.day";
 
 const TranslatedText = ({ id }: { id: PendingTextKey }) => {
   const t = useTranslations();
@@ -58,7 +177,7 @@ export const PendingText = ({
   barClassName?: string | undefined;
   id: PendingTextKey;
 }) =>
-  use(PendingIntlContext) ? (
+  useIntlMounted() ? (
     <TranslatedText id={id} />
   ) : (
     // One line box of the surrounding text, so the bar keeps the label's
@@ -69,6 +188,31 @@ export const PendingText = ({
       aria-hidden="true"
       className="inline-flex h-[1lh] items-center align-top"
     >
-      <Skeleton className={cn("h-[0.75em]", barClassName)} />
+      <InlineSkeleton className={cn("h-[0.75em]", barClassName)} />
     </span>
   );
+
+const PENDING_SHORT_DATE = {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+} as const satisfies Intl.DateTimeFormatOptions;
+
+export const PendingDate = ({
+  date,
+  options = PENDING_SHORT_DATE,
+}: {
+  date?: string | undefined;
+  options?: DateTimeFormatOptions;
+}) => {
+  const formatter = use(PendingIntlContext);
+  const plainDate = date === undefined ? null : parsePlainDate(date);
+  return formatter !== undefined && plainDate !== null ? (
+    formatter.dateTime(
+      plainDate.toZonedDateTime("UTC").epochMilliseconds,
+      options,
+    )
+  ) : (
+    <FaceLabelPending className="w-10" />
+  );
+};

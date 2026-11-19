@@ -136,6 +136,7 @@ import { decisionTextVersion } from "@/api/mcp/case-law-decision-read";
 import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/case-law-search-input";
 import { createCompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
+import { MCP_MODES } from "@/api/mcp/constants";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import {
   deriveContactDisplayName,
@@ -148,6 +149,7 @@ import {
 } from "@/api/mcp/public-read-continuation";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
+import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import {
   createCaseLawContinuation,
   READ_DECISION_BATCH_MAX_TEXT_CHARS,
@@ -245,6 +247,9 @@ beforeEach(() => {
 
 const wireSchemaValidator = createWireSchemaValidator();
 
+/** Tools a success of which this file read against its advertised schema. */
+const outputCheckedTools = new Set<string>();
+
 /**
  * Every call here runs the real dispatcher, which parses a result through the
  * tool's executable output source. The schema a client is shown is a
@@ -276,6 +281,7 @@ const handleMcpToolCall = async (
       validate(result.structuredContent),
       `${call.toolName} result against its advertised output schema: ${wireSchemaValidator.errorsText(validate.errors)}`,
     ).toBe(true);
+    outputCheckedTools.add(call.toolName);
   }
   return result;
 };
@@ -937,6 +943,7 @@ type MockMcpTransaction = {
   selectDistinct: () => ReturnType<typeof createSelectBuilder>;
   query: {
     entities: {
+      findMany: () => Promise<unknown[]>;
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
         createdAt: Date;
         kind: string;
@@ -1084,6 +1091,7 @@ const createScopedDb = (
         await callback({
           query: {
             entities: {
+              findMany: async () => [],
               findFirst: async ({ where }: MockEntityFindFirstInput = {}) => {
                 if (!currentDocument) {
                   return null;
@@ -13805,4 +13813,119 @@ describe("undeclared-argument backstop", () => {
       },
     ]);
   });
+});
+
+/**
+ * Tools with an output schema that no test in this file has yet called to a
+ * success through `handleMcpToolCall`, so no real result of theirs is read
+ * against the schema a client validates it with. The list only shrinks: a
+ * test that reaches one of them removes it here.
+ */
+const OUTPUT_CHECK_PENDING: readonly string[] = [
+  "add_matter_member",
+  "compare_documents",
+  "configure_template_fields",
+  "create_organization",
+  "create_reader_annotation",
+  "create_template",
+  "delete_clause",
+  "delete_contact",
+  "delete_document",
+  "delete_matter",
+  "delete_reader_annotation",
+  "delete_task",
+  "delete_time_entry",
+  "describe_capability",
+  "fill_template",
+  "get_usage",
+  "link_matter_contact",
+  "list_audit_log",
+  "list_capabilities",
+  "list_case_law_courts",
+  "list_clauses",
+  "list_documents",
+  "list_invoices",
+  "list_matters",
+  "list_playbooks",
+  "list_reader_annotations",
+  "list_templates",
+  "mint_web_handoff",
+  "open_case_law_decision",
+  "open_document_version_upload",
+  "open_file_comparison",
+  "prepare_feedback",
+  "prepare_file_comparison",
+  "prepare_file_comparison_from_links",
+  "preview_cited_provision",
+  "preview_template_conditions",
+  "read_capability",
+  "read_case_law_decision_blocks",
+  "read_contact",
+  "read_guidance",
+  "remove_matter_member",
+  "resolve_case_law_decision",
+  "resolve_law_citation",
+  "resolve_rate",
+  "run_playbook",
+  "save_clause",
+  "save_contact",
+  "save_document",
+  "save_filled_template",
+  "save_playbook",
+  "save_time_entry",
+  "search_boe_legislation",
+  "search_guidance",
+  "set_field_value",
+  "set_practice_jurisdictions",
+  "submit_feedback",
+  "update_organization_settings",
+  "update_reader_annotation",
+  "upload_document_version",
+  "verify_quote",
+  "write_capability",
+];
+
+/**
+ * Set when the census test below runs, so a name filter that leaves it out
+ * leaves the census out too.
+ */
+let outputCensusRequested = false;
+
+// Tests may run in any order (a seeded shuffle runs them out of order), so
+// the census test only asks for the census, which is read once every test of
+// the file has run.
+test("every tool with an output schema has a success read against it here", () => {
+  outputCensusRequested = true;
+});
+
+afterAll(() => {
+  if (!outputCensusRequested) {
+    return;
+  }
+  const advertised = new Set(
+    MCP_MODES.flatMap((mode) =>
+      listStaticMcpToolDefinitions(mode)
+        .filter(
+          ({ name }) =>
+            resolveMcpToolOutputContract(name, mode)?.outputSchema !==
+            undefined,
+        )
+        .map(({ name }) => name),
+    ),
+  );
+  const pending = new Set(OUTPUT_CHECK_PENDING);
+  expect(
+    [...advertised]
+      .filter((name) => !outputCheckedTools.has(name) && !pending.has(name))
+      .toSorted(),
+    "Call each of these tools to a success through handleMcpToolCall (run the whole file; a name filter skips the calls)",
+  ).toEqual([]);
+  expect(
+    [...pending].filter((name) => outputCheckedTools.has(name)).toSorted(),
+    "These tools now have a checked success: remove them from OUTPUT_CHECK_PENDING",
+  ).toEqual([]);
+  expect(
+    [...pending].filter((name) => !advertised.has(name)).toSorted(),
+    "These names advertise no output schema: remove them from OUTPUT_CHECK_PENDING",
+  ).toEqual([]);
 });

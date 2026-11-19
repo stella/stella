@@ -1009,6 +1009,14 @@
       "unreadable": "Não foi possível ler esta pasta."
     }
   },
+  "keepAwake": {
+    "title": "Manter ativo",
+    "enabled": "Manter este computador ativo enquanto os agentes trabalham",
+    "description": "Enquanto um agente trabalha neste computador, ele não entra em repouso por inatividade, e as tarefas longas continuam rodando. A tela ainda pode desligar. Um notebook Mac entra em repouso mesmo assim quando você fecha a tampa.",
+    "onBattery": "Também na bateria",
+    "onBatteryDescription": "Com esta opção desligada, o computador entra em repouso normalmente na bateria, mesmo enquanto um agente trabalha.",
+    "errorSave": "Não foi possível salvar esta configuração. Tente de novo."
+  },
   "transcribe": {
     "title": "Transcrever uma gravação",
     "retry": "Tentar novamente",
