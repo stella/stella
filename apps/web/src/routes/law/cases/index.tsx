@@ -1,9 +1,4 @@
-import {
-  createFileRoute,
-  lazyRouteComponent,
-  notFound,
-  redirect,
-} from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { panic, Result, UnhandledException } from "better-result";
 
 import {
@@ -59,6 +54,8 @@ import { ssrStatusHeaders } from "@/ssr-response-status";
 
 import { correctedCaseLawFilterSearch } from "./-case-law-filter-scope.logic";
 import { PublicCaseLawIndexError } from "./-case-law-index-error";
+import { PublicCaseLawIndex } from "./-case-law-index.page";
+import { PublicCaseLawIndexPending } from "./-case-law-index.pending";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { searchSchema } from "./-case-law-search-schema";
 
@@ -385,15 +382,9 @@ export const Route = createFileRoute("/law/cases/")({
   },
   // One page, two states. Only a cold arrival renders the pending one — a
   // filter, a sort or a page step keeps the page it is already on — and what
-  // waits there is the grid alone: the box, the toolbar, the chips and the
-  // pager are the URL's own and are already correct.
-  component: lazyRouteComponent(
-    async () => import("./-case-law-index-page"),
-    "PublicCaseLawIndex",
-  ),
+  // waits there is the page's own shell, with the faces of the box, the
+  // toolbar and the pager and the grid in skeleton.
+  component: PublicCaseLawIndex,
   errorComponent: PublicCaseLawIndexError,
-  pendingComponent: lazyRouteComponent(
-    async () => import("./-case-law-index-page"),
-    "PublicCaseLawIndexPending",
-  ),
+  pendingComponent: PublicCaseLawIndexPending,
 });

@@ -121,6 +121,17 @@ export type {
   WorkspaceViewSwitcherProps,
   WorkspaceViewSwitcherReorder,
 } from "./view-switcher";
+export {
+  WorkspaceViewStrip,
+  WorkspaceViewSwitcherFace,
+  WorkspaceViewTabFace,
+  WorkspaceViewTabName,
+} from "./view-switcher-face";
+export type {
+  WorkspaceViewStripProps,
+  WorkspaceViewSwitcherFaceProps,
+  WorkspaceViewTabFaceProps,
+} from "./view-switcher-face";
 export { WorkspaceFrame } from "./workspace-frame";
 export type {
   WorkspaceFrameEndRail,

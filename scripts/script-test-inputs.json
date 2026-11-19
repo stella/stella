@@ -36,6 +36,7 @@
     "scripts/check-migration-baseline.test.ts": ["**"],
     "scripts/check-migrations.test.ts": ["**"],
     "scripts/check-model-defaults-ledger.test.ts": ["**"],
+    "scripts/check-mutation-query-invalidation.moves.test.ts": ["**"],
     "scripts/check-mutation-query-invalidation.test.ts": ["**"],
     "scripts/check-npm-publish-lag.test.ts": ["**"],
     "scripts/check-npm-publish-readiness.test.ts": ["**"],

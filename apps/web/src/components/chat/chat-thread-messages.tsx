@@ -127,7 +127,6 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   getAwaitedAssistantMessageId,
-  getChatToolTitleKey,
   getPausedChatTurn,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
@@ -167,6 +166,10 @@ import {
   advanceToolCallTiming,
   createToolCallTiming,
 } from "@/components/chat/tool-call-timing.logic";
+import {
+  getToolCallTitleKey,
+  type ToolCallTitleKey,
+} from "@/components/chat/tool-call-title.logic";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
 import {
@@ -386,8 +389,13 @@ const ActiveTurnStatus = memo(
             ? { state: "submitted", phase: null, sentAt: turnSentAt }
             : {
                 state: "streaming",
-                phase: turnPhaseFromParts(assistant.parts, (name) =>
-                  t(getChatToolTitleKey(name)),
+                phase: turnPhaseFromParts(assistant.parts, (part) =>
+                  t(
+                    getToolCallTitleKey({
+                      input: "input" in part ? part.input : undefined,
+                      name: part.name,
+                    }),
+                  ),
                 ),
                 timing: assistant.metadata?.turnTiming,
                 sentAt: turnSentAt,
@@ -2242,8 +2250,7 @@ const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean =>
   // Finished searches and fetches show in the sources tray instead.
   isVisibleProcessStep(entry.part, { searchesShownApart: true });
 
-type ProcessStepTitleKey =
-  ReturnType<typeof getChatToolTitleKey> | "chat.reasoning";
+type ProcessStepTitleKey = ToolCallTitleKey | "chat.reasoning";
 
 const getProcessStepTitleKey = (
   entry: AssistantPartRenderEntry,
@@ -2256,7 +2263,10 @@ const getProcessStepTitleKey = (
     return "chat.reasoning";
   }
   if (part.type === "tool-call") {
-    return getChatToolTitleKey(part.name);
+    return getToolCallTitleKey({
+      input: "input" in part ? part.input : undefined,
+      name: part.name,
+    });
   }
   return null;
 };
@@ -2880,16 +2890,16 @@ const AssistantThinkingPart = ({
     return null;
   }
 
-  // The same row anatomy as `ToolCallCard`: status glyph, label, elapsed
+  // The same row anatomy as `ToolCallCard`: a rail segment, label, elapsed
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <div className="group/reasoning my-0.5 max-w-xl text-sm">
+    <div className="group/reasoning border-border/60 max-w-xl border-s text-sm leading-5">
       <Collapsible onOpenChange={setIsOpen} open={isOpen}>
         <CollapsibleTrigger
           render={<Button className="flex w-full" variant="plain" />}
         >
-          <span className="text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted flex min-h-11 w-full items-center gap-2 rounded-lg ps-2">
+          <span className="text-foreground-label hover:bg-muted/35 hover:text-foreground flex min-h-8 w-full items-center gap-2 rounded-md ps-3 font-normal pointer-coarse:min-h-11">
             <AssistantThinkingHeader
               isExpanded={isOpen}
               isStreaming={isStreaming}
@@ -2922,7 +2932,6 @@ const AssistantThinkingHeader = ({
   const t = useTranslations();
   return (
     <>
-      <StatusMark status="done" />
       <TruncatedText
         render={<span className={cn(isStreaming && CHAT_PENDING_TEXT_CLASS)} />}
       >
@@ -2934,7 +2943,7 @@ const AssistantThinkingHeader = ({
       <span
         aria-hidden="true"
         className={cn(
-          "ms-auto flex size-11 shrink-0 items-center justify-center opacity-0 transition-opacity duration-150 group-hover/reasoning:opacity-100",
+          "ms-auto flex size-8 shrink-0 items-center justify-center opacity-0 transition-opacity duration-150 group-hover/reasoning:opacity-100",
           isExpanded && "opacity-100",
         )}
       >
@@ -2962,24 +2971,22 @@ const AssistantThinkingBody = ({
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => (
-  // Indented to the label's edge (row padding + glyph + gap), so the trace
-  // hangs under the step it belongs to.
-  <div className="ps-8 pe-2 pb-2">
-    <div className="border-s ps-2.5">
-      <AssistantTextPart
-        className={cn(
-          "text-muted-foreground text-xs leading-relaxed",
-          "[&_h1]:my-1 [&_h1]:text-xs [&_h2]:my-1 [&_h2]:text-xs",
-          "[&_h3]:my-1 [&_h3]:text-xs [&_h4]:my-1 [&_h4]:text-xs",
-          "[&_h5]:my-1 [&_h5]:text-xs [&_h6]:my-1 [&_h6]:text-xs",
-          "[&_code]:text-2xs",
-        )}
-        components={components}
-        isStreaming={isStreaming}
-        restorationPairs={restorationPairs}
-        text={text}
-      />
-    </div>
+  // Indented to the label's edge, so the trace hangs off the step's rail
+  // under the step it belongs to.
+  <div className="ps-3 pe-2 pb-2">
+    <AssistantTextPart
+      className={cn(
+        "text-muted-foreground text-xs leading-relaxed",
+        "[&_h1]:my-1 [&_h1]:text-xs [&_h2]:my-1 [&_h2]:text-xs",
+        "[&_h3]:my-1 [&_h3]:text-xs [&_h4]:my-1 [&_h4]:text-xs",
+        "[&_h5]:my-1 [&_h5]:text-xs [&_h6]:my-1 [&_h6]:text-xs",
+        "[&_code]:text-2xs",
+      )}
+      components={components}
+      isStreaming={isStreaming}
+      restorationPairs={restorationPairs}
+      text={text}
+    />
   </div>
 );
 

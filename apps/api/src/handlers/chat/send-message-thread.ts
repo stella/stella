@@ -206,6 +206,8 @@ type ChatThreadRecord = {
   firstSend: boolean;
   /** The thread's title once this send loaded it. */
   title: string;
+  /** The fields this send runs the thread with (`resolveSendThreadFields`). */
+  sendFields: SendThreadFields;
   workspaceId: SafeId<"workspace"> | null;
   contextMatterIds: SafeId<"workspace">[];
   dataWorkspaceIds: SafeId<"workspace">[];
@@ -452,6 +454,7 @@ const loadThreadAttempt = async ({
           id: existing.id,
           firstSend: false,
           title: existing.title,
+          sendFields: storedSendThreadFieldsOf(existing),
           workspaceId: existing.workspaceId,
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
@@ -528,6 +531,7 @@ const loadThreadAttempt = async ({
         title: existing.title,
       });
       state.data.firstSend = true;
+      state.data.sendFields = fields;
       state.data.contextMatterIds = fields.contextMatterIds;
       state.data.dataWorkspaceIds = fields.dataWorkspaceIds;
       if (refreshTitle) {
@@ -679,6 +683,7 @@ const loadThreadAttempt = async ({
         id: threadId,
         firstSend: true,
         title,
+        sendFields: fields,
         workspaceId,
         contextMatterIds: fields.contextMatterIds,
         dataWorkspaceIds: fields.dataWorkspaceIds,
