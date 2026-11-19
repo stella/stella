@@ -272,7 +272,6 @@ export const ChatTabPanel = ({
     threadRef,
     stored: data,
     queryKey: threadQueryOptions.queryKey,
-    startsOnLastChoice: true,
   });
   const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({

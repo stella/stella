@@ -2242,6 +2242,8 @@
       "localSelection": "Twój komputer · {harness}",
       "modelDefault": "Domyślny (zalecany)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nowy czat uruchomiono w chmurze, ponieważ {harness} na Twoim komputerze jest niedostępny ({state})",
+      "startedInCloudCheckFailed": "Nowy czat uruchomiono w chmurze, ponieważ nie udało się sprawdzić Twojego komputera",
       "stepsCheck": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i sprawdź agenta {harness} w sekcji Ustawienia › Ogólne › Subskrypcje AI.",
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
       "stepsSignInClaudeCode": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Zaloguj się przez Claude.",

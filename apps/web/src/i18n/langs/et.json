@@ -2242,6 +2242,8 @@
       "localSelection": "Sinu arvuti · {harness}",
       "modelDefault": "Vaikimisi (soovitatud)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "See uus vestlus algas pilves, sest {harness} pole sinu arvutis saadaval ({state})",
+      "startedInCloudCheckFailed": "See uus vestlus algas pilves, sest sinu arvutit ei õnnestunud kontrollida",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
       "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",

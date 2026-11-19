@@ -2242,6 +2242,8 @@
       "localSelection": "Váš počítač · {harness}",
       "modelDefault": "Výchozí (doporučeno)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nový chat se spustil v cloudu, protože {harness} na vašem počítači není k dispozici ({state})",
+      "startedInCloudCheckFailed": "Nový chat se spustil v cloudu, protože se nepodařilo zkontrolovat váš počítač",
       "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
       "stepsSignInClaudeCode": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",

@@ -44,6 +44,7 @@ import type {
   ModelRecommendation,
 } from "@/components/chat/chat-model-options-menu.logic";
 import { LocalModelOptions } from "@/components/chat/chat-run-target-menu";
+import type { ChatCloudStart } from "@/components/chat/chat-run-target-menu.logic";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
@@ -91,6 +92,11 @@ export type ChatRunOn =
       type: "choice";
       selected: ChatRunTarget;
       select: (target: ChatRunTarget) => void;
+      /**
+       * Why a new chat runs in the cloud although the member last chose
+       * their computer, which the where chip says; `null` otherwise.
+       */
+      startedInCloud: ChatCloudStart | null;
     }
   | { type: "cloud_only" };
 

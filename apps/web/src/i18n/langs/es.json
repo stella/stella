@@ -2242,6 +2242,8 @@
       "localSelection": "Tu ordenador · {harness}",
       "modelDefault": "Predeterminado (recomendado)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Este chat nuevo se ha iniciado en la nube porque {harness} no está disponible en tu ordenador ({state})",
+      "startedInCloudCheckFailed": "Este chat nuevo se ha iniciado en la nube porque no se ha podido comprobar tu ordenador",
       "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
       "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
       "stepsSignInClaudeCode": "Abriendo stella desktop para iniciar sesión. Si no se abre, ábrelo y elige Configuración › General › Iniciar sesión con Claude.",

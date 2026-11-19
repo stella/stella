@@ -2242,6 +2242,8 @@
       "localSelection": "Az Ön számítógépe · {harness}",
       "modelDefault": "Alapértelmezett (ajánlott)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Ez az új csevegés a felhőben indult, mert a(z) {harness} nem érhető el a számítógépén ({state})",
+      "startedInCloudCheckFailed": "Ez az új csevegés a felhőben indult, mert nem sikerült ellenőrizni a számítógépét",
       "stepsCheck": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános › AI-előfizetések részen ellenőrizze ezt az ügynököt: {harness}.",
       "stepsInstall": "A stella desktop megnyílik. Ha nem nyílik meg, nyissa meg a számítógépén, és a Beállítások › Általános részen válassza a Telepítés gombot ennél az ügynöknél: {harness}.",
       "stepsSignInClaudeCode": "A stella desktop megnyílik a bejelentkezéshez. Ha nem nyílik meg, nyissa meg, és válassza a Beállítások › Általános › Bejelentkezés Claude-dal lehetőséget.",

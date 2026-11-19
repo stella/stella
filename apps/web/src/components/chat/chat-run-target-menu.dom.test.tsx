@@ -120,6 +120,7 @@ const renderMenu = (
                   chosen.push(next);
                 }}
                 selected={target}
+                startedInCloud={null}
               />
             </MenuPopup>
           </Menu>
