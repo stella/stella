@@ -8,7 +8,8 @@ export type ContentSecurityPolicyEnvironment = {
   documentsBucket: string;
   documentsEndpoint: string;
   posthogHost?: string | undefined;
-  sandboxUrl: string;
+  /** Every sandbox document the app frames (`frameSandboxUrls`). */
+  sandboxUrls: readonly string[];
 };
 
 const origin = (url: string): string => new URL(url).origin;
@@ -48,7 +49,7 @@ export const buildContentSecurityPolicy = (
     environment.documentsEndpoint,
     environment.documentsBucket,
   );
-  const sandboxOrigin = origin(environment.sandboxUrl);
+  const sandboxOrigins = [...new Set(environment.sandboxUrls.map(origin))];
   const connectSources = [
     "'self'",
     apiOrigin,
@@ -67,7 +68,7 @@ export const buildContentSecurityPolicy = (
     "font-src 'self' data:",
     `connect-src ${[...new Set(connectSources)].join(" ")}`,
     "worker-src 'self' blob:",
-    `frame-src 'self' blob: ${sandboxOrigin}`,
+    `frame-src 'self' blob: ${sandboxOrigins.join(" ")}`,
     "media-src 'self' blob: data:",
     "object-src 'none'",
     "base-uri 'self'",
