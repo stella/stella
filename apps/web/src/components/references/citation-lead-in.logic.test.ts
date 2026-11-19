@@ -35,6 +35,9 @@ describe("prose that names the cited court", () => {
     expect(leadInNamesCourt("Podle „Nejvyššího soudu“,", CZ_SUPREME)).toBe(
       true,
     );
+    expect(leadInNamesCourt("Podle Nejvyššího soudu:👉", CZ_SUPREME)).toBe(
+      true,
+    );
   });
 });
 

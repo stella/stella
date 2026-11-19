@@ -28,24 +28,35 @@ type CitedCourt = {
   courtShortCode: string;
 };
 
+const LEADING_PUNCTUATION = /^[\p{P}\p{S}]+/u;
 const EDGE_PUNCTUATION = /^[\p{P}\p{S}]$/u;
 
 /**
- * The word without the punctuation around it ("(NS)," reads "NS"), walked
- * one character at a time from each end: a pattern anchored at the end would
- * rescan a long run of punctuation from every start.
+ * Where the code point that ends at `end` starts: two code units back when
+ * those two are one astral code point (a surrogate pair), else one.
+ */
+const codePointStart = (text: string, end: number) => {
+  const pair = end - 2;
+  return pair >= 0 && (text.codePointAt(pair) ?? 0) > 0xff_ff ? pair : end - 1;
+};
+
+/**
+ * The word without the punctuation around it ("(NS)," reads "NS"). The start
+ * goes with one start-anchored pattern; the end is walked back one code point
+ * at a time, because a pattern anchored at the end would rescan a long run of
+ * punctuation from every start.
  */
 const trimEdgePunctuation = (word: string) => {
-  const characters = [...word];
-  let start = 0;
-  let end = characters.length;
-  while (start < end && EDGE_PUNCTUATION.test(characters[start] ?? "")) {
-    start += 1;
+  const rest = word.replace(LEADING_PUNCTUATION, "");
+  let end = rest.length;
+  while (end > 0) {
+    const start = codePointStart(rest, end);
+    if (!EDGE_PUNCTUATION.test(rest.slice(start, end))) {
+      break;
+    }
+    end = start;
   }
-  while (end > start && EDGE_PUNCTUATION.test(characters[end - 1] ?? "")) {
-    end -= 1;
-  }
-  return characters.slice(start, end).join("");
+  return rest.slice(0, end);
 };
 
 const fold = (value: string) => value.toLocaleLowerCase("und");
