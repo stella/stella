@@ -135,6 +135,15 @@ const ChartableAnswerTable = ({
 
   const showChart = async () => {
     present({ status: "loading" });
+    // The answer is for the content it was asked about: once the choice has
+    // moved on to newer content, a late answer leaves that choice alone.
+    const requestKey = contentKey;
+    const settle = (next: Presentation) =>
+      setChosen((current) =>
+        current.contentKey === requestKey
+          ? { contentKey: requestKey, presentation: next }
+          : current,
+      );
     const result = await Result.tryPromise(async () => {
       const hash = await sha256Hex(JSON.stringify(table));
       // The loader is bound to the complete source whose digest owns the cache entry.
@@ -157,16 +166,16 @@ const ChartableAnswerTable = ({
         fingerprintKey: "ChartableTable:showChart",
         scope: { type: "handler", handlerId: "chat.table-chart.show-chart" },
       });
-      present({ status: "unavailable" });
+      settle({ status: "unavailable" });
       return;
     }
     const response = result.value;
     switch (response.status) {
       case "unavailable":
-        present({ status: "unavailable" });
+        settle({ status: "unavailable" });
         return;
       case "ready":
-        present(
+        settle(
           isTableChartPlanUsable(response.plan, table)
             ? { status: "chart", plan: response.plan }
             : { status: "unavailable" },

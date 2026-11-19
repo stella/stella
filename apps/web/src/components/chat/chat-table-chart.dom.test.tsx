@@ -57,7 +57,7 @@ const mount = (
   sourceMarkdown = markdown,
 ) => {
   const client = new QueryClient();
-  const view = render(
+  const element = (source: string) => (
     <QueryClientProvider client={client}>
       <IntlProvider
         locale={locale}
@@ -78,13 +78,15 @@ const mount = (
               ),
             }}
           >
-            {sourceMarkdown}
+            {source}
           </Streamdown>
         </FormattingProvider>
       </IntlProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  return { ...view, client };
+  const view = render(element(sourceMarkdown));
+  const update = (source: string) => view.rerender(element(source));
+  return { ...view, client, update };
 };
 
 test("requests no decision until clicked, switches kind, returns to table and reuses the session decision", async () => {
@@ -136,6 +138,41 @@ test("requests no decision until clicked, switches kind, returns to table and re
   fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
   await view.findByRole("img", { name: "Hours" });
   expect(calls).toBe(1);
+});
+
+test("a chart chosen for content that has since changed does not replace the new content's choice", async () => {
+  const pending: ((response: TableChartResponse) => void)[] = [];
+  const view = mount(
+    async () =>
+      await new Promise<TableChartResponse>((resolve) => {
+        pending.push(resolve);
+      }),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() => {
+    expect(pending).toHaveLength(1);
+  });
+  // The table streams on while its first chart is being chosen.
+  view.update(`${markdown}\n| August | 5 |`);
+  fireEvent.click(view.getByRole("button", { name: "Show as chart" }));
+  await waitFor(() => {
+    expect(pending).toHaveLength(2);
+  });
+  await act(async () => {
+    pending[0]?.(ready);
+    await Promise.resolve();
+  });
+  // The first answer belongs to the old content: the new one is still
+  // being chosen.
+  expect(view.getByRole("button", { name: "Choosing a chart…" })).toBeDefined();
+  expect(view.queryByRole("img", { name: "Hours" })).toBeNull();
+  await act(async () => {
+    pending[1]?.(ready);
+    await Promise.resolve();
+  });
+  const image = await view.findByRole("img", { name: "Hours" });
+  expect(image).toBeDefined();
+  expect(view.container.textContent).toContain("August: 5");
 });
 
 test("a table without a numeric column offers no chart", () => {
