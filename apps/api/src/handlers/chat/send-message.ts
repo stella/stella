@@ -190,6 +190,10 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import {
+  CHAT_SEND_CONTEXT_IGNORED_EVENT,
+  ignoredSendThreadFields,
+} from "@/api/handlers/chat/send-thread-fields";
 import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import {
   hydrateMessages,
@@ -346,6 +350,7 @@ import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/conn
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import {
@@ -454,6 +459,32 @@ const usableWorkspaceIds = (
     }
   }
   return ids;
+};
+
+/**
+ * One warning for a send that carried context its thread does not run with: a
+ * thread that holds a message keeps its own skill and subject decision. Names
+ * the fields only, never what they carried.
+ */
+const warnIgnoredSendContext = ({
+  body,
+  thread,
+}: {
+  body: Pick<ChatSendRequest, "activeDecision" | "activeSkill">;
+  thread: ChatThreadState;
+}): void => {
+  const ignoredFields = ignoredSendThreadFields({
+    request: {
+      activeSkill: body.activeSkill,
+      subjectDecisionId: body.activeDecision?.decisionId ?? null,
+    },
+    resolved: thread.data.sendFields,
+  });
+  if (ignoredFields.length > 0) {
+    logger.warn(CHAT_SEND_CONTEXT_IGNORED_EVENT, {
+      "chat.send.ignored_fields": ignoredFields,
+    });
+  }
 };
 
 const validateActiveDraftContext = async ({
@@ -2114,6 +2145,7 @@ const prepareValidatedIncomingMessage = async ({
     // enclosing finally is the sole rollback boundary for every later
     // return, error, or SDK short-circuit before that persistence succeeds.
     lifecycle.adoptThread(thread);
+    warnIgnoredSendContext({ body, thread });
 
     const activeDraft = body.activeDraft;
     if (activeDraft !== undefined) {
@@ -2379,6 +2411,9 @@ const assembleTurnSystemPrompt = ({
 
 export type SendMessageDependencies = {
   caseLawDb?: Parameters<typeof buildChatSystemPromptParts>[0]["caseLawDb"];
+  legislationDb?: Parameters<
+    typeof buildChatSystemPromptParts
+  >[0]["legislationDb"];
   startAdmission?: typeof startExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
@@ -3360,6 +3395,7 @@ export const createSendMessage = (
         }
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
+          legislationDb: dependencies.legislationDb,
           copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
           promptTarget: promptTarget.value,
           recordAuditEvent,
@@ -3910,6 +3946,7 @@ const turnRunModeOf = (
 
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
+  legislationDb?: SendMessageDependencies["legislationDb"];
   copiesFilesToComputer: boolean;
   promptTarget: ChatPromptTarget;
   recordAuditEvent: AuditRecorder;
@@ -4016,6 +4053,7 @@ const auditedLocalRunAttachments = async ({
 
 const prepareChatContext = async ({
   caseLawDb,
+  legislationDb,
   copiesFilesToComputer,
   promptTarget,
   recordAuditEvent,
@@ -4062,6 +4100,7 @@ const prepareChatContext = async ({
     const promptAndMessagesResult = await Result.allAsync([
       buildChatSystemPromptParts({
         ...(caseLawDb === undefined ? {} : { caseLawDb }),
+        ...(legislationDb === undefined ? {} : { legislationDb }),
         featureAccessContext: { featureAccessSnapshot, organizationId, userId },
         activeDecision,
         activeDraft,

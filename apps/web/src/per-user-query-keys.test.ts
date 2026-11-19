@@ -664,10 +664,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "reports/exports/get.ts": {
     kind: "keyed",
     calls: ["api.workspaces().reports().get"],
-    files: [
-      "lib/workspaces/queries/report-exports.ts",
-      "routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx",
-    ],
+    files: ["lib/workspaces/queries/report-exports.ts"],
     keys: () => [
       reportExportsKeys.detail({
         exportId: "export",
