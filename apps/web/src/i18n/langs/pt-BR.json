@@ -2747,6 +2747,7 @@
     "done": "Concluído",
     "doubleClickToRename": "Clique duas vezes para renomear",
     "download": "Baixar",
+    "downloadOriginal": "Baixar original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimentação cancelada. {itemName} não foi movido.} other {Movimentação cancelada. {itemName} não foram movidos.} many {Movimentação cancelada. {itemName} não foram movidos.}}",
       "droppedOn": "{count, plural, one {{itemName} foi solto sobre {destinationName}.} other {{itemName} foram soltos sobre {destinationName}.} many {{itemName} foram soltos sobre {destinationName}.}}",
@@ -3334,6 +3335,8 @@
       "contact": "Contato: {name}",
       "deliveredAt": "Entregue na caixa",
       "delivery": "Entrega",
+      "deliveryEvents": "Histórico de entrega",
+      "deliveryReceipt": "Comprovante de entrega",
       "directionUnknown": "Direção desconhecida",
       "messageId": "ID da mensagem",
       "moreContacts": "Há mais contatos associados a esta caixa de dados.",
@@ -3346,6 +3349,8 @@
       "sent": "Enviada",
       "statedInFile": "Mensagem de caixa de dados (conforme o arquivo)",
       "toHands": "Aos cuidados de {name}",
+      "unlinkedFiles": "Para abrir os anexos exibidos sem link, baixe o arquivo ZFO original.",
+      "unreadable": "Não foi possível ler o arquivo como uma mensagem da caixa de dados nem como um comprovante de entrega.",
       "uploaded": "Mensagem de caixa de dados enviada"
     },
     "deliveredBy": "Entregue por <address>{sender}</address>",

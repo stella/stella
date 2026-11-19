@@ -2747,6 +2747,7 @@
     "done": "Atlikta",
     "doubleClickToRename": "Spustelėkite du kartus, kad pervadintumėte",
     "download": "Atsisiųsti",
+    "downloadOriginal": "Atsisiųsti originalą",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Perkėlimas atšauktas: {itemName}.} few {Perkėlimas atšauktas: {itemName}.} other {Perkėlimas atšauktas: {itemName}.} many {Perkėlimas atšauktas: {itemName}.}}",
       "droppedOn": "{count, plural, one {Numetimas ant {destinationName} baigtas: {itemName}.} few {Numetimas ant {destinationName} baigtas: {itemName}.} other {Numetimas ant {destinationName} baigtas: {itemName}.} many {Numetimas ant {destinationName} baigtas: {itemName}.}}",
@@ -3334,6 +3335,8 @@
       "contact": "Kontaktas: {name}",
       "deliveredAt": "Pristatyta į dėžutę",
       "delivery": "Įteikimas",
+      "deliveryEvents": "Pristatymo eiga",
+      "deliveryReceipt": "Pristatymo patvirtinimas",
       "directionUnknown": "Kryptis nežinoma",
       "messageId": "Pranešimo ID",
       "moreContacts": "Su šia duomenų dėžute susieta daugiau kontaktų.",
@@ -3346,6 +3349,8 @@
       "sent": "Išsiųstas",
       "statedInFile": "Duomenų dėžutės pranešimas (pagal failą)",
       "toHands": "Asmeniškai: {name}",
+      "unlinkedFiles": "Norėdami atidaryti priedus, prie kurių nėra nuorodos, atsisiųskite originalų ZFO failą.",
+      "unreadable": "Failo nepavyko perskaityti nei kaip duomenų dėžutės pranešimo, nei kaip pristatymo patvirtinimo.",
       "uploaded": "Įkeltas duomenų dėžutės pranešimas"
     },
     "deliveredBy": "Pristatė <address>{sender}</address>",

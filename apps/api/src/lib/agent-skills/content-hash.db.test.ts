@@ -205,6 +205,7 @@ const runSkillEditTool = async ({
 
 const savePackage = async (input: Record<string, unknown>) => {
   const tools = createSkillPackageTools({
+    offer: { type: "every" },
     memberRole: sessionMemberRole("member"),
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,

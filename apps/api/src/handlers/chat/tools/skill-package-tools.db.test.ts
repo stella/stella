@@ -63,6 +63,7 @@ const runTool = async ({
 }): Promise<ToolOutput> => {
   const recordAuditEvent: AuditRecorder = async () => undefined;
   const tools = createSkillPackageTools({
+    offer: { type: "every" },
     memberRole: sessionMemberRole(role),
     organizationId: ids.orgA,
     recordAuditEvent,

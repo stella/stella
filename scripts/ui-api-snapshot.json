@@ -2152,6 +2152,7 @@
     "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
       "csv",
+      "dataBox",
       "excel",
       "markdown",
       "openDocumentSheet",

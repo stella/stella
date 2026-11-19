@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
 const fileExtensionMap: Record<string, string> = {
@@ -26,7 +28,12 @@ const fileExtensionMap: Record<string, string> = {
   "application/xml": "xml",
   "message/rfc822": "eml",
   "application/vnd.ms-outlook": "msg",
-  "application/vnd.software602.filler.form-xml-zip": "zfo",
+  ...Object.fromEntries(
+    LEGAL_FILE_FORMATS.map(({ mimeType, extension }) => [
+      mimeType,
+      extension.slice(1),
+    ]),
+  ),
   "application/rtf": "rtf",
 };
 
