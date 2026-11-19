@@ -18,6 +18,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
@@ -107,19 +108,33 @@ const exportSkill = createSafeRootHandler(
         }),
       );
     }
-    const resources = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            content: agentSkillResources.content,
-            path: agentSkillResources.path,
-          })
-          .from(agentSkillResources)
-          .where(eq(agentSkillResources.skillId, params.skillId))
-          .orderBy(asc(agentSkillResources.path))
-          .limit(SKILL_PACKAGE_LIMITS.resourcesPerSkillMax),
+    const read = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await readBounded(
+            tx
+              .select({
+                content: agentSkillResources.content,
+                path: agentSkillResources.path,
+              })
+              .from(agentSkillResources)
+              .where(eq(agentSkillResources.skillId, params.skillId))
+              .orderBy(asc(agentSkillResources.path)),
+            SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
+          ),
       ),
     );
+    // A skill cannot be saved with more files; an archive must not drop any.
+    if (read.type === "overflow") {
+      return Result.err(
+        new HandlerError({
+          code: SKILL_EXPORT_TOO_LARGE_CODE,
+          status: 413,
+          message: "Skill has too many files to download as one archive",
+        }),
+      );
+    }
+    const resources = read.rows;
     yield* Result.await(
       safeDb(
         async (tx) =>

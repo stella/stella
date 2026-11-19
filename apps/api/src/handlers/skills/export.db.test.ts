@@ -74,7 +74,7 @@ describe("skills.export", () => {
 
     const response = await exportAs(ids.userA1, skillId);
     if (!(response instanceof Response)) {
-      return panic(`Expected an archive, got ${JSON.stringify(response)}`);
+      panic(`Expected an archive, got ${JSON.stringify(response)}`);
     }
     expect(response.headers.get("content-type")).toBe("application/zip");
     expect(response.headers.get("content-disposition")).toContain(
@@ -89,7 +89,7 @@ describe("skills.export", () => {
       }),
     );
     if (imported.isErr()) {
-      return panic(`The archive did not import: ${imported.error.message}`);
+      panic(`The archive did not import: ${imported.error.message}`);
     }
     expect(imported.value).toMatchObject({
       body: "Read `references/checklist.md`.",
