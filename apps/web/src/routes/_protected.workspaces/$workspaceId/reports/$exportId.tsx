@@ -1,10 +1,6 @@
 import { useState } from "react";
 
-import {
-  queryOptions,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -13,13 +9,11 @@ import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { useAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
 import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
+import { reportExportRecoveryOptions } from "@/lib/workspaces/queries/report-exports";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
 import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
@@ -194,49 +188,6 @@ function ReportExportRecoverySkeleton() {
     </main>
   );
 }
-
-const POLL_INTERVAL_MS = 2000;
-
-type ReportExportRecoveryKey = {
-  exportId: string;
-  userId: string;
-  workspaceId: string;
-};
-
-const reportExportRecoveryKeys = {
-  all: (workspaceId: string) =>
-    ["report-export-recovery", workspaceId] as const,
-  detail: ({ exportId, userId, workspaceId }: ReportExportRecoveryKey) =>
-    [...reportExportRecoveryKeys.all(workspaceId), userId, exportId] as const,
-};
-
-const reportExportRecoveryOptions = ({
-  exportId,
-  userId,
-  workspaceId,
-}: ReportExportRecoveryKey) =>
-  queryOptions({
-    queryKey: reportExportRecoveryKeys.detail({
-      exportId,
-      userId,
-      workspaceId,
-    }),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .reports({ exportId: toSafeId<"reportExport">(exportId) })
-        .get({ fetch: { signal } });
-      return unwrapApiResponse(response);
-    },
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === "completed" || status === "failed") {
-        return false;
-      }
-      return POLL_INTERVAL_MS;
-    },
-    staleTime: 0,
-  });
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/reports/$exportId",

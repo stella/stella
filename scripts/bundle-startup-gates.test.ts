@@ -36,12 +36,15 @@ const chunk = (
 const graphOf = (
   initial: readonly BuiltChunk[],
   lazy: readonly BuiltChunk[] = [],
-  rest: Partial<Pick<StartupGraph, "routes" | "routeComponentBytes">> = {},
+  rest: Partial<
+    Pick<StartupGraph, "routes" | "routeComponentBytes" | "moduleImports">
+  > = {},
 ): StartupGraph => ({
   initialChunks: initial.map((c) => c.fileName),
   chunks: new Map([...initial, ...lazy].map((c) => [c.fileName, c])),
   routes: [],
   routeComponentBytes: new Map(),
+  moduleImports: new Map(),
   ...rest,
 });
 
@@ -383,6 +386,84 @@ describe("cold-load hops", () => {
 
     // The preloaded shell holds a page module, but nothing waits for it.
     expect(coldLoadHops(graph)).toEqual([]);
+  });
+
+  describe("an import() in the page or what it imports", () => {
+    const pageModule = "src/routes/-cases.page.tsx";
+    const helper = "src/routes/-cases/member-loader.ts";
+    const unrelated = "src/routes/-other.page.tsx";
+    const memberPage = chunk("cases-member-f.js", {
+      "src/routes/-cases/member-page.tsx": 40_000,
+    });
+    const componentChunk = (
+      imports: BuiltChunk["dynamicImports"],
+    ): BuiltChunk =>
+      chunk(
+        "cases-c.js",
+        {
+          "src/routes/cases.tsx?tsr-split=component": 200,
+          [pageModule]: 3000,
+          [helper]: 300,
+          [unrelated]: 3000,
+        },
+        { dynamicImports: imports },
+      );
+    const routes = [
+      {
+        id: "/cases",
+        filePath: "src/routes/cases.tsx",
+        preloads: ["cases-c.js"],
+      },
+    ];
+    const moduleImports = new Map([
+      ["src/routes/cases.tsx?tsr-split=component", [pageModule]],
+      [pageModule, [helper]],
+    ]);
+
+    test("from the page module is a hop", () => {
+      const graph = graphOf(
+        [],
+        [
+          componentChunk([
+            { target: "cases-member-f.js", importer: pageModule },
+          ]),
+          memberPage,
+        ],
+        { routes, moduleImports },
+      );
+
+      expect(coldLoadHops(graph).map((hop) => hop.module)).toEqual([
+        "src/routes/-cases/member-page.tsx",
+      ]);
+    });
+
+    test("from a module the page imports statically is a hop", () => {
+      const graph = graphOf(
+        [],
+        [
+          componentChunk([{ target: "cases-member-f.js", importer: helper }]),
+          memberPage,
+        ],
+        { routes, moduleImports },
+      );
+
+      expect(coldLoadHops(graph).map((hop) => hop.route)).toEqual(["/cases"]);
+    });
+
+    test("from a page the component does not reach is not this route's hop", () => {
+      const graph = graphOf(
+        [],
+        [
+          componentChunk([
+            { target: "cases-member-f.js", importer: unrelated },
+          ]),
+          memberPage,
+        ],
+        { routes, moduleImports },
+      );
+
+      expect(coldLoadHops(graph)).toEqual([]);
+    });
   });
 
   test("a lazy feature and another route's import are not this route's page", () => {

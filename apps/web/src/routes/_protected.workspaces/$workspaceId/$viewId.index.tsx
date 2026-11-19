@@ -16,7 +16,7 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
-import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
+import type { ViewLayoutType } from "@/lib/types";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
   overviewActivityOptions,
@@ -36,7 +36,12 @@ import { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
-import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
+import {
+  isAvtView,
+  isCalendarView,
+  isFilesystemView,
+  isTableView,
+} from "@/lib/workspaces/view-layout";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
@@ -51,21 +56,6 @@ const AvtRoute = lazy(async () => {
   const m = await import("@/features/avt/avt-route");
   return { default: m.AvtRoute };
 });
-
-type FilesystemWorkspaceView = WorkspaceView & {
-  layout: Extract<ViewLayout, { type: "filesystem" }>;
-};
-
-type CalendarWorkspaceView = WorkspaceView & {
-  layout: Extract<ViewLayout, { type: "calendar" }>;
-};
-
-const isFilesystemView = (
-  view: WorkspaceView,
-): view is FilesystemWorkspaceView => view.layout.type === "filesystem";
-
-const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
-  view.layout.type === "calendar";
 
 // `run` opens one verification in an AVT view; `mode` shows the list as a
 // graph or a chronology instead of its review.

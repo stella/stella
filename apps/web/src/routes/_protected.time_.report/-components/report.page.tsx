@@ -1,4 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
@@ -11,7 +12,6 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
   SelectItem,
@@ -21,7 +21,9 @@ import {
 } from "@stll/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@stll/ui/tabs";
 
+import { todayIn } from "@/components/billing/work-week.logic";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { detached } from "@/lib/detached";
 
 import { REPORT_LABELS } from "./report-labels";
 import {
@@ -34,10 +36,42 @@ import { ReportTable } from "./report-table";
 import {
   isReportPeriod,
   type ReportPeriod,
+  resolveReportSearch,
   shiftReportRange,
 } from "./report.logic";
+import { ReportShell } from "./report.pending";
 
-export const ReportPage = ({
+const routeApi = getRouteApi("/_protected/time_/report");
+
+/** /time/report: the report the search names, in the person's own zone. */
+export const TimeReportPage = () => {
+  const search = routeApi.useSearch({ select: (value) => value });
+  const { organizationId, userId, timezoneId } = routeApi.useRouteContext({
+    select: (context) => ({
+      organizationId: context.user.activeOrganizationId,
+      userId: context.user.id,
+      timezoneId: context.user.timezoneId,
+    }),
+  });
+  const navigate = routeApi.useNavigate();
+  const { filter, period } = resolveReportSearch(search, todayIn(timezoneId));
+  return (
+    <ReportPage
+      organizationId={organizationId}
+      userId={userId}
+      filter={filter}
+      period={period}
+      onChange={(next, nextPeriod) =>
+        detached(
+          navigate({ search: { ...next, period: nextPeriod } }),
+          "time-report.navigate",
+        )
+      }
+    />
+  );
+};
+
+const ReportPage = ({
   organizationId,
   userId,
   filter,
@@ -64,7 +98,7 @@ export const ReportPage = ({
 };
 
 type ReportLayoutProps = {
-  data: TimeReportResult | undefined;
+  data: TimeReportResult;
   filter: ReportFilter;
   period: ReportPeriod;
   onChange: (filter: ReportFilter, period: ReportPeriod) => void;
@@ -78,10 +112,9 @@ export const ReportLayout = ({
   const t = useTranslations();
   const common = useTranslations("common");
   return (
-    <ScrollArea className="h-full">
-      <div className="flex min-w-0 flex-col gap-4 p-4">
-        <h1 className="text-lg font-medium">{t(REPORT_LABELS.title)}</h1>
-        <div className="flex flex-wrap items-end gap-3">
+    <ReportShell
+      controls={
+        <>
           <Tabs
             value={period}
             onValueChange={(value) => {
@@ -203,21 +236,19 @@ export const ReportLayout = ({
               </SelectPopup>
             </Select>
           </div>
-        </div>
-        {data?.type === "too-large" ? (
-          <p className="text-sm" role="status">
-            {t(REPORT_LABELS.tooLargeToLoad)}
-          </p>
-        ) : (
-          <>
-            <ReportSummary data={data?.report} />
-            <ReportTable data={data?.report} filter={filter} />
-          </>
-        )}
-        <p className="text-muted-foreground text-xs">
-          {t(REPORT_LABELS.privacy)}
+        </>
+      }
+    >
+      {data.type === "too-large" ? (
+        <p className="text-sm" role="status">
+          {t(REPORT_LABELS.tooLargeToLoad)}
         </p>
-      </div>
-    </ScrollArea>
+      ) : (
+        <>
+          <ReportSummary data={data.report} />
+          <ReportTable data={data.report} filter={filter} />
+        </>
+      )}
+    </ReportShell>
   );
 };
