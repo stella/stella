@@ -11,6 +11,8 @@ export type ReaderMessageKey =
   | "folio.comment"
   | "legalReader.annotations.highlight"
   | "caseLaw.reader.headMatter"
+  | "caseLaw.reader.collectionPartialText"
+  | "caseLaw.reader.collectionUnclassifiedText"
   | "caseLaw.notesFilter.ai"
   | "common.court"
   | "statutes.wordingVersionUnknown"

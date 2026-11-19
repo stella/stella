@@ -19,6 +19,10 @@ import {
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import { CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT } from "@stll/api-contract";
+import {
+  DECISION_BODY_TEXT_SOURCE,
+  type DecisionBodySource,
+} from "@stll/api-contract/case-law-body-source";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -755,7 +759,7 @@ const createReadDecisionResult = () => ({
   },
   sourceUrl: "https://example.test/decision",
   sourceAttributionUrl: "https://example.test/decision",
-  bodySource: { textSource: "host" },
+  bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
 });
 
 /**
@@ -9933,8 +9937,10 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("collection-backed passages preserve the text format and carry publication provenance", async () => {
     const base = createReadDecisionResult();
-    const bodySource = {
-      textSource: "collection",
+    const publication = {
+      extent: "unclassified",
+      contribution: "body",
+      sourceDocumentId: "123",
       sourceUrl: "https://sbirka.nsoud.cz/sbirka/123/",
       retrievedAt: "2026-10-09T12:00:00.000Z",
       source: {
@@ -9944,6 +9950,19 @@ describe("OpenAI-compatible MCP tools", () => {
         allowsDerivedAi: true,
       },
     } as const;
+    const bodySource = {
+      textSource: "collection",
+      source: publication.source,
+      sourceUrl: publication.sourceUrl,
+      retrievedAt: publication.retrievedAt,
+      extent: publication.extent,
+      provenance: {
+        coverage: "all",
+        totalCount: 1,
+        omittedCount: 0,
+        records: [publication],
+      },
+    } satisfies DecisionBodySource;
     readDecisionHandlerMock.mockResolvedValue({ ...base, bodySource });
     const entry = await readOne({ max_chars: 64 });
     expect(entry.decision).toMatchObject({ textSource: "ast", bodySource });

@@ -126,6 +126,7 @@ import {
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
+import type { CollectionDocumentPartRead } from "@/api/lib/legal-search/collection-document-part-read";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
@@ -2104,6 +2105,12 @@ export const caseLawCollectionBodies = p
     retrievedAt: timestamptz("retrieved_at").notNull(),
     detailRawS3Key: p.varchar("detail_raw_s3_key", { length: 512 }),
     detailRawContentType: p.varchar("detail_raw_content_type", { length: 128 }),
+    documentPart: jsonb("document_part").$type<CollectionDocumentPartRead>(),
+    documentBodyS3Key: p.varchar("document_body_s3_key", { length: 512 }),
+    documentBodySha256: p.varchar("document_body_sha256", { length: 64 }),
+    origin: p
+      .varchar("origin", { enum: ["canonical-own-row", "attachment"] })
+      .notNull(),
   })
   .with({ securityBarrier: true }).as(sql`
   SELECT host.id AS host_decision_id,
@@ -2114,7 +2121,17 @@ export const caseLawCollectionBodies = p
     CASE WHEN attachment.source_raw_s3_key ~ (
       '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
     ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
-    attachment.source_raw_content_type AS detail_raw_content_type
+    attachment.source_raw_content_type AS detail_raw_content_type,
+    attachment.document_part - 'legalSentence' AS document_part,
+    CASE WHEN attachment.document_body_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) AND right(attachment.document_body_s3_key, 64) = attachment.document_body_sha256
+      AND attachment.match_evidence->>'status' = 'matched'
+      THEN attachment.document_body_s3_key END AS document_body_s3_key,
+    attachment.document_body_sha256,
+    CASE WHEN attachment.source_id = host.source_id
+      AND attachment.source_document_id = host.source_document_id
+      THEN 'canonical-own-row' ELSE 'attachment' END::varchar AS origin
   FROM case_law_held_decision_attachments AS attachment
   JOIN case_law_decisions AS host
     ON host.id = attachment.host_decision_id
@@ -2122,7 +2139,9 @@ export const caseLawCollectionBodies = p
   JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
   WHERE attachment.host_withdrawn_at IS NULL
     AND ${sql.raw(publishedCaseLawDecisionSqlFor("host"))}
-    AND collection_source.adapter_key = 'cz-ns-sbirka'
+    AND ((collection_source.adapter_key = 'cz-ns-sbirka'
+        AND (attachment.match_evidence IS NULL OR attachment.match_evidence->>'status' = 'matched'))
+      OR (attachment.document_part IS NOT NULL AND attachment.match_evidence->>'status' = 'matched'))
     AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
     AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
   UNION ALL
@@ -2134,7 +2153,15 @@ export const caseLawCollectionBodies = p
     CASE WHEN attachment.source_raw_s3_key ~ (
       '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
     ) THEN attachment.source_raw_s3_key END AS detail_raw_s3_key,
-    attachment.source_raw_content_type AS detail_raw_content_type
+    attachment.source_raw_content_type AS detail_raw_content_type,
+    attachment.document_part - 'legalSentence' AS document_part,
+    CASE WHEN attachment.document_body_s3_key ~ (
+      '^case-law/raw/[0-9a-f-]{36}/documents/' || attachment.host_decision_id::text || '/payloads/[0-9a-f]{64}$'
+    ) AND right(attachment.document_body_s3_key, 64) = attachment.document_body_sha256
+      AND attachment.match_evidence->>'status' = 'matched'
+      THEN attachment.document_body_s3_key END AS document_body_s3_key,
+    attachment.document_body_sha256,
+    'attachment'::varchar AS origin
   FROM case_law_held_decision_attachments AS attachment
   JOIN case_law_decision_aliases AS alias
     ON alias.retired_decision_id = attachment.host_decision_id
@@ -2144,7 +2171,9 @@ export const caseLawCollectionBodies = p
   JOIN case_law_sources AS collection_source ON collection_source.id = attachment.source_id
   WHERE attachment.host_withdrawn_at IS NULL
     AND ${sql.raw(publishedCaseLawDecisionSqlFor("host"))}
-    AND collection_source.adapter_key = 'cz-ns-sbirka'
+    AND ((collection_source.adapter_key = 'cz-ns-sbirka'
+        AND (attachment.match_evidence IS NULL OR attachment.match_evidence->>'status' = 'matched'))
+      OR (attachment.document_part IS NOT NULL AND attachment.match_evidence->>'status' = 'matched'))
     AND ${redistributableCaseLawSourceFor(sql`host_source.descriptor`)}
     AND ${redistributableCaseLawSourceFor(sql`collection_source.descriptor`)}
 `);

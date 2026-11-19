@@ -11,6 +11,7 @@ import {
   omitDerivablePlainText,
 } from "@stll/legal-ast/document-ast";
 import { projectionDigest as digestAst } from "@stll/legal-ast/projection-digest";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   caseLawDecisionIdentifiers,
@@ -94,7 +95,11 @@ import {
 } from "@/api/lib/public-law-shared-query";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
-import { readCollectionBody } from "./collection-body";
+import {
+  canonicalCollectionBodyContextOf,
+  readCollectionBody,
+  readCollectionPublications,
+} from "./collection-body";
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
@@ -354,6 +359,7 @@ export const decisionRecordQuery = (
     .select({
       id: publishedCaseLawDecisions.id,
       sourceId: publishedCaseLawDecisions.sourceId,
+      sourceObservedAt: publishedCaseLawDecisions.sourceObservedAt,
       caseNumber: publishedCaseLawDecisions.caseNumber,
       caseNumberType: publishedCaseLawDecisions.caseNumberType,
       slug: publishedCaseLawDecisions.slug,
@@ -468,8 +474,52 @@ type ResolveDecisionBodyOptions = {
   readTombstones: CorpusTombstoneReader;
 };
 
-/** One selection owner for API, MCP and human readers; host payloads win. */
-const resolveDecisionBody = async ({
+type ReadHostSectionsOptions = Pick<
+  ResolveDecisionBodyOptions,
+  "tx" | "decision" | "decisionId" | "readTombstones"
+>;
+
+const readHostSections = async ({
+  tx,
+  decision,
+  decisionId,
+  readTombstones,
+}: ReadHostSectionsOptions) => {
+  const readRowSections = async () => {
+    const [row] = await tx
+      .select({ sections: publishedCaseLawDecisions.sections })
+      .from(publishedCaseLawDecisions)
+      .where(eq(publishedCaseLawDecisions.id, decisionId))
+      .limit(1);
+    return row?.sections ?? null;
+  };
+  return await containPayloadUnavailable(async () => {
+    const { normalizedS3Key } = decision;
+    if (
+      corpusReadEnabled() &&
+      normalizedS3Key !== null &&
+      decision.contentHash !== null
+    ) {
+      return await readCorpusPayloadOrFallback({
+        documentId: decisionId,
+        key: normalizedS3Key,
+        step: "readDecision.corpusSections",
+        read: async () =>
+          await readCorpusSections(normalizedS3Key, { readTombstones }),
+        fallback: async () => {
+          const rowSections = await readRowSections();
+          return rowSections !== null && rowSections.length > 0
+            ? rowSections
+            : null;
+        },
+      });
+    }
+    return await readRowSections();
+  }, decisionId);
+};
+
+/** The canonical publisher's stored AST, text and normalized sections resolve once. */
+const readHostDecisionBody = async ({
   tx,
   decision,
   decisionId,
@@ -487,14 +537,14 @@ const resolveDecisionBody = async ({
   });
   const storedAst = astRead.payload;
   const hostAstIsUsable = hasUsableAst(storedAst);
-  let sections =
+  const sections =
     hostAstIsUsable && astProjection === "wire"
       ? await payloadReaders.readSections(storedAst)
       : null;
   // Block text a reader can rebuild from the `inlines` beside it does
   // not travel: ingestion derives every `plainText` with
   // `projectPlainText`, and `parseDocumentAst` refills them on arrival.
-  let documentAst =
+  const documentAst =
     hostAstIsUsable && astProjection === "wire"
       ? omitDerivablePlainText(storedAst)
       : storedAst;
@@ -514,41 +564,14 @@ const resolveDecisionBody = async ({
     corpusPayloadUnavailable = corpusPayloadUnavailable || textRead.unavailable;
   }
 
-  let bodySource: DecisionBodySource = { textSource: "host" };
-  let collectionDigest: string | null = null;
   let hostSectionsPresent = false;
   if (!hostAstIsUsable && !fulltext && decision.redactedAt === null) {
-    const readRowSections = async () => {
-      const [row] = await tx
-        .select({ sections: publishedCaseLawDecisions.sections })
-        .from(publishedCaseLawDecisions)
-        .where(eq(publishedCaseLawDecisions.id, decisionId))
-        .limit(1);
-      return row?.sections ?? null;
-    };
-    const hostSections = await containPayloadUnavailable(async () => {
-      const { normalizedS3Key } = decision;
-      if (
-        corpusReadEnabled() &&
-        normalizedS3Key !== null &&
-        decision.contentHash !== null
-      ) {
-        return await readCorpusPayloadOrFallback({
-          documentId: decisionId,
-          key: normalizedS3Key,
-          step: "readDecision.corpusSections",
-          read: async () =>
-            await readCorpusSections(normalizedS3Key, { readTombstones }),
-          fallback: async () => {
-            const rowSections = await readRowSections();
-            return rowSections !== null && rowSections.length > 0
-              ? rowSections
-              : null;
-          },
-        });
-      }
-      return await readRowSections();
-    }, decisionId);
+    const hostSections = await readHostSections({
+      tx,
+      decision,
+      decisionId,
+      readTombstones,
+    });
     corpusPayloadUnavailable =
       corpusPayloadUnavailable || hostSections.unavailable;
     hostSectionsPresent = (hostSections.payload?.length ?? 0) > 0;
@@ -559,41 +582,121 @@ const resolveDecisionBody = async ({
     if (sectionsText) {
       fulltext = sectionsText;
     }
-    if (!fulltext && !hostSectionsPresent && !corpusPayloadUnavailable) {
-      const collection = await readCollectionBody({
-        tx,
-        decisionId,
-        identity: {
-          caseNumber: decision.caseNumber,
-          ecli: decision.ecli ?? undefined,
-          court: decision.court,
-          decisionDate: decision.decisionDate ?? undefined,
-          decisionType: decision.decisionType ?? undefined,
-        },
-      });
-      switch (collection.status) {
-        case "absent":
-        case "empty":
-          break;
-        case "unavailable":
-          corpusPayloadUnavailable = true;
-          break;
-        case "present": {
-          bodySource = collection.bodySource;
-          fulltext = collection.fulltext;
-          documentAst =
-            astProjection === "wire"
-              ? omitDerivablePlainText(collection.documentAst)
-              : collection.documentAst;
-          sections = null;
-          collectionDigest = await digestAst(collection.documentAst);
-          break;
-        }
-        default:
-          collection satisfies never;
-          panic("Unhandled collection body read");
-      }
+  }
+  return {
+    documentAst,
+    sections,
+    fulltext,
+    corpusPayloadUnavailable,
+    hostSectionsPresent,
+    hasReadableDocument:
+      hostAstIsUsable || Boolean(fulltext) || hostSectionsPresent,
+    projectionDigest: astRead.projectionDigest,
+    documentAstSource: astRead.source,
+  };
+};
+
+/** One selection owner for API, MCP and human readers; host payloads win. */
+const resolveDecisionBody = async ({
+  tx,
+  decision,
+  decisionId,
+  astProjection,
+  readTombstones,
+}: ResolveDecisionBodyOptions) => {
+  const collectionSelection = await readCollectionPublications({
+    tx,
+    decisionId,
+  });
+  const collectionContext = canonicalCollectionBodyContextOf({
+    selection: collectionSelection,
+    source: decision.source,
+    sourceUrl: decision.sourceUrl,
+    sourceObservedAt: decision.sourceObservedAt,
+  });
+  const host = await readHostDecisionBody({
+    tx,
+    decision,
+    decisionId,
+    astProjection,
+    readTombstones,
+  });
+  let {
+    documentAst,
+    sections,
+    fulltext,
+    corpusPayloadUnavailable,
+    hostSectionsPresent,
+  } = host;
+  let bodySource: DecisionBodySource = { textSource: "host" };
+  let collectionDigest: string | null = null;
+  const canonicalHasBody = host.hasReadableDocument;
+  if (collectionContext.status === "collection" && canonicalHasBody) {
+    bodySource = collectionContext.bodySource;
+  }
+  const needsComposition =
+    collectionContext.status === "unavailable" ||
+    (collectionContext.status === "collection" &&
+      collectionContext.preferredBody === "collection");
+  const canReadCollection =
+    !corpusPayloadUnavailable && decision.redactedAt === null;
+  if (canReadCollection && (needsComposition || !canonicalHasBody)) {
+    if (
+      collectionContext.status === "collection" &&
+      collectionContext.selfExtent === "section"
+    ) {
+      documentAst = null;
+      fulltext = null;
+      sections = null;
+      hostSectionsPresent = false;
     }
+
+    const collection = await readCollectionBody({
+      tx,
+      decisionId,
+      selection: collectionSelection,
+      identity: {
+        caseNumber: decision.caseNumber,
+        ecli: decision.ecli ?? undefined,
+        court: decision.court,
+        decisionDate: decision.decisionDate ?? undefined,
+        decisionType: decision.decisionType ?? undefined,
+      },
+    });
+    switch (collection.status) {
+      case "absent":
+      case "empty":
+        break;
+      case "unavailable":
+        corpusPayloadUnavailable = true;
+        break;
+      case "present": {
+        bodySource = collection.bodySource;
+        fulltext = collection.fulltext;
+        documentAst =
+          hasUsableAst(collection.documentAst) && astProjection === "wire"
+            ? omitDerivablePlainText(collection.documentAst)
+            : collection.documentAst;
+        sections = null;
+        collectionDigest = hasUsableAst(collection.documentAst)
+          ? await digestAst(collection.documentAst)
+          : sha256Hex(collection.fulltext);
+        break;
+      }
+      default:
+        collection satisfies never;
+        panic("Unhandled collection body read");
+    }
+  }
+  if (
+    collectionContext.status === "unavailable" &&
+    bodySource.textSource === "host"
+  ) {
+    documentAst = null;
+    fulltext = null;
+    sections = null;
+    hostSectionsPresent = false;
+    corpusPayloadUnavailable = true;
   }
 
   return {
@@ -602,10 +705,12 @@ const resolveDecisionBody = async ({
     fulltext,
     bodySource,
     hasReadableDocument:
-      hostAstIsUsable || Boolean(fulltext) || hostSectionsPresent,
+      (documentAst?.blocks.length ?? 0) > 0 ||
+      Boolean(fulltext) ||
+      hostSectionsPresent,
     corpusPayloadUnavailable,
-    projectionDigest: collectionDigest ?? astRead.projectionDigest,
-    documentAstSource: astRead.source,
+    projectionDigest: collectionDigest ?? host.projectionDigest,
+    documentAstSource: host.documentAstSource,
   };
 };
 

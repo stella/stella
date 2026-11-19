@@ -22,6 +22,12 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "folio.comment": t("folio.comment"),
     "legalReader.annotations.highlight": t("legalReader.annotations.highlight"),
     "caseLaw.reader.headMatter": t("caseLaw.reader.headMatter"),
+    "caseLaw.reader.collectionPartialText": t(
+      "caseLaw.reader.collectionPartialText",
+    ),
+    "caseLaw.reader.collectionUnclassifiedText": t(
+      "caseLaw.reader.collectionUnclassifiedText",
+    ),
     "caseLaw.notesFilter.ai": t("caseLaw.notesFilter.ai"),
     "common.court": t("common.court"),
     "statutes.wordingVersionUnknown": t("statutes.wordingVersionUnknown"),
@@ -36,11 +42,18 @@ export const useWebReaderMessages = (): ReaderMessages => {
     // Explicit ReactNode: the inferred `t.rich` result carries React 19's
     // Promise<AwaitedReactNode> member, which promise-function-async flags.
     collectionSourceAttribution: (source, date, link): ReactNode =>
-      t.rich("caseLaw.reader.collectionSourceAttribution", {
-        source,
-        date,
-        link,
-      }),
+      date === null
+        ? t.rich("caseLaw.reader.collectionSourceAttributionUnknownDate", {
+            source,
+            link,
+          })
+        : t.rich("caseLaw.reader.collectionSourceAttribution", {
+            source,
+            date,
+            link,
+          }),
+    collectionProvenanceOmitted: (counts) =>
+      t("caseLaw.reader.collectionProvenanceOmitted", counts),
     sourceAttribution: (source, link): ReactNode =>
       t.rich("caseLaw.reader.sourceAttribution", { source, link }),
     dissentByline: (names): ReactNode =>

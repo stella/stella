@@ -15,6 +15,10 @@ export const readerMessages = (hostLocale: string | undefined) => {
     messages: {
       collectionSourceAttribution:
         messages["caseLaw.reader.collectionSourceAttribution"],
+      collectionSourceAttributionUnknownDate:
+        messages["caseLaw.reader.collectionSourceAttributionUnknownDate"],
+      collectionProvenanceOmitted:
+        messages["caseLaw.reader.collectionProvenanceOmitted"],
       sourceAttribution: messages["caseLaw.reader.sourceAttribution"],
       dissentByline: messages["caseLaw.viewer.dissentByline"],
       provisionEffectiveFrom: messages["statutes.provisionEffectiveFrom"],
@@ -25,7 +29,11 @@ export const readerMessages = (hostLocale: string | undefined) => {
   return {
     ...messages,
     collectionSourceAttribution: (source, date, link): ReactNode =>
-      t.rich("collectionSourceAttribution", { source, date, link }),
+      date === null
+        ? t.rich("collectionSourceAttributionUnknownDate", { source, link })
+        : t.rich("collectionSourceAttribution", { source, date, link }),
+    collectionProvenanceOmitted: (counts) =>
+      t("collectionProvenanceOmitted", counts),
     sourceAttribution: (source, link): ReactNode =>
       t.rich("sourceAttribution", { source, link }),
     dissentByline: (names): ReactNode =>

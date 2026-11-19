@@ -1442,7 +1442,11 @@
       "subsection": "ods. {value}"
     },
     "reader": {
-      "collectionSourceAttribution": "Zbierkový text: <link>{source}</link>. Získané {date}.",
+      "collectionPartialText": "Zobrazené sú publikované časti; úplnosť nebola overená.",
+      "collectionProvenanceOmitted": "Vynechané záznamy o publikáciách: {omittedCount, number} z {totalCount, number}.",
+      "collectionSourceAttribution": "Zbierková publikácia: <link>{source}</link>. Získané {date}.",
+      "collectionSourceAttributionUnknownDate": "Zbierková publikácia: <link>{source}</link>. Dátum získania nie je známy.",
+      "collectionUnclassifiedText": "Rozsah tohto zbierkového textu nie je známy.",
       "documentUpdated": "Dokument bol aktualizovaný.",
       "expandProvisions": "Rozbaliť ustanovenia",
       "headMatter": "Informácie o veci",

@@ -1442,7 +1442,11 @@
       "subsection": "الفقرة {value}"
     },
     "reader": {
-      "collectionSourceAttribution": "نص المجموعة: <link>{source}</link>. تم الاسترجاع في {date}.",
+      "collectionPartialText": "تُعرض الأقسام المنشورة؛ ولم يُثبت اكتمال النص.",
+      "collectionProvenanceOmitted": "سجلات النشر المحذوفة من العرض: {omittedCount, number} من {totalCount, number}.",
+      "collectionSourceAttribution": "منشور المجموعة: <link>{source}</link>. تم الاسترجاع في {date}.",
+      "collectionSourceAttributionUnknownDate": "منشور المجموعة: <link>{source}</link>. تاريخ الاسترجاع غير معروف.",
+      "collectionUnclassifiedText": "نطاق نص المجموعة هذا غير معروف.",
       "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
       "headMatter": "معلومات القضية",

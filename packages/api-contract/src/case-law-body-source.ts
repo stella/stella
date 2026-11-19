@@ -6,6 +6,101 @@ export const DECISION_BODY_TEXT_SOURCE = {
   COLLECTION: "collection",
 } as const;
 
+export const COLLECTION_BODY_EXTENT = {
+  COMPLETE: "complete",
+  SECTION: "section",
+  UNCLASSIFIED: "unclassified",
+} as const;
+
+export const COLLECTION_PUBLICATION_CONTRIBUTION = {
+  BODY: "body",
+  RELATED: "related",
+} as const;
+
+export const COLLECTION_PROVENANCE_COVERAGE = {
+  ALL: "all",
+  TRUNCATED: "truncated",
+} as const;
+
+export const COLLECTION_PUBLICATION_PROJECTION_MAX = 32;
+
+const sourceSchema = v.strictObject({
+  id: v.pipe(v.string(), v.uuid(), v.maxLength(36)),
+  name: v.pipe(v.string(), v.maxLength(1024)),
+  adapterKey: v.pipe(v.string(), v.maxLength(256)),
+  allowsDerivedAi: v.boolean(),
+});
+const sourceUrlSchema = v.pipe(v.string(), v.url(), v.maxLength(8192));
+const retrievedAtSchema = v.nullable(
+  v.pipe(v.string(), v.isoTimestamp(), v.maxLength(32)),
+);
+const positiveInteger = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(Number.MAX_SAFE_INTEGER),
+);
+const publicationEntries = {
+  source: sourceSchema,
+  sourceDocumentId: v.nullable(v.pipe(v.string(), v.maxLength(256))),
+  sourceUrl: sourceUrlSchema,
+  retrievedAt: retrievedAtSchema,
+  contribution: v.picklist(Object.values(COLLECTION_PUBLICATION_CONTRIBUTION)),
+};
+
+/** Per-post attribution contains no body prose, headnotes or object-store locators. */
+export const collectionPublicationSchema = v.variant("extent", [
+  v.strictObject({
+    extent: v.literal(COLLECTION_BODY_EXTENT.COMPLETE),
+    ...publicationEntries,
+  }),
+  v.strictObject({
+    extent: v.literal(COLLECTION_BODY_EXTENT.SECTION),
+    sectionNumber: positiveInteger,
+    collectionLabel: v.pipe(v.string(), v.maxLength(256)),
+    ...publicationEntries,
+  }),
+  v.strictObject({
+    extent: v.literal(COLLECTION_BODY_EXTENT.UNCLASSIFIED),
+    ...publicationEntries,
+  }),
+]);
+
+/** The retained publication count remains visible when its projection is bounded. */
+export const collectionBodyProvenanceSchemaOf = <
+  const TPublication extends v.GenericSchema,
+>(
+  publication: TPublication,
+) => {
+  const records = v.pipe(
+    v.array(publication),
+    v.minLength(1),
+    v.maxLength(COLLECTION_PUBLICATION_PROJECTION_MAX),
+  );
+  return v.variant("coverage", [
+    v.strictObject({
+      coverage: v.literal(COLLECTION_PROVENANCE_COVERAGE.ALL),
+      totalCount: positiveInteger,
+      omittedCount: v.literal(0),
+      records,
+    }),
+    v.strictObject({
+      coverage: v.literal(COLLECTION_PROVENANCE_COVERAGE.TRUNCATED),
+      totalCount: positiveInteger,
+      omittedCount: positiveInteger,
+      records,
+    }),
+  ]);
+};
+
+export const collectionBodyProvenanceSchema = collectionBodyProvenanceSchemaOf(
+  collectionPublicationSchema,
+);
+
+export type CollectionPublicationProvenance = v.InferOutput<
+  typeof collectionPublicationSchema
+>;
+
 /** Publication provenance, distinct from the AST/fulltext passage format. */
 export const decisionBodySourceSchema = v.variant("textSource", [
   v.strictObject({
@@ -13,14 +108,11 @@ export const decisionBodySourceSchema = v.variant("textSource", [
   }),
   v.strictObject({
     textSource: v.literal(DECISION_BODY_TEXT_SOURCE.COLLECTION),
-    source: v.strictObject({
-      id: v.pipe(v.string(), v.uuid(), v.maxLength(36)),
-      name: v.pipe(v.string(), v.maxLength(1024)),
-      adapterKey: v.pipe(v.string(), v.maxLength(256)),
-      allowsDerivedAi: v.boolean(),
-    }),
-    sourceUrl: v.pipe(v.string(), v.url(), v.maxLength(8192)),
-    retrievedAt: v.pipe(v.string(), v.isoTimestamp(), v.maxLength(32)),
+    source: sourceSchema,
+    sourceUrl: sourceUrlSchema,
+    retrievedAt: retrievedAtSchema,
+    extent: v.picklist(Object.values(COLLECTION_BODY_EXTENT)),
+    provenance: collectionBodyProvenanceSchema,
   }),
 ]);
 
@@ -38,7 +130,16 @@ export const decisionBodyAllowsDerivedAi = ({
     case DECISION_BODY_TEXT_SOURCE.HOST:
       return source.allowsDerivedAi;
     case DECISION_BODY_TEXT_SOURCE.COLLECTION:
-      return source.allowsDerivedAi && bodySource.source.allowsDerivedAi;
+      return (
+        source.allowsDerivedAi &&
+        bodySource.source.allowsDerivedAi &&
+        bodySource.provenance.records.every(
+          (publication) =>
+            publication.contribution !==
+              COLLECTION_PUBLICATION_CONTRIBUTION.BODY ||
+            publication.source.allowsDerivedAi,
+        )
+      );
     default:
       bodySource satisfies never;
       return panic("Unhandled decision body source");
