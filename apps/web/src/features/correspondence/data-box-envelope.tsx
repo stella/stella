@@ -78,7 +78,11 @@ const references = (party: DataBoxParty) =>
 export const DataBoxEnvelope = ({
   envelope,
   contacts,
+  titleKey = "correspondence.dataBox.statedInFile",
 }: {
+  titleKey?:
+    | "correspondence.dataBox.statedInFile"
+    | "correspondence.dataBox.deliveryReceipt";
   envelope: Envelope;
   contacts: CorrespondenceDataBoxContacts | null;
 }) => {
@@ -97,9 +101,7 @@ export const DataBoxEnvelope = ({
   return (
     <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
       <div className="space-y-1 sm:col-span-2">
-        <h2 className="text-sm font-medium">
-          {t("correspondence.dataBox.statedInFile")}
-        </h2>
+        <h2 className="text-sm font-medium">{t(titleKey)}</h2>
         {envelope.directionBasis !== "organization_recipient" && (
           <p className="text-muted-foreground text-xs">
             {t(

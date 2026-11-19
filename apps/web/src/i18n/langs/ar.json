@@ -2747,6 +2747,7 @@
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
+    "downloadOriginal": "تنزيل الملف الأصلي",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",
       "droppedOn": "{count, plural, zero {تم إفلات {itemName} على {destinationName}.} one {تم إفلات {itemName} على {destinationName}.} two {تم إفلات {itemName} على {destinationName}.} few {تم إفلات {itemName} على {destinationName}.} many {تم إفلات {itemName} على {destinationName}.} other {تم إفلات {itemName} على {destinationName}.}}",
@@ -3334,6 +3335,8 @@
       "contact": "جهة الاتصال: {name}",
       "deliveredAt": "سُلّمت إلى الصندوق",
       "delivery": "التسليم",
+      "deliveryEvents": "سجلّ التسليم",
+      "deliveryReceipt": "إيصال التسليم",
       "directionUnknown": "الاتجاه غير معروف",
       "messageId": "معرّف الرسالة",
       "moreContacts": "هناك جهات اتصال أخرى مرتبطة بصندوق البيانات هذا.",
@@ -3346,6 +3349,8 @@
       "sent": "مُرسلة",
       "statedInFile": "رسالة صندوق البيانات (كما وردت في الملف)",
       "toHands": "لعناية {name}",
+      "unlinkedFiles": "لفتح المرفقات التي تظهر من دون رابط، نزّل ملف ZFO الأصلي.",
+      "unreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "uploaded": "رسالة صندوق بيانات مرفوعة"
     },
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",

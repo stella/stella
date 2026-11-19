@@ -12,6 +12,7 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
   countedSearchTotal,
   DECISION_SEARCH_MATCHES,
@@ -151,6 +152,7 @@ const readVersionBlocksMock = mock();
 const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
 const executeRegistryLookupMock = mock();
+const readDataBoxFileMock = mock();
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { runRegistryReadTool } = await import("./run-registry-tool");
@@ -173,6 +175,9 @@ const ORGANIZATION_ID = toSafeId<"organization">("org_1");
  * than stubbing the cipher.
  */
 const EXTRACTED_TEXT = "decrypted text";
+
+/** The source text a data-box reader returns for its envelope. */
+const DATA_BOX_TEXT = "ISDS data-box message (datová zpráva)";
 const extractedEnvelope = await encryptContent(ORGANIZATION_ID, EXTRACTED_TEXT);
 
 // --- DB doubles ---------------------------------------------------------------
@@ -309,6 +314,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,
         executeRegistryLookup: executeRegistryLookupMock,
+        legalFileReaders: { dataBox: readDataBoxFileMock },
       },
     }),
   );
@@ -814,6 +820,59 @@ const CONTRACT_CORPUS = {
       expectRefPaths: ["workspaceId", "entityId"],
       // Reached only by really decrypting the fixture envelope above.
       expectPayloadContains: [EXTRACTED_TEXT],
+    },
+    {
+      mode: "data-box",
+      buildArgs: (refRegistry) => ({
+        entity_id: entityRef(refRegistry, uid(14)),
+      }),
+      // The legal reader opens the stored export itself; its own suites cover
+      // the parse, and this call pins how its filed attachments project.
+      setup: () => {
+        readDataBoxFileMock.mockResolvedValue(
+          Result.ok({
+            text: DATA_BOX_TEXT,
+            attachments: [
+              { position: 1, entityId: toSafeId<"entity">(uid(15)) },
+            ],
+          }),
+        );
+      },
+      tx: () => ({
+        query: {
+          entities: {
+            findFirst: async () => ({
+              workspaceId: WS,
+              kind: "document",
+              name: "Court notice",
+              extractedContent: null,
+              currentVersion: {
+                id: uid(65),
+                createdAt: new Date("2026-01-01"),
+                fields: [
+                  {
+                    id: uid(66),
+                    propertyId: uid(62),
+                    content: {
+                      version: 1,
+                      type: "file",
+                      id: uid(67),
+                      fileName: "notice.zfo",
+                      mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+                      sizeBytes: 4096,
+                      encrypted: false,
+                      sha256Hex: "b".repeat(64),
+                      pdfFileId: null,
+                    },
+                  },
+                ],
+              },
+            }),
+          },
+        },
+      }),
+      expectRefPaths: ["workspaceId", "entityId", "attachments[].entityId"],
+      expectPayloadContains: [DATA_BOX_TEXT],
     },
   ],
   read_contact: [
@@ -2398,6 +2457,7 @@ const ALL_MOCKS = [
   searchConsolidatedLegislationMock,
   getLawTextBlockMock,
   executeRegistryLookupMock,
+  readDataBoxFileMock,
 ];
 
 // A projection refusal reports the offending path through the real capture
@@ -2422,6 +2482,7 @@ afterEach(() => {
 beforeEach(() => {
   describeStoredTemplateMock.mockReset();
   executeRegistryLookupMock.mockReset();
+  readDataBoxFileMock.mockReset();
   getLawTextBlockMock.mockReset();
   listStatuteVersionsHandlerMock.mockReset();
   readCaseLawCoverageHandlerMock.mockReset();

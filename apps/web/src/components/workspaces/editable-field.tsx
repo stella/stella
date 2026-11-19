@@ -24,6 +24,7 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { fileTabOf } from "@/components/inspector/open-entities.logic";
 import Tooltip from "@/components/tooltip";
 import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
 import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
@@ -42,7 +43,6 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { keepKeyPressLocal } from "@/lib/hotkeys";
 import { toSafeId } from "@/lib/safe-id";
-import { isFileDisplayable } from "@/lib/types";
 import type {
   EntityKind,
   SelectPropertyOption,
@@ -811,12 +811,6 @@ const TableFileField = ({
   workspaceId,
   propertyId,
 }: TableFileFieldProps) => {
-  const isDisplayable = isFileDisplayable({
-    mimeType: content.mimeType,
-    fileName: content.fileName,
-    pdfFileId: content.pdfFileId ?? null,
-    encrypted: content.encrypted,
-  });
   const openFile = useInspectorTabsStore((s) => s.openFile);
   const thumbnail = {
     fieldId,
@@ -824,70 +818,45 @@ const TableFileField = ({
     workspaceId,
   };
 
-  if (isDisplayable) {
-    return (
-      <Tooltip
-        content={content.fileName}
-        render={
-          <Button
-            className="max-w-full min-w-0"
-            onClick={() =>
-              openFile({
-                id: fieldId,
-                entityId,
-                label: content.fileName,
-                fileName: content.fileName,
-                workspaceId,
-                mimeType: content.mimeType,
-                pdfFileId: content.pdfFileId,
-                propertyId,
-              })
-            }
-            variant="plain"
-          />
-        }
-      >
-        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5">
-          <DocumentIcon
-            className="size-3.5 shrink-0"
-            fileName={content.fileName}
-            mimeType={content.mimeType}
-            thumbnail={thumbnail}
-          />
-          {/* The name, not the icon, sets the chip's baseline, so a wrapped
-            row lines the name up with its neighbours' first lines. */}
-          <TruncatedText
-            className="self-baseline text-start"
-            hint={false}
-            render={<BidiText as="span" />}
-          >
-            <HighlightedText columnId={propertyId} text={content.fileName} />
-          </TruncatedText>
-        </span>
-      </Tooltip>
-    );
-  }
-
   return (
     <Tooltip
       content={content.fileName}
       render={
-        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5 text-start opacity-60" />
+        <Button
+          className="max-w-full min-w-0"
+          onClick={() =>
+            openFile(
+              fileTabOf({
+                content,
+                entityId,
+                fieldId,
+                label: content.fileName,
+                propertyId,
+                workspaceId,
+              }),
+            )
+          }
+          variant="plain"
+        />
       }
     >
-      <DocumentIcon
-        className="size-3.5 shrink-0"
-        fileName={content.fileName}
-        mimeType={content.mimeType}
-        thumbnail={thumbnail}
-      />
-      <TruncatedText
-        className="self-baseline text-start"
-        hint={false}
-        render={<BidiText as="span" />}
-      >
-        <HighlightedText columnId={propertyId} text={content.fileName} />
-      </TruncatedText>
+      <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5">
+        <DocumentIcon
+          className="size-3.5 shrink-0"
+          fileName={content.fileName}
+          mimeType={content.mimeType}
+          thumbnail={thumbnail}
+        />
+        {/* The name, not the icon, sets the chip's baseline, so a wrapped
+          row lines the name up with its neighbours' first lines. */}
+        <TruncatedText
+          className="self-baseline text-start"
+          hint={false}
+          render={<BidiText as="span" />}
+        >
+          <HighlightedText columnId={propertyId} text={content.fileName} />
+        </TruncatedText>
+      </span>
     </Tooltip>
   );
 };
