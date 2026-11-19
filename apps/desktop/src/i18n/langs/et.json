@@ -683,6 +683,7 @@
       "focusChanged": "Lülitusite enne teksti valmimist teise rakendusse, seega midagi ei sisestatud. Proovige uuesti.",
       "focusUnconfirmed": "stella ei suutnud kinnitada, milline rakendus on fookuses, seega midagi ei sisestatud. Proovige uuesti.",
       "shortcutHeld": "Vabastage otsetee klahvid, et teksti saaks sisestada. Midagi ei sisestatud; proovige uuesti.",
+      "passwordField": "Fookuses on paroolivali, seega dikteeritut ei säilitatud ega sisestatud.",
       "cloudTranscription": "stella AI ei suutnud seda dikteerimist teisendada ja kõnemudelit pole selles arvutis. Proovige uuesti või valige „Teisenda kasutades“ all „Seda arvutit“ ja laadige mudel alla."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos."

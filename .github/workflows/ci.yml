@@ -5189,7 +5189,9 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Passing runs take 7 to 9 min (the three bundles about 5 to 7); 20 min
+    # allows about 2.5x contention headroom for a slow hosted runner.
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: write

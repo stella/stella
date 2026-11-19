@@ -90,6 +90,7 @@ export type DictationSnapshot = {
     | "focusUnconfirmed"
     | "microphone"
     | "modelMissing"
+    | "passwordField"
     | "shortcutHeld"
     | "transcription"
     | null;

@@ -48,6 +48,12 @@ const threadData: ChatThreadState["data"] = {
   historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
   id: threadId,
   messages: [],
+  sendFields: {
+    activeSkill: null,
+    contextMatterIds: [],
+    dataWorkspaceIds: [workspaceId],
+    subjectDecisionId: null,
+  },
   title: "New thread",
   webSearchEnabled: false,
   workspaceId,

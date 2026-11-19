@@ -30,6 +30,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { queryView } from "@/lib/query-view.logic";
+import { coversAllMatters } from "@/lib/workspaces/all-matters.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 /**
@@ -365,7 +366,10 @@ export const ChatMatterPicker = ({
     });
   })();
 
-  const allSelected = matters.length > 0 && selected.length === matters.length;
+  const allSelected = coversAllMatters({
+    count: selected.length,
+    total: matters.length,
+  });
   const selectedIdSet = new Set(matterIds);
   const triggerLabel = (() => {
     if (workspacesView.type === "error") {

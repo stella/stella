@@ -58,6 +58,30 @@ pub fn insertion(
   }
 }
 
+/// Whether keyboard focus in `target` is a password field: nothing is
+/// recorded for one or typed into one. False when it cannot be read; on
+/// Windows only classic edit controls say.
+pub fn in_password_field(target: Option<&FocusTarget>) -> bool {
+  let Some(target) = target else {
+    return false;
+  };
+  #[cfg(target_os = "macos")]
+  {
+    i32::try_from(target.process_id)
+      .is_ok_and(stella_desktop_macos::focused_field_is_secure)
+  }
+  #[cfg(target_os = "windows")]
+  {
+    u32::try_from(target.process_id)
+      .is_ok_and(stella_desktop_macos::focused_field_is_secure)
+  }
+  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+  {
+    let _ = target;
+    false
+  }
+}
+
 #[cfg(target_os = "macos")]
 pub fn current(app: &AppHandle) -> Option<FocusTarget> {
   let foreground = crate::foreground_app::current(app)?;

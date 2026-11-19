@@ -6,7 +6,8 @@
 //     preloads are the initial graph; each route's preloads are what the
 //     document links for it.
 //   - dist/client/assets/*.js and their hidden `.js.map` files: chunk bytes,
-//     the modules in each chunk, and which module issues each `import()`.
+//     the modules in each chunk, which module issues each `import()`, and,
+//     from each app module's original source, the app modules it imports.
 //
 // Module ids are app-relative (`src/routes/law/coverage.tsx`), the query the
 // route code splitter adds kept (`?tsr-split=component`, `?tsr-shared=1`).
@@ -446,8 +447,121 @@ type ReadChunk = {
   chunk: BuiltChunk;
   /** Route file to the initial bytes of its component's declarations. */
   routeComponentBytes: Map<string, number>;
+  /** App module id to the specifiers it imports statically. */
+  moduleSpecifiers: Map<string, string[]>;
   /** No map and not a re-export facade: its modules cannot be known. */
   opaque: boolean;
+};
+
+const APP_SOURCE_PREFIX = `${ROUTE_TREE_OPTIONS.srcDirectory}/`;
+
+/**
+ * The specifiers a module imports or re-exports statically, type-only ones
+ * left out: those are erased and load nothing.
+ */
+export const staticSpecifiers = (
+  fileName: string,
+  source: string,
+): string[] => {
+  const { module } = parseSource(fileName, source);
+  return [
+    ...module.staticImports
+      .filter(
+        ({ entries }) =>
+          entries.length === 0 || entries.some(({ isType }) => !isType),
+      )
+      .map(({ moduleRequest }) => moduleRequest.value),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest, isType }) =>
+        moduleRequest === null || isType ? [] : [moduleRequest.value],
+      ),
+    ),
+  ];
+};
+
+const RESOLVE_SUFFIXES = [
+  "",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  "/index.ts",
+  "/index.tsx",
+] as const;
+
+/**
+ * The app module an app-relative or `@/` specifier names, among the module
+ * paths the build holds. Undefined for a package or anything outside them.
+ */
+export const resolveAppImport = (
+  importer: string,
+  specifier: string,
+  known: ReadonlySet<string>,
+): string | undefined => {
+  let base: string;
+  if (specifier.startsWith("@/")) {
+    base = `${APP_SOURCE_PREFIX}${specifier.slice(2)}`;
+  } else if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    base = path.posix.normalize(
+      path.posix.join(path.posix.dirname(importer), specifier),
+    );
+  } else {
+    return undefined;
+  }
+  return RESOLVE_SUFFIXES.map((suffix) => `${base}${suffix}`).find((file) =>
+    known.has(file),
+  );
+};
+
+const withoutQuery = (id: string): string => {
+  const query = id.indexOf("?");
+  return query === -1 ? id : id.slice(0, query);
+};
+
+/** Each app module's static specifiers, read from its original source. */
+const appModuleSpecifiers = (
+  ids: readonly string[],
+  contents: readonly (string | null)[] | undefined,
+): Map<string, string[]> => {
+  const specifiers = new Map<string, string[]>();
+  for (const [index, id] of ids.entries()) {
+    const content = contents?.[index];
+    if (typeof content === "string" && id.startsWith(APP_SOURCE_PREFIX)) {
+      specifiers.set(id, staticSpecifiers(withoutQuery(id), content));
+    }
+  }
+  return specifiers;
+};
+
+/** Resolves each module's specifiers to the build's module ids. */
+export const resolveModuleImports = (
+  specifiers: ReadonlyMap<string, readonly string[]>,
+  moduleIds: Iterable<string>,
+): Map<string, string[]> => {
+  const idsByPath = new Map<string, string[]>();
+  for (const id of moduleIds) {
+    const file = withoutQuery(id);
+    const ids = idsByPath.get(file) ?? [];
+    if (!ids.includes(id)) {
+      ids.push(id);
+    }
+    idsByPath.set(file, ids);
+  }
+  const known = new Set(idsByPath.keys());
+  const imports = new Map<string, string[]>();
+  for (const [importer, list] of specifiers) {
+    const resolved = new Set<string>();
+    for (const specifier of list) {
+      const file = resolveAppImport(withoutQuery(importer), specifier, known);
+      // A plain import names the module itself, not a split or shared part.
+      const ids = file === undefined ? [] : (idsByPath.get(file) ?? []);
+      for (const id of ids.includes(file ?? "") ? [file ?? ""] : ids) {
+        resolved.add(id);
+      }
+    }
+    imports.set(importer, [...resolved]);
+  }
+  return imports;
 };
 
 // The module runtime Rolldown emits beside the entry carries no source.
@@ -511,6 +625,7 @@ const readChunk = (
         dynamicImports: [],
       },
       routeComponentBytes: new Map(),
+      moduleSpecifiers: new Map(),
       opaque,
     };
   }
@@ -558,6 +673,7 @@ const readChunk = (
       routeComponentBytes.set(id, (routeComponentBytes.get(id) ?? 0) + bytes);
     }
   }
+  const moduleSpecifiers = appModuleSpecifiers(ids, map.sourcesContent);
   const dynamicImports: BuiltChunk["dynamicImports"][number][] = [];
   if (attribution !== undefined && hasDynamicImport) {
     const starts = lineStarts(code);
@@ -580,6 +696,7 @@ const readChunk = (
       dynamicImports,
     },
     routeComponentBytes,
+    moduleSpecifiers,
     opaque: false,
   };
 };
@@ -666,6 +783,7 @@ export const readStartupGraph = (distDir: string): ReadResult => {
   const chunks = new Map<string, BuiltChunk>();
   const opaque = new Set<string>();
   const routeComponentBytes = new Map<string, number>();
+  const moduleSpecifiers = new Map<string, string[]>();
   for (const fileName of new Bun.Glob("*.js").scanSync(assetsDir)) {
     const read = readChunk(assetsDir, fileName, initial.has(fileName));
     if (typeof read === "string") {
@@ -677,6 +795,9 @@ export const readStartupGraph = (distDir: string): ReadResult => {
     }
     for (const [id, bytes] of read.routeComponentBytes) {
       routeComponentBytes.set(id, (routeComponentBytes.get(id) ?? 0) + bytes);
+    }
+    for (const [id, specifiers] of read.moduleSpecifiers) {
+      moduleSpecifiers.set(id, specifiers);
     }
   }
   const missing = initialChunks.filter((file) => !chunks.has(file));
@@ -700,6 +821,15 @@ export const readStartupGraph = (distDir: string): ReadResult => {
   }
   return {
     ok: true,
-    graph: { initialChunks, chunks, routes, routeComponentBytes },
+    graph: {
+      initialChunks,
+      chunks,
+      routes,
+      routeComponentBytes,
+      moduleImports: resolveModuleImports(
+        moduleSpecifiers,
+        [...chunks.values()].flatMap((chunk) => [...chunk.modules.keys()]),
+      ),
+    },
   };
 };
