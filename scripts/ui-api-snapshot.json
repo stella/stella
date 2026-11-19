@@ -2086,6 +2086,8 @@
     ],
     "DocumentIdentityBadge.size": ["default", "inline"],
     "DocumentMark.kind": [
+      "asicE",
+      "asicS",
       "cades",
       "csv",
       "dataBox",
