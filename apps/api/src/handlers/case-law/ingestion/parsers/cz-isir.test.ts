@@ -138,4 +138,41 @@ describe("parseCzIsirDecision", () => {
     }
     expect(Result.isError(decision("V Olomouci dne 30. 2. 2024"))).toBe(true);
   });
+
+  test("dates the decision by its closing, not by a certified copy after it", () => {
+    const result = parseCzIsirDecision(
+      [
+        {
+          text: "č. j. MSPH 60 INS 10782/2023 3 VSPH 1361/2023-B-24",
+          bold: true,
+        },
+        { text: "USNESENÍ", bold: true },
+        { text: "Vrchní soud v Praze rozhodl takto.", bold: false },
+        { text: "Praha 22. února 2024", bold: false },
+        { text: "Za správnost vyhotovení: [PERSON_1]", bold: false },
+        { text: "Praha 1. března 2024", bold: false },
+      ],
+      CONTEXT,
+    );
+    expect(Result.isOk(result) && result.value.identity.decisionDate).toBe(
+      "2024-02-22",
+    );
+  });
+
+  test("reads a regional court's branch under the court it belongs to", () => {
+    const result = parseCzIsirDecision(
+      [
+        { text: "č. j. KSLB 87 INS 984/2026-A-13", bold: true },
+        { text: "USNESENÍ", bold: true },
+        { text: "Krajský soud v Ústí nad Labem rozhodl takto.", bold: false },
+        { text: "Liberec 26. března 2026", bold: false },
+      ],
+      CONTEXT,
+    );
+    expect(Result.isOk(result) && result.value.identity).toMatchObject({
+      court: "Krajský soud v Ústí nad Labem – pobočka v Liberci",
+      insolvencyFile: "KSLB 87 INS 984/2026",
+      decisionDate: "2026-03-26",
+    });
+  });
 });

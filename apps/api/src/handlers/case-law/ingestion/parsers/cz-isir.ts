@@ -102,10 +102,26 @@ const HIGH_COURTS = {
 const isHighCourt = (code: string): code is keyof typeof HIGH_COURTS =>
   Object.hasOwn(HIGH_COURTS, code);
 
-const isRegisteredCourt = (
-  code: string,
-): code is keyof typeof CZ_ECLI_COURT_REGISTRY =>
+type RegisteredCourt = keyof typeof CZ_ECLI_COURT_REGISTRY;
+
+const isRegisteredCourt = (code: string): code is RegisteredCourt =>
   Object.hasOwn(CZ_ECLI_COURT_REGISTRY, code);
+
+/**
+ * The register marks a regional court's branch by the branch's own town
+ * (`KSLB 87 INS 984/2026`, Liberec); the court registry names it under its
+ * court (`KSULLI`).
+ */
+const ISIR_BRANCH_COURTS: ReadonlyMap<string, RegisteredCourt> = new Map([
+  ["KSLB", "KSULLI"],
+  ["KSPA", "KSHKPA"],
+  ["KSTA", "KSCBTA"],
+  ["KSZL", "KSBRZL"],
+  ["KSOL", "KSOSOL"],
+]);
+
+const registeredCourtOf = (code: string): RegisteredCourt | null =>
+  ISIR_BRANCH_COURTS.get(code) ?? (isRegisteredCourt(code) ? code : null);
 
 const DASH = "[-‐‑‒–—]";
 
@@ -269,9 +285,12 @@ const readIdentity = (
   const highCourt = HIGH_COURT_DOCKET.exec(header)?.groups;
   const file = INSOLVENCY_FILE.exec(header)?.groups;
   const dispute = INCIDENTAL_DISPUTE.exec(header)?.groups;
+  // The first place and date after the heading closes the decision; a later
+  // one dates a certified copy (`Za správnost vyhotovení`), not the decision.
   const decisionDate = paragraphs
+    .slice(headingAt + 1)
     .map(({ text }) => givenOn(text))
-    .findLast((date) => date !== null);
+    .find((date) => date !== null);
   if (decisionDate === undefined) {
     return failure(
       CZ_ISIR_PARSE_FAILURE.NO_DECISION_DATE,
@@ -314,8 +333,8 @@ const readIdentity = (
       `Document ${documentId} states no docket`,
     );
   }
-  const courtCode = part(file, "court");
-  if (!isRegisteredCourt(courtCode)) {
+  const courtCode = registeredCourtOf(part(file, "court"));
+  if (courtCode === null) {
     return failure(
       CZ_ISIR_PARSE_FAILURE.UNKNOWN_COURT,
       `Document ${documentId} names an unregistered court`,
