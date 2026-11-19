@@ -69,11 +69,7 @@ export const BETA_FEATURES = {
 >;
 
 /** A preview's panel with its checkbox's face (the choice waits on data). */
-export const BetaFeaturePanelPending = ({
-  feature,
-}: {
-  feature: BetaFeature;
-}) => (
+const BetaFeaturePanelPending = ({ feature }: { feature: BetaFeature }) => (
   <BetaFeaturePanel {...BETA_FEATURES[feature]}>
     {/* The live `Field` row: `flex-col` turned into this row. */}
     <div className="flex flex-row items-center gap-2">

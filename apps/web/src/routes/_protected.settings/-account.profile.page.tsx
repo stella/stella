@@ -8,6 +8,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -38,7 +39,6 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
-import { FormField } from "@/components/settings-card.pending";
 import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
@@ -57,6 +57,7 @@ import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
@@ -79,6 +80,7 @@ import { PersonalDataExportCard } from "@/routes/_protected.settings/-components
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
+import { FormField } from "@/routes/_protected.settings/-components/settings-card.pending";
 
 import {
   accountDeletionLeavesTasksUnassigned,
@@ -153,8 +155,10 @@ function ProfilePageBody() {
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
       setOtpError(null);
-      const res = await api.me.delete["send-otp"].post();
-      return unwrapApiResponse(res);
+      // Deleting an account is never an automation capability.
+      return await invokeAppOnlyWrite("account.delete.send-otp", async () =>
+        unwrapApiResponse(await api.me.delete["send-otp"].post()),
+      );
     },
     onSuccess: () => {
       setStep("otp");
@@ -180,8 +184,9 @@ function ProfilePageBody() {
       setOtpError(null);
       // Named before the delete: afterwards the session may name no one.
       const deletedUserId = authenticatedUser.id;
-      const res = await api.me.delete.verify.post(payload);
-      unwrapApiResponse(res);
+      await invokeAppOnlyWrite("account.delete.verify", async () =>
+        unwrapApiResponse(await api.me.delete.verify.post(payload)),
+      );
       return { deletedUserId };
     },
     onSuccess: async ({ deletedUserId }) => {
@@ -189,11 +194,9 @@ function ProfilePageBody() {
         title: t("settings.account.deleteAccountSuccess"),
         type: "success",
       });
-      try {
-        await authClient.signOut();
-      } catch {
-        // Session might already be invalidated on the server
-      }
+      // A failed sign-out is expected here: the server may already have
+      // ended the session with the account.
+      await Result.tryPromise(async () => await authClient.signOut());
       forgetUserStorage(deletedUserId);
       signalSessionChange();
       hideSessionDocument();
@@ -363,12 +366,13 @@ function ProfilePageBody() {
             // from `useFormStatus().pending`, so returning before the save
             // settles re-enables it mid-flight and lets a second submit
             // race the first. The mutation's `onError` renders the toast;
-            // this catch keeps the rejection off the unhandled channel and
+            // the result keeps the rejection off the unhandled channel and
             // records it.
-            try {
-              await updateDisplayName.mutateAsync();
-            } catch (error) {
-              getAnalytics().captureError(error, {
+            const saved = await Result.tryPromise(
+              async () => await updateDisplayName.mutateAsync(),
+            );
+            if (Result.isError(saved)) {
+              getAnalytics().captureError(saved.error, {
                 fingerprintKey: "ProfilePageBody:failure",
                 scope: {
                   type: "handler",
@@ -426,10 +430,11 @@ function ProfilePageBody() {
         <Form
           action={async () => {
             // Awaited for the same reason as the display-name form above.
-            try {
-              await updateWordEditIdentity.mutateAsync();
-            } catch (error) {
-              getAnalytics().captureError(error, {
+            const saved = await Result.tryPromise(
+              async () => await updateWordEditIdentity.mutateAsync(),
+            );
+            if (Result.isError(saved)) {
+              getAnalytics().captureError(saved.error, {
                 fingerprintKey: "ProfilePageBody:failure-2",
                 scope: {
                   type: "handler",

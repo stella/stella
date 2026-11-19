@@ -96,10 +96,10 @@ describe("the account pages' pending views", () => {
         ),
       );
       const heading = view.getByRole("heading", { level: 1 });
-      expect((heading.textContent ?? "").length > 0).toBe(true);
-      expect(
-        view.container.textContent?.includes(messages.common.loading),
-      ).toBe(false);
+      expect(heading.textContent.length > 0).toBe(true);
+      expect(view.container.textContent.includes(messages.common.loading)).toBe(
+        false,
+      );
     });
   }
 

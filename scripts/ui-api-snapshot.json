@@ -383,6 +383,7 @@
       "SidebarSeparator",
       "SidebarTrigger",
       "Skeleton",
+      "SkeletonInline",
       "SortableHead",
       "StellaMark",
       "StellaWordmarkLatin",
@@ -952,7 +953,7 @@
       "useSidebarInlineSize",
       "useSidebarLayout"
     ],
-    "./components/skeleton": ["Skeleton"],
+    "./components/skeleton": ["Skeleton", "SkeletonInline"],
     "./components/stella-mark": ["StellaMark"],
     "./components/stella-wordmark": ["StellaWordmarkLatin"],
     "./components/table": [
@@ -1038,13 +1039,18 @@
     "./context-menu": ["ContextMenu", "ContextMenuActionItems"],
     "./control-face": [
       "ButtonFace",
+      "CheckboxFace",
       "FaceLabelPending",
+      "FieldTriggerFace",
       "InputFace",
+      "LabelFace",
       "SPLIT_BUTTON_PRIMARY_CLASS",
       "SPLIT_BUTTON_ROOT_CLASS",
       "SPLIT_BUTTON_TRIGGER_CLASS",
       "SplitButtonChevron",
       "SplitButtonFace",
+      "SwitchFace",
+      "TabsFace",
       "buttonFaceClassName"
     ],
     "./control-size": ["CONTROL_SIZE", "CONTROL_SIZES"],
@@ -1625,6 +1631,7 @@
       "LIST_ITEM_ROW_CLASS",
       "List",
       "ListGroup",
+      "ListGroupDescription",
       "ListGroupHeader",
       "ListGroupHeading",
       "ListGroupTitle",
@@ -1855,7 +1862,7 @@
       "useSidebarInlineSize",
       "useSidebarLayout"
     ],
-    "./skeleton": ["Skeleton"],
+    "./skeleton": ["Skeleton", "SkeletonInline"],
     "./split-button": ["SplitButton"],
     "./status-mark": ["StatusMark"],
     "./stella-mark": ["StellaMark"],
@@ -2160,6 +2167,7 @@
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
+    "FrameTitle.tone": ["default", "destructive"],
     "HighlightedTextarea.dir": ["ltr", "rtl"],
     "InlineDropIndicator.position": ["after", "before"],
     "InputGroupAddon.align": [
@@ -2282,6 +2290,7 @@
     "Step.status": ["completed", "current", "upcoming"],
     "Steps.variant": ["compact", "default", "progress"],
     "Switch.size": ["default", "sm"],
+    "SwitchFace.size": ["default", "sm"],
     "SwitchField.size": ["default", "sm"],
     "Table.density": ["compact", "default"],
     "Table.inset": ["card", "default"],

@@ -37,7 +37,11 @@ import type { PendingTextKey } from "@/components/pending-text";
  *
  * Neither reads a provider, so a pending view the server paints before the
  * app mounts draws them, and the page that loads draws the real card and
- * field in the same boxes.
+ * field in the same boxes. A card whose title is a static message renders
+ * `SettingsCardPending` in both phases (its text shows once intl is there);
+ * export `SettingsCard` for one whose title is data. The module lives with
+ * the settings pages it serves; it moves to `components/` when a page
+ * outside settings (the auth forms) takes it up.
  */
 
 /** `destructive` takes the destructive title (a danger zone). */
@@ -53,7 +57,7 @@ type SettingsCardProps = {
 };
 
 /** A titled settings card: the header over the panels the page puts in. */
-export const SettingsCard = ({
+const SettingsCard = ({
   children,
   description,
   title,

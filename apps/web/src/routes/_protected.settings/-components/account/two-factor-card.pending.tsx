@@ -4,7 +4,7 @@ import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
 import { FramePanel } from "@stll/ui/frame";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsCardPending } from "@/components/settings-card.pending";
+import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
 
 /** The status chip's box; the page adds its tone (on, off). */
 export const TWO_FACTOR_STATUS_CLASS =

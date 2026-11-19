@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
+import { SkeletonInline } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 // Whether the app's intl is mounted above. A pending view also renders where
@@ -147,6 +147,6 @@ export const PendingText = ({
       aria-hidden="true"
       className="inline-flex h-[1lh] items-center align-top"
     >
-      <Skeleton className={cn("h-[0.75em]", barClassName)} />
+      <SkeletonInline className={cn("h-[0.75em]", barClassName)} />
     </span>
   );

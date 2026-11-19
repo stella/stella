@@ -15,7 +15,7 @@ import {
   INPUT_ELEMENT_CLASS_NAME,
 } from "./input-control";
 import { LABEL_VARIANT_CLASS_NAME } from "./label-classes";
-import { Skeleton } from "./skeleton";
+import { SkeletonInline } from "./skeleton";
 import {
   TABS_INDICATOR_DEFAULT_CLASS,
   TABS_LIST_BASE_CLASS,
@@ -101,7 +101,7 @@ export const FaceLabelPending = ({
     className="inline-flex h-[1lh] items-center"
     data-slot="face-label-skeleton"
   >
-    <Skeleton className={cn("h-[0.75em]", className)} />
+    <SkeletonInline className={cn("h-[0.75em]", className)} />
   </span>
 );
 

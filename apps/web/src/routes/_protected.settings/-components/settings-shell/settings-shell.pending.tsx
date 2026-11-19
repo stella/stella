@@ -1,5 +1,5 @@
 import { createContext, use } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
 import {
@@ -302,7 +302,11 @@ export const SettingsChromeScope = ({ children }: { children: ReactNode }) => (
  * the page inside the shell's pending chrome where the shell is not mounted
  * yet (the cold-load frame), so the page sits in the same column either way.
  */
-export const SettingsPagePending = ({ children }: { children: ReactNode }) =>
+export const SettingsPagePending = ({
+  children,
+}: {
+  children: ReactElement;
+}): ReactElement =>
   use(SettingsChromeContext) ? (
     children
   ) : (

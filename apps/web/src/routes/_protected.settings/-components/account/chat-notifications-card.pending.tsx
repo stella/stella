@@ -4,7 +4,7 @@ import { LabelFace, SwitchFace } from "@stll/ui/control-face";
 import { FramePanel } from "@stll/ui/frame";
 
 import { PendingText } from "@/components/pending-text";
-import { SettingsCardPending } from "@/components/settings-card.pending";
+import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
 
 /** The switch's row: the switch, then its caption, at the touch height. */
 export const CHAT_NOTIFICATIONS_TOGGLE_ROW_CLASS =

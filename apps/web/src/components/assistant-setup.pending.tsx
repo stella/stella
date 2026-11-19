@@ -13,7 +13,7 @@ export const ASSISTANT_ADDRESS_ROW_CLASS =
   "bg-muted flex items-center gap-2 rounded-lg py-1 ps-3 pe-1";
 
 /** The id the card's heading carries, which names the card. */
-export const ASSISTANT_SETUP_TITLE_ID = "assistant-setup-title";
+const ASSISTANT_SETUP_TITLE_ID = "assistant-setup-title";
 
 /**
  * The assistant setup's card (`AssistantSetup`, `card` variant) in both

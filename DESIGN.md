@@ -372,6 +372,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DropdownMenuTrigger`, `MenuTrigger`, `PopoverTrigger` `appearance`: `caption`, `default`
 - `Form` `density`: `compact`, `default`, `snug`
 - `Form` `layout`: `inline`, `stack`
+- `FrameTitle` `tone`: `default`, `destructive`
 - `HighlightedTextarea` `dir`: `ltr`, `rtl`
 - `InlineDropIndicator` `position`: `after`, `before`
 - `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
@@ -427,7 +428,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `StatusMark` `status`: `done`, `failed`, `pending`, `running`
 - `Step` `status`: `completed`, `current`, `upcoming`
 - `Steps` `variant`: `compact`, `default`, `progress`
-- `Switch`, `SwitchField` `size`: `default`, `sm`
+- `Switch`, `SwitchFace`, `SwitchField` `size`: `default`, `sm`
 - `Table` `density`: `compact`, `default`
 - `Table` `inset`: `card`, `default`
 - `Table` `scroll`: `parent`, `self`

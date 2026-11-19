@@ -4,7 +4,7 @@ import { ButtonFace } from "@stll/ui/control-face";
 import { FramePanel } from "@stll/ui/frame";
 
 import { PendingText } from "@/components/pending-text";
-import { SettingsCardPending } from "@/components/settings-card.pending";
+import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
 
 /** The data export card (`PersonalDataExportCard`): header and panel. */
 export const PersonalDataExportCardFrame = ({

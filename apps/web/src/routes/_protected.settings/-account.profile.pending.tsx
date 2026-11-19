@@ -9,16 +9,16 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
-import {
-  FormFieldSkeleton,
-  SettingsCardPending,
-} from "@/components/settings-card.pending";
 import { framePendingView } from "@/routes/-pending-view.logic";
 import { ChatNotificationsCardPending } from "@/routes/_protected.settings/-components/account/chat-notifications-card.pending";
 import { PersonalDataExportCardPending } from "@/routes/_protected.settings/-components/account/personal-data-export-card.pending";
 import { SessionsCardPending } from "@/routes/_protected.settings/-components/account/sessions-card.pending";
 import { SignInMethodsPending } from "@/routes/_protected.settings/-components/account/sign-in-methods.pending";
 import { TwoFactorCardPending } from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
+import {
+  FormFieldSkeleton,
+  SettingsCardPending,
+} from "@/routes/_protected.settings/-components/settings-card.pending";
 import { SettingsPageHeaderPending } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 

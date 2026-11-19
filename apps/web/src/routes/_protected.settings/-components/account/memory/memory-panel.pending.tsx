@@ -32,7 +32,7 @@ export const MEMORY_LIST_CLASS = "flex flex-col gap-3";
 export const MEMORY_CARDS_CLASS = "flex flex-col gap-2";
 
 /** The kind picker's width in the composer. */
-export const MEMORY_KIND_TRIGGER_CLASS = "w-44 shrink-0";
+const MEMORY_KIND_TRIGGER_CLASS = "w-44 shrink-0";
 
 const MEMORY_ROWS_PENDING = [{ key: "a" }, { key: "b" }, { key: "c" }] as const;
 

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { FaceLabelPending } from "@stll/ui/control-face";
 import { FramePanel } from "@stll/ui/frame";
 
-import { SettingsCardPending } from "@/components/settings-card.pending";
+import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
 
 /** The sessions card (`SessionsCard`): its header over the caller's panel. */
 export const SessionsCardFrame = ({ children }: { children: ReactNode }) => (
