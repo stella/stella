@@ -104,7 +104,9 @@ const settleOutcomes = async (
             ),
             fallback: sql`${keptTranscriptDeletions.lastErrorCode}`,
           }),
-          nextAttemptAt: sql`now() + interval '1 minute' * LEAST(power(2, ${keptTranscriptDeletions.attempts}), ${MAX_BACKOFF_MINUTES})`,
+          // The exponent stops at 6 (64 minutes, held to the hour) so a row
+          // refused for weeks never overflows the power.
+          nextAttemptAt: sql`now() + interval '1 minute' * LEAST(power(2, LEAST(${keptTranscriptDeletions.attempts}, 6)), ${MAX_BACKOFF_MINUTES})`,
         })
         .where(
           inArray(

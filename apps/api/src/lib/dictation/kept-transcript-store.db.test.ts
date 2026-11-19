@@ -197,6 +197,15 @@ describe("kept transcript deletion task", () => {
     expect(logged.filter(({ level }) => level === "error")).toEqual([]);
   });
 
+  test("backs off at most an hour however often a delete was refused", async () => {
+    await insertKept({ transcriptionId: "weeks", attempts: 5000 });
+    await run({ outcome: () => ({ type: "failed", code: "http_503" }) });
+    const [weeks] = await rows();
+    expect(weeks).toMatchObject({ attempts: 5001, lastErrorCode: "http_503" });
+    expect(Number(weeks?.waitMs)).toBeGreaterThan(59 * 60 * 1000);
+    expect(Number(weeks?.waitMs)).toBeLessThanOrEqual(60 * 60 * 1000);
+  });
+
   test("reports a transcript whose delete keeps failing", async () => {
     await insertKept({
       transcriptionId: "stuck",
