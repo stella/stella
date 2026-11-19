@@ -22,6 +22,7 @@
  */
 
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import {
@@ -585,7 +586,7 @@ const main = async (): Promise<void> => {
     import.meta.url,
   );
   await Bun.write(outUrl, await createDocx());
-  console.info(`[generate-dd-report-template] wrote ${outUrl.pathname}`);
+  console.info(`[generate-dd-report-template] wrote ${fileURLToPath(outUrl)}`);
 };
 
 await main();

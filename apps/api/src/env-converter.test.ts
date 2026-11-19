@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 const converterEnv = {
   GOTENBERG_URL: "https://converter.example.test",
@@ -14,7 +15,7 @@ const validate = (env: Record<string, string> = converterEnv) =>
       "-e",
       `import ${JSON.stringify(moduleUrl)};`,
     ],
-    cwd: new URL("../../..", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("../../..", import.meta.url)),
     env,
     stderr: "pipe",
   });

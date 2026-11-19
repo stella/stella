@@ -22,13 +22,6 @@ import { Temporal } from "@stll/time";
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import { publicLawNumberedPagerModel } from "@/components/public-law-table/public-law-pagination.logic";
 import {
-  publicLawRowsPhase,
-  publicLawSearchOutage,
-  queryAnsweredByRows,
-  rowsAnswerRequestedSearch,
-} from "@/components/public-law-table/public-law-results-state.logic";
-import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
-import {
   PublicLawFilterChips,
   PublicLawResultsToolbar,
 } from "@/components/public-law-table/public-law-results-toolbar";
@@ -102,6 +95,11 @@ import {
   readDecisionIntent,
 } from "@/features/case-law/open-decision-match";
 import {
+  publicLawSearchOutage,
+  queryAnsweredByRows,
+  rowsAnswerRequestedSearch,
+} from "@/features/case-law/public-law-results-state.logic";
+import {
   decisionsPageOptions,
   usePrefetchedDecisionPage,
 } from "@/features/case-law/queries/decisions";
@@ -129,7 +127,12 @@ import {
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { queryView, queryViewError } from "@/lib/query-view.logic";
+import {
+  queryView,
+  queryViewError,
+  routeRowsPhase,
+} from "@/lib/query-view.logic";
+import type { RouteState } from "@/routes/-route-pending-view";
 import {
   PublicLawListFailure,
   PublicLawResultsBoundary,
@@ -151,7 +154,7 @@ import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 const routeApi = getRouteApi("/law/cases/");
 
 /** The page renders only once the router has the route's data. */
-const ROUTE_STATE: PublicLawRouteState = "loaded";
+const ROUTE_STATE: RouteState = "loaded";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const NO_SHOWN_QUESTIONS: readonly string[] = [];
@@ -407,7 +410,7 @@ export function PublicCaseLawIndex() {
   // The rows are the only region that waits: either they are not there yet,
   // or they answer the search before this one and say so themselves rather
   // than the page being replaced.
-  const rows = publicLawRowsPhase({
+  const rows = routeRowsPhase({
     isLoading,
     isPlaceholderData,
     keptRowCount: pageDecisions(pageData).length,

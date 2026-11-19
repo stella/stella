@@ -34,6 +34,7 @@
     "./browser-clock": "./src/testing/browser-clock.ts",
     "./toolbar-icon-action": "./src/components/toolbar-icon-action.tsx",
     "./view-toolbar": "./src/components/view-toolbar.tsx",
+    "./view-toolbar-shell": "./src/components/view-toolbar-shell.tsx",
     "./accordion": "./src/components/accordion.tsx",
     "./collapsible": "./src/components/collapsible.tsx",
     "./application-rail": "./src/components/application-rail.tsx",
@@ -54,6 +55,7 @@
     "./command": "./src/components/command.tsx",
     "./composer": "./src/components/composer.tsx",
     "./composer-tokens": "./src/components/composer-tokens.ts",
+    "./control-face": "./src/components/control-face.tsx",
     "./context-menu": "./src/components/context-menu.tsx",
     "./entity-actions": "./src/components/entity-actions.tsx",
     "./native-context-menu": "./src/lib/native-context-menu.ts",
@@ -97,10 +99,13 @@
     "./input-group": "./src/components/input-group.tsx",
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",
+    "./input-otp-face": "./src/components/input-otp-face.tsx",
     "./list": "./src/components/list.tsx",
+    "./list-shell": "./src/components/list-shell.tsx",
     "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
+    "./landing-shell": "./src/components/landing-shell.tsx",
     "./document-mark": {
       "react-native": "./src/components/document-mark.native.tsx",
       "default": "./src/components/document-mark.tsx"
@@ -178,6 +183,7 @@
       "default": "./src/components/stella-wordmark.tsx"
     },
     "./table": "./src/components/table.tsx",
+    "./table-shell": "./src/components/table-shell.tsx",
     "./table-chart": "./src/components/table-chart.tsx",
     "./tabs": "./src/components/tabs.tsx",
     "./textarea": {
@@ -194,6 +200,7 @@
     "./toggle-group": "./src/components/toggle-group.tsx",
     "./tooltip": "./src/components/tooltip.tsx",
     "./truncated-text": "./src/components/truncated-text.tsx",
+    "./truncated-text-face": "./src/components/truncated-text-face.tsx",
     "./typed-character": "./src/lib/typed-character.ts",
     "./use-contained-handler": "./src/hooks/use-contained-handler.ts",
     "./use-content-dir": "./src/hooks/use-content-dir.ts",

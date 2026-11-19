@@ -98,6 +98,9 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   remember: CHAT_TOOL_POLICY_KIND.mutation,
+  // Writes a skill package into the user's library: one approved call per
+  // batch of files.
+  save_skill_package: CHAT_TOOL_POLICY_KIND.mutation,
   "search-chat-history": CHAT_TOOL_POLICY_KIND.internal,
   "search-past-chats": CHAT_TOOL_POLICY_KIND.internal,
   // Crosses from this chat's matters into every chat the user has, so the
@@ -107,6 +110,8 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
+  // Checks a package in memory, or a skill the caller may edit; writes nothing.
+  validate_skill_package: CHAT_TOOL_POLICY_KIND.internal,
   // Client-executed Chrome control. Each command reaches a signed-in website
   // with model-authored input, so it uses the external-service policy and
   // stays on per-call approval in the UI grant policy; only page reads may

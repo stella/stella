@@ -93,6 +93,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATA_INVARIANT_CASE_LAW_CANARIES",
   "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
+  "SOFT_LAW_SYNC_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -126,6 +127,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES",
   "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
@@ -379,6 +381,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES:
+    "Comma-separated regulator guidance sources whose publisher has permitted full-text reuse; each must be a source served as a listing pending that permission.",
   KILL_SWITCHES:
     'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
@@ -391,6 +395,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
+  SOFT_LAW_SYNC_ENABLED:
+    "Enable the daily regulator guidance sync for sources with a serving decision.",
   ACTION_LIMIT_CONTACT_URL:
     "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
@@ -824,6 +830,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_SYNC_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
@@ -1076,6 +1083,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
   SMTP_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -1545,6 +1553,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "APPLE_SIGNING_IDENTITY",
   // The ignored SoftHSM2 test of the PKCS #11 helper names the module to load.
   "SOFTHSM2_MODULE",
+  // The desktop transcribe-window browser test saves its screenshots here when set.
+  "TRANSCRIBE_SCREENSHOTS",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",

@@ -31,7 +31,6 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   Conversation,
@@ -55,10 +54,8 @@ import {
 } from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import {
-  ChatMatterPicker,
-  ChatMatterPickerPending,
-} from "@/components/chat/chat-matter-picker";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker.pending";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
@@ -93,7 +90,6 @@ import {
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { ChatTitleSuggestButton } from "@/features/chat/components/chat-title-rename";
-import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -134,7 +130,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { REQUIREMENT } from "@/lib/platform/requirements.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
-import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import {
+  offeredSuggestedSkills,
+  useSuggestedSkills,
+} from "@/lib/prompts/use-suggested-skills";
 import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -381,31 +380,24 @@ export const ChatTabPanel = ({
     },
   );
 
-  const {
-    handleAskUserEditingChange,
-    lastMessageId,
-    suggestedFollowupPrompt,
-    suggestedPrompts,
-  } = useSuggestedFollowupPrompts({
-    activeOrganizationId,
-    approvalPendingMessageId,
-    error,
-    isGenerating,
-    messages,
-    threadRef,
-    turnAbandoned,
-  });
+  const { handleAskUserEditingChange, lastMessageId, suggestedPrompts } =
+    useSuggestedFollowupPrompts({
+      activeOrganizationId,
+      approvalPendingMessageId,
+      error,
+      isGenerating,
+      messages,
+      threadRef,
+      turnAbandoned,
+    });
   // TipTap composer for this thread — `@`-mention chips, drafts,
   // attachments come from the same provider as the right-panel
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
-    followupAnalytics: { surface: "inspector-chat" },
     placeholder: composerPlaceholder,
-    suggestedFollowupPrompt,
     threadRef,
   });
-  const hasSuggestedFollowups = suggestedPrompts.length > 0;
   const focusComposer = editorController.focus;
   const handleContinuePausedTurn = useLatestCallback(async () => {
     await continuePausedTurnWhenReady({
@@ -432,7 +424,7 @@ export const ChatTabPanel = ({
     };
   }, [focusComposer, isGenerating, messages.length, tab.id]);
 
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   // A chat about a decision opens on the questions a judgment answers. The
   // suggested skills are the reader's own drafting and review skills, which are
   // about a document they are writing, not one a court handed down.
@@ -752,12 +744,8 @@ export const ChatTabPanel = ({
         >
           <Conversation className="min-h-0 flex-1">
             {/* Bottom padding keeps the last messages readable above the
-                floating composer block (veil + pill + status row). Extra
-                space when follow-up chips are showing so Copy/Retry can
-                scroll clear of the chip row. */}
-            <ConversationContent
-              className={cn("gap-3", hasSuggestedFollowups ? "pb-44" : "pb-32")}
-            >
+                floating composer block (veil + pill + status row). */}
+            <ConversationContent className="gap-3 pb-32">
               {messages.length === 0 && !isGenerating && !error ? (
                 <ChatEmptyState
                   onSelectPrompt={handleSelectPrompt}
@@ -766,6 +754,35 @@ export const ChatTabPanel = ({
               ) : (
                 <ChatThreadMessages
                   activitySession={activitySession}
+                  followUps={{
+                    analyticsSurface: "inspector-chat",
+                    messageId: lastMessageId,
+                    onSelect: (prompt) => {
+                      editorController.setContent(
+                        composerStoredMarkdown(prompt),
+                      );
+                      detached(
+                        editorController.submit(async (draft) => {
+                          composerModels.openDesktopForSend();
+                          if (!(await ensureAIAvailable())) {
+                            return CHAT_SEND_KEPT;
+                          }
+                          const message = await buildChatRequestMessage(draft);
+                          if (message.isErr()) {
+                            notifyUserError(
+                              message.error,
+                              t("chat.sendErrorMessageEmpty"),
+                            );
+                            return CHAT_SEND_KEPT;
+                          }
+                          return await sendMessage(message.value);
+                        }),
+                        "chat-tab-panel.submit",
+                      );
+                    },
+                    prompts: suggestedPrompts,
+                    threadId: threadRef.threadId,
+                  }}
                   onAnswerEdited={refreshAnswers}
                   answerRewriteAvailability={
                     data.usedAnonymization ? "anonymized" : "available"
@@ -813,8 +830,8 @@ export const ChatTabPanel = ({
           {/* PromptBar owns its own docked positioning (via
               DockedComposer): it floats over the transcript, centred and
               pinned to the pane's bottom, identically to the file-overlay
-              chat. The chips ride the same one geometry through the
-              `followupChips` slot. */}
+              chat. Suggested follow-ups sit under the answer they follow,
+              in the transcript, not over it. */}
           <PromptBar
             sendDisabled={availability !== "available"}
             anonymized={anonymized}
@@ -825,35 +842,6 @@ export const ChatTabPanel = ({
               <PromptBarPlaceholderContent>
                 {composerPlaceholder}
               </PromptBarPlaceholderContent>
-            }
-            followupChips={
-              <SuggestedFollowupChips
-                analyticsSurface="inspector-chat"
-                messageId={lastMessageId}
-                onSelect={(prompt) => {
-                  editorController.setContent(composerStoredMarkdown(prompt));
-                  detached(
-                    editorController.submit(async (draft) => {
-                      composerModels.openDesktopForSend();
-                      if (!(await ensureAIAvailable())) {
-                        return CHAT_SEND_KEPT;
-                      }
-                      const message = await buildChatRequestMessage(draft);
-                      if (message.isErr()) {
-                        notifyUserError(
-                          message.error,
-                          t("chat.sendErrorMessageEmpty"),
-                        );
-                        return CHAT_SEND_KEPT;
-                      }
-                      return await sendMessage(message.value);
-                    }),
-                    "chat-tab-panel.submit",
-                  );
-                }}
-                prompts={suggestedPrompts}
-                threadId={threadRef.threadId}
-              />
             }
             layout="standalone"
             onFocusChange={setComposerFocused}
@@ -1097,7 +1085,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  * spinner flash, no layout shift.
  */
 export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   const decisionPrompts = useDecisionChatPrompts(tab.activeLegalKey);
   const threadRef = chatTabThreadRef(tab);
   return (

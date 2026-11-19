@@ -508,17 +508,28 @@ type DefaultPendingComponentProps = {
   announce?: boolean | undefined;
 };
 
+/** How a pending view rendered before the intl provider mounts announces
+ *  itself: one busy status region around decorative skeleton bars. */
+export const PENDING_STATUS_PROPS = {
+  "aria-busy": true,
+  "aria-label": "Loading",
+  role: "status",
+} as const;
+
 // Shared content fallback, including before the intl provider mounts. Shell
 // chrome belongs to the frame owner, never to a nested loading boundary.
+// It is the last resort, never a page's loading view: a route's
+// `pendingComponent` is the page's own tree in a pending phase (static
+// chrome real, data regions as skeletons from the loaded rows' primitives;
+// the contract is in `routes/-route-pending-view.tsx`), and the
+// `route-pending-component` lint rule keeps this out of route options.
 export const DefaultPendingComponent = ({
   className,
   announce = true,
 }: DefaultPendingComponentProps) => (
   // Announced as busy content; the skeleton bars themselves are decoration.
   <div
-    {...(announce
-      ? { "aria-busy": true, "aria-label": "Loading", role: "status" }
-      : { "aria-hidden": true })}
+    {...(announce ? PENDING_STATUS_PROPS : { "aria-hidden": true })}
     className={cn(
       "flex h-full min-h-0 w-full flex-1 flex-col gap-4 p-6",
       className,

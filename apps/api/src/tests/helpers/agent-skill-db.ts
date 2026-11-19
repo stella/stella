@@ -8,10 +8,11 @@ import { agentSkillRevisions, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { isHttpStatusResponse } from "@/api/http/status";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
   NO_DB,
@@ -45,10 +46,10 @@ export const skillHandlerContext = <TContext>({
   userId,
   ...fields
 }: SkillHandlerContextOptions): TContext => {
-  const recordAuditEvent: AuditRecorder = async (_tx, events) => {
-    auditEvents.push(...(Array.isArray(events) ? events : [events]));
-    await Promise.resolve();
-  };
+  // Keeps the production delivery contract, so an audited download works.
+  const recordAuditEvent = auditRecorderDouble((events) => {
+    auditEvents.push(...events);
+  });
   return createTestHandlerContext<TContext>({
     scopedDb: NO_DB,
     ...fields,

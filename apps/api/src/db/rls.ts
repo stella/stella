@@ -1623,17 +1623,31 @@ const agentSkillInsertCheck = sql`(
   ${agentSkillWriteCheck} AND ${userCheck}
 )`;
 
-const agentSkillResourceVisibleCheck = sql`(
+/**
+ * Rows that hang off a skill (files, revisions, proposals, comments) are
+ * visible to whoever can see the skill: every org member for team skills,
+ * the owner for private ones, and for a bound skill only where the caller
+ * reaches its binding. The reach is stated here rather than inherited from
+ * the `agent_skills` select policy, so a change to that policy cannot widen
+ * a child table. `tableName` is needed because the correlated subquery must
+ * compare against the child row's own organization column.
+ */
+const agentSkillChildVisibleCheck = (tableName: string) => sql`(
   ${organizationCheck} AND EXISTS (
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
-      AND s.organization_id = agent_skill_resources.organization_id
+      AND s.organization_id = ${sql.raw(tableName)}.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         '${sql.raw(SETTING_USER_ID)}', true
       )))
+      AND ${agentSkillBindingReachCheck("s")}
   )
 )`;
+
+const agentSkillResourceVisibleCheck = agentSkillChildVisibleCheck(
+  "agent_skill_resources",
+);
 
 const agentSkillResourceWriteCheck = sql`(
   ${organizationCheck} AND EXISTS (
@@ -1692,24 +1706,6 @@ export const agentSkillResourcePolicies = () => [
     using: agentSkillResourceWriteCheck,
   }),
 ];
-
-/**
- * Rows that hang off a skill (revisions, proposals, comments) are visible to
- * whoever can see the skill: every org member for team skills, the owner for
- * private ones. `tableName` is needed because the correlated subquery must
- * compare against the child row's own organization column.
- */
-const agentSkillChildVisibleCheck = (tableName: string) => sql`(
-  ${organizationCheck} AND EXISTS (
-    SELECT 1
-    FROM agent_skills s
-    WHERE s.id = skill_id
-      AND s.organization_id = ${sql.raw(tableName)}.organization_id
-      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
-        '${sql.raw(SETTING_USER_ID)}', true
-      )))
-  )
-)`;
 
 /**
  * Revisions are written only by the `record_agent_skill_revision` trigger

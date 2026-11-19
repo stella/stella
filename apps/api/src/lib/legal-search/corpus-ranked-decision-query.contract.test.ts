@@ -85,7 +85,8 @@ const DECISIONS = [
   },
   {
     documentId: OTHER_JURISDICTION,
-    jurisdiction: "SVK",
+    // A Czech judgment of the European index: the same stems, another scope.
+    jurisdiction: "EU",
     text: QUESTION.join(" "),
   },
   {

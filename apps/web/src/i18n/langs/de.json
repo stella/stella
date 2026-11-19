@@ -1233,6 +1233,13 @@
       "treatment": "Spätere Rezeption"
     },
     "analyzing": "Analyse läuft...",
+    "browse": {
+      "courtDescription": "{court} ({country}): Entscheidungen in der öffentlichen Rechtsdatenbank von stella, nach Jahr und Monat.",
+      "courts": "Gerichte",
+      "days": "Tage",
+      "jurisdictionDescription": "{country}: Gerichtsentscheidungen in der öffentlichen Rechtsdatenbank von stella, nach Gericht, Jahr und Monat.",
+      "periodDescription": "{court} ({country}), {period}: Entscheidungen in der öffentlichen Rechtsdatenbank von stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Die Suche ist vorübergehend nicht verfügbar"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Suchen Sie nach dem Aktenzeichen oder der ECLI der Entscheidung, sofern bekannt.",
+        "message": "Zu dieser Fundstelle wurde keine genau passende Entscheidung gefunden."
+      },
       "noHits": {
         "hint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
         "message": "Nichts entspricht den Wörtern, die diese Suche verlangt hat."
@@ -2120,6 +2131,7 @@
     },
     "newChat": "Neuer Chat",
     "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
+    "nextSteps": "Nächste Schritte",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
@@ -2226,7 +2238,6 @@
       "chipLabel": "Läuft auf: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Läuft in der Cloud. Funktioniert überall.",
-      "harnessModels": "{harness}-Modelle",
       "hintCheck": "Prüfen Sie es in stella desktop",
       "hintInstall": "Installieren Sie es in stella desktop",
       "hintOffline": "Öffnen Sie stella desktop auf Ihrem Computer",
@@ -2236,7 +2247,6 @@
       "localFolderSelection": "Ihr Computer · {harness} · {folder}",
       "localPlace": "Ihr Computer, {harness}",
       "localSelection": "Ihr Computer · {harness}",
-      "modelDefault": "Standard (empfohlen)",
       "placeState": "{place}. {state}",
       "stepsCheck": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und prüfen Sie {harness} unter Einstellungen › Allgemein › KI-Abonnements.",
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
@@ -2310,7 +2320,6 @@
     "stopping": "Wird angehalten…",
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
-    "suggestedFollowupsLabel": "Vorgeschlagene Folgefragen",
     "suggestingTitle": "Titel wird vorgeschlagen…",
     "suggestionSeverity": {
       "style": "Stil",
@@ -2321,7 +2330,6 @@
       "accepted": "Angewendet",
       "rejected": "Abgelehnt"
     },
-    "tabToAsk": "→ zum Fragen: „{prompt}“",
     "tableChart": {
       "bar": "Balken",
       "kind": "Diagrammtyp",
@@ -2412,6 +2420,7 @@
       "save_document": "Dokument speichern",
       "save_matter": "Akte speichern",
       "save_playbook": "Playbook speichern",
+      "save_skill_package": "Skill speichern",
       "save_task": "Aufgabe speichern",
       "save_template": "Vorlage speichern",
       "save_time_entry": "Zeiteintrag speichern",
@@ -2440,6 +2449,7 @@
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
       "user_message": "Während der Arbeit des Agenten gesendet",
+      "validate_skill_package": "Skill prüfen",
       "web_search": "Web wird durchsucht"
     },
     "toolCall": {
@@ -2450,7 +2460,7 @@
       "commandExited": "{command} (Exit-Code {code})",
       "consoleLogs": "Konsolenausgabe",
       "exactCall": "Exakter Aufruf",
-      "failed": "Dieser Schritt ist fehlgeschlagen; stella arbeitet auf anderem Weg weiter.",
+      "failed": "Dieser Schritt ist fehlgeschlagen.",
       "field": "Feld",
       "input": "Eingabe",
       "interrupted": "Vor Abschluss unterbrochen",
@@ -2473,6 +2483,8 @@
       "proposedPlan": "Plan wird vorgeschlagen",
       "readFile": "Datei wird gelesen",
       "readingLegislation": "Rechtsvorschriften lesen",
+      "retried": "Erneut versucht",
+      "retriedDetail": "Dieser Schritt hat nicht geklappt, daher hat stella einen anderen Weg versucht.",
       "searchFiles": "Dateien werden durchsucht",
       "searchingCaseLaw": "Rechtsprechung durchsuchen",
       "searchingLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsuchen",
@@ -2741,6 +2753,7 @@
     "done": "Fertig",
     "doubleClickToRename": "Zum Umbenennen doppelklicken",
     "download": "Herunterladen",
+    "downloadOriginal": "Original herunterladen",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Verschieben abgebrochen. {itemName} wurde nicht verschoben.} other {Verschieben abgebrochen. {itemName} wurden nicht verschoben.}}",
       "droppedOn": "{count, plural, one {{itemName} wurde auf {destinationName} abgelegt.} other {{itemName} wurden auf {destinationName} abgelegt.}}",
@@ -3328,6 +3341,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "In die Databox zugestellt",
       "delivery": "Zustellung",
+      "deliveryEvents": "Zustellverlauf",
+      "deliveryReceipt": "Zustellnachweis",
       "directionUnknown": "Richtung unbekannt",
       "messageId": "Nachrichten-ID",
       "moreContacts": "Weitere Kontakte stimmen mit diesem Datenpostfach überein.",
@@ -3340,6 +3355,8 @@
       "sent": "Gesendet",
       "statedInFile": "Databox-Nachricht (laut Datei)",
       "toHands": "Zu Händen von {name}",
+      "unlinkedFiles": "Laden Sie die ursprüngliche ZFO-Datei herunter, um Anhänge ohne Link zu öffnen.",
+      "unreadable": "Die Datei konnte weder als Databox-Nachricht noch als Zustellnachweis gelesen werden.",
       "uploaded": "Hochgeladene Databox-Nachricht"
     },
     "deliveredBy": "Zugestellt von <address>{sender}</address>",
@@ -4042,6 +4059,12 @@
     "versionCreatedDescription": "Version {versionNumber} wurde erstellt. Alle können weiterarbeiten.",
     "versionCreatedTitle": "Version erstellt",
     "viewOnly": "Nur Ansicht"
+  },
+  "guidance": {
+    "notCaseLaw": "Von einer Aufsichtsbehörde herausgegebene Leitlinie. Dies ist keine Gerichtsentscheidung.",
+    "openAtPublisher": "Beim Herausgeber öffnen",
+    "source": "Quelle: {attribution}",
+    "textUnavailable": "Der Text dieses Dokuments ist hier nicht verfügbar. Lesen Sie ihn beim Herausgeber."
   },
   "guides": {
     "action": {
@@ -6308,6 +6331,7 @@
     "compareUnstructured": "Eine der Fassungen liegt nur als reiner Text vor, daher lassen sich die beiden nicht vergleichen.",
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
+    "compareWithPreviousWording": "Mit der vorherigen Fassung vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",
     "currentWording": "Aktueller Wortlaut",
     "description": "Öffentliche Datenbank konsolidierter Rechtsvorschriften, nach Rechtsakt und Fassung indexierbar.",
@@ -6321,6 +6345,7 @@
       "withdrawn": "Vom Herausgeber nicht mehr geführt"
     },
     "inForceSince": "In Kraft seit {date}",
+    "inForceSinceAtLeast": "In Kraft spätestens seit {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Leitentscheidung",
     "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
@@ -6331,6 +6356,7 @@
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",
     "pendingChanges": "Bevorstehende Änderungen",
     "pendingChangesIncomplete": "Die Daten des Herausgebers enthalten möglicherweise nicht alle bevorstehenden Änderungen.",
+    "provisionAbsentVersions": "{count, plural, one {In dieser Fassung des Gesetzes nicht enthalten} other {In diesen # Fassungen des Gesetzes nicht enthalten}}",
     "provisionAskContextPrompt": "\n\nPassagen, die die Vorschrift in den maßgeblichsten Entscheidungen anwenden:\n{passages}\n\nNutze die Rechtsprechungswerkzeuge, um eine dieser Entscheidungen vollständig zu lesen oder weitere Entscheidungen zu finden, die die Vorschrift zitieren.",
     "provisionAskSummarize": "Zusammenfassen, wie Gerichte diese Vorschrift anwenden",
     "provisionAskSummarizePrompt": "Fasse zusammen, wie Gerichte {subject} anwenden, und zitiere die herangezogenen Entscheidungen.",
@@ -6341,7 +6367,14 @@
     "provisionPartTextUnavailable": "Der Wortlaut von {provisionLabel} ist nicht verfügbar",
     "provisionPromptSubject": "{provision} von {statute} ({eli}) in der seit {date} geltenden Fassung",
     "provisionPromptSubjectUndated": "{provision} von {statute} ({eli})",
+    "provisionRunAlsoFrom": "auch ab {date}",
+    "provisionRunShowVersions": "Fassungen des Gesetzes für {range} anzeigen",
+    "provisionRunUnchanged": "{count, plural, one {unverändert in # Fassung des Gesetzes} other {unverändert über # Fassungen des Gesetzes}}",
     "provisionTextUnavailable": "Für diese Fassung ist kein Text verfügbar",
+    "provisionVersionsAll": "Alle Fassungen des Gesetzes",
+    "provisionWordingAdded": "Neue Vorschrift",
+    "provisionWordingChanged": "Geändert",
+    "provisionWordingEarliest": "Älteste vorliegende Fassung",
     "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
     "searchLabel": "Rechtsvorschriften durchsuchen",

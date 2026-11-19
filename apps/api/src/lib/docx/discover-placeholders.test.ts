@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import { discoverPlaceholders } from "./discover-placeholders";
 
-const SPA_FIXTURE = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const SPA_FIXTURE = fileURLToPath(
+  new URL("fixtures/spa-template-with-placeholders.docx", import.meta.url),
+);
 
 /** Build a minimal DOCX buffer with the given document.xml. */
 const makeDocx = async (documentXml: string): Promise<Buffer> => {

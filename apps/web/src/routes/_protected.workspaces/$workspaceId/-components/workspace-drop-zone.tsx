@@ -5,7 +5,7 @@ import { useMatch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { FileDropZone } from "@/components/file-drop-zone";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
@@ -62,7 +62,9 @@ export const WorkspaceDropZone = ({
       onDrop={(files) => handleDrop({ files })}
       onDropTree={(tree) => handleDrop({ tree })}
     >
-      <QueryViewFeedback view={viewsView} />
+      {/* While the views load, the view's own pending view stands below;
+          only a failed read has something to say here. */}
+      <SettledQueryViewFeedback view={viewsView} />
       {children}
     </FileDropZone>
   );

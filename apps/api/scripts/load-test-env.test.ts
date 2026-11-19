@@ -165,7 +165,7 @@ test("migration preserves the deployment environment despite a local test file",
       entrypoint,
       `import { loadTestEnv } from "../../scripts/load-test-env";\n${source.replace(
         "const ebs =",
-        'loadTestEnv(new URL("../../.env.test", import.meta.url).pathname);\nconst ebs =',
+        'loadTestEnv(Bun.fileURLToPath(new URL("../../.env.test", import.meta.url)));\nconst ebs =',
       )}`,
     );
     const mutation = await runEntrypoint({

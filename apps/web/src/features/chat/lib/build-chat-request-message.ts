@@ -28,7 +28,7 @@ const IMAGE_MIME_PREFIX = "image/";
 const createChatMessageId = (): SafeId<"chatMessage"> =>
   toSafeId<"chatMessage">(createUuid());
 
-const toDataUrl = async (file: File) =>
+const toDataUrl = async (file: Blob) =>
   await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("error", () => {
@@ -87,7 +87,11 @@ export const buildChatRequestMessage = async (
         const source = {
           type: "url" as const,
           value:
-            file.type === "stored_file" ? file.url : await toDataUrl(file.file),
+            file.type === "stored_file"
+              ? file.url
+              : await toDataUrl(
+                  file.file.slice(0, file.file.size, file.mimeType),
+                ),
           mimeType: file.mimeType,
         };
         const metadata = { filename: file.filename };

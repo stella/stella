@@ -42,6 +42,30 @@ pub enum Insertion {
   FocusUnconfirmed,
 }
 
+/// What differs between the focus at the press and the focus now, the
+/// broadest difference first, for the local log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moved {
+  /// Another app.
+  App,
+  /// The same app, another process of it.
+  Process,
+  /// The same process, another of its windows in front, or none.
+  Window,
+}
+
+pub fn moved(pressed: &FocusTarget, now: &FocusTarget) -> Option<Moved> {
+  if pressed.identifier != now.identifier {
+    Some(Moved::App)
+  } else if pressed.process_id != now.process_id {
+    Some(Moved::Process)
+  } else if pressed.window != now.window {
+    Some(Moved::Window)
+  } else {
+    None
+  }
+}
+
 /// Whether text may go to the app focused now. Without a target read at the
 /// press there is nothing to compare, and typing goes ahead as plain text
 /// (`dictation_format` gives an unread app no formatting keystrokes); once a
@@ -155,6 +179,24 @@ mod tests {
         "{now:?}"
       );
     }
+  }
+
+  #[test]
+  fn the_log_names_the_broadest_difference_in_focus() {
+    let pressed = target("com.microsoft.word", 41, Some(7));
+    assert_eq!(moved(&pressed, &pressed.clone()), None);
+    assert_eq!(
+      moved(&pressed, &target("com.tinyspeck.slackmacgap", 52, Some(9))),
+      Some(Moved::App)
+    );
+    assert_eq!(
+      moved(&pressed, &target("com.microsoft.word", 42, Some(7))),
+      Some(Moved::Process)
+    );
+    assert_eq!(
+      moved(&pressed, &target("com.microsoft.word", 41, None)),
+      Some(Moved::Window)
+    );
   }
 
   #[test]

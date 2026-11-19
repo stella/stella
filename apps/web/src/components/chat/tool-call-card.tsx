@@ -35,6 +35,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { LocalRunStepOutputDetails } from "@/components/chat/local-run-step-output";
 import { useLocalRunSubtitleText } from "@/components/chat/local-run-subtitle";
+import { skillMdName } from "@/components/chat/tool-approval-summary";
 import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
 import {
   advanceToolCallTiming,
@@ -236,6 +237,9 @@ const getToolSubtitle = ({
       return "SKILL.md";
     case "update-current-skill-resource":
       return getStringInputValue({ key: "path", part }) ?? null;
+    case "save_skill_package":
+    case "validate_skill_package":
+      return skillMdName(getStringInputValue({ key: "skillMd", part }));
     case "fetch_url": {
       const url = getStringInputValue({ key: "url", part });
       if (!url) {
@@ -433,10 +437,17 @@ const SettledToolStatusMark = ({
   }
 };
 
+/**
+ * How a failed step reads, by whether its turn went on past it: on to an
+ * answer (or still working), or ended there without one.
+ */
+export type StepFailureOutcome = "recovered" | "terminal";
+
 const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
   durationMs,
+  failureOutcome,
   turnStatus = "finished",
   part,
   showDetails,
@@ -446,6 +457,8 @@ const ToolCallCardComponent = ({
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
+  /** What a failure of this step means for its turn. */
+  failureOutcome: StepFailureOutcome;
   turnStatus?: "running" | "finished";
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
@@ -553,6 +566,11 @@ const ToolCallCardComponent = ({
   // not the tool failing, so it reads as stopped, without the failure tint.
   const stopped = failureLabelKey === "chat.toolCall.interrupted";
   const hasError = errorMessage !== undefined && !stopped;
+  // A failure the turn went on past is part of the work, not its result: the
+  // row stays calm and the reason waits behind the row's own disclosure.
+  const failure = hasError ? failureOutcome : "none";
+  const failureNote =
+    failure === "recovered" ? t("chat.toolCall.retriedDetail") : errorMessage;
   const status = (() => {
     if (hasError) {
       return "failed";
@@ -593,16 +611,20 @@ const ToolCallCardComponent = ({
     >
       {showsMark && (
         <span className="absolute -start-[8.5px] top-2 flex pointer-coarse:top-3.5">
-          <SettledToolStatusMark label={statusLabel} status={status} />
+          {failure === "recovered" ? (
+            <RecoveredStepDot />
+          ) : (
+            <SettledToolStatusMark label={statusLabel} status={status} />
+          )}
         </span>
       )}
       <Tooltip
-        content={errorMessage}
+        content={failureNote}
         render={
           <div
             className={cn(
               "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-md",
-              hasError &&
+              failure === "terminal" &&
                 "bg-destructive/10 text-destructive hover:bg-destructive/15",
             )}
           />
@@ -647,7 +669,7 @@ const ToolCallCardComponent = ({
         >
           <ToolCallHeaderLabel
             elapsed={elapsed}
-            hasError={hasError}
+            failure={failure}
             isLoading={isLoading}
             label={label}
             statusLabel={showsMark ? undefined : statusLabel}
@@ -697,12 +719,13 @@ const ToolCallCardComponent = ({
         <ToolCallDetails
           activeOrganizationId={activeOrganizationId}
           codeToolSource={codeToolSource}
+          note={failure === "recovered" ? failureNote : undefined}
           part={part}
           showMcpExactCall={showMcpExactCall}
           threadId={threadId}
         />
       )}
-      {hasError && errorMessage && (
+      {failure === "terminal" && errorMessage && (
         <ToolCallFailureDetails
           errorMessage={errorMessage}
           rawErrorDetails={rawErrorDetails}
@@ -721,54 +744,71 @@ export const ToolCallCard = memo(ToolCallCardComponent);
  *  header button paints none of its own and the row owns the hover tint. */
 const ToolCallHeaderLabel = ({
   elapsed,
-  hasError,
+  failure,
   isLoading,
   label,
   statusLabel,
   subtitle,
 }: {
   elapsed: string | null;
-  hasError: boolean;
+  failure: StepFailureOutcome | "none";
   isLoading: boolean;
   label: ReactNode;
   /** A finished step's status, which no mark announces. */
   statusLabel: string | undefined;
   subtitle: ReturnType<typeof getToolSubtitle>;
-}) => (
-  <span
-    className={cn(
-      "flex min-h-8 min-w-0 flex-1 items-center gap-2 ps-3 pe-2 text-sm leading-5 font-normal pointer-coarse:min-h-11",
-      hasError && "text-destructive",
-    )}
-  >
-    <TruncatedText
-      render={<span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />}
+}) => {
+  const t = useTranslations();
+  const terminal = failure === "terminal";
+  return (
+    <span
+      className={cn(
+        "flex min-h-8 min-w-0 flex-1 items-center gap-2 ps-3 pe-2 text-sm leading-5 font-normal pointer-coarse:min-h-11",
+        terminal && "text-destructive",
+      )}
     >
-      <span
-        className={cn(
-          !hasError &&
-            "text-foreground-label group-hover/tool-step:text-foreground",
-        )}
+      <TruncatedText
+        render={<span className={cn(isLoading && CHAT_PENDING_TEXT_CLASS)} />}
       >
-        {label}
-      </span>
-      {subtitle && (
-        <span className={cn("ms-1.5", !hasError && "text-muted-foreground")}>
-          {subtitle}
+        <span
+          className={cn(
+            !terminal &&
+              "text-foreground-label group-hover/tool-step:text-foreground",
+          )}
+        >
+          {label}
+        </span>
+        {subtitle && (
+          <span className={cn("ms-1.5", !terminal && "text-muted-foreground")}>
+            {subtitle}
+          </span>
+        )}
+      </TruncatedText>
+      {statusLabel !== undefined && (
+        <span className="sr-only">{statusLabel}</span>
+      )}
+      {failure === "recovered" && (
+        <span className="text-foreground-ghost shrink-0 text-xs">
+          {t("chat.toolCall.retried")}
         </span>
       )}
-    </TruncatedText>
-    {statusLabel !== undefined && (
-      <span className="sr-only">{statusLabel}</span>
-    )}
-    {elapsed && (
-      <span
-        data-tool-duration
-        className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums"
-      >
-        {elapsed}
-      </span>
-    )}
+      {elapsed && (
+        <span
+          data-tool-duration
+          className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums"
+        >
+          {elapsed}
+        </span>
+      )}
+    </span>
+  );
+};
+
+/** A failure the turn went on past: a quiet warning dot on the rail; the
+ *  row's trailing label says it was retried. */
+const RecoveredStepDot = () => (
+  <span aria-hidden="true" className="flex size-4 items-center justify-center">
+    <span className="bg-warning size-1.5 rounded-full" />
   </span>
 );
 
@@ -776,12 +816,15 @@ const ToolCallHeaderLabel = ({
 const ToolCallDetails = ({
   activeOrganizationId,
   codeToolSource,
+  note,
   part,
   showMcpExactCall,
   threadId,
 }: {
   activeOrganizationId: string;
   codeToolSource: string | undefined;
+  /** A plain line about the step, above its raw call and result. */
+  note: string | undefined;
   part: ToolPart;
   showMcpExactCall: boolean;
   threadId: string | undefined;
@@ -793,6 +836,9 @@ const ToolCallDetails = ({
     isCodeToolName(part.name) && hasOutput ? getCodeToolLogs(part) : [];
   return (
     <div className="space-y-1 ps-3 pt-1 pb-2">
+      {note !== undefined && (
+        <p className="text-muted-foreground text-2xs leading-relaxed">{note}</p>
+      )}
       {showMcpExactCall && (
         <ToolCallCodeBlock
           code={JSON.stringify({ input: toolInput, tool: part.name }, null, 2)}

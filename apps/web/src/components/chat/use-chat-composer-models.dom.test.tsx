@@ -272,6 +272,32 @@ test("a new chat starts on the member's last Run on choice, and a send carries i
   expect(server.patches).toEqual([]);
 });
 
+test("before its first read, a new chat shows where it will start, and decides nothing on it", async () => {
+  const server = serve();
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const read = Promise.withResolvers<StoredChoice>();
+  const { result } = renderComposer(read.promise, { startsOnLastChoice: true });
+  // The row lays out for the computer (no web search switch) from the first
+  // render, while the menus stay pending: the chip says nothing yet.
+  expect(result.current.models.state).toBe("loading");
+  expect(result.current.runTarget).toEqual(CODEX);
+
+  read.resolve(NEW_CHAT);
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+  expect(result.current.runTarget).toEqual(CODEX);
+  expect(server.patches).toEqual([]);
+});
+
+test("before its first read, a thread page shows no start of its own", () => {
+  serve();
+  rememberRunTarget(ORGANIZATION_ID, CODEX);
+  const { result } = renderComposer(
+    Promise.withResolvers<StoredChoice>().promise,
+  );
+  expect(result.current.models.state).toBe("loading");
+  expect(result.current.runTarget).toEqual({ kind: "cloud" });
+});
+
 test("a model picked on a new chat stores the remembered target with it, and the chat keeps it", async () => {
   const server = serve();
   rememberRunTarget(ORGANIZATION_ID, CODEX);

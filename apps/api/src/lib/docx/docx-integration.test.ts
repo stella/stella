@@ -8,6 +8,7 @@
  */
 
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 
@@ -144,10 +145,9 @@ const FOOTER_WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
   `<w:ftr xmlns:w="${W_NS}">${body}</w:ftr>`;
 
-const SPA_FIXTURE = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const SPA_FIXTURE = fileURLToPath(
+  new URL("fixtures/spa-template-with-placeholders.docx", import.meta.url),
+);
 
 const spaTemplate = async (): Promise<ScannedFile> =>
   testDocxFile(await Bun.file(SPA_FIXTURE).arrayBuffer());

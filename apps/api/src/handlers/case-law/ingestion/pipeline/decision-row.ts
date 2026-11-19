@@ -313,7 +313,7 @@ const lockFallbackWinnerTx = async (
   }
   const winner = await findFallbackDecisionTx(tx, write);
   // A re-parse writes its own row, whose identity the new document may move.
-  if (write.inputProvenance.type === "stored" && winner === undefined) {
+  if (write.inputProvenance.type !== "observation" && winner === undefined) {
     return { type: "settled", existing };
   }
   if (
@@ -409,7 +409,7 @@ const writeDecisionRow = async (
           payloadFenced:
             storedPayloadUnchanged ||
             replacedBlockAnchors !== null ||
-            inputProvenance.type === "stored",
+            inputProvenance.type !== "observation",
         });
       }
 
@@ -494,7 +494,7 @@ const writeDecisionRow = async (
       });
     }
 
-    if (inputProvenance.type === "stored") {
+    if (inputProvenance.type !== "observation") {
       // A reparse must never recreate a removed decision under a new identity.
       return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
     }

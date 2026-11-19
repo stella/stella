@@ -96,6 +96,7 @@ export const lockLiveVersionField = async (
       lockTx
         .select({
           entityId: entities.id,
+          currentVersionId: entities.currentVersionId,
           workspaceId: entities.workspaceId,
           versionId: entityVersions.id,
           versionWorkspaceId: entityVersions.workspaceId,

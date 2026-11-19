@@ -51,11 +51,14 @@ export const dictationBodySchema = v.strictObject({
   [TRANSCRIPTION_LABELS_SHOWN_FIELD]: v.optional(v.literal("1")),
 });
 
-/** What a linked desktop uploads: the audio chunk, a model and a language.
- *  It names no matter and sends no vocabulary, and its route always knows
- *  the desktop labels its models, so it sends no labels flag. */
-export const desktopDictationBodySchema = v.omit(dictationBodySchema, [
-  "matterId",
-  "vocabulary",
-  TRANSCRIPTION_LABELS_SHOWN_FIELD,
-]);
+/** What a linked desktop uploads: the audio chunk, a model, a language,
+ *  the speaker's own custom words as vocabulary (only to a model the list
+ *  marks `takesVocabulary`) and, for a recording filed under a matter, that
+ *  matter, whose names the API adds. Its route always knows the desktop
+ *  labels its models, so it sends no labels flag. A recording's piece names
+ *  itself the same way on every attempt, so a retry after a lost answer is
+ *  counted once. */
+export const desktopDictationBodySchema = v.strictObject({
+  ...v.omit(dictationBodySchema, [TRANSCRIPTION_LABELS_SHOWN_FIELD]).entries,
+  pieceId: v.optional(v.pipe(v.string(), v.uuid())),
+});

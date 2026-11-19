@@ -19,6 +19,7 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
+import { FaceLabelPending } from "@stll/ui/control-face";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   EllipsisVerticalIcon,
@@ -52,7 +53,10 @@ import {
 } from "@stll/workspace-ui/calculations";
 
 import { InlineEdit } from "@/components/inline-edit";
-import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import {
+  KanbanCard,
+  KanbanCardsPending,
+} from "@/components/workspaces/kanban/kanban-card";
 import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
 import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
@@ -79,6 +83,12 @@ type KanbanColumnProps = {
   title: string;
   columnValue: string | null;
   entities: WorkspaceEntity[];
+  /**
+   * Whether the column's first page is still on its way: the header shows a
+   * bar where the count goes (never a count of 0 it would take back) and the
+   * column shows card placeholders where its cards go.
+   */
+  entitiesPending?: boolean | undefined;
   workspaceId: string;
   color?: string | undefined;
   colorBg?: string | undefined;
@@ -116,6 +126,7 @@ export const KanbanColumn = ({
   title,
   columnValue,
   entities,
+  entitiesPending = false,
   workspaceId,
   color,
   colorBg,
@@ -339,7 +350,15 @@ export const KanbanColumn = ({
             />
           ) : null
         }
-        meta={editing ? undefined : format.number(entities.length)}
+        meta={(() => {
+          if (editing) {
+            return undefined;
+          }
+          if (entitiesPending) {
+            return <FaceLabelPending className="w-3" />;
+          }
+          return format.number(entities.length);
+        })()}
         swatch={
           <KanbanColumnSwatch
             color={color}
@@ -371,6 +390,7 @@ export const KanbanColumn = ({
             {t("workspaces.dropToUploadFiles")}
           </div>
         )}
+        {entitiesPending && <KanbanCardsPending />}
         <div
           className="relative"
           style={{ height: cardVirtualizer.getTotalSize() }}

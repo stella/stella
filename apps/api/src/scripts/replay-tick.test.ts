@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import {
   combine,
@@ -64,9 +65,9 @@ describe("scheduled replay entrypoint", () => {
       cmd: [
         process.execPath,
         "--no-env-file",
-        new URL("replay-tick.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("replay-tick.ts", import.meta.url)),
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "test" },
       stdout: "pipe",
       stderr: "pipe",
@@ -84,7 +85,9 @@ describe("scheduled replay entrypoint", () => {
   });
 
   test("production cannot acquire fixture overrides before database or storage setup", async () => {
-    const entry = new URL("replay-tick-command.ts", import.meta.url).pathname;
+    const entry = fileURLToPath(
+      new URL("replay-tick-command.ts", import.meta.url),
+    );
     const child = Bun.spawn({
       cmd: [
         process.execPath,
@@ -92,7 +95,7 @@ describe("scheduled replay entrypoint", () => {
         "--eval",
         `const { getReplayTickFixtureRunner } = await import(${JSON.stringify(entry)}); getReplayTickFixtureRunner();`,
       ],
-      cwd: new URL("../..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("../..", import.meta.url)),
       env: { PATH: process.env["PATH"], NODE_ENV: "production" },
       stdout: "pipe",
       stderr: "pipe",
