@@ -1084,6 +1084,9 @@ pub(crate) fn set_reconnect_needed(app: &tauri::AppHandle, needed: bool) {
 
 pub fn notify(app: &tauri::AppHandle) {
   use tauri::Manager;
+  // A dictation model list read for the account before the change is read
+  // again.
+  crate::dictation_models::forget();
   if let (Some(sessions), Some(account)) = (
     app.try_state::<crate::commands::AppState>(),
     app.try_state::<AccountState>(),
