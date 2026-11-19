@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertySeed } from "@stll/property-testing";
+import { drawPropertySamples } from "@stll/property-testing";
 
 import {
   caseNumberMatchKey,
@@ -124,10 +124,13 @@ test("the SQL rendering and caseNumberMatchKey fold every boundary key alike", a
 });
 
 test("the SQL rendering and caseNumberMatchKey agree on sampled keys", async () => {
-  const keys = fc.sample(keyArbitrary, { numRuns: 500, seed: propertySeed() });
-  const rows = await foldInSql(keys);
-  expect(rows).toHaveLength(keys.length);
-  for (const { key, folded } of rows) {
-    expect([key, folded]).toEqual([key, caseNumberMatchKey(key)]);
+  const samples = drawPropertySamples(keyArbitrary, { numRuns: 500 });
+  const rows = await foldInSql(samples.map(({ value }) => value));
+  expect(rows).toHaveLength(samples.length);
+  for (const [index, { key, folded }] of rows.entries()) {
+    expect(
+      [key, folded],
+      samples[index]?.label ?? `sample ${String(index)}`,
+    ).toEqual([key, caseNumberMatchKey(key)]);
   }
 });
