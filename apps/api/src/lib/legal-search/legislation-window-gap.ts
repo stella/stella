@@ -53,7 +53,7 @@ export const selectInconsistentWindowVersions = async (
     .limit(INCONSISTENT_VERSIONS_MAX);
 
 /** The row predicate for `legislation_documents` itself. */
-export const isPromulgatedOnlyTextOn = (asOf: SQLWrapper): SQL =>
+const isPromulgatedOnlyTextOn = (asOf: SQLWrapper): SQL =>
   isPromulgatedOnlyTextAt(legislationVersionRow(legislationDocuments), asOf);
 
 /**
