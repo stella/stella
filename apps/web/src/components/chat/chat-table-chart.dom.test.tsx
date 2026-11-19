@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
@@ -57,6 +59,17 @@ const mount = (
   sourceMarkdown = markdown,
 ) => {
   const client = new QueryClient();
+  // Built once, so a rerender keeps the same table instance and its state.
+  const components: ComponentProps<typeof Streamdown>["components"] = {
+    ...messageComponents,
+    table: (props) => (
+      <ChatTableChart
+        {...props}
+        cacheScope={["org-a", "user-a"]}
+        requestPlan={requestPlan}
+      />
+    ),
+  };
   const element = (source: string) => (
     <QueryClientProvider client={client}>
       <IntlProvider
@@ -65,19 +78,7 @@ const mount = (
         timeZone="UTC"
       >
         <FormattingProvider locale={locale} timeZone="UTC">
-          <Streamdown
-            mode="static"
-            components={{
-              ...messageComponents,
-              table: (props) => (
-                <ChatTableChart
-                  {...props}
-                  cacheScope={["org-a", "user-a"]}
-                  requestPlan={requestPlan}
-                />
-              ),
-            }}
-          >
+          <Streamdown mode="static" components={components}>
             {source}
           </Streamdown>
         </FormattingProvider>
