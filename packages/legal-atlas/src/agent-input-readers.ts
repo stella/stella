@@ -20,15 +20,16 @@ const LATEST_READING = "9999-12-31";
  * text naming several works, or none, is not one identifier.
  */
 const workOfCitation = (text: string): string | undefined => {
-  const located = locateGazetteCitations(text);
-  if (located.length > 0) {
-    return located.length === 1 ? located[0]?.eli : undefined;
-  }
-  const hungarian = readHungarianActCitations(text, LATEST_READING);
-  const [act, ...others] = hungarian;
-  return act === undefined || others.length > 0
-    ? undefined
-    : (hungarianDesignationWorkEli(act) ?? undefined);
+  // Every grammar reads the whole text: a Czech number beside a Hungarian
+  // designation names two works, not the first one found.
+  const works = [
+    ...locateGazetteCitations(text).map(({ eli }) => eli),
+    ...readHungarianActCitations(text, LATEST_READING).map(
+      hungarianDesignationWorkEli,
+    ),
+  ];
+  const [work, ...others] = works;
+  return others.length > 0 || work === null ? undefined : work;
 };
 
 /**

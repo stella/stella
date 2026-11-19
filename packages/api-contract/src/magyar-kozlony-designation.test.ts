@@ -116,6 +116,17 @@ describe("Hungarian act citations", () => {
     ).toBeNull();
   });
 
+  test("a later mention stating the signing day completes an undated one", () => {
+    for (const citation of [
+      "123/2020. Korm. rendelet (123/2020. (IV. 30.) Korm. rendelet)",
+      "123/2020. (IV. 30.) Korm. rendelet, azaz a 123/2020. Korm. rendelet",
+    ]) {
+      expect(workOf(citation)).toBe(
+        "urn:hu:magyar-kozlony:123-2020-iv-30-korm-rendelet",
+      );
+    }
+  });
+
   test("a recodified code's abbreviation names the code in force on the citing date", () => {
     expect(workOf("Ptk. 6:519. §", "2014-03-15")).toBe(
       "urn:hu:magyar-kozlony:2013-evi-v-torveny",

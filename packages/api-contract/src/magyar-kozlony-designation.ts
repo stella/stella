@@ -453,17 +453,26 @@ export const readHungarianActCitations = (
   citedOn: string,
 ): HungarianActDesignation[] => {
   const folded = foldCitation(text);
-  const seen = new Set<string>();
-  return [...designationMentions(folded), ...aliasMentions(folded, citedOn)]
-    .toSorted((left, right) => left.offset - right.offset)
-    .flatMap(({ act }) => {
-      const key = designationKey(act);
-      if (seen.has(key)) {
-        return [];
-      }
-      seen.add(key);
-      return [act];
-    });
+  // One entry per act, in the order the text first names it. A later
+  // mention that states the signing day an earlier one left out completes it.
+  const acts = new Map<string, HungarianActDesignation>();
+  for (const { act } of [
+    ...designationMentions(folded),
+    ...aliasMentions(folded, citedOn),
+  ].toSorted((left, right) => left.offset - right.offset)) {
+    const key = designationKey(act);
+    const known = acts.get(key);
+    if (
+      known === undefined ||
+      (known.kind === "numbered" &&
+        known.signed === null &&
+        act.kind === "numbered" &&
+        act.signed !== null)
+    ) {
+      acts.set(key, act);
+    }
+  }
+  return [...acts.values()];
 };
 
 const LAW_KIND_RE = /^(?:torveny|tv\.?)$/u;
