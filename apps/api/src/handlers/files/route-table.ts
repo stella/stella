@@ -1,3 +1,7 @@
+import {
+  cadesContentEndpoint,
+  cadesPreviewEndpoint,
+} from "@/api/handlers/files/cades";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -19,6 +23,8 @@ import { routes } from "@/api/http/route";
 export const filesRoute = routes(
   {
     "/url/:fieldId": { GET: readFileEndpoint },
+    "/cades/:fieldId": { GET: cadesPreviewEndpoint },
+    "/cades/:fieldId/content": { GET: cadesContentEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {

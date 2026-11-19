@@ -602,6 +602,13 @@
     "dictationCleanup": "Corregir con IA",
     "dictationCleanupHint": "Corrige errores de reconocimiento y el formato dictado, como «nueva línea». Solo el texto, no el audio, pasa por stella al proveedor de IA de tu organización; stella no lo guarda."
   },
+  "signedFile": {
+    "layer": "Capa de firmas {number, number}",
+    "noReadableContent": "No hay contenido legible para la vista previa.",
+    "unknownSigner": "Firmante desconocido",
+    "unreadable": "No se ha podido leer el archivo firmado.",
+    "unverified": "Las firmas no se han verificado."
+  },
   "header": {
     "search": "Buscar"
   },

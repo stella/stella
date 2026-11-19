@@ -4,14 +4,9 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
-import {
-  type DataBoxDeliveryEvent,
-  type DataBoxEnvelope,
-  resolveDataBoxMessageMimeType,
-} from "@stll/api-contract/data-box";
+import type { DataBoxDeliveryEvent, DataBoxEnvelope } from "@stll/api-contract/data-box";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
 import {
   correspondence,
   correspondenceAttachments,
@@ -20,9 +15,6 @@ import {
   entityVersions,
   fields,
 } from "@/api/db/schema";
-import { HTTP_FAILURE } from "@/api/http/errors";
-import { AUDIT_RESOURCE_TYPE, type AuditRecorder } from "@/api/lib/audit-log";
-import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withDataBoxDirection } from "@/api/lib/email/correspondence/data-box/direction";
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
@@ -30,22 +22,12 @@ import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-
 import { readDataBoxPreview } from "@/api/lib/email/correspondence/data-box/read-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
-import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
-  fileFieldQuery,
-  lockLiveVersionField,
-} from "@/api/lib/files/live-version-field";
-import { createFileKey } from "@/api/lib/files/utils";
+  type LegalFileReadOptions,
+  legalSourceChanged,
+  loadLegalFileSource,
+} from "@/api/lib/files/legal-file-source";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
-
-type ReadDataBoxFileOptions = {
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  fieldId: SafeId<"field">;
-  recordAuditEvent: AuditRecorder;
-  purpose?: "preview" | "agent" | "standalone";
-};
 
 /** One read of a data-box file: its envelope as stated, and its source text. */
 type DataBoxFileRead =
@@ -66,26 +48,6 @@ type DataBoxFileRead =
         entityId: SafeId<"entity"> | null;
       }[];
     };
-
-const missingFile = () =>
-  Result.err(
-    new HandlerError({
-      status: 404,
-      code: HTTP_FAILURE.notFound,
-      message: "File not found",
-    }),
-  );
-
-const changedSource = () =>
-  Result.err(
-    new HandlerError({
-      status: 409,
-      code: "source_changed",
-      message: "The source changed during this read. Read the file again.",
-      retryable: true,
-      retryAfterMs: 0,
-    }),
-  );
 
 type FiledAttachmentOptions = {
   tx: Transaction;
@@ -180,38 +142,20 @@ const readFiledAttachments = async ({
   return unique;
 };
 
-export const readDataBoxFile = async ({
-  scopedDb,
-  workspaceId,
-  organizationId,
-  fieldId,
-  recordAuditEvent,
-  purpose = "preview",
-}: ReadDataBoxFileOptions): Promise<Result<DataBoxFileRead, HandlerError>> => {
-  const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
-  if (row?.content.type !== "file") {
-    return missingFile();
+export const readDataBoxFile = async (
+  options: LegalFileReadOptions,
+): Promise<Result<DataBoxFileRead, HandlerError>> => {
+  const {
+    scopedDb,
+    workspaceId,
+    organizationId,
+    purpose = "preview",
+  } = options;
+  const loaded = await loadLegalFileSource(options, "dataBox");
+  if (loaded.isErr()) {
+    return Result.err(loaded.error);
   }
-  const content = row.content;
-  const mimeType = resolveDataBoxMessageMimeType(content);
-  if (content.encrypted || !mimeType) {
-    return Result.err(
-      new HandlerError({
-        status: 422,
-        code: PREVIEW_UNAVAILABLE_ERROR_CODE,
-        message: "Data-box preview unavailable for this file",
-      }),
-    );
-  }
-  const source = await readStoredFile({
-    key: createFileKey({
-      organizationId,
-      workspaceId,
-      fileId: content.id,
-      mimeType: content.mimeType,
-    }),
-    mimeType: content.mimeType,
-  });
+  const { source, mimeType, entityId, deliver } = loaded.value;
   const preview = await readDataBoxPreview(source);
   if (preview.isErr()) {
     return Result.err(preview.error);
@@ -228,7 +172,7 @@ export const readDataBoxFile = async ({
           async (tx) =>
             await readFiledAttachments({
               tx,
-              sourceEntityId: row.entityId,
+              sourceEntityId: entityId,
               workspaceId,
               message: doc,
             }),
@@ -274,25 +218,14 @@ export const readDataBoxFile = async ({
       readEmbeddedFiles = true;
     }
   }
-  return await scopedDb(async (tx) => {
-    const live = await lockLiveVersionField(tx, fieldId, workspaceId);
-    if (
-      live?.content.type !== "file" ||
-      live.content.id !== content.id ||
-      live.content.encrypted
-    ) {
-      return missingFile();
-    }
-    if (purpose !== "preview" && live.versionId !== live.currentVersionId) {
-      return changedSource();
-    }
+  return await deliver(async (tx): Promise<Result<DataBoxFileRead, HandlerError>> => {
     const boxIds = await readOrganizationDataBoxIds(tx, organizationId);
     const envelope = withDataBoxDirection(doc.envelope, boxIds);
     const byOrdinal =
       doc.kind === "message"
         ? await readFiledAttachments({
             tx,
-            sourceEntityId: row.entityId,
+            sourceEntityId: entityId,
             workspaceId,
             message: doc,
           })
@@ -303,21 +236,8 @@ export const readDataBoxFile = async ({
       !readEmbeddedFiles &&
       byOrdinal.size !== doc.files.length
     ) {
-      return changedSource();
+      return legalSourceChanged();
     }
-    await recordAuditEvent(tx, {
-      action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: row.entityId,
-      workspaceId,
-      metadata: {
-        disposition: "inline",
-        fieldId,
-        format: "data-box",
-        mimeType: content.mimeType,
-        sizeBytes: content.sizeBytes,
-      },
-    });
     if (doc.kind === "receipt") {
       return Result.ok({
         kind: doc.kind,

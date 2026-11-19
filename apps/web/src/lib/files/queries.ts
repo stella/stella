@@ -11,11 +11,13 @@ import {
   DOCUMENT_PROPERTIES_RESULT_SCHEMA,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
+import { PDF_MIME } from "@/lib/consts";
 import {
   APIError,
   shouldRetryAPIRequest,
@@ -97,6 +99,12 @@ const parseSuccessBody = <TSchema extends v.GenericSchema>(
 export const filesKeys = {
   all: filesQueryRoot,
   byFieldId: fileContentQueryKey,
+  cadesByFieldId: ({ fieldId, workspaceId }: FileByFieldIdKey) => [
+    ...filesKeys.all(),
+    "cades",
+    workspaceId,
+    fieldId,
+  ],
   contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
@@ -226,6 +234,56 @@ export const dataBoxPreviewOptions = (props: FileOptionsProps) =>
       scope: { type: "workspace", workspaceId: props.workspaceId },
     },
   );
+
+export const cadesPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: filesKeys.cadesByFieldId(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .cades({
+            fieldId: props.fieldId,
+          })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          cadesPreviewSchema,
+          unwrapApiResponse(response),
+          "Signed file preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
+  queryOptions({
+    gcTime: 0,
+    retry: false,
+    queryKey: [...filesKeys.cadesByFieldId({ fieldId, workspaceId }), "pdf"],
+    queryFn: async ({ signal }) => {
+      const response = await fetchWithTimeout(
+        apiUrl(
+          `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
+        ),
+        { credentials: "include", signal, timeoutMs: 60_000 },
+      );
+      if (!response.ok || response.headers.get("content-type") !== PDF_MIME) {
+        throw new APIError({
+          status: response.status,
+          message: "Failed to preview PDF inside signed file",
+        });
+      }
+      return await response.arrayBuffer();
+    },
+  });
 
 export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
   queryOptions({

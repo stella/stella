@@ -602,6 +602,13 @@
     "dictationCleanup": "Javítás AI-jal",
     "dictationCleanupHint": "Kijavítja a felismerési hibákat és a kimondott formázást, például „új sor”. Csak a szöveg, nem a hang megy a stellán keresztül a szervezeted AI-szolgáltatójához; a stella nem tárolja."
   },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
   "header": {
     "search": "Keresés"
   },

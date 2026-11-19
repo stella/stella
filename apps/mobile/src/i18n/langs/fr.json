@@ -602,6 +602,13 @@
     "dictationCleanup": "Corriger avec l’IA",
     "dictationCleanupHint": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne ». Seul le texte, pas l’audio, passe par stella vers le fournisseur d’IA de votre organisation ; stella ne le conserve pas."
   },
+  "signedFile": {
+    "layer": "Couche de signatures {number, number}",
+    "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "unknownSigner": "Signataire inconnu",
+    "unreadable": "Impossible de lire le fichier signé.",
+    "unverified": "Les signatures n’ont pas été vérifiées."
+  },
   "header": {
     "search": "Rechercher"
   },

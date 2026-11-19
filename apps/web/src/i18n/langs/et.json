@@ -6247,6 +6247,14 @@
     "reconnectRequired": "Sisselogimine aegus",
     "title": "SharePoint ja OneDrive"
   },
+  "signedFile": {
+    "layer": "Allkirjakiht {number, number}",
+    "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "pdfUnavailable": "PDF-i eelvaade pole saadaval.",
+    "unknownSigner": "Tundmatu allkirjastaja",
+    "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
+    "unverified": "Allkirju ei ole kontrollitud."
+  },
   "skillHistory": {
     "acceptStale": "Võta vastu ja kirjuta uuemad muudatused üle",
     "backToCurrent": "Tagasi praeguse versiooni juurde",

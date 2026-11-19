@@ -15,6 +15,10 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import {
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
+} from "./cades-preview";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -133,6 +137,8 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  cadesContentScalingScenario,
+  cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,

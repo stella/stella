@@ -6247,6 +6247,14 @@
     "reconnectRequired": "Prihlásenie vypršalo",
     "title": "SharePoint a OneDrive"
   },
+  "signedFile": {
+    "layer": "Vrstva podpisov {number, number}",
+    "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "pdfUnavailable": "Náhľad PDF nie je k dispozícii.",
+    "unknownSigner": "Neznámy podpisovateľ",
+    "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
+    "unverified": "Podpisy neboli overené."
+  },
   "skillHistory": {
     "acceptStale": "Prijať a prepísať novšie úpravy",
     "backToCurrent": "Späť na aktuálne znenie",

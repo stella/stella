@@ -602,6 +602,13 @@
     "dictationCleanup": "Labot ar MI",
     "dictationCleanupHint": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”. Tikai teksts, nevis audio, caur stella nonāk pie jūsu organizācijas MI pakalpojumu sniedzēja; stella to neglabā."
   },
+  "signedFile": {
+    "layer": "Parakstu slānis {number, number}",
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "unknownSigner": "Nezināms parakstītājs",
+    "unreadable": "Parakstīto failu neizdevās nolasīt.",
+    "unverified": "Paraksti nav pārbaudīti."
+  },
   "header": {
     "search": "Meklēt"
   },

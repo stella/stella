@@ -6247,6 +6247,14 @@
     "reconnectRequired": "انتهت صلاحية تسجيل الدخول",
     "title": "SharePoint وOneDrive"
   },
+  "signedFile": {
+    "layer": "طبقة التوقيعات {number, number}",
+    "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "unknownSigner": "موقّع مجهول",
+    "unreadable": "تعذّرت قراءة الملف الموقّع.",
+    "unverified": "لم يُتحقق من التوقيعات."
+  },
   "skillHistory": {
     "acceptStale": "قبول واستبدال التعديلات الأحدث",
     "backToCurrent": "العودة إلى النسخة الحالية",

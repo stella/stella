@@ -19,9 +19,28 @@ GlobalRegistrator.register({
 });
 
 const originalFetch = globalThis.fetch;
+const cadesPdfRequests: (RequestCredentials | undefined)[] = [];
 globalThis.fetch = Object.assign(
-  async (input: string | URL | Request) => {
+  async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
+    if (url.includes("/cades/field-cades/content")) {
+      cadesPdfRequests.push(
+        init?.credentials ??
+          (input instanceof Request ? input.credentials : undefined),
+      );
+      return new Response("%PDF-1.7", {
+        headers: { "content-type": "application/pdf" },
+      });
+    }
+    if (url.includes("/cades/field-cades-unsupported")) {
+      return Response.json(
+        { message: "Preview unavailable", code: "preview_unavailable" },
+        { status: 422 },
+      );
+    }
+    if (url.includes("/chat/threads/") && url.includes("/messages")) {
+      return Response.json({ message: "Thread not found" }, { status: 404 });
+    }
     if (url.includes("/chat/")) {
       return Response.json({ messages: [] });
     }
@@ -88,6 +107,8 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const React = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
+const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
+  await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { DocxEditorHost } = await import("@/components/docx/docx-editor-host");
@@ -96,7 +117,7 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const { dataBoxPreviewOptions, fileOptions } =
+const { cadesPreviewOptions, dataBoxPreviewOptions, fileOptions } =
   await import("@/lib/files/queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
@@ -167,6 +188,7 @@ afterEach(async () => {
   });
   docxEngineRenderCount = 0;
   pdfEngineRenderCount = 0;
+  cadesPdfRequests.length = 0;
 });
 
 afterAll(async () => {
@@ -327,6 +349,87 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
     expect(pdfEngineRenderCount).toBe(0);
   },
 );
+
+test.each([
+  { mimeType: "application/pdf", fileName: "submission.pdf", text: "" },
+  {
+    mimeType: "text/plain",
+    fileName: "submission.txt",
+    text: "The enclosed submission",
+  },
+  {
+    mimeType: "application/octet-stream",
+    fileName: "submission.bin",
+    text: "",
+  },
+])(
+  "opens a signed container with $mimeType content in the inspector",
+  async (embedded) => {
+    const tab = {
+      ...pdfTab,
+      id: toSafeId<"field">("field-cades"),
+      label: "Signed submission",
+      fileName: "submission.P7M",
+      mimeType: "application/octet-stream",
+    };
+    const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+    const mounted = renderFileTab(tab, (client) => {
+      client.setQueryData(cadesPreviewOptions(key).queryKey, {
+        ...embedded,
+        layers: [
+          { signers: [{ name: "First signer" }, { name: "Second signer" }] },
+          { signers: [{ name: null }] },
+        ],
+      });
+    });
+    expect(
+      await mounted.findByRole("heading", { name: embedded.fileName }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("heading", { name: "Signature layer 1" }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("heading", { name: "Signature layer 2" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("First signer")).toBeTruthy();
+    expect(mounted.getByText("Second signer")).toBeTruthy();
+    expect(mounted.getByText("Unknown signer")).toBeTruthy();
+    expect(
+      mounted.getByText("The signatures have not been verified."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    if (embedded.mimeType === "application/pdf") {
+      expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+      expect(cadesPdfRequests).toEqual(["include"]);
+    } else {
+      expect(cadesPdfRequests).toHaveLength(0);
+      expect(pdfEngineRenderCount).toBe(0);
+      expect(
+        mounted.getByText(
+          embedded.text || "No readable content is available for preview.",
+        ),
+      ).toBeTruthy();
+    }
+  },
+);
+
+test("keeps the original available when the signed container cannot be opened", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-cades-unsupported"),
+    fileName: "detached.p7m",
+    mimeType: "application/octet-stream",
+  });
+  expect(
+    await mounted.findByText("The signed file could not be read."),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("button", { name: "Download original" }),
+  ).toBeTruthy();
+  expect(pdfEngineRenderCount).toBe(0);
+});
 
 function renderFileTab(
   tab: typeof docxTab | typeof pdfTab,
@@ -515,5 +618,9 @@ function renderFileTab(
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return render(<Harness />);
+  const router = createRouter({
+    routeTree: createRootRoute({ component: Harness }),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  return render(<RouterProvider router={router} />);
 }

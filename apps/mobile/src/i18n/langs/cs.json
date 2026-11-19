@@ -602,6 +602,13 @@
     "dictationCleanup": "Upravit pomocí AI",
     "dictationCleanupHint": "Opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“. Jen text, ne zvuk, jde přes stella k poskytovateli AI vaší organizace; stella ho neukládá."
   },
+  "signedFile": {
+    "layer": "Vrstva podpisů {number, number}",
+    "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "unknownSigner": "Neznámý podepisující",
+    "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
+    "unverified": "Podpisy nebyly ověřeny."
+  },
   "header": {
     "search": "Hledat"
   },

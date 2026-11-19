@@ -6247,6 +6247,14 @@
     "reconnectRequired": "A bejelentkezés lejárt",
     "title": "SharePoint és OneDrive"
   },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
   "skillHistory": {
     "acceptStale": "Elfogadás és az újabb módosítások felülírása",
     "backToCurrent": "Vissza az aktuális változatra",

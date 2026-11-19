@@ -6247,6 +6247,14 @@
     "reconnectRequired": "Login expirado",
     "title": "SharePoint e OneDrive"
   },
+  "signedFile": {
+    "layer": "Camada de assinaturas {number, number}",
+    "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
+    "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "unknownSigner": "Signatário desconhecido",
+    "unreadable": "Não foi possível ler o arquivo assinado.",
+    "unverified": "As assinaturas não foram verificadas."
+  },
   "skillHistory": {
     "acceptStale": "Aceitar e sobrescrever edições mais recentes",
     "backToCurrent": "Voltar à versão atual",

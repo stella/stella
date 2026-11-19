@@ -6247,6 +6247,14 @@
     "reconnectRequired": "Logowanie wygasło",
     "title": "SharePoint i OneDrive"
   },
+  "signedFile": {
+    "layer": "Warstwa podpisów {number, number}",
+    "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "unknownSigner": "Nieznany podpisujący",
+    "unreadable": "Nie udało się odczytać podpisanego pliku.",
+    "unverified": "Podpisy nie zostały zweryfikowane."
+  },
   "skillHistory": {
     "acceptStale": "Zaakceptuj i nadpisz nowsze zmiany",
     "backToCurrent": "Wróć do bieżącej wersji",
