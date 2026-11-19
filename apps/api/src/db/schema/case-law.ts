@@ -31,6 +31,11 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  CYCLE_OUTCOME,
+  CYCLE_OUTCOMES,
+  INGESTION_PAUSE_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   SITEMAP_LANGUAGE_GROUP_INDEX,
@@ -4588,6 +4593,10 @@ export const caseLawSearchDocumentPreviewPassages = p.pgTable(
 // Case Law — Ingestion observability
 // ---------------------------------------------------------------------------
 
+const INGESTION_CYCLE_OUTCOME_SQL_VALUES = CYCLE_OUTCOMES.map((outcome) =>
+  sql.raw(`'${outcome}'`),
+);
+
 export const caseLawIngestionEvents = p.pgTable(
   "case_law_ingestion_events",
   {
@@ -4595,7 +4604,11 @@ export const caseLawIngestionEvents = p.pgTable(
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
-    status: p.varchar({ length: 16 }).notNull().$type<"completed" | "failed">(),
+    status: p.varchar({ length: 16, enum: CYCLE_OUTCOMES }).notNull(),
+    pauseReason: p.varchar("pause_reason", {
+      length: 64,
+      enum: [INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED],
+    }),
     inserted: p.integer().notNull().default(0),
     skipped: p.integer().notNull().default(0),
     searchVectorFailures: p
@@ -4611,6 +4624,14 @@ export const caseLawIngestionEvents = p.pgTable(
     finishedAt: timestamptz("finished_at").defaultNow().notNull(),
   },
   (t) => [
+    p.check(
+      "case_law_ingestion_events_status_valid",
+      sql`${t.status} IN (${sql.join(INGESTION_CYCLE_OUTCOME_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_ingestion_events_pause_reason_valid",
+      sql`(${t.status} = '${sql.raw(CYCLE_OUTCOME.PAUSED)}' AND ${t.pauseReason} IS NOT NULL AND ${t.pauseReason} = '${sql.raw(INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED)}') OR (${t.status} <> '${sql.raw(CYCLE_OUTCOME.PAUSED)}' AND ${t.pauseReason} IS NULL)`,
+    ),
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
     p

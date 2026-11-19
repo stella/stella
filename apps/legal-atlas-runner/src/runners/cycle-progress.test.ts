@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CYCLE_OUTCOME,
+  type CycleOutcome,
+  INGESTION_PAUSE_REASON,
   INGESTION_STOP_KIND,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
@@ -10,10 +13,8 @@ import {
   type CadenceStreaks,
   classifyCycleProductivity,
   CYCLE_CADENCE,
-  CYCLE_OUTCOME,
   CYCLE_PRODUCTIVITY,
   cycleMadeProgress,
-  type CycleOutcome,
   type CycleResult,
   cycleStopKind,
   INITIAL_CADENCE_STREAKS,
@@ -51,6 +52,16 @@ const CYCLES = OUTCOMES.flatMap((outcome) =>
                 pagesProcessed,
                 cursorAdvanced,
                 outcome,
+              };
+            case CYCLE_OUTCOME.PAUSED:
+              return {
+                inserted,
+                skipped,
+                pagesProcessed,
+                cursorAdvanced,
+                outcome,
+                pauseReason:
+                  INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
               };
             case CYCLE_OUTCOME.FAILED:
               return {
@@ -543,7 +554,12 @@ describe("stalled-source causes", () => {
     cursorAdvanced: false,
   });
 
-  const runHealthCycles = (cycles: readonly CycleResult[]) => {
+  const runHealthCycles = (
+    cycles: readonly Exclude<
+      CycleResult,
+      { outcome: typeof CYCLE_OUTCOME.PAUSED }
+    >[],
+  ) => {
     let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
     const stalledAdapters = new Map<string, IngestionStopKind>();
     return cycles.map((cycle) => {
