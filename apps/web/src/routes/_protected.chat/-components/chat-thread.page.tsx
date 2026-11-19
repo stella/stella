@@ -405,7 +405,7 @@ export const ChatThreadPage = ({
 
   const sentMessageHistory = getUserMessageHistory(messages);
 
-  // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
+  // Suggested follow-up prompts, drawn under the answer they follow.
   const {
     handleAskUserEditingChange,
     lastMessageId,
