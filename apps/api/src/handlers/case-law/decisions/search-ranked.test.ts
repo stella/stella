@@ -197,10 +197,13 @@ describe("a ranked plan with no language to stem under", () => {
     );
   });
 
-  test("a scoped or language-filtered search keeps its one stemmer", () => {
+  test("a scoped search asks its jurisdiction's languages, a language filter only its own", () => {
     expect(leavesOf(planFor("loajality", "CZE"))).toEqual([
-      'decision_terms:"loajality"',
-      `decision_terms:"${stemLegalTerm("loajality", "cs")}"`,
+      ...new Set([
+        'decision_terms:"loajality"',
+        `decision_terms:"${stemLegalTerm("loajality", "cs")}"`,
+        `decision_terms:"${stemLegalTerm("loajality", "en")}"`,
+      ]),
     ]);
     expect(leavesOf(planFor("abandoning", "EU", "en"))).toEqual([
       'decision_terms:"abandoning"',

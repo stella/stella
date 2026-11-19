@@ -20,6 +20,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
+  corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
   legislationSources,
@@ -131,6 +132,17 @@ test("a decision in a language its jurisdiction does not declare is persisted as
     lastFailureKind: "document_language_undeclared",
     lastFailureMessage: message,
   });
+
+  // The other cases count this generation's states; leave it as found.
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.entityId, String(row.id)));
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, String(row.id)));
+  await db
+    .delete(legislationDocuments)
+    .where(eq(legislationDocuments.id, row.id));
 });
 
 /** Refused by `readCorpusBytesAt` on its declared length, before any request. */

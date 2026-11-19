@@ -55,21 +55,24 @@ const EU_OFFICIAL_LANGUAGES = [
  * written.
  *
  * Declared generously: a language costs a query at most one stem leaf per
- * word, and a missing one blocks a decision. Slovak courts published in
- * Czech before 1993, so Slovakia declares Czech.
+ * word, and a missing one blocks a decision. Apex courts publish English
+ * translations beside their own language, which a language group keeps as a
+ * decision of the same jurisdiction, so every national jurisdiction declares
+ * English; Slovak courts published in Czech before 1993, so Slovakia declares
+ * Czech.
  *
  * Total over the declared jurisdictions, so a new corpus has to answer
  * rather than inherit a default.
  */
 const CASE_LAW_DOCUMENT_LANGUAGES = {
-  AUT: { primary: "de", languages: ["de"] },
-  BRA: { primary: "pt", languages: ["pt"] },
-  CZE: { primary: "cs", languages: ["cs"] },
+  AUT: { primary: "de", languages: ["de", "en"] },
+  BRA: { primary: "pt", languages: ["pt", "en"] },
+  CZE: { primary: "cs", languages: ["cs", "en"] },
   EU: { primary: null, languages: EU_OFFICIAL_LANGUAGES },
   GBR: { primary: "en", languages: ["en"] },
-  HUN: { primary: "hu", languages: ["hu"] },
-  POL: { primary: "pl", languages: ["pl"] },
-  SVK: { primary: "sk", languages: ["sk", "cs"] },
+  HUN: { primary: "hu", languages: ["hu", "en"] },
+  POL: { primary: "pl", languages: ["pl", "en"] },
+  SVK: { primary: "sk", languages: ["sk", "cs", "en"] },
   USA: { primary: "en", languages: ["en"] },
 } as const satisfies Record<
   CaseLawJurisdiction,

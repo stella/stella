@@ -53,7 +53,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import {
-  CaseLawDocumentLanguageUndeclaredError,
+  type CaseLawDocumentLanguageUndeclaredError,
   caseLawDocumentStemLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
@@ -451,10 +451,11 @@ const decisionTermsCollector = (field: CorpusIndexDecisionTerms | null) => {
  * Stems come from the decision's own language, not its jurisdiction: an
  * index group spans several countries and the European index holds 24
  * languages. The language must be one its jurisdiction declares, because the
- * read side asks each jurisdiction's documents in those languages only; one
- * it does not declare throws the typed error the revision build blocks under
- * its own failure kind. A language with no stemmer writes no stem fields at
- * all, rather than a copy of the surface text under a stem name.
+ * read side asks each jurisdiction's documents in those languages only. The
+ * public builder refuses one it does not declare with the typed error the
+ * revision build blocks under its own failure kind, before building, so here
+ * it is a caller's defect. A language with no stemmer writes no stem fields
+ * at all, rather than a copy of the surface text under a stem name.
  */
 const caseLawProjectionStemming = (
   manifest: BuildCaseLawOptions["manifest"],
@@ -462,7 +463,7 @@ const caseLawProjectionStemming = (
 ): { fields: CorpusIndexStemFields; language: MorphologyLanguage } | null => {
   const declared = caseLawDocumentStemLanguage(input);
   if (declared.isErr()) {
-    throw declared.error;
+    return panic(declared.error.message, declared.error);
   }
   const fields = corpusIndexStemFields(manifest);
   return fields === null || declared.value === null
@@ -713,7 +714,11 @@ export const buildCorpusProjectionDocuments = (
   ChunkBudgetError | CaseLawDocumentLanguageUndeclaredError
 > => {
   switch (options.family) {
-    case "case_law":
+    case "case_law": {
+      const language = caseLawDocumentStemLanguage(options.input);
+      if (language.isErr()) {
+        return Result.err(language.error);
+      }
       return Result.try({
         try: () =>
           buildCaseLawProjectionDocuments({
@@ -723,15 +728,13 @@ export const buildCorpusProjectionDocuments = (
             revision: options.revision,
           }),
         catch: (cause: unknown) => {
-          if (
-            cause instanceof ChunkBudgetError ||
-            cause instanceof CaseLawDocumentLanguageUndeclaredError
-          ) {
+          if (cause instanceof ChunkBudgetError) {
             return cause;
           }
           return panic("Case-law projection builder failed unexpectedly");
         },
       });
+    }
     case "legislation":
       return buildLegislationV2ProjectionDocuments({
         input: options.input,
