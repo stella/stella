@@ -52,6 +52,7 @@ export const FAILURE_TAGS = [
   "CapabilityRequestMismatchError",
   "CaseLawBatchApplyError",
   "CaseLawBatchBoundsError",
+  "CaseLawDocumentLanguageUndeclaredError",
   "CaseLawServingFlipClusterMismatchError",
   "CaseLawServingFlipIncompleteError",
   "CaseLawServingFlipNoServingGenerationError",
