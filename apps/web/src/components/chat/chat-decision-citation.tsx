@@ -17,7 +17,10 @@ import {
   openReadCaseLawDecision,
 } from "@/components/chat/case-law-open";
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
-import { CitationReadFeedback } from "@/components/chat/chat-decision-citation-feedback";
+import {
+  CitationReadFeedback,
+  UnreadInlineCitation,
+} from "@/components/chat/chat-decision-citation-feedback";
 import {
   readyCitationMetadata,
   sourceCitationMetadata,
@@ -107,11 +110,17 @@ const CitationView = ({
 }) => {
   const metadata = readyCitationMetadata(read);
   if (metadata === null) {
-    return (
-      <>
-        {renderPassage && passage}
-        <CitationReadFeedback read={read} />
-      </>
+    // Inside an answer's prose the citation stays the answer's words; only a
+    // citation drawn on its own surface reports its read beside it.
+    return renderPassage ? (
+      <UnreadInlineCitation
+        onOpen={onOpen}
+        originalUrl={originalUrl}
+        passage={passage}
+        read={read}
+      />
+    ) : (
+      <CitationReadFeedback read={read} />
     );
   }
   const decision = {
@@ -160,28 +169,28 @@ const CitationView = ({
         {presentation.before}
         {inlineChip}
         {presentation.after}
-        <CitationReadFeedback read={read} />
+      </>
+    );
+  }
+  // A failed refresh of a decision already shown keeps the chip as it is:
+  // inside prose nothing is added to the line (the query cache reports it).
+  if (renderPassage) {
+    return (
+      <>
+        {presentation.kind === "chip-after-text" ? presentation.label : passage}{" "}
+        {inlineChip}
       </>
     );
   }
   return (
     <>
-      {renderPassage ? (
-        <>
-          {presentation.kind === "chip-after-text"
-            ? presentation.label
-            : passage}{" "}
-          {inlineChip}
-        </>
-      ) : (
-        <CitationChip
-          kind="decision"
-          decision={decision}
-          passage={passage}
-          paragraphNumber={paragraph?.courtParagraphNumber ?? null}
-          onOpenInSidePanel={onOpen}
-        />
-      )}
+      <CitationChip
+        kind="decision"
+        decision={decision}
+        passage={passage}
+        paragraphNumber={paragraph?.courtParagraphNumber ?? null}
+        onOpenInSidePanel={onOpen}
+      />
       <CitationReadFeedback read={read} />
     </>
   );

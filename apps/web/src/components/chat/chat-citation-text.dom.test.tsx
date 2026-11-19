@@ -129,7 +129,10 @@ const mount = (children: ReactNode) => {
 };
 
 /** Renders one answer the way a settled chat answer renders, anchors included. */
-const renderAnswer = async (markdown: string) => {
+const renderAnswer = async (
+  markdown: string,
+  ready: { selector: string; count: number } | undefined = undefined,
+) => {
   const message = {
     id: "answer",
     role: "assistant",
@@ -144,10 +147,12 @@ const renderAnswer = async (markdown: string) => {
   );
   const decisionLinks =
     markdown.split(CHAT_RESOURCE_HREF_PREFIX.case_law_decision).length - 1;
+  const { selector, count } = ready ?? {
+    selector: "[data-decision-citation]",
+    count: decisionLinks,
+  };
   await waitFor(() => {
-    expect(
-      view.container.querySelectorAll("[data-decision-citation]").length,
-    ).toBe(decisionLinks);
+    expect(view.container.querySelectorAll(selector).length).toBe(count);
   });
   return view.container;
 };
@@ -244,6 +249,38 @@ describe("a decision citation after prose that does not name its court", () => {
       `Jinak než Ústavní soud rozhodl ${link(DECISIONS.example)}.`,
     );
     expect(badgeCount(container)).toBe(1);
+  });
+});
+
+describe("a decision citation whose read fails", () => {
+  test("stays the answer's words, with the error and retry only in its peek", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async () => Response.json({ error: "unavailable" }, { status: 500 }),
+      { preconnect: () => undefined },
+    );
+    try {
+      const unread = decision("019a0000-0000-7000-8000-000000000299", {
+        ...CZ_SUPREME,
+        caseNumber: "III. ÚS 2429/24",
+        country: "CZE",
+        language: "cs",
+      });
+      const prose = `Ústavní soud v nálezu ${unread.caseNumber} ze dne 15. 4. 2026 ale vymezil, že to platí jen tam.`;
+      const container = await renderAnswer(
+        `Ústavní soud v nálezu ${link(unread)} ze dne 15. 4. 2026 ale vymezil, že to platí jen tam.`,
+        { selector: '[data-citation-unread="error"]', count: 1 },
+      );
+      // Not one word of status, error or retry copy joins the sentence.
+      expect(paragraphText(container)).toBe(prose);
+      expect(container.querySelector('p [role="alert"]') === null).toBe(true);
+      expect(container.querySelector("p button") === null).toBe(true);
+      const marked = container.querySelector('[data-citation-unread="error"]');
+      expect(marked?.textContent).toBe(unread.caseNumber);
+      expect(marked?.className).toContain("underline");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
