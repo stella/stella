@@ -11,7 +11,13 @@ import {
 } from "@stll/api-contract/browser-storage";
 
 import type { FileTab } from "../../src/components/inspector/file-tab";
-import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
+import {
+  apiDelete,
+  apiPost,
+  apiPut,
+  apiUploadTemplate,
+  E2E_API_ORIGIN,
+} from "./api";
 import {
   dockedChatFileThreadPage,
   dockedChatMessagePage,
@@ -73,7 +79,7 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
     // An organization skill, so its editor's page hosts the dock.
     const skill = v.parse(
       createdSkillSchema,
-      await apiPut(request, "/skills", {
+      await apiPost(request, "/skills", {
         scope: "private",
         name: `Dock geometry ${randomUUID().slice(0, 8)}`,
         description: "Dock geometry fixture",
