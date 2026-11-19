@@ -42,6 +42,24 @@ export const czNsCollectionPartOfKind = (
     (part) => CZ_NS_COLLECTION_KIND_OF_PART[part] === kind,
   ) ?? null;
 
+const blockIndex = v.pipe(v.number(), v.integer(), v.minValue(0));
+const sectionEditionSchema = v.object({
+  extent: v.literal("section"),
+  number: v.string(),
+  sectionPart: v.object({
+    sectionNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    firstBlock: blockIndex,
+    afterLastBlock: blockIndex,
+    collectionLabel: v.string(),
+  }),
+});
+
+const reportEditionSchema = v.variant("extent", [
+  sectionEditionSchema,
+  v.object({ extent: v.literal("complete") }),
+]);
+export type CzNsReportEdition = v.InferOutput<typeof reportEditionSchema>;
+
 /** A URL as the entry carries it once built: typed, or the defect found. */
 type EntryUrl = SafeHref | MetadataUrlDefect | undefined;
 
@@ -55,6 +73,8 @@ export type CzNsCollectionEntry<Url = EntryUrl> = {
   readonly postId: string;
   /** The page's own heading: type, court, date, docket and, where stated, ECLI. */
   readonly title: string;
+  /** Block offsets address the original edition, including its publisher heading. */
+  readonly reportEdition?: CzNsReportEdition;
   /** `Druh`, as stated. */
   readonly kind: string | null;
   /** The series `kind` names; null where it names neither part. */
@@ -97,6 +117,7 @@ const nullableString = v.nullable(v.string());
 export const storedCzNsCollectionEntrySchema = v.object({
   postId: v.string(),
   title: v.string(),
+  reportEdition: v.optional(reportEditionSchema),
   kind: nullableString,
   part: v.nullable(v.picklist(CZ_NS_COLLECTION_PARTS)),
   number: nullableString,
