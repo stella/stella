@@ -1565,7 +1565,7 @@ describe("repository script test census", () => {
       exemptions: scriptTestInputs.noTrackedInputs,
     });
     expect(selection.files).toEqual(
-      Object.entries(scriptTestInputs.inputs)
+      Object.entries<readonly string[]>(scriptTestInputs.inputs)
         .filter(([, patterns]) => patterns.includes("**"))
         .map(([testFile]) => testFile)
         .filter((testFile) => tests.includes(testFile))
