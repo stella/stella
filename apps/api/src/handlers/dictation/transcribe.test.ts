@@ -1111,9 +1111,12 @@ describe("a member's labels flag", () => {
       }).success,
     ).toBe(false);
     expect(v.safeParse(desktopDictationBodySchema, upload).success).toBe(false);
+    // A desktop names the matter a recording is filed under; the API reads
+    // that matter's vocabulary itself.
     expect(Object.keys(desktopDictationBodySchema.entries).toSorted()).toEqual([
       "file",
       "language",
+      "matterId",
       "modelId",
     ]);
   });
