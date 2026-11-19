@@ -314,9 +314,23 @@ const renderedHtml = async (source: string, options: RenderOptions = {}) => {
   return html;
 };
 
+// Closed table controls receive fresh trigger ids on each React mount.
+const TABLE_TRIGGER =
+  '[data-slot="answer-table-header"] button[id^="base-ui-"]';
+
+const comparableTree = (root: HTMLElement) => {
+  const tree = document.importNode(root, true);
+  for (const [index, trigger] of tree
+    .querySelectorAll(TABLE_TRIGGER)
+    .entries()) {
+    trigger.id = `table-trigger-${index}`;
+  }
+  return tree;
+};
+
 const renderedTree = async (source: string, options: RenderOptions = {}) => {
   const view = await mountAnswer(source, options);
-  const tree = view.root.cloneNode(true);
+  const tree = comparableTree(view.root);
   await view.unmount();
   return tree;
 };
@@ -400,7 +414,9 @@ const unscopedNames = (root: Element): string[] =>
   [...root.querySelectorAll("[id], [name]")].flatMap((node) =>
     ["id", "name"].flatMap((attribute) => {
       const value = node.getAttribute(attribute);
-      return value === null || value.startsWith(ANSWER_ID_PREFIX)
+      return value === null ||
+        value.startsWith(ANSWER_ID_PREFIX) ||
+        (attribute === "id" && node.matches(TABLE_TRIGGER))
         ? []
         : [`${attribute}=${value}`];
     }),
@@ -450,17 +466,20 @@ describe("streamed chat answers", () => {
                 names: [],
               });
             }
-            // DOM equality retains every node and attribute value independently of
-            // the order React added attributes during earlier stream frames.
+            // DOM equality ignores the order React added attributes in earlier frames.
             expect(
-              view.root.isEqualNode(await renderedTree(answer, streaming)),
+              comparableTree(view.root).isEqualNode(
+                await renderedTree(answer, streaming),
+              ),
             ).toBe(true);
             // The chat settles a finished turn by switching to source offsets;
             // the settled frame is the one a reload of the thread shows.
             const settled = { ...config.options, sourceOffsets: true };
             await view.update(answer, settled);
             expect(
-              view.root.isEqualNode(await renderedTree(answer, settled)),
+              comparableTree(view.root).isEqualNode(
+                await renderedTree(answer, settled),
+              ),
             ).toBe(true);
             expect(activeContent(view.root)).toEqual([]);
             expect(unscopedNames(view.root)).toEqual([]);
@@ -470,7 +489,9 @@ describe("streamed chat answers", () => {
             const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
             await view.update(answer, restored);
             expect(
-              view.root.isEqualNode(await renderedTree(answer, restored)),
+              comparableTree(view.root).isEqualNode(
+                await renderedTree(answer, restored),
+              ),
             ).toBe(true);
             await view.unmount();
           }
