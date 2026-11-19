@@ -39,6 +39,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifierType,
   type DecisionPrimaryReferenceType,
+  normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -247,9 +248,15 @@ const identifierRowKeysOf = ({
     type,
     keys: [
       ...new Set(
-        values.map((value) =>
+        values.flatMap((value) => [
           normalizeDecisionIdentifierValueIn(jurisdiction, type, value),
-        ),
+          // Old Czech reporter rows predate the canonical writer. Remove
+          // these aliases only after their stored keys have been migrated.
+          ...(jurisdiction === "CZE" &&
+          type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+            ? [normalizeStructuredDecisionIdentifier({ type, value })]
+            : []),
+        ]),
       ),
     ],
   }));

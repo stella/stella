@@ -15,11 +15,12 @@ import {
   polishConstitutionalDocketKey,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
-import { CZ_NSS_REPORTER_SOURCE } from "@stll/api-contract/decision-reporter-grammar";
 import {
-  canonicalUsReporterCitation,
-  readsUsReporterCitations,
-} from "@stll/api-contract/us-reporter-citation";
+  CZ_NSS_REPORTER_SOURCE,
+  czechConstitutionalDesignation,
+  decisionReporterGrammarForJurisdiction,
+} from "@stll/api-contract/decision-reporter-grammar";
+import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
@@ -246,45 +247,6 @@ export const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\
  * counts in.
  */
 const CZ_US_REPORT_VOLUME_SOURCE = String.raw`(?:Sbír(?:ka|ky|ce|ku)\s+nálezů\s+a\s+usnesení(?:\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE}))?\s*,?\s*)?(?:svaz(?:ek|ku)|sv\.)\s*\d{1,3}\s*,\s*(?:nález|usnesení)\s+[čc]\.\s*\d{1,4}(?!\d)`;
-
-const CZ_US_GAZETTE_RE = /^(?<number>\d{1,4})\/(?<year>\d{4}) Sb\.?$/u;
-const CZ_US_REPORT_RE =
-  /^(?<kind>[NU]) ?(?<number>\d{1,4})\/(?<volume>\d{1,3}) SbNU(?: \d{1,4})?$/u;
-const CZ_US_REPORT_VOLUME_RE =
-  /^(?:Sbír\p{L}{1,2} nálezů a usnesení(?: \S+(?: soudu)?)? ?,? ?)?(?:svaz\p{L}{2}|sv\.) ?(?<volume>\d{1,3}) ?, ?(?<kind>nález|usnesení) [čc]\. ?(?<number>\d{1,4})$/u;
-
-/**
- * A Constitutional Court ruling in one spelling per publication, for the
- * reporter-citation normalization, or null for text that is neither: the
- * gazette number as `234/2002 Sb.`, the reporter entry as `SbNU sv. 26 N 53`.
- *
- * The reporter entry keeps volume, series and number and drops the page: the
- * three name the entry, the page only locates it, and a citation that leaves
- * the page out still names the same ruling. Letters stand between the numbers
- * because the shared normalization strips punctuation, and `N 5/326` must not
- * meet `N 53/26`.
- */
-const czechConstitutionalDesignation = (value: string): string | null => {
-  const text = normalizeUnicode(value, "NFC")
-    .replace(/\s+/gu, " ")
-    .replace(/ ?\/ ?/gu, "/")
-    .trim();
-  const gazette = CZ_US_GAZETTE_RE.exec(text)?.groups;
-  if (gazette !== undefined) {
-    return `${requiredGroup(gazette, "number")}/${requiredGroup(gazette, "year")} Sb.`;
-  }
-  const report =
-    CZ_US_REPORT_RE.exec(text)?.groups ??
-    CZ_US_REPORT_VOLUME_RE.exec(text)?.groups;
-  if (report === undefined) {
-    return null;
-  }
-  const kind = requiredGroup(report, "kind");
-  const series = kind === "U" || kind === "usnesení" ? "U" : "N";
-  const volume = Number(requiredGroup(report, "volume"));
-  const number = Number(requiredGroup(report, "number"));
-  return `SbNU sv. ${String(volume)} ${series} ${String(number)}`;
-};
 
 /**
  * Reporter identifiers for a Constitutional Court ruling, read from the
@@ -1822,23 +1784,27 @@ export const normalizeDecisionIdentifierValue = (
  * An identifier's stored key in the jurisdiction that holds it. Decision
  * identifier rows are written through it, by ingestion and by the backfill,
  * and exact lookup and search read through it, so writer and reader agree.
- * In the reporter jurisdiction a reporter citation is keyed by its canonical
- * volume, reporter and first page, so a variant abbreviation or a pin names
- * the same decision. Everywhere else, and for every other type, the key is
- * `normalizeDecisionIdentifier`'s, unchanged, so no stored key moves.
+ * Reporter jurisdictions key each citation through the grammar resolve reads,
+ * so publication spellings and pins name the same entry. Other types and
+ * unclaimed reporter values keep their existing normalization.
  */
 export const normalizeDecisionIdentifierIn = (
   jurisdiction: string | undefined,
   identifier: DecisionIdentifier,
-): string =>
-  identifier.type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION &&
-  readsUsReporterCitations(jurisdiction)
-    ? normalizeStructuredDecisionIdentifier({
+): string => {
+  if (identifier.type !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION) {
+    return normalizeDecisionIdentifier(identifier);
+  }
+  const canonical = decisionReporterGrammarForJurisdiction(
+    jurisdiction,
+  )?.canonicalCitation(identifier.value);
+  return canonical === null || canonical === undefined
+    ? normalizeDecisionIdentifier(identifier)
+    : normalizeStructuredDecisionIdentifier({
         type: identifier.type,
-        value:
-          canonicalUsReporterCitation(identifier.value) ?? identifier.value,
-      })
-    : normalizeDecisionIdentifier(identifier);
+        value: canonical,
+      });
+};
 
 /** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
 export const normalizeDecisionIdentifierValueIn = (

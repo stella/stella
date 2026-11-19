@@ -3,11 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
+  caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawMatterLinks,
   caseLawSourceArrivals,
@@ -18,8 +22,12 @@ import { listIncomingDecisionCitations } from "@/api/handlers/case-law/decisions
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/latest";
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
-import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";
+import {
+  caseLawSearchPlan,
+  findDecisionIdsByIdentity,
+} from "@/api/handlers/case-law/decisions/search";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
+import { normalizeDecisionIdentifierValueIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -199,6 +207,30 @@ if (!databaseUrl || !runPostgresTests) {
         const country =
           publicCaseLawCountry("CZE") ??
           panic("CZE is a public case-law country");
+
+        const reporter = "č. 1234/2025 Sb. NSS";
+        const type = DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
+        await tx.insert(caseLawDecisionIdentifiers).values(
+          [decisionId, listingOnlyId, redactedId].map((id) => ({
+            decisionId: id,
+            type,
+            value: reporter,
+            normalizedValue: normalizeDecisionIdentifierValueIn(
+              country,
+              type,
+              reporter,
+            ),
+          })),
+        );
+        const identity = parseDecisionQuery(reporter, {
+          reporters: decisionReporterGrammarForJurisdiction(country),
+        });
+        if (identity.type !== "identifier" || identity.kind !== "reporter") {
+          return panic("Expected a Czech collection citation");
+        }
+        expect(
+          await findDecisionIdsByIdentity({ caseLawDb, country, identity }),
+        ).toEqual([decisionId]);
 
         const matterLinks = await listMatterLinksHandler({
           caseLawDb,

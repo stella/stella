@@ -80,7 +80,7 @@ const CIVIL_WORD = String.raw`(?:obč|ob|civ)`;
 const CRIMINAL_WORD = String.raw`tr`;
 const PART_WORD = String.raw`(?<partWord>${CIVIL_WORD}|${CRIMINAL_WORD})\.?`;
 const COLLECTION_ABBREVIATION = String.raw`Sb\.\s?rozh\.?`;
-const NUMBER_MARK = String.raw`(?:č\.|čís\.|číslo|číslem|pod\s(?:č\.|číslem))`;
+const NUMBER_MARK = String.raw`(?:[čc]\.|čís\.|číslo|číslem|pod\s(?:[čc]\.|číslem))`;
 const COLLECTION_NAME = String.raw`Sbír\p{L}{1,3}\ssoudních\srozhodnutí\sa\sstanovisek`;
 /** `uveřejněný`, `publikované`: the words a citation introduces the number with. */
 const PUBLISHED_WORD = String.raw`(?:uveřejněn|publikován)\p{L}{0,3}`;
