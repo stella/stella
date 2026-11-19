@@ -1,3 +1,4 @@
+// parser-output-unchanged: Independent claim labels affect persistence ownership only; parsed source fields and document ASTs are unchanged.
 /** Support independent of a currently attached publisher post. */
 export const DECISION_IDENTIFIER_CLAIM = {
   HOST: "host",
