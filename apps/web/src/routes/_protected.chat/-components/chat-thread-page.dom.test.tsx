@@ -593,6 +593,30 @@ test("an empty chat without a skill keeps the general prompts", async () => {
   expect(unexpected).toEqual([]);
 });
 
+test("a chat with messages offers New chat once, in the page header, and not again under the composer", async () => {
+  serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
+  const ui = await openThreadPage(createClient());
+  draftPrompt("Which clauses does the lease cover?");
+  await send(ui, 1);
+  await ui.findByText(ANSWER);
+
+  const header = ui.container.querySelector("header");
+  if (header === null) {
+    throw new Error("Expected the shell header to render");
+  }
+  await testing.waitFor(() =>
+    expect(
+      testing.within(header).queryAllByRole("link", {
+        name: messages.chat.newChat,
+      }).length,
+    ).toBe(1),
+  );
+  expect(
+    ui.queryAllByRole("button", { name: messages.chat.newChat }).length,
+  ).toBe(0);
+  expect(unexpected).toEqual([]);
+});
+
 test("the chat header has no history button of its own: the title's switcher reaches the history", async () => {
   serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
   const ui = await openThreadPage(createClient());

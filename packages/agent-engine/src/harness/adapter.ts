@@ -62,7 +62,10 @@ export type HarnessContinuationRequest =
   /**
    * The next turn in the process a completed turn left running (see
    * `HarnessLiveSession`): the agent sees what it started in the background.
-   * The adapter that made the session continues it, or ends it and fails.
+   * The adapter that made the session continues it, switching the model,
+   * reasoning effort and approval mode to the turn's where they differ. When
+   * the harness cannot switch one, it ends the session and resumes it in a
+   * new process.
    */
   | { type: "live"; session: HarnessLiveSession };
 

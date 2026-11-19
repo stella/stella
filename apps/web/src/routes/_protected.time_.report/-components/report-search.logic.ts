@@ -21,3 +21,6 @@ export const reportSearchSchema = routeSearchSchema({
   bucket: v.optional(v.picklist(TIME_ENTRY_REPORT_BUCKETS)),
 });
 export type ReportSearch = v.InferOutput<typeof reportSearchSchema>;
+
+export const readReportSearch = (search: object): ReportSearch =>
+  v.parse(reportSearchSchema, search);

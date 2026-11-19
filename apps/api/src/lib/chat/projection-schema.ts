@@ -242,6 +242,23 @@ export const unenumeratedJson = () =>
     v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "json" } }),
   );
 
+/**
+ * `unenumeratedJson` for a field whose source declares a list of opaque
+ * items (`unknown[]`): the list is checked, each item is scanned the same way.
+ */
+export const unenumeratedJsonList = () =>
+  v.pipe(
+    v.array(v.unknown()),
+    v.rawTransform(({ addIssue, dataset, NEVER }) => {
+      if (!isPersistedJsonValue(dataset.value)) {
+        addIssue({ message: "Expected a canonical JSON list" });
+        return NEVER;
+      }
+      return dataset.value;
+    }),
+    v.metadata({ [CHAT_PROJECTION_METADATA_KEY]: { role: "json" } }),
+  );
+
 // --- Schema AST walking ---------------------------------------------------------
 // Valibot schemas are plain objects: `v.pipe` spreads its base schema and adds
 // a `pipe` array whose items include `{ type: "metadata", metadata }` actions;

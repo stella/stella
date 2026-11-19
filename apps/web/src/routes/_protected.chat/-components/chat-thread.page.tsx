@@ -523,11 +523,10 @@ export const ChatThreadPage = ({
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
-  // Dock new-chat: same destination as the header's labeled "New chat"
-  // button (which stays as the primary affordance); the dock icon keeps
-  // the status row uniform across chat surfaces. Abort any live stream
-  // first — `chatThreadOptions` keeps the in-flight Chat alive in the
-  // query cache, so navigating away would leave it streaming.
+  // The composer (+) menu's New chat: same destination as the header's
+  // labelled New chat button. Abort any live stream first:
+  // `chatThreadOptions` keeps the in-flight Chat alive in the query cache,
+  // so navigating away would leave it streaming.
   const startNewThread = () => {
     leave();
     if (threadRef.scope === "workspace") {
@@ -1008,7 +1007,10 @@ export const ChatThreadPage = ({
                           />
                         </>
                       }
-                      onNewThread={messages.length > 0 ? startNewThread : null}
+                      // The header's labelled New chat is this page's one
+                      // way to start a chat; the bar under the composer
+                      // does not repeat it.
+                      onNewThread={null}
                       status="ready"
                       threadRef={threadRef}
                     />

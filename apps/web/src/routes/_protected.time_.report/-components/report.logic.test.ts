@@ -8,7 +8,7 @@ import {
 } from "@stll/api-contract/time-entry-report";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
 
-import { reportSearchSchema } from "./report-search";
+import { reportSearchSchema } from "./report-search.logic";
 import {
   approvalCellSearch,
   buildPivot,
