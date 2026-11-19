@@ -50,7 +50,7 @@ const statusLine = async (page: Page) =>
       .filter(
         (element) =>
           element.children.length === 0 &&
-          (element.textContent ?? "").trim() !== "" &&
+          element.textContent.trim() !== "" &&
           element.getClientRects().length > 0,
       )
       .map((element) => Math.round(element.getBoundingClientRect().top));
