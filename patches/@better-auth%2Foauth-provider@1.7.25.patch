@@ -1,16 +1,26 @@
-diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
---- a/dist/authorize-D1IhxxSO.mjs
-+++ b/dist/authorize-D1IhxxSO.mjs
-@@ -2,7 +2,7 @@ import { A as toAudienceClaim, B as getClientDiscoveries, C as removeMaxAgeFromQ
- import { a as postLoginClearedParam, i as getSignedQueryIssuedAt, o as setSignedOAuthQueryParameterNames, r as canonicalizeOAuthQueryParams, s as signedQueryIssuedAtParam, t as PACKAGE_VERSION } from "./version-CJ2ytawv.mjs";
+diff --git a/dist/authorize-BJStuGWz.mjs b/dist/authorize-BJStuGWz.mjs
+index 485ef4afdaa7dc511d1f35dbe6bfc0cd66c35011..513ab2299421235a72d0d1a32a7db34058cc9d1f 100644
+--- a/dist/authorize-BJStuGWz.mjs
++++ b/dist/authorize-BJStuGWz.mjs
+@@ -2,7 +2,7 @@ import { A as removePromptFromQuery, B as verifyOAuthQueryParams, C as mergeDisc
+ import { a as postLoginClearedParam, i as getSignedQueryIssuedAt, o as setSignedOAuthQueryParameterNames, r as canonicalizeOAuthQueryParams, s as signedQueryIssuedAtParam, t as PACKAGE_VERSION } from "./version-DCtKaHCE.mjs";
  import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
  import { isLoopbackHost, isLoopbackIP, isPublicRoutableHost } from "@better-auth/core/utils/host";
 -import { INSECURE_REDIRECT_URI_MESSAGE, RedirectUriSyntaxSchema, SafeUrlSchema, isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 +import { INSECURE_REDIRECT_URI_MESSAGE, RedirectUriSyntaxSchema, SafeUrlSchema, isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
  import { appendQueryParams } from "@better-auth/core/utils/url";
- import { APIError, NO_STORE_HEADERS, addOAuthServerContext, createAuthEndpoint, createAuthMiddleware, dispatchAuthEndpoint, getOAuthState, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
+ import { APIError, NO_STORE_HEADERS, addOAuthServerContext, createAuthEndpoint, createAuthMiddleware, dispatchAuthEndpoint, getOAuthState, getSessionFromCtx, isAPIError, sessionMiddleware } from "better-auth/api";
  import { generateRandomString, makeSignature, symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
-@@ -301,24 +301,35 @@ async function continueEndpoint(ctx, authorize) {
+@@ -226,7 +226,7 @@ async function consentEndpoint(ctx, opts, authorize) {
+ 		const redirectUri = await resolveTrustedRedirectUri(ctx, opts, clientId, query.get("redirect_uri") ?? void 0);
+ 		return {
+ 			redirect: true,
+-			url: redirectUri ? formatErrorURL(redirectUri, "access_denied", "User denied access", query.get("state") ?? void 0, getIssuer(ctx, opts)) : getErrorURL(ctx, "access_denied", "User denied access")
++			url: redirectUri ? formatErrorURL(redirectUri, "access_denied", "User denied access", query.get("state") ?? void 0, getIssuer(ctx, opts)) : getErrorURL(ctx, "access_denied", "User denied access", opts)
+ 		};
+ 	}
+ 	const session = await getSessionFromCtx(ctx);
+@@ -299,24 +299,35 @@ async function continueEndpoint(ctx, authorize) {
  		error: "invalid_request"
  	});
  }
@@ -50,7 +60,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	ctx.headers?.set("accept", "application/json");
  	ctx.query = searchParamsToQuery(removePromptFromQuery(query, "create"));
  	return await authorize(ctx);
-@@ -330,7 +341,7 @@ async function postLogin(ctx, authorize) {
+@@ -328,7 +339,7 @@ async function postLogin(ctx, authorize) {
  		error_description: "missing oauth query",
  		error: "invalid_request"
  	});
@@ -59,7 +69,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	ctx.headers?.set("accept", "application/json");
  	ctx.query = searchParamsToQuery(query);
  	const session = await getSessionFromCtx(ctx);
-@@ -575,7 +586,15 @@ const clientRegistrationRequestSchema = z.object({
+@@ -571,7 +582,15 @@ const clientRegistrationRequestSchema = z.object({
  	client_name: z.string().refine((value) => value.trim().length > 0, "client_name cannot be empty").optional(),
  	client_uri: z.string().optional(),
  	logo_uri: z.string().optional(),
@@ -76,7 +86,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	tos_uri: z.string().optional(),
  	policy_uri: z.string().optional(),
  	software_id: z.string().optional(),
-@@ -1171,6 +1190,7 @@ async function seedResources(ctx, opts) {
+@@ -1159,6 +1178,7 @@ async function seedResources(ctx, opts, isComplete) {
  	const inputs = collectResourceInputs(opts);
  	if (inputs.length === 0) return;
  	const mode = opts.resourceSeedMode ?? "insertOnly";
@@ -84,7 +94,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
  	for (const rawInput of inputs) {
  		const check = await checkIdentifier(opts, rawInput.identifier);
-@@ -1445,7 +1465,17 @@ const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
+@@ -1472,7 +1492,17 @@ const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
  * Handles the /oauth2/token endpoint by delegating
  * the grant types
  */
@@ -102,7 +112,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	const grantType = ctx.body.grant_type;
  	if (!getSupportedGrantTypes(opts).includes(grantType)) throw new APIError("BAD_REQUEST", {
  		error_description: `unsupported grant_type ${grantType}`,
-@@ -1734,7 +1764,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCod
+@@ -1799,7 +1829,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCod
  		authTime,
  		confirmation,
  		requestedUserInfoClaims: requestedUserInfoClaims?.length ? requestedUserInfoClaims : void 0,
@@ -111,7 +121,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		resources,
  		createdAt: /* @__PURE__ */ new Date(iat * 1e3),
  		expiresAt: /* @__PURE__ */ new Date(exp * 1e3)
-@@ -1765,7 +1795,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCod
+@@ -1830,7 +1860,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCod
  		}],
  		increment: {},
  		set: rotationUpdate
@@ -120,20 +130,23 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "invalid refresh token",
  		error: "invalid_grant"
  	});
-@@ -2069,10 +2099,11 @@ async function createUserTokens(ctx, opts, params) {
- /** Checks verification value */
+@@ -2173,7 +2203,7 @@ async function createUserTokens(ctx, opts, params) {
+ */
+ async function rejectAuthorizationCode(ctx, authorizationCodeId) {
+ 	await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+-	throw new APIError("BAD_REQUEST", {
++	throw oauthTokenError(ctx, "code_invalid", "BAD_REQUEST", {
+ 		error_description: "invalid code",
+ 		error: "invalid_grant"
+ 	});
+@@ -2185,38 +2215,39 @@ async function rejectAuthorizationCode(ctx, authorizationCodeId) {
+ */
  async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri, resource) {
  	const authorizationCodeId = await storeToken(opts.storeTokens, code, "authorization_code");
 +	observeOAuthToken(ctx, { familyId: authorizationCodeId });
- 	const verification = await ctx.context.internalAdapter.consumeVerificationValue(authorizationCodeId);
- 	if (!verification) {
- 		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
--		throw new APIError("BAD_REQUEST", {
-+		throw oauthTokenError(ctx, "code_invalid", "BAD_REQUEST", {
- 			error_description: "invalid code",
- 			error: "invalid_grant"
- 		});
-@@ -2081,32 +2112,32 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
+ 	const verification = await ctx.context.internalAdapter.findVerificationValue(authorizationCodeId);
+ 	if (!verification || new Date(verification.expiresAt).getTime() < Date.now()) return rejectAuthorizationCode(ctx, authorizationCodeId);
+ 	let rawValue;
  	try {
  		rawValue = JSON.parse(verification.value);
  	} catch {
@@ -172,7 +185,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "redirect_uri mismatch",
  		error: "invalid_grant"
  	});
-@@ -2115,7 +2146,7 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
+@@ -2225,7 +2256,7 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
  	if (resource && storedResources) {
  		const requestedSet = new Set(resource);
  		const authorizedSet = new Set(storedResources);
@@ -181,9 +194,9 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  			error_description: "requested resource not authorized",
  			error: "invalid_target"
  		});
-@@ -2133,19 +2164,20 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
+@@ -2244,19 +2275,20 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
  async function handleAuthorizationCodeGrant(ctx, opts) {
- 	const credentials = await extractClientCredentials(ctx, opts, `${ctx.context.baseURL}/oauth2/token`);
+ 	const credentials = await extractClientCredentials(ctx, opts, getAuthEndpointUrl(ctx, "/oauth2/token"));
  	const { clientId: client_id, clientSecret: client_secret, preVerified, authMethod } = destructureCredentials(credentials);
 +	observeOAuthToken(ctx, { clientId: client_id ?? null });
  	const { code, code_verifier, redirect_uri, resource } = ctx.body;
@@ -205,16 +218,16 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "Either code_verifier or client_secret is required",
  		error: "invalid_request"
  	});
-@@ -2156,7 +2188,7 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+@@ -2267,7 +2299,7 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
  	/** Get and check Verification Value */
- 	const { verificationValue, effectiveResources, authorizedResources, authorizationCodeId } = await checkVerificationValue(ctx, opts, code, client_id, redirect_uri, resources);
+ 	const { verificationValue, verificationId, effectiveResources, authorizedResources, authorizationCodeId } = await checkVerificationValue(ctx, opts, code, client_id, redirect_uri, resources);
  	const scopes = verificationValue.query.scope?.split(" ");
 -	if (!scopes) throw new APIError("INTERNAL_SERVER_ERROR", {
 +	if (!scopes) throw oauthTokenError(ctx, "server_configuration", "INTERNAL_SERVER_ERROR", {
  		error_description: "verification scope unset",
  		error: "invalid_scope"
  	});
-@@ -2166,11 +2198,11 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+@@ -2277,11 +2309,11 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
  		scopes: requestedScopes,
  		nonce: verificationValue.query?.nonce
  	})) {
@@ -228,7 +241,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "Either PKCE (code_verifier) or client authentication (client_secret or client_assertion) is required",
  		error: "invalid_request"
  	});
-@@ -2178,26 +2210,26 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+@@ -2289,26 +2321,26 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
  	const pkceUsedInAuth = !!verificationValue.query?.code_challenge;
  	const pkceUsedInToken = !!code_verifier;
  	if (pkceUsedInAuth || pkceUsedInToken) {
@@ -260,7 +273,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "missing user, user may have been deleted",
  		error: "invalid_user"
  	});
-@@ -2208,7 +2240,7 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+@@ -2319,7 +2351,7 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
  			value: verificationValue.sessionId
  		}]
  	});
@@ -269,9 +282,9 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "session no longer exists",
  		error: "invalid_request"
  	});
-@@ -2283,13 +2315,14 @@ async function handleClientCredentialsGrant(ctx, opts) {
+@@ -2404,13 +2436,14 @@ async function handleClientCredentialsGrant(ctx, opts) {
  async function handleRefreshTokenGrant(ctx, opts) {
- 	const credentials = await extractClientCredentials(ctx, opts, `${ctx.context.baseURL}/oauth2/token`);
+ 	const credentials = await extractClientCredentials(ctx, opts, getAuthEndpointUrl(ctx, "/oauth2/token"));
  	const { clientId: client_id, clientSecret: client_secret, preVerified, authMethod } = destructureCredentials(credentials);
 +	observeOAuthToken(ctx, { clientId: client_id ?? null });
  	const { refresh_token, scope, resource } = ctx.body;
@@ -286,7 +299,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "Missing a required refresh_token for refresh_token grant",
  		error: "invalid_request"
  	});
-@@ -2305,27 +2338,51 @@ async function handleRefreshTokenGrant(ctx, opts) {
+@@ -2426,27 +2459,51 @@ async function handleRefreshTokenGrant(ctx, opts) {
  			value: await getStoredToken(opts.storeTokens, decodedRefresh.token, "refresh_token")
  		}]
  	});
@@ -343,7 +356,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  			error_description: `unable to issue scope ${requestedScope}`,
  			error: "invalid_scope"
  		});
-@@ -2340,19 +2397,19 @@ async function handleRefreshTokenGrant(ctx, opts) {
+@@ -2461,19 +2518,19 @@ async function handleRefreshTokenGrant(ctx, opts) {
  				resources: resources ?? refreshToken.resources
  			}));
  			if (replay) return replayRefreshTokenRotationResponse(ctx, replay);
@@ -366,7 +379,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		error_description: "user not found",
  		error: "invalid_request"
  	});
-@@ -4307,6 +4364,14 @@ function resolveDynamicRegistrationDefaultApplicationType(opts, client) {
+@@ -4403,6 +4460,14 @@ function resolveDynamicRegistrationDefaultApplicationType(opts, client) {
  	if (configured !== "infer") return configured;
  	return (client.redirect_uris ?? []).some((uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri)) ? "native" : "web";
  }
@@ -381,7 +394,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  function invalidRedirectUri(description) {
  	throw new APIError("BAD_REQUEST", {
  		error: "invalid_redirect_uri",
-@@ -4351,6 +4416,7 @@ async function resolveClientRegistrationResources(ctx, opts, requestedResources)
+@@ -4447,6 +4512,7 @@ async function resolveClientRegistrationResources(ctx, opts, requestedResources)
  	return resources;
  }
  function validateClientRedirectUri(redirectUri, applicationType, opts) {
@@ -389,7 +402,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	let url;
  	try {
  		url = new URL(redirectUri);
-@@ -4376,7 +4442,7 @@ function validateClientRedirectUri(redirectUri, applicationType, opts) {
+@@ -4472,7 +4538,7 @@ function validateClientRedirectUri(redirectUri, applicationType, opts) {
  		if (!isLoopbackHost(url.host) && isInsecureRedirectUriAllowed(opts, url)) return;
  		invalidRedirectUri(`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`);
  	}
@@ -398,7 +411,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  }
  async function registerEndpoint(ctx, opts) {
  	const body = ctx.body;
-@@ -6245,45 +6311,10 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
+@@ -6321,45 +6387,10 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
  			value: await getStoredToken(opts.storeTokens, token, "refresh_token")
  		}]
  	});
@@ -448,16 +461,16 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  }
  /**
  * We don't know the access token format so we try to validate it
-@@ -6348,7 +6379,7 @@ async function revokeEndpoint(ctx, opts) {
+@@ -6424,7 +6455,7 @@ async function revokeEndpoint(ctx, opts) {
  	} catch (error) {
- 		if (error instanceof APIError$1) {
+ 		if (isAPIError(error)) {
  			if (error.body?.error === "unsupported_token_type") throw error;
 -			if (error.name === "BAD_REQUEST") return null;
 +			if (error.status === "BAD_REQUEST") return null;
  			throw error;
  		} else if (error instanceof Error) {
  			logger.error("Introspection error:", error.message, error.stack);
-@@ -7218,6 +7249,10 @@ const oauthProvider = (options) => {
+@@ -7292,6 +7323,10 @@ const oauthProvider = (options) => {
  			}],
  			after: [{
  				matcher(ctx) {
@@ -468,7 +481,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  					return parseSetCookieHeader(ctx.context.responseHeaders?.get("set-cookie") || "").has(ctx.context.authCookies.sessionToken.name);
  				},
  				handler: createAuthMiddleware(async (ctx) => {
-@@ -8140,8 +8175,8 @@ function getIssuer(ctx, opts) {
+@@ -8213,8 +8248,8 @@ function getIssuer(ctx, opts) {
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
@@ -479,7 +492,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  }
  /**
  * Based on the loopback port matching approach in node-oidc-provider.
-@@ -8204,14 +8239,25 @@ function findRegisteredRedirectUri(registered, requested, isWebClient) {
+@@ -8277,14 +8312,25 @@ function findRegisteredRedirectUri(registered, requested, isWebClient) {
  	const hasFragment = requested.includes("#");
  	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
  	if (hasFragment || hasUserinfo) return;
@@ -508,7 +521,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  * Keep URI syntax and credential checks outside the custom trust decision.
  * Callers apply the HTTPS policy first.
  */
-@@ -8266,7 +8312,7 @@ function authorizeRedirectOnError(opts) {
+@@ -8339,7 +8385,7 @@ function authorizeRedirectOnError(opts) {
  		const raw = ctx.query ?? {};
  		const trusted = await resolveTrustedRedirectUri(ctx, opts, typeof raw.client_id === "string" ? raw.client_id : void 0, typeof raw.redirect_uri === "string" ? raw.redirect_uri : void 0);
  		if (trusted) return handleRedirect(ctx, formatErrorURL(trusted, error, error_description, typeof raw.state === "string" ? raw.state : void 0, getIssuer(ctx, opts), deriveResponseMode(raw)));
@@ -517,7 +530,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	};
  }
  async function authorizeEndpoint(ctx, opts, settings) {
-@@ -8335,17 +8381,17 @@ async function authorizeEndpoint(ctx, opts, settings) {
+@@ -8408,17 +8454,17 @@ async function authorizeEndpoint(ctx, opts, settings) {
  	});
  	const promptSet = ctx.query?.prompt ? parsePrompt(ctx.query?.prompt) : void 0;
  	const promptNone = promptSet?.has("none") ?? false;
@@ -541,7 +554,7 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  		const defaultResult = Boolean(findRegisteredRedirectUri(registeredUris, query.redirect_uri, isWebClient));
  		if (opts.validateRedirectUri && isSafeCustomRedirectUri(query.redirect_uri)) try {
  			isValidRedirectUri = await opts.validateRedirectUri(query.redirect_uri, registeredUris, defaultResult);
-@@ -8354,7 +8400,7 @@ async function authorizeEndpoint(ctx, opts, settings) {
+@@ -8427,7 +8473,7 @@ async function authorizeEndpoint(ctx, opts, settings) {
  		}
  		else if (!opts.validateRedirectUri) isValidRedirectUri = defaultResult;
  	}
@@ -550,10 +563,11 @@ diff --git a/dist/authorize-D1IhxxSO.mjs b/dist/authorize-D1IhxxSO.mjs
  	let requestedScopes = query.scope?.split(" ").filter((s) => s);
  	if (requestedScopes) {
  		const validScopes = new Set(client.scopes ?? opts.scopes);
-diff --git a/dist/oauth-CCxTS0dO.d.mts b/dist/oauth-CCxTS0dO.d.mts
---- a/dist/oauth-CCxTS0dO.d.mts
-+++ b/dist/oauth-CCxTS0dO.d.mts
-@@ -1197,6 +1197,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+diff --git a/dist/oauth-kpy9mh0t.d.mts b/dist/oauth-kpy9mh0t.d.mts
+index 799f7022d3e713501351a1f762e293bf6d6c48c3..d5cb70dfab21d570a0870513facf50fc3fb2bed2 100644
+--- a/dist/oauth-kpy9mh0t.d.mts
++++ b/dist/oauth-kpy9mh0t.d.mts
+@@ -1196,6 +1196,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
    /**
     * Controls whether boot-time `resources` config overwrites DB-edited rows.
     *
@@ -562,7 +576,7 @@ diff --git a/dist/oauth-CCxTS0dO.d.mts b/dist/oauth-CCxTS0dO.d.mts
     * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
     *   not already present. Existing rows are untouched — admin edits via CRUD
     *   are never reverted on restart.
-@@ -1210,7 +1212,7 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+@@ -1209,7 +1211,7 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
     *
     * @default "insertOnly"
     */
@@ -571,7 +585,7 @@ diff --git a/dist/oauth-CCxTS0dO.d.mts b/dist/oauth-CCxTS0dO.d.mts
    /**
     * Opt-in cache membership for resources by `identifier`. Mirrors the
     * {@link OAuthOptions.cachedTrustedClients} pattern.
-@@ -1379,6 +1381,14 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+@@ -1378,6 +1380,14 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
     * @default false
     */
    allowUnauthenticatedClientRegistration?: boolean;

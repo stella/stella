@@ -70,7 +70,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
 } as const;
 
 export type PublicLawRelation =
-  (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
+  | (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT]
+  | keyof typeof COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION;
 
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
@@ -78,6 +79,26 @@ export type PublicLawColumnGrant = "required" | "permitted";
 export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
+
+/**
+ * Expansion release for collection-backed decision bodies. Deploy before
+ * granting the narrow attachment view or reading normalized host sections.
+ * This release neither grants these columns nor reads them.
+ */
+export const COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION = {
+  case_law_collection_bodies: {
+    host_decision_id: "permitted",
+    collection_source_id: "permitted",
+    collection_document_id: "permitted",
+    source_url: "permitted",
+    retrieved_at: "permitted",
+    detail_raw_s3_key: "permitted",
+    detail_raw_content_type: "permitted",
+  },
+  case_law_published_decisions: {
+    normalized_s3_key: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
 
 /**
  * Expansion release: tolerate these future public census grants without
@@ -436,8 +457,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     role: "required",
     position: "required",
   },
-  [CASE_LAW_DECISION_VIEWS[0]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  [CASE_LAW_DECISION_VIEWS[0]]: {
+    ...CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+  },
   [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  case_law_collection_bodies:
+    COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
   case_law_decision_citation_stats: {
     decision_id: "required",
     direction: "required",

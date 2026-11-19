@@ -405,25 +405,6 @@ updates:
       - dependency-name: "oxlint-tsgolint"
         versions:
           - ">7.0.2005"
-      # patches/ carries local fixes to @better-auth/cimd and
-      # @better-auth/oauth-provider 1.7.20 that do not apply to 1.7.23. The
-      # better-auth packages share one version and stay on 1.7.20 until the
-      # patches are ported in their own change; remove these with that port.
-      - dependency-name: "better-auth"
-        versions:
-          - ">1.7.20"
-      - dependency-name: "@better-auth/api-key"
-        versions:
-          - ">1.7.20"
-      - dependency-name: "@better-auth/cimd"
-        versions:
-          - ">1.7.20"
-      - dependency-name: "@better-auth/core"
-        versions:
-          - ">1.7.20"
-      - dependency-name: "@better-auth/oauth-provider"
-        versions:
-          - ">1.7.20"
       # prosemirror-inputrules 1.6.0 imports prosemirror-model without
       # declaring it, which the isolated linker cannot resolve. Remove this
       # when a release declares the dependency.

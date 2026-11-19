@@ -2230,7 +2230,6 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
-      "harnessModels": "Modely {harness}",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
@@ -2240,7 +2239,6 @@
       "localFolderSelection": "Váš počítač · {harness} · {folder}",
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
-      "modelDefault": "Predvolený (odporúčaný)",
       "placeState": "{place}. {state}",
       "stepsCheck": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a skontrolujte agenta {harness} v časti Nastavenia › Všeobecné › Predplatné AI.",
       "stepsInstall": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a v časti Nastavenia › Všeobecné zvoľte pri agentovi {harness} Nainštalovať.",
@@ -2416,6 +2414,7 @@
       "save_document": "Uložiť dokument",
       "save_matter": "Uložiť spis",
       "save_playbook": "Uložiť playbook",
+      "save_skill_package": "Uložiť zručnosť",
       "save_task": "Uložiť úlohu",
       "save_template": "Uložiť vzor",
       "save_time_entry": "Uložiť časový záznam",
@@ -2444,6 +2443,7 @@
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
       "user_message": "Odoslané počas práce agenta",
+      "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
@@ -4048,6 +4048,12 @@
     "versionCreatedDescription": "Bola vytvorená verzia {versionNumber}. Všetci môžu pokračovať v úpravách.",
     "versionCreatedTitle": "Verzia vytvorená",
     "viewOnly": "Len na čítanie"
+  },
+  "guidance": {
+    "notCaseLaw": "Metodický dokument vydaný regulátorom. Nejde o súdne rozhodnutie.",
+    "openAtPublisher": "Otvoriť u vydavateľa",
+    "source": "Zdroj: {attribution}",
+    "textUnavailable": "Text tohto dokumentu tu nie je k dispozícii. Prečítajte si ho u vydavateľa."
   },
   "guides": {
     "action": {

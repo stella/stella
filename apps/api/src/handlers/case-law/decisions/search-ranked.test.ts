@@ -151,6 +151,67 @@ describe("the ranked plan", () => {
   });
 });
 
+describe("a ranked plan with no language to stem under", () => {
+  const planFor = (
+    text: string,
+    jurisdiction: string | undefined,
+    language?: string,
+  ) => {
+    const shaped = shapeOf({ text, jurisdiction });
+    const shape =
+      shaped.type === "ranked" ? shaped : panic("expected a ranked shape");
+    return planRankedSearch(shape, {
+      fields: caseLawCorpusQueryFields({
+        generation: "case_law_v11",
+        jurisdiction,
+        language,
+      }),
+      legalAlternatives: null,
+      filterClauses: [],
+    });
+  };
+  const leavesOf = (plan: ReturnType<typeof planFor>) =>
+    plan.words.at(0)?.leaves.decisionLeaves ?? [];
+
+  test.each([
+    ["an unscoped search", "abandoning", undefined, "en"],
+    ["an unscoped search", "loajality", undefined, "cs"],
+    ["a European search without a language", "abandoning", "EU", "en"],
+    ["a European search without a language", "loajality", "EU", "cs"],
+  ] as const)(
+    "%s asks the decision field for %s under the stemmer its documents used",
+    (_name, word, jurisdiction, language) => {
+      const leaves = leavesOf(planFor(word, jurisdiction));
+      expect(leaves).toContain(`decision_terms:"${word}"`);
+      expect(leaves).toContain(
+        `decision_terms:"${stemLegalTerm(word, language)}"`,
+      );
+      expect(stemLegalTerm(word, language)).not.toBe(word);
+    },
+  );
+
+  test("the headnote is asked in the same stems", () => {
+    const plan = planFor("abandoning", undefined);
+    expect(plan.words.at(0)?.leaves.boostedLeaves).toContain(
+      `headnote_stem:"${stemLegalTerm("abandoning", "en")}"`,
+    );
+  });
+
+  test("a scoped search asks its jurisdiction's languages, a language filter only its own", () => {
+    expect(leavesOf(planFor("loajality", "CZE"))).toEqual([
+      ...new Set([
+        'decision_terms:"loajality"',
+        `decision_terms:"${stemLegalTerm("loajality", "cs")}"`,
+        `decision_terms:"${stemLegalTerm("loajality", "en")}"`,
+      ]),
+    ]);
+    expect(leavesOf(planFor("abandoning", "EU", "en"))).toEqual([
+      'decision_terms:"abandoning"',
+      `decision_terms:"${stemLegalTerm("abandoning", "en")}"`,
+    ]);
+  });
+});
+
 describe("a ranked page whose words could not be read", () => {
   test("answers a budget-ended read as the public-read timeout the tools continue", () => {
     const answer = pageWordsRefusal(
