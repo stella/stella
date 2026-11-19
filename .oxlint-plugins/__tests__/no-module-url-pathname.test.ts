@@ -76,13 +76,14 @@ test("is scoped to filesystem runtimes and the Bun tests of browser bundles", as
         }),
     ),
   );
-  expect(
-    Object.fromEntries(
-      cases.map(([sourcePath], index) => [sourcePath, results[index]]),
-    ),
-  ).toEqual(
-    Object.fromEntries(
-      cases.map(([sourcePath, expected]) => [sourcePath, expected]),
-    ),
-  );
+  type CaseResult = [string, readonly number[] | undefined];
+  const reported = cases.map(([sourcePath], index): CaseResult => [
+    sourcePath,
+    results[index],
+  ]);
+  const expected = cases.map(([sourcePath, lines]): CaseResult => [
+    sourcePath,
+    lines,
+  ]);
+  expect(reported).toEqual(expected);
 });
