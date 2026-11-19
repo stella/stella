@@ -496,7 +496,7 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 2,
+    "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 2,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts": 3,
