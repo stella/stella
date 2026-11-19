@@ -3,34 +3,22 @@ import type { ReactElement, ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
 import {
-  BanknoteIcon,
   BrainIcon,
-  BuildingIcon,
   ChevronDownIcon,
-  ClockIcon,
-  CpuIcon,
-  EyeOffIcon,
-  FileTextIcon,
   FlaskConicalIcon,
-  GaugeIcon,
-  HashIcon,
-  HistoryIcon,
   KeyboardIcon,
-  LandmarkIcon,
-  ListOrderedIcon,
   MonitorIcon,
   PlugIcon,
   UserIcon,
-  UsersIcon,
-  WrenchIcon,
 } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { PendingText } from "@/components/pending-text";
 
 /*
- * The settings area's chrome, drawn by both phases: the navigation's
- * sections and items (`./settings-nav.ts` decides which a member sees), the
+ * The settings area's chrome, drawn by both phases: the account section of
+ * the navigation (`./settings-nav.ts` adds the organization's and decides
+ * which rows a member sees), the
  * layout of the narrow-screen menu row, the navigation column and the
  * content column, and the classes their rows use. `SettingsShell` fills it
  * with the live menu, links and scroll areas. A settings page's pending view
@@ -77,97 +65,6 @@ export const ACCOUNT_SECTION = {
     },
   ],
 } as const;
-
-export const ORGANIZATION_SECTIONS = [
-  {
-    id: "organization",
-    labelKey: "common.organization",
-    items: [
-      {
-        to: "/settings/organization/general",
-        labelKey: "admin.general",
-        icon: BuildingIcon,
-      },
-      {
-        to: "/settings/organization/members",
-        labelKey: "common.members",
-        icon: UsersIcon,
-      },
-      {
-        to: "/settings/organization/usage",
-        labelKey: "admin.planAndUsage",
-        icon: GaugeIcon,
-        gate: "usage",
-      },
-      {
-        to: "/settings/organization/audit-logs",
-        labelKey: "settings.organization.auditLogs",
-        icon: HistoryIcon,
-      },
-    ],
-  },
-  {
-    id: "ai",
-    labelKey: "admin.ai",
-    items: [
-      {
-        to: "/settings/organization/ai",
-        labelKey: "admin.modelsAndProviders",
-        icon: CpuIcon,
-      },
-      {
-        to: "/settings/organization/anonymization",
-        labelKey: "settings.organization.anonymization.title",
-        icon: EyeOffIcon,
-      },
-      {
-        to: "/settings/organization/tools",
-        labelKey: "knowledge.sections.tools.title",
-        icon: WrenchIcon,
-      },
-    ],
-  },
-  {
-    id: "firm-setup",
-    labelKey: "admin.firmSetup",
-    items: [
-      {
-        to: "/settings/organization/matter-numbering",
-        labelKey: "settings.organization.matterNumbering",
-        icon: HashIcon,
-      },
-      {
-        to: "/settings/organization/document-types",
-        labelKey: "settings.organization.documentTypes.title",
-        icon: FileTextIcon,
-      },
-      {
-        to: "/settings/organization/time-policy",
-        labelKey: "settings.organization.timePolicy.title",
-        icon: ClockIcon,
-        gate: "timeBilling",
-      },
-      {
-        to: "/settings/organization/number-series",
-        labelKey: "billing.numberSeries.title",
-        icon: ListOrderedIcon,
-        gate: "billing",
-      },
-      {
-        to: "/settings/organization/vat-rates",
-        labelKey: "billing.vatRates.title",
-        icon: LandmarkIcon,
-        gate: "billing",
-      },
-      {
-        to: "/settings/organization/billing",
-        labelKey: "admin.billingProfiles",
-        icon: BanknoteIcon,
-        gate: "billing",
-      },
-    ],
-  },
-] as const;
 
 /** A navigation row: a link, or the shortcuts button's face. */
 export const SETTINGS_NAV_ITEM_CLASS = cn(
