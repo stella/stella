@@ -166,6 +166,7 @@ const censusOf = async (
         hostEcli,
         and(
           eq(hostEcli.type, DECISION_IDENTIFIER_TYPES.ECLI),
+          // oxlint-disable-next-line no-raw-case-number-key-equality/no-raw-case-number-key-equality -- ECLI rows only: an ECLI carries no slash-year tail, so its stored key is its identity
           eq(hostEcli.normalizedValue, ownEcli.normalizedValue),
           ne(hostEcli.decisionId, caseLawDecisions.id),
         ),
