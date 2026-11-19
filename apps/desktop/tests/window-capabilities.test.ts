@@ -63,6 +63,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/onboarding/OnboardingApp.tsx",
     "src/onboarding/ConnectStep.tsx",
     "src/onboarding/use-dictation.ts",
+    "src/mainview/DictationDestination.tsx",
     "src/onboarding/HowItWorksStep.tsx",
     "src/onboarding/PermissionsStep.tsx",
     "src/onboarding/TryItStep.tsx",

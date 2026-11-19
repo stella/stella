@@ -832,18 +832,59 @@
     "introduceActivityTitle": "Újdonság: tevékenységi idővonal",
     "introduceActivityBody": "A tevékenység mostantól elérhető a fiókjában. Semmit nem rögzít, amíg el nem indítja a tevékenységablakban.",
     "openActivity": "Tevékenység megnyitása",
-    "dictationModel": "A beszédmodell ({size} MB) egyszer töltődik le, és ezen a számítógépen fut.",
-    "dictationTurnOn": "Bekapcsolás és letöltés",
     "dictationDownloadContinues": "Továbbléphet. A letöltés a háttérben folytatódik.",
-    "dictationReady": "A diktálás be van kapcsolva és kész.",
-    "dictationTryLabel": "Diktáljon ide",
-    "dictationTryPlaceholder": "Kattintson ide, tartsa lenyomva a(z) {shortcut} billentyűt, és mondjon egy mondatot.",
-    "dictationListening": "Figyelek…",
-    "dictationTranscribing": "Leírom, amit mondott…",
     "dictationMicrophone": "Így a stella hallja Önt, amíg nyomva tartja a billentyűparancsot.",
     "dictationAccessibility": "Így a stella beírja, amit mondott, abba az alkalmazásba, amelyet használ.",
     "dictationFailed": "A stella desktop nem tudta bekapcsolni a diktálást. Próbálja újra.",
     "introduceDictationTitle": "Újdonság: diktálás",
+    "dictationSetup": {
+      "progress": "{current}. lépés / {total}",
+      "skipRest": "A többi kihagyása",
+      "screens": {
+        "microphone": "Mikrofon",
+        "transcription": "Átírás",
+        "app": "Javítás",
+        "context": "Kontextus",
+        "words": "Szavak"
+      },
+      "microphone": {
+        "title": "Hadd hallja Önt a stella",
+        "body": "Tartsa nyomva a(z) {shortcut} billentyűt, és beszéljen: a szöveg ott jelenik meg, ahol éppen ír. Először engedélyezze a mikrofont, hogy a stella hallja Önt.",
+        "bodyMac": "Tartsa nyomva a(z) {shortcut} billentyűt, és beszéljen: a szöveg ott jelenik meg, ahol éppen ír. Először engedélyezze a mikrofont, hogy a stella hallja Önt, és a Kisegítő lehetőségeket, hogy be tudja gépelni a szöveget."
+      },
+      "transcription": {
+        "title": "Hol történjen a beszéde átírása?",
+        "body": "Ezt később a Beállításokban módosíthatja.",
+        "titleLocal": "A beszéde átírása ezen a számítógépen történik",
+        "bodyLocal": "A beszédmodell itt fut, így a diktálás offline is működik.",
+        "localTitle": "Ezen a számítógépen",
+        "localBody": "Offline is működik. A hang soha nem hagyja el ezt a számítógépet.",
+        "localModel": "Ehhez kell a beszédmodell ({size} MB), amelyet egyszer kell letölteni.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nincs mit letölteni. A hang a stellához, majd a stella AI-szolgáltatóján keresztül a választott modell szolgáltatójához kerül. A stella nem tárolja."
+      },
+      "app": {
+        "title": "Az alkalmazáshoz illő szöveg",
+        "body": "Az AI-javítás annak az alkalmazásnak megfelelően tud írni, amelybe diktál: egy e-mail e-mailnek, egy csetüzenet csetüzenetnek hangzik.",
+        "sentAppKind": "Az alkalmazás fajtáját tudja meg, például e-mail, cset vagy dokumentum, a nevét nem.",
+        "notStored": "A stella ebből semmit nem tárol.",
+        "off": "Javítás nélkül a szöveg úgy kerül begépelésre, ahogy átírták, és semmi nem jut el az AI-javításhoz."
+      },
+      "context": {
+        "title": "Több kontextus a javításhoz",
+        "body": "Nem kötelező, és ki van kapcsolva, amíg be nem kapcsolja. Csak a diktálás indításakor olvassa be, és csak az AI-javításhoz kerül. A stella ebből semmit nem tárol."
+      },
+      "words": {
+        "title": "Tanítsa meg a stellának a szavait",
+        "body": "Adjon hozzá neveket és kifejezéseket, amelyeket a stella úgy írjon, ahogy Ön, például az irodája, az ügyfelei nevét vagy más nyelvű kifejezéseket. A lista kezdetben üres.",
+        "examplesLabel": "Ötletek:",
+        "examples": {
+          "firm": "Az irodája neve",
+          "client": "Egy ügyfél neve",
+          "term": "Egy kifejezés, amelyet használ"
+        }
+      }
+    },
     "guideWaiting": "Kapcsolja be a stella desktopot a fenti listában a Kisegítő lehetőségek engedélyezéséhez.",
     "guideAllowed": "A stella desktop engedélyt kapott",
     "never": {

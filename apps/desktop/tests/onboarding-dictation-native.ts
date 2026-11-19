@@ -14,6 +14,9 @@ import type { PermissionsSnapshot } from "../src/shared/permissions";
 export const DICTATION_OFF = {
   available: true,
   cleanup: true,
+  cloudAvailable: false,
+  cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: false,
   failure: null,
@@ -22,7 +25,10 @@ export const DICTATION_OFF = {
   model: { status: "missing" },
   modelBytes: 740_363_168,
   phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
   shortcutTaken: false,
+  textBeforeCursorAvailable: true,
 } satisfies DictationSnapshot;
 
 export const DICTATION_STEP = {
@@ -45,6 +51,29 @@ const PERMISSION_ROWS = {
     { permission: "microphone", status: "notDetermined" },
   ],
 } satisfies PermissionsSnapshot;
+
+/** The region's stella AI models, one of them from a provider that keeps
+ *  the audio. */
+const CLOUD_MODELS = {
+  defaultModelId: "mistralai/voxtral-mini-transcribe",
+  models: [
+    {
+      displayName: "Voxtral Mini Transcribe",
+      id: "mistralai/voxtral-mini-transcribe",
+      outsideRegion: false,
+      provider: "Mistral AI",
+      retainsData: false,
+    },
+    {
+      displayName: "Scribe v3",
+      id: "elevenlabs-direct/scribe-v3",
+      outsideRegion: true,
+      provider: "ElevenLabs",
+      retainsData: true,
+    },
+  ],
+  unavailable: null,
+};
 
 export type NativeSide = {
   /** The dictation snapshot, or what a native side without it answers. */
@@ -71,6 +100,58 @@ const enabledArgument = (args: unknown) =>
   "enabled" in args &&
   args.enabled === true;
 
+const argument = (args: unknown, name: string): unknown =>
+  typeof args === "object" && args !== null
+    ? Object.entries(args).find(([key]) => key === name)?.[1]
+    : undefined;
+
+/** Applies one dictation change the way the native side stores it. */
+const changed = (
+  dictation: DictationSnapshot,
+  command: string,
+  args: unknown,
+): DictationSnapshot | null => {
+  switch (command) {
+    case "dictation_set_enabled":
+      return { ...dictation, enabled: enabledArgument(args) };
+    case "dictation_set_cleanup":
+      return { ...dictation, cleanup: enabledArgument(args) };
+    case "dictation_set_share_window_title":
+      return { ...dictation, shareWindowTitle: enabledArgument(args) };
+    case "dictation_set_share_text_before_cursor":
+      return { ...dictation, shareTextBeforeCursor: enabledArgument(args) };
+    case "dictation_set_destination": {
+      const destination = argument(args, "destination");
+      if (destination === "cloud" && !dictation.cloudAvailable) {
+        return panic("stella AI transcription is not available");
+      }
+      return destination === "cloud" || destination === "local"
+        ? { ...dictation, destination }
+        : panic("unknown destination");
+    }
+    case "dictation_set_cloud_model": {
+      const modelId = argument(args, "modelId");
+      return typeof modelId === "string"
+        ? { ...dictation, cloudModel: modelId }
+        : panic("unknown model");
+    }
+    case "dictation_set_custom_words": {
+      const words = argument(args, "words");
+      return Array.isArray(words) &&
+        words.every((word) => typeof word === "string")
+        ? { ...dictation, customWords: words }
+        : panic("unknown words");
+    }
+    case "dictation_download_model":
+      return {
+        ...dictation,
+        model: { received: 0, status: "downloading", total: 740_363_168 },
+      };
+    default:
+      return null;
+  }
+};
+
 export const installNativeSide = (native: NativeSide) => {
   mockIPC(
     (command, args) => {
@@ -87,29 +168,22 @@ export const installNativeSide = (native: NativeSide) => {
             panic("the dictation state cannot be read");
           }
           return dictation;
-        case "dictation_set_enabled":
-          if (!("enabled" in dictation)) {
-            panic("dictation is not available on this computer");
+        case "dictation_get_cloud_models":
+          return CLOUD_MODELS;
+        default: {
+          if (!command.startsWith("dictation_")) {
+            return null;
           }
-          native.dictation = { ...dictation, enabled: enabledArgument(args) };
-          return native.dictation;
-        case "dictation_set_cleanup":
           if (!("enabled" in dictation)) {
-            panic("dictation is not available on this computer");
+            return panic("dictation is not available on this computer");
           }
-          native.dictation = { ...dictation, cleanup: enabledArgument(args) };
-          return native.dictation;
-        case "dictation_download_model":
-          if (!("enabled" in dictation)) {
-            panic("dictation is not available on this computer");
+          const next = changed(dictation, command, args);
+          if (next === null) {
+            return null;
           }
-          native.dictation = {
-            ...dictation,
-            model: { received: 0, status: "downloading", total: 740_363_168 },
-          };
-          return native.dictation;
-        default:
-          return null;
+          native.dictation = next;
+          return next;
+        }
       }
     },
     { shouldMockEvents: true },

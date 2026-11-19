@@ -129,7 +129,7 @@ type WindowFixture = {
   /** The region's stella AI transcription models. */
   cloudModels: unknown;
   /** The dictation snapshot. */
-  dictation: unknown;
+  dictation: Record<string, unknown>;
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
@@ -199,6 +199,38 @@ const openWindow = async (
       shortcut_get_snapshot: () => data.shortcut,
       dictation_get_snapshot: () => data.dictation,
       dictation_get_cloud_models: () => data.cloudModels,
+      // Each change answers with the snapshot it leaves, as the native side
+      // does, so a window can walk through its choices.
+      ...Object.fromEntries(
+        (
+          [
+            ["dictation_set_enabled", "enabled", "enabled"],
+            ["dictation_set_cleanup", "enabled", "cleanup"],
+            ["dictation_set_share_window_title", "enabled", "shareWindowTitle"],
+            [
+              "dictation_set_share_text_before_cursor",
+              "enabled",
+              "shareTextBeforeCursor",
+            ],
+            ["dictation_set_destination", "destination", "destination"],
+            ["dictation_set_cloud_model", "modelId", "cloudModel"],
+            ["dictation_set_custom_words", "words", "customWords"],
+          ] as const
+        ).map(([command, argument, field]) => [
+          command,
+          (args: Record<string, unknown>) => {
+            data.dictation = { ...data.dictation, [field]: args[argument] };
+            return data.dictation;
+          },
+        ]),
+      ),
+      dictation_download_model: () => {
+        data.dictation = {
+          ...data.dictation,
+          model: { received: 0, status: "downloading", total: 740_363_168 },
+        };
+        return data.dictation;
+      },
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
       // Consent given, so Settings lays out its stella AI drafting rows too.
@@ -220,7 +252,11 @@ const openWindow = async (
 export const openOnboardingWindow = async (
   page: Page,
   snapshot: OnboardingSnapshot,
-  options: WindowVariant & { requestOutcome?: PermissionStatus },
+  options: WindowVariant & {
+    /** The dictation snapshot; dictation on and ready by default. */
+    dictation?: Record<string, unknown>;
+    requestOutcome?: PermissionStatus;
+  },
 ) => {
   await openWindow(page, {
     fixture: {
@@ -228,7 +264,7 @@ export const openOnboardingWindow = async (
       activity: null,
       appState: APP_STATE,
       cloudModels: CLOUD_MODELS,
-      dictation: DICTATION_READY,
+      dictation: options.dictation ?? DICTATION_READY,
       language: options.language,
       onboarding: snapshot,
       permissions: SETUP_PERMISSIONS,

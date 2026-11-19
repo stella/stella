@@ -832,18 +832,59 @@
     "introduceActivityTitle": "Neu: Aktivitätsübersicht",
     "introduceActivityBody": "Aktivität ist jetzt für Ihr Konto verfügbar. Nichts wird aufgezeichnet, bis Sie sie im Aktivitätsfenster starten.",
     "openActivity": "Aktivität öffnen",
-    "dictationModel": "Das Sprachmodell ({size} MB) wird einmal geladen und läuft auf diesem Computer.",
-    "dictationTurnOn": "Einschalten und laden",
     "dictationDownloadContinues": "Sie können weitermachen. Der Download läuft im Hintergrund weiter.",
-    "dictationReady": "Diktieren ist eingeschaltet und bereit.",
-    "dictationTryLabel": "Hier diktieren",
-    "dictationTryPlaceholder": "Hier klicken, {shortcut} gedrückt halten und einen Satz sagen.",
-    "dictationListening": "Hört zu…",
-    "dictationTranscribing": "Schreibt auf, was Sie gesagt haben…",
     "dictationMicrophone": "Damit hört stella Sie, solange Sie das Tastenkürzel halten.",
     "dictationAccessibility": "Damit schreibt stella das Gesagte in die App, die Sie gerade verwenden.",
     "dictationFailed": "stella desktop konnte das Diktieren nicht einschalten. Versuchen Sie es erneut.",
     "introduceDictationTitle": "Neu: Diktieren",
+    "dictationSetup": {
+      "progress": "Schritt {current} von {total}",
+      "skipRest": "Rest überspringen",
+      "screens": {
+        "microphone": "Mikrofon",
+        "transcription": "Transkription",
+        "app": "Überarbeitung",
+        "context": "Kontext",
+        "words": "Wörter"
+      },
+      "microphone": {
+        "title": "Damit stella Sie hört",
+        "body": "Halten Sie {shortcut} gedrückt und sprechen Sie, dann erscheint der Text dort, wo Sie schreiben. Erlauben Sie zuerst das Mikrofon, damit stella Sie hört.",
+        "bodyMac": "Halten Sie {shortcut} gedrückt und sprechen Sie, dann erscheint der Text dort, wo Sie schreiben. Erlauben Sie zuerst das Mikrofon, damit stella Sie hört, und die Bedienungshilfen, damit stella den Text eintippen kann."
+      },
+      "transcription": {
+        "title": "Wo soll Ihre Sprache transkribiert werden?",
+        "body": "Sie können das später in den Einstellungen ändern.",
+        "titleLocal": "Ihre Sprache wird auf diesem Computer transkribiert",
+        "bodyLocal": "Das Sprachmodell läuft hier, daher funktioniert das Diktieren auch offline.",
+        "localTitle": "Auf diesem Computer",
+        "localBody": "Funktioniert offline. Ihr Audio verlässt diesen Computer nie.",
+        "localModel": "Benötigt das Sprachmodell ({size} MB), das einmal heruntergeladen wird.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Kein Download. Ihr Audio wird an stella und über den KI-Anbieter von stella an den Anbieter des gewählten Modells gesendet. stella speichert es nicht."
+      },
+      "app": {
+        "title": "Text passend zur App",
+        "body": "Die KI-Überarbeitung kann für die App schreiben, in die Sie diktieren: Eine E-Mail liest sich dann wie eine E-Mail und eine Chatnachricht wie eine Chatnachricht.",
+        "sentAppKind": "Sie erfährt die Art der App, etwa E-Mail, Chat oder Dokument, nicht den Namen der App.",
+        "notStored": "stella speichert nichts davon.",
+        "off": "Ohne Überarbeitung wird der Text so eingetippt, wie er transkribiert wurde, und nichts geht an die KI-Überarbeitung."
+      },
+      "context": {
+        "title": "Mehr Kontext für die Überarbeitung",
+        "body": "Optional und aus, bis Sie es einschalten. Es wird nur beim Start eines Diktats gelesen und geht nur an die KI-Überarbeitung. stella speichert nichts davon."
+      },
+      "words": {
+        "title": "Bringen Sie stella Ihre Wörter bei",
+        "body": "Fügen Sie Namen und Begriffe hinzu, die stella so schreiben soll wie Sie, etwa Ihre Kanzlei, Ihre Mandanten oder Begriffe aus einer anderen Sprache. Ihre Liste ist zu Beginn leer.",
+        "examplesLabel": "Ideen:",
+        "examples": {
+          "firm": "Name Ihrer Kanzlei",
+          "client": "Name eines Mandanten",
+          "term": "Ein Begriff, den Sie verwenden"
+        }
+      }
+    },
     "guideWaiting": "Schalten Sie stella desktop in der Liste oben ein, um Bedienungshilfen zu erlauben.",
     "guideAllowed": "stella desktop ist erlaubt",
     "never": {

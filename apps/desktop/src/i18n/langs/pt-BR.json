@@ -832,18 +832,59 @@
     "introduceActivityTitle": "Novo: linha do tempo de atividade",
     "introduceActivityBody": "A atividade agora está disponível para sua conta. Nada é registrado até você iniciá-la na janela de atividade.",
     "openActivity": "Abrir atividade",
-    "dictationModel": "O modelo de voz ({size} MB) é baixado uma vez e funciona neste computador.",
-    "dictationTurnOn": "Ativar e baixar",
     "dictationDownloadContinues": "Você pode continuar. O download segue em segundo plano.",
-    "dictationReady": "O ditado está ativado e pronto.",
-    "dictationTryLabel": "Dite aqui",
-    "dictationTryPlaceholder": "Clique aqui, segure {shortcut} e diga uma frase.",
-    "dictationListening": "Ouvindo…",
-    "dictationTranscribing": "Escrevendo o que você disse…",
     "dictationMicrophone": "Permite que a stella ouça você enquanto segura o atalho.",
     "dictationAccessibility": "Permite que a stella digite o que você disse no app que está usando.",
     "dictationFailed": "O stella desktop não conseguiu ativar o ditado. Tente novamente.",
     "introduceDictationTitle": "Novo: ditado",
+    "dictationSetup": {
+      "progress": "Etapa {current} de {total}",
+      "skipRest": "Pular o resto",
+      "screens": {
+        "microphone": "Microfone",
+        "transcription": "Transcrição",
+        "app": "Revisão",
+        "context": "Contexto",
+        "words": "Palavras"
+      },
+      "microphone": {
+        "title": "Deixe a stella ouvir você",
+        "body": "Segure {shortcut} e fale, e o texto aparece onde você está digitando. Primeiro, permita o microfone para que a stella possa ouvir você.",
+        "bodyMac": "Segure {shortcut} e fale, e o texto aparece onde você está digitando. Primeiro, permita o microfone para que a stella possa ouvir você, e a Acessibilidade para que ela possa digitar o texto."
+      },
+      "transcription": {
+        "title": "Onde sua fala deve ser transcrita?",
+        "body": "Você pode mudar isso depois nas Configurações.",
+        "titleLocal": "Sua fala é transcrita neste computador",
+        "bodyLocal": "O modelo de fala roda aqui, então o ditado também funciona offline.",
+        "localTitle": "Neste computador",
+        "localBody": "Funciona offline. Seu áudio nunca sai deste computador.",
+        "localModel": "Precisa do modelo de fala ({size} MB), baixado uma vez.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Nada para baixar. Seu áudio é enviado à stella e, por meio do provedor de IA da stella, ao provedor do modelo que você escolher. A stella não o armazena."
+      },
+      "app": {
+        "title": "Texto sob medida para o app",
+        "body": "A revisão com IA pode escrever para o app em que você dita, para que um e-mail pareça um e-mail e uma mensagem de chat pareça uma mensagem de chat.",
+        "sentAppKind": "Ela fica sabendo o tipo de app, como e-mail, chat ou documento, não o nome do app.",
+        "notStored": "A stella não armazena nada disso.",
+        "off": "Sem revisão, o texto é digitado como foi transcrito e nada vai para a revisão com IA."
+      },
+      "context": {
+        "title": "Mais contexto para a revisão",
+        "body": "Opcional e desligado até você ligar. É lido apenas quando você começa um ditado e vai só para a revisão com IA. A stella não armazena nada disso."
+      },
+      "words": {
+        "title": "Ensine suas palavras à stella",
+        "body": "Adicione nomes e termos que a stella deve escrever do seu jeito, como seu escritório, seus clientes ou termos em outro idioma. Sua lista começa vazia.",
+        "examplesLabel": "Ideias:",
+        "examples": {
+          "firm": "O nome do seu escritório",
+          "client": "O nome de um cliente",
+          "term": "Um termo que você usa"
+        }
+      }
+    },
     "guideWaiting": "Ative o stella desktop na lista acima para permitir Acessibilidade.",
     "guideAllowed": "O stella desktop tem permissão",
     "never": {

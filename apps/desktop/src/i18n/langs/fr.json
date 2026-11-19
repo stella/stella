@@ -832,18 +832,59 @@
     "introduceActivityTitle": "Nouveau : chronologie d'activité",
     "introduceActivityBody": "L'activité est maintenant disponible pour votre compte. Rien n'est enregistré tant que vous ne la lancez pas dans la fenêtre d'activité.",
     "openActivity": "Ouvrir l'activité",
-    "dictationModel": "Le modèle vocal ({size} Mo) est téléchargé une fois et fonctionne sur cet ordinateur.",
-    "dictationTurnOn": "Activer et télécharger",
     "dictationDownloadContinues": "Vous pouvez continuer. Le téléchargement se poursuit en arrière-plan.",
-    "dictationReady": "La dictée est activée et prête.",
-    "dictationTryLabel": "Dictez ici",
-    "dictationTryPlaceholder": "Cliquez ici, maintenez {shortcut} et dites une phrase.",
-    "dictationListening": "À l'écoute…",
-    "dictationTranscribing": "Transcription de vos paroles…",
     "dictationMicrophone": "Permet à stella de vous entendre tant que vous maintenez le raccourci.",
     "dictationAccessibility": "Permet à stella de saisir vos paroles dans l'application que vous utilisez.",
     "dictationFailed": "stella desktop n'a pas pu activer la dictée. Réessayez.",
     "introduceDictationTitle": "Nouveau : dictée",
+    "dictationSetup": {
+      "progress": "Étape {current} sur {total}",
+      "skipRest": "Passer la suite",
+      "screens": {
+        "microphone": "Microphone",
+        "transcription": "Transcription",
+        "app": "Correction",
+        "context": "Contexte",
+        "words": "Mots"
+      },
+      "microphone": {
+        "title": "Laissez stella vous entendre",
+        "body": "Maintenez {shortcut} et parlez : le texte apparaît là où vous écrivez. D’abord, autorisez le microphone pour que stella vous entende.",
+        "bodyMac": "Maintenez {shortcut} et parlez : le texte apparaît là où vous écrivez. D’abord, autorisez le microphone pour que stella vous entende, et l’Accessibilité pour qu’elle puisse saisir le texte."
+      },
+      "transcription": {
+        "title": "Où votre voix doit-elle être transcrite ?",
+        "body": "Vous pourrez le modifier plus tard dans les Réglages.",
+        "titleLocal": "Votre voix est transcrite sur cet ordinateur",
+        "bodyLocal": "Le modèle vocal tourne ici, la dictée fonctionne donc aussi hors ligne.",
+        "localTitle": "Sur cet ordinateur",
+        "localBody": "Fonctionne hors ligne. Votre audio ne quitte jamais cet ordinateur.",
+        "localModel": "Nécessite le modèle vocal ({size} Mo), téléchargé une seule fois.",
+        "cloudTitle": "stella AI",
+        "cloudBody": "Rien à télécharger. Votre audio est envoyé à stella puis, via le fournisseur d’IA de stella, au fournisseur du modèle choisi. stella ne le conserve pas."
+      },
+      "app": {
+        "title": "Un texte adapté à l’application",
+        "body": "La correction par l’IA peut écrire pour l’application dans laquelle vous dictez : un e-mail ressemble à un e-mail, un message de chat à un message de chat.",
+        "sentAppKind": "Elle connaît le type d’application, par exemple e-mail, chat ou document, pas son nom.",
+        "notStored": "stella n’en conserve rien.",
+        "off": "Sans correction, le texte est saisi tel qu’il a été transcrit et rien n’est envoyé à la correction par l’IA."
+      },
+      "context": {
+        "title": "Plus de contexte pour la correction",
+        "body": "Facultatif, et désactivé tant que vous ne l’activez pas. Lu uniquement au début d’une dictée, il ne va qu’à la correction par l’IA. stella n’en conserve rien."
+      },
+      "words": {
+        "title": "Apprenez vos mots à stella",
+        "body": "Ajoutez les noms et les termes que stella doit écrire à votre façon, comme votre cabinet, vos clients ou des termes d’une autre langue. Votre liste est vide au départ.",
+        "examplesLabel": "Idées :",
+        "examples": {
+          "firm": "Le nom de votre cabinet",
+          "client": "Le nom d’un client",
+          "term": "Un terme que vous utilisez"
+        }
+      }
+    },
     "guideWaiting": "Activez stella desktop dans la liste ci-dessus pour autoriser l'Accessibilité.",
     "guideAllowed": "stella desktop est autorisé",
     "never": {

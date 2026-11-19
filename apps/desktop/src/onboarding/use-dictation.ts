@@ -44,6 +44,13 @@ export type DictationSnapshot = {
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed; on by default. */
   cleanup: boolean;
+  /** Whether the account has stella AI transcription; without it the
+   *  choice of where speech is transcribed is not offered. */
+  cloudAvailable: boolean;
+  /** The stella AI model the user picked; null: the region's default. */
+  cloudModel: string | null;
+  /** Names and terms stella should spell the speaker's way. */
+  customWords: string[];
   /** Where speech is transcribed. */
   destination: "cloud" | "local";
   enabled: boolean;
@@ -55,7 +62,13 @@ export type DictationSnapshot = {
   model: DictationModel;
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
+  /** Whether cleanup also gets the text before the cursor. */
+  shareTextBeforeCursor: boolean;
+  /** Whether cleanup also gets the focused window's title. */
+  shareWindowTitle: boolean;
   shortcutTaken: boolean;
+  /** Whether this computer can read the text before the cursor. */
+  textBeforeCursorAvailable: boolean;
 };
 
 /** Mirrors the native `CHANGED_EVENT`; payload-free. */
@@ -88,6 +101,10 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   isRecord(value) &&
   typeof value["available"] === "boolean" &&
   typeof value["cleanup"] === "boolean" &&
+  typeof value["cloudAvailable"] === "boolean" &&
+  (value["cloudModel"] === null || typeof value["cloudModel"] === "string") &&
+  Array.isArray(value["customWords"]) &&
+  value["customWords"].every((word) => typeof word === "string") &&
   (value["destination"] === "local" || value["destination"] === "cloud") &&
   typeof value["enabled"] === "boolean" &&
   (value["failure"] === null || typeof value["failure"] === "string") &&
@@ -98,16 +115,19 @@ const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
   (value["phase"] === "idle" ||
     value["phase"] === "recording" ||
     value["phase"] === "transcribing") &&
-  typeof value["shortcutTaken"] === "boolean";
+  typeof value["shareTextBeforeCursor"] === "boolean" &&
+  typeof value["shareWindowTitle"] === "boolean" &&
+  typeof value["shortcutTaken"] === "boolean" &&
+  typeof value["textBeforeCursorAvailable"] === "boolean";
 
 /** A model that is neither on disk nor on its way. */
-const needsDownload = (model: DictationModel) =>
+export const needsDownload = (model: DictationModel) =>
   model.status === "missing" || model.status === "failed";
 
 export type DictationControls = {
   /** `null` until a read lands. */
   snapshot: DictationSnapshot | null;
-  /** The last turn-on or download did not reach the native side. */
+  /** The last change did not reach the native side. */
   failed: boolean;
   /**
    * The last read did not land; `snapshot` is still the one before it, so
@@ -116,11 +136,24 @@ export type DictationControls = {
   unread: boolean;
   /** Reads the state again. */
   reload: () => void;
-  /** Turns dictation on and starts the speech model download. */
-  turnOn: () => Promise<void>;
+  /** Turns dictation on; the speech model is downloaded on its own.
+   *  Resolves to whether it is on. */
+  turnOn: () => Promise<boolean>;
+  /** Starts the speech model download unless the model is on its way or
+   *  in place. */
   download: () => Promise<void>;
   setCleanup: (enabled: boolean) => Promise<void>;
+  setDestination: (
+    destination: DictationSnapshot["destination"],
+  ) => Promise<void>;
+  setCloudModel: (modelId: string) => Promise<void>;
+  setShare: (piece: DictationSharedPiece, enabled: boolean) => Promise<void>;
+  /** Resolves to whether the native side stored the list. */
+  setCustomWords: (words: string[]) => Promise<boolean>;
 };
+
+/** What cleanup may also read, each behind its own switch. */
+type DictationSharedPiece = "textBeforeCursor" | "windowTitle";
 
 /**
  * The live dictation state for setup, and the actions setup offers. The
@@ -189,17 +222,18 @@ export const useDictation = (): DictationControls => {
   };
 
   const download = async () => {
+    if (snapshot !== null && !needsDownload(snapshot.model)) {
+      return;
+    }
     await run(async () => invoke<unknown>("dictation_download_model"));
   };
 
-  const turnOn = async () => {
-    const enabled = await run(async () =>
-      invoke<unknown>("dictation_set_enabled", { enabled: true }),
-    );
-    if (enabled && needsDownload(enabled.model)) {
-      await download();
-    }
-  };
+  const turnOn = async () =>
+    (
+      await run(async () =>
+        invoke<unknown>("dictation_set_enabled", { enabled: true }),
+      )
+    )?.enabled === true;
 
   const setCleanup = async (enabled: boolean) => {
     await run(async () =>
@@ -207,9 +241,50 @@ export const useDictation = (): DictationControls => {
     );
   };
 
+  const setDestination = async (
+    destination: DictationSnapshot["destination"],
+  ) => {
+    await run(async () =>
+      invoke<unknown>("dictation_set_destination", { destination }),
+    );
+  };
+
+  const setCloudModel = async (modelId: string) => {
+    await run(async () =>
+      invoke<unknown>("dictation_set_cloud_model", { modelId }),
+    );
+  };
+
+  const setShare = async (piece: DictationSharedPiece, enabled: boolean) => {
+    await run(async () =>
+      piece === "windowTitle"
+        ? invoke<unknown>("dictation_set_share_window_title", { enabled })
+        : invoke<unknown>("dictation_set_share_text_before_cursor", {
+            enabled,
+          }),
+    );
+  };
+
+  const setCustomWords = async (words: string[]) =>
+    (await run(async () =>
+      invoke<unknown>("dictation_set_custom_words", { words }),
+    )) !== null;
+
   const reload = () => {
     reread.current();
   };
 
-  return { download, failed, reload, setCleanup, snapshot, turnOn, unread };
+  return {
+    download,
+    failed,
+    reload,
+    setCleanup,
+    setCloudModel,
+    setCustomWords,
+    setDestination,
+    setShare,
+    snapshot,
+    turnOn,
+    unread,
+  };
 };
