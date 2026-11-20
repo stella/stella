@@ -161,18 +161,19 @@ export const DictationVocabularyCard = () => {
             <UploadIcon />
             {t("settings.organization.dictation.addMany")}
           </Button>
-          <Button
-            disabled={total === 0}
-            loading={exporting}
-            onClick={() => {
-              detached(download(), "dictation-vocabulary-card.export");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            <DownloadIcon />
-            {t("settings.organization.dictation.export")}
-          </Button>
+          {total > 0 && (
+            <Button
+              loading={exporting}
+              onClick={() => {
+                detached(download(), "dictation-vocabulary-card.export");
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <DownloadIcon />
+              {t("settings.organization.dictation.export")}
+            </Button>
+          )}
         </ListGroupAction>
       </ListGroupHeader>
       <AddWordForm full={max !== undefined && total >= max} />
@@ -222,7 +223,10 @@ export const DictationVocabularyCard = () => {
                 aria-label={t("settings.organization.dictation.deleteWord", {
                   word: word.term,
                 })}
-                disabled={remove.isPending}
+                loading={
+                  remove.isPending &&
+                  remove.variables?.includes(word.id) === true
+                }
                 onClick={() => {
                   remove.mutate([word.id]);
                 }}
@@ -325,7 +329,8 @@ const AddWordForm = ({ full }: { full: boolean }) => {
   return (
     <Form
       action={() => {
-        if (reading.type === "term") {
+        // A blank, refused or over-limit word says why next to the field.
+        if (reading.type === "term" && !full) {
           add.mutate(reading.term);
         }
       }}
@@ -358,12 +363,7 @@ const AddWordForm = ({ full }: { full: boolean }) => {
             </p>
           )}
         </div>
-        <Button
-          disabled={reading.type !== "term" || full}
-          loading={add.isPending}
-          size="sm"
-          type="submit"
-        >
+        <Button loading={add.isPending} size="sm" type="submit">
           {t("common.add")}
         </Button>
       </div>

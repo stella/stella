@@ -111,6 +111,9 @@ const DictationImportSheetBody = ({
   };
   // A CSV shows only its first cells, so what is edited is what is added.
   const readFile = async (file: File) => {
+    if (checking) {
+      return;
+    }
     const content = await file.text();
     edit(
       file.name.toLowerCase().endsWith(".csv")
@@ -142,7 +145,6 @@ const DictationImportSheetBody = ({
           />
           <div>
             <Button
-              disabled={checking}
               onClick={() => {
                 openFilePicker({
                   accept: ".txt,.csv,text/plain,text/csv",
@@ -182,7 +184,6 @@ const DictationImportSheetBody = ({
         </Button>
         {review === null ? (
           <Button
-            disabled={text.trim().length === 0}
             loading={checking}
             onClick={() => {
               detached(check(), "dictation-import-sheet.review");
@@ -191,15 +192,18 @@ const DictationImportSheetBody = ({
             {t("settings.organization.dictation.review")}
           </Button>
         ) : (
-          <Button
-            disabled={fresh === 0 || fresh > room}
-            loading={add.isPending}
-            onClick={() => {
-              add.mutate(review.terms.map(({ term }) => term));
-            }}
-          >
-            {t("settings.organization.dictation.addCount", { count: fresh })}
-          </Button>
+          // Offered only when the new words fit; the review says why not.
+          fresh > 0 &&
+          fresh <= room && (
+            <Button
+              loading={add.isPending}
+              onClick={() => {
+                add.mutate(review.terms.map(({ term }) => term));
+              }}
+            >
+              {t("settings.organization.dictation.addCount", { count: fresh })}
+            </Button>
+          )
         )}
       </SheetFooter>
     </SheetPopup>

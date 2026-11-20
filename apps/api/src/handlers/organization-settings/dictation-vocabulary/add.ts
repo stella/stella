@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import {
   dictationTermKey,
   MAX_ORGANIZATION_DICTATION_TERMS,
@@ -11,6 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import {
   countOrganizationTerms,
@@ -27,6 +29,7 @@ const config = {
     "any case) is skipped. The request is refused whole when the new " +
     "words would take the list over its limit.",
   permissions: { organizationSettings: ["update"] },
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",

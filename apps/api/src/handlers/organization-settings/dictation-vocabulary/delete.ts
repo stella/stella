@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { MAX_DICTATION_TERMS_PER_REQUEST } from "@stll/api-contract/dictation-vocabulary";
 
 import { dictationVocabularyTerms } from "@/api/db/schema";
@@ -10,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import { countOrganizationTerms } from "./terms";
 
@@ -29,6 +31,7 @@ const config = {
     "the list are ignored. Returns how many were deleted and how many words " +
     "the list still holds.",
   permissions: { organizationSettings: ["update"] },
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
