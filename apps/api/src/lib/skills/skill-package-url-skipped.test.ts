@@ -133,7 +133,7 @@ describe("files a URL import leaves out", () => {
     ]);
   });
 
-  test("a zip package at a URL reports the files it leaves out", async () => {
+  test("a zip package at a URL keeps its binary files as bytes", async () => {
     const zip = new ZipArchive();
     zip.set("pack/SKILL.md", SKILL_SOURCE);
     zip.set("pack/scripts/helper.ts", "export const helper = true;");
@@ -158,17 +158,12 @@ describe("files a URL import leaves out", () => {
       "references/REFERENCE.md",
       "scripts/helper.ts",
     ]);
-    // OS metadata is dropped unreported; a NUL makes a file binary.
-    expect(byPath(result.value.skippedFiles)).toEqual([
-      {
-        path: "pack/references/latin1.txt",
-        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
-      },
-      {
-        path: "pack/references/table.dat",
-        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
-      },
-    ]);
+    // OS metadata is dropped unreported; a NUL or invalid UTF-8 makes a file
+    // binary, which an archive keeps as its bytes.
+    expect(result.value.skippedFiles).toEqual([]);
+    expect(result.value.binaryFiles.map(({ path }) => path).toSorted()).toEqual(
+      ["references/latin1.txt", "references/table.dat"],
+    );
   });
 
   test("a single SKILL.md at a URL leaves nothing out", async () => {

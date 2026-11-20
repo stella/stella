@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval."
+  },
   "tabs": {
     "chat": "Vestlus",
     "close": "Sulge",
@@ -271,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
       "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
-      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
+      "searchedLegislation": "Õigusaktidest otsitud",
+      "searchedCaseLaw": "Kohtupraktikast otsitud",
+      "searchedLegislationAndCaseLaw": "Õigusaktidest ja kohtupraktikast otsitud",
+      "readDocument": "Dokument loetud",
+      "readDocuments": "Dokumendid loetud",
+      "searchedMatters": "Toimikud läbi vaadatud",
+      "checkedRegisters": "Avalikud registrid kontrollitud",
+      "searchedWeb": "Veebist otsitud",
+      "searchedChats": "Vestlusajaloost otsitud"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
+    "lookupCount": "{count, plural, one {# päring} other {# päringut}}",
     "reasoning": "Arutlus",
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "failure": {
@@ -608,6 +620,17 @@
     "dictationModelsUnavailable": "Mudeleid ei õnnestunud laadida. Dikteerimine kasutab valitud mudelit või vaikimisi mudelit, kui server seda enam ei paku.",
     "dictationCleanup": "Paranda tehisintellektiga",
     "dictationCleanupHint": "Parandab tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“. Ainult tekst, mitte heli, läheb stella kaudu teie organisatsiooni tehisintellekti teenusepakkujale; stella seda ei talleta."
+  },
+  "signedFile": {
+    "layer": "Allkirjakiht {number, number}",
+    "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "unknownSigner": "Tundmatu allkirjastaja",
+    "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
+    "unverified": "Allkirju ei ole kontrollitud."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Eelvaates kuvamiseks pole loetavat teksti.",
+    "textOnly": "Teksti eelvaade ilma leheküljekujunduse ja piltideta."
   },
   "header": {
     "search": "Otsing"

@@ -3,7 +3,10 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionAliases,
+  caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawHeldDecisionAttachments,
+  caseLawIngestionFailureEvidence,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
@@ -33,6 +36,10 @@ export const parkAttachmentsOfErasedDecisionTx = async (
     {
       hostWithdrawnAt: sql`coalesce(${caseLawHeldDecisionAttachments.hostWithdrawnAt}, now())`,
       metadata: null,
+      documentPart: null,
+      documentBodyS3Key: null,
+      documentBodySha256: null,
+      matchEvidence: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
     },
@@ -42,6 +49,21 @@ export const parkAttachmentsOfErasedDecisionTx = async (
         value: new Date(),
       },
     },
+  );
+  const erasedIds = [decisionId, ...retired.map(({ id }) => id)];
+  // Rejected observations of a known publisher identity belong to the same
+  // takedown, including copies another source had already attached.
+  await tx.delete(caseLawIngestionFailureEvidence).where(
+    sql`(${caseLawIngestionFailureEvidence.sourceId}, ${caseLawIngestionFailureEvidence.sourceDocumentId}) IN (
+        SELECT ${caseLawDecisionSourceIdentities.sourceId}, ${caseLawDecisionSourceIdentities.sourceDocumentId}
+        FROM ${caseLawDecisionSourceIdentities} WHERE ${inArray(caseLawDecisionSourceIdentities.decisionId, erasedIds)}
+        UNION ALL
+        SELECT ${caseLawDecisions.sourceId}, ${caseLawDecisions.sourceDocumentId}
+        FROM ${caseLawDecisions} WHERE ${inArray(caseLawDecisions.id, erasedIds)}
+        UNION ALL
+        SELECT ${caseLawHeldDecisionAttachments.sourceId}, ${caseLawHeldDecisionAttachments.sourceDocumentId}
+        FROM ${caseLawHeldDecisionAttachments} WHERE ${inArray(caseLawHeldDecisionAttachments.hostDecisionId, erasedIds)}
+      )`,
   );
   // audit: skip — GDPR redaction; the fence records it in case_law_index_jobs
   await tx

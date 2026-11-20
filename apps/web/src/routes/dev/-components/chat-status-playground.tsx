@@ -38,6 +38,13 @@ const THINKING = {
     "The cap sits in clause 11.2. I should read it, compare it with the playbook, and check whether the carve-outs escape it.",
 } as const;
 
+// The plan the chat prompt asks for before the first step (`PLAN LINE`).
+const PLAN = {
+  type: "text",
+  content:
+    "I'll read the cap in clause 11.2 and compare it, and its carve-outs, with what we usually accept for a share deal.",
+} as const;
+
 const searchHistory = (
   state: "complete" | "input-complete",
 ): ChatToolCallPart => ({
@@ -98,21 +105,28 @@ type Frame = {
 const FRAMES: readonly Frame[] = [
   { durationMs: 1600, isGenerating: true, parts: [] },
   { durationMs: 2200, isGenerating: true, parts: [THINKING] },
+  { durationMs: 1000, isGenerating: true, parts: [THINKING, PLAN] },
   {
     durationMs: 1800,
     isGenerating: true,
-    parts: [THINKING, searchHistory("input-complete")],
+    parts: [THINKING, PLAN, searchHistory("input-complete")],
   },
   {
     durationMs: 1800,
     isGenerating: true,
-    parts: [THINKING, searchHistory("complete"), readSection("input-complete")],
+    parts: [
+      THINKING,
+      PLAN,
+      searchHistory("complete"),
+      readSection("input-complete"),
+    ],
   },
   {
     durationMs: 2000,
     isGenerating: true,
     parts: [
       THINKING,
+      PLAN,
       searchHistory("complete"),
       readSection("complete"),
       readDocument("input-complete"),
@@ -123,6 +137,7 @@ const FRAMES: readonly Frame[] = [
     isGenerating: true,
     parts: [
       THINKING,
+      PLAN,
       searchHistory("complete"),
       readSection("complete"),
       readDocument("complete"),
@@ -134,6 +149,7 @@ const FRAMES: readonly Frame[] = [
     isGenerating: false,
     parts: [
       THINKING,
+      PLAN,
       searchHistory("complete"),
       readSection("complete"),
       readDocument("complete"),

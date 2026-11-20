@@ -23,6 +23,7 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import type { WorkspaceEntity } from "@/lib/types";
 import { viewsQueryWorkspaceId } from "@/lib/workspaces/queries/views.logic";
+import { registerStoredColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
 import {
   pruneMatterViews,
   readPersistedTableState,
@@ -328,6 +329,12 @@ export const useTableStore = create<TableStore>()(
 );
 
 followStorageOwner(useTableStore);
+
+// A loading table reads the widths a reader dragged through this, so its
+// columns stand where the mounted table puts them.
+registerStoredColumnSizing((ref) =>
+  getViewRecord(useTableStore.getState().columnSizing, ref),
+);
 
 const reconcileInstalledClients = new WeakSet<QueryClient>();
 

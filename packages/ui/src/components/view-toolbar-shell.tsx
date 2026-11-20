@@ -1,11 +1,19 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
+import { FilterIcon } from "../icons";
 import { cn } from "../lib/utils";
+import { ButtonFace } from "./control-face";
+import {
+  VIEW_FILTER_BUTTON,
+  VIEW_FILTER_CHIP,
+  VIEW_FILTER_ICON_CLASS_NAME,
+} from "./view-toolbar-classes";
 
 /*
  * The view chrome's rows, apart from the controls that go in them: a loading
  * view drawn before the page mounts lays out the same row without loading a
  * button, and the controls that replace its faces land in the same boxes.
+ * The faces of the filter controls (./view-toolbar.tsx) live here too.
  */
 
 /**
@@ -41,4 +49,28 @@ export const ViewToolbarChrome = ({
     )}
     {...props}
   />
+);
+
+/** The face of `ViewFilterButton` (./view-toolbar.tsx), for a loading view. */
+export const ViewFilterButtonFace = () => (
+  <ButtonFace
+    size={VIEW_FILTER_BUTTON.size}
+    variant={VIEW_FILTER_BUTTON.variant}
+  >
+    <FilterIcon className={VIEW_FILTER_ICON_CLASS_NAME} />
+  </ButtonFace>
+);
+
+/**
+ * The face of a `ViewFilterChip` (./view-toolbar.tsx), for a loading view:
+ * the chip's box around what the caller draws of its content.
+ */
+export const ViewFilterChipFace = ({ children }: { children: ReactNode }) => (
+  <ButtonFace
+    className={VIEW_FILTER_CHIP.className}
+    size={VIEW_FILTER_CHIP.size}
+    variant={VIEW_FILTER_CHIP.variant}
+  >
+    {children}
+  </ButtonFace>
 );

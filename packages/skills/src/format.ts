@@ -24,6 +24,13 @@ export const SKILL_FILE_NAME = "SKILL.md";
 export const SKILL_PACKAGE_LIMITS = {
   archiveFilesMax: 1000,
   archiveUncompressedMaxBytes: 50 * 1024 * 1024,
+  /**
+   * Bytes a stored skill's files may take together. Every write is held to
+   * it, so any stored skill exports as a package that imports again: it
+   * leaves `archiveUncompressedMaxBytes` room for SKILL.md (its body and
+   * frontmatter stay well under 1 MiB) and the package manifest.
+   */
+  packageFilesMaxBytes: 49 * 1024 * 1024,
   bodyMaxChars: 80_000,
   compatibilityMaxChars: 500,
   descriptionMaxChars: 1024,
@@ -58,10 +65,12 @@ export const SKILL_NAME_PATTERN = /^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/u;
  * no empty, `.` or `..` segment, no control, format or line-separator
  * characters, none of the characters Windows forbids in a file name
  * (a backslash or `< > : " | ? *`), and no segment that starts or ends with whitespace or
- * ends with a dot. `@stll/api-contract` holds the same pattern for browsers.
+ * ends with a dot. Nothing lives in the reserved `.stella/` folder, in any
+ * case: a package keeps its manifest there. `@stll/api-contract` holds the
+ * same pattern for browsers.
  */
 export const SKILL_PACKAGE_RESOURCE_PATH_PATTERN =
-  /^(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
+  /^(?!\.[sS][tT][eE][lL][lL][aA](?:\/|$))(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
 
 /**
  * The folders the spec recommends. A package may use any folder; these are
@@ -162,6 +171,22 @@ const BINARY_RESOURCE_EXTENSIONS: ReadonlySet<string> = new Set([
 ]);
 
 const lastSegment = (path: string): string => path.split("/").at(-1) ?? "";
+
+/** Folder of a skill package that holds its manifest and no skill file. */
+export const SKILL_PACKAGE_RESERVED_FOLDER = ".stella";
+
+/**
+ * Whether `path` (relative to the skill folder) falls in the reserved
+ * folder. Compared without case, as the folder unpacks onto case-insensitive
+ * file systems.
+ */
+export const isReservedSkillPackagePath = (path: string): boolean => {
+  const lower = path.toLowerCase();
+  return (
+    lower === SKILL_PACKAGE_RESERVED_FOLDER ||
+    lower.startsWith(`${SKILL_PACKAGE_RESERVED_FOLDER}/`)
+  );
+};
 
 /** A file whose extension says it is binary; see `BINARY_RESOURCE_EXTENSIONS`. */
 export const isKnownBinaryResourcePath = (path: string): boolean => {
@@ -412,7 +437,8 @@ const collectPackageResources = ({
       file.path.slice(prefix.length).replaceAll("\\", "/"),
       "NFC",
     );
-    if (isOsMetadataPath(path)) {
+    // The manifest is read by the package reader; it is no file of the skill.
+    if (isOsMetadataPath(path) || isReservedSkillPackagePath(path)) {
       continue;
     }
     const skipReason = binarySkipReason({ content: file.content, path });
@@ -628,6 +654,20 @@ export const validateSkillPackage = ({
       type: "limit_exceeded",
       field: "resources",
       limit: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
+    });
+  }
+  const encoder = new TextEncoder();
+  const resourceBytes = resources.reduce(
+    (total, resource) =>
+      total +
+      (resource.sizeBytes ?? encoder.encode(resource.content).byteLength),
+    0,
+  );
+  if (resourceBytes > SKILL_PACKAGE_LIMITS.packageFilesMaxBytes) {
+    diagnostics.push({
+      type: "limit_exceeded",
+      field: "files",
+      limit: SKILL_PACKAGE_LIMITS.packageFilesMaxBytes,
     });
   }
   if (!entrypointOnly) {

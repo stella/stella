@@ -2,7 +2,7 @@ import type { ReactNode, RefObject } from "react";
 
 import { containedEventHandler } from "../hooks/use-contained-handler";
 import { cn } from "../lib/utils";
-import { KANBAN_CARD_STICKY_TOP_CLASS } from "./sticky-lane";
+import { KANBAN_CARD_STICKY_TOP_CLASS } from "./layout-tokens";
 
 export type KanbanCardSelectionModifiers = {
   /** Cmd on macOS, Ctrl elsewhere. */

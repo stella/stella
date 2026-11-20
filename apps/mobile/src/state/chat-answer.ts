@@ -34,16 +34,17 @@ import {
 } from "@stll/api-contract/chat-run-target";
 import {
   chatToolLabel,
-  countProcessWork,
   groupProcessParts,
   isFailedToolOutput,
   isProcessPart,
   isVisibleProcessStep,
+  narratedIntentIndex,
+  summarizeProcessRun,
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatActivityPart,
   ChatToolLabel,
-  ProcessSummaryKind,
+  ProcessSummaryPiece,
 } from "@stll/api-contract/chat-tool-activity";
 
 /**
@@ -100,12 +101,22 @@ export type AnswerBlock =
       readonly markdown: string;
     }
   | {
+      /**
+       * The plan the model wrote before its first step, shown as quiet
+       * prose above the steps rather than as the answer
+       * (`narratedIntentIndex`, as on the web).
+       */
+      readonly type: "intent";
+      readonly key: string;
+      readonly text: string;
+    }
+  | {
       readonly type: "steps";
       /** The run's place in the message, stable while it streams. */
       readonly key: string;
       readonly steps: readonly AnswerStep[];
-      /** What the run got done, by kind, for its settled summary. */
-      readonly work: ReadonlyMap<ProcessSummaryKind, number>;
+      /** What the run got done, in its settled summary's phrases. */
+      readonly summary: readonly ProcessSummaryPiece[];
     }
   | {
       /**
@@ -284,6 +295,10 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
       part.type !== "text" ||
       (typeof part.content === "string" && part.content.trim() !== ""),
   );
+  // The plan the model wrote joins the run it introduces, so the run reads
+  // it above its steps, as on the web.
+  const intentIndex = narratedIntentIndex(drawn);
+  const intent = intentIndex === null ? undefined : drawn[intentIndex];
   const calls = identifiedCalls(drawn.filter(isProcessPart));
   const partOf = new Map(calls.map(({ id, part }) => [id, part]));
   const groups = localRunSubagentGroups(
@@ -327,7 +342,10 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
         .map(({ part }) => toStep(part)),
     };
   };
-  for (const group of groupProcessParts(drawn, isProcessPart)) {
+  for (const group of groupProcessParts(
+    drawn,
+    (part) => part === intent || isProcessPart(part),
+  )) {
     if (group.kind === "standard") {
       const { item } = group;
       const text =
@@ -350,7 +368,17 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
     }
     // The run's parts between its subagents, each stretch a run of its own.
     const stretches: Stretch[] = [];
+    if (intent !== undefined && group.items.includes(intent)) {
+      blocks.push({
+        type: "intent",
+        key: String(intentIndex),
+        text: typeof intent.content === "string" ? intent.content.trim() : "",
+      });
+    }
     for (const [offset, part] of group.items.entries()) {
+      if (part === intent) {
+        continue;
+      }
       // A steered message splits the run: the steps before it, its words,
       // then the steps after.
       const steered = steeredText(part);
@@ -392,7 +420,9 @@ export const answerBlocks = (parts: readonly AnswerPart[]): AnswerBlock[] => {
           type: "steps",
           key: String(group.startIndex + stretch.start),
           steps,
-          work: countProcessWork(stretch.items),
+          summary: summarizeProcessRun(stretch.items, {
+            stepCount: steps.length,
+          }),
         });
       }
     }

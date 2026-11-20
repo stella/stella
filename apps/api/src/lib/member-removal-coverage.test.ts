@@ -85,6 +85,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   // A publisher's typed metadata of a public decision and the identifiers it
   // declares on it; no member ids.
   "case_law_held_decision_attachments.declared_identifiers",
+  // Publisher sections and the public decision identifiers used to match them.
+  "case_law_held_decision_attachments.document_part",
+  "case_law_held_decision_attachments.match_evidence",
   "case_law_held_decision_attachments.metadata",
   "case_law_judges.external_refs",
   // Corpus population buckets: kind/value pairs derived from public decisions.

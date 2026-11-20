@@ -616,3 +616,24 @@ test("a chat with messages offers New chat once, in the page header, and not aga
   ).toBe(0);
   expect(unexpected).toEqual([]);
 });
+
+test("the chat header has no history button of its own: the title's switcher reaches the history", async () => {
+  serveSavedBuilder({ thread: { ...savedThread, activeSkill: null } });
+  const ui = await openThreadPage(createClient());
+
+  const header = ui.container.querySelector("header");
+  if (header === null) {
+    throw new Error("Expected the shell header to render");
+  }
+  // The header's actions have landed once its New chat shows.
+  await testing.waitFor(() =>
+    expect(header.textContent.includes(messages.chat.newChat)).toBe(true),
+  );
+  expect(header.querySelector('a[href="/chat/history"]')).toBeNull();
+  expect(
+    testing.within(header).queryAllByRole("button", {
+      name: messages.common.history,
+    }).length,
+  ).toBe(0);
+  expect(unexpected).toEqual([]);
+});

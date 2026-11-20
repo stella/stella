@@ -1,8 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import { Skeleton } from "@stll/ui/skeleton";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
@@ -15,9 +12,10 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { MemoryPanel } from "@/routes/_protected.settings/-components/account/memory/memory-panel";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
+
+import { MemoryPage } from "./-account.memory.page";
+import { MemoryPending } from "./-account.memory.pending";
 
 export const Route = createFileRoute("/_protected/settings/account/memory")({
   beforeLoad: async ({ context }) => {
@@ -76,65 +74,9 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
   },
   head: () => ({ meta: [{ title: pageTitle("memory.pageTitle") }] }),
   component: MemoryPage,
-  pendingComponent: MemoryPagePending,
+  pendingComponent: MemoryPending,
 });
 
 // Must match the default tab/view in MemoryPanel; the two statuses are
 // independent cursors, so both must be warm for the first paint.
 const MEMORY_TAB_PRIMED_STATUSES = ["suggested", "active"] as const;
-
-const MEMORY_TAB_SKELETON_KEYS = ["mine", "firm", "matter"] as const;
-const MEMORY_ROW_SKELETON_KEYS = ["primary", "secondary", "tertiary"] as const;
-
-function MemoryPagePending() {
-  return (
-    <>
-      <header className="flex flex-col gap-1">
-        <Skeleton className="h-7 w-24" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-      </header>
-
-      <section className="flex flex-col gap-2">
-        <div className="bg-muted flex w-fit items-center gap-0.5 rounded-lg p-0.5">
-          {MEMORY_TAB_SKELETON_KEYS.map((key) => (
-            <Skeleton className="h-8 w-24 rounded-md" key={key} />
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-6 pt-4">
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-16 w-full rounded-lg" />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-20 w-full rounded-md" />
-            <div className="flex justify-end">
-              <Skeleton className="h-9 w-24 rounded-md" />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {MEMORY_ROW_SKELETON_KEYS.map((key) => (
-              <Skeleton className="h-24 w-full rounded-lg" key={key} />
-            ))}
-          </div>
-        </div>
-      </section>
-    </>
-  );
-}
-
-function MemoryPage() {
-  const t = useTranslations("memory");
-
-  return (
-    <>
-      <SettingsPageHeader
-        description={t("pageDescription")}
-        title={t("pageTitle")}
-      />
-      <MemoryPanel />
-    </>
-  );
-}

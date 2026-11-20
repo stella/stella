@@ -246,6 +246,19 @@ const decisionDocument = async ({
   };
 };
 
+const ambiguousDecisionCandidates = (
+  rows: readonly DecisionIdentityRow[],
+  completeness: "complete" | "truncated",
+) =>
+  ({
+    status: "ambiguous",
+    ...(completeness === "truncated" ||
+    rows.length > LIMITS.caseLawLookupCandidatesMax
+      ? { candidateSet: "truncated" as const }
+      : {}),
+    candidates: rows.slice(0, LIMITS.caseLawLookupCandidatesMax).map(candidate),
+  }) as const satisfies DecisionResolveResponse;
+
 const otherCourtCandidate = (row: DecisionIdentityRow) => ({
   ...candidate(row),
   court: row.court,
@@ -356,6 +369,14 @@ const resolveConstrainedDecision = async ({
       .toSorted(byCourtThenDate(family[0]?.language ?? "en"))
       .slice(0, LIMITS.caseLawLookupCandidatesMax)
       .map(otherCourtCandidate);
+  if (rows.some((row) => row.exactIdentityRead === "truncated")) {
+    return ambiguousDecisionCandidates(
+      family.filter(
+        (row) => !namesCourt(constraints) || atNamedCourt(constraints, row),
+      ),
+      "truncated",
+    );
+  }
   if (namesUnrecognizedCourt(constraints) && family.length > 0) {
     return {
       status: "not_found",
@@ -396,6 +417,7 @@ const resolveConstrainedDecision = async ({
       : { ...response, otherCourtCandidates };
   const resolution = resolveDecisionIdentity(intent, scopedRows, {
     reporters,
+    exactIdentityRead: rows.at(0)?.exactIdentityRead,
   });
   const answer = async (): Promise<DecisionResolveResponse> => {
     switch (resolution.status) {
@@ -421,12 +443,9 @@ const resolveConstrainedDecision = async ({
                 reason: "no_exact_identity",
               });
         }
-        return withOtherCourts({
-          status: "ambiguous",
-          candidates: resolution.candidates
-            .slice(0, LIMITS.caseLawLookupCandidatesMax)
-            .map(candidate),
-        });
+        return withOtherCourts(
+          ambiguousDecisionCandidates(resolution.candidates, "complete"),
+        );
       }
       case "unique":
         return await admit(resolution.decision);

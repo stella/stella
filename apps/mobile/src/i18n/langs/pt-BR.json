@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "O texto completo não está disponível nesta prévia."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Fechar",
@@ -271,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}",
       "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento} many {# edições do documento}}",
       "changesSaved": "{count, plural, one {# alteração salva} other {# alterações salvas} many {# alterações salvas}}",
-      "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}"
+      "searchedLegislation": "Legislação pesquisada",
+      "searchedCaseLaw": "Jurisprudência pesquisada",
+      "searchedLegislationAndCaseLaw": "Legislação e jurisprudência pesquisadas",
+      "readDocument": "Documento lido",
+      "readDocuments": "Documentos lidos",
+      "searchedMatters": "Casos revisados",
+      "checkedRegisters": "Registros públicos consultados",
+      "searchedWeb": "Web pesquisada",
+      "searchedChats": "Histórico do chat pesquisado"
     },
     "stepCount": "{count, plural, one {# etapa} other {# etapas} many {# etapas}}",
+    "lookupCount": "{count, plural, one {# consulta} many {# consultas} other {# consultas}}",
     "reasoning": "Raciocínio",
     "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
     "failure": {
@@ -608,6 +620,17 @@
     "dictationModelsUnavailable": "Não foi possível carregar os modelos. O ditado usa o modelo que você escolheu, ou o padrão se o servidor não o oferecer mais.",
     "dictationCleanup": "Revisar com IA",
     "dictationCleanupHint": "Corrige erros de reconhecimento e a formatação ditada, como “nova linha”. Só o texto, não o áudio, passa pela stella até o provedor de IA da sua organização; a stella não o armazena."
+  },
+  "signedFile": {
+    "layer": "Camada de assinaturas {number, number}",
+    "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
+    "unknownSigner": "Signatário desconhecido",
+    "unreadable": "Não foi possível ler o arquivo assinado.",
+    "unverified": "As assinaturas não foram verificadas."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Não há texto legível para exibir na prévia.",
+    "textOnly": "Prévia do texto sem o layout da página nem as imagens."
   },
   "header": {
     "search": "Pesquisar"
