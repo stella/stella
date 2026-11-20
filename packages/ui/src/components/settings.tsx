@@ -1,0 +1,218 @@
+"use client";
+
+import { useId } from "react";
+import type * as React from "react";
+
+import { cn } from "../lib/utils";
+import {
+  List,
+  ListGroup,
+  ListGroupAction,
+  ListGroupDescription,
+  ListGroupHeader,
+  ListGroupHeading,
+  ListGroupTitle,
+} from "./list-shell";
+import type { ListGroupTitleTone } from "./list-shell";
+
+/*
+ * The pieces every settings page is composed from, on the web and in the
+ * desktop app: a section (a title, one quiet line, an optional trailing
+ * action) over one surface of hairline-divided rows (`@stll/ui/list-shell`).
+ * One option is one row: its title and one secondary line at the start, its
+ * control at the end. A form, or anything else that is not a row, sits in a
+ * `SettingsPanel` on the same surface. No Base UI and no popup, so a pending
+ * view draws the same section and rows the page that loads does.
+ */
+
+type SettingsSectionProps = Omit<React.ComponentProps<"section">, "title"> & {
+  /** The section's name; none when the page header already names it. */
+  title?: React.ReactNode;
+  /** One quiet line under the title. */
+  description?: React.ReactNode;
+  /** A quiet trailing action on the header row (an add or a link). */
+  action?: React.ReactNode;
+  /** `destructive` names an irreversible section (a danger zone). */
+  tone?: ListGroupTitleTone | undefined;
+  /** `SettingsRow`s and `SettingsPanel`s. */
+  children: React.ReactNode;
+};
+
+// A slot filled with `condition && <X />` holds `false` when the condition
+// fails; such a slot draws nothing and claims no header space.
+const rendersSomething = (node: React.ReactNode): boolean =>
+  node !== undefined && node !== null && node !== false;
+
+/** A titled section over one surface of rows. */
+const SettingsSection = ({
+  action,
+  children,
+  description,
+  title,
+  tone,
+  ...props
+}: SettingsSectionProps) => {
+  const titleId = useId();
+  const named = rendersSomething(title);
+  const described = rendersSomething(description);
+  const acted = rendersSomething(action);
+  return (
+    <ListGroup aria-labelledby={named ? titleId : undefined} {...props}>
+      {(named || described || acted) && (
+        <ListGroupHeader>
+          <ListGroupHeading>
+            {named && (
+              <ListGroupTitle id={titleId} tone={tone}>
+                {title}
+              </ListGroupTitle>
+            )}
+            {described && (
+              <ListGroupDescription>{description}</ListGroupDescription>
+            )}
+          </ListGroupHeading>
+          {acted && <ListGroupAction>{action}</ListGroupAction>}
+        </ListGroupHeader>
+      )}
+      <List>{children}</List>
+    </ListGroup>
+  );
+};
+
+/** The ids a row's control points at for its name and its description. */
+const settingsRowIds = (id: string) => ({
+  description: `${id}-description`,
+  label: `${id}-label`,
+});
+
+/** How far a row sits in: a `nested` row refines the row above it. */
+type SettingsRowDepth = "top" | "nested";
+
+const ROW_DEPTH_CLASS = {
+  nested: "ps-10",
+  top: "ps-4",
+} as const satisfies Record<SettingsRowDepth, string>;
+
+/**
+ * What a press on the row does. `label`: the row is its control's label, so
+ * a press anywhere on it reaches the control (a switch or a checkbox); keep
+ * every other interactive element out of such a row.
+ */
+type SettingsRowInteraction = "none" | "label";
+
+// A row too narrow for its text and its control wraps the control under the
+// text rather than squeezing the text.
+const SETTINGS_ROW_BOX_CLASS =
+  "flex min-h-14 w-full flex-wrap items-center gap-x-3 gap-y-2 py-2.5 pe-4 text-start";
+
+type SettingsRowProps = {
+  /** Names the title and the description (`settingsRowIds`), so the
+   *  control can point at them. */
+  id?: string | undefined;
+  /** A 32px tile before the title (`ListItemMedia`). */
+  media?: React.ReactNode;
+  title: React.ReactNode;
+  /** One secondary line under the title. */
+  description?: React.ReactNode;
+  /** The trailing control, value, status or link. */
+  children?: React.ReactNode;
+  /** Under the row and inside it, without a divider: a warning or an error
+   *  about this row's value. */
+  footer?: React.ReactNode;
+  depth?: SettingsRowDepth | undefined;
+  /** Shown dimmed: its control is disabled until something else allows it. */
+  disabled?: boolean | undefined;
+  interaction?: SettingsRowInteraction | undefined;
+  className?: string | undefined;
+};
+
+/** One option: media, title and secondary line, then its control. */
+const SettingsRow = ({
+  children,
+  className,
+  depth = "top",
+  description,
+  disabled = false,
+  footer,
+  id,
+  interaction = "none",
+  media,
+  title,
+}: SettingsRowProps) => {
+  const ids = id === undefined ? undefined : settingsRowIds(id);
+  const Box = interaction === "label" ? "label" : "div";
+  return (
+    <li
+      className="flex min-w-0 flex-col"
+      data-disabled={disabled ? "" : undefined}
+      data-slot="settings-row"
+    >
+      <Box
+        className={cn(
+          SETTINGS_ROW_BOX_CLASS,
+          ROW_DEPTH_CLASS[depth],
+          interaction === "label" &&
+            "hover:bg-muted/50 cursor-pointer has-data-disabled:cursor-not-allowed has-data-disabled:hover:bg-transparent",
+          className,
+        )}
+      >
+        {media}
+        <span
+          className={cn(
+            "flex min-w-48 flex-1 basis-48 flex-col gap-0.5",
+            disabled && "opacity-64",
+          )}
+        >
+          <span
+            className="text-foreground text-sm font-medium text-pretty wrap-break-word"
+            data-slot="settings-row-title"
+            id={ids?.label}
+          >
+            {title}
+          </span>
+          {rendersSomething(description) && (
+            <span
+              className="text-muted-foreground text-xs text-pretty wrap-break-word"
+              data-slot="settings-row-description"
+              id={ids?.description}
+            >
+              {description}
+            </span>
+          )}
+        </span>
+        {rendersSomething(children) && (
+          <span
+            className="ms-auto flex shrink-0 items-center gap-2"
+            data-slot="settings-row-control"
+          >
+            {children}
+          </span>
+        )}
+      </Box>
+      {rendersSomething(footer) && (
+        <div className={cn("pe-4 pb-3", ROW_DEPTH_CLASS[depth])}>{footer}</div>
+      )}
+    </li>
+  );
+};
+
+/** How a panel's content sits on the surface. `flush`: the content lays out
+ *  its own rows edge to edge. */
+type SettingsPanelInset = "padded" | "flush";
+
+/** A form, or other content that is not a row, on a section's surface. */
+const SettingsPanel = ({
+  className,
+  inset = "padded",
+  ...props
+}: React.ComponentProps<"li"> & {
+  inset?: SettingsPanelInset | undefined;
+}) => (
+  <li
+    className={cn("block min-w-0", inset === "padded" && "p-4", className)}
+    data-slot="settings-panel"
+    {...props}
+  />
+);
+
+export { SettingsPanel, SettingsRow, settingsRowIds, SettingsSection };
+export type { SettingsRowDepth, SettingsRowInteraction };
