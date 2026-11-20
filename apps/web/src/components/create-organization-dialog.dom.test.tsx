@@ -445,7 +445,7 @@ test.each(
       fireEvent.submit(form);
     });
     await waitFor(() => expect(creationKeys).toHaveLength(1));
-    expect(submit.hasAttribute("disabled")).toBe(true);
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
     response.resolve(createdResponse());
     const switchButton = await expectCreated(messages);
     expect(switchRequests()).toHaveLength(0);
