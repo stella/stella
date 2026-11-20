@@ -82,7 +82,9 @@ import {
   createBrowseWebAgent,
   NO_SUSPENDED_BROWSE_RUNS,
   prepareSuspendedBrowseRuns,
+  type SuspendedBrowseHistory,
   type SuspendedBrowseRuns,
+  withSuspendedBrowseRuns,
 } from "@/api/handlers/chat/browse-web-agent";
 import {
   applyChatPartPersistenceBudget,
@@ -718,17 +720,11 @@ export const streamChat = async ({
 }: StreamChatProps): Promise<StreamChatOutcome> => {
   const admittedAt = performance.now();
   const messages = pruneOrphanedToolParts(rawMessages);
-  // A model turn browses through the `browse_web` sub-agent: the browser
-  // tool, approval gate included, moves to its child, so page snapshots never
-  // reach this turn's model. A run on the member's computer or in a sandbox
-  // has no such child.
-  const { [BROWSER_CONTROL_TOOL_NAME]: browserTool, ...toolsWithoutBrowser } =
-    tools;
-  const browsing =
-    browserTool !== undefined &&
-    localRun === undefined &&
-    sandboxRun === undefined;
-  const turnTools = browsing ? toolsWithoutBrowser : tools;
+  const { browserTool, turnTools } = browseTurnTools({
+    localRun,
+    sandboxRun,
+    tools,
+  });
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
@@ -797,29 +793,21 @@ export const streamChat = async ({
     messages: rawPreparedMessages.value,
     workspaceIds: tenantWorkspaceIds,
   });
-  const suspendedBrowse = browsing
-    ? await prepareSuspendedBrowseRuns({
-        boundary: thirdPartyBoundary,
-        messages,
-        workspaceIds: tenantWorkspaceIds,
-      })
-    : Result.ok(NO_SUSPENDED_BROWSE_RUNS);
-  if (Result.isError(suspendedBrowse)) {
+  const browseTurn = await prepareBrowseTurn({
+    boundary: thirdPartyBoundary,
+    browserTool,
+    messages,
+    workspaceIds: tenantWorkspaceIds,
+  });
+  if (Result.isError(browseTurn)) {
     return {
       type: "refused",
-      response: thirdPartyBoundaryRefusalResponse(suspendedBrowse.error),
+      response: thirdPartyBoundaryRefusalResponse(browseTurn.error),
     };
   }
-  // The SDK resumes a suspended browsing run from its part in the history it
-  // is handed, so the continued message carries it back, prepared like the
-  // rest; a tool-mode part gives the model nothing.
-  const providerMessageList = preparedMessageList.map((message) =>
-    message.id === suspendedBrowse.value.messageId
-      ? {
-          ...message,
-          parts: [...message.parts, ...suspendedBrowse.value.parts],
-        }
-      : message,
+  const providerMessageList = withSuspendedBrowseRuns(
+    preparedMessageList,
+    browseTurn.value.history,
   );
 
   const turnModelSelection = resolveChatTurnModel({
@@ -1014,9 +1002,7 @@ export const streamChat = async ({
     runId,
     parentRunId,
     resume: preparedResume,
-    browse: browsing
-      ? { browserTool, suspendedRuns: suspendedBrowse.value.runs }
-      : undefined,
+    browse: browseTurn.value.turn,
     safeDb,
     surfaces: {
       // The provider's copy only: persistence keeps the stored parts.
@@ -1890,6 +1876,110 @@ type BrowseWebTurn = {
   suspendedRuns: SuspendedBrowseRuns;
 };
 
+/**
+ * The tools this turn's own model gets, and the browser tool its
+ * `browse_web` child gets instead when the turn browses. A model turn browses
+ * through the sub-agent: the browser tool, approval gate included, moves to
+ * its child, so page snapshots never reach this turn's model. A run on the
+ * member's computer or in a sandbox has no such child.
+ */
+const browseTurnTools = ({
+  localRun,
+  sandboxRun,
+  tools,
+}: Pick<StreamChatProps, "localRun" | "sandboxRun" | "tools">): {
+  browserTool: ChatTool | undefined;
+  turnTools: ChatToolMap;
+} => {
+  const { [BROWSER_CONTROL_TOOL_NAME]: browserTool, ...rest } = tools;
+  return browserTool !== undefined &&
+    localRun === undefined &&
+    sandboxRun === undefined
+    ? { browserTool, turnTools: rest }
+    : { browserTool: undefined, turnTools: tools };
+};
+
+/**
+ * What a browsing turn's `browse_web` child runs with, and the suspended runs
+ * its history carries back (`prepareSuspendedBrowseRuns`); a turn that does
+ * not browse has neither.
+ */
+const prepareBrowseTurn = async ({
+  boundary,
+  browserTool,
+  messages,
+  workspaceIds,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  browserTool: ChatTool | undefined;
+  messages: readonly ChatMessage[];
+  workspaceIds: readonly SafeId<"workspace">[];
+}): Promise<
+  Result<
+    { history: SuspendedBrowseHistory; turn: BrowseWebTurn | undefined },
+    AnonymizationRefusal
+  >
+> => {
+  if (browserTool === undefined) {
+    return Result.ok({ history: NO_SUSPENDED_BROWSE_RUNS, turn: undefined });
+  }
+  const history = await prepareSuspendedBrowseRuns({
+    boundary,
+    messages,
+    workspaceIds,
+  });
+  return Result.isError(history)
+    ? Result.err(history.error)
+    : Result.ok({
+        history: history.value,
+        turn: { browserTool, suspendedRuns: history.value.runs },
+      });
+};
+
+/** The `browse_web` sub-agent an attempt offers when its turn browses, on
+ *  the attempt's admission, metering and boundary. */
+const browseWebSubagents = ({
+  browse,
+  feature,
+  managedAIResidency,
+  modelAdmission,
+  organizationId,
+  orgAIConfig,
+  safeDb,
+  surfaces,
+  thirdPartyBoundary,
+  threadId,
+  turnBudget,
+  usageLane,
+  userId,
+  workspaceId,
+}: RunChatAttemptProps) =>
+  browse === undefined
+    ? {}
+    : {
+        subagents: {
+          agents: [
+            createBrowseWebAgent({
+              admission: modelAdmission,
+              browserTool: browse.browserTool,
+              feature,
+              managedAIResidency,
+              organizationId,
+              orgAIConfig,
+              safeDb,
+              suspendedRuns: browse.suspendedRuns,
+              tenantWorkspaceIds: surfaces.tenantWorkspaceIds,
+              thirdPartyBoundary,
+              threadId,
+              turnBudget: turnBudget.childMiddleware,
+              usageLane,
+              userId,
+              workspaceId,
+            }),
+          ],
+        },
+      };
+
 const runChatAttempts = async function* ({
   abortController,
   abortSignal,
@@ -2093,38 +2183,40 @@ type RunChatAttemptProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const runChatAttempt = async function* ({
-  abortController,
-  abortSignal,
-  compactionFeature,
-  onHistoryTrimmed,
-  externalMcpToolSource,
-  feature,
-  model,
-  modelId,
-  organizationId,
-  modelAdmission,
-  orgAIConfig,
-  managedAIResidency,
-  promptCacheKey,
-  promptCachingEnabled,
-  runId,
-  parentRunId,
-  resume,
-  browse,
-  task,
-  safeDb,
-  sandboxRun,
-  usageLane,
-  state,
-  surfaces,
-  thirdPartyBoundary,
-  threadId,
-  toolCallIds,
-  turnBudget,
-  userId,
-  workspaceId,
-}: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
+const runChatAttempt = async function* (
+  props: RunChatAttemptProps,
+): AsyncIterable<PublicStreamChunk> {
+  const {
+    abortController,
+    abortSignal,
+    compactionFeature,
+    onHistoryTrimmed,
+    externalMcpToolSource,
+    feature,
+    model,
+    modelId,
+    organizationId,
+    modelAdmission,
+    orgAIConfig,
+    managedAIResidency,
+    promptCacheKey,
+    promptCachingEnabled,
+    runId,
+    parentRunId,
+    resume,
+    task,
+    safeDb,
+    sandboxRun,
+    usageLane,
+    state,
+    surfaces,
+    thirdPartyBoundary,
+    threadId,
+    toolCallIds,
+    turnBudget,
+    userId,
+    workspaceId,
+  } = props;
   // The one place the guard's brands are widened back to the plain types the
   // provider SDK takes: everything below this line is dispatch.
   const {
@@ -2270,31 +2362,7 @@ const runChatAttempt = async function* ({
         ...(runId === undefined ? {} : { runId }),
         ...(parentRunId === undefined ? {} : { parentRunId }),
         ...(resume === undefined ? {} : { resume }),
-        ...(browse === undefined
-          ? {}
-          : {
-              subagents: {
-                agents: [
-                  createBrowseWebAgent({
-                    admission: modelAdmission,
-                    browserTool: browse.browserTool,
-                    feature,
-                    managedAIResidency,
-                    organizationId,
-                    orgAIConfig,
-                    safeDb,
-                    suspendedRuns: browse.suspendedRuns,
-                    tenantWorkspaceIds,
-                    thirdPartyBoundary,
-                    threadId,
-                    turnBudget: turnBudget.childMiddleware,
-                    usageLane,
-                    userId,
-                    workspaceId,
-                  }),
-                ],
-              },
-            }),
+        ...browseWebSubagents(props),
         middleware: [
           analytics.middleware,
           createChatRuntimeMiddleware({

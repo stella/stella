@@ -391,6 +391,22 @@ export const prepareSuspendedBrowseRuns = async ({
   });
 };
 
+/**
+ * The provider's copy of the turn's messages, with the continued message's
+ * suspended `browse_web` runs back in it. The SDK resumes a suspended run
+ * from its part in the history it is handed, so the part goes back prepared
+ * like the rest; a tool-mode part gives the main model nothing.
+ */
+export const withSuspendedBrowseRuns = <TMessage extends ChatMessage>(
+  messages: readonly TMessage[],
+  history: SuspendedBrowseHistory,
+): TMessage[] =>
+  messages.map((message) =>
+    message.id === history.messageId
+      ? { ...message, parts: [...message.parts, ...history.parts] }
+      : message,
+  );
+
 export type BrowseWebAgentOptions = {
   /** The parent turn's admission; the child is never admitted again. */
   admission: ModelDispatchAdmission;
