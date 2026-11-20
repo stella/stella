@@ -512,17 +512,6 @@ fn heard_nothing(held: Duration) -> Result<(), Failed> {
   }
 }
 
-/// Whether a stream error means no more audio comes, rather than a glitch
-/// or a reroute the stream survives.
-const fn ends_capture(kind: cpal::ErrorKind) -> bool {
-  matches!(
-    kind,
-    cpal::ErrorKind::DeviceNotAvailable
-      | cpal::ErrorKind::HostUnavailable
-      | cpal::ErrorKind::StreamInvalidated
-  )
-}
-
 /// Drops a dictation's transcription and keeps its worker.
 fn discard(live: Live<Engines>, worker: &mut Option<Worker>) {
   if let Some(engines) = live.cancel() {
@@ -933,6 +922,17 @@ fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
       missing,
     },
   ))
+}
+
+/// Whether a stream error means no more audio comes, rather than a glitch
+/// or a reroute the stream survives.
+const fn ends_capture(kind: cpal::ErrorKind) -> bool {
+  matches!(
+    kind,
+    cpal::ErrorKind::DeviceNotAvailable
+      | cpal::ErrorKind::HostUnavailable
+      | cpal::ErrorKind::StreamInvalidated
+  )
 }
 
 fn build<T>(
