@@ -35,22 +35,21 @@ fn usual_dirs(home: Option<&Path>) -> Vec<PathBuf> {
   dirs
 }
 
+#[cfg(unix)]
+fn has_execute_bit(metadata: &std::fs::Metadata) -> bool {
+  use std::os::unix::fs::PermissionsExt;
+  metadata.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+const fn has_execute_bit(_metadata: &std::fs::Metadata) -> bool {
+  true
+}
+
 fn is_executable_file(path: &Path) -> bool {
-  let Ok(metadata) = std::fs::metadata(path) else {
-    return false;
-  };
-  if !metadata.is_file() || metadata.len() == 0 {
-    return false;
-  }
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode() & 0o111 != 0
-  }
-  #[cfg(not(unix))]
-  {
-    true
-  }
+  std::fs::metadata(path).is_ok_and(|metadata| {
+    metadata.is_file() && metadata.len() > 0 && has_execute_bit(&metadata)
+  })
 }
 
 /// The first Antigravity CLI on `path_var`'s directories, then the usual
@@ -157,16 +156,24 @@ pub(crate) fn antigravity() -> Option<(PathBuf, String)> {
   let executable =
     find_antigravity(std::env::var_os("PATH").as_deref(), home.as_deref())?;
   let current = stamp(&executable)?;
-  let mut cache = VERSIONS
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner);
-  if let Some((cached, version)) = cache.as_ref() {
-    if *cached == current {
-      return version.clone().map(|version| (executable, version));
-    }
-  }
-  let version = read_version(&executable);
-  *cache = Some((current, version.clone()));
+  let cached = {
+    let cache = VERSIONS
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner);
+    cache
+      .as_ref()
+      .filter(|(seen, _)| *seen == current)
+      .map(|(_, version)| version.clone())
+  };
+  // Read without holding the lock: `--version` may take seconds.
+  let version = cached.unwrap_or_else(|| {
+    let version = read_version(&executable);
+    *VERSIONS
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner) =
+      Some((current, version.clone()));
+    version
+  });
   version.map(|version| (executable, version))
 }
 
@@ -195,6 +202,7 @@ mod tests {
     assert_eq!(parse_version(""), None);
   }
 
+  #[cfg(unix)]
   use crate::harness_archive::tests::TempDir;
 
   #[cfg(unix)]
