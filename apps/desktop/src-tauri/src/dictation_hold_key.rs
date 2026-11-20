@@ -158,11 +158,111 @@ impl Gesture {
   }
 }
 
+/// Whose key names a label uses: the Mac's symbols, or the words Windows and
+/// other keyboards print.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyNames {
+  Mac,
+  Windows,
+  Other,
+}
+
+impl KeyNames {
+  pub const CURRENT: Self = if cfg!(target_os = "macos") {
+    Self::Mac
+  } else if cfg!(target_os = "windows") {
+    Self::Windows
+  } else {
+    Self::Other
+  };
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Modifier {
+  Control,
+  Alt,
+  Super,
+}
+
+/// A modifier's name, as `shortcut-keys.ts` names it for the windows.
+fn modifier_label(modifier: Modifier, names: KeyNames, language: &str) -> &'static str {
+  match (names, modifier) {
+    (KeyNames::Mac, Modifier::Control) => "⌃",
+    (KeyNames::Mac, Modifier::Alt) => "⌥",
+    (KeyNames::Mac, Modifier::Super) => "⌘",
+    // German keyboards print Strg.
+    (_, Modifier::Control) if language == "de" => "Strg",
+    (_, Modifier::Control) => "Ctrl",
+    (_, Modifier::Alt) => "Alt",
+    (KeyNames::Windows, Modifier::Super) => "Win",
+    (KeyNames::Other, Modifier::Super) => "Super",
+  }
+}
+
+impl HoldChoice {
+  /// The key inside a sentence, as the Settings window writes it (`fn`,
+  /// `Right ⌥`, `Ctrl+Win`, `⌃⌥Space`); `right` is the translated
+  /// "Right {key}".
+  pub fn label(
+    self,
+    names: KeyNames,
+    language: &str,
+    right: impl Fn(&str) -> String,
+  ) -> String {
+    let name = |modifier| modifier_label(modifier, names, language);
+    let join = if names == KeyNames::Mac { "" } else { "+" };
+    match self {
+      Self::Fn => "fn".to_string(),
+      Self::RightOption => right(name(Modifier::Alt)),
+      Self::RightCommand => right(name(Modifier::Super)),
+      Self::RightControl => right(name(Modifier::Control)),
+      Self::ControlWindows => {
+        format!("{}+{}", name(Modifier::Control), name(Modifier::Super))
+      }
+      Self::Combination => {
+        [name(Modifier::Control), name(Modifier::Alt), "Space"].join(join)
+      }
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
 
   const ALONE: Input = Input::Down { others_held: false };
+
+  #[test]
+  fn hold_keys_are_named_as_the_settings_window_names_them() {
+    let right = |key: &str| format!("Right {key}");
+    assert_eq!(HoldChoice::Fn.label(KeyNames::Mac, "en", right), "fn");
+    assert_eq!(
+      HoldChoice::RightOption.label(KeyNames::Mac, "en", right),
+      "Right ⌥"
+    );
+    assert_eq!(
+      HoldChoice::RightCommand.label(KeyNames::Mac, "en", right),
+      "Right ⌘"
+    );
+    assert_eq!(
+      HoldChoice::Combination.label(KeyNames::Mac, "en", right),
+      "⌃⌥Space"
+    );
+    assert_eq!(
+      HoldChoice::Combination.label(KeyNames::Windows, "en", right),
+      "Ctrl+Alt+Space"
+    );
+    assert_eq!(
+      HoldChoice::ControlWindows.label(KeyNames::Windows, "de", right),
+      "Strg+Win"
+    );
+    assert_eq!(
+      HoldChoice::RightControl.label(KeyNames::Windows, "en", |key: &str| {
+        format!("{key} droite")
+      }),
+      "Ctrl droite"
+    );
+  }
 
   #[test]
   fn a_long_hold_transcribes() {

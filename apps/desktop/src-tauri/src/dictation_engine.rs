@@ -34,6 +34,7 @@ use crate::{
   dictation_hold_key::HoldChoice,
   dictation_input,
   dictation_live::{Ended, Live, Transcribe, Transcription},
+  dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
   dictation_preview,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
@@ -45,6 +46,8 @@ const WORKER_IDLE: Duration = Duration::from_secs(300);
 /// How often captured audio is checked for a pause while the key is down.
 const LISTEN: Duration = Duration::from_millis(100);
 const MAX_RECORDING_SECONDS: usize = 600;
+/// A shorter hold that heard nothing is a tap, not a dictation that failed.
+const MIN_NOTICED_HOLD: Duration = Duration::from_millis(500);
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The speaker waits on every request, so a busy machine must not starve it.
@@ -96,6 +99,8 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
       Ok(Command::Press) if active.is_none() => {
         let trace = Trace::pressed();
         dictation::clear_failure(app);
+        // The microphone belongs to the dictation, not to a test of it.
+        dictation_microphone::stop_test(app);
         // Read before capture starts: the microphone never opens for a
         // password field that already has focus.
         let focus = dictation_focus::current(app);
@@ -127,7 +132,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
               });
             }
             Err(failure) => {
-              dictation::report_failure(app, failure);
+              let device = (failure == Failure::Microphone)
+                .then(|| default_input().map(|device| device.name))
+                .flatten();
+              dictation::report_input_failure(app, failure, device);
               dictation::set_phase(app, Phase::Idle);
               end(app, &trace, Outcome::Failed(failure.into()), None);
             }
@@ -157,6 +165,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           dictation::set_phase(app, Phase::Transcribing);
           trace.release();
           dictation_preview::release(app);
+          let device = capture.recorder.device.clone();
           let mut moved = None;
           let outcome = match finish(
             app,
@@ -171,7 +180,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             Ok(Delivered::Empty) => Outcome::Empty,
             Ok(Delivered::Cancelled) => Outcome::Cancelled,
             Err(failed) => {
-              dictation::report_failure(app, failed);
+              dictation::report_input_failure(app, failed, device);
               Outcome::Failed(failed)
             }
           };
@@ -298,7 +307,11 @@ fn begin(
   if !dictation_input::request_access() {
     return Err(Failure::Accessibility);
   }
-  let recorder = Recorder::start().ok_or(Failure::Microphone)?;
+  let recorder =
+    Recorder::start(dictation::microphone_choice()).ok_or(Failure::Microphone)?;
+  if let Some(chosen) = &recorder.missing {
+    dictation::report_missing_microphone(app, chosen, recorder.device.clone());
+  }
   let language = dictation::language(app);
   let local_installed = model.is_some();
   let mut cloud = CloudSession::new(
@@ -411,7 +424,8 @@ fn finish(
   };
   let text = text.trim();
   if text.is_empty() {
-    return Ok(Delivered::Empty);
+    // A hold that heard nothing is told unless it was a tap.
+    return heard_nothing(held).map(|()| Delivered::Empty);
   }
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
     if dictation::cleanup_enabled(app) {
@@ -466,6 +480,16 @@ fn deliver(
     kept_in_history,
   });
   (result, focus_read, kept_in_history)
+}
+
+/// A dictation that recorded sound and produced no words: a failure the
+/// speaker is told about, unless the hold was a tap.
+fn heard_nothing(held: Duration) -> Result<(), Failed> {
+  if held < MIN_NOTICED_HOLD {
+    Ok(())
+  } else {
+    Err(Failure::NothingHeard.into())
+  }
 }
 
 /// Drops a dictation's transcription and keeps its worker.
@@ -682,34 +706,49 @@ fn take_frames(tape: &mut Tape, channels: usize) -> Vec<f32> {
 /// The audio stream is tied to the thread that built it, so a thread holds it
 /// for exactly as long as the key is down, while the dictation thread takes
 /// its audio as it arrives.
-struct Recorder {
+pub(crate) struct Recorder {
   stop: Sender<()>,
   thread: JoinHandle<()>,
   tape: Shared,
-  channels: usize,
+  pub(crate) channels: usize,
   rate: u32,
+  /// The input device's name, as the OS shows it.
+  pub(crate) device: Option<String>,
+  /// The chosen microphone's name when it was not connected and the system
+  /// default records instead.
+  missing: Option<String>,
 }
 
 impl Recorder {
-  fn start() -> Option<Self> {
+  /// Opens `choice`, or the system default without one or while it is not
+  /// connected.
+  pub(crate) fn start(choice: Option<Choice>) -> Option<Self> {
     let (stop, stopped) = mpsc::channel();
     let (ready, started) = mpsc::channel();
     let thread = thread::Builder::new()
       .name("dictation-capture".to_string())
-      .spawn(move || capture(&ready, &stopped))
+      .spawn(move || capture(choice.as_ref(), &ready, &stopped))
       .ok()?;
-    let (tape, channels, rate) = started.recv().ok().flatten()?;
+    let Opened {
+      tape,
+      channels,
+      rate,
+      device,
+      missing,
+    } = started.recv().ok().flatten()?;
     Some(Self {
       stop,
       thread,
       tape,
       channels,
       rate,
+      device,
+      missing,
     })
   }
 
   /// The audio captured since the last take, in whole frames.
-  fn take(&self) -> Vec<f32> {
+  pub(crate) fn take(&self) -> Vec<f32> {
     take_frames(&mut lock(&self.tape), self.channels)
   }
 
@@ -737,17 +776,31 @@ impl Recorder {
 }
 
 /// What the capture thread hands over once its stream plays.
-type Opened = (Shared, usize, u32);
+struct Opened {
+  tape: Shared,
+  channels: usize,
+  rate: u32,
+  device: Option<String>,
+  missing: Option<String>,
+}
 
-fn capture(ready: &Sender<Option<Opened>>, stopped: &Receiver<()>) {
-  let opened = open_stream().filter(|(stream, ..)| stream.play().is_ok());
-  let handed = opened
-    .as_ref()
-    .map(|(_, tape, channels, rate)| (Arc::clone(tape), *channels, *rate));
+fn capture(
+  choice: Option<&Choice>,
+  ready: &Sender<Option<Opened>>,
+  stopped: &Receiver<()>,
+) {
+  let opened = open_stream(choice).filter(|(stream, _)| stream.play().is_ok());
+  let handed = opened.as_ref().map(|(_, opened)| Opened {
+    tape: Arc::clone(&opened.tape),
+    channels: opened.channels,
+    rate: opened.rate,
+    device: opened.device.clone(),
+    missing: opened.missing.clone(),
+  });
   if ready.send(handed).is_err() {
     return;
   }
-  let Some((stream, ..)) = opened else {
+  let Some((stream, _)) = opened else {
     return;
   };
   // Ends when `Recorder::finish` drops the sender, or the recorder is gone.
@@ -755,8 +808,60 @@ fn capture(ready: &Sender<Option<Opened>>, stopped: &Receiver<()>) {
   drop(stream);
 }
 
-fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32)> {
-  let device = cpal::default_host().default_input_device()?;
+/// An input device as Settings lists it; `None` without a stable id.
+fn listed(device: &cpal::Device) -> Option<InputDevice> {
+  let id = device.id().ok()?.to_string();
+  let description = device.description().ok();
+  Some(InputDevice {
+    name: description
+      .as_ref()
+      .map_or_else(|| id.clone(), |description| description.name().to_string()),
+    bluetooth: description.is_some_and(|description| {
+      description.interface_type() == cpal::InterfaceType::Bluetooth
+    }),
+    id,
+  })
+}
+
+/// Every input device, in the order the OS lists them.
+pub(crate) fn input_devices() -> Vec<InputDevice> {
+  let Ok(devices) = cpal::default_host().input_devices() else {
+    return Vec::new();
+  };
+  let mut listed_devices: Vec<InputDevice> = Vec::new();
+  for device in devices.filter_map(|device| listed(&device)) {
+    if !listed_devices.iter().any(|known| known.id == device.id) {
+      listed_devices.push(device);
+    }
+  }
+  listed_devices
+}
+
+/// The system default input device.
+pub(crate) fn default_input() -> Option<InputDevice> {
+  listed(&cpal::default_host().default_input_device()?)
+}
+
+/// The device `choice` names when it is connected, otherwise the system
+/// default with the chosen name it stands in for.
+fn pick_device(choice: Option<&Choice>) -> Option<(cpal::Device, Option<String>)> {
+  let host = cpal::default_host();
+  if let Some(choice) = choice {
+    let chosen = choice
+      .id
+      .parse::<cpal::DeviceId>()
+      .ok()
+      .and_then(|id| host.device_by_id(&id));
+    if let Some(device) = chosen {
+      return Some((device, None));
+    }
+    return Some((host.default_input_device()?, Some(choice.name.clone())));
+  }
+  Some((host.default_input_device()?, None))
+}
+
+fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
+  let (device, missing) = pick_device(choice)?;
   let config = device.default_input_config().ok()?;
   let channels = usize::from(config.channels());
   let rate = config.sample_rate();
@@ -770,7 +875,17 @@ fn open_stream() -> Option<(cpal::Stream, Shared, usize, u32)> {
     SampleFormat::U16 => build::<u16>(&device, &stream_config, &tape, limit),
     _ => None,
   }?;
-  Some((stream, tape, channels, rate))
+  let name = listed(&device).map(|device| device.name);
+  Some((
+    stream,
+    Opened {
+      tape,
+      channels,
+      rate,
+      device: name,
+      missing,
+    },
+  ))
 }
 
 fn build<T>(
@@ -807,6 +922,24 @@ where
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_hold_that_heard_nothing_is_reported_unless_it_was_a_tap() {
+    assert_eq!(heard_nothing(Duration::from_millis(200)), Ok(()));
+    assert_eq!(
+      heard_nothing(MIN_NOTICED_HOLD - Duration::from_millis(1)),
+      Ok(())
+    );
+    assert_eq!(
+      heard_nothing(MIN_NOTICED_HOLD),
+      Err(Failure::NothingHeard.into())
+    );
+    // A headset still switching profile sends silence for a second or so.
+    assert_eq!(
+      heard_nothing(Duration::from_millis(1_500)),
+      Err(Failure::NothingHeard.into())
+    );
+  }
 
   #[test]
   fn only_whole_frames_are_taken_and_the_rest_waits() {

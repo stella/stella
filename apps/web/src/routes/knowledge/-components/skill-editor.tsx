@@ -50,6 +50,7 @@ import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
 import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
@@ -302,6 +303,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         ? MARKDOWN_MIME
         : "text/plain",
       content: resource.content,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
   };
 
@@ -325,6 +327,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         label: SKILL_BODY_FILE_NAME,
         mimeType: MARKDOWN_MIME,
         content: bodyContent,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }
@@ -650,6 +653,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               label: SKILL_BODY_FILE_NAME,
               mimeType: MARKDOWN_MIME,
               content: detail.data.body,
+              // Landing on the editor opens SKILL.md beside what the
+              // inspector already shows, never in its place.
+              focus: INSPECTOR_FOCUS_INTENT.ifIdle,
             });
           }}
         />
@@ -703,6 +709,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                       slug: detail.data.slug,
                     }),
                     label: detail.data.name,
+                    focus: INSPECTOR_FOCUS_INTENT.claim,
                   })
                 }
                 size="icon-sm"

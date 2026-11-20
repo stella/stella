@@ -74,6 +74,7 @@ import {
 } from "@/components/inspector/chat-context-label.logic";
 import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   type HeaderAction,
   InspectorTabHeader,
@@ -270,7 +271,7 @@ export const ChatTabPanel = ({
     threadRef,
     stored: data,
     queryKey: threadQueryOptions.queryKey,
-    startsOnLastChoice: true,
+    opensNewChats: true,
   });
   const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({
@@ -522,9 +523,10 @@ export const ChatTabPanel = ({
   // pane header: opens a fresh tab scoped to the route's matter.
   const routeWorkspaceId = useRouteWorkspaceId();
   const startNewThread = () => {
-    openChat(
-      dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),
-    );
+    openChat({
+      ...dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   };
 
   // The shared tab context menu (right-click on rail icon or

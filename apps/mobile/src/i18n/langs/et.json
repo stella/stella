@@ -212,6 +212,11 @@
       "validate_skill_package": "Kontrolli oskust",
       "web_search": "Veebist otsimine"
     },
+    "toolResearch": {
+      "caseLaw": "Otsing kohtupraktikast",
+      "legislation": "Õigusaktide lugemine",
+      "legislationAndCaseLaw": "Otsing õigusaktidest ja kohtupraktikast"
+    },
     "localRun": {
       "title": {
         "sign_in": "Jätkamiseks logige sisse",

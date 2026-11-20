@@ -130,6 +130,7 @@ const renderChips = (
           runTarget: {
             type: "choice",
             selected: target,
+            startedInCloud: null,
             select: (next) => {
               chosen.push(next);
               setTarget(next);

@@ -28,6 +28,7 @@
  */
 import { Result, TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
@@ -49,6 +50,7 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import type { CzNsReportEdition } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 
@@ -174,6 +176,7 @@ export type CzNsSbirkaDocumentIdentity = {
 export type CzNsSbirkaParsedDocument = {
   documentAst: DocumentAst;
   fulltext: string;
+  reportEdition: CzNsReportEdition | undefined;
   /** Present where the text sets at least one heading. */
   sections: DecisionSection[] | undefined;
 };
@@ -324,6 +327,86 @@ const numberedBlocks = (drafts: readonly BlockDraft[]): Block[] => {
   return blocks;
 };
 
+const chapterTitle = (value: string) =>
+  collapse(value.replaceAll(".", "")).toLocaleLowerCase("cs");
+
+const NUMBERED_SUBSECTION = /^(?<number>[1-9]\d{0,5})\.\s+\p{L}/u;
+
+/** Both editions print a contents block naming the chapters around the numbered sections. */
+const reportEdition = (
+  blocks: readonly Block[],
+): CzNsReportEdition | undefined => {
+  const contentsIndex = blocks.findIndex(({ plainText }) =>
+    /^OBSAH\s+I\./u.test(plainText),
+  );
+  const contents = blocks.at(contentsIndex);
+  if (contentsIndex === -1 || contents === undefined) {
+    return undefined;
+  }
+  const titles = chapterTitle(contents.plainText);
+  const chapter = (marker: string, after: number) =>
+    blocks.findIndex(({ plainText }, index) => {
+      if (index <= after || plainText.length > contents.plainText.length) {
+        return false;
+      }
+      const title = chapterTitle(plainText);
+      return title.startsWith(marker) && titles.includes(title);
+    });
+  const secondChapter = chapter("ii ", contentsIndex);
+  const thirdChapter = chapter("iii ", secondChapter);
+  if (secondChapter < 0 || thirdChapter <= secondChapter + 1) {
+    return undefined;
+  }
+  const sectionHeadings = (from: number, to: number) =>
+    blocks.slice(from, to).flatMap(({ plainText }, offset) => {
+      const number = NUMBERED_SUBSECTION.exec(plainText)?.groups?.["number"];
+      return number === undefined ? [] : [{ number, index: from + offset }];
+    });
+  const sections = sectionHeadings(secondChapter + 1, thirdChapter);
+  const first = sections.at(0);
+  if (
+    first?.index !== secondChapter + 1 ||
+    sections.some(
+      (heading, i) =>
+        (sections.at(i + 1)?.index ?? thirdChapter) <= heading.index + 1,
+    )
+  ) {
+    return undefined;
+  }
+  if (sections.length === 1) {
+    const label =
+      blocks.at(0)?.type === "heading" ? blocks.at(1) : blocks.at(0);
+    const number = /^Č\.\s*(?<number>[1-9]\d*)$/u.exec(label?.plainText ?? "")
+      ?.groups?.["number"];
+    if (number === undefined || label === undefined) {
+      return undefined;
+    }
+    return {
+      extent: "section",
+      number,
+      sectionPart: {
+        sectionNumber: parseIntegerToken(first.number, {
+          sign: "unsigned",
+        }).unwrap(
+          "A matched subsection number contains at most six decimal digits",
+        ),
+        firstBlock: secondChapter + 1,
+        afterLastBlock: thirdChapter,
+        collectionLabel: label.plainText,
+      },
+    };
+  }
+  const listed = sectionHeadings(contentsIndex + 1, secondChapter);
+  return listed.length > 1 &&
+    listed.length === sections.length &&
+    listed.every(
+      ({ number }, i) =>
+        number === String(i + 1) && sections.at(i)?.number === number,
+    )
+    ? { extent: "complete" }
+    : undefined;
+};
+
 /**
  * The collection's text of one entry as a document, or a typed failure when
  * nothing in it survived. Text retention is the pipeline's to validate,
@@ -354,18 +437,17 @@ export const parseCzNsSbirkaText = (
   }
   // Recent entries number their paragraphs ("1. Žalobou …"); the number
   // moves onto the block where the paragraphs read as one numbering.
-  const blocks = courtParagraphNumbers(
-    numberedBlocks([
-      { type: "heading", role: "publisher-heading", inlines: headingInlines },
-      ...drafts,
-    ]),
-    {
-      parser: SOURCE_SYSTEM,
-      caseNumber: identity.caseNumber,
-      url: identity.sourceUrl,
-    },
-  );
+  const printedBlocks = numberedBlocks([
+    { type: "heading", role: "publisher-heading", inlines: headingInlines },
+    ...drafts,
+  ]);
+  const blocks = courtParagraphNumbers(printedBlocks, {
+    parser: SOURCE_SYSTEM,
+    caseNumber: identity.caseNumber,
+    url: identity.sourceUrl,
+  });
   return Result.ok({
+    reportEdition: reportEdition(printedBlocks),
     documentAst: {
       version: 1,
       source: {

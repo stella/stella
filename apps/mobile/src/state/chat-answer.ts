@@ -10,6 +10,10 @@
 import * as v from "valibot";
 
 import {
+  codeStepResearch,
+  type CodeToolResearch,
+} from "@stll/api-contract/chat-code-step";
+import {
   isLocalRunInterruptedOutput,
   type LocalRunStepCall,
   localRunStepFailed,
@@ -65,6 +69,11 @@ export type AnswerStep =
       readonly type: "tool";
       readonly label: ChatToolLabel;
       readonly status: StepStatus;
+      /**
+       * The legal research a code step does, which titles it in place of
+       * its tool, as on the web (`codeStepResearch`).
+       */
+      readonly research?: CodeToolResearch;
     }
   | {
       readonly type: "local";
@@ -146,8 +155,18 @@ const toStep = (part: AnswerPart): AnswerStep => {
     input: part.input,
     output: part.output,
   });
+  const research = codeStepResearch({
+    input: part.input,
+    name,
+    output: part.output,
+  });
   return local === null
-    ? { type: "tool", label, status }
+    ? {
+        type: "tool",
+        label,
+        status,
+        ...(research === undefined ? {} : { research }),
+      }
     : {
         type: "local",
         label,

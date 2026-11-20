@@ -77,6 +77,7 @@ import {
 import {
   CZ_NS_SBIRKA_TEXT_HEADING,
   type CzNsSbirkaPage,
+  type CzNsSbirkaParsedDocument,
   parseCzNsSbirkaText,
   readCzNsSbirkaPage,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-ns-sbirka";
@@ -564,12 +565,43 @@ export const buildCzNsSbirkaDecision = ({
   const keywords = keywordsOf(page);
   const citedProvisions = rowLines(page, "Předpisy");
   const legalSentence = rowParagraphs(page, "Právní věta");
+  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
+  let fulltext: string | undefined;
+  let sections: IngestionResult["sections"];
+  let report: CzNsSbirkaParsedDocument["reportEdition"];
+  if (page.textHtml !== undefined) {
+    const parsed = parseCzNsSbirkaText(page.textHtml, {
+      postId,
+      sourceUrl,
+      caseNumber: dockets.caseNumber,
+      ecli,
+      court,
+      decisionDate,
+      decisionType,
+      keywords,
+      statutes: citedProvisions,
+    });
+    // An entry whose text cell the publisher left empty is stored without a
+    // document: the page states the entry, and its text is not published.
+    if (Result.isOk(parsed)) {
+      ({
+        documentAst,
+        fulltext,
+        sections,
+        reportEdition: report,
+      } = parsed.value);
+    }
+  }
+
   const entry: CzNsCollectionEntry = {
     postId,
     title: page.title,
     kind,
     part: czNsCollectionPartOfKind(kind),
-    number: rowText(page, "Číslo rozhodnutí") ?? null,
+    number:
+      rowText(page, "Číslo rozhodnutí") ??
+      (report?.extent === "section" ? report.number : null),
+    ...(report === undefined ? {} : { reportEdition: report }),
     year:
       yearText !== undefined && YEAR_PATTERN.test(yearText)
         ? integerOf(yearText)
@@ -595,28 +627,6 @@ export const buildCzNsSbirkaDecision = ({
           : toMetadataUrl(page.exports.epub, "decoded"),
     },
   };
-
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
-  let fulltext: string | undefined;
-  let sections: IngestionResult["sections"];
-  if (page.textHtml !== undefined) {
-    const parsed = parseCzNsSbirkaText(page.textHtml, {
-      postId,
-      sourceUrl,
-      caseNumber: dockets.caseNumber,
-      ecli,
-      court,
-      decisionDate,
-      decisionType,
-      keywords,
-      statutes: citedProvisions,
-    });
-    // An entry whose text cell the publisher left empty is stored without a
-    // document: the page states the entry, and its text is not published.
-    if (Result.isOk(parsed)) {
-      ({ documentAst, fulltext, sections } = parsed.value);
-    }
-  }
 
   const identifiers: DecisionIdentifier[] = [
     ...dockets.additionalCaseNumbers.map((value) => ({

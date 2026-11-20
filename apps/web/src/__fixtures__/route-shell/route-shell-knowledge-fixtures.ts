@@ -11,6 +11,9 @@ if (tool === undefined) {
   panic("The route shell fixture needs a bundled non-skill catalogue entry");
 }
 export const KNOWLEDGE_FIXTURE_TOOL_SLUG = tool.slug;
+
+/** An organization's own skill's id, for `/knowledge/tools/skills/$skillId`. */
+export const KNOWLEDGE_FIXTURE_SKILL_ID = "00000000-0000-4000-8000-00000000000a";
 const toolDetail = {
   displayName: tool.displayName,
   entry: tool,
@@ -260,10 +263,7 @@ export const knowledgeFixtureReadyText = (
 };
 
 export const knowledgeFixtureLoaderData = (routeId: string) => {
-  if (routeId === "/knowledge/tools_/$entry") {
-    return { page: "catalogue", ...toolDetail };
-  }
-  if (routeId === "/tools/$slug") {
+  if (routeId === "/knowledge/tools_/$entry" || routeId === "/tools/$slug") {
     return toolDetail;
   }
   if (routeId === "/knowledge/templates_/catalogue/$packId/$templateId") {

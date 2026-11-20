@@ -7,6 +7,7 @@ import {
   CHAT_LOCAL_RUN_PARENT_CALL_METADATA_KEY,
   chatLocalRunParentCallId,
 } from "@stll/api-contract/chat-local-run-tool";
+import { CHAT_STEP_LEDGER_KEY } from "@stll/api-contract/chat-step-ledger";
 import { assertProperty } from "@stll/property-testing";
 
 import { answerBlocks } from "./chat-answer";
@@ -419,5 +420,52 @@ describe("a coding agent's steps in an answer on the phone", () => {
         },
       ),
     );
+  });
+});
+
+describe("a code step on the phone", () => {
+  test("is titled by the research its ledger records, as on the web", () => {
+    const ledgerCall = (tool: string) => ({
+      tool,
+      queries: [],
+      filters: [],
+      outcome: "ok",
+      found: [],
+      foundOmitted: 0,
+    });
+    const codeStep = (tools: readonly string[]) =>
+      call({
+        id: `code-${tools.join("-")}`,
+        name: "execute_typescript",
+        input: { typescriptCode: "return await run();" },
+        output: {
+          success: true,
+          [CHAT_STEP_LEDGER_KEY]: {
+            calls: tools.map(ledgerCall),
+            callsOmitted: 0,
+          },
+        },
+      });
+    const steps = answerBlocks([
+      codeStep(["search_case_law"]),
+      codeStep(["read_statute_provisions", "search_case_law"]),
+      codeStep(["list_matters"]),
+    ]).flatMap((block) => (block.type === "steps" ? block.steps : []));
+    expect(steps).toEqual([
+      {
+        type: "tool",
+        label: "execute_typescript",
+        status: "done",
+        research: "caseLaw",
+      },
+      {
+        type: "tool",
+        label: "execute_typescript",
+        status: "done",
+        research: "legislationAndCaseLaw",
+      },
+      // A read outside the law keeps the tool's own title.
+      { type: "tool", label: "execute_typescript", status: "done" },
+    ]);
   });
 });

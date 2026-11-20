@@ -1732,12 +1732,25 @@
       "unorderedList": "Seznam s odrážkami",
       "wholeBlockRequired": "Pro změnu stylu vyberte celý odstavec nebo seznam."
     },
+    "answerNotFinished": "stella tuto odpověď nedokončila.",
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
       "unverified": "Citaci se nepodařilo ověřit",
       "unverifiedHint": "Citovaná rozhodnutí tento text doslovně neobsahují",
       "verified": "Ověřená citace",
       "verifiedHint": "Doslovně v {source}"
+    },
+    "answerTable": {
+      "copy": "Kopírovat tabulku",
+      "copyAs": "Kopírovat jako {format}",
+      "download": "Stáhnout tabulku",
+      "downloadAs": "Stáhnout jako {format}",
+      "fullscreen": "Otevřít na celou obrazovku",
+      "fullscreenTitle": "Tabulka na celou obrazovku",
+      "singleLine": "Na jeden řádek",
+      "size": "{rows, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}} · {columns, plural, one {# sloupec} few {# sloupce} many {# sloupce} other {# sloupců}}",
+      "textMode": "Text buněk",
+      "wrap": "Zalamovat text"
     },
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
@@ -2248,6 +2261,8 @@
       "localPlace": "Váš počítač, {harness}",
       "localSelection": "Váš počítač · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nový chat se spustil v cloudu, protože {harness} na vašem počítači není k dispozici ({state})",
+      "startedInCloudCheckFailed": "Nový chat se spustil v cloudu, protože se nepodařilo zkontrolovat váš počítač",
       "stepsCheck": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a zkontrolujte agenta {harness} v Nastavení › Obecné › Předplatné AI.",
       "stepsInstall": "Otevírá se stella desktop. Pokud se neotevře, otevřete ho ve svém počítači a v Nastavení › Obecné zvolte u agenta {harness} Nainstalovat.",
       "stepsSignInClaudeCode": "Otevírá se stella desktop k přihlášení. Pokud se neotevře, otevřete ho a zvolte Nastavení › Obecné › Přihlásit se přes Claude.",
@@ -2313,6 +2328,20 @@
       "runFull": "Agent teď další zprávy nepřijme.",
       "title": "Zpráva čeká ve frontě, dokud agent neskončí",
       "turnNotRunning": "Agent právě nepracuje."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# rozhodnutí nalezeno} few {# rozhodnutí nalezena} many {# rozhodnutí nalezeno} other {# rozhodnutí nalezeno}}",
+      "decisionsFoundUsed": "{found, plural, one {# rozhodnutí nalezeno} few {# rozhodnutí nalezena} many {# rozhodnutí nalezeno} other {# rozhodnutí nalezeno}}, {used, plural, one {# použito v odpovědi} few {# použita v odpovědi} many {# použito v odpovědi} other {# použito v odpovědi}}",
+      "filterAsOf": "Ke dni {date}",
+      "legislationFound": "{count, plural, one {# předpis nebo ustanovení} few {# předpisy a ustanovení} many {# předpisu a ustanovení} other {# předpisů a ustanovení}}",
+      "lookupDidNotGoThrough": "Toto hledání neprošlo.",
+      "moreFound": "{count, plural, one {a # další} few {a # další} many {a # dalšího} other {a # dalších}}",
+      "moreLookups": "{count, plural, one {# další dotaz se nezobrazuje} few {# další dotazy se nezobrazují} many {# dalšího dotazu se nezobrazuje} other {# dalších dotazů se nezobrazuje}}",
+      "notRecorded": "Tento krok proběhl dříve, než stella začala zaznamenávat, co který krok hledá.",
+      "nothingFound": "Nic neodpovídá.",
+      "technicalDetails": "Technické detaily",
+      "usedInAnswer": "Použito v odpovědi",
+      "versionFrom": "Znění od {date}"
     },
     "stopFailed": "Odpověď se nepodařilo zastavit. Zkuste to znovu.",
     "stopResponse": "Zastavit",
@@ -5756,6 +5785,9 @@
       "chatNotificationsDescription": "Dostanete oznámení z tohoto prohlížeče, když se odpověď v chatu dokončí, zatímco je stella na pozadí.",
       "chatNotificationsToggle": "Upozornit mě, když je odpověď hotová nebo potřebuje můj vstup",
       "chatNotificationsUnsupported": "Tento prohlížeč oznámení nepodporuje.",
+      "chatTechnicalDetails": "Technické detaily v chatu",
+      "chatTechnicalDetailsDescription": "Každý krok v chatu ukazuje, co hledal a co našel. Po zapnutí uvidíte i kód a nezpracované výsledky za ním.",
+      "chatTechnicalDetailsToggle": "Zobrazovat technické detaily v chatu",
       "confirmDelete": "Potvrdit smazání účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Trvale smazat přístup k účtu a soukromá data účtu.",
@@ -7910,7 +7942,6 @@
         "endDate": "Datum ukončení",
         "month": "Měsíc",
         "quarter": "Čtvrtletí",
-        "showTable": "Zobrazit tabulku",
         "startDate": "Datum zahájení",
         "week": "Týden"
       },
