@@ -723,39 +723,24 @@ const useCheckingFiles = () => {
   return [checkingCount > 0, whileCheckingFiles] as const;
 };
 
-/** The files that carry a reference to a document stella already holds. */
-const useResolveReferencedFiles = (
-  whileCheckingFiles: <T>(check: () => Promise<T>) => Promise<T>,
-) => {
-  const queryClient = useQueryClient();
-  const { activeOrganizationId } = useAuthenticatedUser();
-  const analytics = useAnalytics();
-
-  return async (input: CreateFileEntitiesInput) =>
-    await whileCheckingFiles(
-      async () =>
-        await resolveDocumentReferenceMatches({
-          queryClient,
-          files: uploadInputFiles(input),
-          organizationId: activeOrganizationId,
-          onError: (error) =>
-            analytics.captureError(error, {
-              fingerprintKey:
-                "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
-              scope: {
-                type: "handler",
-                handlerId:
-                  "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
-              },
-            }),
-        }),
-    );
-};
+/** Reports a failed reference lookup; the upload goes on without it. */
+const reportReferenceCheckError =
+  (analytics: ReturnType<typeof useAnalytics>) => (error: Error) =>
+    analytics.captureError(error, {
+      fingerprintKey:
+        "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+      scope: {
+        type: "handler",
+        handlerId:
+          "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+      },
+    });
 
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
   const labels = useBatchUploadLabels();
   const queryClient = useQueryClient();
+  const { activeOrganizationId } = useAuthenticatedUser();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const analytics = useAnalytics();
   const startWorkflow = useStartWorkflow(workspaceId);
@@ -767,7 +752,6 @@ export const useCreateFileEntities = (workspaceId: string) => {
     workspaceId,
     whileCheckingFiles,
   });
-  const resolveReferencedFiles = useResolveReferencedFiles(whileCheckingFiles);
 
   const ensureFileProperty = async (): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
@@ -892,7 +876,15 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const createFileEntitiesAfterReferenceCheck = async (
     input: CreateFileEntitiesInput,
   ): Promise<void> => {
-    const referenced = await resolveReferencedFiles(input);
+    const referenced = await whileCheckingFiles(
+      async () =>
+        await resolveDocumentReferenceMatches({
+          queryClient,
+          files: uploadInputFiles(input),
+          organizationId: activeOrganizationId,
+          onError: reportReferenceCheckError(analytics),
+        }),
+    );
 
     if (referenced.length === 0) {
       await uploadAfterDuplicateCheck(input, mutate);
