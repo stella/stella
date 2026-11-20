@@ -103,7 +103,7 @@ export const DecisionAppealReviews = ({
         </p>
       )}
       {reviews.status === "none_found" && (
-        <p className="text-muted-foreground text-xs">
+        <p className={DECISION_REVIEWS_CLASS_NAMES.note}>
           {t("caseLaw.viewer.appealReviews.corpusOnly")}
         </p>
       )}
