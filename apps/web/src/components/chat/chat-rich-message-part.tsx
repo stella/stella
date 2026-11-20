@@ -1,4 +1,5 @@
-import { createElement, lazy, Suspense, useRef } from "react";
+import { createElement, lazy, Suspense, useRef, useState } from "react";
+import type { PropsWithChildren } from "react";
 
 import type { AppRendererProps } from "@mcp-ui/client";
 import { useQuery } from "@tanstack/react-query";
@@ -17,9 +18,21 @@ import {
   stellaMcpAppBundleSchema,
   stellaMcpAppPartSchema,
 } from "@stll/api-contract/stella-mcp-app";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { CaseLawIcon, ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
 
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { stellaAppDisclosure } from "@/components/chat/stella-app-disclosure.logic";
+import type { StellaAppDisclosure } from "@/components/chat/stella-app-disclosure.logic";
 import {
   createStellaAppToolCaller,
   openStellaAppLink,
@@ -537,7 +550,93 @@ const StellaAppResource = ({
   if (mcpAppSandboxUrl().origin === window.location.origin) {
     return <RichContentRefused refusal="sandbox-origin" />;
   }
-  return <StellaAppFrame part={parsed.output} threadRef={threadRef} />;
+  const frame = <StellaAppFrame part={parsed.output} threadRef={threadRef} />;
+  const disclosure = stellaAppDisclosure(
+    stellaAppDirectory(parsed.output.resource.uri),
+    readStellaMcpAppCall(parsed.output),
+  );
+  switch (disclosure.type) {
+    case "open":
+      return frame;
+    case "case-law":
+      return (
+        <CaseLawAppDisclosure disclosure={disclosure}>
+          {frame}
+        </CaseLawAppDisclosure>
+      );
+    default:
+      disclosure satisfies never;
+      return panic("Unhandled stella app disclosure");
+  }
+};
+
+/**
+ * A case-law result list starts as one line: what was searched and how many
+ * decisions came back. The app, and its document request, load on first open
+ * and then stay mounted, so closing and reopening keeps the reader's own
+ * filters and scroll position.
+ */
+const CaseLawAppDisclosure = ({
+  children,
+  disclosure,
+}: PropsWithChildren<{
+  disclosure: Extract<StellaAppDisclosure, { type: "case-law" }>;
+}>) => {
+  const t = useTranslations();
+  const [isOpen, setIsOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
+  return (
+    <Collapsible
+      className="w-full min-w-0"
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (open) {
+          setHasOpened(true);
+        }
+      }}
+      open={isOpen}
+    >
+      <CollapsibleTrigger
+        render={<Button className="max-w-full" variant="plain" />}
+      >
+        <span className="text-muted-foreground hover:text-foreground inline-flex min-h-8 max-w-full min-w-0 items-center gap-1.5 text-xs pointer-coarse:min-h-11">
+          <CaseLawIcon aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="text-foreground shrink-0 font-medium">
+            {t("common.caseLaw")}
+          </span>
+          {disclosure.query.length > 0 && (
+            <>
+              <span aria-hidden="true">·</span>
+              <TruncatedText hint={false} render={<span />}>
+                {disclosure.query}
+              </TruncatedText>
+            </>
+          )}
+          {disclosure.decisionCount !== null && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="shrink-0 tabular-nums">
+                {t("caseLaw.citation.decisionCount", {
+                  count: disclosure.decisionCount,
+                })}
+              </span>
+            </>
+          )}
+          <DirectionalIcon
+            className={cn(
+              "size-3.5 shrink-0 transition-transform duration-150",
+              isOpen && "rotate-90",
+            )}
+            flip={!isOpen}
+            icon={ChevronRightIcon}
+          />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        {hasOpened && <div className="pt-1">{children}</div>}
+      </CollapsiblePanel>
+    </Collapsible>
+  );
 };
 
 type ChatRichMessagePartProps = {
