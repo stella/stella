@@ -223,10 +223,7 @@ export const DictationVocabularyCard = () => {
                 aria-label={t("settings.organization.dictation.deleteWord", {
                   word: word.term,
                 })}
-                loading={
-                  remove.isPending &&
-                  remove.variables?.includes(word.id) === true
-                }
+                loading={remove.isPending && remove.variables.includes(word.id)}
                 onClick={() => {
                   remove.mutate([word.id]);
                 }}
