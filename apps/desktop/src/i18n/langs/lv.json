@@ -724,7 +724,24 @@
       "nothingBody": "Runājiet, kamēr turat taustiņu, vai skaņas iestatījumos izvēlieties citu ievadi.",
       "inputDevice": "Ievade: {device}",
       "openSoundMac": "Atvērt skaņas iestatījumus",
-      "openSoundPc": "Atvērt skaņas iestatījumus"
+      "openSoundPc": "Atvērt skaņas iestatījumus",
+      "missingTitle": "{missing} nav pievienota",
+      "missingBody": "Diktēšana tā vietā izmanto {device}.",
+      "chooseMicrophone": "Izvēlēties mikrofonu…"
+    },
+    "microphone": {
+      "title": "Mikrofons",
+      "hint": "Bluetooth austiņām vajag brīdi, lai pārslēgtos uz mikrofonu, un tās ieraksta zemākā kvalitātē. Iebūvētais mikrofons parasti ir skaidrāks.",
+      "systemDefault": "Sistēmas noklusējums",
+      "systemDefaultNamed": "Sistēmas noklusējums ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nav pievienota)",
+      "test": "Pārbaudīt mikrofonu",
+      "stopTest": "Apturēt",
+      "level": "Ievades līmenis",
+      "hearing": "Mēs jūs dzirdam.",
+      "noSound": "No ierīces {device} nenāk skaņa.",
+      "checkAccess": "Pārbaudīt piekļuvi mikrofonam"
     },
     "preview": {
       "label": "Līdz šim diktētais teksts",

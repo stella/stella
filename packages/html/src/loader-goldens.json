@@ -4106,56 +4106,56 @@
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
     "mode": "document",
-    "input": "f7e7cba486199ce89f9a48296938ed5dbd546e7ef6913e37c26c5f1b1ed02319",
-    "html": "adcd357f89d425a2a51498998fc33178794127bfb81ff57e1cf6f6b7d357d6ec",
-    "xml": "c4668840612ceda06e160c8c5003f7bdee1d79a8f2fb28cc2d7b989904dcbeae",
-    "text": "553540ecb36226bdf90469951f0f9c6538df9916e5820101583e9f9bac140c14",
-    "mutated": "b284726e5a39fd1f3126e787130a4106935c7087ab6fae4846e333d5d211cd4a"
+    "input": "034fca23be432ffc3e2a3ca1f0a9a0851135ff751bb5990431b986586b49da9f",
+    "html": "a24b372616ab5418bc70a4fe0a4f5326f9eac485471d1877d724756e12abf0f1",
+    "xml": "50eb0ac150af611798212ae05d57f7b926e5e6714b6a9d1faf73ed9e1509969b",
+    "text": "daa28d299171f56d24fa88fb1bf2da1e2d5332752b5d63d5c7cd1a5474eecf77",
+    "mutated": "72a66bea2ac3e8af511d4d26c023fc8aac6dc4d7141fd4003944dcd19e520cd0"
   },
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
     "mode": "fragment",
-    "input": "f7e7cba486199ce89f9a48296938ed5dbd546e7ef6913e37c26c5f1b1ed02319",
-    "html": "4f77b5ccd4ddc3561b45d8d1aab72d704dc1aa230a9466a1e231506af302dc4e",
-    "xml": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "text": "553540ecb36226bdf90469951f0f9c6538df9916e5820101583e9f9bac140c14",
-    "mutated": "4f77b5ccd4ddc3561b45d8d1aab72d704dc1aa230a9466a1e231506af302dc4e"
+    "input": "034fca23be432ffc3e2a3ca1f0a9a0851135ff751bb5990431b986586b49da9f",
+    "html": "69a8e22cb05a5d86dbbacc97f5d1aeca5b5f8ea2edfd533aad8b3d4e1c4b54bd",
+    "xml": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "text": "daa28d299171f56d24fa88fb1bf2da1e2d5332752b5d63d5c7cd1a5474eecf77",
+    "mutated": "69a8e22cb05a5d86dbbacc97f5d1aeca5b5f8ea2edfd533aad8b3d4e1c4b54bd"
   },
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
     "mode": "email",
-    "input": "f7e7cba486199ce89f9a48296938ed5dbd546e7ef6913e37c26c5f1b1ed02319",
-    "html": "adcd357f89d425a2a51498998fc33178794127bfb81ff57e1cf6f6b7d357d6ec",
-    "xml": "c4668840612ceda06e160c8c5003f7bdee1d79a8f2fb28cc2d7b989904dcbeae",
-    "text": "553540ecb36226bdf90469951f0f9c6538df9916e5820101583e9f9bac140c14",
-    "mutated": "b284726e5a39fd1f3126e787130a4106935c7087ab6fae4846e333d5d211cd4a"
+    "input": "034fca23be432ffc3e2a3ca1f0a9a0851135ff751bb5990431b986586b49da9f",
+    "html": "a24b372616ab5418bc70a4fe0a4f5326f9eac485471d1877d724756e12abf0f1",
+    "xml": "50eb0ac150af611798212ae05d57f7b926e5e6714b6a9d1faf73ed9e1509969b",
+    "text": "daa28d299171f56d24fa88fb1bf2da1e2d5332752b5d63d5c7cd1a5474eecf77",
+    "mutated": "72a66bea2ac3e8af511d4d26c023fc8aac6dc4d7141fd4003944dcd19e520cd0"
   },
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
     "mode": "xml",
-    "input": "f7e7cba486199ce89f9a48296938ed5dbd546e7ef6913e37c26c5f1b1ed02319",
-    "html": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "xml": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "text": "553540ecb36226bdf90469951f0f9c6538df9916e5820101583e9f9bac140c14",
-    "mutated": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6"
+    "input": "034fca23be432ffc3e2a3ca1f0a9a0851135ff751bb5990431b986586b49da9f",
+    "html": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "xml": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "text": "daa28d299171f56d24fa88fb1bf2da1e2d5332752b5d63d5c7cd1a5474eecf77",
+    "mutated": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa"
   },
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
     "mode": "xml-mode",
-    "input": "f7e7cba486199ce89f9a48296938ed5dbd546e7ef6913e37c26c5f1b1ed02319",
-    "html": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "xml": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "text": "553540ecb36226bdf90469951f0f9c6538df9916e5820101583e9f9bac140c14",
-    "mutated": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6"
+    "input": "034fca23be432ffc3e2a3ca1f0a9a0851135ff751bb5990431b986586b49da9f",
+    "html": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "xml": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "text": "daa28d299171f56d24fa88fb1bf2da1e2d5332752b5d63d5c7cd1a5474eecf77",
+    "mutated": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa"
   },
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
     "mode": "xml-indices",
-    "input": "f7e7cba486199ce89f9a48296938ed5dbd546e7ef6913e37c26c5f1b1ed02319",
-    "html": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "xml": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6",
-    "text": "553540ecb36226bdf90469951f0f9c6538df9916e5820101583e9f9bac140c14",
-    "mutated": "75d48eba5eb522661868e7c39326d4bcabcb748f00626e30e1000442271279a6"
+    "input": "034fca23be432ffc3e2a3ca1f0a9a0851135ff751bb5990431b986586b49da9f",
+    "html": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "xml": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa",
+    "text": "daa28d299171f56d24fa88fb1bf2da1e2d5332752b5d63d5c7cd1a5474eecf77",
+    "mutated": "36f1f6328f1272815a952cdedaf223d834961da44cb9aa5f6ec4d8e012bc3bfa"
   },
   {
     "path": "src/handlers/visual-sandbox/fixtures/showcase/court-year-showcase.html",
