@@ -17,7 +17,6 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { ShieldAlertIcon, Trash2Icon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
 import {
   List,
   ListGroup,
@@ -37,6 +36,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import {
+  SettingsPanel,
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
 
@@ -250,39 +255,37 @@ type SettingsSectionProps = {
 
 const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
   const t = useTranslations("activity");
+  const detectCallsIds = settingsRowIds("activity-detect-calls");
+  const retentionIds = settingsRowIds("activity-retention");
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label className="items-start gap-2" htmlFor="activity-detect-calls">
-          <Checkbox
-            checked={settings.detectCalls}
-            id="activity-detect-calls"
-            onCheckedChange={(enabled) =>
-              onCommand("activity_set_detect_calls", { enabled })
-            }
-          />
-          <span>{t("detectCalls")}</span>
-        </Label>
-        <p className="text-muted-foreground text-xs">
-          {t("detectCallsDescription")}
-        </p>
-      </div>
+    <SettingsSection>
+      <SettingsRow
+        description={t("detectCallsDescription")}
+        id="activity-detect-calls"
+        interaction="label"
+        title={t("detectCalls")}
+      >
+        <Checkbox
+          aria-describedby={detectCallsIds.description}
+          aria-labelledby={detectCallsIds.label}
+          checked={settings.detectCalls}
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_detect_calls", { enabled })
+          }
+        />
+      </SettingsRow>
       <BillingDraftConsentSettings />
-      <CaptureDetailsControl onCommand={onCommand} settings={settings} />
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm" id="activity-retention-label">
-          {t("retention")}
-        </span>
+      <SettingsPanel>
+        <CaptureDetailsControl onCommand={onCommand} settings={settings} />
+      </SettingsPanel>
+      <SettingsRow id="activity-retention" title={t("retention")}>
         <Select
           onValueChange={(retention) => {
             onCommand("activity_set_retention", { retention });
           }}
           value={settings.retention}
         >
-          <SelectTrigger
-            aria-labelledby="activity-retention-label"
-            className="w-36"
-          >
+          <SelectTrigger aria-labelledby={retentionIds.label} className="w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectPopup>
@@ -293,8 +296,8 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
             ))}
           </SelectPopup>
         </Select>
-      </div>
-    </section>
+      </SettingsRow>
+    </SettingsSection>
   );
 };
 
@@ -1042,9 +1045,11 @@ const BillingDraftConsentSettings = () => {
   }
   if (settings.type === "failed") {
     return (
-      <p className="text-muted-foreground text-xs">
-        {t("billingDraftsUnavailable")}
-      </p>
+      <SettingsPanel>
+        <p className="text-muted-foreground text-xs">
+          {t("billingDraftsUnavailable")}
+        </p>
+      </SettingsPanel>
     );
   }
   const { consent } = settings;
@@ -1054,7 +1059,7 @@ const BillingDraftConsentSettings = () => {
     return null;
   }
   return (
-    <div className="flex flex-col gap-2">
+    <SettingsPanel className="flex flex-col gap-2">
       <span className="text-sm">{t("billingDraftsTitle")}</span>
       <p className="text-muted-foreground text-xs">
         {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
@@ -1093,6 +1098,6 @@ const BillingDraftConsentSettings = () => {
           {t("billingDraftsWithdraw")}
         </Button>
       ) : null}
-    </div>
+    </SettingsPanel>
   );
 };

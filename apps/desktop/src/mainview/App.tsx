@@ -19,9 +19,14 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { BanIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
 import { ListItemStatus } from "@stll/ui/list";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  SettingsPanel,
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { cn } from "@stll/ui/utils";
@@ -67,13 +72,7 @@ import { KeepAwakeSection } from "./KeepAwakeSection";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
-import {
-  SettingsGroup,
-  SettingsPageHeader,
-  SettingsRow,
-  settingsRowIds,
-  SettingsSectionGroup,
-} from "./settings-layout";
+import { SettingsPageHeader } from "./settings-layout";
 import {
   isAgentSettingsFocus,
   isSettingsPage,
@@ -140,49 +139,6 @@ const PERMISSIONS_PAGE_ROWS = PERMISSIONS.filter(
   (permission) => permission !== "openAtLogin",
 );
 
-type NotificationRowProps = {
-  checked: boolean;
-  description: string;
-  disabled?: boolean;
-  label: string;
-  onCheckedChange: (checked: boolean) => void;
-  preferenceKey: NotificationPreferenceKey;
-};
-
-const NotificationRow = ({
-  checked,
-  description,
-  disabled = false,
-  label,
-  onCheckedChange,
-  preferenceKey,
-}: NotificationRowProps) => {
-  const inputId = `notification-${preferenceKey}`;
-
-  return (
-    <div className={cn("px-4 py-3", disabled && "opacity-64")}>
-      <Label className="items-start gap-3" htmlFor={inputId}>
-        <Checkbox
-          checked={checked}
-          className="mt-0.5"
-          data-disabled={disabled ? "" : undefined}
-          disabled={disabled}
-          id={inputId}
-          onCheckedChange={(nextChecked) => {
-            onCheckedChange(nextChecked);
-          }}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">{label}</span>
-          <span className="text-muted-foreground mt-1 block text-sm leading-relaxed">
-            {description}
-          </span>
-        </span>
-      </Label>
-    </div>
-  );
-};
-
 const DocumentRecovery = ({
   recovery,
   onRefresh,
@@ -212,70 +168,72 @@ const DocumentRecovery = ({
     return null;
   }
   return (
-    <SettingsSectionGroup title={t("recoveryTitle")}>
-      <div className="space-y-3 px-4 py-3 text-sm">
-        {recovery.edits.length ? (
-          <>
-            <p className="text-muted-foreground">{t("recoveryBody")}</p>
-            <ul className="space-y-1">
-              {recovery.edits.map((edit) => (
-                <li key={edit.id} className="wrap-break-word">
-                  <BidiText>{edit.fileName}</BidiText>
-                  {edit.status === "pending"
-                    ? ` (${t("recoveryFilePending")})`
-                    : ""}
-                </li>
-              ))}
-            </ul>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void act("account");
-              }}
-              variant="outline"
-            >
-              {t("recoveryOpenFolder")}
-            </Button>
-          </>
-        ) : null}
-        {recovery.access === "signInRequired" ? (
-          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
-        ) : null}
-        {recovery.unassigned ? (
-          <>
-            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void act("unassigned");
-              }}
-              variant="outline"
-            >
-              {t("recoveryOpenUnassigned")}
-            </Button>
-          </>
-        ) : null}
-        {recovery.pending ? (
-          <>
-            <p className="text-muted-foreground">{t("recoveryPending")}</p>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void act("retry");
-              }}
-              variant="outline"
-            >
-              {t("tryAgain")}
-            </Button>
-          </>
-        ) : null}
-        {error ? (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </SettingsSectionGroup>
+    <SettingsSection title={t("recoveryTitle")}>
+      <SettingsPanel inset="flush">
+        <div className="space-y-3 px-4 py-3 text-sm">
+          {recovery.edits.length ? (
+            <>
+              <p className="text-muted-foreground">{t("recoveryBody")}</p>
+              <ul className="space-y-1">
+                {recovery.edits.map((edit) => (
+                  <li key={edit.id} className="wrap-break-word">
+                    <BidiText>{edit.fileName}</BidiText>
+                    {edit.status === "pending"
+                      ? ` (${t("recoveryFilePending")})`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void act("account");
+                }}
+                variant="outline"
+              >
+                {t("recoveryOpenFolder")}
+              </Button>
+            </>
+          ) : null}
+          {recovery.access === "signInRequired" ? (
+            <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+          ) : null}
+          {recovery.unassigned ? (
+            <>
+              <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void act("unassigned");
+                }}
+                variant="outline"
+              >
+                {t("recoveryOpenUnassigned")}
+              </Button>
+            </>
+          ) : null}
+          {recovery.pending ? (
+            <>
+              <p className="text-muted-foreground">{t("recoveryPending")}</p>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void act("retry");
+                }}
+                variant="outline"
+              >
+                {t("tryAgain")}
+              </Button>
+            </>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </SettingsPanel>
+    </SettingsSection>
   );
 };
 
@@ -401,10 +359,10 @@ const GeneralPane = ({
   return (
     <>
       <SettingsPageHeader title={t("pages.general")} />
-      <SettingsGroup title={t("account")}>
+      <SettingsSection title={t("account")}>
         <AccountRow accountState={accountState} onAction={onAccountAction} />
-      </SettingsGroup>
-      <SettingsGroup title={t("app")}>
+      </SettingsSection>
+      <SettingsSection title={t("app")}>
         <SettingsRow id="desktop-language-row" title={t("language")}>
           <Combobox<SupportedLanguage>
             autoHighlight
@@ -450,10 +408,10 @@ const GeneralPane = ({
           />
         </li>
         <SetupGuideSetting />
-      </SettingsGroup>
-      <SettingsGroup title={t("privacy")}>
+      </SettingsSection>
+      <SettingsSection title={t("privacy")}>
         <TelemetryToggle />
-      </SettingsGroup>
+      </SettingsSection>
     </>
   );
 };
@@ -582,9 +540,11 @@ const ClipboardPane = () => {
   return (
     <>
       <SettingsPageHeader title={t("pages.clipboard")} />
-      <SettingsSectionGroup>
-        <ShortcutSetting />
-      </SettingsSectionGroup>
+      <SettingsSection>
+        <SettingsPanel inset="flush">
+          <ShortcutSetting />
+        </SettingsPanel>
+      </SettingsSection>
     </>
   );
 };
@@ -608,23 +568,23 @@ const AgentsPane = ({
           focus={agentSettingsFocus}
           onFocusShown={onAgentSettingsShown}
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tSubscriptions("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tSubscriptions("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
         <LocalSkillFoldersSection
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tLocalSkills("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tLocalSkills("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
         <LocalLinkedFoldersSection
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tLinkedFolders("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tLinkedFolders("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
         <KeepAwakeSection />
@@ -642,9 +602,9 @@ const SigningPane = () => {
       <SettingsSections>
         <SigningDriverSection
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tSigningDriver("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tSigningDriver("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
       </SettingsSections>
@@ -677,22 +637,31 @@ const NotificationsPane = ({
   return (
     <>
       <SettingsPageHeader title={t("pages.notifications")} />
-      <SettingsGroup>
-        {items.map((item) => (
-          <li key={item.key}>
-            <NotificationRow
-              checked={notificationPreferences[item.key]}
+      <SettingsSection>
+        {items.map((item) => {
+          const ids = settingsRowIds(`notification-${item.key}`);
+          return (
+            <SettingsRow
               description={item.description}
               disabled={!ready}
-              label={item.label}
-              onCheckedChange={(checked) => {
-                onPreferenceChange(item.key, checked);
-              }}
-              preferenceKey={item.key}
-            />
-          </li>
-        ))}
-      </SettingsGroup>
+              id={`notification-${item.key}`}
+              interaction="label"
+              key={item.key}
+              title={item.label}
+            >
+              <Checkbox
+                aria-describedby={ids.description}
+                aria-labelledby={ids.label}
+                checked={notificationPreferences[item.key]}
+                disabled={!ready}
+                onCheckedChange={(checked) => {
+                  onPreferenceChange(item.key, checked);
+                }}
+              />
+            </SettingsRow>
+          );
+        })}
+      </SettingsSection>
     </>
   );
 };
@@ -707,13 +676,15 @@ const PermissionsPane = () => {
         description={t("permissionsDescription")}
         title={t("pages.permissions")}
       />
-      <SettingsSectionGroup>
-        <PermissionsSection
-          only={PERMISSIONS_PAGE_ROWS}
-          window={DESKTOP_TELEMETRY_WINDOWS.main}
-        />
-      </SettingsSectionGroup>
-      <SettingsGroup title={t("neverRequested")}>
+      <SettingsSection>
+        <SettingsPanel inset="flush">
+          <PermissionsSection
+            only={PERMISSIONS_PAGE_ROWS}
+            window={DESKTOP_TELEMETRY_WINDOWS.main}
+          />
+        </SettingsPanel>
+      </SettingsSection>
+      <SettingsSection title={t("neverRequested")}>
         <li className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 py-3">
           {NEVER_REQUESTED[DESKTOP_PLATFORM].map((claim) => (
             <span
@@ -725,7 +696,7 @@ const PermissionsPane = () => {
             </span>
           ))}
         </li>
-      </SettingsGroup>
+      </SettingsSection>
     </>
   );
 };
@@ -755,7 +726,7 @@ const AboutPane = ({
   return (
     <>
       <SettingsPageHeader title={t("pages.about")} />
-      <SettingsGroup>
+      <SettingsSection>
         <AppVersionRow
           onEmailSupport={onEmailSupport}
           supportEmail={SUPPORT_EMAIL}
@@ -774,9 +745,9 @@ const AboutPane = ({
             </span>
           </SettingsRow>
         ) : null}
-      </SettingsGroup>
+      </SettingsSection>
 
-      <SettingsGroup title={t("support")}>
+      <SettingsSection title={t("support")}>
         <SettingsRow id="about-support-email" title={SUPPORT_EMAIL}>
           <Button onClick={onEmailSupport} variant="outline">
             {t("email")}
@@ -798,7 +769,7 @@ const AboutPane = ({
             {t("revealAppData")}
           </Button>
         </li>
-      </SettingsGroup>
+      </SettingsSection>
     </>
   );
 };
