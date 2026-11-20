@@ -44,6 +44,14 @@ export const seedRedactionTombstoneScenario = async (
   );
   await database.execute(sql`DELETE FROM case_law_corpus_upload_intents WHERE decision_id IN
     (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
+  // Neither table references the decision, so deleting the source below
+  // leaves a measured run's desired states and signal changes behind; the
+  // next population reuses the same decision ids and would update them.
+  await database.execute(sql`DELETE FROM corpus_index_projection_states
+    WHERE family = 'case_law' AND entity_id IN
+      (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
+  await database.execute(sql`DELETE FROM case_law_ranking_signal_changes WHERE decision_id IN
+    (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
   await database.execute(
     sql`DELETE FROM case_law_sources WHERE id = ${SOURCE_ID}`,
   );
@@ -138,6 +146,23 @@ export const seedRedactionTombstoneScenario = async (
         },
       });
   });
+  // Every population starts from the same unprocessed state.
+  const leftovers = v.parse(
+    v.object({ states: v.number(), signals: v.number() }),
+    executedRows(
+      await database.execute(sql`SELECT
+        (SELECT count(*)::int FROM corpus_index_projection_states
+          WHERE family = 'case_law' AND entity_id IN
+            (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})) AS states,
+        (SELECT count(*)::int FROM case_law_ranking_signal_changes WHERE decision_id IN
+          (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})) AS signals`),
+    ).at(0),
+  );
+  if (leftovers.states !== 0 || leftovers.signals !== 0) {
+    panic(
+      `Redaction measurement seed kept ${String(leftovers.states)} projection states and ${String(leftovers.signals)} signal changes`,
+    );
+  }
   for (const table of [
     "case_law_decisions",
     "case_law_index_jobs",
