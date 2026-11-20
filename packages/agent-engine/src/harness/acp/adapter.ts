@@ -196,8 +196,17 @@ const connect = async ({
     });
   }
   const client = started.value;
+  if (tempDir !== null && !recordTempDirOwner(tempDir, client.pid)) {
+    // Without its owner on record a later sweep could remove the folder
+    // under the running process.
+    await client.kill();
+    removeTempDir(tempDir);
+    return Result.err({
+      reason: "harness_unavailable",
+      message: "The agent's temporary folder cannot be written.",
+    });
+  }
   if (tempDir !== null) {
-    recordTempDirOwner(tempDir, client.pid);
     detached(
       (async () => {
         await client.exited;
@@ -345,7 +354,10 @@ const selectValues = (option: AcpConfigOption) =>
 const configOf = (state: AcpSessionState, category: string) =>
   state?.configOptions?.find((option) => option.category === category) ?? null;
 
-/** The models a session offers: its model list, else its model setting. */
+/**
+ * The models a session offers: its model setting, which a turn sets, else
+ * its older model list.
+ */
 const sessionModels = (
   state: AcpSessionState,
   agent: AcpInitializeResponse,
@@ -355,6 +367,16 @@ const sessionModels = (
   const efforts = knownReasoningEfforts(
     thought === null ? [] : selectValues(thought).map(({ value }) => value),
   );
+  const setting = configOf(state, "model");
+  if (setting !== null) {
+    return selectValues(setting).map((model) => ({
+      id: model.value,
+      displayName: model.name,
+      isDefault: model.value === setting.currentValue,
+      reasoningEfforts: model.value === setting.currentValue ? efforts : [],
+      inputModalities,
+    }));
+  }
   const listed = state?.models;
   if (listed !== null && listed !== undefined) {
     return listed.availableModels.map((model) => ({
@@ -366,17 +388,7 @@ const sessionModels = (
       inputModalities,
     }));
   }
-  const setting = configOf(state, "model");
-  if (setting === null) {
-    return [];
-  }
-  return selectValues(setting).map((model) => ({
-    id: model.value,
-    displayName: model.name,
-    isDefault: model.value === setting.currentValue,
-    reasoningEfforts: model.value === setting.currentValue ? efforts : [],
-    inputModalities,
-  }));
+  return [];
 };
 
 /** A probe session's folder, made and removed by the probe. */
@@ -721,7 +733,11 @@ const configure = async (
 ): Promise<Result<void, HarnessStartError>> => {
   const { sessionId } = opened;
   const session = { state: opened.state };
-  const setOption = async (configId: string, value: string) => {
+  /** Whether the agent reported its settings after the change. */
+  const setOption = async (
+    configId: string,
+    value: string,
+  ): Promise<Result<boolean, AcpRequestError>> => {
     const set = await client.request("session/set_config_option", {
       sessionId,
       configId,
@@ -744,48 +760,74 @@ const configure = async (
           ...session.state,
           configOptions: state.output.configOptions,
         };
+        return Result.ok(true);
       }
+      return Result.ok(false);
     }
     return set;
   };
 
-  const { approvals } = input.policy;
-  const modeId =
-    approvals === "full_auto"
-      ? undefined
-      : options.definition.sessionModes[approvals];
-  const modeSetting = configOf(session.state, "mode");
-  const modes = session.state?.modes ?? null;
-  if (modeId !== undefined && modeSetting !== null) {
-    if (
-      modeSetting.currentValue !== modeId &&
-      selectValues(modeSetting).some(({ value }) => value === modeId)
+  const applyMode = async (): Promise<Result<void, HarnessStartError>> => {
+    const { approvals } = input.policy;
+    const modeId =
+      approvals === "full_auto"
+        ? undefined
+        : options.definition.sessionModes[approvals];
+    const modeSetting = configOf(session.state, "mode");
+    const modes = session.state?.modes ?? null;
+    if (modeId !== undefined && modeSetting !== null) {
+      if (
+        modeSetting.currentValue !== modeId &&
+        selectValues(modeSetting).some(({ value }) => value === modeId)
+      ) {
+        const set = await setOption(modeSetting.id, modeId);
+        if (Result.isError(set)) {
+          return rejectedStart(set.error.message);
+        }
+      }
+    } else if (
+      modeId !== undefined &&
+      modes !== null &&
+      modes.currentModeId !== modeId &&
+      modes.availableModes.some(({ id }) => id === modeId)
     ) {
-      const set = await setOption(modeSetting.id, modeId);
+      const set = await client.request("session/set_mode", {
+        sessionId,
+        modeId,
+      });
       if (Result.isError(set)) {
         return rejectedStart(set.error.message);
       }
     }
-  } else if (
-    modeId !== undefined &&
-    modes !== null &&
-    modes.currentModeId !== modeId &&
-    modes.availableModes.some(({ id }) => id === modeId)
-  ) {
-    const set = await client.request("session/set_mode", { sessionId, modeId });
-    if (Result.isError(set)) {
-      return rejectedStart(set.error.message);
-    }
+    return Result.ok();
+  };
+  const moded = await applyMode();
+  if (Result.isError(moded)) {
+    return moded;
   }
 
   const modelSetting = configOf(session.state, "model");
   const listed = session.state?.models ?? null;
+  const offered =
+    modelSetting === null
+      ? (listed?.availableModels.some(
+          ({ modelId }) => modelId === input.model,
+        ) ?? true)
+      : selectValues(modelSetting).some(({ value }) => value === input.model);
+  if (!offered) {
+    return rejectedStart(
+      `${options.definition.displayName} does not offer this model.`,
+    );
+  }
+  /** Whether the model changed without the agent saying what else did. */
+  const unreported = { settings: false };
   if (modelSetting !== null) {
     if (modelSetting.currentValue !== input.model) {
       const set = await setOption(modelSetting.id, input.model);
       if (Result.isError(set)) {
         return rejectedStart(set.error.message);
       }
+      unreported.settings = !set.value;
     }
   } else if (listed !== null && listed.currentModelId !== input.model) {
     const set = await client.request("session/set_model", {
@@ -795,13 +837,16 @@ const configure = async (
     if (Result.isError(set)) {
       return rejectedStart(set.error.message);
     }
+    unreported.settings = true;
   }
 
   const thought = configOf(session.state, "thought_level");
   if (
     input.reasoningEffort !== null &&
     thought !== null &&
-    thought.currentValue !== input.reasoningEffort &&
+    // After a model change the agent did not report on, the effort it had
+    // may be gone: it is set whatever the old value said.
+    (unreported.settings || thought.currentValue !== input.reasoningEffort) &&
     selectValues(thought).some(({ value }) => value === input.reasoningEffort)
   ) {
     const set = await setOption(thought.id, input.reasoningEffort);

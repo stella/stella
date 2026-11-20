@@ -192,6 +192,8 @@ const COMMAND_KEYS = [
   "CommandLine",
   "command_line",
 ];
+/** Input fields that list several files. */
+const PATH_LIST_KEYS = ["paths", "files", "file_paths", "filePaths"];
 const PATH_KEYS = ["path", "file_path", "filePath", "abs_path", "AbsolutePath"];
 const PATTERN_KEYS = ["pattern", "query", "Query", "regex", "glob"];
 const URL_KEYS = ["url", "Url", "uri"];
@@ -201,11 +203,19 @@ const unquoted = (title: string) => title.replace(/^`([^`]*)`$/u, "$1").trim();
 
 /** Every path a call names: its locations and the path its input gives. */
 export const toolCallPaths = (call: AcpToolCallState): string[] => {
-  const input = stringField(call.rawInput, PATH_KEYS);
+  const named = isRecord(call.rawInput)
+    ? [...PATH_KEYS, ...PATH_LIST_KEYS].flatMap((key) => {
+        const field = isRecord(call.rawInput) ? call.rawInput[key] : undefined;
+        if (typeof field === "string") {
+          return [field];
+        }
+        return Array.isArray(field)
+          ? field.filter((entry) => typeof entry === "string")
+          : [];
+      })
+    : [];
   const located = call.locations.map((location) => location.path);
-  return input === null || located.includes(input)
-    ? located
-    : [...located, input];
+  return [...new Set([...located, ...named])];
 };
 
 const firstPath = (call: AcpToolCallState): string | null =>

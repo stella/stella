@@ -80,21 +80,34 @@ const existingRealPath = (file: string): string | null => {
   return Result.isOk(real) ? real.value : null;
 };
 
-const realPathOf = (file: string): string => {
-  const rest: string[] = [];
-  let current = path.resolve(file);
-  for (;;) {
-    const real = existingRealPath(current);
-    if (real !== null) {
-      return path.join(real, ...rest.toReversed());
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return path.resolve(file);
-    }
-    rest.push(path.basename(current));
-    current = parent;
+const realPathOf = (file: string): string | null => {
+  if (!path.isAbsolute(file)) {
+    return null;
   }
+  // Each part is taken in the order the file system walks it: a link is
+  // followed before a `..` after it climbs out of where the link leads.
+  const parts = file.split(/[\\/]+/u).filter((part) => part !== "");
+  let current =
+    existingRealPath(path.parse(file).root) ?? path.parse(file).root;
+  let missing = false;
+  for (const part of parts) {
+    if (part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      // Past a part that does not exist, where `..` leads is unknown.
+      if (missing) {
+        return null;
+      }
+      current = path.dirname(current);
+      continue;
+    }
+    const next = path.join(current, part);
+    const real: string | null = missing ? null : existingRealPath(next);
+    missing = real === null;
+    current = real ?? next;
+  }
+  return current;
 };
 
 /** What stella does with a permission request before the member sees it. */
@@ -125,13 +138,21 @@ export const permissionDisposition = ({
 }): PermissionDisposition => {
   // Where each path really is, through any link on the way, so a link in
   // the folder to somewhere else is judged by where it leads.
-  const workspace = realPathOf(workspaceDir);
-  const unreadable = unreadablePaths.map(realPathOf);
+  const workspace = realPathOf(workspaceDir) ?? workspaceDir;
+  const unreadable = unreadablePaths.map((root) => realPathOf(root) ?? root);
   const resolved = toolCallPaths(call).map((file) =>
-    realPathOf(path.isAbsolute(file) ? file : path.resolve(workspaceDir, file)),
+    // Joined as written: resolving `..` by name first could skip a link.
+    realPathOf(
+      path.isAbsolute(file) ? file : `${workspaceDir}${path.sep}${file}`,
+    ),
   );
+  // A path stella cannot follow is never allowed without asking.
+  if (resolved.includes(null)) {
+    return "ask";
+  }
+  const files = resolved.filter((file) => file !== null);
   if (
-    resolved.some((file) =>
+    files.some((file) =>
       unreadable.some(
         (root) => isPathInside(root, file) && !isPathInside(workspace, file),
       ),
@@ -139,13 +160,18 @@ export const permissionDisposition = ({
   ) {
     return "deny";
   }
-  // An MCP tool's own kind is the agent's guess; the member decides.
-  if (mcpToolOfTitle(call.title, mcpNames) !== null) {
+  // An MCP tool's own kind is the agent's guess; the member decides. A
+  // title that names a registered server at all is taken as one.
+  if (
+    mcpToolOfTitle(call.title, mcpNames) !== null ||
+    [mcpNames.stella, ...mcpNames.others].some((server) =>
+      call.title.includes(server),
+    )
+  ) {
     return "ask";
   }
   const inside =
-    resolved.length > 0 &&
-    resolved.every((file) => isPathInside(workspace, file));
+    files.length > 0 && files.every((file) => isPathInside(workspace, file));
   const kind = call.kind ?? "other";
   if (READ_KINDS.has(kind) && inside) {
     return "allow";
@@ -153,7 +179,7 @@ export const permissionDisposition = ({
   if (WRITE_KINDS.has(kind) && inside) {
     return policy.approvals === "auto" ? "allow" : "ask";
   }
-  if (kind === "fetch" && resolved.length === 0) {
+  if (kind === "fetch" && files.length === 0) {
     return policy.approvals === "auto" ? "allow" : "ask";
   }
   return "ask";
@@ -372,6 +398,9 @@ export class AcpTurnSession {
     const client = this.lifecycle.client;
     if (
       !this.steering ||
+      // One handover at a time: a message sent while another is still being
+      // handed over waits for the next turn.
+      this.steeringInputs.size > 0 ||
       client === null ||
       this.sessionId === null ||
       this.lifecycle.interrupting
