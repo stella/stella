@@ -5,9 +5,18 @@ import { fileURLToPath } from "node:url";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createUserFileThumbnailKey,
+  getFileExtension,
   storedKeyForOrganization,
   storedUserFileKey,
 } from "@/api/lib/file-key";
+
+test.each([
+  "application/pkcs7-mime",
+  "application/x-pkcs7-mime",
+  "application/octet-stream",
+])("keeps existing signed document storage keys for %s", (mimeType) => {
+  expect(getFileExtension(mimeType)).toBe("bin");
+});
 
 describe("stored object organization keys", () => {
   const organizationId = toSafeId<"organization">("org_1");

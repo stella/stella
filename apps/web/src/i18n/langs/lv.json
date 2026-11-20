@@ -6300,6 +6300,14 @@
     "reconnectRequired": "Pierakstīšanās beidzās",
     "title": "SharePoint un OneDrive"
   },
+  "signedFile": {
+    "layer": "Parakstu slānis {number, number}",
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "unknownSigner": "Nezināms parakstītājs",
+    "unreadable": "Parakstīto failu neizdevās nolasīt.",
+    "unverified": "Paraksti nav pārbaudīti."
+  },
   "skillHistory": {
     "acceptStale": "Pieņemt un pārrakstīt jaunākos labojumus",
     "backToCurrent": "Atpakaļ uz pašreizējo versiju",

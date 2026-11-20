@@ -6300,6 +6300,14 @@
     "reconnectRequired": "Anmeldung abgelaufen",
     "title": "SharePoint und OneDrive"
   },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
+  },
   "skillHistory": {
     "acceptStale": "Annehmen und neuere Änderungen überschreiben",
     "backToCurrent": "Zurück zur aktuellen Fassung",

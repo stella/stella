@@ -486,7 +486,8 @@ impl LocalHarnesses for ManagedHarnesses {
     let managed = match harness {
       Harness::Codex => ManagedHarness::Codex,
       Harness::ClaudeCode => ManagedHarness::ClaudeCode,
-      Harness::Opencode => return None,
+      // Not installed by this desktop yet.
+      Harness::Opencode | Harness::Antigravity => return None,
     };
     let installation = self.app.try_state::<HarnessInstallation>()?;
     let lease = installation.acquire(managed).ok()?;

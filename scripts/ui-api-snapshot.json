@@ -2180,6 +2180,7 @@
     ],
     "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
+      "cades",
       "csv",
       "dataBox",
       "excel",
