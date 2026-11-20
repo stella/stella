@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "تم رفض الدعوة",
       "declinedDescription": "لم تنضم إلى هذه المؤسسة.",
-      "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail} بصفة {role}.",
+      "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail}{role, select, owner { بصفة مالك} admin { بصفة مسؤول} member { بصفة عضو} intern { بصفة متدرب} external { بصفة متعاون خارجي} other {}}.",
       "goToWorkspaces": "الانتقال إلى الملفات القانونية",
       "title": "دعوة المؤسسة",
       "verifyEmailHint": "لتأكيد {email}، سجّل الخروج، ثم سجّل الدخول برمز لمرة واحدة سنرسله إلى هذا العنوان.",

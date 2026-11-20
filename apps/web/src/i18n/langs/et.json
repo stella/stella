@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Kutse tagasi lükatud",
       "declinedDescription": "Te ei liitunud selle organisatsiooniga.",
-      "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName} liikmeks rolliga {role}.",
+      "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName}{role, select, owner { omanikuks} admin { administraatoriks} member { liikmeks} intern { praktikandiks} external { väliseks koostööpartneriks} other {}}.",
       "goToWorkspaces": "Mine toimikutesse",
       "title": "Kutse organisatsiooni",
       "verifyEmailHint": "Aadressi {email} kinnitamiseks logige välja ja logige sisse ühekordse koodiga, mille sellele aadressile saadame.",
