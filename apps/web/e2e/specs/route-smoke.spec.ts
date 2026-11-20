@@ -541,6 +541,44 @@ test("records loading landmarks in English and Czech", async ({
   }
 });
 
+test("records inbox and contact loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for three routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "contacts",
+  });
+  await testInfo.attach("contacts-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+  for (const sample of measurement.evidence) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      // The inbox's body is drawn from the layout this browser keeps, which
+      // the server's paint cannot read: it is absent there, never elsewhere.
+      if (sample.route === "/inbox" && landmark === "body") {
+        expect(sample.server[landmark]).toBeNull();
+        continue;
+      }
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject({ top: loaded?.top, left: loaded?.left });
+    }
+  }
+});
+
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
   // A write run may be adding the missing route entry; check the committed

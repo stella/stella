@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Ebenfalls konsultiert ({count, number})"
+      "moreConsulted": "+{count, number} weitere geprüft"
     },
     "sourcePlaceholder": "Chat über {title}",
     "sourcePlaceholderAction": "Chat über",
@@ -4713,6 +4713,10 @@
       "dropPack": ".zip/.skill oder SKILL.md hier ablegen, um den Skill zu importieren",
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
+      "exportAsSkill": "Als .skill exportieren",
+      "exportAsZip": "Als .zip exportieren",
+      "exportFailed": "Der Skill konnte nicht exportiert werden",
+      "exportSkill": "Skill exportieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",

@@ -44,6 +44,7 @@
 @source "../../../ui/src/components/directional-icon.tsx";
 @source "../../../ui/src/components/document-identity-badge.logic.ts";
 @source "../../../ui/src/components/document-identity-badge.tsx";
+@source "../../../ui/src/components/field-classes.ts";
 @source "../../../ui/src/components/field.tsx";
 @source "../../../ui/src/components/file-input.tsx";
 @source "../../../ui/src/components/form.tsx";

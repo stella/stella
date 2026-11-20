@@ -1,17 +1,14 @@
-import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import "@/features/inbox/signal-inspector-registration";
-import {
-  EntityViews,
-  EntityViewsPending,
-} from "@/components/entity-views/entity-views";
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityViewsOptions } from "@/lib/workspaces/queries/entity-views";
 import { routePresentation } from "@/routes/-route-presentation";
 
-const protectedRouteApi = getRouteApi("/_protected");
+import { InboxPage } from "./-inbox.page";
+import { InboxPending } from "./-inbox.pending";
 
 export const Route = createFileRoute("/_protected/inbox/")({
   staticData: {
@@ -33,19 +30,6 @@ export const Route = createFileRoute("/_protected/inbox/")({
     );
   },
   head: () => ({ meta: [{ title: pageTitle("navigation.inbox") }] }),
-  pendingComponent: EntityViewsPending,
+  pendingComponent: InboxPending,
   component: InboxPage,
 });
-
-function InboxPage() {
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
-  return (
-    <EntityViews
-      key={organizationId}
-      organizationId={organizationId}
-      scope={{ type: "organization" }}
-    />
-  );
-}

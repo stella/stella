@@ -47,7 +47,7 @@ export const SellerProfilesCardShell = ({
 );
 
 export const BillingSettingsPending = framePendingView(() => (
-  <SettingsPagePending>
+  <SettingsPagePending area="organization">
     <BillingSettingsShell>
       <SellerProfilesCardShell
         action={

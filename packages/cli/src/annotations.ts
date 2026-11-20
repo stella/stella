@@ -25,6 +25,8 @@ export const RESERVED_FLAGS: ReadonlySet<string> = new Set([
   "--verbose",
   "--file",
   "--dry-run",
+  "--save",
+  "-o",
   "--yes",
   "-y",
   "--all",

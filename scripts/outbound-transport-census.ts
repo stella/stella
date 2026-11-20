@@ -1096,6 +1096,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@modelcontextprotocol/client"],
   },
   {
+    path: "packages/cli/src/save-download.ts",
+    class: "package-owned-client",
+    reason:
+      "Standalone CLI saves a server-issued download URL to the path the caller named, under its download deadline.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/cli/src/upload-document.ts",
     class: "package-owned-client",
     reason:

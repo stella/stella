@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Taip pat peržiūrėta ({count, number})"
+      "moreConsulted": "{count, plural, one {+# dar peržiūrėtas} few {+# dar peržiūrėti} many {+# dar peržiūrėto} other {+# dar peržiūrėtų}}"
     },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
@@ -4713,6 +4713,10 @@
       "dropPack": "Vilkite .zip/.skill arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
+      "exportAsSkill": "Eksportuoti kaip .skill",
+      "exportAsZip": "Eksportuoti kaip .zip",
+      "exportFailed": "Nepavyko eksportuoti įgūdžio",
+      "exportSkill": "Eksportuoti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
       "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",

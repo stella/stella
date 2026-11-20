@@ -60,7 +60,7 @@ export const VatRatesCardShell = ({
 );
 
 export const VatRateSettingsPending = framePendingView(() => (
-  <SettingsPagePending>
+  <SettingsPagePending area="organization">
     <VatRateSettingsShell>
       <VatRatesCardShell
         actions={

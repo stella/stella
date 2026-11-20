@@ -264,6 +264,41 @@ export const originalColumns = (original: SkillResourceOriginal) => ({
 });
 
 /**
+ * A row's original, from its four original columns as selected: absent when
+ * the file was only ever text. Every write sets and clears the columns
+ * together, so a partial set is a broken invariant.
+ */
+export const originalFromColumns = ({
+  mediaType,
+  s3Key,
+  sha256,
+  sizeBytes,
+}: {
+  mediaType: string | null;
+  s3Key: string | null;
+  sha256: string | null;
+  sizeBytes: number | null;
+}): SkillResourceOriginal | undefined => {
+  if (
+    mediaType === null &&
+    s3Key === null &&
+    sha256 === null &&
+    sizeBytes === null
+  ) {
+    return undefined;
+  }
+  if (
+    mediaType === null ||
+    s3Key === null ||
+    sha256 === null ||
+    sizeBytes === null
+  ) {
+    return panic("A skill file's original columns are set together");
+  }
+  return { mediaType, s3Key, sha256, sizeBytes };
+};
+
+/**
  * Every original a skill's files keep, by file path, read in the caller's
  * transaction (so under its row security and with the rest of its read).
  * Files that were only ever text are absent.
@@ -288,16 +323,12 @@ export const readSkillResourceOriginals = async (
       ),
     );
   const originals = new Map<string, SkillResourceOriginal>();
-  for (const { mediaType, path, s3Key, sha256, sizeBytes } of rows) {
-    if (
-      mediaType === null ||
-      s3Key === null ||
-      sha256 === null ||
-      sizeBytes === null
-    ) {
+  for (const { path, ...columns } of rows) {
+    const original = originalFromColumns(columns);
+    if (original === undefined) {
       return panic("A skill file's original columns are set together");
     }
-    originals.set(path, { mediaType, s3Key, sha256, sizeBytes });
+    originals.set(path, original);
   }
   return originals;
 };

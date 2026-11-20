@@ -121,7 +121,7 @@ const CONNECTION_GROUPS_PENDING = [
 })[];
 
 const ConnectionsPendingView = () => (
-  <SettingsPagePending>
+  <SettingsPagePending area="account">
     <ConnectionsPageShell
       search={
         <InputFace icon={<SearchIcon />}>

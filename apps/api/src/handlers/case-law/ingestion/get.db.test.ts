@@ -1,7 +1,12 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import {
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -411,4 +416,51 @@ test("latest-event and reconciliation reads use their per-source indexes", async
   expect(reconciliationPlan).toContain(
     "Index Only Scan using case_law_removal_items_due_idx",
   );
+});
+
+test("a paused cycle exposes its typed reason without becoming a failure", async () => {
+  const id = createSafeId<"caseLawIngestionEvent">();
+  const values = {
+    id,
+    sourceId: quietId,
+    status: CYCLE_OUTCOME.PAUSED,
+    pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+    durationMs: 10,
+    startedAt: FIXED_NOW,
+    finishedAt: FIXED_NOW,
+  } satisfies typeof caseLawIngestionEvents.$inferInsert;
+  try {
+    await db.insert(caseLawIngestionEvents).values(values);
+    const status = await readStatus();
+    expect(
+      status.sources.find((source) => source.name === "quiet source")
+        ?.lastEvent,
+    ).toMatchObject({
+      status: CYCLE_OUTCOME.PAUSED,
+      pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+      failed: false,
+    });
+    const missingReason = await Result.tryPromise(
+      async () =>
+        await db.insert(caseLawIngestionEvents).values({
+          ...values,
+          id: createSafeId<"caseLawIngestionEvent">(),
+          pauseReason: null,
+        }),
+    );
+    expect(Result.isError(missingReason)).toBe(true);
+    const spuriousReason = await Result.tryPromise(
+      async () =>
+        await db.insert(caseLawIngestionEvents).values({
+          ...values,
+          id: createSafeId<"caseLawIngestionEvent">(),
+          status: CYCLE_OUTCOME.COMPLETED,
+        }),
+    );
+    expect(Result.isError(spuriousReason)).toBe(true);
+  } finally {
+    await db
+      .delete(caseLawIngestionEvents)
+      .where(eq(caseLawIngestionEvents.id, id));
+  }
 });
