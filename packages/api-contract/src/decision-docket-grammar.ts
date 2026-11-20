@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] Optional zero senate spellings and their lookup policy affect only CZE; POL acceptance and parsed values are unchanged.
 // parser-output-unchanged: [pl-uokik] Five-digit Czech sheet numbers and sheet-neutral Czech canonical keys change only the CZE grammar; this adapter reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] BRA adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] POL.parse is used only as a null check; filingYear is not projected, and the explicit whitespace class equals ECMAScript whitespace.
