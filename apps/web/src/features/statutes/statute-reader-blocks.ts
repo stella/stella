@@ -74,13 +74,15 @@ export const statuteLandingAnchorIds = (
     citedAnchorIds?: readonly string[] | undefined;
   },
 ): string[] => {
-  const resolve = (requested: string) =>
-    resolveDocumentAnchor(statute, requested)?.anchorId ?? [];
+  const resolve = (requested: string): string[] => {
+    const block = resolveDocumentAnchor(statute, requested);
+    return block === null ? [] : [block.anchorId];
+  };
   const cited = [...new Set(citedAnchorIds.flatMap(resolve))];
   if (cited.length > 0) {
     return cited;
   }
-  return anchorId === undefined ? [] : [resolve(anchorId)].flat();
+  return anchorId === undefined ? [] : resolve(anchorId);
 };
 
 /**

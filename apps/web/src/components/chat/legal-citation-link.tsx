@@ -14,6 +14,7 @@ import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import type { StatuteLink } from "@/components/chat/chat-app-link.logic";
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import {
   ChatDecisionCitation,
@@ -96,24 +97,14 @@ const InteractiveLegalCitation = ({
     event.preventDefault();
     const url = new URL(citation.url);
     const link = classifyChatHttpLink(url, appOrigins);
-    // The words the reader clicked, which may name a narrower passage than
-    // the address: `§ 240 odst. 3` on a link to § 240.
-    const label = event.currentTarget.textContent ?? "";
     switch (link.type) {
       case "statute":
         detached(
-          (async () => {
-            const { labelledStatuteAnchorIds } =
-              await import("@/components/chat/statute-link-label.logic");
-            await openStatute({
-              ...link.link,
-              citedAnchorIds: labelledStatuteAnchorIds({
-                anchor: link.link.anchor,
-                country: link.link.params.country,
-                label,
-              }),
-            });
-          })(),
+          openLabelledStatute({
+            label: event.currentTarget.textContent,
+            link: link.link,
+            openStatute,
+          }),
           "legal-citation.open-statute",
         );
         return undefined;
@@ -129,6 +120,35 @@ const InteractiveLegalCitation = ({
     }
   };
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
+};
+
+type OpenLabelledStatuteOptions = {
+  /** The words the reader clicked: `§ 240 odst. 3` on a link to § 240. */
+  label: string;
+  link: StatuteLink;
+  openStatute: ReturnType<typeof useOpenStatuteLink>;
+};
+
+/**
+ * Opens the act, marking the subdivisions the citation's own words name
+ * inside the provision its address lands on. The grammars that read them load
+ * on click, not with every answer that renders a citation.
+ */
+const openLabelledStatute = async ({
+  label,
+  link,
+  openStatute,
+}: OpenLabelledStatuteOptions) => {
+  const { labelledStatuteAnchorIds } =
+    await import("@/components/chat/statute-link-label.logic");
+  await openStatute({
+    ...link,
+    citedAnchorIds: labelledStatuteAnchorIds({
+      anchor: link.anchor,
+      country: link.params.country,
+      label,
+    }),
+  });
 };
 
 /** A source-tray row for a decision with a known id: it keeps its full label,
