@@ -1993,6 +1993,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/mcp-apps/scripts/lib/metafile-path.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
       "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
       "packages/mcp-apps/scripts/style-sources.ts",
