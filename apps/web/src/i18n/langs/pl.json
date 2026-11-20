@@ -6135,7 +6135,7 @@
         "title": "Projekty rozliczeń z AI"
       },
       "dataBoxes": {
-        "description": "Wiadomość wysłana z jednej z tych skrzynek jest zapisywana jako wychodząca, a wysłana do nich jako przychodząca. Każda zmiana ponownie ustala kierunek wiadomości już zapisanych w sprawach, do których masz dostęp.",
+        "description": "Wiadomości wysłane z tych skrzynek są zapisywane jako wychodzące, a wysłane do nich jako przychodzące. Zmiany dotyczą też wiadomości już zapisanych.",
         "invalid": "Identyfikator skrzynki danych ma siedem liter lub cyfr.",
         "remove": "Usuń skrzynkę danych {address}",
         "title": "Skrzynki danych organizacji"
@@ -6168,6 +6168,7 @@
         "title": "Wyodrębnianie pamięci",
         "toggleLabel": "Proponuj wpisy do pamięci z historii czatów w tle"
       },
+      "organizationIdHint": "Stały identyfikator, który nigdy się nie zmienia. Użyj go, kontaktując się z pomocą techniczną lub konfigurując integracje.",
       "pastInvitations": "Poprzednie zaproszenia",
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje",
@@ -6181,11 +6182,12 @@
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
       "slug": {
-        "change": "Zmień identyfikator",
-        "conflict": "Ten identyfikator jest już używany przez inną organizację.",
-        "description": "Wybierz nowy identyfikator lub wygeneruj losowy. Poprzedni identyfikator przestanie działać.",
-        "opaque": "Wygeneruj losowy identyfikator",
-        "title": "Identyfikator organizacji"
+        "change": "Zmień krótką nazwę",
+        "conflict": "Ta krótka nazwa jest już używana przez inną organizację.",
+        "description": "Wybierz nową krótką nazwę lub wygeneruj losową. Poprzednia krótka nazwa przestanie działać.",
+        "hint": "Unikalna krótka nazwa tej organizacji, niezależna od jej nazwy wyświetlanej.",
+        "opaque": "Wygeneruj losową krótką nazwę",
+        "title": "Krótka nazwa organizacji"
       },
       "timePolicy": {
         "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",

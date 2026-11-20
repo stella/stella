@@ -6135,7 +6135,7 @@
         "title": "AI számlázási vázlatok"
       },
       "dataBoxes": {
-        "description": "Az ezek egyikéből küldött üzenet kimenőként, a nekik küldött bejövőként kerül iktatásra. Minden módosítás újra meghatározza a már iktatott üzenetek irányát azokban az ügyekben, amelyekhez hozzáfér.",
+        "description": "Az ezekből az adatfiókokból küldött üzenetek kimenőként, a nekik küldöttek bejövőként kerülnek iktatásra. A módosítások a már iktatott üzenetekre is vonatkoznak.",
         "invalid": "Az adatfiók-azonosító hét betűből vagy számjegyből áll.",
         "remove": "{address} adatfiók eltávolítása",
         "title": "A szervezet adatfiókjai"
@@ -6168,6 +6168,7 @@
         "title": "Memóriakinyerés",
         "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
       },
+      "organizationIdHint": "Állandó azonosító, amely soha nem változik. Használja, ha az ügyfélszolgálathoz fordul, vagy integrációt állít be.",
       "pastInvitations": "Korábbi meghívók",
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
@@ -6181,11 +6182,12 @@
       "renameTitle": "Szervezet átnevezése",
       "renameTypeToConfirm": "A megerősítéshez írja be az új nevet: {name}",
       "slug": {
-        "change": "Azonosító módosítása",
-        "conflict": "Ezt az azonosítót már egy másik szervezet használja.",
-        "description": "Válasszon új azonosítót, vagy hozzon létre egy véletlenszerűt. A korábbi azonosító nem lesz többé használható.",
-        "opaque": "Véletlenszerű azonosító létrehozása",
-        "title": "Szervezeti azonosító"
+        "change": "Rövid név módosítása",
+        "conflict": "Ezt a rövid nevet már egy másik szervezet használja.",
+        "description": "Válasszon új rövid nevet, vagy hozzon létre egy véletlenszerűt. A korábbi rövid név nem lesz többé használható.",
+        "hint": "A szervezet egyedi rövid neve, amely független a megjelenített nevétől.",
+        "opaque": "Véletlenszerű rövid név létrehozása",
+        "title": "Szervezet rövid neve"
       },
       "timePolicy": {
         "description": "Állítsa be az idő kerekítését, a szerkesztési határidőket és a hónapok zárolását.",
