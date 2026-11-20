@@ -233,6 +233,7 @@ export const SelectionAIActions = ({
             <Button
               aria-describedby={explainReasonId}
               disabled
+              disabledReason={explainRefusal}
               size="sm"
               variant="ghost"
             >
