@@ -5,6 +5,10 @@ import { isUuid } from "@stll/api-contract/safe-id";
 
 import type { ViewSort } from "@/lib/api";
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
+import {
+  entitiesRootKey,
+  entityDetailKey,
+} from "@/lib/workspaces/queries/entity-keys.logic";
 
 /**
  * A find, as it travels to the server. `find.term` is the find bar's submitted
@@ -111,11 +115,8 @@ export const isEntityCollectionQueryKey = (
 };
 
 export const entitiesKeys = {
-  all: (workspaceId: string) => ["entities", workspaceId],
-  detail: (workspaceId: string, entityId: string) => [
-    ...entitiesKeys.all(workspaceId),
-    entityId,
-  ],
+  all: entitiesRootKey,
+  detail: entityDetailKey,
   versions: (workspaceId: string, entityId: string) => [
     ...entitiesKeys.detail(workspaceId, entityId),
     "versions",
