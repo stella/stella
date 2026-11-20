@@ -93,7 +93,6 @@
     "rewriting": "Teksti sõnastatakse ümber…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Oodake praeguse käituse lõppu või valige muud read.",
     "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
     "modelRefused": "Mudel keeldus vastamast",
     "noRowsToRun": "Valikus pole sobivaid ridu.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Laadimine ebaõnnestus.",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
-    "lockedOrReadOnly": "Väli on lukus või kirje on kirjutuskaitstud.",
     "logTime": "Salvesta aeg",
     "low": "Madal",
     "markAsRead": "Märgi loetuks",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Lisa oskus",
     "addToStella": "Lisa rakendusse stella",
+    "alreadyInstalled": "See tööriist on juba paigaldatud.",
     "content": "Sisu",
     "contentUnavailable": "Selle oskuse sisu ei saanud laadida. Vaata seda hoopis GitHubis.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Seda tööriista ei saa teie organisatsioonis paigaldada.",
     "mcpConfigHint": "Klientrakendusest sõltumatud ühenduse andmed. Kleebi need mis tahes MCP-ga ühilduvasse klienti ja lisa oma autentimisandmed.",
     "metaDescription": "Sirvige juriidilise töö oskuste, integratsioonide ja sisseehitatud tööriistade avatud kataloogi.",
+    "missingFromCatalogue": "Seda tööriista ei ole teie organisatsiooni kataloogis.",
     "nativeToolInfo": "See on sisseehitatud stella võimalus. Lubage see oma tööruumis, et seda vestluses kasutada.",
     "notFound": "Tööriista ei leitud.",
     "practiceArea": "Õigusvaldkond",
@@ -5867,7 +5867,6 @@
     "explain": "Selgita",
     "followUp": "Esita täpsustav küsimus",
     "followUpRequired": "Kirjutage saatmiseks täpsustav küsimus.",
-    "generationUnavailable": "Selle kohtulahendi kohta ei saa vastuseid genereerida.",
     "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
     "loading": "Vastuse loomine…",
     "minimise": "Ahenda vastust",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Laadi logo üles",
       "usage": "Kasutus",
+      "usageCheckoutProviderUnavailable": "Makseteenuse pakkuja pole veebimakseks saadaval.",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",
       "usageEmptyTitle": "Kasutusõigus puudub",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Majutatud kasutuse haldust ei saanud avada",
       "usageManuallyManaged": "Käsitsi hallatud",
       "usagePacksDescription": "Ühekordsed ühikupaketid, mis lisatakse praegusele perioodile.",
+      "usagePacksRequireActivePlan": "Ühikupakettide ostmiseks aktiveerige või taastage majutatud pakett.",
       "usagePacksTitle": "Ühikupaketid",
-      "usagePlanCannotPurchase": "Seda paketti ei saa osta.",
       "usagePlanCheckout": "Jätka kassasse",
       "usagePlanCheckoutError": "Kassasse ei saanud siirduda",
       "usagePlanCheckoutUnavailable": "Selle paketi eest ei saa veebis tasuda.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "lk {page}",
         "pageRangeLocator": "lk {start}–{end}"
       },
-      "unlock": "Ava lukk",
-      "versionComparisonUnavailable": "Selle faili versioone ei saa võrrelda."
+      "unlock": "Ava lukk"
     },
     "playbooks": {
       "autoRun": "Automaatne käivitamine",
@@ -8073,6 +8072,7 @@
       "person": "Isik",
       "readingFrom": "AI loeb:",
       "reduceDependencies": "Valige vähem sisendveerge.",
+      "retryReadOnlyRecord": "See kirje on kirjutuskaitstud.",
       "returnsLabel": "Vorming",
       "selectColor": "Valige värv",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Jaga # valikuks} other {Jaga # valikuks}}",
       "suggestWithAI": "Soovita AI-ga",
       "typeChangeWarning": "Olemasolevad andmed kustutatakse ja luuakse salvestamisel uuesti.",
+      "unlockFieldToRetry": "Uuesti proovimiseks avage välja lukustus.",
       "untitledColumn": "Veeru nimi, nt jõustumiskuupäev",
       "waitForWorkflow": "Oodake töövoo lõppu."
     },

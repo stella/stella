@@ -93,7 +93,6 @@
     "rewriting": "Rewriting the text…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Wait for the current run or select other rows.",
     "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
     "modelRefused": "The model refused to answer",
     "noRowsToRun": "There are no eligible rows in this selection.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Couldn't load.",
     "loadMore": "Load more",
     "loading": "Loading",
-    "lockedOrReadOnly": "The field is locked or the record is read-only.",
     "logTime": "Log time",
     "low": "Low",
     "markAsRead": "Mark as read",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Add a skill",
     "addToStella": "Add to stella",
+    "alreadyInstalled": "This tool is already installed.",
     "content": "Content",
     "contentUnavailable": "This skill's content could not be loaded. View it on GitHub instead.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "This tool cannot be installed in your organization.",
     "mcpConfigHint": "Client-agnostic connection details. Paste into any MCP-compatible client and add your own credentials.",
     "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.",
+    "missingFromCatalogue": "This tool is not in your organization’s catalogue.",
     "nativeToolInfo": "This is a built-in stella capability. Enable it from your workspace to use it in chat.",
     "notFound": "Tool not found.",
     "practiceArea": "Practice area",
@@ -5867,7 +5867,6 @@
     "explain": "Explain",
     "followUp": "Ask a follow-up",
     "followUpRequired": "Type a follow-up question to send it.",
-    "generationUnavailable": "Answer generation is unavailable for this decision.",
     "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}",
     "loading": "Generating answer…",
     "minimise": "Minimise answer",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Upload logo",
       "usage": "Usage",
+      "usageCheckoutProviderUnavailable": "The payment provider is unavailable for online checkout.",
       "usageDescription": "Usage limits and entitlement state for this organization",
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organization.",
       "usageEmptyTitle": "No usage entitlement",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Could not open hosted usage management",
       "usageManuallyManaged": "Manually managed",
       "usagePacksDescription": "One-time unit packs added to your current period.",
+      "usagePacksRequireActivePlan": "Start or resume a hosted plan to buy unit packs.",
       "usagePacksTitle": "Unit packs",
-      "usagePlanCannotPurchase": "This plan cannot be purchased.",
       "usagePlanCheckout": "Continue to checkout",
       "usagePlanCheckoutError": "Could not start checkout",
       "usagePlanCheckoutUnavailable": "Online checkout is unavailable for this plan.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "p. {page}",
         "pageRangeLocator": "pp. {start}–{end}"
       },
-      "unlock": "Unlock",
-      "versionComparisonUnavailable": "Version comparison is unavailable for this file."
+      "unlock": "Unlock"
     },
     "playbooks": {
       "autoRun": "Auto run",
@@ -8073,6 +8072,7 @@
       "person": "Person",
       "readingFrom": "AI reads from",
       "reduceDependencies": "Select fewer input columns.",
+      "retryReadOnlyRecord": "This record is read-only.",
       "returnsLabel": "Format",
       "selectColor": "Select color",
       "setPromptPlaceholder": "Set a prompt to extract the information",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Suggest with AI",
       "typeChangeWarning": "Existing data will be cleared and rebuilt on save.",
+      "unlockFieldToRetry": "Unlock this field to retry.",
       "untitledColumn": "Column name, e.g. Effective date",
       "waitForWorkflow": "Wait for the workflow to finish."
     },

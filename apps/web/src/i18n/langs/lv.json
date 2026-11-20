@@ -93,7 +93,6 @@
     "rewriting": "Teksts tiek pārformulēts…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Uzgaidiet pašreizējās izpildes beigas vai atlasiet citas rindas.",
     "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
     "modelRefused": "Modelis atteicās atbildēt",
     "noRowsToRun": "Atlasē nav piemērotu rindu.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Neizdevās ielādēt.",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
-    "lockedOrReadOnly": "Lauks ir bloķēts vai ieraksts ir tikai lasāms.",
     "logTime": "Reģistrēt laiku",
     "low": "Zema",
     "markAsRead": "Atzīmēt kā izlasītu",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Pievienot prasmi",
     "addToStella": "Pievienot stella",
+    "alreadyInstalled": "Šis rīks jau ir instalēts.",
     "content": "Saturs",
     "contentUnavailable": "Neizdevās ielādēt šīs prasmes saturu. Skatiet to vietnē GitHub.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Šo rīku nevar instalēt jūsu organizācijā.",
     "mcpConfigHint": "No klienta neatkarīga savienojuma informācija. Ielīmējiet to jebkurā ar MCP saderīgā klientā un pievienojiet savus akreditācijas datus.",
     "metaDescription": "Pārlūkojiet atvērto juridiskā darba prasmju, integrāciju un iebūvēto rīku katalogu.",
+    "missingFromCatalogue": "Šis rīks nav iekļauts jūsu organizācijas katalogā.",
     "nativeToolInfo": "Šī ir stella iebūvēta iespēja. Iespējojiet to savā darbvietā, lai izmantotu tērzēšanā.",
     "notFound": "Rīks nav atrasts.",
     "practiceArea": "Tiesību joma",
@@ -5867,7 +5867,6 @@
     "explain": "Izskaidrot",
     "followUp": "Uzdot papildjautājumu",
     "followUpRequired": "Ierakstiet papildjautājumu, lai to nosūtītu.",
-    "generationUnavailable": "Šim tiesas nolēmumam atbildes nevar ģenerēt.",
     "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
     "loading": "Tiek ģenerēta atbilde…",
     "minimise": "Sakļaut atbildi",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Augšupielādēt logotipu",
       "usage": "Lietojums",
+      "usageCheckoutProviderUnavailable": "Maksājumu pakalpojumu sniedzējs nav pieejams norēķiniem tiešsaistē.",
       "usageDescription": "Šīs organizācijas lietojuma limiti un tiesību statuss",
       "usageEmptyDescription": "Konfigurējiet lietojuma tiesības, lai šai organizācijai iespējotu mērītas AI funkcijas.",
       "usageEmptyTitle": "Nav lietojuma tiesību",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Neizdevās atvērt mitinātā lietojuma pārvaldību",
       "usageManuallyManaged": "Pārvaldīts manuāli",
       "usagePacksDescription": "Vienreizējas vienību pakotnes, kas pievienotas pašreizējam periodam.",
+      "usagePacksRequireActivePlan": "Lai iegādātos vienību pakas, aktivizējiet vai atjaunojiet mitinātu plānu.",
       "usagePacksTitle": "Vienību pakotnes",
-      "usagePlanCannotPurchase": "Šo plānu nevar iegādāties.",
       "usagePlanCheckout": "Turpināt uz apmaksu",
       "usagePlanCheckoutError": "Neizdevās sākt apmaksu",
       "usagePlanCheckoutUnavailable": "Par šo plānu nevar samaksāt tiešsaistē.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "{page}. lpp.",
         "pageRangeLocator": "{start}.–{end}. lpp."
       },
-      "unlock": "Atbloķēt",
-      "versionComparisonUnavailable": "Šī faila versijas nevar salīdzināt."
+      "unlock": "Atbloķēt"
     },
     "playbooks": {
       "autoRun": "Automātiska palaišana",
@@ -8073,6 +8072,7 @@
       "person": "Persona",
       "readingFrom": "AI lasa no",
       "reduceDependencies": "Atlasiet mazāk ievades kolonnu.",
+      "retryReadOnlyRecord": "Šis ieraksts ir tikai lasāms.",
       "returnsLabel": "Formāts",
       "selectColor": "Izvēlieties krāsu",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, zero {Sadalīt # iespējās} one {Sadalīt # iespējā} other {Sadalīt # iespējās}}",
       "suggestWithAI": "Ieteikt ar AI",
       "typeChangeWarning": "Saglabājot esošie dati tiks dzēsti un izveidoti no jauna.",
+      "unlockFieldToRetry": "Atbloķējiet šo lauku, lai mēģinātu vēlreiz.",
       "untitledColumn": "Kolonnas nosaukums, piem., spēkā stāšanās datums",
       "waitForWorkflow": "Uzgaidiet, līdz beidzas darbplūsma."
     },

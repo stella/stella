@@ -93,7 +93,6 @@
     "rewriting": "Text wird überarbeitet…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Warten Sie auf den laufenden Durchgang oder wählen Sie andere Zeilen aus.",
     "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
     "modelRefused": "Das Modell hat die Antwort verweigert",
     "noRowsToRun": "In dieser Auswahl gibt es keine geeigneten Zeilen.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Konnte nicht geladen werden.",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
-    "lockedOrReadOnly": "Das Feld ist gesperrt oder der Datensatz ist schreibgeschützt.",
     "logTime": "Zeit erfassen",
     "low": "Niedrig",
     "markAsRead": "Als gelesen markieren",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Skill hinzufügen",
     "addToStella": "Zu stella hinzufügen",
+    "alreadyInstalled": "Dieses Werkzeug ist bereits installiert.",
     "content": "Inhalt",
     "contentUnavailable": "Der Inhalt dieses Skills konnte nicht geladen werden. Sie können ihn stattdessen auf GitHub ansehen.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Dieses Tool kann in Ihrer Organisation nicht installiert werden.",
     "mcpConfigHint": "Clientunabhängige Verbindungsdaten. Fügen Sie sie in einen beliebigen MCP-kompatiblen Client ein und ergänzen Sie Ihre eigenen Zugangsdaten.",
     "metaDescription": "Durchsuchen Sie den offenen Katalog mit Skills, Integrationen und integrierten Werkzeugen für die juristische Arbeit.",
+    "missingFromCatalogue": "Dieses Werkzeug ist im Katalog Ihrer Organisation nicht aufgeführt.",
     "nativeToolInfo": "Dies ist eine integrierte Funktion von stella. Aktivieren Sie sie in Ihrem Arbeitsbereich, um sie im Chat zu verwenden.",
     "notFound": "Werkzeug nicht gefunden.",
     "practiceArea": "Rechtsgebiet",
@@ -5867,7 +5867,6 @@
     "explain": "Erklären",
     "followUp": "Rückfrage stellen",
     "followUpRequired": "Geben Sie eine Rückfrage ein, um sie zu senden.",
-    "generationUnavailable": "Für diese Gerichtsentscheidung können keine Antworten generiert werden.",
     "invalidCitations": "{count, plural, one {# Fundstelle konnte nicht überprüft werden.} other {# Fundstellen konnten nicht überprüft werden.}}",
     "loading": "Antwort wird generiert…",
     "minimise": "Antwort einklappen",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Logo hochladen",
       "usage": "Nutzung",
+      "usageCheckoutProviderUnavailable": "Der Zahlungsanbieter steht für die Online-Zahlung nicht zur Verfügung.",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",
       "usageEmptyTitle": "Keine Nutzungsberechtigung",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Gehostete Nutzungsverwaltung konnte nicht geöffnet werden",
       "usageManuallyManaged": "Manuell verwaltet",
       "usagePacksDescription": "Einmalige Einheitenpakete, die Ihrem aktuellen Zeitraum hinzugefügt werden.",
+      "usagePacksRequireActivePlan": "Aktivieren Sie einen gehosteten Tarif oder setzen Sie ihn fort, um Einheitenpakete zu kaufen.",
       "usagePacksTitle": "Einheitenpakete",
-      "usagePlanCannotPurchase": "Dieser Tarif kann nicht gekauft werden.",
       "usagePlanCheckout": "Weiter zum Bezahlvorgang",
       "usagePlanCheckoutError": "Bezahlvorgang konnte nicht gestartet werden",
       "usagePlanCheckoutUnavailable": "Für diesen Tarif ist keine Online-Zahlung verfügbar.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "S. {page}",
         "pageRangeLocator": "S. {start}–{end}"
       },
-      "unlock": "Entsperren",
-      "versionComparisonUnavailable": "Für diese Datei können keine Versionen verglichen werden."
+      "unlock": "Entsperren"
     },
     "playbooks": {
       "autoRun": "Automatisch ausführen",
@@ -8073,6 +8072,7 @@
       "person": "Person",
       "readingFrom": "KI liest aus",
       "reduceDependencies": "Wählen Sie weniger Eingabespalten aus.",
+      "retryReadOnlyRecord": "Dieser Datensatz ist schreibgeschützt.",
       "returnsLabel": "Format",
       "selectColor": "Farbe auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {In # Option aufteilen} other {In # Optionen aufteilen}}",
       "suggestWithAI": "Mit KI vorschlagen",
       "typeChangeWarning": "Vorhandene Daten werden beim Speichern gelöscht und neu erstellt.",
+      "unlockFieldToRetry": "Entsperren Sie dieses Feld, um es erneut zu versuchen.",
       "untitledColumn": "Spaltenname, z. B. Vertragsbeginn",
       "waitForWorkflow": "Warten Sie, bis der Workflow abgeschlossen ist."
     },

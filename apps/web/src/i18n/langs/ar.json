@@ -93,7 +93,6 @@
     "rewriting": "جارٍ إعادة صياغة النص…"
   },
   "aiColumns": {
-    "checkRunAvailability": "انتظر انتهاء التشغيل الحالي أو اختر صفوفًا أخرى.",
     "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
     "modelRefused": "رفض النموذج الإجابة",
     "noRowsToRun": "لا توجد صفوف مؤهلة في هذا التحديد.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "تعذّر التحميل.",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
-    "lockedOrReadOnly": "الحقل مقفل أو السجل متاح للقراءة فقط.",
     "logTime": "تسجيل الوقت",
     "low": "منخفضة",
     "markAsRead": "تعليم كمقروء",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "إضافة مهارة",
     "addToStella": "إضافة إلى stella",
+    "alreadyInstalled": "هذه الأداة مثبّتة بالفعل.",
     "content": "المحتوى",
     "contentUnavailable": "تعذّر تحميل محتوى هذه المهارة. يمكنك عرضه على GitHub بدلاً من ذلك.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "لا يمكن تثبيت هذه الأداة في مؤسستك.",
     "mcpConfigHint": "تفاصيل اتصال مستقلة عن برنامج العميل. ألصقها في أي برنامج عميل متوافق مع MCP وأضف بيانات اعتمادك.",
     "metaDescription": "تصفح الكتالوج المفتوح للمهارات وعمليات التكامل والأدوات المدمجة للعمل القانوني.",
+    "missingFromCatalogue": "هذه الأداة غير مدرجة في كتالوج مؤسستك.",
     "nativeToolInfo": "هذه إمكانية مدمجة في stella. فعّلها من مساحة عملك لاستخدامها في الدردشة.",
     "notFound": "لم يتم العثور على الأداة.",
     "practiceArea": "مجال الممارسة",
@@ -5867,7 +5867,6 @@
     "explain": "شرح",
     "followUp": "طرح سؤال متابعة",
     "followUpRequired": "اكتب سؤال متابعة لإرساله.",
-    "generationUnavailable": "إنشاء الإجابات غير متاح لهذا القرار القضائي.",
     "invalidCitations": "{count, plural, zero {تعذر التحقق من # إحالات.} one {تعذر التحقق من إحالة واحدة.} two {تعذر التحقق من إحالتين.} few {تعذر التحقق من # إحالات.} many {تعذر التحقق من # إحالة.} other {تعذر التحقق من # إحالة.}}",
     "loading": "جارٍ توليد الإجابة…",
     "minimise": "طي الإجابة",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "رفع الشعار",
       "usage": "الاستخدام",
+      "usageCheckoutProviderUnavailable": "مزود الدفع غير متاح لإتمام الدفع عبر الإنترنت.",
       "usageDescription": "حدود الاستخدام وحالة الاستحقاق لهذه المؤسسة",
       "usageEmptyDescription": "اضبط استحقاق استخدام لتفعيل ميزات الذكاء الاصطناعي المُقاسة لهذه المؤسسة.",
       "usageEmptyTitle": "لا يوجد استحقاق استخدام",
@@ -6426,8 +6426,8 @@
       "usageManageError": "تعذّر فتح إدارة الاستخدام المُستضافة",
       "usageManuallyManaged": "مُدار يدويًا",
       "usagePacksDescription": "باقات وحدات لمرة واحدة تُضاف إلى فترتك الحالية.",
+      "usagePacksRequireActivePlan": "ابدأ خطة مستضافة أو استأنفها لشراء حزم الوحدات.",
       "usagePacksTitle": "باقات الوحدات",
-      "usagePlanCannotPurchase": "لا يمكن شراء هذه الخطة.",
       "usagePlanCheckout": "المتابعة إلى الدفع",
       "usagePlanCheckoutError": "تعذّر بدء عملية الدفع",
       "usagePlanCheckoutUnavailable": "الدفع عبر الإنترنت غير متاح لهذه الخطة.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "ص. {page}",
         "pageRangeLocator": "ص. {start}–{end}"
       },
-      "unlock": "إلغاء القفل",
-      "versionComparisonUnavailable": "مقارنة الإصدارات غير متاحة لهذا الملف."
+      "unlock": "إلغاء القفل"
     },
     "playbooks": {
       "autoRun": "تشغيل تلقائي",
@@ -8073,6 +8072,7 @@
       "person": "شخص",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
       "reduceDependencies": "اختر عددًا أقل من أعمدة الإدخال.",
+      "retryReadOnlyRecord": "هذا السجل للقراءة فقط.",
       "returnsLabel": "التنسيق",
       "selectColor": "اختر اللون",
       "setPromptPlaceholder": "اضبط موجِّهًا لاستخراج المعلومات",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, zero {التقسيم إلى خيارات} one {التقسيم إلى خيار واحد} two {التقسيم إلى خيارين} few {التقسيم إلى # خيارات} many {التقسيم إلى # خيارًا} other {التقسيم إلى # خيار}}",
       "suggestWithAI": "اقترح بالذكاء الاصطناعي",
       "typeChangeWarning": "سيتم مسح البيانات الحالية وإعادة بنائها عند الحفظ.",
+      "unlockFieldToRetry": "افتح قفل هذا الحقل لإعادة المحاولة.",
       "untitledColumn": "اسم العمود، مثل تاريخ السريان",
       "waitForWorkflow": "انتظر انتهاء سير العمل."
     },

@@ -93,7 +93,6 @@
     "rewriting": "Szöveg átfogalmazása…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Várja meg az aktuális futás végét, vagy válasszon más sorokat.",
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
     "modelRefused": "A modell megtagadta a választ",
     "noRowsToRun": "A kijelölésben nincs megfelelő sor.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Nem sikerült betölteni.",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
-    "lockedOrReadOnly": "A mező zárolva van, vagy a rekord csak olvasható.",
     "logTime": "Idő rögzítése",
     "low": "Alacsony",
     "markAsRead": "Megjelölés olvasottként",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Készség hozzáadása",
     "addToStella": "Hozzáadás a stella alkalmazáshoz",
+    "alreadyInstalled": "Ez az eszköz már telepítve van.",
     "content": "Tartalom",
     "contentUnavailable": "Nem sikerült betölteni ennek a készségnek a tartalmát. Tekintse meg inkább a GitHubon.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Ez az eszköz nem telepíthető a szervezetében.",
     "mcpConfigHint": "Kliensfüggetlen kapcsolati adatok. Illessze be bármely MCP-kompatibilis kliensbe, majd adja meg saját hitelesítő adatait.",
     "metaDescription": "Böngésszen a jogi munkához szükséges készségek, integrációk és beépített eszközök nyílt katalógusában.",
+    "missingFromCatalogue": "Ez az eszköz nem szerepel szervezete katalógusában.",
     "nativeToolInfo": "Ez a stella beépített funkciója. A csevegésben való használathoz engedélyezze a munkaterületen.",
     "notFound": "Az eszköz nem található.",
     "practiceArea": "Jogi szakterület",
@@ -5867,7 +5867,6 @@
     "explain": "Magyarázat",
     "followUp": "Kiegészítő kérdés feltevése",
     "followUpRequired": "Az elküldéshez írja be a kiegészítő kérdést.",
-    "generationUnavailable": "Ehhez a bírósági határozathoz nem hozható létre válasz.",
     "invalidCitations": "{count, plural, one {# hivatkozást nem sikerült ellenőrizni.} other {# hivatkozást nem sikerült ellenőrizni.}}",
     "loading": "Válasz generálása…",
     "minimise": "Válasz összecsukása",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Logó feltöltése",
       "usage": "Használat",
+      "usageCheckoutProviderUnavailable": "A fizetési szolgáltató nem érhető el az online fizetéshez.",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",
       "usageEmptyTitle": "Nincs használati jogosultság",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Nem sikerült megnyitni a hosztolt használat kezelését",
       "usageManuallyManaged": "Kézzel kezelt",
       "usagePacksDescription": "Egyszeri egységcsomagok, amelyek a jelenlegi időszakhoz adódnak hozzá.",
+      "usagePacksRequireActivePlan": "Egységcsomag vásárlásához indítson vagy folytasson egy hosztolt csomagot.",
       "usagePacksTitle": "Egységcsomagok",
-      "usagePlanCannotPurchase": "Ez a csomag nem vásárolható meg.",
       "usagePlanCheckout": "Tovább a fizetéshez",
       "usagePlanCheckoutError": "Nem sikerült elindítani a fizetést",
       "usagePlanCheckoutUnavailable": "Ehhez a csomaghoz nem érhető el online fizetés.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "{page}. o.",
         "pageRangeLocator": "{start}–{end}. o."
       },
-      "unlock": "Feloldás",
-      "versionComparisonUnavailable": "Ennél a fájlnál nem hasonlíthatók össze a verziók."
+      "unlock": "Feloldás"
     },
     "playbooks": {
       "autoRun": "Automatikus futtatás",
@@ -8073,6 +8072,7 @@
       "person": "Személy",
       "readingFrom": "Az AI innen olvas:",
       "reduceDependencies": "Válasszon kevesebb bemeneti oszlopot.",
+      "retryReadOnlyRecord": "Ez a rekord csak olvasható.",
       "returnsLabel": "Formátum",
       "selectColor": "Szín kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Felosztás # lehetőségre} other {Felosztás # lehetőségre}}",
       "suggestWithAI": "Javaslat AI-val",
       "typeChangeWarning": "A meglévő adatok törlődnek, és mentéskor újraépülnek.",
+      "unlockFieldToRetry": "Az újbóli próbálkozáshoz oldja fel a mező zárolását.",
       "untitledColumn": "Oszlop neve, pl. Hatálybalépés dátuma",
       "waitForWorkflow": "Várja meg a munkafolyamat végét."
     },

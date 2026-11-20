@@ -93,7 +93,6 @@
     "rewriting": "Reformulando el texto…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Espere a que termine la ejecución actual o seleccione otras filas.",
     "countSummary": "{columns} columnas × {rows} filas = {answers, plural, one {# respuesta} other {# respuestas} many {# respuestas}}. Las respuestas consumen presupuesto.",
     "modelRefused": "El modelo se negó a responder",
     "noRowsToRun": "No hay filas aptas en esta selección.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "No se ha podido cargar.",
     "loadMore": "Cargar más",
     "loading": "Cargando",
-    "lockedOrReadOnly": "El campo está bloqueado o el registro es de solo lectura.",
     "logTime": "Registrar tiempo",
     "low": "Baja",
     "markAsRead": "Marcar como leído",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Añadir una habilidad",
     "addToStella": "Añadir a stella",
+    "alreadyInstalled": "Esta herramienta ya está instalada.",
     "content": "Contenido",
     "contentUnavailable": "No se ha podido cargar el contenido de esta habilidad. Consúltalo en GitHub.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "No se puede instalar esta herramienta en su organización.",
     "mcpConfigHint": "Datos de conexión independientes del cliente. Pégalos en cualquier cliente compatible con MCP y añade tus propias credenciales.",
     "metaDescription": "Explora el catálogo abierto de habilidades, integraciones y herramientas incorporadas para el trabajo jurídico.",
+    "missingFromCatalogue": "Esta herramienta no figura en el catálogo de su organización.",
     "nativeToolInfo": "Esta es una función incorporada de stella. Habilítala desde tu espacio de trabajo para usarla en el chat.",
     "notFound": "No se ha encontrado la herramienta.",
     "practiceArea": "Área de práctica",
@@ -5867,7 +5867,6 @@
     "explain": "Explicar",
     "followUp": "Hacer una pregunta de seguimiento",
     "followUpRequired": "Escriba una pregunta de seguimiento para enviarla.",
-    "generationUnavailable": "No se pueden generar respuestas para esta resolución judicial.",
     "invalidCitations": "{count, plural, one {No se pudo verificar # cita.} many {No se pudieron verificar # citas.} other {No se pudieron verificar # citas.}}",
     "loading": "Generando respuesta…",
     "minimise": "Contraer respuesta",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Subir logotipo",
       "usage": "Uso",
+      "usageCheckoutProviderUnavailable": "El proveedor de pagos no está disponible para el pago en línea.",
       "usageDescription": "Límites de uso y estado de la autorización de esta organización",
       "usageEmptyDescription": "Configura una autorización de uso para habilitar funciones de IA medidas en esta organización.",
       "usageEmptyTitle": "Sin autorización de uso",
@@ -6426,8 +6426,8 @@
       "usageManageError": "No se pudo abrir la gestión de uso alojado",
       "usageManuallyManaged": "Gestionado manualmente",
       "usagePacksDescription": "Paquetes de unidades de pago único añadidos a tu periodo actual.",
+      "usagePacksRequireActivePlan": "Active o reanude un plan alojado para comprar paquetes de unidades.",
       "usagePacksTitle": "Paquetes de unidades",
-      "usagePlanCannotPurchase": "Este plan no se puede comprar.",
       "usagePlanCheckout": "Continuar al pago",
       "usagePlanCheckoutError": "No se pudo iniciar el pago",
       "usagePlanCheckoutUnavailable": "El pago en línea no está disponible para este plan.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "p. {page}",
         "pageRangeLocator": "pp. {start}-{end}"
       },
-      "unlock": "Desbloquear",
-      "versionComparisonUnavailable": "No se pueden comparar las versiones de este archivo."
+      "unlock": "Desbloquear"
     },
     "playbooks": {
       "autoRun": "Ejecución automática",
@@ -8073,6 +8072,7 @@
       "person": "Persona",
       "readingFrom": "La IA lee de",
       "reduceDependencies": "Seleccione menos columnas de entrada.",
+      "retryReadOnlyRecord": "Este registro es de solo lectura.",
       "returnsLabel": "Formato",
       "selectColor": "Seleccionar color",
       "setPromptPlaceholder": "Defina una instrucción para extraer la información",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Dividir en # opción} other {Dividir en # opciones} many {Dividir en # opciones}}",
       "suggestWithAI": "Sugerir con IA",
       "typeChangeWarning": "Los datos existentes se borrarán y se reconstruirán al guardar.",
+      "unlockFieldToRetry": "Desbloquee este campo para volver a intentarlo.",
       "untitledColumn": "Nombre de columna, p. ej. Fecha de vigencia",
       "waitForWorkflow": "Espere a que termine el flujo de trabajo."
     },

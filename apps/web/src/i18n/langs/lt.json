@@ -93,7 +93,6 @@
     "rewriting": "Tekstas performuluojamas…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Palaukite, kol vykdymas baigsis, arba pasirinkite kitas eilutes.",
     "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
     "modelRefused": "Modelis atsisakė atsakyti",
     "noRowsToRun": "Šioje atrankoje nėra tinkamų eilučių.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Nepavyko įkelti.",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
-    "lockedOrReadOnly": "Laukas užrakintas arba įrašas skirtas tik skaityti.",
     "logTime": "Registruoti laiką",
     "low": "Žema",
     "markAsRead": "Pažymėti kaip skaitytą",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Pridėkite įgūdį",
     "addToStella": "Pridėti prie stella",
+    "alreadyInstalled": "Šis įrankis jau įdiegtas.",
     "content": "Turinys",
     "contentUnavailable": "Nepavyko įkelti šio įgūdžio turinio. Peržiūrėkite jį GitHub platformoje.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Šio įrankio jūsų organizacijoje įdiegti negalima.",
     "mcpConfigHint": "Nuo kliento nepriklausomi ryšio duomenys. Įklijuokite juos į bet kurį su MCP suderinamą klientą ir pridėkite savo prisijungimo duomenis.",
     "metaDescription": "Naršykite atvirame teisinio darbo įgūdžių, integracijų ir integruotų įrankių kataloge.",
+    "missingFromCatalogue": "Šio įrankio nėra jūsų organizacijos kataloge.",
     "nativeToolInfo": "Tai integruota stella funkcija. Įjunkite ją savo darbo srityje, kad galėtumėte naudoti pokalbyje.",
     "notFound": "Įrankis nerastas.",
     "practiceArea": "Teisės sritis",
@@ -5867,7 +5867,6 @@
     "explain": "Paaiškinti",
     "followUp": "Užduoti papildomą klausimą",
     "followUpRequired": "Įrašykite papildomą klausimą, kurį norite išsiųsti.",
-    "generationUnavailable": "Šiam teismo sprendimui atsakymų generuoti negalima.",
     "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
     "loading": "Generuojamas atsakymas…",
     "minimise": "Suskleisti atsakymą",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Įkelti logotipą",
       "usage": "Naudojimas",
+      "usageCheckoutProviderUnavailable": "Mokėjimo paslaugų teikėjas nepasiekiamas atsiskaityti internetu.",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
       "usageEmptyTitle": "Nėra naudojimo teisės",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",
       "usagePacksDescription": "Vienkartiniai vienetų paketai, pridedami prie dabartinio laikotarpio.",
+      "usagePacksRequireActivePlan": "Norėdami įsigyti vienetų paketų, aktyvinkite arba atnaujinkite priglobtą planą.",
       "usagePacksTitle": "Vienetų paketai",
-      "usagePlanCannotPurchase": "Šio plano įsigyti negalima.",
       "usagePlanCheckout": "Pereiti prie apmokėjimo",
       "usagePlanCheckoutError": "Nepavyko pradėti apmokėjimo",
       "usagePlanCheckoutUnavailable": "Už šį planą negalima sumokėti internetu.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "p. {page}",
         "pageRangeLocator": "p. {start}–{end}"
       },
-      "unlock": "Atrakinti",
-      "versionComparisonUnavailable": "Šio failo versijų palyginti negalima."
+      "unlock": "Atrakinti"
     },
     "playbooks": {
       "autoRun": "Automatinis vykdymas",
@@ -8073,6 +8072,7 @@
       "person": "Asmuo",
       "readingFrom": "DI skaito iš",
       "reduceDependencies": "Pasirinkite mažiau įvesties stulpelių.",
+      "retryReadOnlyRecord": "Šis įrašas skirtas tik skaityti.",
       "returnsLabel": "Formatas",
       "selectColor": "Pasirinkite spalvą",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Skaidyti į # parinktį} few {Skaidyti į # parinktis} many {Skaidyti į # parinkties} other {Skaidyti į # parinkčių}}",
       "suggestWithAI": "Pasiūlyti su DI",
       "typeChangeWarning": "Esami duomenys bus išvalyti ir perkurti išsaugant.",
+      "unlockFieldToRetry": "Atrakinkite šį lauką ir bandykite dar kartą.",
       "untitledColumn": "Stulpelio pavadinimas, pvz., įsigaliojimo data",
       "waitForWorkflow": "Palaukite, kol darbo eiga baigsis."
     },

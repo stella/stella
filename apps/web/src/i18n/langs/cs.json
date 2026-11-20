@@ -93,7 +93,6 @@
     "rewriting": "Text se přeformulovává…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Počkejte na dokončení zpracování nebo vyberte jiné řádky.",
     "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
     "modelRefused": "Model odmítl odpovědět",
     "noRowsToRun": "Ve výběru nejsou žádné vhodné řádky.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Nepodařilo se načíst.",
     "loadMore": "Načíst další",
     "loading": "Načítám",
-    "lockedOrReadOnly": "Pole je uzamčené nebo je záznam jen pro čtení.",
     "logTime": "Zaznamenat čas",
     "low": "Nízká",
     "markAsRead": "Označit jako přečtené",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Přidat dovednost",
     "addToStella": "Přidat do stella",
+    "alreadyInstalled": "Tento nástroj už je nainstalovaný.",
     "content": "Obsah",
     "contentUnavailable": "Obsah této dovednosti se nepodařilo načíst. Místo toho si ho zobrazte na GitHubu.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Tento nástroj ve vaší organizaci nelze nainstalovat.",
     "mcpConfigHint": "Údaje připojení nezávislé na klientovi. Vložte je do libovolného klienta kompatibilního s MCP a přidejte vlastní přihlašovací údaje.",
     "metaDescription": "Procházejte otevřený katalog dovedností, integrací a vestavěných nástrojů pro právní práci.",
+    "missingFromCatalogue": "Tento nástroj není v katalogu vaší organizace.",
     "nativeToolInfo": "Toto je vestavěná funkce stella. Chcete-li ji používat v chatu, zapněte ji v pracovním prostoru.",
     "notFound": "Nástroj nebyl nalezen.",
     "practiceArea": "Právní oblast",
@@ -5867,7 +5867,6 @@
     "explain": "Vysvětlit",
     "followUp": "Položit doplňující otázku",
     "followUpRequired": "Napište doplňující otázku, kterou chcete odeslat.",
-    "generationUnavailable": "Pro toto rozhodnutí nelze generovat odpovědi.",
     "invalidCitations": "{count, plural, one {# citaci se nepodařilo ověřit.} few {# citace se nepodařilo ověřit.} other {# citací se nepodařilo ověřit.} many {# citace se nepodařilo ověřit.}}",
     "loading": "Generování odpovědi…",
     "minimise": "Sbalit odpověď",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Nahrát logo",
       "usage": "Využití",
+      "usageCheckoutProviderUnavailable": "Poskytovatel plateb není pro platbu online dostupný.",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
       "usageEmptyDescription": "Nakonfigurujte oprávnění k využití, aby organizace mohla používat měřené funkce AI.",
       "usageEmptyTitle": "Žádné oprávnění k využití",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Nepodařilo se otevřít správu hostovaného využití",
       "usageManuallyManaged": "Spravováno ručně",
       "usagePacksDescription": "Jednorázové balíčky jednotek přidané do aktuálního období.",
+      "usagePacksRequireActivePlan": "Pro nákup balíčků jednotek aktivujte nebo obnovte hostovaný tarif.",
       "usagePacksTitle": "Balíčky jednotek",
-      "usagePlanCannotPurchase": "Tento tarif nelze zakoupit.",
       "usagePlanCheckout": "Pokračovat k objednávce",
       "usagePlanCheckoutError": "Nepodařilo se zahájit objednávku",
       "usagePlanCheckoutUnavailable": "Pro tento tarif není dostupná platba online.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "s. {page}",
         "pageRangeLocator": "s. {start}–{end}"
       },
-      "unlock": "Odemknout",
-      "versionComparisonUnavailable": "U tohoto souboru nelze porovnávat verze."
+      "unlock": "Odemknout"
     },
     "playbooks": {
       "autoRun": "Automatické spuštění",
@@ -8073,6 +8072,7 @@
       "person": "Osoba",
       "readingFrom": "AI čerpá informace z",
       "reduceDependencies": "Vyberte méně vstupních sloupců.",
+      "retryReadOnlyRecord": "Tento záznam je jen pro čtení.",
       "returnsLabel": "Formát",
       "selectColor": "Vyberte barvu",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Rozdělit na # možnost} few {Rozdělit na # možnosti} other {Rozdělit na # možností} many {Rozdělit na # možnosti}}",
       "suggestWithAI": "Navrhnout pomocí AI",
       "typeChangeWarning": "Stávající data se při uložení smažou a znovu spočítají.",
+      "unlockFieldToRetry": "Odemkněte toto pole a zkuste to znovu.",
       "untitledColumn": "Název sloupce, např. Datum účinnosti",
       "waitForWorkflow": "Počkejte na dokončení pracovního postupu."
     },

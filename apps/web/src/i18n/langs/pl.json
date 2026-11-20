@@ -93,7 +93,6 @@
     "rewriting": "Przeredagowywanie tekstu…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Poczekaj na zakończenie bieżącego uruchomienia lub wybierz inne wiersze.",
     "countSummary": "{columns} kolumn × {rows} wierszy = {answers, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}. Odpowiedzi zużywają budżet.",
     "modelRefused": "Model odmówił odpowiedzi",
     "noRowsToRun": "W tym wyborze nie ma odpowiednich wierszy.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Nie udało się wczytać.",
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
-    "lockedOrReadOnly": "Pole jest zablokowane lub rekord jest tylko do odczytu.",
     "logTime": "Zarejestruj czas",
     "low": "Niska",
     "markAsRead": "Oznacz jako przeczytane",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Dodaj umiejętność",
     "addToStella": "Dodaj do stella",
+    "alreadyInstalled": "To narzędzie jest już zainstalowane.",
     "content": "Treść",
     "contentUnavailable": "Nie udało się wczytać treści tej umiejętności. Zobacz ją na GitHubie.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "W Państwa organizacji nie można zainstalować tego narzędzia.",
     "mcpConfigHint": "Dane połączenia niezależne od klienta. Wklej je do dowolnego klienta zgodnego z MCP i dodaj własne dane logowania.",
     "metaDescription": "Przeglądaj otwarty katalog umiejętności, integracji i wbudowanych narzędzi do pracy prawniczej.",
+    "missingFromCatalogue": "Tego narzędzia nie ma w katalogu Twojej organizacji.",
     "nativeToolInfo": "To wbudowana funkcja stella. Włącz ją w swoim obszarze roboczym, aby używać jej na czacie.",
     "notFound": "Nie znaleziono narzędzia.",
     "practiceArea": "Dziedzina prawa",
@@ -5867,7 +5867,6 @@
     "explain": "Wyjaśnij",
     "followUp": "Zadaj dodatkowe pytanie",
     "followUpRequired": "Proszę wpisać dodatkowe pytanie, aby je wysłać.",
-    "generationUnavailable": "Nie można generować odpowiedzi dotyczących tego orzeczenia.",
     "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
     "loading": "Generowanie odpowiedzi…",
     "minimise": "Zwiń odpowiedź",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Prześlij logo",
       "usage": "Użycie",
+      "usageCheckoutProviderUnavailable": "Operator płatności jest niedostępny do obsługi płatności online.",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",
       "usageEmptyTitle": "Brak uprawnienia do użycia",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Nie udało się otworzyć zarządzania użyciem hostowanym",
       "usageManuallyManaged": "Zarządzane ręcznie",
       "usagePacksDescription": "Jednorazowe pakiety jednostek dodawane do bieżącego okresu.",
+      "usagePacksRequireActivePlan": "Aktywuj lub wznów plan hostowany, aby kupić pakiety jednostek.",
       "usagePacksTitle": "Pakiety jednostek",
-      "usagePlanCannotPurchase": "Nie można kupić tego planu.",
       "usagePlanCheckout": "Przejdź do płatności",
       "usagePlanCheckoutError": "Nie udało się rozpocząć płatności",
       "usagePlanCheckoutUnavailable": "Płatność online za ten plan jest niedostępna.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "s. {page}",
         "pageRangeLocator": "s. {start}–{end}"
       },
-      "unlock": "Odblokuj",
-      "versionComparisonUnavailable": "Nie można porównać wersji tego pliku."
+      "unlock": "Odblokuj"
     },
     "playbooks": {
       "autoRun": "Automatyczne uruchamianie",
@@ -8073,6 +8072,7 @@
       "person": "Osoba",
       "readingFrom": "AI czyta z",
       "reduceDependencies": "Wybierz mniej kolumn wejściowych.",
+      "retryReadOnlyRecord": "Ten rekord jest tylko do odczytu.",
       "returnsLabel": "Format",
       "selectColor": "Wybierz kolor",
       "setPromptPlaceholder": "Ustaw prompt do wyodrębnienia informacji",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Podziel na # opcję} few {Podziel na # opcje} many {Podziel na # opcji} other {Podziel na # opcji}}",
       "suggestWithAI": "Zaproponuj z AI",
       "typeChangeWarning": "Istniejące dane zostaną usunięte i ponownie pobrane przy zapisie.",
+      "unlockFieldToRetry": "Odblokuj to pole, aby spróbować ponownie.",
       "untitledColumn": "Nazwa kolumny, np. Data wejścia w życie",
       "waitForWorkflow": "Poczekaj na zakończenie przepływu pracy."
     },

@@ -93,7 +93,6 @@
     "rewriting": "Reformulation du texte…"
   },
   "aiColumns": {
-    "checkRunAvailability": "Attendez la fin de l’exécution en cours ou sélectionnez d’autres lignes.",
     "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses} many {# réponses}}. Les réponses consomment le budget.",
     "modelRefused": "Le modèle a refusé de répondre",
     "noRowsToRun": "Aucune ligne de cette sélection n’est admissible.",
@@ -3001,7 +3000,6 @@
     "loadFailed": "Échec du chargement.",
     "loadMore": "Charger plus",
     "loading": "Chargement",
-    "lockedOrReadOnly": "Le champ est verrouillé ou la fiche est en lecture seule.",
     "logTime": "Saisir le temps",
     "low": "Faible",
     "markAsRead": "Marquer comme lu",
@@ -5721,6 +5719,7 @@
   "publicTools": {
     "addSkill": "Ajouter une compétence",
     "addToStella": "Ajouter à stella",
+    "alreadyInstalled": "Cet outil est déjà installé.",
     "content": "Contenu",
     "contentUnavailable": "Le contenu de cette compétence n’a pas pu être chargé. Consultez-le plutôt sur GitHub.",
     "contribute": {
@@ -5827,6 +5826,7 @@
     "installUnavailable": "Cet outil ne peut pas être installé dans votre organisation.",
     "mcpConfigHint": "Paramètres de connexion indépendants du client. Collez-les dans tout client compatible MCP et ajoutez vos propres identifiants.",
     "metaDescription": "Parcourez le catalogue ouvert de compétences, d'intégrations et d'outils intégrés pour le travail juridique.",
+    "missingFromCatalogue": "Cet outil ne figure pas dans le catalogue de votre organisation.",
     "nativeToolInfo": "Cette fonctionnalité est intégrée à stella. Activez-la depuis votre espace de travail pour l’utiliser dans les conversations.",
     "notFound": "Outil introuvable.",
     "practiceArea": "Domaine juridique",
@@ -5867,7 +5867,6 @@
     "explain": "Expliquer",
     "followUp": "Poser une question complémentaire",
     "followUpRequired": "Saisissez une question complémentaire pour l’envoyer.",
-    "generationUnavailable": "La génération de réponses est indisponible pour cette décision de justice.",
     "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
     "loading": "Génération de la réponse…",
     "minimise": "Réduire la réponse",
@@ -6410,6 +6409,7 @@
       },
       "uploadLogo": "Importer un logo",
       "usage": "Utilisation",
+      "usageCheckoutProviderUnavailable": "Le prestataire de paiement est indisponible pour le règlement en ligne.",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
       "usageEmptyTitle": "Aucun droit d’utilisation",
@@ -6426,8 +6426,8 @@
       "usageManageError": "Impossible d’ouvrir la gestion de l’utilisation hébergée",
       "usageManuallyManaged": "Géré manuellement",
       "usagePacksDescription": "Packs d’unités ponctuels ajoutés à votre période en cours.",
+      "usagePacksRequireActivePlan": "Activez ou reprenez une offre hébergée pour acheter des packs d’unités.",
       "usagePacksTitle": "Packs d’unités",
-      "usagePlanCannotPurchase": "Cette offre ne peut pas être achetée.",
       "usagePlanCheckout": "Continuer vers le paiement",
       "usagePlanCheckoutError": "Impossible de démarrer le paiement",
       "usagePlanCheckoutUnavailable": "Le paiement en ligne est indisponible pour cette offre.",
@@ -8001,8 +8001,7 @@
         "pageLocator": "p. {page}",
         "pageRangeLocator": "p. {start}-{end}"
       },
-      "unlock": "Déverrouiller",
-      "versionComparisonUnavailable": "Les versions de ce fichier ne peuvent pas être comparées."
+      "unlock": "Déverrouiller"
     },
     "playbooks": {
       "autoRun": "Exécution automatique",
@@ -8073,6 +8072,7 @@
       "person": "Personne",
       "readingFrom": "L’IA lit à partir de",
       "reduceDependencies": "Sélectionnez moins de colonnes d’entrée.",
+      "retryReadOnlyRecord": "Cet enregistrement est en lecture seule.",
       "returnsLabel": "Format",
       "selectColor": "Sélectionner une couleur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
@@ -8086,6 +8086,7 @@
       "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options} many {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "typeChangeWarning": "Les données existantes seront effacées et reconstruites à l’enregistrement.",
+      "unlockFieldToRetry": "Déverrouillez ce champ pour réessayer.",
       "untitledColumn": "Nom de colonne, p. ex. Date d'effet",
       "waitForWorkflow": "Attendez la fin du flux de travail."
     },
