@@ -21,16 +21,22 @@ export const REASONED_CONTROLS: ReadonlySet<string> = new Set(["Button"]);
 
 export const DISABLED_REASON_ATTRIBUTE = "disabledReason";
 
-type NodeLike = { readonly type?: unknown };
+// The JSX fields the predicate reads, each `unknown` until narrowed: declared
+// rather than an index signature, so they read with plain dot access.
+type JsxNodeLike = {
+  readonly type?: unknown;
+  readonly name?: unknown;
+  readonly value?: unknown;
+  readonly expression?: unknown;
+  readonly attributes?: unknown;
+};
 
-const isNode = (value: unknown): value is NodeLike & Record<string, unknown> =>
+const isNode = (value: unknown): value is JsxNodeLike =>
   typeof value === "object" && value !== null && "type" in value;
 
 const identifierName = (name: unknown): string | null =>
-  isNode(name) &&
-  name.type === "JSXIdentifier" &&
-  typeof name["name"] === "string"
-    ? name["name"]
+  isNode(name) && name.type === "JSXIdentifier" && typeof name.name === "string"
+    ? name.name
     : null;
 
 // `disabled={false}`: the literal says the control is never disabled here.
@@ -38,11 +44,11 @@ const isLiteralFalse = (value: unknown): boolean => {
   if (!isNode(value) || value.type !== "JSXExpressionContainer") {
     return false;
   }
-  const expression = value["expression"];
+  const expression = value.expression;
   return (
     isNode(expression) &&
     expression.type === "Literal" &&
-    expression["value"] === false
+    expression.value === false
   );
 };
 
@@ -57,24 +63,24 @@ export const disabledAttributeWithoutReason = (
   if (
     !isNode(openingElement) ||
     openingElement.type !== "JSXOpeningElement" ||
-    !Array.isArray(openingElement["attributes"])
+    !Array.isArray(openingElement.attributes)
   ) {
     return null;
   }
-  const name = identifierName(openingElement["name"]);
+  const name = identifierName(openingElement.name);
   if (name === null || !REASONED_CONTROLS.has(name)) {
     return null;
   }
   let disabled: number | null = null;
-  for (const [index, attribute] of openingElement["attributes"].entries()) {
+  for (const [index, attribute] of openingElement.attributes.entries()) {
     if (!isNode(attribute) || attribute.type !== "JSXAttribute") {
       continue;
     }
-    const attributeName = identifierName(attribute["name"]);
+    const attributeName = identifierName(attribute.name);
     if (attributeName === DISABLED_REASON_ATTRIBUTE) {
       return null;
     }
-    if (attributeName === "disabled" && !isLiteralFalse(attribute["value"])) {
+    if (attributeName === "disabled" && !isLiteralFalse(attribute.value)) {
       disabled = index;
     }
   }
