@@ -13,6 +13,7 @@ import {
   List,
   LIST_ITEM_ROW_CLASS,
   ListGroup,
+  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,
@@ -26,8 +27,8 @@ import type { TruncatedTextLines } from "./truncated-text";
  * sessions, members, keys) where each row is icon + name + one quiet line +
  * trailing status or action. Rows never scroll sideways: the content column
  * truncates and the trailing column keeps its width, so actions stay on
- * screen at any viewport. The group, its header and title and the surface
- * live in ./list-shell.tsx, beside the rows' loading placeholder.
+ * screen at any viewport. The group, its header, title and description and
+ * the surface live in ./list-shell.tsx, beside the rows' loading placeholder.
  */
 
 /**
@@ -47,17 +48,6 @@ const ListGroupCount = ({
   >
     <AnimatedCount value={count} />
   </span>
-);
-
-const ListGroupDescription = ({
-  className,
-  ...props
-}: React.ComponentProps<"p">) => (
-  <p
-    className={cn("text-muted-foreground text-xs text-pretty", className)}
-    data-slot="list-group-description"
-    {...props}
-  />
 );
 
 /** Quiet trailing affordance on the header row (a link or ghost button). */

@@ -37,8 +37,9 @@ export const scanCadesPayload = async (
   }
   return Result.ok({
     file: scanned.value,
-    layers: layers.map(({ signers }) => ({
-      signers: signers.map(({ name }) => ({ name })),
+    layers: layers.map(({ id, signers }) => ({
+      id,
+      signers: signers.map((signer) => ({ id: signer.id, name: signer.name })),
     })),
   });
 };

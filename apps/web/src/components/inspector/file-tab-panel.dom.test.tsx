@@ -389,8 +389,17 @@ test.each([
       client.setQueryData(cadesPreviewOptions(key).queryKey, {
         ...embedded,
         layers: [
-          { signers: [{ name: "First signer" }, { name: "Second signer" }] },
-          { signers: [{ name: null }] },
+          {
+            id: "layer-0",
+            signers: [
+              { id: "layer-0.signer-0", name: "First signer" },
+              { id: "layer-0.signer-1", name: "Second signer" },
+            ],
+          },
+          {
+            id: "layer-0.1",
+            signers: [{ id: "layer-0.1.signer-0", name: null }],
+          },
         ],
       });
     });

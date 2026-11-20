@@ -1,0 +1,4 @@
+{
+  "add-column": "Adds one column with a constant non-null default using PostgreSQL's metadata-only default, without a backfill or table rewrite; bounded by 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "Adds a NOT VALID CHECK, so existing identifier rows are not scanned; future writes are checked immediately, with 1s lock_timeout and 5s statement_timeout."
+}

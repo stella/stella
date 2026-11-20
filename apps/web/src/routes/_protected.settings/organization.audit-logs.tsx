@@ -51,7 +51,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import {
   ALL_PERFORMERS,
   DEFAULT_PERFORMER_FILTER,

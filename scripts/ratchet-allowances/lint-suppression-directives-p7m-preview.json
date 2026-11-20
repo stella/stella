@@ -1,5 +1,0 @@
-{
-  "metric": "lint-suppression-directives",
-  "delta": 4,
-  "reason": "The web and mobile signed-document previews render immutable CMS layer and signer sequences. Layer depth and signer position identify rows for one envelope; certificate names are optional and can repeat. The four directives apply only to those positional React keys."
-}

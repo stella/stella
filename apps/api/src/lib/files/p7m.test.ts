@@ -45,6 +45,24 @@ test("reports co-signers and nested signers from outermost to innermost", async 
   ]);
 });
 
+test("gives every layer and signer a unique id, even for a repeated signer", async () => {
+  const inner = await wrapP7m(binary, { signers: ["ski", "ski"] });
+  const parsed = parseP7m(await wrapP7m(await wrapP7m(inner)));
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  expect(
+    parsed.value.layers.map(({ id, signers }) => [
+      id,
+      signers.map((signer) => signer.id),
+    ]),
+  ).toEqual([
+    ["layer-0", ["layer-0.signer-0"]],
+    ["layer-0.1", ["layer-0.1.signer-0"]],
+    ["layer-0.1.2", ["layer-0.1.2.signer-0", "layer-0.1.2.signer-1"]],
+  ]);
+});
+
 test("matches a subject key identifier to the embedded certificate", async () => {
   const parsed = parseP7m(await wrapP7m(binary, { signers: ["ski"] }));
   if (parsed.isErr()) {
@@ -52,6 +70,7 @@ test("matches a subject key identifier to the embedded certificate", async () =>
   }
   expect(parsed.value.layers.at(0)?.signers).toEqual([
     {
+      id: "layer-0.signer-0",
       name: "Example first signer",
       issuerName: "Example first signer",
       serialNumber: "01",

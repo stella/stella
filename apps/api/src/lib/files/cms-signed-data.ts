@@ -11,6 +11,8 @@ const ORGANIZATION_NAME_OID = "2.5.4.10";
 const MAX_NAME_LENGTH = 4096;
 
 type CmsSigner = {
+  /** Stable within one parse: the layer id and the SignerInfo position. */
+  id: string;
   name: string | null;
   issuerName: string | null;
   serialNumber: string | null;
@@ -18,6 +20,7 @@ type CmsSigner = {
 };
 
 type CmsSignedData = {
+  id: string;
   contentType: string;
   content: Uint8Array;
   signers: CmsSigner[];
@@ -160,7 +163,10 @@ const certificateSubjectKey = (certificate: pkijs.Certificate) => {
   return bytes && bytes.byteLength > 0 ? `key:${hex(bytes)}` : null;
 };
 
-const readSigners = (signedData: pkijs.SignedData): CmsSigner[] => {
+const readSigners = (
+  signedData: pkijs.SignedData,
+  layerId: string,
+): CmsSigner[] => {
   const certificates = new Map<string, pkijs.Certificate | null>();
   if (signedData.certificates !== undefined) {
     for (const certificate of signedData.certificates) {
@@ -177,7 +183,7 @@ const readSigners = (signedData: pkijs.SignedData): CmsSigner[] => {
       }
     }
   }
-  return signedData.signerInfos.map((signer) => {
+  return signedData.signerInfos.map((signer, position) => {
     const sid: unknown = signer.sid;
     const key = signerKey(sid);
     const certificate = key === null ? undefined : certificates.get(key);
@@ -185,6 +191,9 @@ const readSigners = (signedData: pkijs.SignedData): CmsSigner[] => {
       certificate?.serialNumber ??
       (sid instanceof pkijs.IssuerAndSerialNumber ? sid.serialNumber : null);
     return {
+      // Issuer and serial number can repeat within a layer, so the position
+      // in the immutable SignerInfo set is what tells signers apart.
+      id: `${layerId}.signer-${position}`,
       name: certificate ? nameAttribute(certificate.subject) : null,
       issuerName: certificate ? nameAttribute(certificate.issuer) : null,
       serialNumber: serialNumber
@@ -214,9 +223,13 @@ export const hasCmsSignedDataHeader = (bytes: Uint8Array) => {
   );
 };
 
+/** The id of the outermost SignedData layer; nested layers extend its path. */
+export const OUTER_CMS_LAYER_ID = "layer-0";
+
 /** Extracts CMS content and stated signer metadata without verifying signatures. */
 export const readCmsSignedData = (
   bytes: Uint8Array,
+  layerId: string = OUTER_CMS_LAYER_ID,
 ): Result<CmsSignedData, CmsFailure> => {
   // asn1js can throw on certain malformed strings, and pkijs throws on schema mismatch.
   const decoded = Result.try(() => {
@@ -246,8 +259,9 @@ export const readCmsSignedData = (
     return Result.err("unsupported_content");
   }
   return Result.ok({
+    id: layerId,
     contentType: eContentType,
     content,
-    signers: readSigners(decoded.value),
+    signers: readSigners(decoded.value, layerId),
   });
 };

@@ -507,16 +507,14 @@ const LegalFilePreview = ({
             {fileName}
           </Text>
           <Text variant="caption">{signedFile("unverified")}</Text>
-          {layers.map(({ signers }, index) => (
-            // oxlint-disable-next-line react/no-array-index-key -- Layers are in immutable nesting order.
-            <View key={index}>
+          {layers.map(({ id, signers }, index) => (
+            <View key={id}>
               <Text accessibilityRole="header" variant="label">
                 {signedFile("layer", { number: index + 1 })}
               </Text>
-              {signers.map(({ name }, ordinal) => (
-                // oxlint-disable-next-line react/no-array-index-key -- Immutable signers can have duplicate or missing names.
-                <Text key={ordinal} selectable>
-                  {name ?? signedFile("unknownSigner")}
+              {signers.map((signer) => (
+                <Text key={signer.id} selectable>
+                  {signer.name ?? signedFile("unknownSigner")}
                 </Text>
               ))}
             </View>
