@@ -45,6 +45,7 @@ export const ActionAdmissionOutcome = ({
         {outcome.retryable && onRetry && (
           <Button
             disabled={disabled}
+            disabledReason={t("common.retrying")}
             onClick={onRetry}
             size="sm"
             variant="outline"
