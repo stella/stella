@@ -194,6 +194,26 @@ const lockCaseLawSourcesInOrderTx = async (
   return await lockCaseLawSourcesInOrderTx(tx, sourceIds, offset + 1, next);
 };
 
+type CaseLawProjectionBatch = {
+  sourceId: SafeId<"caseLawSource">;
+  decisionIds: SafeId<"caseLawDecision">[];
+};
+
+/** One set-based reconciliation per source batch, in source order. */
+const synchronizeCaseLawBatchesTx = async (
+  tx: Transaction,
+  lock: ActiveCorpusProjectionSourceLock,
+  batches: readonly CaseLawProjectionBatch[],
+  offset = 0,
+): Promise<void> => {
+  const batch = batches.at(offset);
+  if (batch === undefined) {
+    return;
+  }
+  await synchronizeLockedCaseLawProjectionBatchTx(tx, { lock, ...batch });
+  await synchronizeCaseLawBatchesTx(tx, lock, batches, offset + 1);
+};
+
 /**
  * Project decisions whose projectability or projected hash the caller wrote
  * in this transaction, under the lock `lockCaseLawProjectabilitySourcesTx`
@@ -218,10 +238,7 @@ export const projectCaseLawDecisionsTx = async (
   if (rows.length !== requested.size) {
     panic("Projected case-law decision disappeared");
   }
-  const batches: {
-    sourceId: SafeId<"caseLawSource">;
-    decisionIds: SafeId<"caseLawDecision">[];
-  }[] = [];
+  const batches: CaseLawProjectionBatch[] = [];
   for (const { id, sourceId } of rows) {
     const batch = batches.at(-1);
     if (
@@ -233,14 +250,7 @@ export const projectCaseLawDecisionsTx = async (
       batches.push({ sourceId, decisionIds: [id] });
     }
   }
-  for (const { sourceId, decisionIds } of batches) {
-    // db-await-in-loop: one set-based reconciliation per source batch, bounded by the caller's page.
-    await synchronizeLockedCaseLawProjectionBatchTx(tx, {
-      lock,
-      sourceId,
-      decisionIds,
-    });
-  }
+  await synchronizeCaseLawBatchesTx(tx, lock, batches);
 };
 
 /** What a corpus write stored for a row: its object keys and content hash. */
