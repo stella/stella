@@ -376,6 +376,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
       onAnswer: blocks.flatMap((block) => {
         switch (block.type) {
           case "text":
+          case "intent":
             return [];
           case "steps":
             return block.steps.flatMap(markerOf);
@@ -467,5 +468,49 @@ describe("a code step on the phone", () => {
       // A read outside the law keeps the tool's own title.
       { type: "tool", label: "execute_typescript", status: "done" },
     ]);
+  });
+});
+
+describe("the plan an answer narrates before its steps", () => {
+  const plan = {
+    type: "text",
+    content:
+      "Dohledám znění § 240 o. s. ř. a judikaturu Nejvyššího soudu k počátku běhu lhůty.",
+  };
+  const search = call({
+    id: "search",
+    name: "web_search",
+    input: { query: "§ 240 o. s. ř." },
+    output: { results: [] },
+  });
+  const answer = { type: "text", content: "Lhůta běží od doručení." };
+
+  test("shows above the steps as the intent, not as the answer", () => {
+    const blocks = answerBlocks([
+      { type: "thinking", content: "" },
+      plan,
+      search,
+      answer,
+    ]);
+    expect(blocks.map((block) => block.type)).toEqual([
+      "intent",
+      "steps",
+      "text",
+    ]);
+    expect(blocks.at(0)).toEqual({
+      type: "intent",
+      key: "1",
+      text: plan.content,
+    });
+  });
+
+  test("stays the answer when no step follows it, or when it reads as one", () => {
+    expect(answerBlocks([plan]).map((block) => block.type)).toEqual(["text"]);
+    expect(
+      answerBlocks([
+        { type: "text", content: "## Shrnutí\n\n- první bod\n- druhý bod" },
+        search,
+      ]).map((block) => block.type),
+    ).toEqual(["text", "steps"]);
   });
 });
