@@ -2259,6 +2259,7 @@
       "chipLabel": "Darbojas: {place}",
       "cloud": "Mākonis",
       "cloudDescription": "Darbojas mākonī. Pieejams no jebkuras vietas.",
+      "hintAntigravity": "Instalējiet Antigravity 1.5 vai jaunāku versiju un pierakstieties tajā",
       "hintCheck": "Pārbaudiet to lietotnē stella desktop",
       "hintInstall": "Instalējiet to no stella desktop",
       "hintOffline": "Atveriet stella desktop savā datorā",
@@ -2941,6 +2942,7 @@
     "playbooks": "Pārbaudes ceļveži",
     "preparing": "Sagatavošana…",
     "preview": "Priekšskatījums",
+    "previewTruncated": "Pilns teksts šajā priekšskatījumā nav pieejams.",
     "previous": "Iepriekšējais",
     "previousMatch": "Iepriekšējā atbilstība",
     "print": "Drukāt",
@@ -4708,7 +4710,7 @@
       "discoveredSkills": "{count, plural, zero {Atrastas # prasmes} one {Atrasta # prasme} other {Atrastas # prasmes}}",
       "discoveryEmpty": "Šajā repozitorijā vai mapē prasmes netika atrastas.",
       "discoverySkippedInvalid": "{count, plural, zero {Izlaistas # nederīgas prasmes} one {Izlaista # nederīga prasme} other {Izlaistas # nederīgas prasmes}}",
-      "dropPack": "Nometiet .zip vai SKILL.md failu, lai importētu prasmi",
+      "dropPack": "Nometiet .zip/.skill vai SKILL.md failu, lai importētu prasmi",
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
@@ -4765,8 +4767,8 @@
           "name": "Apkopot dokumentu"
         }
       },
-      "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
-      "uploadPack": "Augšupielādēt .zip vai SKILL.md",
+      "uploadHelp": "Izmantojiet SKILL.md failu vai .zip/.skill mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
+      "uploadPack": "Augšupielādēt .zip/.skill vai SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
     },
@@ -6456,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, zero {# svītrotu noteikumu} one {# svītrots noteikums} other {# svītroti noteikumi}}",
     "versionChangesWords": "{inserted, plural, zero {# ievietotu vārdu} one {# ievietots vārds} other {# ievietoti vārdi}}, {deleted, plural, zero {# svītrotu vārdu} one {# svītrots vārds} other {# svītroti vārdi}}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms teksts.",
+    "textOnly": "Teksta priekšskatījums bez lapas izkārtojuma un attēliem."
   },
   "styleSets": {
     "create": "Izveidot",

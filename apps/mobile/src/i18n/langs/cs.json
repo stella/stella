@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Úplný text není v tomto náhledu dostupný."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Zavřít",
@@ -624,6 +627,10 @@
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
     "unverified": "Podpisy nebyly ověřeny."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Pro náhled není k dispozici čitelný text.",
+    "textOnly": "Textový náhled bez rozvržení stránky a obrázků."
   },
   "header": {
     "search": "Hledat"

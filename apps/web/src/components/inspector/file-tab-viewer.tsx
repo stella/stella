@@ -49,6 +49,11 @@ import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 
+const AsicFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/asic-file-viewer");
+  return { default: m.AsicFileViewer };
+});
+
 const CadesFileViewer = lazy(async () => {
   const m = await import("@/components/inspector/cades-file-viewer");
   return { default: m.CadesFileViewer };
@@ -59,6 +64,11 @@ const DataBoxFileViewer = lazy(async () => {
   return { default: m.DataBoxFileViewer };
 });
 
+const StructuredDocumentViewer = lazy(async () => {
+  const m = await import("@/components/inspector/structured-document-viewer");
+  return { default: m.StructuredDocumentViewer };
+});
+
 type LegalFileViewer = {
   Viewer: ComponentType<{ onDownload: () => void; tab: FileTab }>;
   unreadable: TranslationKey;
@@ -66,13 +76,31 @@ type LegalFileViewer = {
   surface: ViewerSurface;
 };
 
+const asicFileViewer = {
+  Viewer: AsicFileViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-asic",
+} as const satisfies LegalFileViewer;
+
+const structuredDocumentViewer = {
+  Viewer: StructuredDocumentViewer,
+  unreadable: "structuredDocument.noReadableContent",
+  download: "common.downloadOriginal",
+  surface: "inspector-structured-document",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
+  asicE: asicFileViewer,
+  asicS: asicFileViewer,
   cades: {
     Viewer: CadesFileViewer,
     unreadable: "signedFile.unreadable",
     download: "common.downloadOriginal",
     surface: "inspector-cades",
   },
+  ofd: structuredDocumentViewer,
+  uyap: structuredDocumentViewer,
   dataBox: {
     Viewer: DataBoxFileViewer,
     unreadable: "correspondence.dataBox.unreadable",
@@ -202,8 +230,12 @@ const FileTabViewerComponent = ({
 
   const fileViewer = (() => {
     switch (nativePreviewKind) {
+      case "asicE":
+      case "asicS":
       case "cades":
-      case "dataBox": {
+      case "dataBox":
+      case "ofd":
+      case "uyap": {
         const { Viewer, unreadable, download, surface } =
           legalFileViewers[nativePreviewKind];
         return (

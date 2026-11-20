@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Le texte intégral n’est pas disponible dans cet aperçu."
+  },
   "tabs": {
     "chat": "Conversation",
     "close": "Fermer",
@@ -624,6 +627,10 @@
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Aucun texte lisible ne peut être affiché dans l’aperçu.",
+    "textOnly": "Aperçu du texte sans mise en page ni images."
   },
   "header": {
     "search": "Rechercher"

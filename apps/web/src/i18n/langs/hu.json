@@ -2259,6 +2259,7 @@
       "chipLabel": "Futás helye: {place}",
       "cloud": "Felhő",
       "cloudDescription": "A felhőben fut. Bárhonnan elérhető.",
+      "hintAntigravity": "Telepítse az Antigravity 1.5-ös vagy újabb verzióját, majd jelentkezzen be benne",
       "hintCheck": "Ellenőrizze a stella desktopban",
       "hintInstall": "Telepítse a stella desktopból",
       "hintOffline": "Nyissa meg a stella desktopot a számítógépén",
@@ -2941,6 +2942,7 @@
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",
     "preview": "Előnézet",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "previous": "Előző",
     "previousMatch": "Előző találat",
     "print": "Nyomtatás",
@@ -4708,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
       "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
       "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
-      "dropPack": "Húzzon ide egy .zip vagy SKILL.md fájlt a készség importálásához",
+      "dropPack": "Húzzon ide egy .zip/.skill vagy SKILL.md fájlt a készség importálásához",
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
@@ -4765,8 +4767,8 @@
           "name": "Dokumentum összefoglalása"
         }
       },
-      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
-      "uploadPack": ".zip vagy SKILL.md feltöltése",
+      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip/.skill mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadPack": ".zip/.skill vagy SKILL.md feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },
@@ -6456,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# elhagyott rendelkezés} other {# elhagyott rendelkezés}}",
     "versionChangesWords": "{inserted, plural, one {# beszúrt szó} other {# beszúrt szó}}, {deleted, plural, one {# törölt szó} other {# törölt szó}}",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Nincs megjeleníthető szöveg az előnézethez.",
+    "textOnly": "Szöveges előnézet az oldalelrendezés és a képek nélkül."
   },
   "styleSets": {
     "create": "Létrehozás",

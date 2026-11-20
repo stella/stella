@@ -247,8 +247,8 @@ const openDocumentMark = ({
   };
 };
 
-export const DOCUMENT_MARKS = {
-  cades: {
+const legalDocumentMark = (details: string) =>
+  ({
     viewBox: "0 0 24 24",
     gradients: [],
     shapes: [
@@ -269,7 +269,7 @@ export const DOCUMENT_MARKS = {
       {
         tag: "path",
         attrs: {
-          d: "M7 11h8m-8 3h5m1 4 2 2 4-5",
+          d: details,
           fill: "none",
           stroke: "#fff",
           strokeWidth: "1.4",
@@ -278,7 +278,17 @@ export const DOCUMENT_MARKS = {
         },
       },
     ],
-  },
+  }) satisfies DocumentMarkArtwork;
+
+const signedDocumentMark = legalDocumentMark("M7 11h8m-8 3h5m1 4 2 2 4-5");
+const structuredDocumentMark = legalDocumentMark("M7 11h8m-8 4h8m-8 4h5");
+
+export const DOCUMENT_MARKS = {
+  ofd: structuredDocumentMark,
+  uyap: structuredDocumentMark,
+  asicE: signedDocumentMark,
+  asicS: signedDocumentMark,
+  cades: signedDocumentMark,
   dataBox: {
     viewBox: "0 0 24 24",
     gradients: [],

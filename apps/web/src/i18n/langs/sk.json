@@ -2259,6 +2259,7 @@
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
       "cloudDescription": "Beží v cloude. Funguje odkiaľkoľvek.",
+      "hintAntigravity": "Nainštalujte Antigravity 1.5 alebo novšie a prihláste sa v ňom",
       "hintCheck": "Skontrolujte ho v stella desktop",
       "hintInstall": "Nainštalujte ho v stella desktop",
       "hintOffline": "Otvorte stella desktop vo svojom počítači",
@@ -2941,6 +2942,7 @@
     "playbooks": "Playbooky",
     "preparing": "Pripravuje sa…",
     "preview": "Náhľad",
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii.",
     "previous": "Predchádzajúci",
     "previousMatch": "Predchádzajúci výskyt",
     "print": "Tlačiť",
@@ -4708,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností} many {Nájdené # zručnosti}}",
       "discoveryEmpty": "V tomto repozitári ani priečinku sa nenašli žiadne zručnosti.",
       "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených} many {# neplatnej zručnosti bolo preskočené}}",
-      "dropPack": "Presuňte sem .zip alebo SKILL.md a zručnosť sa naimportuje",
+      "dropPack": "Presuňte sem .zip/.skill alebo SKILL.md a zručnosť sa naimportuje",
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
@@ -4765,8 +4767,8 @@
           "name": "Zhrnúť dokument"
         }
       },
-      "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
-      "uploadPack": "Nahrať .zip alebo SKILL.md",
+      "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip/.skill obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
+      "uploadPack": "Nahrať .zip/.skill alebo SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
     },
@@ -6456,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# vypustené ustanovenie} few {# vypustené ustanovenia} many {# vypusteného ustanovenia} other {# vypustených ustanovení}}",
     "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložené slová} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypustené slovo} few {# vypustené slová} many {# vypusteného slova} other {# vypustených slov}}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Na náhľad nie je k dispozícii čitateľný text.",
+    "textOnly": "Textový náhľad bez rozloženia strany a obrázkov."
   },
   "styleSets": {
     "create": "Vytvoriť",

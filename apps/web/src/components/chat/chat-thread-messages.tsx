@@ -24,6 +24,7 @@ import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
+import { readChatStepRefTargets } from "@stll/api-contract/chat-step-ledger";
 import {
   groupProcessParts,
   isProcessPart,
@@ -2510,6 +2511,28 @@ const renderLocalRunCall = (
   ) : null;
 };
 
+/**
+ * What an opened step of `message` reads its finds against: what the
+ * settled answer cites, so it can say which finds the answer used (a
+ * streaming answer has not settled what it cites), and where the documents
+ * and matters it found open, from the stored message's ref bindings.
+ */
+const stepFindsContext = ({
+  isTurnActive,
+  message,
+}: {
+  isTurnActive: boolean;
+  message: AssistantMessagePartsProps["message"];
+}) => ({
+  answerCitations: isTurnActive
+    ? undefined
+    : collectSourceChipEntries({
+        appOrigins: chatAppOrigins(),
+        parts: message.parts,
+      }).citations,
+  stepRefTargets: readChatStepRefTargets(message.metadata?.refContext),
+});
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -2556,14 +2579,10 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
-  // What the settled answer cites, so an opened step can say which of its
-  // finds the answer used; a streaming answer has not settled what it cites.
-  const answerCitations = isTurnActive
-    ? undefined
-    : collectSourceChipEntries({
-        appOrigins: chatAppOrigins(),
-        parts: message.parts,
-      }).citations;
+  const { answerCitations, stepRefTargets } = stepFindsContext({
+    isTurnActive,
+    message,
+  });
   // A coding agent's subagent shows as one group holding the steps it took.
   const toolCallEntries = toToolCallRenderEntries(renderEntries);
   const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
@@ -2648,6 +2667,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          stepRefTargets={stepRefTargets}
           threadId={threadRef?.threadId}
         />
       );
@@ -2757,6 +2777,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          stepRefTargets={stepRefTargets}
           threadId={threadRef?.threadId}
         />
       );

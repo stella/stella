@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Pilns teksts šajā priekšskatījumā nav pieejams."
+  },
   "tabs": {
     "chat": "Tērzēšana",
     "close": "Aizvērt",
@@ -624,6 +627,10 @@
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms teksts.",
+    "textOnly": "Teksta priekšskatījums bez lapas izkārtojuma un attēliem."
   },
   "header": {
     "search": "Meklēt"

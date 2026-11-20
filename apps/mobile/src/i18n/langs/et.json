@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval."
+  },
   "tabs": {
     "chat": "Vestlus",
     "close": "Sulge",
@@ -624,6 +627,10 @@
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Eelvaates kuvamiseks pole loetavat teksti.",
+    "textOnly": "Teksti eelvaade ilma leheküljekujunduse ja piltideta."
   },
   "header": {
     "search": "Otsing"

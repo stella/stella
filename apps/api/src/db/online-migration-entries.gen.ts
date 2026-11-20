@@ -47,6 +47,7 @@ export { default as constraints_user_locale_constraints } from "./online-migrati
 export { default as cutovers_case_law_decisions_updated_id_idx } from "./online-migration-entries/cutovers-case-law-decisions-updated-id-idx";
 export { default as indexes_account_audit_logs_user_event_idx } from "./online-migration-entries/indexes-account-audit-logs-user-event-idx";
 export { default as indexes_account_provider_account_id_uidx } from "./online-migration-entries/indexes-account-provider-account-id-uidx";
+export { default as indexes_agent_skill_resources_original_s3_key_idx } from "./online-migration-entries/indexes-agent-skill-resources-original-s3-key-idx";
 export { default as indexes_agent_skill_resources_path_billing_trgm_idx } from "./online-migration-entries/indexes-agent-skill-resources-path-billing-trgm-idx";
 export { default as indexes_agent_skills_bound_client_idx } from "./online-migration-entries/indexes-agent-skills-bound-client-idx";
 export { default as indexes_agent_skills_bound_workspace_idx } from "./online-migration-entries/indexes-agent-skills-bound-workspace-idx";

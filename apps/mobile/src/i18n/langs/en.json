@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "The full text is unavailable in this preview."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Close",
@@ -624,6 +627,10 @@
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."
+  },
+  "structuredDocument": {
+    "noReadableContent": "No readable text is available for preview.",
+    "textOnly": "Text preview without page layout or images."
   },
   "header": {
     "search": "Search"

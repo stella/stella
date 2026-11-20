@@ -23,6 +23,10 @@ import type { DownloadRendition } from "@/components/inspector/file-download-ser
 import { PdfSignButton } from "@/components/inspector/pdf-sign-action";
 import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import {
+  PDF_PAGE_FIELD_ROW_CLASS,
+  PDF_ZOOM_GROUP_CLASS,
+} from "@/components/pdf/pdf-viewer.pending";
+import {
   fetchPrintPdf,
   printPdfBuffer,
 } from "@/components/pdf/peek/peek-pdf-print";
@@ -169,7 +173,7 @@ export const PdfViewerControls = ({
   const primaryControls = (
     <div className="flex items-center gap-1">
       {fieldId.length > 0 && <QueryViewFeedback view={fileMetadataView} />}
-      <div className="flex items-center rounded-md border p-0.5">
+      <div className={PDF_ZOOM_GROUP_CLASS}>
         <PeekPdfControls
           atMax={scaleOffset >= PDF_MAX_SCALE_OFFSET}
           atMin={scaleOffset <= PDF_MIN_SCALE_OFFSET}
@@ -224,7 +228,7 @@ export const PdfViewerControls = ({
           </Button>
           {/* The "/ total" sits on the field's centre line, so it never
               floats above the box. */}
-          <div className="ms-1.5 me-2 flex items-center gap-x-1.5 text-sm tabular-nums">
+          <div className={PDF_PAGE_FIELD_ROW_CLASS}>
             <Input
               aria-label={t("common.currentPage")}
               autoComplete="off"

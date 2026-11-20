@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Pełny tekst nie jest dostępny w tym podglądzie."
+  },
   "tabs": {
     "chat": "Czat",
     "close": "Zamknij",
@@ -624,6 +627,10 @@
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
     "unverified": "Podpisy nie zostały zweryfikowane."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Brak czytelnego tekstu do wyświetlenia w podglądzie.",
+    "textOnly": "Podgląd tekstu bez układu strony i obrazów."
   },
   "header": {
     "search": "Szukaj"

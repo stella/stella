@@ -83,6 +83,11 @@ describe("a parked record's review", () => {
         parked: HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE,
         attached: null,
       },
+      {
+        matchBasis: HELD_DECISION_MATCH_BASIS.SOURCE_POLICY,
+        parked: HELD_DECISION_REVIEW.SOURCE_POLICY,
+        attached: null,
+      },
     ]);
   });
 });

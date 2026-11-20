@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Der vollständige Text ist in dieser Vorschau nicht verfügbar."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Schließen",
@@ -624,6 +627,10 @@
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Für die Vorschau ist kein lesbarer Text verfügbar.",
+    "textOnly": "Textvorschau ohne Seitenlayout und Bilder."
   },
   "header": {
     "search": "Suchen"

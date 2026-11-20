@@ -107,6 +107,10 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import { KanbanSelectionSurface } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-selection-surface";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
+import {
+  canRenderKanbanBoard,
+  KANBAN_BOARD_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 type KanbanViewProps = {
@@ -1171,19 +1175,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 };
 
-// Drops write one column value per card, so the board needs fixed single-select columns.
-function canRenderKanbanBoard(
-  propertyId: string | null,
-  grouping: ReturnType<typeof resolveWorkspaceKanbanGrouping>,
-): propertyId is string {
-  return (
-    propertyId !== null &&
-    isKanbanGroupingRenderable(grouping) &&
-    (grouping.type !== "property" ||
-      grouping.property.content.type === "single-select")
-  );
-}
-
 type KanbanGroupColumnProps = Omit<
   ComponentProps<typeof KanbanColumn>,
   "entities"
@@ -1321,7 +1312,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   });
 
   return (
-    <div className="flex h-full gap-4 overflow-x-auto p-4" ref={scrollRef}>
+    <div className={KANBAN_BOARD_CLASS} ref={scrollRef}>
       {children}
     </div>
   );
