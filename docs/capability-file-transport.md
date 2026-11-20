@@ -65,7 +65,6 @@ alternative transport.
 | `clauses.import`               | x        |     | partial: `clauses.create` (one clause per call, no CSV bulk)           |
 | `clauses.export`               |          | x   | partial: `clauses.list` + `clauses.get` (no single export file)        |
 | `skills.resources.upload`      | x        |     | partial: `skills.resources.create` (text only, no binary resource)     |
-| `skills.export`                |          | x   | partial: `skills.get` (JSON, not an installable package)               |
 | `style-sets.create`            | x        |     | partial: `style-sets.from-editor.create` (settings, not a DOCX)        |
 | `style-sets.replace`           | x        |     | partial: `style-sets.from-editor.update` (settings, not a DOCX)        |
 | `templates.from-styles.create` | x        |     | partial: style set from editor, then `templates.from-style-set.create` |

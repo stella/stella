@@ -25,7 +25,7 @@ const triggers = (on: unknown): string[] => {
 // call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/npm-independent-release.yml@ba1d8b5e67dd5b252f6d3edd0c9fa047c5d386fc":
+  "stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4":
     "checkout, artifact download, setup-node without a cache input, hardened publish action from the pinned release-tooling checkout; no cache",
 };
 const DESKTOP_WINDOWS_BUILD_CACHE_USE =
