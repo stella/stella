@@ -124,3 +124,9 @@ export const visualRegistry = {
 } as const satisfies Record<string, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;
+
+export const isVisualName = (input: unknown): input is VisualName =>
+  typeof input === "string" && Object.hasOwn(visualRegistry, input);
+
+export const resolveVisualName = (visual: unknown): VisualName =>
+  isVisualName(visual) ? visual : "ui";

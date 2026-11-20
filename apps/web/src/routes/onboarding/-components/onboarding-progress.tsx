@@ -1,48 +1,14 @@
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/utils";
-
-type OnboardingProgressProps = {
-  currentStep: number;
-  totalSteps: number;
-};
+import { OnboardingProgressFace } from "./onboarding-progress.pending";
 
 export const OnboardingProgress = ({
   currentStep,
-  totalSteps,
-}: OnboardingProgressProps) => {
+}: {
+  currentStep: number;
+}) => {
   const t = useTranslations();
-  const labels = [
-    t("onboarding.stepOrganization"),
-    t("onboarding.stepJurisdiction"),
-    t("common.catalogue"),
-    t("onboarding.stepAi"),
-    t("onboarding.stepTeam"),
-    t("onboarding.stepApps"),
-  ];
-
   return (
-    <div className="mb-6 flex items-start gap-4 [@media(min-height:700px)]:mb-10">
-      {Array.from({ length: totalSteps }, (_, i) => (
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5" key={i}>
-          <div
-            className={cn(
-              "h-1.5 w-12 max-w-full rounded-full",
-              i <= currentStep ? "bg-foreground" : "bg-border",
-            )}
-          />
-          <span
-            className={cn(
-              "text-2xs wrap-anywhere",
-              i <= currentStep
-                ? "text-muted-foreground"
-                : "text-foreground-disabled",
-            )}
-          >
-            {labels[i]}
-          </span>
-        </div>
-      ))}
-    </div>
+    <OnboardingProgressFace currentStep={currentStep} label={(id) => t(id)} />
   );
 };

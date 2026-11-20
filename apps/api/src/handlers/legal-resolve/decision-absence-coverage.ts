@@ -116,6 +116,8 @@ export const EXCLUSIVE_DOCKET_REGISTERS = {
   [ADAPTER_KEYS.BR_TJDFT]: [],
   // The collection prints every register of the courts it selects from.
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: [],
+  // The high courts' registers are the courts' database's too.
+  [ADAPTER_KEYS.CZ_ISIR]: [],
   [ADAPTER_KEYS.BR_TST]: [],
 } as const satisfies Record<AdapterKey, readonly string[]>;
 
