@@ -206,6 +206,7 @@ export const ViewSwitcher = ({
         render={
           <Button
             disabled={createView.isPending}
+            disabledReason={t("common.creating")}
             size="icon-xs"
             variant="ghost"
           />

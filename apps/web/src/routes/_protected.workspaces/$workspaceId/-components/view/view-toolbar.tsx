@@ -592,6 +592,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
               aria-busy={exportingFormat !== null}
               aria-label={t("workspaces.views.exportTable")}
               disabled={exportingFormat !== null}
+              disabledReason={t("common.preparing")}
               size={TABLE_EXPORT_BUTTON.size}
               title={t("workspaces.views.exportTable")}
               variant={TABLE_EXPORT_BUTTON.variant}
@@ -801,6 +802,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
               <Button
                 aria-label={t("workspaces.playbooks.run")}
                 disabled={isRunning}
+                disabledReason={t("common.running")}
                 size="icon-xs"
                 title={t("workspaces.playbooks.run")}
                 variant="ghost"
@@ -962,6 +964,19 @@ const FilesystemOrganizerAction = ({
     mimeType: file.mimeType,
   }));
 
+  const resolveOrganizerDisabledReason = () => {
+    if (
+      foldersDataView.type === "pending" ||
+      filesDataView.type === "pending"
+    ) {
+      return t("common.loading");
+    }
+    if (foldersDataView.type === "error" || filesDataView.type === "error") {
+      return t("common.loadFailed");
+    }
+    return t("workspaces.importOrganizer.noFilesToOrganize");
+  };
+
   return (
     <>
       <QueryViewFeedback view={foldersDataView} />
@@ -981,6 +996,7 @@ const FilesystemOrganizerAction = ({
           filesDataView.type === "pending" ||
           filesDataView.type === "error"
         }
+        disabledReason={resolveOrganizerDisabledReason()}
         onClick={() => setOpen(true)}
         size={FILE_ORGANIZER_BUTTON.size}
         title={
