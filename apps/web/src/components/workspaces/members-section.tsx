@@ -213,6 +213,7 @@ const MemberRow = ({
               </DialogClose>
               <Button
                 disabled={removeMember.isPending}
+                disabledReason={t("common.removing")}
                 onClick={handleRemove}
                 variant="destructive"
               >

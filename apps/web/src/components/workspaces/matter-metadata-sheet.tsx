@@ -467,6 +467,7 @@ export const MatterMetadataPanel = ({
             <Button
               className="block w-full shrink-0"
               disabled={deleteWorkspace.isPending}
+              disabledReason={t("workspaces.deletingWorkspace")}
               onClick={() => setDeleteDialogOpen(true)}
               variant="plain"
             >
