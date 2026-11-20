@@ -15,9 +15,9 @@
     }
   },
   "scripts": {
-    "dev": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && vite dev",
-    "build": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && vite build && bun build --target=bun --outfile=dist/runtime.js --external ./server/server.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
-    "build:analyze": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && vite build --mode analyze",
+    "dev": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun --bun vite dev",
+    "build": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun --bun vite build && bun build --target=bun --outfile=dist/runtime.js --external ./server/server.js src/runtime.ts && bun scripts/assert-start-runtime-build.ts",
+    "build:analyze": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun --bun vite build --mode analyze",
     "generate:route-tree": "bun scripts/generate-route-tree.ts",
     "generate:messages": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
     "generate:web-sources": "bun run generate:route-tree && bun run generate:messages",
