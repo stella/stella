@@ -17,6 +17,7 @@ import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
 import type { RenderSnapshot } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
 
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type { ChatThreadDomSession } from "@/components/chat/chat-thread-dom-page";
 import {
@@ -428,10 +429,7 @@ const createStreamingServer = (
             const stop = testing.screen.queryByRole("button", {
               name: translations.chat.stopResponse,
             });
-            burst.stopEnabled =
-              stop !== null &&
-              !stop.hasAttribute("disabled") &&
-              stop.getAttribute("aria-disabled") !== "true";
+            burst.stopEnabled = stop !== null && !isDisabledControl(stop);
             burst.before = probe.snapshot();
           }
           if (index === lastKindIndex + 1) {
