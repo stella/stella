@@ -244,97 +244,105 @@ export const DictationMicrophoneChoice = ({
   const message = testMessage(level);
   const device = level?.device ?? defaultLabel;
 
-  return layout({
-    select: (
-      <Select
-        onValueChange={(next) => {
-          if (typeof next === "string") {
-            void choose(next);
-          }
-        }}
-        value={value}
-      >
-        <SelectTrigger
-          aria-labelledby={labelledBy}
-          className="w-56"
-          ref={trigger}
-        >
-          <SelectValue>{label}</SelectValue>
-        </SelectTrigger>
-        <SelectPopup>
-          <SelectItem value={SYSTEM_DEFAULT}>{defaultLabel}</SelectItem>
-          {snapshot.devices.map((input) => (
-            <SelectItem key={input.id} value={input.id}>
-              {label(input.id)}
-            </SelectItem>
-          ))}
-          {snapshot.chosenMissing === null ||
-          snapshot.chosen === null ? null : (
-            <SelectItem disabled value={snapshot.chosen}>
-              {label(snapshot.chosen)}
-            </SelectItem>
-          )}
-        </SelectPopup>
-      </Select>
-    ),
-    test: (
-      <div
-        className="flex min-w-0 flex-col gap-2"
-        data-slot="microphone-test"
-        data-status={level?.status ?? "idle"}
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            onClick={() => {
-              if (testing) {
-                setTesting(false);
-              } else {
-                void startTest();
+  // A fragment, so the component returns an element whatever the layout
+  // hands back.
+  return (
+    <>
+      {layout({
+        select: (
+          <Select
+            onValueChange={(next) => {
+              if (typeof next === "string") {
+                void choose(next);
               }
             }}
-            variant="outline"
+            value={value}
           >
-            {testing ? t("stopTest") : t("test")}
-          </Button>
-          {testing || level !== null ? (
-            <LevelMeter
-              level={level}
-              label={t("level")}
-              still={reducedMotion}
-            />
-          ) : null}
-        </div>
-        {message === null ? null : (
-          <p
-            aria-live="polite"
-            className={
-              message === "hearing"
-                ? "text-success-foreground text-sm"
-                : "text-destructive-foreground text-sm"
-            }
+            <SelectTrigger
+              aria-labelledby={labelledBy}
+              className="w-56"
+              ref={trigger}
+            >
+              <SelectValue>{label}</SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value={SYSTEM_DEFAULT}>{defaultLabel}</SelectItem>
+              {snapshot.devices.map((input) => (
+                <SelectItem key={input.id} value={input.id}>
+                  {label(input.id)}
+                </SelectItem>
+              ))}
+              {snapshot.chosenMissing === null ||
+              snapshot.chosen === null ? null : (
+                <SelectItem disabled value={snapshot.chosen}>
+                  {label(snapshot.chosen)}
+                </SelectItem>
+              )}
+            </SelectPopup>
+          </Select>
+        ),
+        test: (
+          <div
+            className="flex min-w-0 flex-col gap-2"
+            data-slot="microphone-test"
+            data-status={level?.status ?? "idle"}
           >
-            {message === "hearing" ? t("hearing") : t("noSound", { device })}
-            {level?.status === "zeros" ? (
-              <>
-                {" "}
-                <Button
-                  onClick={() => {
-                    void command("permissions_open_settings", {
-                      permission: "microphone",
-                    });
-                  }}
-                  size="inline"
-                  variant="link"
-                >
-                  {t("checkAccess")}
-                </Button>
-              </>
-            ) : null}
-          </p>
-        )}
-      </div>
-    ),
-  });
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={() => {
+                  if (testing) {
+                    setTesting(false);
+                  } else {
+                    void startTest();
+                  }
+                }}
+                variant="outline"
+              >
+                {testing ? t("stopTest") : t("test")}
+              </Button>
+              {testing || level !== null ? (
+                <LevelMeter
+                  level={level}
+                  label={t("level")}
+                  still={reducedMotion}
+                />
+              ) : null}
+            </div>
+            {message === null ? null : (
+              <p
+                aria-live="polite"
+                className={
+                  message === "hearing"
+                    ? "text-success-foreground text-sm"
+                    : "text-destructive-foreground text-sm"
+                }
+              >
+                {message === "hearing"
+                  ? t("hearing")
+                  : t("noSound", { device })}
+                {level?.status === "zeros" ? (
+                  <>
+                    {" "}
+                    <Button
+                      onClick={() => {
+                        void command("permissions_open_settings", {
+                          permission: "microphone",
+                        });
+                      }}
+                      size="inline"
+                      variant="link"
+                    >
+                      {t("checkAccess")}
+                    </Button>
+                  </>
+                ) : null}
+              </p>
+            )}
+          </div>
+        ),
+      })}
+    </>
+  );
 };
 
 /** The input level as a bar, with its recent peak; levels only. */
