@@ -1030,7 +1030,7 @@ const unreadBlock = (draft: UnreadBlockDraft, index: number): UnreadBlock => {
 
 const isUnreadBlockDraft = (
   block: WireBlock | UnreadBlockDraft,
-): block is UnreadBlockDraft => "kind" in block && block.kind === "unread";
+): block is UnreadBlockDraft => "kind" in block;
 
 /** What the persisted reader could not read as written, per occurrence. */
 export type PersistedAstDegradation =
