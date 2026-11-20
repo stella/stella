@@ -303,7 +303,6 @@ const assignIds = async (
   if (assignments.length === 0) {
     return;
   }
-  const ids = new Set<SafeId<"caseLawDecision">>();
   for (const batch of chunk(
     assignments,
     CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
@@ -320,26 +319,24 @@ const assignIds = async (
           })),
         }),
     );
-    for (const id of changed) {
-      ids.add(id);
+    const ids = new Set(changed);
+    for (const assignment of batch) {
+      if (!ids.has(assignment.row.id)) {
+        tally.superseded += 1;
+        continue;
+      }
+      written += 1;
+      tally.assignIdWritten += 1;
+      logWrite({
+        id: assignment.row.id,
+        adapter: source.adapterKey,
+        from: assignment.from,
+        to: assignment.to,
+        courtId: assignment.courtId,
+        previousCourtId: assignment.row.courtId,
+        addedMetadataCourt: false,
+      });
     }
-  }
-  for (const assignment of assignments) {
-    if (!ids.has(assignment.row.id)) {
-      tally.superseded += 1;
-      continue;
-    }
-    written += 1;
-    tally.assignIdWritten += 1;
-    logWrite({
-      id: assignment.row.id,
-      adapter: source.adapterKey,
-      from: assignment.from,
-      to: assignment.to,
-      courtId: assignment.courtId,
-      previousCourtId: assignment.row.courtId,
-      addedMetadataCourt: false,
-    });
   }
 };
 
