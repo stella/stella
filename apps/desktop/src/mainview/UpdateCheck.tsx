@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { SettingsCheck } from "@stll/api-contract/desktop-rpc";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 
@@ -133,35 +134,47 @@ const CheckOutcome = ({
   }
 };
 
-/** What `check_for_updates` and `install_update` answer
- *  (`updater::SettingsCheck`); a failure is the command's error. */
-type UpdateCheck =
-  | { status: "up_to_date" }
-  | { status: "available"; version: string }
-  | { status: "deferred"; version: string }
-  | { status: "installing"; version: string }
-  | { status: "managed" };
-
 type CheckState =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "failed"; during: "check" | "install" }
-  | UpdateCheck;
+  | SettingsCheck;
 
-const VERSIONED_STATUSES = new Set(["available", "deferred", "installing"]);
+type SettingsCheckStatus = SettingsCheck["status"];
 
-const isUpdateCheck = (value: unknown): value is UpdateCheck => {
-  if (typeof value !== "object" || value === null || !("status" in value)) {
+// Which statuses carry the version they are about, read off the generated
+// contract: a status added, removed or reshaped natively fails to compile
+// here instead of reaching Settings as a generic failure.
+type CheckPayload<Status extends SettingsCheckStatus> =
+  Extract<SettingsCheck, { status: Status }> extends { version: string }
+    ? "version"
+    : "none";
+
+const CHECK_PAYLOADS = {
+  up_to_date: "none",
+  available: "version",
+  deferred: "version",
+  installing: "version",
+  managed: "none",
+} as const satisfies { [Status in SettingsCheckStatus]: CheckPayload<Status> };
+
+const isCheckStatus = (status: unknown): status is SettingsCheckStatus =>
+  typeof status === "string" && Object.hasOwn(CHECK_PAYLOADS, status);
+
+/** What `check_for_updates` and `install_update` answer; a failure is the
+ *  command's error. */
+const isSettingsCheck = (value: unknown): value is SettingsCheck => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("status" in value) ||
+    !isCheckStatus(value.status)
+  ) {
     return false;
   }
-  if (value.status === "up_to_date" || value.status === "managed") {
-    return true;
-  }
   return (
-    typeof value.status === "string" &&
-    VERSIONED_STATUSES.has(value.status) &&
-    "version" in value &&
-    typeof value.version === "string"
+    CHECK_PAYLOADS[value.status] === "none" ||
+    ("version" in value && typeof value.version === "string")
   );
 };
 
@@ -169,6 +182,6 @@ const nativeCheckState = (
   result: Result<unknown, unknown>,
   during: "check" | "install",
 ): CheckState =>
-  Result.isOk(result) && isUpdateCheck(result.value)
+  Result.isOk(result) && isSettingsCheck(result.value)
     ? result.value
     : { status: "failed", during };

@@ -248,10 +248,11 @@ fn build_updater(handle: &AppHandle) -> Result<tauri_plugin_updater::Updater, St
     .map_err(|err| err.to_string())
 }
 
-/// What Settings → About shows after a check or an install it started
-/// (`UpdateCheck` in `src/mainview/UpdateCheck.tsx`). A failure is the
-/// command's error instead.
+// What Settings → About shows after a check or an install it started; the
+// webview reads it through the generated desktop RPC contract. A failure is
+// the command's error instead.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum SettingsCheck {
   UpToDate,

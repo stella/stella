@@ -768,6 +768,7 @@ mod rpc_codegen_tests {
     OpenFileRequest,
     OpenFileResponse,
     RecoveryTarget,
+    crate::updater::SettingsCheck,
   );
 
   struct DeclarationVisitor<'a> {
