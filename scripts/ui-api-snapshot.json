@@ -1758,6 +1758,7 @@
       "INSPECTOR_PANE_MIN_WIDTH",
       "INSPECTOR_RAIL_WIDTH",
       "clampInspectorPaneWidth",
+      "inspectorPaneWidthCss",
       "resolveInspectorDockWidth",
       "resolveInspectorPaneMaxWidth",
       "resolveInspectorPaneWidth",
