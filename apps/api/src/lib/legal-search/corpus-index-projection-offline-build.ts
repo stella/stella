@@ -98,6 +98,12 @@ import {
   reserveCorpusProjectionRoutePageTx,
   startCorpusProjectionOfflineRequestChunkTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import {
+  countStoredAstOutcome,
+  emptyStoredAstReadCounts,
+  type StoredAstDocumentOutcome,
+  type StoredAstReadCounts,
+} from "@/api/lib/legal-search/stored-ast-outcome";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 
@@ -351,6 +357,13 @@ export type CorpusProjectionOfflineBuildOptions<Family extends CorpusFamily> = {
   resumeAfter: CorpusProjectionReservationQueueKey | null;
   /** Called after every shard and proof pass with the progress so far. */
   onProgress?: (progress: CorpusProjectionOfflineBuildProgress) => void;
+  /**
+   * Called once per built revision with what the read of its stored AST came
+   * to, read as written included, so a caller can keep a per-document record
+   * that a reparse clears. Synchronous: a caller that writes it somewhere
+   * buffers it.
+   */
+  onStoredAstOutcome?: (read: StoredAstDocumentOutcome) => void;
   /** Deterministic seams for database tests. */
   testing?: {
     /** A clock aligned with the test database; also each statement's time. */
@@ -401,6 +414,13 @@ export type CorpusProjectionOfflineBuildProgress = {
    * decision comes near the ceiling, so any count is a decision to look at.
    */
   decisionTermsPartial: number;
+  /**
+   * Built revisions whose stored AST was not read as written, by outcome:
+   * degraded (and per kind), structureless, or unreadable beside usable text.
+   * Each document is also reported once, under its id
+   * (`case_law.stored_ast_degraded`); these say how many a run met.
+   */
+  storedAst: StoredAstReadCounts;
   shards: {
     delivered: number;
     ingested: number;
@@ -649,6 +669,7 @@ const emptyProgress = (
   },
   started: 0,
   decisionTermsPartial: 0,
+  storedAst: emptyStoredAstReadCounts(),
   shards: {
     delivered: 0,
     ingested: 0,
@@ -1682,6 +1703,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         );
         continue;
       }
+      countStoredAstOutcome(this.#progress.storedAst, built.value.storedAst);
+      this.#options.onStoredAstOutcome?.({
+        documentId: material.input.documentId,
+        jurisdiction: material.input.jurisdiction,
+        outcome: built.value.storedAst,
+      });
       if (built.value.decisionTerms === "prefix") {
         this.#progress.decisionTermsPartial += 1;
         logger.error("corpus_projection.decision_terms_partial", {

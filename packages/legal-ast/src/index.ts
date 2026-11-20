@@ -29,6 +29,7 @@ export {
   hasUsableAst,
   isApparatusRole,
   isDocumentAst,
+  isUnreadBlock,
   parseDocumentAst,
   persistedAstDegradations,
 } from "./document-ast.js";
@@ -49,6 +50,7 @@ export type {
   PersistedAstDegradation,
   TableBlock,
   TableCell,
+  UnreadBlock,
 } from "./document-ast.js";
 export { resolveDecisionParagraphRange } from "./paragraph-range.js";
 export type {

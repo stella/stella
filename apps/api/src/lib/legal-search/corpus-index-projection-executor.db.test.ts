@@ -191,7 +191,8 @@ const runLegislationCycle = async ({
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
     proofAfterIndexId: null,
-    payloadReader: async () => Result.ok({ text, ast: null }),
+    payloadReader: async () =>
+      Result.ok({ text, ast: null, storedAst: { type: "absent" } as const }),
   });
 };
 

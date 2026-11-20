@@ -3,12 +3,7 @@ import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
-import { sanitizeErrorAttributesForOutput } from "@stll/errors";
-import {
-  type DocumentAst,
-  headMatterOrderDegradations,
-  persistedAstDegradations,
-} from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -25,7 +20,6 @@ import {
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
   STORED_CORPUS_VALIDATION_CODE,
-  StoredAstDegradedError,
   StoredCorpusValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -59,10 +53,15 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
+import {
+  reportStoredAstOutcome,
+  type StoredAstReadOutcome,
+  storedAstReadOutcome,
+  type StoredAstReportContext,
+} from "@/api/lib/legal-search/stored-ast-outcome";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
@@ -151,21 +150,27 @@ const issueDotPaths = (
     return own === null ? nested : [own, ...nested];
   });
 
+/** A stored AST as the persisted reader serves it, with what that read came to. */
+export type ParsedStoredCorpusAst = {
+  ast: DocumentAst | EmptyAst | null;
+  outcome: StoredAstReadOutcome;
+};
+
 /**
  * Malformed stored ASTs raise a classified failure without retaining the payload.
- * Undeclared vocabulary is recoverable: the schema
- * keeps what carries text and degrades the rest, and each degradation is
- * reported here so the row stays visible without costing the reader the
- * document.
+ * Undeclared vocabulary is recoverable: the schema keeps what it cannot read
+ * as written in a neutral shape and loses no text, and the read names that
+ * in its `outcome` (`stored-ast-outcome.ts`). This parser reports nothing
+ * about the outcome; the caller that owns the read does, once.
  *
- * Given `documentId`, this parser is the one reporter of the failure. A
- * `readCorpusPayloadOrFallback` read parses without it, because that
- * function reports a failed read itself.
+ * Given `documentId`, this parser is the one reporter of a validation
+ * failure. A `readCorpusPayloadOrFallback` read parses without it, because
+ * that function reports a failed read itself.
  */
-export const parsePersistedCorpusAst = (
+export const parseStoredCorpusAst = (
   value: unknown,
   documentId?: string,
-): DocumentAst | EmptyAst | null => {
+): ParsedStoredCorpusAst => {
   recordReadWork("astParses");
   const parsed = v.safeParse(persistedCorpusAstSchema, value);
   if (!parsed.success) {
@@ -180,36 +185,24 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
-  // Late head matter is a known state of stored rows that a read serves as
-  // stored: a line per read, so its rate stays visible, and no exception, since
-  // no one can act on each read of the same row. Undeclared vocabulary is the
-  // schema falling behind what was stored, and is reported as a failure.
-  const lateHeadMatter =
-    parsed.output !== null && "blocks" in parsed.output
-      ? headMatterOrderDegradations(parsed.output.blocks)
-      : [];
-  if (lateHeadMatter.length > 0) {
-    logger.warn(
-      "case_law.decision.stored_ast_head_matter_order",
-      sanitizeErrorAttributesForOutput({
-        ...(documentId === undefined ? {} : { documentId }),
-        lateBlockCount: lateHeadMatter.length,
-      }),
-    );
-  }
-  const degradations = persistedAstDegradations(value);
-  if (degradations.length > 0) {
-    captureError(
-      new StoredAstDegradedError({
-        message: "Stored document AST was degraded on read",
-        degradations,
-      }),
-      handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
-        step: "corpus-storage.parsePersistedCorpusAst",
-      }),
-    );
-  }
-  return parsed.output;
+  return {
+    ast: parsed.output,
+    outcome: storedAstReadOutcome(value, parsed.output),
+  };
+};
+
+/**
+ * `parseStoredCorpusAst` for a caller that serves the AST and has no use for
+ * the outcome: the outcome is reported here, once per parse, under the
+ * document id when the caller knows it.
+ */
+export const parsePersistedCorpusAst = (
+  value: unknown,
+  documentId?: string,
+): DocumentAst | EmptyAst | null => {
+  const { ast, outcome } = parseStoredCorpusAst(value, documentId);
+  reportStoredAstOutcome(outcome, { documentId });
+  return ast;
 };
 
 const STORED_CORPUS_VALIDATION_SINK = failureSink({
@@ -1017,15 +1010,25 @@ export const readCorpusSections = async (
  * A parsed AST together with the length of the JSON it was parsed from, which
  * is what a reader that keeps the result has to budget: the parsed graph's
  * heap footprint scales with it, and nothing cheaper measures it afterwards.
+ * `outcome` is what the read came to; it is already reported.
  */
 export type SizedCorpusAst = {
   ast: DocumentAst | EmptyAst | null;
   decodedLength: number;
+  outcome: StoredAstReadOutcome;
+};
+
+/**
+ * The read's document, for its one report. A caller that knows the document
+ * passes it; a read without it is still reported, without the id.
+ */
+export type CorpusAstReadOptions = CorpusByteSourceSeams & {
+  report?: StoredAstReportContext;
 };
 
 export const readSizedCorpusAst = async (
   storedKey: string,
-  { signal, ...seams }: CorpusByteSourceSeams,
+  { signal, report, ...seams }: CorpusAstReadOptions,
 ): Promise<SizedCorpusAst> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
@@ -1047,17 +1050,16 @@ export const readSizedCorpusAst = async (
     });
     throw error;
   }
-  return {
-    ast: parsePersistedCorpusAst(parsed.value),
-    decodedLength: decoded.length,
-  };
+  const { ast, outcome } = parseStoredCorpusAst(parsed.value);
+  reportStoredAstOutcome(outcome, report);
+  return { ast, decodedLength: decoded.length, outcome };
 };
 
 export const readCorpusAst = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  options: CorpusAstReadOptions,
 ): Promise<DocumentAst | EmptyAst | null> =>
-  (await readSizedCorpusAst(storedKey, seams)).ast;
+  (await readSizedCorpusAst(storedKey, options)).ast;
 
 type ReadCorpusAtAuthoritativePointerOptions<T> = {
   storedKey: string;
