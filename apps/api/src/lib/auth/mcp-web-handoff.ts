@@ -26,10 +26,10 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
-import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import { liveSessionPredicate } from "@/api/lib/db/session-liveness";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { logger } from "@/api/lib/observability/logger";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";

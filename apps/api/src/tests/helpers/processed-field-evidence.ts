@@ -474,7 +474,7 @@ const readCzNsSbirka: EvidenceReader = async (fixture) => {
 
 const parseCzIsirDecision = guardParser(parseCzIsirDecisionUnguarded);
 
-/** The anonymised paragraphs the cz-isir reader stored, parsed as a replay parses them. */
+/** The paragraphs the cz-isir reader stored, parsed as a replay parses them. */
 const readCzIsir: EvidenceReader = async (fixture) => {
   const paragraphs = v.parse(
     v.array(v.strictObject({ text: v.string(), bold: v.boolean() })),

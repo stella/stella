@@ -48,6 +48,9 @@ const LISTEN: Duration = Duration::from_millis(100);
 const MAX_RECORDING_SECONDS: usize = 600;
 /// A shorter hold that heard nothing is a tap, not a dictation that failed.
 const MIN_NOTICED_HOLD: Duration = Duration::from_millis(500);
+/// Recording goes on this long after the key comes up: speakers often let go
+/// while still saying the last word.
+const RELEASE_TAIL: Duration = Duration::from_millis(200);
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The speaker waits on every request, so a busy machine must not starve it.
@@ -165,6 +168,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           dictation::set_phase(app, Phase::Transcribing);
           trace.release();
           dictation_preview::release(app);
+          thread::sleep(release_tail(trace.held()));
           let device = capture.recorder.device.clone();
           let mut moved = None;
           let outcome = match finish(
@@ -489,6 +493,16 @@ fn heard_nothing(held: Duration) -> Result<(), Failed> {
     Ok(())
   } else {
     Err(Failure::NothingHeard.into())
+  }
+}
+
+/// How long recording goes on after a hold of `held`. A tap gets none: it
+/// is not a dictation, and its sound is better not heard.
+fn release_tail(held: Duration) -> Duration {
+  if held < MIN_NOTICED_HOLD {
+    Duration::ZERO
+  } else {
+    RELEASE_TAIL
   }
 }
 
@@ -939,6 +953,17 @@ mod tests {
       heard_nothing(Duration::from_millis(1_500)),
       Err(Failure::NothingHeard.into())
     );
+  }
+
+  #[test]
+  fn recording_goes_on_after_a_hold_but_not_after_a_tap() {
+    assert_eq!(release_tail(Duration::from_millis(200)), Duration::ZERO);
+    assert_eq!(
+      release_tail(MIN_NOTICED_HOLD - Duration::from_millis(1)),
+      Duration::ZERO
+    );
+    assert_eq!(release_tail(MIN_NOTICED_HOLD), RELEASE_TAIL);
+    assert_eq!(release_tail(Duration::from_secs(90)), RELEASE_TAIL);
   }
 
   #[test]
