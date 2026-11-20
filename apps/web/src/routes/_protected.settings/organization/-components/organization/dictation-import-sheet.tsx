@@ -79,8 +79,14 @@ const DictationImportSheetBody = ({
   const fresh = review === null ? 0 : review.terms.length - review.listed;
   const room =
     review === null ? 0 : MAX_ORGANIZATION_DICTATION_TERMS - review.total;
+  // Explicit type arguments: useMutation's contextual type would otherwise
+  // infer the answer as unknown.
   const add = useMutation({
-    mutationFn: resourceMutation({
+    mutationFn: resourceMutation<
+      "addDictationVocabulary",
+      { added: number },
+      readonly string[]
+    >({
       mutation: "addDictationVocabulary",
       queryClient,
       scope: { type: "organization" },

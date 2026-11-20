@@ -76,9 +76,15 @@ export const DictationVocabularyCard = () => {
     list.data === undefined
       ? []
       : list.data.pages.flatMap(({ items }) => items);
-  // The words' resource contracts refresh the list after every write.
+  // The words' resource contracts refresh the list after every write. The
+  // type arguments are explicit: useMutation's contextual type would
+  // otherwise infer the answer as unknown.
   const remove = useMutation({
-    mutationFn: resourceMutation({
+    mutationFn: resourceMutation<
+      "deleteDictationVocabulary",
+      { deleted: number },
+      readonly DictationVocabularyTerm["id"][]
+    >({
       mutation: "deleteDictationVocabulary",
       queryClient,
       scope: { type: "organization" },
@@ -287,7 +293,11 @@ const AddWordForm = ({ full }: { full: boolean }) => {
   const [draft, setDraft] = useState("");
   const reading = readDictationTerm(draft);
   const add = useMutation({
-    mutationFn: resourceMutation({
+    mutationFn: resourceMutation<
+      "addDictationVocabulary",
+      { added: number },
+      string
+    >({
       mutation: "addDictationVocabulary",
       queryClient,
       scope: { type: "organization" },
