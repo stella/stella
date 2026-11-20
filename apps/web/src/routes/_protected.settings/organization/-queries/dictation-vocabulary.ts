@@ -9,7 +9,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
-export const dictationVocabularyKeys = {
+const dictationVocabularyKeys = {
   all: (organizationId: string) =>
     ["organization-settings", "dictation-vocabulary", organizationId] as const,
   list: (organizationId: string, search: string) =>

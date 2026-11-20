@@ -103,6 +103,7 @@ export const DictationVocabularyCard = () => {
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+  const removeSelected = async () => await remove.mutateAsync([...selected]);
   const [exporting, setExporting] = useState(false);
   const download = async () => {
     setExporting(true);
@@ -274,7 +275,7 @@ export const DictationVocabularyCard = () => {
           number: String(selected.size),
         })}
         loading={remove.isPending}
-        onConfirm={() => remove.mutateAsync([...selected])}
+        onConfirm={removeSelected}
         onOpenChange={setConfirmingDelete}
         open={confirmingDelete}
         title={t("settings.organization.dictation.deleteSelectedTitle", {
