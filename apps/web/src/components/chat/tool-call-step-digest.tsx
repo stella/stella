@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -363,7 +363,7 @@ const StepMatterReferenceLink = ({
   fallback,
   reference,
 }: {
-  fallback: ReactNode;
+  fallback: ReactElement;
   reference: StepMatterReference;
 }) =>
   useReferenceAvailability(reference) === "resolved" ? (

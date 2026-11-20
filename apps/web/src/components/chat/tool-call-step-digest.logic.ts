@@ -84,7 +84,8 @@ export type StepDigest = {
 export type ChatStepRefTargets = ReadonlyMap<string, ChatStepRefTarget>;
 
 /** For a step outside any stored message: no ref opens anything. */
-export const NO_STEP_REF_TARGETS: ChatStepRefTargets = new Map();
+export const NO_STEP_REF_TARGETS: ReadonlyMap<string, ChatStepRefTarget> =
+  new Map();
 
 /** The parts of a call a digest reads; its input and output are untrusted. */
 type StepToolPart = { input: unknown; name: string; output: unknown };
