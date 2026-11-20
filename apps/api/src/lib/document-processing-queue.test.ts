@@ -325,6 +325,35 @@ describe("OCR derivative durability", () => {
   });
 });
 
+describe("OCR near-duplicate signature", () => {
+  // A scanned PDF has no native text, so the OCR text is the only text a
+  // signature can come from.
+  test("records the signature from OCR text once it becomes the projection", () => {
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+    const persistence = processSource.indexOf(
+      "const persistenceOutcome = await persistOcrProjection",
+    );
+    const signature = processSource.indexOf(
+      "await recordNearDuplicateSignature(database",
+    );
+    const guard = processSource.lastIndexOf(
+      'if (persistenceOutcome === "persisted")',
+      signature,
+    );
+
+    expect(persistence).toBeGreaterThan(-1);
+    expect(guard).toBeGreaterThan(persistence);
+    expect(signature).toBeGreaterThan(guard);
+    expect(processSource.slice(signature, signature + 400)).toContain(
+      "text: result.value.text",
+    );
+  });
+});
+
 describe("lease heartbeat", () => {
   test("aborts the attempt when a renewal no longer owns the run", () => {
     const heartbeatStart = queueSource.indexOf(
