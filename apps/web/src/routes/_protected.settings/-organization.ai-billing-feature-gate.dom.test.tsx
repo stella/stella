@@ -64,7 +64,13 @@ afterEach(async () => {
       response.resolve(
         Response.json({
           configured: false,
-          defaultModels: { chat: null, fast: null, reasoning: null, pdf: null },
+          defaultModels: {
+            chat: null,
+            fast: null,
+            reasoning: null,
+            pdf: null,
+            browse: null,
+          },
           providerDefaultModels: [],
           instanceProvisioned: false,
           decisionInstanceProvisioned: false,

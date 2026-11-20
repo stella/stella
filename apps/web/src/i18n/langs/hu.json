@@ -5391,6 +5391,7 @@
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
       "defaultRationale": {
+        "browse": "Weboldalakon végzett munkához a böngészőben.",
         "chat": "Beszélgetésekhez és mindennapi kérdésekhez.",
         "fast": "Rövid, rutinszerű feladatokhoz.",
         "pdf": "PDF-dokumentumok olvasásához és elemzéséhez.",
@@ -5442,6 +5443,7 @@
       "replaceKey": "Kulcs cseréje",
       "roleUnavailable": "A(z) {provider} nem támogatja ezt a szerepkört.",
       "roles": {
+        "browse": "Böngészés",
         "chat": "Csevegés",
         "fast": "Gyors",
         "pdf": "PDF",

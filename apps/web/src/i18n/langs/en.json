@@ -5391,6 +5391,7 @@
       "defaultModel": "Default: {model}",
       "defaultModelOption": "Default",
       "defaultRationale": {
+        "browse": "For working on websites in the browser.",
         "chat": "For conversation and everyday questions.",
         "fast": "For short, routine tasks.",
         "pdf": "For reading and analysing PDF documents.",
@@ -5442,6 +5443,7 @@
       "replaceKey": "Replace key",
       "roleUnavailable": "{provider} does not support this role.",
       "roles": {
+        "browse": "Browsing",
         "chat": "Chat",
         "fast": "Fast",
         "pdf": "PDF",

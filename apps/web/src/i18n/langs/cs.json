@@ -5391,6 +5391,7 @@
       "defaultModel": "Výchozí: {model}",
       "defaultModelOption": "Výchozí",
       "defaultRationale": {
+        "browse": "Pro práci s webovými stránkami v prohlížeči.",
         "chat": "Pro konverzaci a běžné otázky.",
         "fast": "Pro krátké, rutinní úkoly.",
         "pdf": "Pro čtení a analýzu dokumentů PDF.",
@@ -5442,6 +5443,7 @@
       "replaceKey": "Nahradit klíč",
       "roleUnavailable": "{provider} tuto roli nepodporuje.",
       "roles": {
+        "browse": "Prohlížení webu",
         "chat": "Chat",
         "fast": "Rychlost",
         "pdf": "PDF",

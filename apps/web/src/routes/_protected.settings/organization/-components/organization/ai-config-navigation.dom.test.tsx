@@ -6,6 +6,7 @@ import {
   BYOK_DEFAULT_MODELS,
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
+  MODEL_OVERRIDE_GROUPS,
 } from "@stll/ai-catalog";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
@@ -13,6 +14,9 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+
+// One row per model role, plus the decision row.
+const MODE_ROW_COUNT = MODEL_OVERRIDE_GROUPS.length + 1;
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",
@@ -58,24 +62,28 @@ const GOOGLE_DEFAULTS = {
   fast: { provider: "google", modelId: "gemini-3.8-flash" },
   reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
   pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+  browse: { provider: "google", modelId: "gemini-3.8-flash" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const ANTHROPIC_DEFAULTS = {
   chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
   fast: { provider: "anthropic", modelId: "claude-haiku-5-5" },
   reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
   pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const OPENROUTER_DEFAULTS = {
   chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
   fast: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
   reasoning: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
   pdf: { provider: "openrouter", modelId: "google/gemini-3.8-flash" },
+  browse: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
 } satisfies OrganizationAIConfig["defaultModels"];
 const EMPTY_DEFAULTS = {
   chat: null,
   fast: null,
   reasoning: null,
   pdf: null,
+  browse: null,
 } satisfies OrganizationAIConfig["defaultModels"];
 const previewDefaultsFixture = (fixtureKey: string) => {
   switch (fixtureKey) {
@@ -136,6 +144,10 @@ const savedConfig = {
     pdf: {
       provider: "google",
       modelId: BYOK_DEFAULT_MODELS.google.pdf.modelId,
+    },
+    browse: {
+      provider: "google",
+      modelId: BYOK_DEFAULT_MODELS.google.browse.modelId,
     },
   },
   decision: null,
@@ -753,7 +765,7 @@ test("Advanced shows catalog defaults, saves only explicit overrides and resets 
       .filter((row) =>
         row.textContent.includes(messages.organization.aiConfig.usingDefaults),
       ),
-  ).toHaveLength(5);
+  ).toHaveLength(MODE_ROW_COUNT);
   expect(
     screen.getByText(messages.organization.aiConfig.defaultRationale.chat),
   ).toBeDefined();
@@ -994,6 +1006,7 @@ test.each([false, true])(
         fast: { provider: "mistral", modelId: "mistral-small-latest" },
         reasoning: { provider: "mistral", modelId: "mistral-medium-latest" },
         pdf: withFallback ? { provider: "openai", modelId: "gpt-6-sol" } : null,
+        browse: { provider: "mistral", modelId: "mistral-small-latest" },
       },
       providerDefaultModels: [
         {
@@ -1006,6 +1019,7 @@ test.each([false, true])(
               modelId: "mistral-medium-latest",
             },
             pdf: null,
+            browse: { provider: "mistral", modelId: "mistral-small-latest" },
           },
         },
         ...(withFallback
@@ -1020,6 +1034,7 @@ test.each([false, true])(
                     modelId: "gpt-6-sol",
                   },
                   pdf: { provider: openai.provider, modelId: "gpt-6-sol" },
+                  browse: { provider: openai.provider, modelId: "gpt-6-luna" },
                 },
               },
             ]
@@ -1216,7 +1231,7 @@ const selectDecisionProvider = async (): Promise<"typesafe"> => {
   return provider;
 };
 
-test("Advanced has five mode rows with the default decision in the same table", async () => {
+test("Advanced has a row per model role and the default decision in the same table", async () => {
   await mount({ ...savedConfig, overrideModels: null });
   fireEvent.click(
     screen.getByRole("button", { name: messages.common.advanced }),
@@ -1230,7 +1245,7 @@ test("Advanced has five mode rows with the default decision in the same table", 
   const modeRows = within(table)
     .getAllByRole("group")
     .filter((group) => group.parentElement === table);
-  expect(modeRows).toHaveLength(5);
+  expect(modeRows).toHaveLength(MODE_ROW_COUNT);
   for (const label of Object.values(messages.organization.aiConfig.roles)) {
     expect(within(table).getByRole("group", { name: label })).toBeDefined();
   }
