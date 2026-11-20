@@ -594,7 +594,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `skills.delete` | write, destructive | stella:skills | — | generic invoke → `stella capability skills delete` |
 | `skills.discover` | write | stella:skills | — | generic invoke → `stella capability skills discover` |
 | `skills.drafts.generate` | write | stella:skills | — | generic invoke → `stella capability skills drafts-generate` |
-| `skills.export` | read | stella:skills | — | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. skills.get covers part of this: returns the skill as JSON (instructions and each resource) rather than a SKILL.md package another host can install |
+| `skills.export` | write | stella:skills | — | generic invoke → `stella capability skills export` |
 | `skills.from-blueprint.create` | write | stella:skills | — | generic invoke → `stella capability skills from-blueprint-create` |
 | `skills.from-url.import` | write | stella:skills | — | generic invoke → `stella capability skills from-url-import` |
 | `skills.get` | read | stella:skills | — | generic invoke → `stella capability skills get` |
@@ -841,7 +841,7 @@ mechanics, and similar), not gaps in coverage.
 | native_device | 5 |
 | native_tool_ui | 13 |
 | organization_export | 2 |
-| provider_secret | 34 |
+| provider_secret | 35 |
 | public_indexing | 13 |
 | realtime_stream | 10 |
 | search_ui | 22 |

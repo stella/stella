@@ -1,3 +1,4 @@
+// parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
@@ -94,6 +95,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.PL_UOKIK]: "uokik-gov-pl",
   [ADAPTER_KEYS.BR_TJDFT]: "tjdft-jus-br",
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: "nsoud-sbirka-cz",
+  [ADAPTER_KEYS.CZ_ISIR]: "isir-justice-cz",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** The hosts an adapter's publisher serves from. */

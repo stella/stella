@@ -1425,7 +1425,7 @@ const bunNativeFiles = [
   "apps/api/src/handlers/legal-resolve/authorization.test.ts",
   "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
   "apps/api/src/handlers/lists/verifications/get.db.test.ts",
-  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/lib/auth/microsoft365/graph-oauth.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
   "apps/api/src/handlers/soft-law/adapters/edpb.ts",
   "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
@@ -2428,6 +2428,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
+    "./.oxlint-plugins/no-raw-case-number-key-equality.ts",
     "./.oxlint-plugins/no-local-letter-spacing.ts",
     "./.oxlint-plugins/no-local-paragraph-label.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
@@ -3784,6 +3785,31 @@ const config = defineConfig({
       ],
       rules: {
         "no-local-paragraph-label/no-local-paragraph-label": "error",
+      },
+    },
+    {
+      // Case-number keys are compared through
+      // apps/api/src/lib/case-law/case-number-match-key.ts, which reads a key
+      // printed with a four-digit year and one printed with two as one case.
+      // Excepted: the case-law review tables, keyed by the copy a review row
+      // keeps of its citation's own key and compared byte for byte with it
+      // (polarity/reviews.ts); one-off maintenance scripts, which run once
+      // against the keys of their day; and tests, which state expected rows
+      // independently of the owner.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-case-number-key-equality.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/lib/case-law/case-number-match-key.ts",
+        "apps/api/src/handlers/case-law/polarity/reviews.ts",
+        "apps/api/src/scripts/**",
+        "apps/api/src/tests/**",
+        "apps/api/src/**/*.test.ts",
+      ],
+      rules: {
+        "no-raw-case-number-key-equality/no-raw-case-number-key-equality":
+          "error",
       },
     },
     {

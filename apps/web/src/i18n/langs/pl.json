@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "Wyszukiwanie w BOE",
       "borme_get_summary": "Dzienne podsumowanie BORME",
       "business_registry_lookup": "Wyszukiwanie w rejestrze przedsiębiorstw",
+      "calendar_free_busy": "Sprawdź dostępność w kalendarzu",
+      "calendar_list_events": "Odczytaj wydarzenia z kalendarza",
       "command_execution": "Uruchamianie polecenia",
       "compare_versions": "Porównywanie wersji",
       "configure_template_fields": "Skonfiguruj pola szablonu",
@@ -4713,6 +4715,10 @@
       "dropPack": "Upuść plik .zip/.skill lub SKILL.md, aby zaimportować umiejętność",
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
+      "exportAsSkill": "Eksportuj jako .skill",
+      "exportAsZip": "Eksportuj jako .zip",
+      "exportFailed": "Nie udało się wyeksportować umiejętności",
+      "exportSkill": "Eksportuj umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
       "howItRuns": "Jak działa",
       "importFailureFetch": "Nie udało się wczytać źródła umiejętności.",
@@ -5404,6 +5410,11 @@
       "googleKeyRestricted": "Sprawdź ograniczenia tego klucza dotyczące API, adresów IP i witryn odsyłających w Google Cloud. Zezwól na wymagane API i żądania swojego serwera, a następnie spróbuj ponownie.",
       "keepSavedKey": "Zachowaj zapisany klucz",
       "keyFormatHint": "Ten klucz ma nietypowy format dla dostawcy {provider}. Zapisz go, aby sprawdzić go u dostawcy.",
+      "keyNeed": {
+        "builtIn": "Opcjonalne. Bez własnego klucza AI w tej organizacji działa na modelach udostępnianych przez stellę.",
+        "keyRequired": "AI w tej organizacji potrzebuje klucza dostawcy. Dodaj go, aby włączyć AI.",
+        "ownKeys": "AI w tej organizacji działa na kluczach poniżej."
+      },
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
       "modelsDescription": "Dla każdej kategorii AI wybierz dostawcę i jeden oferowany model multimodalny.",
@@ -5411,6 +5422,7 @@
       "newApiKey": "Nowy klucz API",
       "newApiKeyDescription": "Po zapisaniu zmian zastąpi zapisany klucz.",
       "noModelResults": "Brak pasujących oferowanych modeli",
+      "noProviders": "Nie dodano jeszcze kluczy dostawców.",
       "openaiInsufficientQuota": "Sprawdź budżet projektu OpenAI i rozliczenia API. Doładuj środki lub zwiększ odpowiedni limit i spróbuj ponownie.",
       "openaiProjectOrganizationMismatch": "Użyj klucza API z właściwego projektu i organizacji OpenAI. Sprawdź ich ustawienia dostępu i spróbuj ponownie.",
       "openrouterNoCredits": "Doładuj środki w rozliczeniach OpenRouter i spróbuj ponownie.",
@@ -5433,6 +5445,8 @@
       "providerForRole": "Dostawca dla {role}",
       "providerKeyInvalid": "{provider} odrzucił klucz. Sprawdź go przed zapisaniem.",
       "providerKeyInvalidShort": "Nieprawidłowy",
+      "providerModes": "Używany w trybach: {modes}",
+      "providerModesNone": "Nieużywany w żadnym trybie. Przypisz go do trybu w sekcji Zaawansowane.",
       "providerSetupConsole": "Otwórz ustawienia dostawcy",
       "providersDescription": "Dodaj dane uwierzytelniające dostawców, których stella ma używać.",
       "providersPanel": "Dostawcy",
@@ -5458,6 +5472,7 @@
       "title": "Instrukcje organizacji",
       "tooLong": "Instrukcje mogą zawierać maksymalnie {maxLength} znaków."
     },
+    "createdSwitchPrompt": "Organizacja <bdi>{name}</bdi> została utworzona. Przełącz się na nią, aby ją skonfigurować i zaprosić członków.",
     "creationEvaluationLimitReached": "Wykorzystano wszystkie {limit} okresy próbne organizacji. Usunięcie organizacji nie przywraca okresu próbnego. Użyj istniejącej organizacji lub skontaktuj się z pomocą techniczną, aby uzyskać płatny dostęp.",
     "creationInvalidName": "Wpisz prawidłową nazwę organizacji (maksymalnie {maxLength} znaków).",
     "creationNotAllowed": "To konto nie może tworzyć organizacji.",
@@ -5529,6 +5544,13 @@
     "startOverDescription": "Pierwotne żądanie mogło już utworzyć organizację. Zanim zaczniesz od nowa, sprawdź swoje organizacje; nowe żądanie może utworzyć kolejną organizację.",
     "startOverTitle": "Wysłać nowe żądanie utworzenia?",
     "switchOrganization": "Przełącz organizację"
+  },
+  "organizationSetup": {
+    "aiAction": "Skonfiguruj AI",
+    "aiOptional": "Własne klucze dostawców AI są opcjonalne: bez nich AI działa na modelach udostępnianych przez stellę.",
+    "aiRequired": "AI w tej organizacji potrzebuje klucza dostawcy, zanim ktokolwiek będzie mógł z niej korzystać.",
+    "invite": "Zaproś współpracowników, aby mogli tu z Tobą pracować.",
+    "title": "Skonfiguruj nową organizację"
   },
   "publicTools": {
     "addSkill": "Dodaj umiejętność",
@@ -5969,7 +5991,7 @@
     "organization": {
       "activeMembers": "Aktywni członkowie",
       "ai": "Konfiguracja AI",
-      "aiDescription": "Podłącz własne klucze dostawców AI.",
+      "aiDescription": "Wybierz, jak działa AI w tej organizacji.",
       "anonymization": {
         "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa zespołu)",
         "deleteAction": "Usuń termin",
@@ -6135,7 +6157,7 @@
         "title": "Projekty rozliczeń z AI"
       },
       "dataBoxes": {
-        "description": "Wiadomość wysłana z jednej z tych skrzynek jest zapisywana jako wychodząca, a wysłana do nich jako przychodząca. Każda zmiana ponownie ustala kierunek wiadomości już zapisanych w sprawach, do których masz dostęp.",
+        "description": "Wiadomości wysłane z tych skrzynek są zapisywane jako wychodzące, a wysłane do nich jako przychodzące. Zmiany dotyczą też wiadomości już zapisanych.",
         "invalid": "Identyfikator skrzynki danych ma siedem liter lub cyfr.",
         "remove": "Usuń skrzynkę danych {address}",
         "title": "Skrzynki danych organizacji"
@@ -6168,6 +6190,7 @@
         "title": "Wyodrębnianie pamięci",
         "toggleLabel": "Proponuj wpisy do pamięci z historii czatów w tle"
       },
+      "organizationIdHint": "Stały identyfikator, który nigdy się nie zmienia. Użyj go, kontaktując się z pomocą techniczną lub konfigurując integracje.",
       "pastInvitations": "Poprzednie zaproszenia",
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje",
@@ -6181,11 +6204,12 @@
       "renameTitle": "Zmień nazwę organizacji",
       "renameTypeToConfirm": "Aby potwierdzić, wpisz nową nazwę: {name}",
       "slug": {
-        "change": "Zmień identyfikator",
-        "conflict": "Ten identyfikator jest już używany przez inną organizację.",
-        "description": "Wybierz nowy identyfikator lub wygeneruj losowy. Poprzedni identyfikator przestanie działać.",
-        "opaque": "Wygeneruj losowy identyfikator",
-        "title": "Identyfikator organizacji"
+        "change": "Zmień krótką nazwę",
+        "conflict": "Ta krótka nazwa jest już używana przez inną organizację.",
+        "description": "Wybierz nową krótką nazwę lub wygeneruj losową. Poprzednia krótka nazwa przestanie działać.",
+        "hint": "Unikalna krótka nazwa tej organizacji, niezależna od jej nazwy wyświetlanej.",
+        "opaque": "Wygeneruj losową krótką nazwę",
+        "title": "Krótka nazwa organizacji"
       },
       "timePolicy": {
         "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",

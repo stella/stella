@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import * as v from "valibot";
 
-import { apiPut } from "../helpers/api";
+import { apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { createTestCorrespondence } from "../helpers/correspondence";
 import {
@@ -70,7 +70,24 @@ test.describe("pages fit a phone", () => {
       request: apiRequest,
       workspace,
     });
-    const correspondenceId = await createTestCorrespondence(workspace.id);
+    const sessionResponse = await apiRequest.get(
+      `${E2E_API_ORIGIN}/api/auth/get-session`,
+    );
+    expect(sessionResponse.ok()).toBe(true);
+    const {
+      session: { activeOrganizationId },
+      user: { email },
+    } = v.parse(
+      v.object({
+        session: v.object({ activeOrganizationId: v.string() }),
+        user: v.object({ email: v.string() }),
+      }),
+      await sessionResponse.json(),
+    );
+    const correspondenceId = await createTestCorrespondence(workspace.id, {
+      organizationId: activeOrganizationId,
+      email,
+    });
     world = { workspace, contactId, documentRoute, correspondenceId };
   });
 

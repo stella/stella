@@ -6151,6 +6151,26 @@
   },
   {
     "schema": "public",
+    "table": "email_delivery_failures",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "email_delivery_failures",
+    "policy": "email_delivery_failures_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('email_delivery_failures'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('email_delivery_failures'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "entities",
     "policy": "entity_feature_gate_maintenance",
     "command": "ALL",
@@ -12461,6 +12481,16 @@
   },
   {
     "schema": "public",
+    "table": "sharepoint_connections",
+    "policy": "sharepoint_connections_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('sharepoint_connections'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('sharepoint_connections'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "sharepoint_oauth_state",
     "policy": "sharepoint_oauth_state_delete",
     "command": "DELETE",
@@ -12482,6 +12512,16 @@
   {
     "schema": "public",
     "table": "sharepoint_oauth_state",
+    "policy": "sharepoint_oauth_state_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('sharepoint_oauth_state'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('sharepoint_oauth_state'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "sharepoint_oauth_state",
     "policy": "sharepoint_oauth_state_select",
     "command": "SELECT",
     "roles": ["stella"],
@@ -12495,9 +12535,9 @@
     "policy": "sharepoint_oauth_state_update",
     "command": "UPDATE",
     "roles": ["stella"],
-    "permissive": "PERMISSIVE",
-    "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))",
-    "withCheck": null
+    "permissive": "RESTRICTIVE",
+    "using": "false",
+    "withCheck": "false"
   },
   {
     "schema": "public",

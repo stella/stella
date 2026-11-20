@@ -197,6 +197,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   "details-grid": native("DetailsGrid from @stll/ui/details-grid", {
     elements: ["dl", "dt", "dd"],
   }),
+  "details-list-face": noNative(
+    "the fixed horizontal detail list and row used during loading",
+  ),
   dialog: native("Dialog from @stll/ui/dialog", {
     elements: ["dialog"],
     roles: ["dialog"],
@@ -301,6 +304,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["number"],
   }),
   "option-color": notComponent("option colour tokens"),
+  "outcome-screen-face": noNative(
+    "the shared first-paint layout for a callback result",
+  ),
   "outcome-screen": noNative(
     "the screen a finished flow ends on; a hand-built one is " +
       "no-adhoc-outcome-screen's",
@@ -602,6 +608,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "destructive-confirm-dialog": webOnly(
     "a phone confirms through the platform's own alert",
   ),
+  "details-list-face": webOnly(
+    "the phone presents account details in native rows",
+  ),
   "details-grid": webOnly(
     "a phone stacks labelled values as rows, not a definition grid",
   ),
@@ -678,6 +687,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     'React Native truncates a line natively (numberOfLines with ellipsizeMode "middle")',
   ),
   "number-input": webOnly("the app enters no numbers yet"),
+  "outcome-screen-face": webOnly(
+    "the browser renders the callback progress and result",
+  ),
   "outcome-screen": webOnly(
     "the web's end-of-flow screen; no app flow ends on one yet",
   ),

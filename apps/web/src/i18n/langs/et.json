@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE seaduste otsing",
       "borme_get_summary": "BORME päevane kokkuvõte",
       "business_registry_lookup": "Äriregistrist otsimine",
+      "calendar_free_busy": "Vaba aja kontrollimine kalendris",
+      "calendar_list_events": "Kalendrisündmuste lugemine",
       "command_execution": "Käsu käivitamine",
       "compare_versions": "Versioonide võrdlemine",
       "configure_template_fields": "Seadista malli väljad",
@@ -4713,6 +4715,10 @@
       "dropPack": "Lohistage siia .zip/.skill või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
+      "exportAsSkill": "Ekspordi .skill-failina",
+      "exportAsZip": "Ekspordi .zip-failina",
+      "exportFailed": "Oskust ei õnnestunud eksportida",
+      "exportSkill": "Ekspordi oskus",
       "fileExists": "Selle teega fail on juba olemas",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
@@ -5404,6 +5410,11 @@
       "googleKeyRestricted": "Kontrollige Google Cloudis selle võtme API-, IP-aadressi- ja viitavate veebisaitide piiranguid. Lubage vajalik API ja oma serveri päringud ning proovige uuesti.",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "keyFormatHint": "Selle võtme vorming on teenusepakkuja {provider} puhul ebatavaline. Salvestage võti, et seda teenusepakkujaga kontrollida.",
+      "keyNeed": {
+        "builtIn": "Valikuline. Oma võtmeta kasutab selle organisatsiooni tehisintellekt stella pakutavaid mudeleid.",
+        "keyRequired": "Selle organisatsiooni tehisintellekt vajab teenusepakkuja võtit. Lisa võti, et tehisintellekt sisse lülitada.",
+        "ownKeys": "Selle organisatsiooni tehisintellekt kasutab allolevaid võtmeid."
+      },
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
@@ -5411,6 +5422,7 @@
       "newApiKey": "Uus API võti",
       "newApiKeyDescription": "See asendab salvestatud võtme muudatuste salvestamisel.",
       "noModelResults": "Sobivaid pakutud mudeleid ei leitud",
+      "noProviders": "Teenusepakkujate võtmeid pole veel lisatud.",
       "openaiInsufficientQuota": "Kontrollige oma OpenAI projekti eelarvet ja API arveldust. Lisage krediiti või suurendage vastavat limiiti ja proovige uuesti.",
       "openaiProjectOrganizationMismatch": "Kasutage soovitud OpenAI projekti ja organisatsiooni API-võtit. Kontrollige nende juurdepääsuseadeid ja proovige uuesti.",
       "openrouterNoCredits": "Lisage OpenRouteri arveldusjaotises krediiti ja proovige uuesti.",
@@ -5433,6 +5445,8 @@
       "providerForRole": "{role} teenusepakkuja",
       "providerKeyInvalid": "{provider} keeldus võtmest. Kontrollige seda enne salvestamist.",
       "providerKeyInvalidShort": "Vigane",
+      "providerModes": "Kasutatakse režiimides: {modes}",
+      "providerModesNone": "Ei kasutata üheski režiimis. Määra see režiimile jaotises Täpsemad seaded.",
       "providerSetupConsole": "Ava teenusepakkuja seaded",
       "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
@@ -5458,6 +5472,7 @@
       "title": "Organisatsiooni juhised",
       "tooLong": "Juhised võivad sisaldada kuni {maxLength} märki."
     },
+    "createdSwitchPrompt": "Organisatsioon <bdi>{name}</bdi> on loodud. Vaheta sellele, et see seadistada ja liikmeid kutsuda.",
     "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
     "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
     "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
@@ -5529,6 +5544,13 @@
     "startOverDescription": "Algne päring võis organisatsiooni juba luua. Enne uuesti alustamist kontrolli oma organisatsioone; uus päring võib luua veel ühe organisatsiooni.",
     "startOverTitle": "Kas saata uus loomispäring?",
     "switchOrganization": "Vaheta organisatsiooni"
+  },
+  "organizationSetup": {
+    "aiAction": "Seadista tehisintellekt",
+    "aiOptional": "Oma tehisintellekti teenusepakkujate võtmed on valikulised: ilma nendeta kasutab tehisintellekt stella pakutavaid mudeleid.",
+    "aiRequired": "Selle organisatsiooni tehisintellekt vajab teenusepakkuja võtit, enne kui keegi saab seda kasutada.",
+    "invite": "Kutsu kolleegid, et nad saaksid siin sinuga koos töötada.",
+    "title": "Seadista uus organisatsioon"
   },
   "publicTools": {
     "addSkill": "Lisa oskus",
@@ -5969,7 +5991,7 @@
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
       "ai": "AI seadistus",
-      "aiDescription": "Ühendage oma tehisintellekti teenusepakkujate võtmed.",
+      "aiDescription": "Vali, kuidas tehisintellekt selles organisatsioonis töötab.",
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
@@ -6135,7 +6157,7 @@
         "title": "Tehisintellekti arveldusmustandid"
       },
       "dataBoxes": {
-        "description": "Ühest neist postkastidest saadetud sõnum registreeritakse väljaminevana, neile saadetud sõnum sissetulevana. Iga muudatus määrab uuesti juba registreeritud sõnumite suuna toimikutes, millele teil on juurdepääs.",
+        "description": "Nendest postkastidest saadetud sõnumid registreeritakse väljaminevatena, neile saadetud sõnumid sissetulevatena. Muudatused kehtivad ka juba registreeritud sõnumitele.",
         "invalid": "Andmepostkasti ID koosneb seitsmest tähest või numbrist.",
         "remove": "Eemalda andmepostkast {address}",
         "title": "Organisatsiooni andmepostkastid"
@@ -6168,6 +6190,7 @@
         "title": "Mälu ekstraktimine",
         "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
       },
+      "organizationIdHint": "Püsiv ID, mis ei muutu kunagi. Kasutage seda toega ühendust võttes või liidestuste seadistamisel.",
       "pastInvitations": "Varasemad kutsed",
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
@@ -6181,11 +6204,12 @@
       "renameTitle": "Nimeta organisatsioon ümber",
       "renameTypeToConfirm": "Kinnitamiseks sisesta uus nimi: {name}",
       "slug": {
-        "change": "Muuda tunnust",
-        "conflict": "See tunnus on juba teise organisatsiooni kasutusel.",
-        "description": "Valige uus tunnus või looge juhuslik tunnus. Senine tunnus ei ole enam kasutatav.",
-        "opaque": "Loo juhuslik tunnus",
-        "title": "Organisatsiooni tunnus"
+        "change": "Muuda lühinime",
+        "conflict": "See lühinimi on juba teise organisatsiooni kasutusel.",
+        "description": "Valige uus lühinimi või looge juhuslik. Senine lühinimi ei ole enam kasutatav.",
+        "hint": "Organisatsiooni unikaalne lühinimi, kuvatavast nimest eraldi.",
+        "opaque": "Loo juhuslik lühinimi",
+        "title": "Organisatsiooni lühinimi"
       },
       "timePolicy": {
         "description": "Määrake aja ümardamine, muutmise tähtajad ja kuude lukustamine.",

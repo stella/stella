@@ -56,6 +56,7 @@ export function OrganizationGeneralPage() {
       organizationId={
         <IdentifierPanel
           action={<CopyControl text={organization.id} variant="outline" />}
+          description={t("settings.organization.organizationIdHint")}
           title={t("admin.organizationId")}
           value={organization.id}
         />

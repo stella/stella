@@ -50,6 +50,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "verificationDecisionModelEnabled", // AI policy belongs to the AI settings.
   "aiInstructions", // AI policy belongs to general settings.
   "sharepointConnectionEnabled", // Connection policy belongs to general settings.
+  "microsoft365CalendarReadEnabled", // Connection policy belongs to SharePoint settings.
   "memoryExtractionEnabled", // Memory policy belongs to general settings.
   "templatePacksHidden", // Template preferences belong to general settings.
   "memoryExtractionEnabledAt", // Extraction scheduling is internal state.

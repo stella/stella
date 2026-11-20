@@ -83,6 +83,7 @@ export const OrganizationSlugCard = ({
             </Button>
           )
         }
+        description={t("settings.organization.slug.hint")}
         title={t("settings.organization.slug.title")}
         value={slug}
       />

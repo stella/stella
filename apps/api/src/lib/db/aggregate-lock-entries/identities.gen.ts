@@ -56,6 +56,7 @@ import type { Identity as SchedulerClaimIdentity } from "./schedulerClaim";
 import type { Identity as ScoutCensusIdentity } from "./scoutCensus";
 import type { Identity as SearchHistoryIdentity } from "./searchHistory";
 import type { Identity as SearchProjectionRepairIdentity } from "./searchProjectionRepair";
+import type { Identity as SharepointConnectionIdentity } from "./sharepointConnection";
 import type { Identity as SignalIdentity } from "./signal";
 import type { Identity as SigningSessionIdentity } from "./signingSession";
 import type { Identity as WorkspaceIdentity } from "./workspace";
@@ -119,6 +120,7 @@ export type AggregateIdentities = {
   "scoutCensus": ScoutCensusIdentity;
   "searchHistory": SearchHistoryIdentity;
   "searchProjectionRepair": SearchProjectionRepairIdentity;
+  "sharepointConnection": SharepointConnectionIdentity;
   "signal": SignalIdentity;
   "signingSession": SigningSessionIdentity;
   "workspace": WorkspaceIdentity;

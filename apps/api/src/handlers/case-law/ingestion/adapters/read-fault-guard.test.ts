@@ -56,6 +56,7 @@ import {
   atRisFixture,
   brTjdftFixture,
   brTstCrawlFixture,
+  czIsirFixture,
   czNsFixture,
   czNsSbirkaFixture,
   czNssFixture,
@@ -137,6 +138,7 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
   [ADAPTER_KEYS.BR_TJDFT]: brTjdftFixture,
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaFixture,
+  [ADAPTER_KEYS.CZ_ISIR]: czIsirFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
 const UNDRIVEN_REASON =

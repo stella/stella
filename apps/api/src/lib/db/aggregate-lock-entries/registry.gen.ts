@@ -56,9 +56,10 @@ import entry54 from "./schedulerClaim";
 import entry55 from "./scoutCensus";
 import entry56 from "./searchHistory";
 import entry57 from "./searchProjectionRepair";
-import entry58 from "./signal";
-import entry59 from "./signingSession";
-import entry60 from "./workspace";
+import entry58 from "./sharepointConnection";
+import entry59 from "./signal";
+import entry60 from "./signingSession";
+import entry61 from "./workspace";
 
 export default {
   "account": entry0,
@@ -119,7 +120,8 @@ export default {
   "scoutCensus": entry55,
   "searchHistory": entry56,
   "searchProjectionRepair": entry57,
-  "signal": entry58,
-  "signingSession": entry59,
-  "workspace": entry60,
+  "sharepointConnection": entry58,
+  "signal": entry59,
+  "signingSession": entry60,
+  "workspace": entry61,
 } as const;

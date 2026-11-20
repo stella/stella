@@ -40,12 +40,21 @@ const config = {
 // OneDrive.
 const listSharepointDrivesHandler = createSafeRootHandler(
   config,
-  async function* ({ query, safeDb, session, user }) {
+  async function* ({
+    query,
+    safeDb,
+    session,
+    user,
+    request,
+    recordAuditEvent,
+  }) {
     const page = yield* Result.await(
       withSharepointGraph({
         organizationId: session.activeOrganizationId,
         userId: user.id,
         safeDb,
+        recordAuditEvent,
+        signal: request.signal,
         call: async (accessToken) =>
           await listSharepointDrives({
             accessToken,
