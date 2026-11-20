@@ -420,7 +420,6 @@ test("an unrecognized attaching court parks the source post and exact replay inp
         corpus: landingTransfer().corpus,
         polarityRules: new Map(),
         context: { adapterKey: "synthetic-collection", cursor: "page-1" },
-        failureStreak: 0,
       },
       async () => syntheticAttachingContract(),
     );
@@ -433,7 +432,6 @@ test("an unrecognized attaching court parks the source post and exact replay inp
   const applied = await apply();
   expect(applied.failureLedger).toEqual({ type: "written" });
   expect(applied.halt).toBeNull();
-  expect(applied.failureStreak).toBe(0);
   expect(applied.settlements).toHaveLength(decisions.length);
   expect((await apply()).failureLedger).toEqual({ type: "written" });
   expect(
