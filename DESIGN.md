@@ -360,6 +360,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
 - `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle`, `SegmentedIconToggleFace` `size`: `compact`, `touch`
 - `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
+- `DetailsGrid` `density`: `compact`, `default`
 - `DetailsGrid` `labelWidth`: `auto`, `lg`, `md`, `sm`
 - `DetailsGrid` `orientation`: `auto`, `horizontal`, `vertical`
 - `DetailsGrid` `variant`: `list`, `sheet`
