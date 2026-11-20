@@ -49,6 +49,7 @@ const populationIds = ({ rows, cohort }: RedactionTombstoneScenario) => {
     .padStart(4, "0");
   return {
     decisionPrefix: `01890000-00d4-7000-${group}-`,
+    citationPrefix: `01890000-00d9-7000-${group}-`,
     controlId: toSafeId<"caseLawDecision">(
       `01890000-00d5-7000-${group}-000000000001`,
     ),
@@ -60,20 +61,49 @@ const populationIds = ({ rows, cohort }: RedactionTombstoneScenario) => {
 const CONSTRAINT = "case_law_decisions_redacted_payload_erased";
 const LEASE = "query-perf-redaction";
 
+/** Times one seed step, so a slow reseed names the step that spends it. */
+const seedStep = async <T>(step: string, operation: () => Promise<T>) => {
+  const started = performance.now();
+  try {
+    return await operation();
+  } finally {
+    process.stdout.write(
+      `${JSON.stringify({
+        event: "redaction_seed_step",
+        step,
+        ms: Math.round(performance.now() - started),
+      })}\n`,
+    );
+  }
+};
+
 /** Restore historical rows only in the disposable measurement database. */
 export const seedRedactionTombstoneScenario = async (
   database: GatedTestDb,
   scenario: RedactionTombstoneScenario,
 ) => {
   const { rows, cohort } = scenario;
-  const { decisionPrefix, controlId, pageEnd } = populationIds(scenario);
-  await database.execute(
-    sql`DELETE FROM scheduler_jobs WHERE id LIKE 'query-perf-redaction-background:%'`,
+  const { decisionPrefix, citationPrefix, controlId, pageEnd } =
+    populationIds(scenario);
+  await seedStep(
+    "delete scheduler rows",
+    async () =>
+      await database.execute(
+        sql`DELETE FROM scheduler_jobs WHERE id LIKE 'query-perf-redaction-background:%'`,
+      ),
   );
-  await database.execute(sql`DELETE FROM case_law_corpus_upload_intents WHERE decision_id IN
-    (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`);
-  await database.execute(
-    sql`DELETE FROM case_law_sources WHERE id = ${SOURCE_ID}`,
+  await seedStep(
+    "delete upload intents",
+    async () =>
+      await database.execute(sql`DELETE FROM case_law_corpus_upload_intents WHERE decision_id IN
+    (SELECT id FROM case_law_decisions WHERE source_id = ${SOURCE_ID})`),
+  );
+  await seedStep(
+    "delete source",
+    async () =>
+      await database.execute(
+        sql`DELETE FROM case_law_sources WHERE id = ${SOURCE_ID}`,
+      ),
   );
   const definition = v
     .parse(
@@ -84,21 +114,34 @@ export const seedRedactionTombstoneScenario = async (
       ).at(0),
     )
     .definition.replace(/ NOT VALID$/u, "");
-  await database.transaction(async (tx) => {
-    await tx.execute(sql`ALTER TABLE case_law_decisions DISABLE TRIGGER USER`);
-    await tx.execute(sql`ALTER TABLE case_law_index_jobs DISABLE TRIGGER USER`);
-    await tx.execute(
-      sql`ALTER TABLE case_law_search_documents DISABLE TRIGGER USER`,
-    );
-    await tx.execute(
-      sql`ALTER TABLE case_law_corpus_upload_intents DISABLE TRIGGER USER`,
-    );
-    await tx.execute(
-      sql`ALTER TABLE case_law_decisions DROP CONSTRAINT case_law_decisions_redacted_payload_erased`,
-    );
-    await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+  await seedStep(
+    "insert population",
+    async () =>
+      await database.transaction(async (tx) => {
+        await tx.execute(
+          sql`ALTER TABLE case_law_decisions DISABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_index_jobs DISABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_search_documents DISABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_corpus_upload_intents DISABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_decision_identifiers DISABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_provision_citations DISABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_decisions DROP CONSTRAINT case_law_decisions_redacted_payload_erased`,
+        );
+        await tx.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
       VALUES (${SOURCE_ID}, 'query-perf-redaction', 'Redaction measurement', false)`);
-    await tx.execute(sql`INSERT INTO case_law_decisions
+        await tx.execute(sql`INSERT INTO case_law_decisions
       (id, source_id, case_number, docket_family_key, country, court, language, fulltext, source_raw,
        text_s3_key, normalized_s3_key, ast_s3_key, redacted_at)
       SELECT (${decisionPrefix} || lpad(n::text, 12, '0'))::uuid,
@@ -112,60 +155,83 @@ export const seedRedactionTombstoneScenario = async (
         CASE WHEN n <= 50 AND ${cohort} = 'repair' THEN 'fixture/ast/' || n ELSE NULL END,
         CASE WHEN ${cohort} = 'repair' THEN NULL ELSE '2026-01-01'::timestamptz END
       FROM generate_series(1, ${rows}::integer) n`);
-    await tx.execute(sql`INSERT INTO case_law_decisions
+        await tx.execute(sql`INSERT INTO case_law_decisions
       (id, source_id, case_number, docket_family_key, country, court, language, fulltext, source_raw)
       VALUES (${controlId}, ${SOURCE_ID}, ${CONTROL_CASE_NUMBER}, NULL, 'CZE', 'Measurement court', 'cs', 'Live text', 'Live publisher payload')`);
-    await tx.execute(sql`INSERT INTO case_law_search_documents (decision_id, searchable_text)
+        await tx.execute(sql`INSERT INTO case_law_search_documents (decision_id, searchable_text)
       SELECT id, 'Searchable fixture text' FROM case_law_decisions WHERE source_id = ${SOURCE_ID}`);
-    await tx.execute(sql`INSERT INTO case_law_corpus_upload_intents
+        await tx.execute(sql`INSERT INTO case_law_corpus_upload_intents
       (id, decision_id, text_s3_key, normalized_s3_key, ast_s3_key, lease_expires_at, status, next_cleanup_at)
       SELECT ('01890000-00d6-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         (${decisionPrefix} || lpad(n::text, 12, '0'))::uuid,
         'fixture/reserved/text/' || n, 'fixture/reserved/sections/' || n, 'fixture/reserved/ast/' || n,
         '2026-01-01'::timestamptz, CASE WHEN ${cohort} = 'repair' THEN 'active' ELSE 'cleanup' END, CASE WHEN ${cohort} = 'repair' THEN NULL ELSE '2026-01-01'::timestamptz END FROM generate_series(1, ${rows}::integer) n`);
-    await tx.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
+        await tx.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
       SELECT ('01890000-00d7-7000-8000-' || right(id::text, 12))::uuid, id, 'redact', 'succeeded', '2026-01-01'::timestamptz
       FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <> ${controlId}`);
-    await tx.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
+        await tx.execute(sql`INSERT INTO case_law_index_jobs (id, decision_id, operation, status, created_at)
       SELECT ('01890000-00d8-7000-8000-' || right(id::text, 12))::uuid, id, 'redact', 'succeeded', '2026-01-02'::timestamptz
       FROM case_law_decisions WHERE source_id = ${SOURCE_ID} AND id <= ${pageEnd}`);
-    await tx.execute(
-      sql`ALTER TABLE case_law_decisions ADD CONSTRAINT case_law_decisions_redacted_payload_erased ${sql.raw(definition)} NOT VALID`,
-    );
-    await tx.execute(
-      sql`ALTER TABLE case_law_corpus_upload_intents ENABLE TRIGGER USER`,
-    );
-    await tx.execute(
-      sql`ALTER TABLE case_law_search_documents ENABLE TRIGGER USER`,
-    );
-    await tx.execute(sql`ALTER TABLE case_law_index_jobs ENABLE TRIGGER USER`);
-    await tx.execute(sql`ALTER TABLE case_law_decisions ENABLE TRIGGER USER`);
-    await tx.execute(sql`INSERT INTO scheduler_jobs (id, task, schedule, next_run_at, enabled)
+        // Every decision states an identifier and cites a provision, as
+        // published decisions do: the projection reads both by decision.
+        await tx.execute(sql`INSERT INTO case_law_decision_identifiers
+      (decision_id, type, value, normalized_value)
+      SELECT id, 'ecli', 'ECLI:CZ:QP:2026:' || id::text, 'ECLI:CZ:QP:2026:' || id::text
+      FROM case_law_decisions WHERE source_id = ${SOURCE_ID}`);
+        await tx.execute(sql`INSERT INTO case_law_provision_citations
+      (id, decision_id, jurisdiction, work_identifier, work_number, work_year, work_collection,
+       unit, section, work_eli, anchor, span_start, span_end, sentence_text, confidence)
+      SELECT (${citationPrefix} || right(id::text, 12))::uuid, id, 'CZE', '89/2012 Sb.', 89, 2012, 'Sb.',
+        'section', 1, '/eli/cz/sb/2012/89', 's1', 0, 5, 'Citation', 1
+      FROM case_law_decisions WHERE source_id = ${SOURCE_ID}`);
+        await tx.execute(
+          sql`ALTER TABLE case_law_decisions ADD CONSTRAINT case_law_decisions_redacted_payload_erased ${sql.raw(definition)} NOT VALID`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_provision_citations ENABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_decision_identifiers ENABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_corpus_upload_intents ENABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_search_documents ENABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_index_jobs ENABLE TRIGGER USER`,
+        );
+        await tx.execute(
+          sql`ALTER TABLE case_law_decisions ENABLE TRIGGER USER`,
+        );
+        await tx.execute(sql`INSERT INTO scheduler_jobs (id, task, schedule, next_run_at, enabled)
       SELECT 'query-perf-redaction-background:' || n, 'noop', '{"type":"interval","everyMs":60000}'::jsonb,
         '2026-01-10'::timestamptz, false FROM generate_series(1, ${rows}::integer) n`);
-    await tx
-      .insert(schedulerJobs)
-      .values({
-        id: REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
-        task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
-        schedule: { type: "interval", everyMs: 60_000 },
-        lockedBy: LEASE,
-        lockedAt: new Date("2026-01-10T12:00:00Z"),
-        lockedUntil: new Date("2026-01-10T12:05:00Z"),
-        nextRunAt: new Date("2026-01-10T12:00:00Z"),
-        payload: { cursor: null },
-      })
-      .onConflictDoUpdate({
-        target: schedulerJobs.id,
-        set: {
-          lockedBy: LEASE,
-          lockedAt: new Date("2026-01-10T12:00:00Z"),
-          lockedUntil: new Date("2026-01-10T12:05:00Z"),
-          payload: { cursor: null },
-          enabled: true,
-        },
-      });
-  });
+        await tx
+          .insert(schedulerJobs)
+          .values({
+            id: REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
+            task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+            schedule: { type: "interval", everyMs: 60_000 },
+            lockedBy: LEASE,
+            lockedAt: new Date("2026-01-10T12:00:00Z"),
+            lockedUntil: new Date("2026-01-10T12:05:00Z"),
+            nextRunAt: new Date("2026-01-10T12:00:00Z"),
+            payload: { cursor: null },
+          })
+          .onConflictDoUpdate({
+            target: schedulerJobs.id,
+            set: {
+              lockedBy: LEASE,
+              lockedAt: new Date("2026-01-10T12:00:00Z"),
+              lockedUntil: new Date("2026-01-10T12:05:00Z"),
+              payload: { cursor: null },
+              enabled: true,
+            },
+          });
+      }),
+  );
   // Every population starts unprocessed: no desired state or signal change of
   // an earlier run may name its decisions.
   const leftovers = v.parse(
@@ -192,8 +258,22 @@ export const seedRedactionTombstoneScenario = async (
     "scheduler_jobs",
   ]) {
     // db-await-in-loop: fixed fixture tables need fresh statistics at each population size.
-    await database.execute(sql.raw(`VACUUM (ANALYZE) ${table}`));
+    await seedStep(
+      `vacuum ${table}`,
+      async () => await database.execute(sql.raw(`VACUUM (ANALYZE) ${table}`)),
+    );
   }
+  // The planner reads both by decision only with their statistics current.
+  await seedStep(
+    "analyze case_law_decision_identifiers",
+    async () =>
+      await database.execute(sql`ANALYZE case_law_decision_identifiers`),
+  );
+  await seedStep(
+    "analyze case_law_provision_citations",
+    async () =>
+      await database.execute(sql`ANALYZE case_law_provision_citations`),
+  );
 };
 
 /** A full page, the inline cleanup and the non-audited control must all be exercised. */
