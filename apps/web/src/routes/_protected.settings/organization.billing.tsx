@@ -7,7 +7,7 @@ import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { SellerProfilesCard } from "@/routes/_protected.settings/organization/-components/organization/seller-profiles-card";
 
 export const Route = createFileRoute(

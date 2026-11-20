@@ -24,7 +24,7 @@ import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { UsagePlansCard } from "@/routes/_protected.settings/organization/-components/organization/usage-plans-card";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/organization/-queries/usage-policies";
 

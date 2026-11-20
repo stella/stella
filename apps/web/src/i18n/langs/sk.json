@@ -2359,6 +2359,11 @@
       "accepted": "Použité",
       "rejected": "Odmietnuté"
     },
+    "switcher": {
+      "allChats": "Všetky chaty",
+      "searchPlaceholder": "Nájsť chat…",
+      "trigger": "Prepnúť chat"
+    },
     "tableChart": {
       "bar": "Stĺpcový",
       "kind": "Typ grafu",

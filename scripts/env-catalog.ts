@@ -1568,6 +1568,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
   "FAKE_CODEX_PACE_MS",
+  // The run folder and an unreadable folder the fake ACP agent names in the
+  // paths of its tool calls and permission requests.
+  "FAKE_ACP_WORKSPACE",
+  "FAKE_ACP_UNREADABLE",
   // The local stack's stand-in computer (`agent:up -- --local-runner`) logs
   // at the level this filter names.
   "RUST_LOG",
