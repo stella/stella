@@ -24,7 +24,6 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import {
   admitFiniteAction,
   authorizeHandlerUsage,
-  configuredModelAdmission,
   type SafeHandlerGenerator,
   type SafeHandlerLogContext,
 } from "@/api/lib/api-handlers";
@@ -345,23 +344,25 @@ type MemberDictationContext = OrgSettingsForAuth & {
   user: { id: SafeId<"user"> };
   request: Request;
   actionSignal?: AbortSignal | undefined;
-  modelAdmission?: ModelDispatchAdmission | undefined;
 };
 
 /**
  * Runs one model-backed cleanup for a signed-in member, after the root
  * handler has checked the role, usage and the "dictation.cleanup" action
  * admission: the organization's stored AI settings must be readable and the
- * cleanup budget is consumed before `run` reaches the model.
+ * cleanup budget is consumed before `run` reaches the model under the
+ * admission the handler's configured action admission granted.
  */
 export const runMemberDictationModelAction = async function* <
   TResult extends NonNullable<unknown>,
 >({
   ctx,
+  modelAdmission,
   limit = consumeDictationLimit,
   run,
 }: {
   ctx: MemberDictationContext;
+  modelAdmission: ModelDispatchAdmission;
   limit?: typeof consumeDictationLimit | undefined;
   run: (admitted: AdmittedDictationContext) => SafeHandlerGenerator<TResult>;
 }): SafeHandlerGenerator<TResult> {
@@ -380,9 +381,7 @@ export const runMemberDictationModelAction = async function* <
       managedAIResidency: ctx.managedAIResidency,
       promptCachingEnabled: ctx.promptCachingEnabled,
     },
-    modelAdmission: configuredModelAdmission({
-      modelAdmission: ctx.modelAdmission,
-    }),
+    modelAdmission,
     actionSignal: ctx.actionSignal ?? ctx.request.signal,
   });
 };
