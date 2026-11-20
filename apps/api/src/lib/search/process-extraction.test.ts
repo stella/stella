@@ -156,6 +156,12 @@ const recordLanguageMock = mock(
   ) => undefined,
 );
 
+const recordSignatureMock = mock(
+  async (
+    ..._args: Parameters<ExecuteNativeExtractionDependencies["recordSignature"]>
+  ) => undefined,
+);
+
 const persistNativeExtractionProjection = async (
   options: Parameters<typeof persistNativeExtractionProjectionWithDatabase>[0],
 ) =>
@@ -173,6 +179,7 @@ const executeDependencies = {
   extractText: extractFileTextResultMock,
   persistProjection: persistProjectionSpy,
   recordLanguage: recordLanguageMock,
+  recordSignature: recordSignatureMock,
   requestAutomaticOcr: requestAutomaticDocumentOcrMock,
   restoreManualOcr: restoreManualOcrRunAfterProjectionLossMock,
 } satisfies ExecuteNativeExtractionDependencies;
@@ -285,6 +292,7 @@ beforeEach(() => {
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
   recordLanguageMock.mockClear();
+  recordSignatureMock.mockClear();
   enqueueUploadedMailMock.mockReset();
   enqueueUploadedMailMock.mockImplementation(async () => undefined);
   persistProjectionSpy.mockClear();
@@ -924,6 +932,32 @@ describe("the extraction's database", () => {
     expect(
       requestAutomaticDocumentOcrMock.mock.calls.map(([input]) => input.db),
     ).toEqual([extractionDatabase]);
+    // A textless PDF has nothing to compare.
+    expect(recordSignatureMock).not.toHaveBeenCalled();
+  });
+
+  test("hands the extracted text to the signature recorder on the same connection", async () => {
+    seedSource("pdf");
+
+    const outcome = await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      run,
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(recordSignatureMock.mock.calls).toEqual([
+      [
+        extractionDatabase,
+        {
+          entityId,
+          entityVersionId,
+          organizationId,
+          workspaceId,
+          text: "native text",
+        },
+      ],
+    ]);
   });
 
   test("stamps a DOCX-declared language on the same connection", async () => {
@@ -976,6 +1010,7 @@ describe("the extraction's database", () => {
     expect(outcome).toBe("source_cancelled");
     expect(persistProjectionSpy).toHaveBeenCalledTimes(1);
     expect(recordLanguageMock).not.toHaveBeenCalled();
+    expect(recordSignatureMock).not.toHaveBeenCalled();
     expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();

@@ -25,6 +25,7 @@ CREATE INDEX "entity_version_minhash_signatures_workspace_organization_idx" ON "
 ALTER TABLE "entity_version_minhash_signatures" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_signatures" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "entity_version_minhash_signatures" TO stella;--> statement-breakpoint
+CREATE POLICY "entity_version_minhash_signatures_owner" ON "entity_version_minhash_signatures" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.entity_version_minhash_signatures'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.entity_version_minhash_signatures'::regclass));--> statement-breakpoint
 CREATE POLICY "entity_version_minhash_signatures_workspace_select" ON "entity_version_minhash_signatures" AS PERMISSIVE FOR SELECT TO "stella" USING ((
   CASE
   WHEN workspace_id = ANY(
@@ -137,6 +138,7 @@ CREATE INDEX "entity_version_minhash_bands_entity_workspace_idx" ON "entity_vers
 ALTER TABLE "entity_version_minhash_bands" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "entity_version_minhash_bands" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "entity_version_minhash_bands" TO stella;--> statement-breakpoint
+CREATE POLICY "entity_version_minhash_bands_owner" ON "entity_version_minhash_bands" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.entity_version_minhash_bands'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.entity_version_minhash_bands'::regclass));--> statement-breakpoint
 CREATE POLICY "entity_version_minhash_bands_workspace_select" ON "entity_version_minhash_bands" AS PERMISSIVE FOR SELECT TO "stella" USING ((
   CASE
   WHEN workspace_id = ANY(

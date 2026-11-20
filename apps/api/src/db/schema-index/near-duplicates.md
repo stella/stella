@@ -4,31 +4,31 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## entity_version_minhash_signatures · `entityVersionMinhashSignatures` · near-duplicates.ts:29
+## entity_version_minhash_signatures · `entityVersionMinhashSignatures` · near-duplicates.ts:42
 
-MinHash signature of a document version's extracted text, seeded per organization; see `@/api/lib/near-duplicate/minhash`.
+MinHash signature of a document version's extracted text, seeded per organization; see `@/api/lib/uploads/near-duplicates/minhash`.
 
 ```text
-entity_version_minhash_signatures.{...entityFeatureGateColumns()}           spread                                near-duplicates.ts:32
-entity_version_minhash_signatures.{...entityFeatureWorkspaceGateColumns()}  spread                                near-duplicates.ts:33
-entity_version_minhash_signatures.entity_version_id                         safeUuid            pk,fk,not null    near-duplicates.ts:34
-entity_version_minhash_signatures.organization_id                           safeOrganizationId  fk,not null       near-duplicates.ts:35
-entity_version_minhash_signatures.workspace_id                              safeWorkspaceId     fk,not null       near-duplicates.ts:36
-entity_version_minhash_signatures.entity_id                                 safeUuid            fk,not null       near-duplicates.ts:37
-entity_version_minhash_signatures.signature                                 bytea               not null          near-duplicates.ts:38
-entity_version_minhash_signatures.created_at                                timestamptz         default,not null  near-duplicates.ts:39
+entity_version_minhash_signatures.{...entityFeatureGateColumns()}           spread                                near-duplicates.ts:45
+entity_version_minhash_signatures.{...entityFeatureWorkspaceGateColumns()}  spread                                near-duplicates.ts:46
+entity_version_minhash_signatures.entity_version_id                         safeUuid            pk,fk,not null    near-duplicates.ts:47
+entity_version_minhash_signatures.organization_id                           safeOrganizationId  fk,not null       near-duplicates.ts:49
+entity_version_minhash_signatures.workspace_id                              safeWorkspaceId     fk,not null       near-duplicates.ts:50
+entity_version_minhash_signatures.entity_id                                 safeUuid            fk,not null       near-duplicates.ts:51
+entity_version_minhash_signatures.signature                                 bytea               not null          near-duplicates.ts:52
+entity_version_minhash_signatures.created_at                                timestamptz         default,not null  near-duplicates.ts:53
 ```
 
-## entity_version_minhash_bands · `entityVersionMinhashBands` · near-duplicates.ts:102
+## entity_version_minhash_bands · `entityVersionMinhashBands` · near-duplicates.ts:117
 
 One LSH band key per band of a signature; candidates share a key.
 
 ```text
-entity_version_minhash_bands.{...entityFeatureGateColumns()}           spread                           near-duplicates.ts:105
-entity_version_minhash_bands.{...entityFeatureWorkspaceGateColumns()}  spread                           near-duplicates.ts:106
-entity_version_minhash_bands.entity_version_id                         safeUuid            fk,not null  near-duplicates.ts:107
-entity_version_minhash_bands.organization_id                           safeOrganizationId  fk,not null  near-duplicates.ts:108
-entity_version_minhash_bands.workspace_id                              safeWorkspaceId     fk,not null  near-duplicates.ts:109
-entity_version_minhash_bands.entity_id                                 safeUuid            fk,not null  near-duplicates.ts:110
-entity_version_minhash_bands.band_key                                  bigint              not null     near-duplicates.ts:111
+entity_version_minhash_bands.{...entityFeatureGateColumns()}           spread                           near-duplicates.ts:120
+entity_version_minhash_bands.{...entityFeatureWorkspaceGateColumns()}  spread                           near-duplicates.ts:121
+entity_version_minhash_bands.entity_version_id                         safeUuid            fk,not null  near-duplicates.ts:122
+entity_version_minhash_bands.organization_id                           safeOrganizationId  fk,not null  near-duplicates.ts:123
+entity_version_minhash_bands.workspace_id                              safeWorkspaceId     fk,not null  near-duplicates.ts:124
+entity_version_minhash_bands.entity_id                                 safeUuid            fk,not null  near-duplicates.ts:125
+entity_version_minhash_bands.band_key                                  bigint              not null     near-duplicates.ts:126
 ```

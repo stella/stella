@@ -41,6 +41,7 @@ import {
   findExtractionFileField,
   findExtractionFileFieldRow,
 } from "@/api/lib/search/types";
+import { recordNearDuplicateSignature } from "@/api/lib/uploads/near-duplicates/record-signature";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -311,7 +312,7 @@ type NativeExtractionRun = Pick<
  */
 export type NativeExtractionDatabase = Pick<
   typeof rootDb,
-  "transaction" | "update"
+  "insert" | "transaction" | "update"
 >;
 
 type RecordDocxVersionLanguageOptions = {
@@ -369,6 +370,51 @@ const recordDocxVersionLanguage = async ({
         source: "native-extraction-docx-language",
       }),
     );
+  }
+};
+
+const NEAR_DUPLICATE_SIGNATURE_SINK = failureSink({
+  event: "native_extraction.near_duplicate_signature_failed",
+  expected: [],
+});
+
+type RecordVersionSignatureOptions = {
+  database: NativeExtractionDatabase;
+  recordSignature: ExecuteNativeExtractionDependencies["recordSignature"];
+  run: NativeExtractionRun;
+  text: string | null;
+};
+
+/**
+ * Store the MinHash signature near-duplicate detection compares, for every
+ * file version that gets text, from the same single hook as the language
+ * stamp. Telemetry-only on failure: the document stays fully indexed.
+ */
+const recordVersionSignature = async ({
+  database,
+  recordSignature,
+  run,
+  text,
+}: RecordVersionSignatureOptions): Promise<void> => {
+  if (text === null) {
+    return;
+  }
+  const recorded = await Result.tryPromise({
+    try: async () =>
+      await recordSignature(database, {
+        entityId: run.entityId,
+        entityVersionId: run.entityVersionId,
+        organizationId: run.organizationId,
+        workspaceId: run.workspaceId,
+        text,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(recorded)) {
+    observeFailure(recorded.error, {
+      sink: NEAR_DUPLICATE_SIGNATURE_SINK,
+      ctx: { entityId: run.entityId, workspaceId: run.workspaceId },
+    });
   }
 };
 
@@ -448,6 +494,7 @@ export const executeNativeExtraction = async ({
     extractText,
     persistProjection,
     recordLanguage,
+    recordSignature,
     requestAutomaticOcr,
     restoreManualOcr,
   } = dependencies;
@@ -517,6 +564,8 @@ export const executeNativeExtraction = async ({
     text,
   });
 
+  await recordVersionSignature({ database, recordSignature, run, text });
+
   await recordUploadedMail({ source, enqueueUploadedMail, run });
 
   if (source.extractionMimeType === PDF_MIME_TYPE) {
@@ -562,6 +611,7 @@ export type ExecuteNativeExtractionDependencies = {
   extractText: typeof extractFileTextResult;
   persistProjection: typeof persistNativeExtractionProjection;
   recordLanguage: typeof recordEntityVersionDetectedLanguage;
+  recordSignature: typeof recordNearDuplicateSignature;
   requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
   restoreManualOcr: typeof restoreManualOcrRunAfterProjectionLoss;
 };
@@ -572,6 +622,7 @@ const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencie
     extractText: extractFileTextResult,
     persistProjection: persistNativeExtractionProjection,
     recordLanguage: recordEntityVersionDetectedLanguage,
+    recordSignature: recordNearDuplicateSignature,
     requestAutomaticOcr: requestAutomaticDocumentOcr,
     restoreManualOcr: restoreManualOcrRunAfterProjectionLoss,
   };

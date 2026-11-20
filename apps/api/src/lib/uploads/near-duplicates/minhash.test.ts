@@ -7,7 +7,7 @@ import {
   minHashSeeds,
   minHashSignature,
   NEAR_DUPLICATE_THRESHOLD,
-} from "@/api/lib/near-duplicate/minhash";
+} from "@/api/lib/uploads/near-duplicates/minhash";
 
 const SEEDS = minHashSeeds("organization-a");
 

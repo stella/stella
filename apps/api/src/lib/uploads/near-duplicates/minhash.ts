@@ -56,7 +56,10 @@ export const minHashSeeds = (key: string): Uint32Array =>
   );
 
 export const shingleHashes = (text: string): Set<number> | null => {
-  const words = foldSearchMatchText(text).match(WORD_RE) ?? [];
+  const words = Array.from(
+    foldSearchMatchText(text).matchAll(WORD_RE),
+    ([word]) => word,
+  );
   if (words.length < MIN_WORDS) {
     return null;
   }
@@ -86,6 +89,22 @@ export const minHashSignature = (
     }
   }
   return signature;
+};
+
+/** Little-endian, so stored signatures do not depend on the host. */
+export const signatureToBytes = (signature: Uint32Array): Buffer => {
+  const bytes = Buffer.alloc(SIGNATURE_LENGTH * 4);
+  for (const [slot, value] of signature.entries()) {
+    bytes.writeUInt32LE(value, slot * 4);
+  }
+  return bytes;
+};
+
+export const signatureFromBytes = (bytes: Uint8Array): Uint32Array => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return Uint32Array.from({ length: SIGNATURE_LENGTH }, (_, slot) =>
+    view.getUint32(slot * 4, true),
+  );
 };
 
 export const estimateSimilarity = (

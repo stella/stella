@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import { SIGNATURE_LENGTH } from "@/api/lib/near-duplicate/minhash";
+import { SIGNATURE_LENGTH } from "@/api/lib/uploads/near-duplicates/minhash";
 
 import {
   entityFeatureGateChecks,
@@ -22,9 +22,22 @@ import { entities, entityVersions } from "./entities";
 
 const SIGNATURE_BYTES = SIGNATURE_LENGTH * 4;
 
+// The extraction worker writes through the owner connection.
+const ownerPolicy = (table: string) => {
+  const isOwner = sql.raw(
+    `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass)`,
+  );
+  return p.pgPolicy(`${table}_owner`, {
+    for: "all",
+    to: "public",
+    using: isOwner,
+    withCheck: isOwner,
+  });
+};
+
 /**
  * MinHash signature of a document version's extracted text, seeded per
- * organization; see `@/api/lib/near-duplicate/minhash`.
+ * organization; see `@/api/lib/uploads/near-duplicates/minhash`.
  */
 export const entityVersionMinhashSignatures = p.pgTable(
   "entity_version_minhash_signatures",
@@ -86,6 +99,7 @@ export const entityVersionMinhashSignatures = p.pgTable(
       "entity_version_minhash_signatures_length_check",
       sql`octet_length(${table.signature}) = ${sql.raw(String(SIGNATURE_BYTES))}`,
     ),
+    ownerPolicy("entity_version_minhash_signatures"),
     ...wsOrganizationPolicies("entity_version_minhash_signatures", {
       columns: table,
       references: new Map([
@@ -158,6 +172,7 @@ export const entityVersionMinhashBands = p.pgTable(
         name: "entity_version_minhash_bands_entity_workspace_fk",
       })
       .onDelete("cascade"),
+    ownerPolicy("entity_version_minhash_bands"),
     ...wsOrganizationPolicies("entity_version_minhash_bands", {
       columns: table,
       references: new Map([

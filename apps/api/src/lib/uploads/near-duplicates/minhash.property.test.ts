@@ -10,7 +10,9 @@ import {
   minHashSeeds,
   minHashSignature,
   NEAR_DUPLICATE_THRESHOLD,
-} from "@/api/lib/near-duplicate/minhash";
+  signatureFromBytes,
+  signatureToBytes,
+} from "@/api/lib/uploads/near-duplicates/minhash";
 
 const SEEDS = minHashSeeds("organization-a");
 
@@ -53,6 +55,19 @@ describe("near-duplicate MinHash (properties)", () => {
         expect([...signatureOf(reformatted)]).toEqual([...signatureOf(value)]);
       }),
       { numRuns: 100 },
+    );
+  });
+
+  test("a signature survives its byte encoding", () => {
+    assertProperty(
+      "a signature survives its byte encoding",
+      fc.property(text, (value) => {
+        const signature = signatureOf(value);
+        expect([...signatureFromBytes(signatureToBytes(signature))]).toEqual([
+          ...signature,
+        ]);
+      }),
+      { numRuns: 50 },
     );
   });
 

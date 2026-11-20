@@ -226,6 +226,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations":
     "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/file": "crud",
+  "GET /v1/entities/:workspaceId/entity/:entityId/similar": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions/:versionId": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/diff":
