@@ -13,6 +13,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 
+import {
+  APPEAL_REVIEWS_COUNTRY,
+  DECISION_REVIEWS_CLASS_NAMES,
+} from "@/features/case-law/components/case-viewer/decision-appeal-reviews.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { formatDecisionDate } from "@/lib/decision-date";
@@ -77,16 +81,16 @@ export const DecisionAppealReviews = ({
   const hasConflict = [...reviews.reviewedBy, ...reviews.reviews].some(
     ({ evidenceStatus }) => evidenceStatus === "conflict",
   );
-  if (country !== "CZE") {
+  if (country !== APPEAL_REVIEWS_COUNTRY) {
     return null;
   }
   return (
     <section
       aria-label={t("caseLaw.viewer.appealReviews.title")}
-      className="reader-chrome flex flex-col gap-2 text-sm"
+      className={DECISION_REVIEWS_CLASS_NAMES.section}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-foreground-strong-muted text-xs font-medium">
+      <div className={DECISION_REVIEWS_CLASS_NAMES.headingRow}>
+        <h2 className={DECISION_REVIEWS_CLASS_NAMES.heading}>
           {t("caseLaw.viewer.appealReviews.title")}
         </h2>
         <ReviewStatusBadge tone={STATUS_TONE[reviews.status]}>
