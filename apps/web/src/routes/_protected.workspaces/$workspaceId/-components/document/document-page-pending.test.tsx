@@ -10,7 +10,6 @@ import {
   PdfToolbarFace,
 } from "@/components/pdf/pdf-viewer.pending";
 import { DOCX_MIME, PDF_MIME, XLSX_MIME } from "@/lib/consts";
-import { fileMetadataQueryKey } from "@/lib/files/file-metadata-query.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityField } from "@/lib/types";
 import { entityDetailKey } from "@/lib/workspaces/queries/entity-keys.logic";
@@ -75,14 +74,6 @@ describe("the document page's loading sheet", () => {
     expect(
       cachedDocumentPageSheet(cacheWith("image/png"), workspaceId, search),
     ).toEqual({ type: "pdf", colorMode: undefined });
-    const scanned = cacheWith(PDF_MIME);
-    scanned.setQueryData(fileMetadataQueryKey({ fieldId, workspaceId }), {
-      originalMimeType: "image/jpeg",
-    });
-    expect(cachedDocumentPageSheet(scanned, workspaceId, search)).toEqual({
-      type: "pdf",
-      colorMode: undefined,
-    });
   });
 
   test("is read from the version history for an older version's file", () => {

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 
+import { panic } from "better-result";
+
+import { fitWidthZoom } from "@stll/folio-core/paged-layout/fitWidthZoom";
+
+import { DOCX_PAGE_WIDTH } from "@/components/docx/docx-page.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 // Target the typical Word text area (page minus ~1-inch margins on
@@ -9,13 +14,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 // leaving the page margins as dead whitespace. The page edges then
 // overflow horizontally and the user can scroll to inspect margins.
 const DOCX_TEXT_AREA_WIDTH = 624;
-
-// The full Letter page at 96 DPI (8.5 × 11 inches). Callers fitting the whole page
-// — margins included — divide their available width by DOCX_PAGE_WIDTH instead of
-// the text area, so the page sits centred rather than overflowing its side margins;
-// the loading shell sizes its placeholder page from both dimensions.
-export const DOCX_PAGE_WIDTH = 816;
-export const DOCX_PAGE_HEIGHT = 1056;
 
 // Fit target for whole-page surfaces: inflating the page width by a per-side
 // gutter reserves ~7.5% of the container width as symmetric breathing space,
@@ -28,19 +26,6 @@ const DOCX_DEFAULT_ZOOM = 1;
 const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
 const DOCX_PINCH_SENSITIVITY = 0.005;
-
-/**
- * The width `useDocxFitZoom` gives the whole page, as CSS, for a view that
- * cannot measure before it paints: the measured box's width (`100cqw`, the
- * nearest inline-size query container, which must be as wide as the box the
- * hook measures) less the fit padding, over the fitted width, capped at the
- * largest automatic zoom, times the page. The hook rounds its zoom to
- * hundredths, so the two can differ by under half a percent of the page.
- */
-export const docxFitPageWidthCss = (maxAutoZoom: number): string =>
-  `min(${String(maxAutoZoom * DOCX_PAGE_WIDTH)}px, calc((100cqw - ${String(
-    DOCX_FIT_PADDING * 2,
-  )}px) * ${String(DOCX_PAGE_WIDTH / DOCX_TEXT_AREA_WIDTH)}))`;
 
 type ZoomableDocxEditor = {
   getZoom: () => number;
@@ -55,23 +40,31 @@ type DocxFitZoomResult = {
   fitZoom: number;
 };
 
+/**
+ * How a view fits a DOCX page to its container:
+ * - `editor`: the whole page, by the rule Folio's editor fits with
+ *   (`fitWidthZoom`), for the editor and every view that stands in for it
+ *   (its loading sheet, a zoom nudged from the fit, the read-only viewer), so
+ *   the page keeps its box when the editor replaces them;
+ * - `width`: `fitWidth` px fitted to the container, up to `maxAutoZoom`. The
+ *   Word text area (the default) fills the panel with body text and lets the
+ *   page margins overflow; the full page plus a gutter allowance fits the
+ *   whole page with the spare width as symmetric side padding.
+ */
+type DocxFit =
+  | { type: "editor" }
+  | { type: "width"; fitWidth?: number; maxAutoZoom?: number };
+
 type DocxFitZoomOptions = {
+  fit: DocxFit;
   /** Added to the auto-fit zoom after clamping (a manual zoom nudge). */
   scaleOffset?: number;
-  /** Ceiling for the auto-fit zoom. */
-  maxAutoZoom?: number;
-  /** Content width (px) fitted to the container. Defaults to the Word text area,
-   * so body text fills the panel and the page margins overflow horizontally. Pass
-   * a larger width (e.g. the full page plus a gutter allowance) to fit the whole
-   * page instead, leaving the container's spare width as symmetric side padding. */
-  fitWidth?: number;
 };
 
 export const useDocxFitZoom = ({
+  fit,
   scaleOffset = 0,
-  maxAutoZoom = DOCX_MAX_ZOOM,
-  fitWidth = DOCX_TEXT_AREA_WIDTH,
-}: DocxFitZoomOptions = {}): DocxFitZoomResult => {
+}: DocxFitZoomOptions): DocxFitZoomResult => {
   const [fitZoom, setFitZoom] = useState(DOCX_DEFAULT_ZOOM);
 
   // Callback ref: React invokes this once when the container
@@ -87,15 +80,48 @@ export const useDocxFitZoom = ({
       return undefined;
     }
 
+    // The widest scrollbar edge seen so far, which the editor's fit keeps.
+    let reservedEdge = 0;
     const updateZoom = () => {
-      const { clientWidth } = node;
+      const { clientWidth, offsetWidth } = node;
       if (clientWidth <= 0) {
         return;
       }
-      const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
-      const nextFitZoom = availableWidth / fitWidth;
-      const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
-      setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
+      switch (fit.type) {
+        case "editor": {
+          const editorFit = fitWidthZoom({
+            clientWidth,
+            offsetWidth,
+            pageWidth: DOCX_PAGE_WIDTH,
+            reservedEdge,
+          });
+          reservedEdge = editorFit.reservedEdge;
+          if (editorFit.zoom !== null) {
+            setFitZoom(clampDocxZoom(editorFit.zoom));
+          }
+          return;
+        }
+        case "width": {
+          const {
+            fitWidth = DOCX_TEXT_AREA_WIDTH,
+            maxAutoZoom = DOCX_MAX_ZOOM,
+          } = fit;
+          const availableWidth = Math.max(
+            1,
+            clientWidth - DOCX_FIT_PADDING * 2,
+          );
+          const cappedFitZoom = Math.min(
+            maxAutoZoom,
+            availableWidth / fitWidth,
+          );
+          setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
+          return;
+        }
+        default: {
+          fit satisfies never;
+          panic("Unhandled DOCX fit");
+        }
+      }
     };
 
     updateZoom();
