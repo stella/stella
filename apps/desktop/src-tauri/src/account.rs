@@ -1180,6 +1180,11 @@ pub async fn account_disconnect(
   let _lease = lock_requests().await;
   let account = load_account_to_disconnect(&state).await?;
   end_link(&state, &sessions, account.as_ref()).await?;
+  // Transcripts kept for the account leave with it.
+  if let Some(account) = &account {
+    crate::transcribe_history::erase_account(&app, account.local_data_namespace())
+      .await;
+  }
   *BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
