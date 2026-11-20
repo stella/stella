@@ -1563,6 +1563,20 @@
       "useKanbanSortable",
       "useKanbanSortableSensors"
     ],
+    "./kanban-card-shell": ["KanbanCardShell"],
+    "./kanban-column-header-shell": [
+      "KANBAN_COLUMN_NAME_CLASS",
+      "KanbanColumnHeaderShell",
+      "KanbanColumnNameFace"
+    ],
+    "./kanban-grouping": [
+      "getKanbanGroupingPropertyId",
+      "getKanbanGroups",
+      "isKanbanGroupingRenderable",
+      "resolveKanbanGroupOptions",
+      "resolveKanbanGrouping",
+      "selectKanbanRows"
+    ],
     "./kbd": ["Kbd", "formatKeys", "kbdPlatformOf", "useKbdPlatform"],
     "./label": ["Label"],
     "./landing": [
