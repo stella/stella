@@ -14,6 +14,8 @@
 // test's file accesses against its declared inputs costs minutes, so only the
 // nightly `--verify-declarations` run traces, and it traces every test.
 //
+// The declaration census checks every script test without running tests.
+//   bun scripts/run-unlisted-script-tests.ts --check-declarations
 //   bun scripts/run-unlisted-script-tests.ts [--depth] [--verify-declarations]
 
 import { panic, Result } from "better-result";
@@ -39,31 +41,44 @@ import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
 const declaredInputs = new Map(Object.entries(scriptTestInputs.inputs));
 
 /**
- * `affected` runs the tests the diff selects, untraced; `verify-declarations`
- * runs and traces every test, whatever the diff.
+ * `affected` runs the tests the diff selects, untraced. `verify-declarations`
+ * runs and traces every test. `check-declarations` checks declaration presence.
  */
 export const SCRIPT_TEST_MODES = {
   affected: "affected",
+  checkDeclarations: "check-declarations",
   verifyDeclarations: "verify-declarations",
 } as const;
 type ScriptTestMode =
   (typeof SCRIPT_TEST_MODES)[keyof typeof SCRIPT_TEST_MODES];
+
+type ScriptTestRunMode = Exclude<
+  ScriptTestMode,
+  typeof SCRIPT_TEST_MODES.checkDeclarations
+>;
 
 type ScriptTestArguments =
   | {
       readonly type: "valid";
       readonly timeout: number | undefined;
       readonly depth: boolean;
-      readonly mode: ScriptTestMode;
+      readonly mode: ScriptTestRunMode;
+    }
+  | {
+      readonly type: "valid";
+      readonly mode: typeof SCRIPT_TEST_MODES.checkDeclarations;
     }
   | { readonly type: "invalid"; readonly message: string };
 
 export const parseScriptTestArguments = (
   args: readonly string[],
 ): ScriptTestArguments => {
+  if (args.length === 1 && args[0] === "--check-declarations") {
+    return { type: "valid", mode: SCRIPT_TEST_MODES.checkDeclarations };
+  }
   let timeout: number | undefined;
   let depth = false;
-  let mode: ScriptTestMode = SCRIPT_TEST_MODES.affected;
+  let mode: ScriptTestRunMode = SCRIPT_TEST_MODES.affected;
   const argumentsIterator = args.values();
   for (const argument of argumentsIterator) {
     if (argument === "--depth") {
@@ -236,6 +251,7 @@ export const prepareStrace = ({
   return installed;
 };
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
+const GLOBAL_SCRIPT_TEST_INPUT = "**";
 const DEPTH_TESTS = Object.keys(
   await Bun.file(new URL("depth-script-tests.json", import.meta.url)).json(),
 );
@@ -274,8 +290,8 @@ type SelectScriptTestsOptions = {
   readonly tests: readonly string[];
   readonly changed: readonly string[];
   readonly root?: string;
-  readonly inputs?: Readonly<Record<string, readonly string[]>>;
-  readonly exemptions?: Readonly<Record<string, string>>;
+  readonly inputs?: ScriptTestInputMap;
+  readonly exemptions?: ScriptTestExemptions;
   /** Tracked files; a closure file outside it is generated output. */
   readonly tracked?: ReadonlySet<string>;
   /**
@@ -285,14 +301,47 @@ type SelectScriptTestsOptions = {
   readonly declarationChanges?: DeclarationChanges;
 };
 
+type ScriptTestInputMap = Readonly<Record<string, readonly string[]>>;
+type ScriptTestExemptions = Readonly<Record<string, string>>;
+
 const scriptTestDeclarationsSchema = v.object({
   inputs: v.optional(v.record(v.string(), v.array(v.string()))),
   noTrackedInputs: v.optional(v.record(v.string(), v.string())),
 });
 
 type ScriptTestDeclarations = {
-  readonly inputs?: Readonly<Record<string, readonly string[]>> | undefined;
-  readonly noTrackedInputs?: Readonly<Record<string, string>> | undefined;
+  readonly inputs?: ScriptTestInputMap | undefined;
+  readonly noTrackedInputs?: ScriptTestExemptions | undefined;
+};
+
+const hasScriptTestDeclaration = (
+  test: string,
+  inputs: ScriptTestInputMap,
+  exemptions: ScriptTestExemptions,
+): boolean => Object.hasOwn(inputs, test) || Object.hasOwn(exemptions, test);
+
+export const scriptTestDeclarationError = (
+  tests: readonly string[],
+  {
+    inputs = {},
+    noTrackedInputs = {},
+  }: ScriptTestDeclarations = scriptTestInputs,
+): string | undefined => {
+  const missing = tests.filter(
+    (test) => !hasScriptTestDeclaration(test, inputs, noTrackedInputs),
+  );
+  if (missing.length === 0) {
+    return undefined;
+  }
+  return [
+    `Script tests with undeclared inputs. Add these entries to "inputs" in ${SCRIPT_TEST_INPUTS_PATH}:`,
+    ...missing
+      .toSorted()
+      .map(
+        (test) =>
+          `  ${JSON.stringify(test)}: ${JSON.stringify([GLOBAL_SCRIPT_TEST_INPUT])},`,
+      ),
+  ].join("\n");
 };
 
 /**
@@ -363,7 +412,7 @@ export const planScriptTestRun = ({
   comparison,
   selectAffected,
 }: {
-  readonly mode: ScriptTestMode;
+  readonly mode: ScriptTestRunMode;
   readonly tests: readonly string[];
   readonly comparison: ScriptTestComparison | undefined;
   readonly selectAffected: (
@@ -424,7 +473,7 @@ const trackedFiles = (): Set<string> => {
   );
 };
 
-/** Select tests only when HEAD proves their code or declared data changed. */
+/** Keep tests with unknown inputs and tests affected by the diff. */
 export const selectAffectedScriptTests = ({
   tests,
   changed,
@@ -460,20 +509,19 @@ export const selectAffectedScriptTests = ({
       reason: "shared test configuration or runner changed",
     };
   }
-  const undeclared = tests.filter((test) => {
-    const closure = graph.closure(test);
-    return (
-      [...closure].some(
+  const runsAlways = (test: string) =>
+    !hasScriptTestDeclaration(test, inputs, exemptions) ||
+    inputs[test]?.includes(GLOBAL_SCRIPT_TEST_INPUT) === true;
+  const emptyReaderInputs = tests.filter(
+    (test) =>
+      inputs[test]?.length === 0 &&
+      !Object.hasOwn(exemptions, test) &&
+      [...graph.closure(test)].some(
         (file) => graph.readers.has(file) || graph.scanners.has(file),
-      ) &&
-      (!Object.hasOwn(inputs, test) || inputs[test]?.length === 0) &&
-      !Object.hasOwn(exemptions, test)
-    );
-  });
-  // Generated sources exist only where CI prepared them, and no tracked file
-  // digest covers their generators' inputs. A test reaching one, or an import
-  // that cannot resolve, can never be proven unaffected, so it declares `**`.
-  const runsAlways = (test: string) => inputs[test]?.includes("**") === true;
+      ),
+  );
+  // An unresolved or generated import has no tracked closure. The test
+  // needs a global declaration before narrowed selection can be safe.
   const unresolved = tests.filter(
     (test) =>
       !runsAlways(test) &&
@@ -483,11 +531,11 @@ export const selectAffectedScriptTests = ({
           (tracked !== undefined && !tracked.has(file)),
       ),
   );
-  if (undeclared.length > 0 || unresolved.length > 0) {
+  if (emptyReaderInputs.length > 0 || unresolved.length > 0) {
     panic(
       [
-        undeclared.length > 0
-          ? `Script tests with undeclared data inputs: ${undeclared.join(", ")}`
+        emptyReaderInputs.length > 0
+          ? `Script tests with undeclared data inputs: ${emptyReaderInputs.join(", ")}`
           : "",
         unresolved.length > 0
           ? `Script tests with unresolved or generated imports (declare "**"): ${unresolved.join(", ")}`
@@ -500,6 +548,7 @@ export const selectAffectedScriptTests = ({
   const changedSet = new Set(changed);
   const files = tests.filter((test) => {
     if (
+      runsAlways(test) ||
       changedSet.has(test) ||
       (declarationChanges !== "all" && declarationChanges.has(test))
     ) {
@@ -543,9 +592,10 @@ export const selectScriptTests = (
     : discovered.filter((file) => !depthSet.has(file));
 };
 
-const scan = (pattern: string): string[] => [
-  ...new Bun.Glob(pattern).scanSync({ cwd: REPO_ROOT }),
-];
+export const discoverScriptTests = (root = REPO_ROOT): string[] =>
+  [...new Bun.Glob(TEST_GLOB).scanSync({ cwd: root })].filter(
+    (file) => !file.includes("/node_modules/"),
+  );
 
 const TRACE_STRING_LIMIT = 65_535;
 
@@ -1346,16 +1396,24 @@ if (import.meta.main) {
   const options = parseScriptTestArguments(process.argv.slice(2));
   if (options.type === "invalid") {
     console.error(
-      `Usage: bun scripts/run-unlisted-script-tests.ts [--depth] [--verify-declarations] [--timeout <positive integer>]\n${options.message}`,
+      `Usage: bun scripts/run-unlisted-script-tests.ts [--check-declarations | [--depth] [--verify-declarations] [--timeout <positive integer>]]\n${options.message}`,
     );
     process.exitCode = 2;
+  } else if (options.mode === SCRIPT_TEST_MODES.checkDeclarations) {
+    const tests = discoverScriptTests();
+    const error = scriptTestDeclarationError(tests);
+    if (error === undefined) {
+      console.log(
+        `Checked input declarations for ${tests.length} script test file(s).`,
+      );
+    } else {
+      console.error(error);
+      process.exitCode = 1;
+    }
   } else {
     // Pooled checks run their commands from the check pool registries.
     const workflowText = readCiCheckCommandText(REPO_ROOT);
-    const discovered = unlistedTests(
-      scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
-      workflowText,
-    );
+    const discovered = unlistedTests(discoverScriptTests(), workflowText);
     const unlisted = selectScriptTests(discovered, DEPTH_TESTS, options.depth);
     const base =
       options.mode === SCRIPT_TEST_MODES.affected

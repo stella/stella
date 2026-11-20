@@ -8,7 +8,6 @@ import {
   publicLawPageSize,
   publicLawPagesToWalk,
 } from "@/components/public-law-table/public-law-pagination.logic";
-import { publicLawLoadMode } from "@/components/public-law-table/public-law-results-state.logic";
 import { createStatuteFilters } from "@/features/statutes/open-statute-match";
 import {
   statuteFacetsOptions,
@@ -22,6 +21,7 @@ import {
 } from "@/features/statutes/statute-index-search.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import {
   ensureRouteInfiniteQueryData,
   prefetchRouteQuery,
@@ -110,7 +110,7 @@ export const loadPublicStatutesIndex = async ({
   // components hold the previous rows and swap them in place, so awaiting
   // here would only replace a live page with a skeleton.
   if (
-    publicLawLoadMode({ cause, hasCachedPages: cached !== undefined }) ===
+    routeLoadMode({ cause, hasCachedPages: cached !== undefined }) ===
     "background"
   ) {
     return { statutes: shownStatutes(cached, search.page) };

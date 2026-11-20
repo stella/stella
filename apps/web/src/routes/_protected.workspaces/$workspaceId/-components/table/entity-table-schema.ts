@@ -12,7 +12,7 @@
 import {
   getInternalColId,
   getInternalPropertyId,
-} from "@/components/workspaces/entity-utils";
+} from "@/components/workspaces/internal-ids.logic";
 import {
   ADD_PROPERTY_COLUMN_SIZE,
   DEFAULT_TABLE_COLUMN_MIN_SIZE,

@@ -21,20 +21,28 @@ import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { panic, Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import { legalFileFormat } from "@stll/api-contract/document-format";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import {
+  LEGAL_FILE_FORMATS,
+  type LegalFileFormatKind,
+} from "@stll/api-contract/legal-file-formats";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
 
-import {
-  dataBoxMessageText,
-  parseDataBoxMessage,
-} from "@/api/lib/email/correspondence/data-box/zfo";
+import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
+import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
+import { extractDataBoxPreview } from "@/api/lib/email/correspondence/data-box/preview-worker";
+import { parseDataBoxDocument } from "@/api/lib/email/correspondence/data-box/zfo";
+import type {
+  FileScanFailedError,
+  FileScanRejectedError,
+} from "@/api/lib/file-scan/scan-upload";
 import {
   type EmailAttachment,
   type EmailParseError,
@@ -42,6 +50,7 @@ import {
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   canExtractMimeType,
   isDirectTextMimeType,
@@ -51,6 +60,7 @@ import {
 import {
   classifyAttachmentError,
   formatAttachmentIssue,
+  STANDALONE_ATTACHMENT_MODE,
 } from "@/api/lib/search/extraction-worker-attachments";
 import {
   formatWorkerErrorLine,
@@ -106,7 +116,6 @@ const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   xls: XLS_MIME_TYPE,
   xlsb: XLSB_MIME_TYPE,
   xlsx: XLSX_MIME_TYPE,
-  zfo: DATA_BOX_MESSAGE_MIME_TYPE,
 };
 
 /**
@@ -265,7 +274,8 @@ const extractAttachmentPlaintext = async ({
 }): Promise<string | null> => {
   const result = (
     await Result.tryPromise({
-      try: async () => await extract(bytes, mimeType, maxChars, nestingDepth),
+      try: async () =>
+        await extract({ fileBytes: bytes, mimeType, maxChars, nestingDepth }),
       catch: (error) => error,
     })
   ).andThen((extracted) => extracted);
@@ -282,12 +292,87 @@ const extractAttachmentPlaintext = async ({
   return result.value;
 };
 
-const extract = async (
-  fileBytes: Uint8Array,
-  mimeType: string,
-  maxChars: number,
+type LegalTextReadOptions = {
+  fileBytes: Uint8Array;
+  maxChars: number;
+  nestingDepth: number;
+  includeContainerAttachments: boolean;
+};
+
+type LegalTextReadError = FileScanFailedError | FileScanRejectedError;
+
+const extractDataBoxText = async ({
+  fileBytes,
+  maxChars,
+  nestingDepth,
+  includeContainerAttachments,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError>
+> => {
+  // Each filed attachment has its own matter document and searchable text.
+  const document = parseDataBoxDocument(fileBytes);
+  if (document.isErr()) {
+    return Result.ok(null);
+  }
+  let text = dataBoxDocumentText(document.value);
+  if (includeContainerAttachments && document.value.kind === "message") {
+    const { scanUpload } = await import("@/api/lib/file-scan/scan-upload");
+    for (const file of document.value.files) {
+      const mimeType = resolveAttachmentMimeType(file) ?? file.mimeType;
+      const scanned = await scanUpload({
+        bytes: file.bytes,
+        fileName: sanitizeFilename(file.fileName),
+        declaredMimeType: mimeType,
+      });
+      if (scanned.isErr()) {
+        return Result.err(scanned.error);
+      }
+      const heading = `
+
+Attachment: ${file.fileName}
+`;
+      const remainingChars = maxChars - text.length - heading.length;
+      if (remainingChars <= 0) {
+        continue;
+      }
+      const content = canExtractMimeType(mimeType)
+        ? await extractAttachmentPlaintext({
+            bytes: new Uint8Array(scanned.value.bytes),
+            maxChars: remainingChars,
+            mimeType,
+            nestingDepth: nestingDepth + 1,
+          })
+        : null;
+      text += heading + (content ?? "Attachment text unavailable.");
+    }
+  }
+  return Result.ok(text);
+};
+
+const LEGAL_TEXT_READERS = { dataBox: extractDataBoxText } satisfies Record<
+  LegalFileFormatKind,
+  (
+    options: LegalTextReadOptions,
+  ) => Promise<Result<string | null, LegalTextReadError>>
+>;
+
+type ExtractOptions = {
+  fileBytes: Uint8Array;
+  mimeType: string;
+  maxChars: number;
+  nestingDepth?: number;
+  includeContainerAttachments?: boolean;
+};
+
+const extract = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
   nestingDepth = 0,
-): Promise<Result<string | null, EmailParseError>> => {
+  includeContainerAttachments = false,
+}: ExtractOptions): Promise<
+  Result<string | null, EmailParseError | LegalTextReadError>
+> => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   let text: string | null = null;
 
@@ -314,12 +399,22 @@ const extract = async (
       mimeType: normalizedMimeType,
       nestingDepth,
     });
-  } else if (normalizedMimeType === DATA_BOX_MESSAGE_MIME_TYPE) {
-    // The message's files are stored as documents of their own, so only the
-    // envelope is this file's text. An unreadable file has none; filing it
-    // as correspondence records why it was skipped.
-    const message = parseDataBoxMessage(fileBytes);
-    text = message.isOk() ? dataBoxMessageText(message.value) : null;
+  } else {
+    const legal = LEGAL_FILE_FORMATS.find(
+      (format) => format.mimeType === normalizedMimeType,
+    );
+    if (legal) {
+      const legalText = await LEGAL_TEXT_READERS[legal.kind]({
+        fileBytes,
+        maxChars,
+        nestingDepth,
+        includeContainerAttachments,
+      });
+      if (legalText.isErr()) {
+        return Result.err(legalText.error);
+      }
+      text = legalText.value;
+    }
   }
 
   if (!text || text.trim().length === 0) {
@@ -330,8 +425,12 @@ const extract = async (
 };
 
 const resolveAttachmentMimeType = (
-  attachment: EmailAttachment,
+  attachment: Pick<EmailAttachment, "fileName" | "mimeType">,
 ): string | null => {
+  const legal = legalFileFormat(attachment.mimeType, attachment.fileName);
+  if (legal) {
+    return legal.mimeType;
+  }
   const normalized = normalizeMimeType(attachment.mimeType ?? "");
   if (canExtractMimeType(normalized)) {
     return normalized;
@@ -392,7 +491,16 @@ try {
   const mimeType = process.argv[2] ?? "";
   const maxChars = readMaxCharsArgument(process.argv[3]);
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const result = await extract(fileBytes, mimeType, maxChars);
+  if (mimeType === DATA_BOX_PREVIEW_MODE) {
+    await writeWorkerStdout(JSON.stringify(extractDataBoxPreview(fileBytes)));
+    process.exit(0);
+  }
+  const result = await extract({
+    fileBytes,
+    mimeType,
+    maxChars,
+    includeContainerAttachments: process.argv[4] === STANDALONE_ATTACHMENT_MODE,
+  });
   if (result.isErr()) {
     const errorClass = getWorkerErrorClass(result.error);
     const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));

@@ -71,7 +71,7 @@ export const visualRegistry = {
     label: "Connector sign-in confirmation",
     layout: "plain",
   },
-  "table-chart": { label: "Chat table chart", layout: "plain" },
+  "table-chart": { label: "Answer tables", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
@@ -100,7 +100,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
-  "chat-follow-ups": { label: "Chat follow-up chips", layout: "plain" },
+  "chat-follow-ups": { label: "Chat follow-ups", layout: "plain" },
   "ask-user": { label: "Ask-user questions", layout: "plain" },
   "case-law-text-availability": {
     label: "Case-law text availability",

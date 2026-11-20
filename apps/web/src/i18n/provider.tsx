@@ -81,7 +81,7 @@ export const I18nProvider = ({ children }: PropsWithChildren) => {
       timeZone={timeZone}
     >
       <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
-        <PendingTextIntlScope>
+        <PendingTextIntlScope formattingLocale={formattingLocale}>
           <DialogTranslations>{children}</DialogTranslations>
         </PendingTextIntlScope>
       </FormattingProvider>

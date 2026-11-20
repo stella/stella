@@ -98,6 +98,7 @@ import {
   reserveCorpusProjectionRoutePageTx,
   startCorpusProjectionOfflineRequestChunkTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 
 /**
@@ -394,6 +395,12 @@ export type CorpusProjectionOfflineBuildProgress = {
     handedBack: number;
   };
   started: number;
+  /**
+   * Built revisions whose decision's terms were cut to a prefix because the
+   * whole did not fit the opening passage. Expected to stay 0: no stored
+   * decision comes near the ceiling, so any count is a decision to look at.
+   */
+  decisionTermsPartial: number;
   shards: {
     delivered: number;
     ingested: number;
@@ -641,6 +648,7 @@ const emptyProgress = (
     handedBack: 0,
   },
   started: 0,
+  decisionTermsPartial: 0,
   shards: {
     delivered: 0,
     ingested: 0,
@@ -1673,6 +1681,14 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
           ),
         );
         continue;
+      }
+      if (built.value.decisionTerms === "prefix") {
+        this.#progress.decisionTermsPartial += 1;
+        logger.error("corpus_projection.decision_terms_partial", {
+          entity: material.lease.entityId,
+          generation: material.lease.generation,
+          indexId: material.lease.indexId,
+        });
       }
       // The file holds the block as one line per document.
       const block = `${built.value.parts.join("\n")}\n`;

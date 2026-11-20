@@ -16,6 +16,7 @@ import {
   authFixtureResponse,
 } from "@/__fixtures__/route-shell/route-shell-auth-fixtures";
 import {
+  KNOWLEDGE_FIXTURE_SKILL_ID,
   knowledgeFixtureResponse,
   knowledgeFixtureLoaderData,
   knowledgeFixtureReadyText,
@@ -36,6 +37,7 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { APP_FRAME_SCOPE, matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
 type RouteShellProviderFixtureOptions = {
@@ -70,7 +72,7 @@ const fixtureRouteSchema = v.object({
     validateSearch: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
-        appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
+        appFrame: v.optional(v.picklist(Object.values(APP_FRAME_SCOPE))),
       }),
     ),
   }),
@@ -648,7 +650,6 @@ const loadFixtureRuntime = async (
   const { useAIKeyGate } = await import("@/components/require-ai-key");
   const { useChatEditorManager, useChatEditorExtensions } =
     await import("@/components/chat-editor-provider");
-  const { matchedAppFrameScope } = await import("@/routes/-app-frame-scope");
   const { noopAnalytics } = await import("@/lib/analytics/noop");
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
@@ -737,6 +738,7 @@ const loadFixtureRuntime = async (
     version: "2026-01-01",
     registry: "ares",
     entry: KNOWLEDGE_FIXTURE_TOOL_SLUG,
+    skillId: KNOWLEDGE_FIXTURE_SKILL_ID,
     exportId: "00000000-0000-4000-8000-000000000005",
     invitationId: "00000000-0000-4000-8000-000000000006",
     invoiceId: "00000000-0000-4000-8000-000000000007",
@@ -787,7 +789,6 @@ const loadFixtureRuntime = async (
     useAIKeyGate,
     useChatEditorManager,
     useChatEditorExtensions,
-    matchedAppFrameScope,
     RouterProvider,
     useMatches,
     ...network,
@@ -956,7 +957,6 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
     useAIKeyGate,
     useChatEditorManager,
     useChatEditorExtensions,
-    matchedAppFrameScope,
     RouterProvider,
     useMatches,
     state,

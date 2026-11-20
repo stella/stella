@@ -27,6 +27,7 @@ export type DockedChatHost = {
 };
 
 const SOURCE_ROOT = path.resolve(import.meta.dirname, "../../src");
+const APP_FRAME_SCOPE_BY_NAME = new Map(Object.entries(APP_FRAME_SCOPE));
 const PROVIDER_SURFACES = new Map<string, DockedChatSurface>([
   ["components/ai-suggestions/file-viewer-with-ai.tsx", "reader"],
   ["routes/knowledge/-components/template-studio-chat.tsx", "template"],
@@ -150,19 +151,11 @@ export const declaredAppFrameScope = (
       ) {
         throw new Error(`Unsupported appFrame metadata in ${fileName}`);
       }
-      switch (value.property.name) {
-        case "none":
-          scope = APP_FRAME_SCOPE.none;
-          break;
-        case "member":
-          scope = APP_FRAME_SCOPE.member;
-          break;
-        case "knowledge":
-          scope = APP_FRAME_SCOPE.knowledge;
-          break;
-        default:
-          throw new Error(`Unknown appFrame metadata in ${fileName}`);
+      const declaredScope = APP_FRAME_SCOPE_BY_NAME.get(value.property.name);
+      if (declaredScope === undefined) {
+        throw new Error(`Unknown appFrame metadata in ${fileName}`);
       }
+      scope = declaredScope;
     }
   });
   return scope;

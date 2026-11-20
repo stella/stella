@@ -1,6 +1,6 @@
 import {
   CHAT_FILE_TYPE_CONFIG,
-  isChatFileMimeType,
+  chatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import type { ChatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { CHAT_LOCAL_RUN_ANONYMIZED_REFUSAL_CODE } from "@stll/api-contract/chat-run-target";
@@ -52,26 +52,6 @@ export type ChatAttachment = {
 export type SentFile = {
   readonly name: string;
   readonly mimeType: string;
-};
-
-/**
- * The chat type of a picked file: the type the picker named when chat takes
- * it, else the one its extension names. Undefined when chat takes neither.
- */
-export const chatFileMimeType = (
-  name: string,
-  mimeType: string | null | undefined,
-): ChatFileMimeType | undefined => {
-  if (mimeType !== null && mimeType !== undefined) {
-    const declared = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
-    if (isChatFileMimeType(declared)) {
-      return declared;
-    }
-  }
-  const lower = name.toLowerCase();
-  return CHAT_FILE_TYPE_CONFIG.find(({ extensions }) =>
-    extensions.some((extension) => lower.endsWith(extension)),
-  )?.mimeType;
 };
 
 /**

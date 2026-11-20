@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -1132,6 +1133,27 @@ export const czUohsAdapter = defineSourceAdapter({
     return listing.error.httpStatus === undefined
       ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
       : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+  },
+  buildStoredDocument: async ({ stored, signal }) => {
+    const read = readStoredRawListing({
+      stored,
+      part: "listing",
+      identityOf: (listing) =>
+        typeof listing["iri"] === "string" ? listing["iri"] : undefined,
+    });
+    if (read.type === "rejected") {
+      return { type: "incomplete-locator", detail: read.detail };
+    }
+    const parsed = v.safeParse(recordSchema, read.listing);
+    return parsed.success
+      ? {
+          type: "built",
+          decision: await buildCzUohsDecision(parsed.output, signal),
+        }
+      : {
+          type: "incomplete-locator",
+          detail: "Stored listing is not a complete ÚOHS record",
+        };
   },
   reconciliation: {
     // The publisher exposes one atomic listing, so its one slice contains

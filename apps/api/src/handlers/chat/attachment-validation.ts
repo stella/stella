@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
+import { legalFileFormat } from "@stll/api-contract/document-format";
 
 import {
+  getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
   getUserFileIdFromAttachmentPart,
@@ -19,6 +21,12 @@ export const TEXT_PLAIN_MIME_TYPE = "text/plain" as const;
 export const TEXT_CSV_MIME_TYPE = "text/csv" as const;
 export const TEXT_MARKDOWN_MIME_TYPE = "text/markdown" as const;
 export const CHAT_MAX_FILE_BYTES = FILE_SIZE_LIMIT_BYTES.chatContextFile;
+
+/** Preserve the wire MIME for data URL validation, then scan and store a recognized legal format under its registered MIME. */
+export const chatUploadMimeType = (file: {
+  fileName: string | undefined;
+  mimeType: string;
+}) => legalFileFormat(file.mimeType, file.fileName)?.mimeType ?? file.mimeType;
 
 export type StoredFileRef = {
   id: SafeId<"userFile">;
@@ -74,7 +82,14 @@ export const validateChatFileParts = ({
         );
       }
 
-      if (!isChatFileMimeType(mimeType)) {
+      if (
+        !isChatFileMimeType(
+          chatUploadMimeType({
+            fileName: getChatAttachmentFilename(part),
+            mimeType,
+          }),
+        )
+      ) {
         return Result.err(
           new HandlerError({
             status: 400,

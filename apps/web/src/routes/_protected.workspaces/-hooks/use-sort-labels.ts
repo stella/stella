@@ -1,15 +1,17 @@
-import { useTranslations } from "use-intl";
-
+import { usePendingTextLabel } from "@/components/pending-text";
 import type { MattersSortKey } from "@/lib/workspaces/types";
+import { MATTERS_SORT_LABEL_KEYS } from "@/routes/_protected.workspaces/-hooks/matters-labels.logic";
 
 export const useSortLabels = (): Record<MattersSortKey, string> => {
-  const t = useTranslations();
+  const pendingLabel = usePendingTextLabel();
+  const label = (key: MattersSortKey) =>
+    pendingLabel(MATTERS_SORT_LABEL_KEYS[key]);
   return {
-    name: t("common.matter"),
-    reference: t("common.reference"),
-    entityCount: t("workspaces.overview.totalItems"),
-    lastActivityAt: t("workspaces.lastActive", { time: "" }).trim(),
-    createdAt: t("common.createdAt", { date: "" }).trim(),
-    clientName: t("workspaces.parties.client"),
+    name: label("name"),
+    reference: label("reference"),
+    entityCount: label("entityCount"),
+    lastActivityAt: label("lastActivityAt"),
+    createdAt: label("createdAt"),
+    clientName: label("clientName"),
   };
 };

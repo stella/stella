@@ -1233,6 +1233,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "قائمة نقطية",
       "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
     },
+    "answerNotFinished": "لم تتمكن stella من إكمال هذه الإجابة.",
     "answerQuote": {
       "showInDecision": "عرض في القرار",
       "unverified": "تعذّر التحقق من الاقتباس",
       "unverifiedHint": "لا تتضمن القرارات المستشهد بها هذا النص حرفيًا",
       "verified": "اقتباس موثَّق",
       "verifiedHint": "حرفيًا في {source}"
+    },
+    "answerTable": {
+      "copy": "نسخ الجدول",
+      "copyAs": "نسخ بتنسيق {format}",
+      "download": "تنزيل الجدول",
+      "downloadAs": "تنزيل بتنسيق {format}",
+      "fullscreen": "فتح بملء الشاشة",
+      "fullscreenTitle": "الجدول بملء الشاشة",
+      "singleLine": "سطر واحد",
+      "size": "{rows, plural, zero {لا صفوف} one {صف واحد} two {صفان} few {# صفوف} many {# صفًا} other {# صف}} · {columns, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}}",
+      "textMode": "نص الخلايا",
+      "wrap": "التفاف النص"
     },
     "applyMode": {
       "description": "يُخزّن Word مَن أجرى كل تغيير. وسنتذكّر اختيارك.",
@@ -2124,6 +2144,7 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
@@ -2230,7 +2251,6 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
-      "harnessModels": "نماذج {harness}",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2240,8 +2260,9 @@
       "localFolderSelection": "حاسوبك · {harness} · {folder}",
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
-      "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "بدأت هذه الدردشة الجديدة في السحابة لأن {harness} غير متاح على حاسوبك ({state})",
+      "startedInCloudCheckFailed": "بدأت هذه الدردشة الجديدة في السحابة لأنه تعذّر التحقق من حاسوبك",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
       "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
@@ -2308,13 +2329,26 @@
       "title": "رسالتك في قائمة الانتظار حتى ينتهي الوكيل",
       "turnNotRunning": "الوكيل لا يعمل الآن."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}",
+      "decisionsFoundUsed": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}، {used, plural, zero {لم يُستخدم أي منها في الإجابة} one {استُخدم واحد في الإجابة} two {استُخدم اثنان في الإجابة} few {استُخدم # في الإجابة} many {استُخدم # في الإجابة} other {استُخدم # في الإجابة}}",
+      "filterAsOf": "حتى تاريخ {date}",
+      "legislationFound": "{count, plural, zero {# تشريع أو حكم} one {تشريع أو حكم واحد} two {تشريعان أو حكمان} few {# تشريعات وأحكام} many {# تشريعًا وحكمًا} other {# تشريع وحكم}}",
+      "lookupDidNotGoThrough": "لم يكتمل هذا البحث.",
+      "moreFound": "{count, plural, zero {لا يوجد المزيد} one {واحد آخر غير معروض} two {اثنان آخران غير معروضين} few {# أخرى غير معروضة} many {# أخرى غير معروضة} other {# أخرى غير معروضة}}",
+      "moreLookups": "{count, plural, zero {لا توجد استعلامات أخرى} one {استعلام آخر غير معروض} two {استعلامان آخران غير معروضين} few {# استعلامات أخرى غير معروضة} many {# استعلامًا آخر غير معروض} other {# استعلام آخر غير معروض}}",
+      "notRecorded": "نُفذت هذه الخطوة قبل أن تبدأ stella بتسجيل ما تبحث عنه كل خطوة.",
+      "nothingFound": "لا توجد نتائج مطابقة.",
+      "technicalDetails": "التفاصيل التقنية",
+      "usedInAnswer": "مستخدم في الإجابة",
+      "versionFrom": "الصيغة السارية منذ {date}"
+    },
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
-    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
@@ -2325,7 +2359,6 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
-    "tabToAsk": "→ للسؤال: «{prompt}»",
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",
@@ -2749,6 +2782,7 @@
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
+    "downloadOriginal": "تنزيل الملف الأصلي",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",
       "droppedOn": "{count, plural, zero {تم إفلات {itemName} على {destinationName}.} one {تم إفلات {itemName} على {destinationName}.} two {تم إفلات {itemName} على {destinationName}.} few {تم إفلات {itemName} على {destinationName}.} many {تم إفلات {itemName} على {destinationName}.} other {تم إفلات {itemName} على {destinationName}.}}",
@@ -3336,6 +3370,8 @@
       "contact": "جهة الاتصال: {name}",
       "deliveredAt": "سُلّمت إلى الصندوق",
       "delivery": "التسليم",
+      "deliveryEvents": "سجلّ التسليم",
+      "deliveryReceipt": "إيصال التسليم",
       "directionUnknown": "الاتجاه غير معروف",
       "messageId": "معرّف الرسالة",
       "moreContacts": "هناك جهات اتصال أخرى مرتبطة بصندوق البيانات هذا.",
@@ -3348,6 +3384,8 @@
       "sent": "مُرسلة",
       "statedInFile": "رسالة صندوق البيانات (كما وردت في الملف)",
       "toHands": "لعناية {name}",
+      "unlinkedFiles": "لفتح المرفقات التي تظهر من دون رابط، نزّل ملف ZFO الأصلي.",
+      "unreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "uploaded": "رسالة صندوق بيانات مرفوعة"
     },
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
@@ -5747,6 +5785,9 @@
       "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
       "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
       "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
+      "chatTechnicalDetails": "التفاصيل التقنية في الدردشة",
+      "chatTechnicalDetailsDescription": "تعرض كل خطوة في الدردشة ما بحثت عنه وما وجدته. فعّل هذا الخيار لترى أيضًا الشيفرة والنتائج الخام وراءها.",
+      "chatTechnicalDetailsToggle": "إظهار التفاصيل التقنية في الدردشة",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
@@ -7901,7 +7942,6 @@
         "endDate": "تاريخ الانتهاء",
         "month": "الشهر",
         "quarter": "الربع",
-        "showTable": "عرض الجدول",
         "startDate": "تاريخ البدء",
         "week": "الأسبوع"
       },

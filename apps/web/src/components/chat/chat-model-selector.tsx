@@ -27,10 +27,12 @@ import {
 import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   ChatRunTargetMenu,
+  useCloudStartLabel,
   useLocalRunTargetStateLabel,
 } from "@/components/chat/chat-run-target-menu";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
+  type ChatCloudStart,
   localRunModelLabel,
   localRunTargetState,
 } from "@/components/chat/chat-run-target-menu.logic";
@@ -92,6 +94,7 @@ const ChatComposerChipsReady = ({
         disabled={disabled || models.state === "loading"}
         onSelect={models.runTarget.select}
         selected={models.runTarget.selected}
+        startedInCloud={models.runTarget.startedInCloud}
       />
     )}
     <ChatModelSelector disabled={disabled} models={models} />
@@ -103,13 +106,15 @@ type ChatRunOnChipProps = {
   disabled: boolean;
   selected: ChatRunTarget;
   onSelect: (target: ChatRunTarget) => void;
+  startedInCloud: ChatCloudStart | null;
 };
 
 /**
  * Where the chat runs: [Cloud], or [Your computer · Codex], with the linked
  * folder's name when the chat works in one, and why the computer or folder
  * cannot take a turn now when it says so (offline, signed out, or stella
- * desktop opening). Its
+ * desktop opening). A new chat that started in the cloud although the
+ * member last chose their computer says why in its name and tooltip. Its
  * name for assistive technology says the place in full ("Runs on: Your
  * computer, Codex").
  */
@@ -118,9 +123,11 @@ const ChatRunOnChip = ({
   disabled,
   selected,
   onSelect,
+  startedInCloud,
 }: ChatRunOnChipProps) => {
   const t = useTranslations();
   const stateLabel = useLocalRunTargetStateLabel();
+  const cloudStartLabel = useCloudStartLabel();
   const desktop = useDesktopLaunch(activeOrganizationId);
   const [open, setOpen] = useState(false);
   const runnersView = queryView(
@@ -143,7 +150,13 @@ const ChatRunOnChip = ({
       const place = t("chat.runOn.cloud");
       return {
         label: place,
-        name: place,
+        name:
+          startedInCloud === null
+            ? place
+            : t("chat.runOn.placeState", {
+                place,
+                state: cloudStartLabel(startedInCloud),
+              }),
         icon: <CloudIcon aria-hidden="true" className="size-3.5" />,
       };
     }
@@ -222,6 +235,7 @@ const ChatRunOnChip = ({
           key={open ? "open" : "closed"}
           onSelect={onSelect}
           selected={selected}
+          startedInCloud={startedInCloud}
         />
       </MenuPopup>
     </Menu>
