@@ -95,6 +95,18 @@ export const SignInDialog = ({
             <OTPPanel
               key={step.devOtp ?? "empty"}
               signInAttempt={step.signInAttempt}
+              onSignInAttemptChange={(signInAttempt) => {
+                setStep((prev) =>
+                  prev.status === "otp"
+                    ? {
+                        status: "otp",
+                        email: prev.email,
+                        devOtp: prev.devOtp,
+                        signInAttempt,
+                      }
+                    : prev,
+                );
+              }}
               email={step.email}
               initialOtp={step.devOtp ?? undefined}
               redirectTo={redirectTo}

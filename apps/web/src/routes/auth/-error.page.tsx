@@ -152,6 +152,9 @@ export const SocialRecoveryPanel = ({
     return (
       <OTPPanel
         signInAttempt={step.signInAttempt}
+        onSignInAttemptChange={(signInAttempt) => {
+          setStep({ type: "otp", email: step.email, signInAttempt });
+        }}
         email={step.email}
         redirectTo={redirectTo}
         linkProvider={provider ?? undefined}

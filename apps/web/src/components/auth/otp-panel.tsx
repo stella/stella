@@ -80,6 +80,11 @@ type OTPPanelProps = {
    * mail bounced, and if so explains why instead of saying a code was sent.
    */
   signInAttempt?: string | undefined;
+  /**
+   * A code sent again names a new attempt; the owner of `signInAttempt`
+   * keeps it, so a reload or remount follows the new code's mail.
+   */
+  onSignInAttemptChange?: (signInAttempt: string) => void;
 };
 
 const OTP_EXPIRED_MESSAGE = "OTP expired";
@@ -119,6 +124,7 @@ export const OTPPanelBody = ({
   onVerified,
   linkProvider,
   signInAttempt: initialSignInAttempt,
+  onSignInAttemptChange,
 }: Omit<OTPPanelProps, "className">) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -215,6 +221,7 @@ export const OTPPanelBody = ({
           Temporal.Now.instant().epochMilliseconds +
           SIGN_IN_CODE_DELIVERY_WINDOW_MS,
       });
+      onSignInAttemptChange?.(attempt);
       stellaToast.add({
         description: t("auth.checkSpamHint"),
         title: t("auth.codeSentAgain"),

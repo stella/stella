@@ -271,6 +271,7 @@ test("the panel explains its own code mail's bounce, and a code sent again start
   const opening = "a".repeat(43);
   const resent: string[] = [];
   const polled: unknown[] = [];
+  const handedBack: string[] = [];
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
@@ -304,6 +305,9 @@ test("the panel explains its own code mail's bounce, and a code sent again start
         email="new.member@example.test"
         redirectTo="/account"
         signInAttempt={opening}
+        onSignInAttemptChange={(attempt) => {
+          handedBack.push(attempt);
+        }}
       />
     ),
   });
@@ -337,6 +341,8 @@ test("the panel explains its own code mail's bounce, and a code sent again start
     await waitFor(() => {
       expect(polled.at(-1)).toEqual({ attempt: resent[0] });
     });
+    // The owner keeps the new attempt, so a reload follows the new code.
+    expect(handedBack).toEqual(resent);
   } finally {
     client.clear();
     globalThis.fetch = originalFetch;
