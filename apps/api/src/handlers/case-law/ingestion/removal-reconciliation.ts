@@ -231,12 +231,10 @@ const commitRemovalProgress = async ({
 type InitialCheckpointOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
-  now: Date;
 };
 const initialRemovalCheckpoint = async ({
   scopedDb,
   sourceId,
-  now,
 }: InitialCheckpointOptions): Promise<RemovalCheckpoint> => {
   const last = await scopedDb(async (tx) =>
     (
@@ -248,13 +246,10 @@ const initialRemovalCheckpoint = async ({
         .limit(1)
     ).at(0),
   );
+  // A source with no decisions of its own may still hold records as
+  // attachments to other sources' decisions: the cycle starts with those.
   return last === undefined
-    ? {
-        status: "waiting",
-        nextCycleAt: new Date(
-          now.getTime() + REMOVAL_SWEEP_INTERVAL_MS,
-        ).toISOString(),
-      }
+    ? { status: "running-attachments", after: null }
     : { status: "running", cursor: null, ceiling: last.id };
 };
 
@@ -697,11 +692,7 @@ const discoverPublisherRemovals = async ({
     }
     if (state === null) {
       // db-await-in-loop: initialization pins a finite source range before enumeration.
-      const next = await initialRemovalCheckpoint({
-        scopedDb,
-        sourceId,
-        now: now(),
-      });
+      const next = await initialRemovalCheckpoint({ scopedDb, sourceId });
       // db-await-in-loop: initialize the cycle under the same source CAS.
       if (!(await commit(next))) {
         return { type: "contended", checked };
