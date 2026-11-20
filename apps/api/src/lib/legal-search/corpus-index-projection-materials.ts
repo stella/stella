@@ -209,24 +209,17 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
       continue;
     }
     const { descriptor, material } = project(row);
-    if (!stateMatchesLease(state, lease) || descriptor.action !== "upsert") {
-      rejected.push(
-        rejection(
-          lease,
-          "stale",
-          "desired state changed or canonical input was removed",
-        ),
-      );
-      continue;
-    }
-    if (!descriptorMatchesLease(descriptor, lease)) {
-      rejected.push(
-        rejection(
-          lease,
-          "canonical_input_mismatch",
-          "current projection state disagrees with canonical input",
-        ),
-      );
+    const stateCurrent = stateMatchesLease(state, lease);
+    if (!stateCurrent || !descriptorMatchesLease(descriptor, lease)) {
+      rejected.push({
+        lease,
+        status:
+          stateCurrent && descriptor.action === "upsert"
+            ? "canonical_input_mismatch"
+            : "stale",
+        reason:
+          "projection reservation rejected: its desired or canonical input differs",
+      });
       continue;
     }
     if (row.textS3Key === null) {
