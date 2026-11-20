@@ -212,6 +212,11 @@
       "validate_skill_package": "Skill prüfen",
       "web_search": "Web wird durchsucht"
     },
+    "toolResearch": {
+      "caseLaw": "Rechtsprechung durchsuchen",
+      "legislation": "Rechtsvorschriften lesen",
+      "legislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsuchen"
+    },
     "localRun": {
       "title": {
         "sign_in": "Zum Fortfahren anmelden",

@@ -38,7 +38,7 @@ export const PendingTextIntlScope = ({
 // The static labels pending views show. A closed union keeps the
 // translator's key type small (`t` checks each one is a real message); a
 // page adds its labels here as it gains a pending view.
-type PendingTextKey =
+type PendingTextMessageKey =
   | "admin.toolsDescription"
   | "auth.continueWithEmail"
   | "auth.emailPlaceholder"
@@ -130,6 +130,7 @@ type PendingTextKey =
   | "common.accept"
   | "common.action"
   | "common.actions"
+  | "common.active"
   | "common.add"
   | "common.anonymizationLabels.person"
   | "common.back"
@@ -150,6 +151,7 @@ type PendingTextKey =
   | "common.matter"
   | "common.members"
   | "common.name"
+  | "common.newMatter"
   | "common.next"
   | "common.previous"
   | "common.reference"
@@ -172,11 +174,14 @@ type PendingTextKey =
   | "folio.listsGroup"
   | "guidance.notCaseLaw"
   | "inspector.matterPicker.allMatters"
+  | "knowledge.sections.templates.title"
+  | "knowledge.sections.tools.description"
   | "knowledge.sections.tools.title"
   | "lawHome.prompt"
   | "lawHome.recent"
   | "lawHome.signals"
   | "lawHome.topCourts"
+  | "memory.views.archived"
   | "organization.invitations.expires"
   | "organization.invitations.invited"
   | "organization.members.joined"
@@ -218,17 +223,47 @@ type PendingTextKey =
   | "tasks.status"
   | "templates.addItem"
   | "timesheets.week.title"
+  | "workspaces.overview.nextDeadline"
+  | "workspaces.overview.openTasks"
+  | "workspaces.overview.timeThisWeek"
+  | "workspaces.overview.totalDocuments"
+  | "workspaces.overview.totalItems"
   | "workspaces.parties.client"
+  | "workspaces.team"
   | "workspaces.views.calendar.month"
   | "workspaces.views.calendar.week"
   | "workspaces.views.exportCsv"
+  | "workspaces.views.layouts.grid"
+  | "workspaces.views.layouts.table"
   | "workspaces.views.reportExport.title"
   | "workspaces.views.timeline.day";
 
-const TranslatedText = ({ id }: { id: PendingTextKey }) => {
+// Messages whose label is their text before one placeholder: a column called
+// "Last active" from "Last active {time}". The placeholder is left empty and
+// the rest trimmed, the one way every surface names that column.
+type PendingTextLeadKey = "common.createdAt" | "workspaces.lastActive";
+
+export type PendingTextKey = PendingTextMessageKey | PendingTextLeadKey;
+
+/**
+ * A pending label's text, as the loaded page shows the same label: for a
+ * live surface that names a thing the way its pending view does.
+ */
+export const usePendingTextLabel = (): ((id: PendingTextKey) => string) => {
   const t = useTranslations();
-  return t(id);
+  return (id) => {
+    if (id === "common.createdAt") {
+      return t(id, { date: "" }).trim();
+    }
+    if (id === "workspaces.lastActive") {
+      return t(id, { time: "" }).trim();
+    }
+    return t(id);
+  };
 };
+
+const TranslatedText = ({ id }: { id: PendingTextKey }) =>
+  usePendingTextLabel()(id);
 
 /**
  * A static label in a pending view: the translated message where the app's

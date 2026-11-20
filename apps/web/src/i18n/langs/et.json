@@ -1732,6 +1732,7 @@
       "unorderedList": "Täpploend",
       "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
     },
+    "answerNotFinished": "stella ei saanud seda vastust lõpetada.",
     "answerQuote": {
       "showInDecision": "Näita lahendis",
       "unverified": "Tsitaati ei õnnestunud kontrollida",
@@ -2248,6 +2249,8 @@
       "localPlace": "Sinu arvuti, {harness}",
       "localSelection": "Sinu arvuti · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "See uus vestlus algas pilves, sest {harness} pole sinu arvutis saadaval ({state})",
+      "startedInCloudCheckFailed": "See uus vestlus algas pilves, sest sinu arvutit ei õnnestunud kontrollida",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
       "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",
@@ -2313,6 +2316,20 @@
       "runFull": "Agent ei saa praegu rohkem sõnumeid vastu võtta.",
       "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
       "turnNotRunning": "Agent praegu ei tööta."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}",
+      "decisionsFoundUsed": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}, {used, plural, one {vastuses kasutati #} other {vastuses kasutati #}}",
+      "filterAsOf": "Seisuga {date}",
+      "legislationFound": "{count, plural, one {# õigusakt või säte} other {# õigusakti ja sätet}}",
+      "lookupDidNotGoThrough": "See otsing ei õnnestunud.",
+      "moreFound": "{count, plural, one {veel # pole näidatud} other {veel # pole näidatud}}",
+      "moreLookups": "{count, plural, one {Veel # päringut pole näidatud} other {Veel # päringut pole näidatud}}",
+      "notRecorded": "See samm tehti enne, kui stella hakkas salvestama, mida iga samm otsib.",
+      "nothingFound": "Vasteid ei leitud.",
+      "technicalDetails": "Tehnilised üksikasjad",
+      "usedInAnswer": "Kasutati vastuses",
+      "versionFrom": "Redaktsioon alates {date}"
     },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
@@ -5756,6 +5773,9 @@
       "chatNotificationsDescription": "Saate sellest brauserist teavituse, kui vestluse vastus valmib ajal, mil stella on taustal.",
       "chatNotificationsToggle": "Teavita mind, kui vastus on valmis või vajab minu sisendit",
       "chatNotificationsUnsupported": "See brauser ei toeta teavitusi.",
+      "chatTechnicalDetails": "Tehnilised üksikasjad vestluses",
+      "chatTechnicalDetailsDescription": "Iga vestluse samm näitab, mida see otsis ja mida leidis. Sisse lülitatuna näete ka selle taga olevat koodi ja töötlemata tulemusi.",
+      "chatTechnicalDetailsToggle": "Näita vestluses tehnilisi üksikasju",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
       "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",

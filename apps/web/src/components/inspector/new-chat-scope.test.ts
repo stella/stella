@@ -12,6 +12,7 @@ import {
 } from "@stll/scripts/src/syntax-tree";
 
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import { createInspectorTabsSlice } from "@/components/inspector/inspector-tabs-slice";
 import {
@@ -34,6 +35,7 @@ const storeWithChatInMatterB = () => {
     id: THREAD_IN_B,
     workspaceId: MATTER_B,
     contextMatterIds: [MATTER_B],
+    focus: INSPECTOR_FOCUS_INTENT.claim,
   });
   return store;
 };
@@ -67,7 +69,10 @@ describe("a new chat after navigating from matter B to matter A", () => {
   // them to it.
   test("New chat shortcut, rail menu, command palette", () => {
     const store = storeWithChatInMatterB();
-    store.getState().openChat(newChatMatterScope(MATTER_A));
+    store.getState().openChat({
+      ...newChatMatterScope(MATTER_A),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     expect(newTab(store)).toMatchObject({
       workspaceId: MATTER_A,
       contextMatterIds: [MATTER_A],
@@ -76,7 +81,10 @@ describe("a new chat after navigating from matter B to matter A", () => {
 
   test("rail New chat button", () => {
     const store = storeWithChatInMatterB();
-    store.getState().openChat(railChatOpenArgs({ workspaceId: MATTER_A }));
+    store.getState().openChat({
+      ...railChatOpenArgs({ workspaceId: MATTER_A }),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     expect(newTab(store)).toMatchObject({
       workspaceId: MATTER_A,
       contextMatterIds: [MATTER_A],
@@ -91,13 +99,14 @@ describe("a new chat after navigating from matter B to matter A", () => {
     if (tabInB?.type !== "chat") {
       throw new Error("expected the matter B chat tab");
     }
-    store.getState().openChat(
-      dockNewChatArgs({
+    store.getState().openChat({
+      ...dockNewChatArgs({
         id: NEW_THREAD,
         routeWorkspaceId: MATTER_A,
         tab: tabInB,
       }),
-    );
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     expect(newTab(store)).toMatchObject({
       id: NEW_THREAD,
       workspaceId: MATTER_A,
@@ -107,13 +116,14 @@ describe("a new chat after navigating from matter B to matter A", () => {
 
   test("dock New chat off a matter route opens a global chat", () => {
     const store = storeWithChatInMatterB();
-    store.getState().openChat(
-      dockNewChatArgs({
+    store.getState().openChat({
+      ...dockNewChatArgs({
         id: NEW_THREAD,
         routeWorkspaceId: undefined,
         tab: {},
       }),
-    );
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const tab = newTab(store);
     expect(tab.workspaceId).toBeUndefined();
     expect(tab.contextMatterIds).toEqual([]);

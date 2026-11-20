@@ -1880,15 +1880,22 @@
     ],
     "./table-chart": ["TableChart"],
     "./table-shell": [
+      "HEAD_CONTENT_CLASS",
+      "SORT_ICON_SLOT_CLASS",
+      "SortDirectionIcon",
+      "SortableHeadFace",
       "Table",
       "TableBody",
       "TableCaption",
       "TableCellFace",
       "TableFooter",
       "TableHead",
+      "TableHeadLabel",
       "TableHeader",
       "TableRow",
-      "TableSkeletonRows"
+      "TableSkeletonRows",
+      "ariaSortOf",
+      "sortableHeadButtonClassName"
     ],
     "./tabs": [
       "Tabs",
@@ -1934,6 +1941,10 @@
       "TooltipTrigger"
     ],
     "./truncated-text": ["TruncatedText", "isTextOverflowing"],
+    "./truncated-text-face": [
+      "TRUNCATED_TEXT_LINES_CLASS",
+      "TruncatedTextFace"
+    ],
     "./typed-character": ["typedCharacter"],
     "./use-contained-handler": ["containedEventHandler", "containedHandler"],
     "./use-content-dir": [
@@ -1952,6 +1963,7 @@
       "ViewFilterChip",
       "ViewToolbarChrome"
     ],
+    "./view-toolbar-shell": ["ViewChromeBar", "ViewToolbarChrome"],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
     "./workspace-shell": ["WorkspaceEndRail", "WorkspaceShell"]
   },
@@ -2289,8 +2301,11 @@
     "SidebarMenuButton.size": ["default", "lg", "rail", "sm"],
     "SidebarMenuButton.variant": ["default", "outline"],
     "SidebarMenuSubButton.size": ["md", "sm"],
+    "SortDirectionIcon.direction": ["asc", "desc"],
     "SortableHead.align": ["center", "end", "start"],
     "SortableHead.sortDirection": ["asc", "desc"],
+    "SortableHeadFace.align": ["center", "end", "start"],
+    "SortableHeadFace.sortDirection": ["asc", "desc"],
     "SplitButton.size": ["md", "sm"],
     "SplitButton.surface": ["menu", "popover"],
     "SplitButtonFace.size": ["md", "sm"],

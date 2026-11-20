@@ -561,7 +561,10 @@ describe("targets", () => {
         .map((target) => target.path)
         .toSorted(),
     ).toEqual([
+      "/knowledge/playbooks/catalogue",
+      "/knowledge/templates/catalogue",
       "/knowledge/templates/catalogue/pack%20one/tpl",
+      "/knowledge/tools/catalogue",
       "/knowledge/tools/contribute",
       "/knowledge/tools/tool",
     ]);

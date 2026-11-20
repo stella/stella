@@ -53,10 +53,16 @@ export { default as indexes_agent_skills_bound_workspace_idx } from "./online-mi
 export { default as indexes_apikey_personal_owner_keyset_idx } from "./online-migration-entries/indexes-apikey-personal-owner-keyset-idx";
 export { default as indexes_audit_logs_org_people_created_id_idx } from "./online-migration-entries/indexes-audit-logs-org-people-created-id-idx";
 export { default as indexes_case_law_citations_doctrine_cited_idx } from "./online-migration-entries/indexes-case-law-citations-doctrine-cited-idx";
+export { default as indexes_case_law_citations_identifier_backfill_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-identifier-backfill-match-key-idx";
 export { default as indexes_case_law_citations_polarity_pending_idx } from "./online-migration-entries/indexes-case-law-citations-polarity-pending-idx";
+export { default as indexes_case_law_citations_reopenable_identifier_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-reopenable-identifier-match-key-idx";
+export { default as indexes_case_law_citations_reopenable_match_key_idx } from "./online-migration-entries/indexes-case-law-citations-reopenable-match-key-idx";
 export { default as indexes_case_law_court_date_published_index } from "./online-migration-entries/indexes-case-law-court-date-published-index";
 export { default as indexes_case_law_coverage_index } from "./online-migration-entries/indexes-case-law-coverage-index";
+export { default as indexes_case_law_decision_identifiers_match_key_idx } from "./online-migration-entries/indexes-case-law-decision-identifiers-match-key-idx";
 export { default as indexes_case_law_decisions_citation_candidate_published_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-candidate-published-idx";
+export { default as indexes_case_law_decisions_citation_match_key_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-idx";
+export { default as indexes_case_law_decisions_citation_match_key_published_idx } from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-published-idx";
 export { default as indexes_case_law_decisions_country_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-date-published-idx";
 export { default as indexes_case_law_decisions_country_language_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-language-date-published-idx";
 export { default as indexes_case_law_decisions_docket_family_key_idx } from "./online-migration-entries/indexes-case-law-decisions-docket-family-key-idx";

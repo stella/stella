@@ -350,7 +350,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ButtonTextRun` `variant`: `link`, `plain`
 - `Checkbox` `appearance`: `cell`, `default`
 - `Checkbox` `firstLine`: `control`, `text`
-- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableCellFace`, `TableHead` `align`: `center`, `end`, `start`
+- `ColorPicker`, `EntityActionsButton`, `SortableHead`, `SortableHeadFace`, `TableCell`, `TableCellFace`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
 - `ComboboxTrigger` `variant`: `field`, `plain`
@@ -422,7 +422,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `SidebarMenuButton` `size`: `default`, `lg`, `rail`, `sm`
 - `SidebarMenuButton` `variant`: `default`, `outline`
 - `SidebarMenuSubButton`, `SplitButton`, `SplitButtonFace` `size`: `md`, `sm`
-- `SortableHead` `sortDirection`: `asc`, `desc`
+- `SortDirectionIcon` `direction`: `asc`, `desc`
+- `SortableHead`, `SortableHeadFace` `sortDirection`: `asc`, `desc`
 - `SplitButton` `surface`: `menu`, `popover`
 - `StatusMark` `status`: `done`, `failed`, `pending`, `running`
 - `Step` `status`: `completed`, `current`, `upcoming`
@@ -452,6 +453,10 @@ row content, readonly row labels, struts, and Checkbox's cell appearance.
 slot and content minimum; `control` uses 28px for a line inside an editable
 field. Consumers use the same entry's `slot` and `content` values rather
 than maintaining parallel geometry maps.
+
+`TableSkeletonRows` from `@stll/ui/table-shell` follows the table's column
+specification, including responsive cell classes. Each loading cell draws
+the column's bar or a custom placeholder for its content.
 
 ### Disclosure Panels
 

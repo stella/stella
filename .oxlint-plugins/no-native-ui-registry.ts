@@ -458,6 +458,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("tooltip"),
     "a title on truncated text is reported by the tooltip rule",
   ),
+  "truncated-text-face": noNative(
+    "cut text's box without its hint, for loading views",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
@@ -468,6 +471,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   utils: notComponent("class name helpers"),
   "view-toolbar": noNative(
     "a view's filter row; ARIA toolbars have no general @stll/ui primitive",
+  ),
+  "view-toolbar-shell": noNative(
+    "the view chrome's rows without their controls, for loading views",
   ),
   week: notComponent("week arithmetic"),
   "workspace-shell": noNative("the workspace page layout"),
@@ -742,8 +748,14 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "truncated-text": webOnly(
     "reveals the full text in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
   ),
+  "truncated-text-face": webOnly(
+    "the web's cut-text box for loading views; a phone caps lines with Text's numberOfLines",
+  ),
   "view-toolbar": webOnly(
     "the web's view filter row; the app filters from the header",
+  ),
+  "view-toolbar-shell": webOnly(
+    "the web view chrome's rows for loading views; the app filters from the header",
   ),
   "workspace-shell": webOnly(
     "the web's page layout; screens lay out with the platform's navigation",

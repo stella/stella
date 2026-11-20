@@ -46,6 +46,7 @@ import {
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
 import type { FakeScenario as FakeCodexScenario } from "../../../scripts/fake-codex-app-server";
+import { readFakeHarnessLog } from "../../../scripts/fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
@@ -158,10 +159,7 @@ const harnessFor = (
     platform,
   });
   const entries = () =>
-    readFileSync(logPath, "utf-8")
-      .split("\n")
-      .filter((line) => line !== "")
-      .map((line) => v.parse(LogEntrySchema, JSON.parse(line)));
+    readFakeHarnessLog(logPath).map((entry) => v.parse(LogEntrySchema, entry));
   /** Messages the fake CLI received, in order. */
   const received = () =>
     entries().flatMap(({ received: message }) =>
@@ -1161,6 +1159,75 @@ describe("Claude Code adapter over stream-json stdio", () => {
       ),
     ).toBeGreaterThan(settled);
     expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a steer the CLI holds past its result is answered in the same turn, once", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_held_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId, status: "accepted" },
+    ]);
+    // Both answers belong to the turn, and it ends once, on the last result.
+    expect(
+      events.flatMap((event) =>
+        event.type === "text.completed" ? [event.text] : [],
+      ),
+    ).toEqual(["Only the notes are here.", "The annex is not here."]);
+    expect(events.filter(({ type }) => type === "turn.completed")).toHaveLength(
+      1,
+    );
+    const completed = terminal(events);
+    expect(
+      completed?.type === "turn.completed" && completed.usage,
+    ).toMatchObject({ outputTokens: 60 });
+    // The command's step is not taken for an unsupported one.
+    expect(toolCompletions(events)).toHaveLength(1);
+  });
+
+  test("a steer dropped while the CLI answers another held one does not end the turn", async () => {
+    const [read, dropped] = [crypto.randomUUID(), crypto.randomUUID()];
+    const { events } = await run("steers_read_and_dropped_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId: read, text: "Also check the annex." });
+          await turn.steer({ inputId: dropped, text: "And the appendix." });
+        }
+      },
+    });
+    expect(events.filter(({ type }) => type === "input.settled")).toEqual([
+      { type: "input.settled", inputId: read, status: "accepted" },
+      { type: "input.settled", inputId: dropped, status: "rejected" },
+    ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "text.completed",
+        text: "The annex is not here.",
+      }),
+    );
+    expect(events.filter(({ type }) => type === "turn.completed")).toHaveLength(
+      1,
+    );
+  });
+
+  test("a steer the CLI drops after its result is settled rejected, and the turn ends", async () => {
+    const inputId = crypto.randomUUID();
+    const { events } = await run("steer_dropped_past_result", {
+      onEvent: async (event, turn) => {
+        if (event.type === "tool.started") {
+          await turn.steer({ inputId, text: "Also check the annex." });
+        }
+      },
+    });
+    expect(events.slice(-2)).toEqual([
+      { type: "input.settled", inputId, status: "rejected" },
+      expect.objectContaining({ type: "turn.completed" }),
+    ]);
   });
 
   test("a steer the turn's result arrives before is settled rejected ahead of the turn's end", async () => {

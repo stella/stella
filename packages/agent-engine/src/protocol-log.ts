@@ -578,6 +578,17 @@ const CLAUDE_LINE_FIELDS: Readonly<Record<ClaudeLineType, MessageShape>> = {
   conversation_reset: shape({}),
   active_goal: shape({}),
   keep_alive: shape({}),
+  command_lifecycle: shape({
+    command_uuid: IDENTIFIER,
+    state: vocabulary([
+      "queued",
+      "started",
+      "completed",
+      "cancelled",
+      "discarded",
+      "refused",
+    ]),
+  }),
 };
 
 // The CLI writes every type it knows; `items.ts` decides what each means.

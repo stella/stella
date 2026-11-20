@@ -2,11 +2,12 @@ import type { ReactElement, ReactNode } from "react";
 
 import { useSearch } from "@tanstack/react-router";
 
-import { buttonFaceClassName, InputFace } from "@stll/ui/control-face";
+import { InputFace } from "@stll/ui/control-face";
 import { Frame } from "@stll/ui/frame";
-import { ArrowUpIcon, SearchIcon } from "@stll/ui/icons";
+import { SearchIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
+  SortableHeadFace,
   Table,
   TableBody,
   TableCellFace,
@@ -96,27 +97,17 @@ const MembersTableHeader = ({
         const { id, sortKey, label, labelWidth } = column;
         const text = <PendingText id={label} barClassName={labelWidth} />;
         return renderSortableHead === undefined ? (
-          <TableHead className={className} key={id}>
-            <span className="inline-flex items-center gap-1">
-              <span
-                aria-hidden="true"
-                className={cn(
-                  buttonFaceClassName({ size: "default", variant: "muted" }),
-                  "-ms-2.5 min-w-0 gap-1 px-2.5",
-                )}
-              >
-                {text}
-                <span
-                  aria-hidden="true"
-                  className="inline-flex w-3 shrink-0 justify-center"
-                >
-                  {sortKey === INITIAL_MEMBERS_SORT.key && (
-                    <ArrowUpIcon className="size-3" />
-                  )}
-                </span>
-              </span>
-            </span>
-          </TableHead>
+          <SortableHeadFace
+            className={className}
+            key={id}
+            sortDirection={
+              sortKey === INITIAL_MEMBERS_SORT.key
+                ? INITIAL_MEMBERS_SORT.dir
+                : null
+            }
+          >
+            {text}
+          </SortableHeadFace>
         ) : (
           renderSortableHead({ className, label: text, sortKey })
         );

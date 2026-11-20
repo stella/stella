@@ -6,11 +6,15 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "./features/case-law/case-law-jurisdiction";
+import { toolsCataloguePathOf } from "./lib/knowledge/public-tools-catalogue-path";
+import type { PublicToolsBasePath } from "./lib/knowledge/public-tools-catalogue-path";
 
 type PublicCrawlRoute = {
   path: `/${string}`;
   route: `/${string}`;
   /**
+   * `catalogue`: the published tools' list, with their pages beside it, when
+   * the tools live where this list does.
    * `jurisdictions`: the path itself, plus a subtree per jurisdiction whose
    * pages are public. A country whose pages are not public stays outside the
    * crawl, whatever it may serve.
@@ -58,9 +62,11 @@ export const PUBLIC_CRAWL_ROUTES = [
     permission: "tools",
     format: "html",
   },
+  // The published tools' list; `/knowledge/tools` is an organization's own
+  // page and stays closed.
   {
-    path: "/knowledge/tools",
-    route: "/knowledge/tools",
+    path: "/knowledge/tools/catalogue",
+    route: "/knowledge/tools/catalogue",
     scope: "catalogue",
     permission: "tools",
     format: "html",
@@ -69,6 +75,13 @@ export const PUBLIC_CRAWL_ROUTES = [
     path: "/knowledge/templates/catalogue",
     route: "/knowledge/templates/catalogue",
     scope: "subtree",
+    permission: "knowledge",
+    format: "html",
+  },
+  {
+    path: "/knowledge/playbooks/catalogue",
+    route: "/knowledge/playbooks/catalogue",
+    scope: "exact",
     permission: "knowledge",
     format: "html",
   },
@@ -87,7 +100,7 @@ export type PublicCrawlOptions = {
   publicKnowledgeCrawlAllowed: boolean;
   publicLawCrawlAllowed: boolean;
   publicToolsCrawlAllowed: boolean;
-  toolsBasePath: "/tools" | "/knowledge/tools";
+  toolsBasePath: PublicToolsBasePath;
 };
 
 export type PublicCrawlRule = {
@@ -113,7 +126,7 @@ const catalogueToolSlugs = createServerOnlyFn((): readonly string[] =>
 export const publicToolCrawlPaths = (
   toolsBasePath: PublicCrawlOptions["toolsBasePath"],
 ): readonly `/${string}`[] => [
-  toolsBasePath,
+  toolsCataloguePathOf(toolsBasePath),
   `${toolsBasePath}/contribute`,
   ...catalogueToolSlugs().map(
     (slug): `/${string}` => `${toolsBasePath}/${slug}`,
@@ -144,7 +157,7 @@ export const createPublicCrawlRules = ({
       continue;
     }
     if (entry.scope === "catalogue") {
-      if (entry.path === toolsBasePath) {
+      if (entry.path === toolsCataloguePathOf(toolsBasePath)) {
         for (const path of publicToolCrawlPaths(toolsBasePath)) {
           rules.push({ path, scope: "exact" });
         }

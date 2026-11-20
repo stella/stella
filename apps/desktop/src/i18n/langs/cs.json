@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Otevírání v Office",
     "sessionSavingDraft": "Ukládání konceptu",
     "reconnectAccount": "Znovu připojit k stella web…",
-    "transcribeRecording": "Přepsat nahrávku…"
+    "transcribeRecording": "Přepsat nahrávku…",
+    "dictation": "Diktování",
+    "dictationHint": "Pro diktování podržte {key}",
+    "dictationSettings": "Nastavení diktování…",
+    "dictationTurnOn": "Zapnout diktování…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: změny zůstávají lokální a budou automaticky zopakovány",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella nemohla ověřit, která aplikace je aktivní, takže se nic nenapsalo. Zkuste to znovu.",
       "shortcutHeld": "Pusťte klávesy zkratky, aby se text mohl napsat. Nic se nenapsalo, zkuste to znovu.",
       "passwordField": "Je vybrané pole pro heslo, proto se diktát neuložil ani nenapsal.",
-      "cloudTranscription": "stella AI tento diktát nepřevedla a řečový model v tomto počítači není. Zkuste to znovu, nebo u „Převádět pomocí“ zvolte „Tento počítač“ a model stáhněte."
+      "cloudTranscription": "stella AI tento diktát nepřevedla a řečový model v tomto počítači není. Zkuste to znovu, nebo u „Převádět pomocí“ zvolte „Tento počítač“ a model stáhněte.",
+      "nothingHeard": "stella neslyšela žádnou řeč. Zkontrolujte vstupní zařízení v nastavení Zvuku."
     },
     "failureKeptInHistory": "Text najdete v historii schránky.",
     "transcribeRecording": {
@@ -705,6 +710,21 @@
       "description": "Soubor z diktafonu, hlasovou poznámku nebo záznam jednání až do 4 hodin převede na text.",
       "open": "Otevřít",
       "failed": "Okno se nepodařilo otevřít. Zkuste to znovu."
+    },
+    "notice": {
+      "title": "stella neslyší váš mikrofon",
+      "allowBody": "Povolte přístup k mikrofonu a zkuste to znovu.",
+      "checkBodyMac": "Zkontrolujte přístup k mikrofonu v Nastavení systému a zkuste to znovu.",
+      "checkBodyPc": "Zkontrolujte přístup k mikrofonu v Nastavení Windows a zkuste to znovu.",
+      "allow": "Povolit mikrofon",
+      "openSettingsMac": "Otevřít Nastavení systému",
+      "openSettingsPc": "Otevřít Nastavení",
+      "dismiss": "Zavřít",
+      "nothingTitle": "stella neslyšela žádnou řeč",
+      "nothingBody": "Mluvte, dokud držíte klávesu, nebo v nastavení Zvuku vyberte jiný vstup.",
+      "inputDevice": "Vstup: {device}",
+      "openSoundMac": "Otevřít nastavení Zvuku",
+      "openSoundPc": "Otevřít nastavení zvuku"
     },
     "preview": {
       "label": "Co jste zatím nadiktovali",
@@ -809,8 +829,8 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "permissionsBody": "Každé oprávnění je na vás. Později je můžete změnit v Nastavení.",
     "neverRequested": "Nikdy nevyžadováno:",
-    "tryTitle": "Vyzkoušejte to",
-    "tryBody": "Zkopírujte libovolný text a stiskněte {shortcut}.",
+    "tryTitle": "Vyzkoušejte historii schránky",
+    "tryBody": "Zkopírujte libovolný text a stisknutím {shortcut} otevřete historii schránky.",
     "tryWaiting": "Čekám na zkratku",
     "tryKeepGoing": "Pokračujte…",
     "tryExtraModifier": "To je {pressed}. Použijte {shortcut}.",

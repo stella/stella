@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
 // parser-output-unchanged: [sk-us] locating a stored row in its month's listing changes no parsed decision.
 // parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -3253,6 +3254,28 @@ export const skUsAdapter = defineSourceAdapter({
    * answerable without the crawl cursor ever reaching it: list the month, key
    * each item the way the ingest would, and compare against what is held.
    */
+  buildStoredDocument: async ({ stored, signal }) => {
+    const parts = skUsStoredRawParts(
+      new TextDecoder().decode(stored.raw),
+      stored.contentType,
+    );
+    const rawListing = parts?.["listing"];
+    const parsed =
+      rawListing === undefined
+        ? undefined
+        : Result.try({
+            try: (): unknown => JSON.parse(rawListing),
+            catch: () => null,
+          }).unwrapOr(null);
+    if (!isRecord(parsed) || parsed["documentId"] !== stored.sourceDocumentId) {
+      return {
+        type: "incomplete-locator",
+        detail:
+          "Stored payload does not retain this complete DMS listing document",
+      };
+    }
+    return await buildSkUsFromPayload(parsed, signal);
+  },
   reconciliation: {
     // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
     revisionOf: (payload) =>
