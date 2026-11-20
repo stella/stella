@@ -312,7 +312,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
     "test:unit": "bun test --isolate --path-ignore-patterns '**/*.playwright.spec.ts'",
