@@ -1,3 +1,5 @@
+import { renderToStaticMarkup } from "react-dom/server";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RouteComponent } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, test } from "bun:test";
@@ -23,6 +25,10 @@ const { ProtectedPendingSkeleton } =
   await import("@/routes/-protected-pending-skeleton");
 const { rememberTimeBillingAccess } =
   await import("@/lib/workspaces/time-billing-access-memory");
+const { initializeBrowserPresentationPrefs, PresentationPrefsProvider } =
+  await import("@/lib/account/presentation-prefs/provider");
+const { createTestPresentationPrefsSync } =
+  await import("@/lib/account/presentation-prefs/sync.test-fixtures");
 const { isPublicLawEnabled } = await import("@/lib/public-law-launch");
 
 afterEach(() => {
@@ -219,15 +225,25 @@ test("a frameless redirect into the app shows its target in the member frame", a
 
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000abcd";
 
+// The presentation cookie as this browser holds it: what the skeleton reads,
+// and where remembering an answer writes.
+const prefsSync = createTestPresentationPrefsSync();
+initializeBrowserPresentationPrefs(prefsSync.getSnapshot(), prefsSync);
+
 const pendingNavIds = (scope?: { userId: string; organizationId: string }) => {
   const view = testing.render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {scope === undefined ? (
-        <ProtectedPendingSkeleton />
-      ) : (
-        <ProtectedPendingSkeleton inspectorScope={scope} />
-      )}
-    </IntlProvider>,
+    <PresentationPrefsProvider
+      initialPrefs={prefsSync.getSnapshot()}
+      sync={prefsSync}
+    >
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {scope === undefined ? (
+          <ProtectedPendingSkeleton />
+        ) : (
+          <ProtectedPendingSkeleton inspectorScope={scope} />
+        )}
+      </IntlProvider>
+    </PresentationPrefsProvider>,
   );
   const ids = [
     ...view.container.querySelectorAll<HTMLElement>("[data-nav-item]"),
@@ -242,16 +258,45 @@ test("the frame's nav has the entries the build gives the sidebar", () => {
   expect(ids.includes("caseLaw")).toBe(isPublicLawEnabled());
 });
 
-test("the frame's nav keeps the timesheets entry this browser last had", () => {
+test("the frame's nav keeps the timesheets entry this browser last had", async () => {
   const scope = { userId: "user-1", organizationId: ORGANIZATION_ID };
-  rememberTimeBillingAccess(ORGANIZATION_ID, false);
+  // The cookie write is detached; it lands in the browser's prefs.
+  const remember = async (enabled: boolean) => {
+    rememberTimeBillingAccess(ORGANIZATION_ID, enabled);
+    await testing.waitFor(() => {
+      expect(prefsSync.getSnapshot().timeBillingHint).toBe(enabled);
+    });
+  };
+  await remember(false);
   expect(pendingNavIds(scope)).not.toContain("timesheets");
   expect(pendingNavIds()).not.toContain("timesheets");
-  rememberTimeBillingAccess(ORGANIZATION_ID, true);
+  await remember(true);
   expect(pendingNavIds(scope)).toContain("timesheets");
-  // Before the frame knows the member's organization, the answer kept for
-  // the member stands in, and reading it keeps it.
+  // Before the frame knows the member's organization (the server's paint and
+  // its hydration), the answer kept in the presentation cookie stands in.
+  expect(prefsSync.getSnapshot().timeBillingHint).toBe(true);
   expect(pendingNavIds()).toContain("timesheets");
   expect(pendingNavIds(scope)).toContain("timesheets");
-  rememberTimeBillingAccess(ORGANIZATION_ID, false);
+  await remember(false);
+  expect(pendingNavIds()).not.toContain("timesheets");
+});
+
+// The jump this guards is in the server's paint, which renders with the
+// stores' server snapshots: the frame must take the cookie's answer there.
+test("the server's paint of the frame's nav follows the presentation cookie", () => {
+  const serverNav = (timeBillingHint: boolean) => {
+    const prefs = { ...prefsSync.getSnapshot(), timeBillingHint };
+    return renderToStaticMarkup(
+      <PresentationPrefsProvider
+        initialPrefs={prefs}
+        sync={createTestPresentationPrefsSync(prefs)}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ProtectedPendingSkeleton />
+        </IntlProvider>
+      </PresentationPrefsProvider>,
+    );
+  };
+  expect(serverNav(true)).toContain('data-nav-item="timesheets"');
+  expect(serverNav(false)).not.toContain('data-nav-item="timesheets"');
 });
