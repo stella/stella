@@ -13,6 +13,10 @@ import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
 import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
 import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
+import {
+  PDF_VIEWPORT_CLASS,
+  PDF_VIEWPORT_CONTENT_CLASS,
+} from "@/components/pdf/pdf-viewer.pending";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
@@ -129,8 +133,8 @@ const FullscreenPdfViewer = () => {
         <PDFViewport
           pageSource="portfolio"
           buffer={file.buffer}
-          className="document-preview-surface h-full"
-          contentClassName="relative mt-2 space-y-2 px-2"
+          className={PDF_VIEWPORT_CLASS}
+          contentClassName={PDF_VIEWPORT_CONTENT_CLASS}
           fileId={fieldId}
           invertColors={resolvePDFInvertColors({
             colorMode: pdfColorMode,

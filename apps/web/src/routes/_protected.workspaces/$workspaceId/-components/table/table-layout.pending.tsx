@@ -15,6 +15,8 @@ import {
 } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { tableSkeletonRowCount } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import type { WorkspaceView } from "@/lib/types";
+import { storedColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
+import { GroupedTableViewPending } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.pending";
 import {
   cachedWorkspaceProperties,
   isGroupedTableView,
@@ -29,10 +31,10 @@ const PENDING_TABLE_ROWS = 12;
 /**
  * A table view before it mounts: the table itself, its header row and
  * placeholder rows in the grid its saved layout gives (the columns, their
- * order, widths and pinning), from the cached view and the matter's cached
- * properties. Without the properties there are no columns to lay out, and
- * a grouped table's sections depend on counts still in flight: neither
- * claims a shape before it loads.
+ * order, widths and pinning, and the widths a reader dragged them to), from
+ * the cached view, the matter's cached properties and the table store.
+ * Without the properties there are no columns to lay out; a grouped table
+ * draws its sections from the same properties.
  */
 export const TableViewPending = ({
   cache,
@@ -45,10 +47,23 @@ export const TableViewPending = ({
 }) => {
   const properties =
     cache === null ? undefined : cachedWorkspaceProperties(cache, workspaceId);
-  if (properties === undefined || isGroupedTableView(view)) {
+  if (properties === undefined) {
     return null;
   }
-  const grid = pendingTableGrid({ properties, view });
+  if (isGroupedTableView(view)) {
+    return (
+      <GroupedTableViewPending
+        properties={properties}
+        view={view}
+        workspaceId={workspaceId}
+      />
+    );
+  }
+  const grid = pendingTableGrid({
+    properties,
+    sizing: storedColumnSizing({ workspaceId, viewId: view.id }),
+    view,
+  });
   const style: TableGridStyle = {
     "--workspace-table-columns": grid.templateColumns,
     minWidth: grid.tableWidth,

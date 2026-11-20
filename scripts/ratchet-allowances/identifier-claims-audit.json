@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "The shared canonical identifier claim owner replaces two duplicated writes with five ownership-aware mutations. Each mutation declares its public corpus scope; none accesses workspace data."
+}

@@ -62,7 +62,7 @@
     "@types/hast": "^3.0.5",
     "better-result": "catalog:",
     "linkify-it": "6.1.0",
-    "tldts": "7.5.2",
+    "tldts": "7.5.3",
     "valibot": "catalog:",
     "zod": "^4.6.6"
   },

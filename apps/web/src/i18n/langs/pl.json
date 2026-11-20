@@ -2359,6 +2359,11 @@
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
     },
+    "switcher": {
+      "allChats": "Wszystkie czaty",
+      "searchPlaceholder": "Znajdź czat…",
+      "trigger": "Przełącz czat"
+    },
     "tableChart": {
       "bar": "Słupkowy",
       "kind": "Typ wykresu",
@@ -6294,6 +6299,14 @@
     },
     "reconnectRequired": "Logowanie wygasło",
     "title": "SharePoint i OneDrive"
+  },
+  "signedFile": {
+    "layer": "Warstwa podpisów {number, number}",
+    "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "unknownSigner": "Nieznany podpisujący",
+    "unreadable": "Nie udało się odczytać podpisanego pliku.",
+    "unverified": "Podpisy nie zostały zweryfikowane."
   },
   "skillHistory": {
     "acceptStale": "Zaakceptuj i nadpisz nowsze zmiany",

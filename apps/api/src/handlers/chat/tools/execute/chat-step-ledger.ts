@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as v from "valibot";
 
@@ -13,6 +14,11 @@ import {
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  brandPersistedEntityId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -25,6 +31,12 @@ import { isRecord } from "@/api/lib/type-guards";
  * withholds and nothing the member may not read can appear: a read the
  * member may not make is refused before it answers, and a matter item from
  * outside the turn's authorized matters is dropped here as well.
+ *
+ * A matter document or a matter is named by its title and by the chat ref
+ * the turn's ref registry spells it with (`ent_3`, `mat_1`), the ref the
+ * model reads it by, never by an id: the ledger rides on a tool result. The
+ * stored message binds each ref it holds (`refContext`), which is how a page
+ * opens the item later.
  */
 
 /** What one registry read answered: its normalized arguments and payload. */
@@ -43,17 +55,64 @@ const DISCARDING_STEP_CALL_SINK: ChatStepCallSink = {
   answered: () => undefined,
 };
 
-type StepRefScope = {
+/**
+ * The turn's chat refs for a matter document and a matter, minted (or
+ * reused) by the turn's one ref registry, so a step names an item by the
+ * spelling the model reads it by.
+ */
+type ChatStepRefMinter = {
+  document: (target: { entityId: string; matterId: string }) => string;
+  matter: (matterId: string) => string;
+};
+
+export type ChatStepRefScope = {
   /** The matters the turn may read; a matter item outside them is dropped. */
   workspaceIds: ReadonlySet<string>;
+  refs: ChatStepRefMinter;
 };
 
 /**
- * One item a read found: the ref the ledger keeps, the key it is told apart
- * by, and for a matter item the matter it belongs to, which decides whether
- * the turn may name it and is never kept.
+ * A step's scope in a turn: the matters it may name, by the refs of the
+ * turn's own registry. That is the registry the read's projection mints into
+ * what the script receives, so the step and the model spell an item alike,
+ * and the stored message binds the ref (`collectRefBindings`).
  */
-type FoundItem = { ref: ChatStepRef; key: string; matterId: string | null };
+export const chatStepRefScope = ({
+  refRegistry,
+  workspaceIds,
+}: {
+  refRegistry: ChatRefRegistry;
+  workspaceIds: Iterable<string>;
+}): ChatStepRefScope => ({
+  workspaceIds: new Set(workspaceIds),
+  refs: {
+    document: ({ entityId, matterId }) =>
+      refRegistry.toEntityRef({
+        entityId: brandPersistedEntityId(entityId),
+        workspaceId: brandPersistedWorkspaceId(matterId),
+      }),
+    matter: (matterId) =>
+      refRegistry.toMatterRef(brandPersistedWorkspaceId(matterId)),
+  },
+});
+
+/**
+ * One item a read found and the key it is told apart by. A public item is
+ * kept as found; a matter item carries the matter it belongs to, which
+ * decides whether the turn may name it, and gets its chat ref only once it
+ * is kept. Neither id is ever kept.
+ */
+type FoundItem = { key: string } & (
+  | { type: "public"; ref: ChatStepRef }
+  | {
+      type: "document";
+      entityId: string;
+      matterId: string;
+      title: string;
+      kind: string | null;
+    }
+  | { type: "matter"; matterId: string; title: string }
+);
 
 type StepRefReader = (answer: ChatStepReadAnswer) => FoundItem[];
 
@@ -91,7 +150,7 @@ const toDecisionRef = (
   value: v.InferOutput<typeof decisionFields>,
 ): FoundItem => ({
   key: `decision:${value.decisionId}`,
-  matterId: null,
+  type: "public",
   ref: {
     type: "decision",
     decisionId: value.decisionId,
@@ -123,7 +182,7 @@ const toStatuteRef = (
   value: v.InferOutput<typeof statuteFields>,
 ): FoundItem => ({
   key: `statute:${value.eli}#${value.anchor ?? ""}@${value.versionValidFrom ?? ""}`,
-  matterId: null,
+  type: "public",
   ref: {
     type: "statute",
     eli: value.eli,
@@ -174,8 +233,11 @@ const toDocumentRef = (
   value: v.InferOutput<typeof documentFields>,
 ): FoundItem => ({
   key: `document:${value.workspaceId}:${value.entityId}`,
+  type: "document",
+  entityId: value.entityId,
   matterId: value.workspaceId,
-  ref: { type: "document", title: value.name, kind: value.kind },
+  title: value.name,
+  kind: value.kind,
 });
 
 const readFoundDecisions: StepRefReader = ({ data }) =>
@@ -256,8 +318,9 @@ const STEP_REF_READERS = {
       v.object({ id: text, name: text }),
       (matter): FoundItem => ({
         key: `matter:${matter.id}`,
+        type: "matter",
         matterId: matter.id,
-        ref: { type: "matter", title: matter.name },
+        title: matter.name,
       }),
     ),
   fetch: null,
@@ -331,8 +394,42 @@ const readFilters = (args: Record<string, unknown>): ChatStepFilter[] =>
     textValues(args[arg]).map((value) => ({ kind, value })),
   ).slice(0, CHAT_STEP_LEDGER_LIMITS.filtersPerCall);
 
-const isInScope = (item: FoundItem, scope: StepRefScope | undefined) =>
-  item.matterId === null || scope?.workspaceIds.has(item.matterId) === true;
+/** Whether the turn may name `item`: a matter item only from its matters. */
+const isInScope = (item: FoundItem, scope: ChatStepRefScope | undefined) =>
+  item.type === "public" || scope?.workspaceIds.has(item.matterId) === true;
+
+const scopeRefs = (scope: ChatStepRefScope | undefined): ChatStepRefMinter =>
+  scope?.refs ?? panic("A matter item was kept outside the turn's matters");
+
+/** What the ledger keeps of an in-scope item: a matter item by its ref. */
+const keptRef = (
+  item: FoundItem,
+  scope: ChatStepRefScope | undefined,
+): ChatStepRef => {
+  switch (item.type) {
+    case "public":
+      return item.ref;
+    case "document":
+      return {
+        type: "document",
+        ref: scopeRefs(scope).document({
+          entityId: item.entityId,
+          matterId: item.matterId,
+        }),
+        title: item.title,
+        kind: item.kind,
+      };
+    case "matter":
+      return {
+        type: "matter",
+        ref: scopeRefs(scope).matter(item.matterId),
+        title: item.title,
+      };
+    default:
+      item satisfies never;
+      return panic("Unhandled step ledger item");
+  }
+};
 
 const STEP_REF_READER_BY_TOOL: ReadonlyMap<string, StepRefReader | null> =
   new Map(Object.entries(STEP_REF_READERS));
@@ -355,7 +452,7 @@ export type ChatStepLedgerRecorder = {
 };
 
 export const createChatStepLedgerRecorder = (
-  scope?: StepRefScope,
+  scope?: ChatStepRefScope,
 ): ChatStepLedgerRecorder => {
   const calls: ChatStepCall[] = [];
   let callsOmitted = 0;
@@ -368,25 +465,28 @@ export const createChatStepLedgerRecorder = (
       const args = answer?.args ?? (isRecord(callArgs) ? callArgs : {});
       const reader = readerOf(tool);
       const seen = new Set<string>();
-      const found =
+      const named =
         answer === undefined || reader === null
           ? []
-          : reader(answer).flatMap((item) => {
+          : reader(answer).filter((item) => {
               if (!isInScope(item, scope) || seen.has(item.key)) {
-                return [];
+                return false;
               }
               seen.add(item.key);
-              return [item.ref];
+              return true;
             });
       calls.push({
         tool: clip(tool),
         queries: readQueries(args),
         filters: readFilters(args),
         outcome,
-        found: found.slice(0, CHAT_STEP_LEDGER_LIMITS.refsPerCall),
+        // Only a kept item is given a ref; one past the limit is counted.
+        found: named
+          .slice(0, CHAT_STEP_LEDGER_LIMITS.refsPerCall)
+          .map((item) => keptRef(item, scope)),
         foundOmitted: Math.max(
           0,
-          found.length - CHAT_STEP_LEDGER_LIMITS.refsPerCall,
+          named.length - CHAT_STEP_LEDGER_LIMITS.refsPerCall,
         ),
       });
     },

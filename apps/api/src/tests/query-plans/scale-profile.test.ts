@@ -403,14 +403,18 @@ test(
           assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE),
         ),
       ).toMatchObject({
-        message:
+        message: [
           "Scale profile contradicts the seed: case_law_decisions.citation_key is profiled with null fraction 0.2 but seeded entirely NULL",
+          "Scale profile contradicts the seed: case_law_decisions.citation_key is profiled with n_distinct -0.8 but seeded with 0 distinct values",
+        ].join("\n"),
       });
       expect(
         await rejectionOf(injectScaleProfile(db, SYNTHETIC_SCALE_PROFILE)),
       ).toMatchObject({
-        message:
+        message: [
           "Scale profile contradicts the seed: case_law_decisions.citation_key is profiled with null fraction 0.2 but seeded entirely NULL",
+          "Scale profile contradicts the seed: case_law_decisions.citation_key is profiled with n_distinct -0.8 but seeded with 0 distinct values",
+        ].join("\n"),
       });
 
       await db.execute(sql`
@@ -427,6 +431,57 @@ test(
         message:
           "Scale profile contradicts the seed: case_law_decision_identifiers.normalized_value is profiled with n_distinct -0.9 but seeded with 1 distinct values",
       });
+    } finally {
+      await client.close();
+    }
+  },
+  TEST_TIMEOUT_MS,
+);
+
+// timeout: an embedded Postgres seeds and analyzes every guarded table.
+test(
+  "a profiled common value the seed never holds fails the gate, naming it",
+  async () => {
+    const client = new PGlite();
+    try {
+      const db = drizzle({ client });
+      await createScaleTables(db);
+      await assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE);
+
+      // A thin seed: one country's language and one identifier type are
+      // never written, though the profile calls them common.
+      await db.execute(sql`
+        UPDATE case_law_decisions SET language = 'cs'
+         WHERE language IN ('sk', 'pl')
+      `);
+      await db.execute(sql`
+        UPDATE case_law_decision_identifiers SET type = 'ecli'
+         WHERE type = 'reporter-citation'
+      `);
+      const expected = [
+        "Scale profile contradicts the seed: case_law_decisions.language is profiled with common values the seed never holds: sk, pl",
+        "Scale profile contradicts the seed: case_law_decision_identifiers.type is profiled with common values the seed never holds: reporter-citation",
+      ].join("\n");
+      expect(
+        await rejectionOf(
+          assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE),
+        ),
+      ).toMatchObject({ message: expected });
+      expect(
+        await rejectionOf(injectScaleProfile(db, SYNTHETIC_SCALE_PROFILE)),
+      ).toMatchObject({ message: expected });
+
+      await db.execute(sql`
+        UPDATE case_law_decisions SET language = 'sk' WHERE country = 'SVK'
+      `);
+      await db.execute(sql`
+        UPDATE case_law_decisions SET language = 'pl' WHERE country = 'POL'
+      `);
+      await db.execute(sql`
+        UPDATE case_law_decision_identifiers SET type = 'reporter-citation'
+         WHERE type = 'ecli' AND normalized_value = 'other'
+      `);
+      await assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE);
     } finally {
       await client.close();
     }

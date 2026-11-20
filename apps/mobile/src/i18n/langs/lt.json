@@ -609,6 +609,13 @@
     "dictationCleanup": "Taisyti su DI",
     "dictationCleanupHint": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“. Tik tekstas, ne garsas, per stella siunčiamas jūsų organizacijos DI paslaugų teikėjui; stella jo nesaugo."
   },
+  "signedFile": {
+    "layer": "Parašų sluoksnis {number, number}",
+    "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "unknownSigner": "Nežinomas pasirašęs asmuo",
+    "unreadable": "Nepavyko perskaityti pasirašyto failo.",
+    "unverified": "Parašai nepatikrinti."
+  },
   "header": {
     "search": "Ieškoti"
   },

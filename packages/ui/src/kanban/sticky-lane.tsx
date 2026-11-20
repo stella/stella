@@ -35,13 +35,7 @@ export type KanbanStickyTopStyle = CSSProperties & {
  */
 export const KANBAN_CARD_STICKY_TOP_VAR = "--kanban-card-sticky-top" as const;
 
-/**
- * Sticks a card's identity row under everything pinned above it. The fallback
- * keeps the row usable inside a card rendered outside a cell that publishes the
- * offset, where nothing is pinned above it at all.
- */
-export const KANBAN_CARD_STICKY_TOP_CLASS =
-  "top-(--kanban-card-sticky-top,0px)";
+export { KANBAN_CARD_STICKY_TOP_CLASS } from "./layout-tokens";
 
 export type KanbanCardStickyTopStyle = CSSProperties & {
   [KANBAN_CARD_STICKY_TOP_VAR]?: string;
