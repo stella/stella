@@ -3,7 +3,7 @@ import { ButtonFace } from "@stll/ui/control-face";
 import { PendingText } from "@/components/pending-text";
 
 /**
- * A labelled `CopyControl`'s face (`./copy-control.tsx`) at the default
+ * A labelled `CopyControl`'s face (`@/components/copy-control`) at the default
  * size: the button box, the glyph's cell at its size, and the Copy and
  * Copied labels sharing one cell as the live control stacks them, so the
  * control that loads keeps the wider label's width. The glyph itself is

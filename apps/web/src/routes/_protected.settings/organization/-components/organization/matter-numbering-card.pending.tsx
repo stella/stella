@@ -125,7 +125,7 @@ const PickerFieldPending = ({
 export const MatterNumberingCardPending = () => (
   <MatterNumberingCardFrame
     numberingToggle={
-      <FieldFace layout="snug">
+      <FieldFace density="snug">
         <div className={MATTER_NUMBERING_TOGGLE_ROW_CLASS}>
           <CheckboxFace />
           <LabelFace>

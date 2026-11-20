@@ -248,19 +248,27 @@ export const LabelFace = ({
 );
 
 /**
- * How a field's face lays out its parts, as the live `Field` is laid out:
- * - `stack`: the caption over the control over its lines (the field's column);
- * - `snug`: that column with its parts a step closer (a checkbox row over its
- *   line);
- * - `inline`: a checkbox or switch beside its caption, on one line.
+ * How a field's face lays out its parts, in `Form`'s names: `stack` puts the
+ * caption over the control over its lines (the field's column), `inline` a
+ * checkbox or switch beside its caption.
  */
-type FieldFaceLayout = "stack" | "snug" | "inline";
+type FieldFaceLayout = "stack" | "inline";
 
 const FIELD_FACE_LAYOUT_CLASS_NAMES = {
   stack: "",
-  snug: "gap-1",
   inline: "flex-row items-center",
 } as const satisfies Record<FieldFaceLayout, string>;
+
+/**
+ * How close a field's face sets its parts: `snug` a step closer (a checkbox
+ * row over its line).
+ */
+type FieldFaceDensity = "default" | "snug";
+
+const FIELD_FACE_DENSITY_CLASS_NAMES = {
+  default: "",
+  snug: "gap-1",
+} as const satisfies Record<FieldFaceDensity, string>;
 
 /**
  * A form field's face, as `Field` draws it: the caption, the control's face
@@ -269,16 +277,19 @@ const FIELD_FACE_LAYOUT_CLASS_NAMES = {
 export const FieldFace = ({
   children,
   className,
+  density = "default",
   layout = "stack",
 }: {
   children: ReactNode;
   className?: string | undefined;
+  density?: FieldFaceDensity | undefined;
   layout?: FieldFaceLayout | undefined;
 }) => (
   <div
     className={cn(
       FIELD_CLASS_NAME,
       FIELD_FACE_LAYOUT_CLASS_NAMES[layout],
+      FIELD_FACE_DENSITY_CLASS_NAMES[density],
       className,
     )}
     data-slot="field-face"

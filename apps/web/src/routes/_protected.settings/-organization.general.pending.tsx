@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 import { ButtonFace } from "@stll/ui/control-face";
 
-import { CopyControlFace } from "@/components/copy-control.pending";
 import { usePendingCache } from "@/components/pending-cache";
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -11,6 +10,7 @@ import { framePendingView } from "@/routes/-pending-view.logic";
 import { SettingsPageHeaderPending } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import { OrganizationDangerZonePending } from "@/routes/_protected.settings/organization/-components/organization-danger-zone.pending";
+import { CopyControlFace } from "@/routes/_protected.settings/organization/-components/organization/copy-control-face.pending";
 import { OrganizationDataBoxesCardPending } from "@/routes/_protected.settings/organization/-components/organization/data-boxes-card.pending";
 import { IdentifierPanelPending } from "@/routes/_protected.settings/organization/-components/organization/identifier-panel.pending";
 import { OrganizationJurisdictionsCardPending } from "@/routes/_protected.settings/organization/-components/organization/jurisdictions-card.pending";
