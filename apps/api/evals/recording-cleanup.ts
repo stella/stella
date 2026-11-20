@@ -104,6 +104,7 @@ const runSample = async (
       userId: null,
       organizationId: EVAL_ORGANIZATION_ID,
       orgAIConfig,
+      managedAIResidency: "eu",
       task: "chat",
       serviceTier: "standard",
       caching: { enabled: false, reason: "org-disabled" },
