@@ -1,5 +1,3 @@
-import { useId } from "react";
-
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -39,7 +37,6 @@ export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
 }: SortPropertyProps<TRow>) => {
   const t = useTranslations();
   const labels = sortDirectionLabels((key) => t(key));
-  const reasonIdPrefix = useId();
   const canSort = column.getCanSort();
   const active = column.getIsSorted();
 
@@ -49,13 +46,9 @@ export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
         const Icon = DIRECTION_ICONS[direction];
         const availability = directions[direction];
         const isActive = active === direction;
-        const reasonId = `${reasonIdPrefix}-${direction}`;
         return (
           <div className="flex flex-col" key={direction}>
             <Button
-              aria-describedby={
-                availability.type === "unavailable" ? reasonId : undefined
-              }
               aria-pressed={isActive}
               className="justify-start font-normal"
               disabled={!canSort || availability.type === "unavailable"}
@@ -77,10 +70,7 @@ export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
               {isActive && <CheckIcon aria-hidden />}
             </Button>
             {availability.type === "unavailable" && (
-              <p
-                className="text-muted-foreground max-w-56 px-2 pb-1 text-xs text-pretty"
-                id={reasonId}
-              >
+              <p className="text-muted-foreground max-w-56 px-2 pb-1 text-xs text-pretty">
                 {availability.reason}
               </p>
             )}

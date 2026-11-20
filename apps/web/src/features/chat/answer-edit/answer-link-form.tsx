@@ -43,7 +43,6 @@ export const AnswerLinkForm = ({
   const t = useTranslations();
   const id = useId();
   const errorId = useId();
-  const removalReasonId = useId();
   const form = useForm(
     schemaFormOptions({
       schema: v.strictObject({
@@ -136,9 +135,6 @@ export const AnswerLinkForm = ({
                   ? t(removal.reason)
                   : t("chat.answerEdit.waitForAnswer")
               }
-              aria-describedby={
-                removal.status === "unavailable" ? removalReasonId : undefined
-              }
               onClick={() =>
                 onAction({
                   format: "link",
@@ -154,7 +150,7 @@ export const AnswerLinkForm = ({
           </Button>
         </div>
         {existingUrl !== undefined && removal.status === "unavailable" && (
-          <p id={removalReasonId}>{t(removal.reason)}</p>
+          <p>{t(removal.reason)}</p>
         )}
       </Form>
     </div>

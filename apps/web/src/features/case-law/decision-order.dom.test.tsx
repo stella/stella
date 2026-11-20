@@ -214,7 +214,7 @@ test("oldest first from the date header moves the address, the request and the h
   // The order shown is the one checked, and both are on offer.
   expect(newest.getAttribute("aria-pressed")).toBe("true");
   expect(oldest.getAttribute("aria-pressed")).toBe("false");
-  expect(oldest.hasAttribute("disabled")).toBe(false);
+  expect(oldest.getAttribute("aria-disabled")).toBeNull();
 
   fireEvent.click(oldest);
 
@@ -243,11 +243,15 @@ test("a search offers newest first from the date header and says why not oldest"
     messages.workspaces.properties.sortDescendingDate,
   );
 
-  expect(oldest.hasAttribute("disabled")).toBe(true);
-  expect(view.getByText(UNAVAILABLE_REASON).id).toBe(
-    oldest.getAttribute("aria-describedby") ?? "",
-  );
-  expect(newest.hasAttribute("disabled")).toBe(false);
+  expect(oldest.getAttribute("aria-disabled")).toBe("true");
+  expect(
+    view.getByRole("button", {
+      name: new RegExp(messages.workspaces.properties.sortAscendingDate, "u"),
+      description: UNAVAILABLE_REASON,
+    }),
+  ).toBe(oldest);
+  expect(view.getByText(UNAVAILABLE_REASON, { selector: "p" })).toBeDefined();
+  expect(newest.getAttribute("aria-disabled")).toBeNull();
   // Relevance orders the search, so no date direction is checked.
   expect(newest.getAttribute("aria-pressed")).toBe("false");
 });
