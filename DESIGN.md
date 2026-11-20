@@ -456,6 +456,10 @@ slot and content minimum; `control` uses 28px for a line inside an editable
 field. Consumers use the same entry's `slot` and `content` values rather
 than maintaining parallel geometry maps.
 
+`TableSkeletonRows` from `@stll/ui/table-shell` follows the table's column
+specification, including responsive cell classes. Each loading cell draws
+the column's bar or a custom placeholder for its content.
+
 ### Disclosure Panels
 
 `CollapsiblePanel` changes layout directly and fades opening content from
