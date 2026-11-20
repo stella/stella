@@ -23,7 +23,10 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { heldDecisionEcliIdentity } from "@/api/lib/case-law/held-decision-candidate-query";
+import {
+  heldDecisionCandidateQuery,
+  heldDecisionEcliIdentity,
+} from "@/api/lib/case-law/held-decision-candidate-query";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -241,3 +244,38 @@ test("placeholder and prose ECLIs cannot bypass missing ruling identity", () => 
     heldDecisionEcliIdentity("CZE", "See ECLI:CZ:NS:2024:1 for context"),
   ).toBeNull();
 });
+
+test.each([
+  { index: 9, incoming: "ECLI:EU:C:2024:9", stored: "EU:C:2024:9" },
+  { index: 10, incoming: "EU:C:2024:10", stored: "ECLI:EU:C:2024:10" },
+])(
+  "legacy European primary ECLI is found without a projection: $incoming",
+  async ({ index, incoming, stored }) => {
+    const f = await fixture(index);
+    const id = await f.host({
+      country: "EU",
+      court: "Court of Justice",
+      courtId: null,
+      ecli: stored,
+    });
+    const identity =
+      heldDecisionEcliIdentity("EU", incoming) ??
+      panic("European fixture ECLI invalid");
+    const rows = await createIngestionRoleScopedDb(db)(
+      async (tx) =>
+        await heldDecisionCandidateQuery(tx, {
+          country: "EU",
+          court: "Court of Justice",
+          sourceId: f.collection.id,
+          collectionAdapterKeys: [f.collection.adapterKey],
+          role: "host",
+          path: {
+            basis: "ecli",
+            keys: identity.keys,
+            primaryValues: identity.primaryValues,
+          },
+        }),
+    );
+    expect(rows.map((row) => row.id)).toEqual([id]);
+  },
+);
