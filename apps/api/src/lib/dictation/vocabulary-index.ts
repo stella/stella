@@ -122,7 +122,7 @@ const baseLetter = (letter: string): string => {
  * classes collapse unless a vowel separates them ("Lovells" is LFLS).
  */
 const wordSkeleton = (word: string, reading: Reading): string => {
-  const letters = [...word];
+  const letters = Array.from(word);
   let skeleton = "";
   let previous = "";
   const emit = (classes: string) => {

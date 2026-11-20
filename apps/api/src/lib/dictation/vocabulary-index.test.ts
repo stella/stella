@@ -105,8 +105,8 @@ describe("at the scale of a full list", () => {
       }
       return item;
     };
-    const consonants = [..."bcdfghjklmnprstvzšžčřň"];
-    const vowels = [..."aeiouyáéíůě"];
+    const consonants = Array.from("bcdfghjklmnprstvzšžčřň");
+    const vowels = Array.from("aeiouyáéíůě");
     const name = () => {
       let word = pick(consonants).toUpperCase();
       const syllables = 2 + Math.floor(random() * 4);
