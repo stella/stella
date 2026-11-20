@@ -253,6 +253,8 @@ import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
+import { createSessionSignInsPlugin } from "@/api/lib/auth/session-sign-ins-plugin";
+import { getSessionSignInStore } from "@/api/lib/auth/session-sign-ins-runtime";
 import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
   DISCONNECTED_SIGN_IN_MESSAGE,
@@ -2478,6 +2480,15 @@ export const createAuth = (
                 message: DISCONNECTED_SIGN_IN_MESSAGE,
               });
             }
+            // Where the session signed in from, recorded only when the request
+            // proved it came through CloudFront; otherwise `unknown`.
+            await getSessionSignInStore().record({
+              sessionId: session.id,
+              location: readViewerLocation({
+                headers: ctx?.request?.headers ?? ctx?.headers,
+                clientAddress: sealedRequestClientAddress(),
+              }),
+            });
           },
         },
       },
@@ -2607,6 +2618,7 @@ export const createAuth = (
       CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createMcpWebHandoffPlugin({ service: getWebHandoffService }),
+      createSessionSignInsPlugin(getSessionSignInStore),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createReviewAccountPlugin({
@@ -3099,6 +3111,8 @@ export const createAuth = (
             : null,
           dependencies: {
             findPreviousSessions: findOtherSessionDevices,
+            requestReview: async (signIn) =>
+              await getSessionSignInStore().requestReview(signIn),
             sendNotice: ({ email, device, ipAddress, createdAt }) => {
               const lang = extractLangFromRequest(ctx.request);
               const formattedTime =

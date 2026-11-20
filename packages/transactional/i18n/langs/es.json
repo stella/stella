@@ -21,25 +21,25 @@
     "subject": "{documentType, select, credit_note {Factura rectificativa} advance {Factura de anticipo} other {Factura}} {invoiceNumber} de {firmName}"
   },
   "newDeviceLogin": {
-    "action": "Revisar sesiones",
-    "body": "Se ha iniciado sesión en su cuenta desde un nuevo dispositivo o ubicación.",
+    "action": "Revisar dispositivos con sesión iniciada",
+    "body": "Un nuevo dispositivo acaba de iniciar sesión en su cuenta.",
     "device": "Dispositivo",
     "deviceName": {
       "browserOnOs": "{browser} en {os}",
       "unknown": "Dispositivo desconocido"
     },
-    "heading": "Nuevo inicio de sesión detectado",
-    "ignore": "Si fue usted, no es necesario hacer nada. Si no reconoce esta actividad, revise sus sesiones activas y revoque las que no reconozca.",
+    "heading": "Nuevo inicio de sesión en su cuenta",
+    "ignore": "Si fue usted, no tiene que hacer nada. Si no reconoce este inicio de sesión, cierre la sesión de este dispositivo.",
     "ipAddress": "Dirección IP",
     "ipAddressUnknown": "Desconocida",
-    "location": "Ubicación aproximada",
-    "locationNote": "La ubicación se estima a partir de la dirección IP y puede no ser exacta.",
+    "location": "Ubicación",
     "mapAlt": "Mapa con la ubicación aproximada del inicio de sesión: {location}",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",
       "regionCountry": "{region}, {country}"
     },
+    "placeApproximate": "{place} (aproximada)",
     "preview": "Nuevo inicio de sesión desde {device}",
     "previewUnknownDevice": "Nuevo inicio de sesión desde un dispositivo desconocido",
     "subject": "Nuevo inicio de sesión en su cuenta stella",
