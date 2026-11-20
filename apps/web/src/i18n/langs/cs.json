@@ -2356,6 +2356,10 @@
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
     "stopping": "Zastavuji…",
+    "subagentRun": {
+      "browseWeb": "Procházení webu",
+      "generic": "Práce na dílčím úkolu"
+    },
     "suggestTitle": "Navrhnout název",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nejsou dostupné pro anonymizované konverzace.",
     "suggestingTitle": "Navrhuji název…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Výchozí: {model}",
       "defaultModelOption": "Výchozí",
       "defaultRationale": {
+        "browse": "Pro práci s webovými stránkami v prohlížeči.",
         "chat": "Pro konverzaci a běžné otázky.",
         "fast": "Pro krátké, rutinní úkoly.",
         "pdf": "Pro čtení a analýzu dokumentů PDF.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "Nahradit klíč",
       "roleUnavailable": "{provider} tuto roli nepodporuje.",
       "roles": {
+        "browse": "Prohlížení webu",
         "chat": "Chat",
         "fast": "Rychlost",
         "pdf": "PDF",

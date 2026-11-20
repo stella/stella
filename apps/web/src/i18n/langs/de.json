@@ -2356,6 +2356,10 @@
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
     "stopping": "Wird angehalten…",
+    "subagentRun": {
+      "browseWeb": "Websites werden besucht",
+      "generic": "Teilaufgabe wird bearbeitet"
+    },
     "suggestTitle": "Titel vorschlagen",
     "suggestTitleUnavailableAnonymized": "Für anonymisierte Konversationen sind keine Titelvorschläge verfügbar.",
     "suggestingTitle": "Titel wird vorgeschlagen…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
       "defaultRationale": {
+        "browse": "Für die Arbeit auf Websites im Browser.",
         "chat": "Für Gespräche und alltägliche Fragen.",
         "fast": "Für kurze Routineaufgaben.",
         "pdf": "Zum Lesen und Analysieren von PDF-Dokumenten.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "Schlüssel ersetzen",
       "roleUnavailable": "{provider} unterstützt diese Rolle nicht.",
       "roles": {
+        "browse": "Browsen",
         "chat": "Chat",
         "fast": "Schnell",
         "pdf": "PDF",
