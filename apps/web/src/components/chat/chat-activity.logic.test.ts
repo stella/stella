@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  countProcessWork,
   getChatToolActivityCategory,
+  summarizeProcessRun,
 } from "@stll/api-contract/chat-tool-activity";
 import type { KnownChatToolName } from "@stll/api-contract/chat-tool-activity";
 
@@ -76,7 +76,7 @@ describe("chat tool activity", () => {
 });
 
 describe("process summary", () => {
-  test("counts landed work by kind and leaves out failures, waits and reasoning", () => {
+  test("names landed work in plain phrases and leaves out failures, waits and reasoning", () => {
     const parts = [
       { type: "thinking" as const, content: "Check clause 11." },
       {
@@ -125,12 +125,10 @@ describe("process summary", () => {
       },
     ] satisfies ChatMessage["parts"];
 
-    expect(countProcessWork(projectParts(parts))).toEqual(
-      new Map([
-        ["research", 1],
-        ["artifact", 1],
-      ]),
-    );
+    expect(summarizeProcessRun(projectParts(parts), { stepCount: 5 })).toEqual([
+      { phrase: "readDocument", count: 1 },
+      { phrase: "documentEdits", count: 1 },
+    ]);
   });
 });
 

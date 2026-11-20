@@ -24,14 +24,16 @@ import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { localRunSubagentGroups } from "@stll/api-contract/chat-local-run-steps";
 import { chatLocalRunParentCallId } from "@stll/api-contract/chat-local-run-tool";
 import { CHAT_LOCAL_RUN_STEER_TOOL } from "@stll/api-contract/chat-run-target";
+import { readChatStepRefTargets } from "@stll/api-contract/chat-step-ledger";
 import {
-  countProcessWork,
   groupProcessParts,
   isProcessPart,
   isVisibleProcessStep,
-  PROCESS_SUMMARY_KINDS,
+  narratedIntentIndex,
+  summarizeProcessRun,
 } from "@stll/api-contract/chat-tool-activity";
-import type { ProcessSummaryKind } from "@stll/api-contract/chat-tool-activity";
+import type { ProcessSummaryPiece } from "@stll/api-contract/chat-tool-activity";
+import { chatElapsedReading } from "@stll/api-contract/chat-turn-duration";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
 import { Temporal } from "@stll/time";
 import {
@@ -98,6 +100,10 @@ import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import { ChatSteeredMessage } from "@/components/chat/chat-steered-message";
+import {
+  formatChatElapsed,
+  processSummaryText,
+} from "@/components/chat/chat-step-summary";
 import {
   assistantMessageFallbackText,
   buildMessageTurns,
@@ -412,6 +418,82 @@ const ActiveTurnStatus = memo(
   },
 );
 
+/**
+ * The running turn's status line, handed to the run of steps it describes.
+ * A turn whose message ends in a run of steps shows one line: the run's own,
+ * naming the current step with the turn's clock, instead of a summary above
+ * a second line saying the same. Null everywhere else.
+ */
+const LiveTurnStatusContext = createContext<ReactNode>(null);
+
+/**
+ * Whether a message ends in a run of steps that draws something: the run
+ * `AssistantMessageParts` renders as live while the turn streams. A run
+ * whose steps all show inside a subagent's group draws nothing of its own.
+ */
+const endsInDrawnStepRun = (message: ChatUIMessage): boolean => {
+  const entries = toAssistantPartRenderEntries(message.parts);
+  const last = toAssistantPartRenderGroups(
+    entries,
+    narratedIntentIndex(message.parts),
+  ).at(-1);
+  if (
+    last?.kind !== "process" ||
+    last.startIndex + last.items.length !== entries.length
+  ) {
+    return false;
+  }
+  const subagentGroups = toLocalRunSubagentGroups(
+    toToolCallRenderEntries(entries),
+  );
+  return last.items
+    .filter(isVisibleProcessEntry)
+    .some(
+      (entry) =>
+        !(
+          entry.type === "standard" &&
+          entry.part.type === "tool-call" &&
+          subagentGroups.rowIn.has(entry.part.id)
+        ),
+    );
+};
+
+/**
+ * Where a turn's live status line goes. The live run of steps (the latest
+ * answer's last run) carries the line itself, so the turn reads one live
+ * line, not two; otherwise it follows the turn.
+ */
+const placeLiveTurnStatus = ({
+  isActive,
+  latestAssistantId,
+  sentAt,
+  turnBody,
+}: {
+  isActive: boolean;
+  latestAssistantId: string | null;
+  sentAt: number | null | undefined;
+  turnBody: readonly { message: ChatUIMessage }[];
+}): { afterTurn: ReactNode; body: (messages: ReactNode) => ReactNode } => {
+  const assistant = turnBody.findLast(
+    (item) => item.message.role === "assistant",
+  )?.message;
+  const line = isActive ? (
+    <ActiveTurnStatus assistant={assistant} sentAt={sentAt} />
+  ) : null;
+  const inRun =
+    line !== null &&
+    assistant?.id === latestAssistantId &&
+    endsInDrawnStepRun(assistant);
+  return {
+    afterTurn: inRun ? null : line,
+    body: (messages) => (
+      <LiveTurnStatusContext value={inRun ? line : null}>
+        {messages}
+      </LiveTurnStatusContext>
+    ),
+  };
+};
+
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -659,22 +741,25 @@ export const ChatThreadMessages = ({
           />
         )}
         {turns.map((turn, turnIndex) => {
-          const body = turn.body.map((item) =>
-            renderMessageNode(item.message, item.index),
+          const live = placeLiveTurnStatus({
+            turnBody: turn.body,
+            isActive:
+              generationActive &&
+              turnIndex === turns.length - 1 &&
+              computerWait === null,
+            latestAssistantId: retryableAssistantMessageId,
+            sentAt: turnSentAt,
+          });
+          const body = live.body(
+            turn.body.map((item) =>
+              renderMessageNode(item.message, item.index),
+            ),
           );
-          const assistant = turn.body.findLast(
-            (item) => item.message.role === "assistant",
-          )?.message;
-          const active = generationActive && turnIndex === turns.length - 1;
-          const status =
-            active && computerWait === null ? (
-              <ActiveTurnStatus assistant={assistant} sentAt={turnSentAt} />
-            ) : null;
           if (turn.type === "orphan") {
             return (
               <Fragment key={turn.body.at(0)?.message.id}>
                 {body}
-                {status}
+                {live.afterTurn}
               </Fragment>
             );
           }
@@ -683,7 +768,7 @@ export const ChatThreadMessages = ({
               <Fragment key={turn.header.id}>
                 {renderMessageNode(turn.header, turn.index)}
                 {body}
-                {status}
+                {live.afterTurn}
               </Fragment>
             );
           }
@@ -699,7 +784,7 @@ export const ChatThreadMessages = ({
               userMessageEdit={userMessageEdit}
             >
               {body}
-              {status}
+              {live.afterTurn}
             </StickyUserTurn>
           );
         })}
@@ -2334,9 +2419,19 @@ const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
 // Chunks render entries into runs of consecutive process parts so a
 // multi-step turn packs its reasoning/tool rows tightly instead of
 // spreading them across the message's standard part gap.
+// The message's narrated intent (`narratedIntentIndex`) joins the run it
+// introduces, so the run reads its plan above its steps and its reasoning
+// stays one of those steps.
 const toAssistantPartRenderGroups = (
   entries: readonly AssistantPartRenderEntry[],
-) => groupProcessParts(entries, isProcessRenderEntry);
+  intentIndex: number | null,
+) => {
+  const intent = intentIndex === null ? undefined : entries[intentIndex];
+  return groupProcessParts(
+    entries,
+    (entry) => entry === intent || isProcessRenderEntry(entry),
+  );
+};
 
 /**
  * Renders the body of an assistant message. Splitting this out of
@@ -2416,6 +2511,28 @@ const renderLocalRunCall = (
   ) : null;
 };
 
+/**
+ * What an opened step of `message` reads its finds against: what the
+ * settled answer cites, so it can say which finds the answer used (a
+ * streaming answer has not settled what it cites), and where the documents
+ * and matters it found open, from the stored message's ref bindings.
+ */
+const stepFindsContext = ({
+  isTurnActive,
+  message,
+}: {
+  isTurnActive: boolean;
+  message: AssistantMessagePartsProps["message"];
+}) => ({
+  answerCitations: isTurnActive
+    ? undefined
+    : collectSourceChipEntries({
+        appOrigins: chatAppOrigins(),
+        parts: message.parts,
+      }).citations,
+  stepRefTargets: readChatStepRefTargets(message.metadata?.refContext),
+});
+
 const AssistantMessageParts = ({
   threadRef,
   activeFileName,
@@ -2451,7 +2568,10 @@ const AssistantMessageParts = ({
     isTurnActive || isAwaitingUser || hasAnswerContent
       ? "recovered"
       : "terminal";
-  const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  const intentIndex = narratedIntentIndex(message.parts);
+  const intentEntry =
+    intentIndex === null ? undefined : renderEntries[intentIndex];
+  const renderGroups = toAssistantPartRenderGroups(renderEntries, intentIndex);
   // Start open while this message is actively streaming its reasoning (no
   // answer text yet), but always render the same disclosure so the user can
   // collapse it immediately. Once the stream settles it folds unless the user
@@ -2459,14 +2579,10 @@ const AssistantMessageParts = ({
   const thinkingDisplayState =
     !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const streamingEntryIndex = isTurnActive ? renderEntries.length - 1 : -1;
-  // What the settled answer cites, so an opened step can say which of its
-  // finds the answer used; a streaming answer has not settled what it cites.
-  const answerCitations = isTurnActive
-    ? undefined
-    : collectSourceChipEntries({
-        appOrigins: chatAppOrigins(),
-        parts: message.parts,
-      }).citations;
+  const { answerCitations, stepRefTargets } = stepFindsContext({
+    isTurnActive,
+    message,
+  });
   // A coding agent's subagent shows as one group holding the steps it took.
   const toolCallEntries = toToolCallRenderEntries(renderEntries);
   const subagentGroups = toLocalRunSubagentGroups(toolCallEntries);
@@ -2551,6 +2667,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          stepRefTargets={stepRefTargets}
           threadId={threadRef?.threadId}
         />
       );
@@ -2660,6 +2777,7 @@ const AssistantMessageParts = ({
           part={part}
           turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
+          stepRefTargets={stepRefTargets}
           threadId={threadRef?.threadId}
         />
       );
@@ -2674,43 +2792,26 @@ const AssistantMessageParts = ({
         if (group.kind === "standard") {
           return renderEntry(group.item, group.index);
         }
-        const visibleEntries = group.items.filter(isVisibleProcessEntry);
+        // The run's plan reads above it, never as one of its steps.
+        const stepEntries = group.items.filter((item) => item !== intentEntry);
+        const visibleEntries = stepEntries.filter(isVisibleProcessEntry);
         // A run whose steps all show inside a subagent's group draws nothing
         // of its own.
         if (visibleEntries.every(isShownInSubagent)) {
           return null;
         }
-        const renderStep = (entry: AssistantPartRenderEntry, index: number) => {
-          if (isShownInSubagent(entry)) {
-            return null;
-          }
-          const subagent = toolCallEntries.find((call) => call.entry === entry);
-          if (subagent === undefined) {
-            return renderEntry(entry, index);
-          }
-          const stepIds = subagentGroups.stepsOf.get(subagent.part.id);
-          if (stepIds === undefined) {
-            return renderEntry(entry, index);
-          }
-          const steps = toolCallEntries.filter(({ part }) =>
-            stepIds.includes(part.id),
-          );
-          return (
-            <LocalRunSubagentGroup
-              conversation={localRunSubagentConversation({
+        const renderStep = (entry: AssistantPartRenderEntry, index: number) =>
+          isShownInSubagent(entry) || entry === intentEntry
+            ? null
+            : renderRunStep({
                 activeOrganizationId,
-                part: subagent.part,
+                entry,
+                index,
+                renderEntry,
+                subagentGroups,
                 threadId: threadRef?.threadId,
-              })}
-              key={subagent.part.id}
-              part={subagent.part}
-              rows={steps
-                .filter((step) => isShownInSubagent(step.entry))
-                .map((step) => renderEntry(step.entry, step.index))}
-              steps={steps.map(({ part }) => part)}
-            />
-          );
-        };
+                toolCallEntries,
+              });
         // A run that is still receiving parts at the end of a streaming
         // message relays its current step in the collapsed summary.
         const isLiveGroup =
@@ -2721,6 +2822,17 @@ const AssistantMessageParts = ({
         return (
           <AssistantProcessGroup
             defaultOpen={shouldShowToolCalls}
+            intent={
+              intentEntry?.type === "standard" &&
+              intentEntry.part.type === "text" &&
+              group.items.includes(intentEntry) ? (
+                <NarratedIntent
+                  components={streamdownComponents}
+                  restorationPairs={restorationPairs}
+                  text={intentEntry.part.content}
+                />
+              ) : null
+            }
             isLive={isLiveGroup}
             turnStatus={turnStatus}
             key={`${message.id}-process-${group.startIndex}`}
@@ -2729,11 +2841,11 @@ const AssistantMessageParts = ({
                 ? getProcessStepTitleKey(lastVisibleEntry)
                 : null
             }
-            stepCount={visibleEntries.length}
-            // Counted over every entry: completed web searches and fetches
+            // Read over every entry: completed web searches and fetches
             // render in the sources tray, not as steps, but are still work.
-            workCounts={countProcessWork(
-              group.items.map((entry) => entry.part),
+            summary={summarizeProcessRun(
+              stepEntries.map((entry) => entry.part),
+              { stepCount: visibleEntries.length },
             )}
           >
             {group.items.map((entry, offset) =>
@@ -2749,43 +2861,87 @@ const AssistantMessageParts = ({
   );
 };
 
+/**
+ * A step of a run, or a coding agent's subagent with the steps it took. A
+ * step renders synchronously: `Awaited` keeps React 19's promise member out
+ * of the type, so the functions that render steps stay plain ones.
+ */
+const renderRunStep = ({
+  activeOrganizationId,
+  entry,
+  index,
+  renderEntry,
+  subagentGroups,
+  threadId,
+  toolCallEntries,
+}: {
+  activeOrganizationId: string;
+  entry: AssistantPartRenderEntry;
+  index: number;
+  renderEntry: (
+    entry: AssistantPartRenderEntry,
+    index: number,
+  ) => Awaited<ReactNode>;
+  subagentGroups: ReturnType<typeof toLocalRunSubagentGroups>;
+  threadId: string | undefined;
+  toolCallEntries: readonly ToolCallRenderEntry[];
+}): Awaited<ReactNode> => {
+  const subagent = toolCallEntries.find((call) => call.entry === entry);
+  const stepIds =
+    subagent === undefined
+      ? undefined
+      : subagentGroups.stepsOf.get(subagent.part.id);
+  if (subagent === undefined || stepIds === undefined) {
+    return renderEntry(entry, index);
+  }
+  const steps = toolCallEntries.filter(({ part }) => stepIds.includes(part.id));
+  return (
+    <LocalRunSubagentGroup
+      conversation={localRunSubagentConversation({
+        activeOrganizationId,
+        part: subagent.part,
+        threadId,
+      })}
+      key={subagent.part.id}
+      part={subagent.part}
+      rows={steps
+        .filter((step) => subagentGroups.rowIn.has(step.part.id))
+        .map((step) => renderEntry(step.entry, step.index))}
+      steps={steps.map(({ part }) => part)}
+    />
+  );
+};
+
 type AssistantProcessGroupProps = {
   children: ReactNode;
   /** Open the step list initially on development surfaces. */
   defaultOpen: boolean;
+  /** The plan the model wrote for this run, read above its line. */
+  intent: ReactNode;
   /** The run is still receiving parts at the end of a streaming message. */
   isLive: boolean;
   /** Title of the run's current step while it is still streaming. */
   liveStepKey: ProcessStepTitleKey | null;
   turnStatus: "running" | "finished";
-  stepCount: number;
-  /** What the run accomplished, for the settled summary. */
-  workCounts: ReadonlyMap<ProcessSummaryKind, number>;
+  /** What the run accomplished, in its settled summary's phrases. */
+  summary: readonly ProcessSummaryPiece[];
 };
-
-/** The phrase each kind of work is counted in; `PROCESS_SUMMARY_KINDS`
- *  orders them. */
-const PROCESS_SUMMARY_KEYS = {
-  research: "chat.processSummary.sourcesChecked",
-  artifact: "chat.processSummary.documentEdits",
-  mutation: "chat.processSummary.changesSaved",
-  computation: "chat.processSummary.analyses",
-} as const satisfies Record<ProcessSummaryKind, TranslationKey>;
 
 const LIVE_STEP_MIN_DWELL_MS = 1500;
 
 const AssistantProcessGroup = ({
   children,
   defaultOpen,
+  intent,
   isLive,
   liveStepKey,
-  stepCount,
+  summary,
   turnStatus,
-  workCounts,
 }: AssistantProcessGroupProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const format = useFormatter();
+  const turnLiveStatus = use(LiveTurnStatusContext);
   const [timing, setTiming] = useState(() =>
     createToolCallTiming({
       durationMs: undefined,
@@ -2803,76 +2959,124 @@ const AssistantProcessGroup = ({
       }),
     );
   }, [isLive]);
-  const elapsed =
+  const reading =
     turnStatus === "finished" &&
     timing.status === "finished" &&
     timing.durationMs !== undefined
-      ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        })
+      ? chatElapsedReading(timing.durationMs, { live: false })
       : null;
   // A run that appears mid-stream fades in where the thinking indicator was;
   // one that renders settled (a reload) simply is there.
   const [appearedLive] = useState(isLive);
   // Quick steps would otherwise swap the label several times a second.
   const shownStepKey = useSteadyValue(liveStepKey, LIVE_STEP_MIN_DWELL_MS);
-  // Settled, the summary says what was done ("3 sources checked · 1 document
-  // edit"); a run of reasoning alone, or of steps that did not land, falls
-  // back to the step count.
-  const workSummary = PROCESS_SUMMARY_KINDS.flatMap((kind) => {
-    const count = workCounts.get(kind) ?? 0;
-    return count > 0 ? [t(PROCESS_SUMMARY_KEYS[kind], { count })] : [];
-  }).join(" · ");
+  // Live, the run's line is the turn's status line: the current step and
+  // the clock, once. Settled, it says what the run did, in plain words
+  // ("Searched legislation and case law · 5 lookups").
+  const liveLine = isLive ? turnLiveStatus : null;
   const label =
-    shownStepKey !== null
-      ? t(shownStepKey)
-      : workSummary || t("common.stepCount", { count: stepCount });
+    shownStepKey === null ? processSummaryText(summary, t) : t(shownStepKey);
   return (
     <div
       data-slot="chat-step-list"
-      className={cn(
-        "rounded-md",
-        isOpen && "border-border/70 bg-muted/20 border",
-        appearedLive && "motion-safe:animate-text-fade",
-      )}
+      className={cn(appearedLive && "motion-safe:animate-text-fade")}
     >
+      {intent}
       <Collapsible onOpenChange={setIsOpen} open={isOpen}>
-        <CollapsibleTrigger render={<Button variant="plain" />}>
+        <CollapsibleTrigger
+          render={<Button className="max-w-full" variant="plain" />}
+        >
           <span
             className={cn(
-              "inline-flex min-h-8 items-center gap-1.5",
-              "rounded-md px-2.5 py-1.5 text-xs",
-              !isOpen &&
-                "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
-              "text-muted-foreground",
+              "inline-flex min-h-8 max-w-full min-w-0 items-center gap-1 text-xs pointer-coarse:min-h-11",
+              "text-muted-foreground hover:text-foreground",
             )}
           >
+            {liveLine ?? (
+              <ProcessSummaryLabel
+                elapsed={
+                  reading === null ? null : formatChatElapsed(format, reading)
+                }
+                label={label}
+                pending={shownStepKey !== null}
+              />
+            )}
             <DirectionalIcon
               className={cn(
-                "size-3.5 shrink-0 transition-transform",
+                "size-3.5 shrink-0 transition-transform duration-150",
                 isOpen && "rotate-90",
               )}
               flip={!isOpen}
               icon={ChevronRightIcon}
             />
-            <span className="text-xs font-medium">
-              <SwapText
-                className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
-                text={label}
-              />
-            </span>
-            {elapsed && <span data-process-duration>{elapsed}</span>}
           </span>
         </CollapsibleTrigger>
         <CollapsiblePanel>
-          <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
+          <div className="flex flex-col gap-1 pt-1 pb-1">{children}</div>
         </CollapsiblePanel>
       </Collapsible>
     </div>
   );
 };
+
+/** A run's own line: its current step while it streams, else its summary
+ *  and how long it took when this view saw it run. */
+const ProcessSummaryLabel = ({
+  elapsed,
+  label,
+  pending,
+}: {
+  elapsed: string | null;
+  label: string;
+  pending: boolean;
+}) => (
+  <span className="flex min-w-0 items-center gap-1 tabular-nums">
+    <TruncatedText hint={false} render={<span />}>
+      <SwapText
+        className={cn(pending && CHAT_PENDING_TEXT_CLASS)}
+        text={label}
+      />
+    </TruncatedText>
+    {elapsed !== null && (
+      <>
+        <span aria-hidden="true">·</span>
+        <span className="shrink-0" data-process-duration>
+          {elapsed}
+        </span>
+      </>
+    )}
+  </span>
+);
+
+/**
+ * The plan the model wrote before its first step, in the user's language:
+ * quiet prose above the run's line, no box, cut at three lines. Its
+ * reasoning, where it shows any, stays behind the run's "Reasoning" step.
+ */
+const NarratedIntent = ({
+  components,
+  restorationPairs,
+  text,
+}: {
+  components: ChatThreadMessagesProps["streamdownComponents"];
+  restorationPairs: readonly ChatAnonRestoration[];
+  text: string;
+}) => (
+  <TruncatedText
+    className="text-muted-foreground mb-0.5 text-sm text-pretty"
+    data-chat-narrated-intent
+    lines={3}
+    render={<div />}
+  >
+    <AssistantTextPart
+      className="[&_p]:my-0"
+      components={components}
+      isStreaming={false}
+      restorationPairs={restorationPairs}
+      text={text}
+    />
+  </TruncatedText>
+);
 
 const getFirstThinkingPartIndex = (parts: readonly ChatPart[]): number =>
   parts.findIndex(
@@ -2904,8 +3108,10 @@ const endedAtFailedStep = (parts: readonly ChatPart[]): boolean =>
   );
 
 const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
-  for (const part of parts) {
-    if (part.type === "text" && part.content.trim()) {
+  // The plan written before the steps is not the answer.
+  const intentIndex = narratedIntentIndex(parts);
+  for (const [index, part] of parts.entries()) {
+    if (part.type === "text" && part.content.trim() && index !== intentIndex) {
       return true;
     }
     if (isRichChatPart(part) || isChatAttachmentPart(part)) {

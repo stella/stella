@@ -3,8 +3,11 @@ import { useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { chatElapsedReading } from "@stll/api-contract/chat-turn-duration";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { formatChatElapsed } from "@/components/chat/chat-step-summary";
 import {
   type ChatTurnStatusInput,
   liveTurnElapsedMs,
@@ -50,23 +53,25 @@ const LiveTurnStatus = ({
     const interval = setInterval(() => setNow(performance.now()), TICK_MS);
     return () => clearInterval(interval);
   }, []);
-  const durationMs = liveTurnElapsedMs({ sentAt, timing, shownAt, now });
-  const elapsed = format.number(Math.floor(durationMs / 1000), {
-    style: "unit",
-    unit: "second",
-    unitDisplay: "narrow",
-  });
+  // Quick turns stay quiet: the clock shows only after a few seconds, then
+  // counts seconds and, past a minute, whole minutes.
+  const reading = chatElapsedReading(
+    liveTurnElapsedMs({ sentAt, timing, shownAt, now }),
+    { live: true },
+  );
 
   // Not a live region: it redraws every second and with every step. The
   // thread's `ChatTurnAnnouncer` says when the turn needs the member or ends.
+  // A span, so the line can also stand as the label of the run of steps it
+  // describes (`AssistantProcessGroup`).
   return (
-    <p
-      className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums"
+    <span
+      className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs tabular-nums"
       data-chat-copy-exclude
       data-turn-live-status
     >
       <Loader size="sm" variant="decorative" />
-      <span>
+      <TruncatedText hint={false} render={<span />}>
         {phaseLabel(phase, {
           analyzingSources: t("chat.analyzingSources"),
           thinking: t("chat.thinking"),
@@ -74,9 +79,11 @@ const LiveTurnStatus = ({
           waitingForInput: t("chat.turnStatus.waitingForInput"),
           writing: t("chat.turnStatus.writing"),
         })}
-      </span>
-      <span>{elapsed}</span>
-    </p>
+      </TruncatedText>
+      {reading !== null && (
+        <span className="shrink-0">{formatChatElapsed(format, reading)}</span>
+      )}
+    </span>
   );
 };
 

@@ -2162,9 +2162,17 @@
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
     "processSummary": {
-      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
       "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "checkedRegisters": "تم التحقق من السجلات العامة",
       "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "readDocument": "تمت قراءة المستند",
+      "readDocuments": "تمت قراءة المستندات",
+      "searchedCaseLaw": "تم البحث في الاجتهاد القضائي",
+      "searchedChats": "تم البحث في سجلّ الدردشة",
+      "searchedLegislation": "تم البحث في التشريعات",
+      "searchedLegislationAndCaseLaw": "تم البحث في التشريعات والاجتهاد القضائي",
+      "searchedMatters": "تمت مراجعة الملفات القانونية",
+      "searchedWeb": "تم البحث على الويب",
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "hintAntigravity": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2933,6 +2942,7 @@
     "playbooks": "أدلّة المراجعة",
     "preparing": "جارٍ التحضير…",
     "preview": "معاينة",
+    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة.",
     "previous": "السابق",
     "previousMatch": "النتيجة السابقة",
     "print": "طباعة",
@@ -4700,7 +4710,7 @@
       "discoveredSkills": "{count, plural, zero {لم يُعثر على أي مهارات} one {تم العثور على مهارة واحدة} two {تم العثور على مهارتين} few {تم العثور على # مهارات} many {تم العثور على # مهارة} other {تم العثور على # مهارة}}",
       "discoveryEmpty": "لم يُعثر على أي مهارات في هذا المستودع أو المجلد.",
       "discoverySkippedInvalid": "{count, plural, zero {لم يتم تخطي أي مهارات غير صالحة} one {تم تخطي مهارة واحدة غير صالحة} two {تم تخطي مهارتين غير صالحتين} few {تم تخطي # مهارات غير صالحة} many {تم تخطي # مهارة غير صالحة} other {تم تخطي # مهارة غير صالحة}}",
-      "dropPack": "أفلِت ملف .zip أو SKILL.md هنا لاستيراد المهارة",
+      "dropPack": "أفلِت ملف .zip/.skill أو SKILL.md هنا لاستيراد المهارة",
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
@@ -4757,8 +4767,8 @@
           "name": "تلخيص مستند"
         }
       },
-      "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
-      "uploadPack": "رفع ملف .zip أو SKILL.md",
+      "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip/.skill يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
+      "uploadPack": "رفع ملف .zip/.skill أو SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },
@@ -6448,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, zero {لا مواد محذوفة} one {مادة واحدة محذوفة} two {مادتان محذوفتان} few {# مواد محذوفة} many {# مادةً محذوفة} other {# مادة محذوفة}}",
     "versionChangesWords": "{inserted, plural, zero {لا كلمات مضافة} one {كلمة واحدة مضافة} two {كلمتان مضافتان} few {# كلمات مضافة} many {# كلمةً مضافة} other {# كلمة مضافة}}، {deleted, plural, zero {لا كلمات محذوفة} one {كلمة واحدة محذوفة} two {كلمتان محذوفتان} few {# كلمات محذوفة} many {# كلمةً محذوفة} other {# كلمة محذوفة}}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
+  },
+  "structuredDocument": {
+    "noReadableContent": "لا يتوفر نص قابل للقراءة للمعاينة.",
+    "textOnly": "معاينة نصية من دون تنسيق الصفحة أو الصور."
   },
   "styleSets": {
     "create": "إنشاء",

@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/legal-search/cz-isir-decision";
 import {
   CZ_NS_COLLECTION_METADATA_KEY,
+  czNsCollectionDocumentPartSchema,
   storedCzNsCollectionEntrySchema,
 } from "@/api/lib/legal-search/cz-ns-collection-entry";
 import {
@@ -21,17 +22,17 @@ import {
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
+import type { CollectionDocumentPart } from "./collection-document-part";
+
 /**
  * A source whose records can enrich a decision another source already holds,
  * instead of being written as a second row of the same decision.
  *
- * An official collection reprints decisions a court's own database already
- * publishes. At write time a record of a declaring source that has no row of
- * its own looks for the held decision it names among the host sources' rows:
- * exactly one by its stated ECLI, else exactly one by court, docket and
- * decision date. One match attaches the record; none writes it as a decision
- * of its own, as any other source's record; several park it as ambiguous and
- * write nothing.
+ * Identity matching checks both ECLI and court, docket and decision date across
+ * every source in the country. Authoritative publisher rows precede collection
+ * copies; same-source sibling posts share one canonical decision. Conflicting,
+ * ambiguous or policy-disallowed matches are durably parked. Only complete
+ * absence on both identity paths permits a new own row.
  *
  * An attached record keeps its typed metadata, raw payload and provenance in
  * `case_law_held_decision_attachments`, and its identifiers of the declared
@@ -41,8 +42,9 @@ import {
 export type HeldDecisionAttachment<THostKey extends string = AdapterKey> = {
   /**
    * The sources whose stored decisions this source's records can enrich.
-   * Never the declaring source itself: a source's own duplicates are its
-   * identity resolution's to settle.
+   * This policy restricts attachment after the all-source safety lookup;
+   * it never excludes a candidate from the new-row prevention fence.
+   * Same-source sibling posts can always share their verified canonical row.
    */
   readonly hostAdapterKeys: readonly [THostKey, ...THostKey[]];
   /** The key of the result's metadata that holds the record's typed metadata. */
@@ -54,6 +56,11 @@ export type HeldDecisionAttachment<THostKey extends string = AdapterKey> = {
   readonly metadataSchema: v.GenericSchema<
     unknown,
     Readonly<Record<string, unknown>>
+  >;
+  /** Validated source-owned descriptor of the retained document edition. */
+  readonly documentPartSchema?: v.GenericSchema<
+    unknown,
+    CollectionDocumentPart
   >;
   /** The identifier types the record declares on its host, such as reporter citations. */
   readonly declaredIdentifierTypes: readonly [
@@ -114,6 +121,7 @@ export const HELD_DECISION_ATTACHMENTS: Readonly<
     hostAdapterKeys: otherSourcesOf(ADAPTER_KEYS.CZ_NS_SBIRKA),
     metadataKey: CZ_NS_COLLECTION_METADATA_KEY,
     metadataSchema: storedCzNsCollectionEntrySchema,
+    documentPartSchema: czNsCollectionDocumentPartSchema,
     declaredIdentifierTypes: [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
     docketHeldUnderOtherDate: "park-for-review",
   },

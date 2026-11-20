@@ -9,6 +9,7 @@ import { fileSchema } from "@/api/lib/custom-schema";
 import { validateDocxArchive } from "@/api/lib/docx-archive";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   authorizeSkillInstallScope,
@@ -58,64 +59,65 @@ const config = {
   body: uploadSkillBodySchema,
 } satisfies HandlerConfig;
 
-const uploadSkill = createSafeRootHandler(
-  config,
-  async function* ({
-    body,
-    memberRole,
-    recordAuditEvent,
-    safeDb,
-    session,
-    user,
-  }) {
-    const authorization = authorizeSkillInstallScope({
+/** `writeObject` is injected by tests; production writes to object storage. */
+export const createUploadSkill = (writeObject = writeS3ObjectWithRetry) =>
+  createSafeRootHandler(
+    config,
+    async function* ({
+      body,
       memberRole,
-      scope: body.scope,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
-
-    const bytes = await body.file.arrayBuffer();
-    if (
-      isZipSkillSource({
-        buffer: bytes,
-        contentType: body.file.type,
-        path: body.file.name,
-      })
-    ) {
-      yield* Result.await(validateDocxArchive(bytes, SKILL_ARCHIVE_OPTIONS));
-    }
-
-    const scanned = yield* Result.await(
-      scanUploadForHandler({
-        bytes,
-        declaredMimeType: body.file.type,
-        fileName: sanitizeFilenamePreservingExtension(body.file.name),
-      }),
-    );
-    const parsed = yield* Result.await(parseUploadedSkillPackage(scanned));
-
-    const installResult = await installSkill({
-      memberRole,
-      origin: "upload",
-      parsed,
       recordAuditEvent,
       safeDb,
-      scope: body.scope,
       session,
       user,
-    });
-    if (installResult.isErr()) {
-      return Result.err(installResult.error);
-    }
+    }) {
+      const authorization = authorizeSkillInstallScope({
+        memberRole,
+        scope: body.scope,
+      });
+      if (Result.isError(authorization)) {
+        return Result.err(authorization.error);
+      }
 
-    return Result.ok({
-      ...installResult.value,
-      name: parsed.name,
-      skippedFiles: parsed.skippedFiles,
-    });
-  },
-);
+      const bytes = await body.file.arrayBuffer();
+      if (isZipSkillSource(bytes)) {
+        yield* Result.await(validateDocxArchive(bytes, SKILL_ARCHIVE_OPTIONS));
+      }
+
+      const scanned = yield* Result.await(
+        scanUploadForHandler({
+          bytes,
+          declaredMimeType: body.file.type,
+          fileName: sanitizeFilenamePreservingExtension(body.file.name),
+        }),
+      );
+      const parsed = yield* Result.await(parseUploadedSkillPackage(scanned));
+
+      const installResult = await installSkill({
+        binaryFiles: parsed.binaryFiles,
+        memberRole,
+        onSlugTaken: "copy",
+        origin: "upload",
+        parsed,
+        recordAuditEvent,
+        safeDb,
+        scope: body.scope,
+        session,
+        user,
+        writeObject,
+      });
+      if (installResult.isErr()) {
+        return Result.err(installResult.error);
+      }
+
+      return Result.ok({
+        ...installResult.value,
+        name: parsed.name,
+        skippedFiles: parsed.skippedFiles,
+      });
+    },
+  );
+
+const uploadSkill = createUploadSkill();
 
 export default uploadSkill;

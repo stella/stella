@@ -33,6 +33,8 @@ export type ViewerSurface =
   | "document-pdf"
   | "email-attachment-pdf"
   | "external-reference-pdf"
+  | "inspector-asic"
+  | "inspector-structured-document"
   | "inspector-cades"
   | "inspector-data-box"
   | "inspector-pdf"

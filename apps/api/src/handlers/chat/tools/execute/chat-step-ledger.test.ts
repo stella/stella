@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -7,14 +8,20 @@ import {
 } from "@stll/api-contract/chat-step-ledger";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+
 import {
+  chatStepRefScope,
   createChatStepLedgerRecorder,
   runRecordedStepCall,
   stepCallSink,
 } from "./chat-step-ledger";
 
-const MATTER_ID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
+const MATTER_ID = toSafeId<"workspace">("0dc54d0c-10d7-501d-897e-e801dbd0998c");
 const FOREIGN_MATTER_ID = "7a1f0f7e-2c3b-5d4e-8f90-112233445566";
+const DOCUMENT_ID = toSafeId<"entity">("11111111-1111-5111-8111-111111111111");
+const FOREIGN_DOCUMENT_ID = "22222222-2222-5222-8222-222222222222";
 
 // A search_case_law hit as the registry answers it after egress: the
 // published identity of the decision, its headnote, and fields the ledger
@@ -194,34 +201,52 @@ describe("the step ledger", () => {
     ]);
   });
 
-  test("names a matter document by title only, and only from the turn's own matters", async () => {
-    const recorder = createChatStepLedgerRecorder({
-      workspaceIds: new Set([MATTER_ID]),
-    });
-    const args = { query: "indemnity cap" };
+  test("names a matter document and a matter by the turn's chat refs, and only from the turn's own matters", async () => {
+    const refRegistry = createChatRefRegistry();
+    const recorder = createChatStepLedgerRecorder(
+      chatStepRefScope({ refRegistry, workspaceIds: [MATTER_ID] }),
+    );
+    const searchArgsForMatters = { query: "indemnity cap" };
     await runRecordedStepCall({
       recorder,
       tool: "search_across_matters",
-      callArgs: args,
+      callArgs: searchArgsForMatters,
       run: async () => {
         stepCallSink().answered({
-          args,
+          args: searchArgsForMatters,
           data: {
             hits: [
               {
-                entityId: "11111111-1111-5111-8111-111111111111",
+                entityId: DOCUMENT_ID,
                 workspaceId: MATTER_ID,
                 workspaceName: "Harbrook acquisition",
                 name: "Share purchase agreement.docx",
-                kind: "file",
+                kind: "document",
               },
               {
-                entityId: "22222222-2222-5222-8222-222222222222",
+                entityId: FOREIGN_DOCUMENT_ID,
                 workspaceId: FOREIGN_MATTER_ID,
                 workspaceName: "Another client",
                 name: "Board minutes.docx",
-                kind: "file",
+                kind: "document",
               },
+            ],
+          },
+        });
+        return await Promise.resolve(null);
+      },
+    });
+    await runRecordedStepCall({
+      recorder,
+      tool: "list_matters",
+      callArgs: {},
+      run: async () => {
+        stepCallSink().answered({
+          args: {},
+          data: {
+            matters: [
+              { id: MATTER_ID, name: "Harbrook acquisition" },
+              { id: FOREIGN_MATTER_ID, name: "Another client" },
             ],
           },
         });
@@ -230,17 +255,38 @@ describe("the step ledger", () => {
     });
 
     const ledger = recorder.ledger();
-    expect(ledger.calls[0]?.found).toEqual([
-      {
-        type: "document",
-        title: "Share purchase agreement.docx",
-        kind: "file",
-      },
+    expect(ledger.calls.map((call) => call.found)).toEqual([
+      [
+        {
+          type: "document",
+          ref: "ent_1",
+          title: "Share purchase agreement.docx",
+          kind: "document",
+        },
+      ],
+      [{ type: "matter", ref: "mat_1", title: "Harbrook acquisition" }],
     ]);
+    // Each ref is the turn's own spelling of what the read found.
+    expect(refRegistry.resolveEntityRefTargets(["ent_1"])).toEqual(
+      Result.ok([{ entityId: DOCUMENT_ID, workspaceId: MATTER_ID }]),
+    );
+    expect(refRegistry.resolveMatterRefs(["mat_1"])).toEqual(
+      Result.ok([MATTER_ID]),
+    );
+    // An item from outside the turn's matters is never named, nor minted a
+    // ref the stored message could bind.
+    expect(refRegistry.getRegisteredWorkspaceIds()).toEqual([MATTER_ID]);
     // No tenant id rides on the step's result.
     const serialized = JSON.stringify(ledger);
-    expect(serialized).not.toContain(MATTER_ID);
-    expect(serialized).not.toContain("11111111-1111-5111-8111-111111111111");
+    for (const id of [
+      MATTER_ID,
+      DOCUMENT_ID,
+      FOREIGN_MATTER_ID,
+      FOREIGN_DOCUMENT_ID,
+    ]) {
+      expect(serialized).not.toContain(id);
+    }
+    expect(v.safeParse(chatStepLedgerSchema, ledger).success).toBe(true);
   });
 
   test("names no matter item at all without the turn's matters", async () => {

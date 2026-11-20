@@ -259,6 +259,11 @@ export const NO_NATIVE_UI_REGISTRY = {
   "input-otp-face": noNative("presentational one-time code group and slots"),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
+  "kanban-card-shell": noNative("a board card's frame"),
+  "kanban-column-header-shell": noNative(
+    "a board column header's row, without its cut text",
+  ),
+  "kanban-grouping": noNative("how a board resolves its columns"),
   kbd: noNative(
     "key caps; a rule for raw <kbd> follows once the existing key hints " +
       "render through Kbd, so it lands without a backlog",
@@ -648,6 +653,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "the web's docked inspector; a phone shows details on their own screen",
   ),
   kanban: webOnly("a phone has no room for a board"),
+  "kanban-card-shell": webOnly("a phone has no room for a board"),
+  "kanban-column-header-shell": webOnly("a phone has no room for a board"),
+  "kanban-grouping": webOnly("a phone has no room for a board"),
   kbd: webOnly("a phone has no keyboard shortcuts to show"),
   label: webOnly(
     "React Native has no label element; Text names the control above it",

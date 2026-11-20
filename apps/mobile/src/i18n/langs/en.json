@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "The full text is unavailable in this preview."
+  },
   "tabs": {
     "chat": "Chat",
     "close": "Close",
@@ -271,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}",
       "documentEdits": "{count, plural, one {# document edit} other {# document edits}}",
       "changesSaved": "{count, plural, one {# change saved} other {# changes saved}}",
-      "analyses": "{count, plural, one {# analysis} other {# analyses}}"
+      "searchedLegislation": "Searched legislation",
+      "searchedCaseLaw": "Searched case law",
+      "searchedLegislationAndCaseLaw": "Searched legislation and case law",
+      "readDocument": "Read the document",
+      "readDocuments": "Read documents",
+      "searchedMatters": "Looked through matters",
+      "checkedRegisters": "Checked public registers",
+      "searchedWeb": "Searched the web",
+      "searchedChats": "Searched chat history"
     },
     "stepCount": "{count, plural, one {# step} other {# steps}}",
+    "lookupCount": "{count, plural, one {# lookup} other {# lookups}}",
     "reasoning": "Reasoning trace",
     "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
     "failure": {
@@ -615,6 +627,10 @@
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."
+  },
+  "structuredDocument": {
+    "noReadableContent": "No readable text is available for preview.",
+    "textOnly": "Text preview without page layout or images."
   },
   "header": {
     "search": "Search"

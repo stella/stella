@@ -44,6 +44,7 @@
     "./property-icon": "./src/property-icon.tsx",
     "./responsive-action-toolbar": "./src/responsive-action-toolbar.tsx",
     "./sorts": "./src/sorts.tsx",
+    "./sorts-face": "./src/sorts-face.tsx",
     "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",
     "./task-status": "./src/task-status.ts",
     "./types": "./src/types.ts",
