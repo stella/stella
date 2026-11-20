@@ -1145,7 +1145,8 @@
       "saveFailed": "Az átiratot nem sikerült másolni vagy menteni. Próbálja újra.",
       "noSpeech": "Ebben a felvételben nem található beszéd.",
       "fileName": "{title} – átirat.txt",
-      "documentTitle": "{title} – átirat"
+      "documentTitle": "{title} – átirat",
+      "transcriptTitle": "Átirat"
     },
     "progress": {
       "running": "Átírás: {done, number} / {total, number} perc",
@@ -1154,6 +1155,25 @@
       "stopped": "Leállítva {done, number} perc után. Az eddigi szöveg megmarad.",
       "done": "{total, number} perc átírva.",
       "another": "Másik felvétel átírása"
+    },
+    "cleaned": {
+      "title": "Javított szöveg",
+      "running": "Javítás…",
+      "waiting": "Minden rész javítása az átírás után azonnal elindul.",
+      "instructionsTitle": "Utasítások a diktálásban · nem részei a szövegnek",
+      "instructionsLabel": "Utasítások:",
+      "partFailed": "Ezt a részt nem sikerült javítani, ezért az átírt formájában látható.",
+      "failedCount": "{count, plural, one {# rész nincs javítva} other {# rész nincs javítva}}",
+      "saveMarkdown": "Formázott szöveg (.md)",
+      "saveText": "Egyszerű szöveg (.txt)",
+      "fileNameMarkdown": "{title} javított.md",
+      "fileNameText": "{title} javított.txt"
+    },
+    "copyMenu": {
+      "label": "Másolási beállítások",
+      "formatted": "Formázással",
+      "plain": "Egyszerű szövegként",
+      "hint": "Formázással a címsorok, a félkövér és a listák is bekerülnek a Wordbe vagy az Outlookba. A választását megjegyezzük."
     }
   }
 }

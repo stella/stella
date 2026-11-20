@@ -1145,7 +1145,8 @@
       "saveFailed": "Nie udało się skopiować ani zapisać transkrypcji. Spróbuj ponownie.",
       "noSpeech": "W tym nagraniu nie znaleziono mowy.",
       "fileName": "{title} – transkrypcja.txt",
-      "documentTitle": "{title} – transkrypcja"
+      "documentTitle": "{title} – transkrypcja",
+      "transcriptTitle": "Transkrypcja"
     },
     "progress": {
       "running": "Transkrypcja: {done, number} z {total, number} min",
@@ -1154,6 +1155,25 @@
       "stopped": "Zatrzymano po {done, number} min. Dotychczasowy tekst zostaje.",
       "done": "Transkrybowano {total, number} min.",
       "another": "Transkrybuj kolejne nagranie"
+    },
+    "cleaned": {
+      "title": "Tekst po korekcie",
+      "running": "Poprawianie…",
+      "waiting": "Każda część jest poprawiana zaraz po transkrypcji.",
+      "instructionsTitle": "Polecenia w dyktowaniu · nie są częścią tekstu",
+      "instructionsLabel": "Polecenia:",
+      "partFailed": "Tej części nie udało się poprawić, więc jest pokazana tak, jak ją przepisano.",
+      "failedCount": "{count, plural, one {# część niepoprawiona} few {# części niepoprawione} other {# części niepoprawionych}}",
+      "saveMarkdown": "Tekst sformatowany (.md)",
+      "saveText": "Zwykły tekst (.txt)",
+      "fileNameMarkdown": "{title} po korekcie.md",
+      "fileNameText": "{title} po korekcie.txt"
+    },
+    "copyMenu": {
+      "label": "Opcje kopiowania",
+      "formatted": "Z formatowaniem",
+      "plain": "Jako zwykły tekst",
+      "hint": "Z formatowaniem do Worda lub Outlooka wklejają się nagłówki, pogrubienia i listy. Twój wybór zostanie zapamiętany."
     }
   }
 }

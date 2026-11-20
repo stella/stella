@@ -58,6 +58,8 @@ macro_rules! with_stella_commands {
       transcribe_recording::transcribe_start => "transcribe_start",
       transcribe_recording::transcribe_stop => "transcribe_stop",
       transcribe_recording::transcribe_copy_text => "transcribe_copy_text",
+      transcribe_recording::transcribe_copy_rich => "transcribe_copy_rich",
+      transcribe_recording::transcribe_clean_up => "transcribe_clean_up",
       transcribe_recording::transcribe_save_text => "transcribe_save_text",
       transcribe_recording::transcribe_search_matters => "transcribe_search_matters",
       transcribe_recording::transcribe_save_to_matter => "transcribe_save_to_matter",

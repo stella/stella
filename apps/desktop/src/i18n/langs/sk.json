@@ -1145,7 +1145,8 @@
       "saveFailed": "Prepis sa nepodarilo skopírovať ani uložiť. Skúste to znova.",
       "noSpeech": "V nahrávke sa nenašla žiadna reč.",
       "fileName": "{title} – prepis.txt",
-      "documentTitle": "{title} – prepis"
+      "documentTitle": "{title} – prepis",
+      "transcriptTitle": "Prepis"
     },
     "progress": {
       "running": "Prepisuje sa {done, number} z {total, number} min",
@@ -1154,6 +1155,25 @@
       "stopped": "Zastavené po {done, number} min. Doterajší text zostáva.",
       "done": "Prepísané: {total, number} min.",
       "another": "Prepísať ďalšiu nahrávku"
+    },
+    "cleaned": {
+      "title": "Upravený text",
+      "running": "Upravujem…",
+      "waiting": "Každá časť sa upraví hneď, ako je prepísaná.",
+      "instructionsTitle": "Pokyny v diktáte · nie sú súčasťou textu",
+      "instructionsLabel": "Pokyny:",
+      "partFailed": "Túto časť sa nepodarilo upraviť, preto je zobrazená tak, ako bola prepísaná.",
+      "failedCount": "{count, plural, one {# časť neupravená} few {# časti neupravené} other {# častí neupravených}}",
+      "saveMarkdown": "Formátovaný text (.md)",
+      "saveText": "Obyčajný text (.txt)",
+      "fileNameMarkdown": "{title} upravený text.md",
+      "fileNameText": "{title} upravený text.txt"
+    },
+    "copyMenu": {
+      "label": "Možnosti kopírovania",
+      "formatted": "S formátovaním",
+      "plain": "Ako obyčajný text",
+      "hint": "S formátovaním sa do Wordu alebo Outlooku vložia nadpisy, tučné písmo aj zoznamy. Kopírovanie si vašu voľbu zapamätá."
     }
   }
 }

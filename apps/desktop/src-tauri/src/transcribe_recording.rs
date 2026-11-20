@@ -1168,11 +1168,74 @@ pub fn transcribe_copy_text(window: Window, text: String) -> Result<(), String> 
   crate::clipboard::write_plain_text(text)
 }
 
+/// Copies text with its formatting: the plain text and the same text as
+/// HTML, which word processors and mail clients paste with headings, bold
+/// and lists.
+#[tauri::command]
+pub fn transcribe_copy_rich(
+  window: Window,
+  text: String,
+  html: String,
+) -> Result<(), String> {
+  require_window(&window)?;
+  if text.trim().is_empty()
+    || text.len() > MAX_SAVED_TEXT_BYTES
+    || html.len() > 2 * MAX_SAVED_TEXT_BYTES
+  {
+    return Err("the text is empty or too large to copy".to_string());
+  }
+  crate::clipboard::write_text_and_html(text, html)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanUpRequest {
+  transcript: String,
+  previous_text: Option<String>,
+}
+
+/// Cleans up one part of the transcript with the organization's AI model.
+#[tauri::command]
+pub async fn transcribe_clean_up(
+  app: AppHandle,
+  window: Window,
+  request: CleanUpRequest,
+) -> Result<crate::recording_cleanup::CleanedPart, String> {
+  require_window(&window)?;
+  require_available(&app)?;
+  crate::recording_cleanup::clean_up(
+    &app,
+    &request.transcript,
+    request.previous_text.as_deref(),
+  )
+  .await
+}
+
+/// The kind of text file a transcript is saved as.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SavedFormat {
+  #[default]
+  Text,
+  Markdown,
+}
+
+impl SavedFormat {
+  fn filter(self) -> (&'static str, &'static [&'static str]) {
+    match self {
+      Self::Text => ("Text", &["txt"]),
+      Self::Markdown => ("Markdown", &["md"]),
+    }
+  }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveTextRequest {
   text: String,
   file_name: String,
+  #[serde(default)]
+  format: SavedFormat,
 }
 
 /// Saves the transcript where the user picks; `false` when they cancel.
@@ -1192,7 +1255,7 @@ pub async fn transcribe_save_text(
     .dialog()
     .file()
     .set_file_name(&suggested)
-    .add_filter("Text", &["txt"]);
+    .add_filter(request.format.filter().0, request.format.filter().1);
   if let Some(parent) = app.get_webview_window(TRANSCRIBE_WINDOW_LABEL) {
     dialog = dialog.set_parent(&parent);
   }

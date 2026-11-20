@@ -385,7 +385,7 @@ pub fn typed_text(transcript: &str, cleaned: Option<&[Segment]>) -> String {
 }
 
 /// A language tag the contract admits, or none.
-fn locale_hint(locale: &str) -> Option<&str> {
+pub(crate) fn locale_hint(locale: &str) -> Option<&str> {
   let mut parts = locale.split('-');
   let language = parts.next()?;
   let tagged = (2..=3).contains(&language.len())

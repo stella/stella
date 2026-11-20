@@ -7,14 +7,7 @@ import { useTranslations } from "use-intl";
 
 import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
 import { Button } from "@stll/ui/button";
-import { CopyButton } from "@stll/ui/copy-button";
-import {
-  ChevronDownIcon,
-  InfoIcon,
-  TriangleAlertIcon,
-  WavesIcon,
-} from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { InfoIcon, TriangleAlertIcon, WavesIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -28,6 +21,14 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import {
+  blocksToHtml,
+  blocksToText,
+  cleanedMarkdown,
+  escapeHtmlText,
+  paragraphsToHtml,
+  parseMarkdown,
+} from "./cleaned-text";
 import {
   afterRefusedStart,
   formatTimestamp,
@@ -57,6 +58,12 @@ import type {
   TranscribeFailure,
   TranscribeSnapshot,
 } from "./transcribe-logic";
+import {
+  CleanedText,
+  PaneActions,
+  useCopyFormat,
+  useRecordingCleanup,
+} from "./TranscribeCleanup";
 import { TranscribeMatterPicker } from "./TranscribeMatterPicker";
 
 const MAC = detectDesktopPlatform(navigator.userAgent) === "mac";
@@ -327,6 +334,7 @@ const TranscribeApp = () => {
   const outcome = finished.find((entry) => entry.job === session.job) ?? null;
   return (
     <ResultScreen
+      key={session.job}
       onAnother={() => {
         setSession(null);
         setPieces([]);
@@ -735,20 +743,59 @@ const ResultScreen = ({
       ? null
       : t("result.matter", { name: session.matter.name }),
   ].filter((part) => part !== null);
-  const saveText = async (timestamps: boolean) => {
+  const cleanup = useRecordingCleanup({
+    job: session.job,
+    paragraphs,
+    finished: !running,
+  });
+  const [copyFormat, setCopyFormat] = useCopyFormat();
+  const cleanedBlocks = parseMarkdown(cleanup.markdown);
+  const cleanedReady = !cleanup.running && cleanup.parts.length > 0;
+  const save = async (
+    text: string,
+    fileName: string,
+    format: "text" | "markdown",
+  ) => {
     setActionFailed(false);
     const result = await Result.tryPromise(async () =>
       invoke<boolean>("transcribe_save_text", {
-        request: {
-          text: transcriptText(paragraphs, { timestamps }),
-          fileName: t("result.fileName", { title }),
-        },
+        request: { text, fileName, format },
       }),
     );
     if (Result.isError(result)) {
       setActionFailed(true);
     }
   };
+  const copy = async (text: string, html: string | null) => {
+    const result = await Result.tryPromise(async () =>
+      html === null
+        ? invoke("transcribe_copy_text", { text })
+        : invoke("transcribe_copy_rich", { text, html }),
+    );
+    setActionFailed(Result.isError(result));
+    return Result.isOk(result);
+  };
+  let cleanedStatus = "";
+  if (cleanup.running && hasText) {
+    cleanedStatus = t("cleaned.running");
+  } else if (cleanup.failed > 0) {
+    cleanedStatus = t("cleaned.failedCount", { count: cleanup.failed });
+  }
+  const instructionsLabel = t("cleaned.instructionsLabel");
+  const cleanedPlain = [
+    ...(cleanup.instructions.length > 0
+      ? [`${instructionsLabel} ${cleanup.instructions.join(" ")}`]
+      : []),
+    blocksToText(cleanedBlocks),
+  ].join("\n\n");
+  const cleanedHtml = [
+    ...(cleanup.instructions.length > 0
+      ? [
+          `<p><em>${escapeHtmlText(`${instructionsLabel} ${cleanup.instructions.join(" ")}`)}</em></p>`,
+        ]
+      : []),
+    blocksToHtml(cleanedBlocks),
+  ].join("\n");
   const saveToMatter = async () => {
     if (session.matter === null) {
       return;
@@ -784,50 +831,6 @@ const ResultScreen = ({
             {meta.join(" · ")}
           </TruncatedText>
         </div>
-        <CopyButton
-          copiedLabel={t("result.copied")}
-          disabled={!hasText}
-          label={t("result.copy")}
-          onCopy={async () => {
-            const result = await Result.tryPromise(async () =>
-              invoke("transcribe_copy_text", {
-                text: transcriptText(paragraphs, { timestamps: true }),
-              }),
-            );
-            setActionFailed(Result.isError(result));
-            return Result.isOk(result);
-          }}
-          size="sm"
-          variant="ghost"
-        />
-        <Menu>
-          <MenuTrigger
-            disabled={!hasText}
-            render={<Button size="sm" variant="outline" />}
-          >
-            {t("result.saveAs")}
-            <ChevronDownIcon
-              aria-hidden="true"
-              className="text-muted-foreground"
-            />
-          </MenuTrigger>
-          <MenuPopup align="end" className="w-60">
-            <MenuItem
-              onClick={() => {
-                void saveText(true);
-              }}
-            >
-              {t("result.saveWithTimestamps")}
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                void saveText(false);
-              }}
-            >
-              {t("result.saveWithoutTimestamps")}
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
         {session.matter === null ? null : (
           <Button
             disabled={
@@ -847,25 +850,145 @@ const ResultScreen = ({
           </Button>
         )}
       </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-3.5 px-7 pt-5 pb-6">
-          {paragraphs.map((paragraph) => (
-            <div className="flex gap-4" key={paragraph.startMs}>
-              <span className="text-muted-foreground w-12 shrink-0 pt-px text-xs tabular-nums">
-                {formatTimestamp(paragraph.startMs)}
-              </span>
-              <p className="max-w-xl text-sm leading-relaxed text-pretty">
-                {paragraph.text}
-              </p>
+      <div className="grid min-h-0 flex-1 grid-cols-2">
+        <section
+          aria-labelledby="transcribe-raw-title"
+          className="flex min-h-0 flex-col border-e"
+        >
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b ps-7 pe-4">
+            <h2
+              className="flex-1 text-sm font-semibold"
+              id="transcribe-raw-title"
+            >
+              {t("result.transcriptTitle")}
+            </h2>
+            <PaneActions
+              copyFormat={copyFormat}
+              disabled={!hasText}
+              onCopy={async (format) =>
+                await copy(
+                  transcriptText(paragraphs, { timestamps: true }),
+                  format === "formatted"
+                    ? paragraphsToHtml(paragraphs, formatTimestamp)
+                    : null,
+                )
+              }
+              onCopyFormatChange={setCopyFormat}
+              saveOptions={[
+                {
+                  id: "timestamps",
+                  label: t("result.saveWithTimestamps"),
+                  onSave: () => {
+                    void save(
+                      transcriptText(paragraphs, { timestamps: true }),
+                      t("result.fileName", { title }),
+                      "text",
+                    );
+                  },
+                },
+                {
+                  id: "plain",
+                  label: t("result.saveWithoutTimestamps"),
+                  onSave: () => {
+                    void save(
+                      transcriptText(paragraphs, { timestamps: false }),
+                      t("result.fileName", { title }),
+                      "text",
+                    );
+                  },
+                },
+              ]}
+            />
+          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-3.5 px-7 pt-5 pb-6">
+              {paragraphs.map((paragraph) => (
+                <div className="flex gap-4" key={paragraph.startMs}>
+                  <span className="text-muted-foreground w-12 shrink-0 pt-px text-xs tabular-nums">
+                    {formatTimestamp(paragraph.startMs)}
+                  </span>
+                  <p className="max-w-xl text-sm leading-relaxed text-pretty">
+                    {paragraph.text}
+                  </p>
+                </div>
+              ))}
+              {!running && !hasText ? (
+                <p className="text-muted-foreground text-sm">
+                  {t("result.noSpeech")}
+                </p>
+              ) : null}
             </div>
-          ))}
-          {!running && !hasText ? (
-            <p className="text-muted-foreground text-sm">
-              {t("result.noSpeech")}
-            </p>
-          ) : null}
-        </div>
-      </ScrollArea>
+          </ScrollArea>
+        </section>
+        <section
+          aria-labelledby="transcribe-cleaned-title"
+          className="flex min-h-0 flex-col"
+        >
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b ps-7 pe-4">
+            <div className="flex min-w-0 flex-1 items-baseline gap-2">
+              <h2
+                className="text-sm font-semibold"
+                id="transcribe-cleaned-title"
+              >
+                {t("cleaned.title")}
+              </h2>
+              <TruncatedText
+                aria-live="polite"
+                className="text-muted-foreground text-xs"
+                render={<span />}
+              >
+                {cleanedStatus}
+              </TruncatedText>
+            </div>
+            <PaneActions
+              copyFormat={copyFormat}
+              disabled={!cleanedReady}
+              onCopy={async (format) =>
+                await copy(
+                  cleanedPlain,
+                  format === "formatted" ? cleanedHtml : null,
+                )
+              }
+              onCopyFormatChange={setCopyFormat}
+              saveOptions={[
+                {
+                  id: "markdown",
+                  label: t("cleaned.saveMarkdown"),
+                  onSave: () => {
+                    void save(
+                      cleanedMarkdown(
+                        cleanup.instructions,
+                        cleanup.markdown,
+                        instructionsLabel,
+                      ),
+                      t("cleaned.fileNameMarkdown", { title }),
+                      "markdown",
+                    );
+                  },
+                },
+                {
+                  id: "text",
+                  label: t("cleaned.saveText"),
+                  onSave: () => {
+                    void save(
+                      cleanedPlain,
+                      t("cleaned.fileNameText", { title }),
+                      "text",
+                    );
+                  },
+                },
+              ]}
+            />
+          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="px-7 pt-5 pb-6">
+              {hasText ? (
+                <CleanedText cleanup={cleanup} transcribing={running} />
+              ) : null}
+            </div>
+          </ScrollArea>
+        </section>
+      </div>
       <StatusRow
         actionFailed={actionFailed}
         doneMs={doneMs}

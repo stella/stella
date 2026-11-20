@@ -1145,7 +1145,8 @@
       "saveFailed": "Não foi possível copiar nem salvar a transcrição. Tente novamente.",
       "noSpeech": "Nenhuma fala foi encontrada nesta gravação.",
       "fileName": "{title} - transcrição.txt",
-      "documentTitle": "{title} - transcrição"
+      "documentTitle": "{title} - transcrição",
+      "transcriptTitle": "Transcrição"
     },
     "progress": {
       "running": "Transcrevendo {done, number} de {total, number} min",
@@ -1154,6 +1155,25 @@
       "stopped": "Parado após {done, number} min. O texto obtido até agora foi mantido.",
       "done": "{total, number} min transcritos.",
       "another": "Transcrever outra gravação"
+    },
+    "cleaned": {
+      "title": "Texto revisado",
+      "running": "Revisando…",
+      "waiting": "Cada parte é revisada assim que é transcrita.",
+      "instructionsTitle": "Instruções no ditado · não fazem parte do texto",
+      "instructionsLabel": "Instruções:",
+      "partFailed": "Não foi possível revisar esta parte, então ela aparece como foi transcrita.",
+      "failedCount": "{count, plural, one {# parte não revisada} other {# partes não revisadas}}",
+      "saveMarkdown": "Texto formatado (.md)",
+      "saveText": "Texto simples (.txt)",
+      "fileNameMarkdown": "{title} revisado.md",
+      "fileNameText": "{title} revisado.txt"
+    },
+    "copyMenu": {
+      "label": "Opções de cópia",
+      "formatted": "Com formatação",
+      "plain": "Como texto simples",
+      "hint": "Com formatação, títulos, negrito e listas são colados no Word ou no Outlook. Sua escolha fica salva."
     }
   }
 }
