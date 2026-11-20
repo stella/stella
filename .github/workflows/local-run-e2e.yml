@@ -85,11 +85,18 @@ jobs:
         with:
           persist-credentials: false
 
+      # Each apt attempt has its own deadline, so retry.sh starts a fresh
+      # attempt instead of waiting on a stalled mirror. retry.sh makes three
+      # attempts with 15 s and 45 s pauses; the step deadline covers every
+      # attempt of both calls.
       - name: Install desktop build libraries
-        timeout-minutes: 5
+        timeout-minutes: 20
         run: |
-          bash scripts/retry.sh sudo apt-get update -qq
-          bash scripts/retry.sh sudo apt-get install -y -qq --no-install-recommends \
+          apt_options=(-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3)
+          bash scripts/retry.sh sudo timeout --kill-after=10s 90s \
+            apt-get "${apt_options[@]}" update -qq
+          bash scripts/retry.sh sudo timeout --kill-after=10s 210s \
+            apt-get "${apt_options[@]}" install -y -qq --no-install-recommends \
             libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
 
