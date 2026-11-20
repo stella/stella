@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE jogszabálykeresés",
       "borme_get_summary": "BORME napi összefoglaló",
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
+      "calendar_free_busy": "Szabad időpontok ellenőrzése",
+      "calendar_list_events": "Naptáresemények olvasása",
       "command_execution": "Parancs futtatása",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
@@ -5408,6 +5410,11 @@
       "googleKeyRestricted": "Ellenőrizze a kulcs API-, IP-cím- és hivatkozówebhely-korlátozásait a Google Cloudban. Engedélyezze a szükséges API-t és a kiszolgáló kéréseit, majd próbálja újra.",
       "keepSavedKey": "Mentett kulcs megtartása",
       "keyFormatHint": "Ez a kulcs a(z) {provider} esetében szokatlan formátumú. Mentse a szolgáltatónál történő ellenőrzéshez.",
+      "keyNeed": {
+        "builtIn": "Nem kötelező. Saját kulcs nélkül a szervezet AI-funkciói a stella által biztosított modelleket használják.",
+        "keyRequired": "A szervezet AI-funkcióihoz szolgáltatói kulcs kell. Adjon meg egyet az AI bekapcsolásához.",
+        "ownKeys": "A szervezet AI-funkciói az alábbi kulcsokat használják."
+      },
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
       "modelsDescription": "Válasszon szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
@@ -5415,6 +5422,7 @@
       "newApiKey": "Új API-kulcs",
       "newApiKeyDescription": "Mentéskor lecseréli a mentett kulcsot.",
       "noModelResults": "Nincs egyező felkínált modell",
+      "noProviders": "Még nincs szolgáltatói kulcs megadva.",
       "openaiInsufficientQuota": "Ellenőrizze az OpenAI-projekt költségkeretét és az API számlázását. Töltse fel az egyenleget vagy emelje meg az érintett korlátot, majd próbálja újra.",
       "openaiProjectOrganizationMismatch": "A kívánt OpenAI-projekthez és szervezethez tartozó API-kulcsot használjon. Ellenőrizze a hozzáférési beállításaikat, majd próbálja újra.",
       "openrouterNoCredits": "Töltsön fel egyenleget az OpenRouter számlázási részében, majd próbálja újra.",
@@ -5437,6 +5445,8 @@
       "providerForRole": "{role} szolgáltatója",
       "providerKeyInvalid": "A {provider} elutasította a kulcsot. Kérjük, ellenőrizze.",
       "providerKeyInvalidShort": "Érvénytelen",
+      "providerModes": "Ezekhez használja: {modes}",
+      "providerModesNone": "Egyik módhoz sincs használatban. Rendelje hozzá egy módhoz a Speciális részben.",
       "providerSetupConsole": "Szolgáltatói beállítások megnyitása",
       "providersDescription": "Adja meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használ.",
       "providersPanel": "Szolgáltatók",
@@ -5534,6 +5544,13 @@
     "startOverDescription": "Előfordulhat, hogy az eredeti kérés már létrehozott egy szervezetet. Az újrakezdés előtt ellenőrizze a szervezeteit; egy új kérés újabb szervezetet hozhat létre.",
     "startOverTitle": "Új létrehozási kérést indít?",
     "switchOrganization": "Szervezet váltása"
+  },
+  "organizationSetup": {
+    "aiAction": "AI beállítása",
+    "aiOptional": "A saját AI-szolgáltatói kulcsok nem kötelezők: nélkülük az AI a stella által biztosított modelleket használja.",
+    "aiRequired": "A szervezet AI-funkcióihoz szolgáltatói kulcs kell, különben senki sem használhatja őket.",
+    "invite": "Hívja meg kollégáit, hogy itt dolgozhassanak Önnel.",
+    "title": "Állítsa be az új szervezetet"
   },
   "publicTools": {
     "addSkill": "Készség hozzáadása",
@@ -5974,7 +5991,7 @@
     "organization": {
       "activeMembers": "Aktív tagok",
       "ai": "AI-konfiguráció",
-      "aiDescription": "Csatlakoztassa saját AI-szolgáltatói kulcsait.",
+      "aiDescription": "Adja meg, hogyan működjön az AI ebben a szervezetben.",
       "anonymization": {
         "addPlaceholder": "Mindig maszkolandó kifejezés (pl. csapat neve)",
         "deleteAction": "Kifejezés törlése",

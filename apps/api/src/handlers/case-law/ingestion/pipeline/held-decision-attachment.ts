@@ -196,6 +196,17 @@ const HOST_COLUMNS = {
   ecli: caseLawDecisions.ecli,
 };
 
+/** The record's order mark, with where a same-source candidate keeps its own. */
+const orderMarkFor = (
+  declaration: HeldDecisionAttachment<string>,
+  observed: ObservedDecision["observed"],
+) => {
+  const mark = declaration.orderMarkOf?.(observed) ?? null;
+  return mark === null
+    ? null
+    : { ...mark, metadataKey: declaration.metadataKey };
+};
+
 /**
  * The held decisions the record names: by its stated ECLI where any host
  * decision carries it as an identifier, otherwise by court, docket and
@@ -254,6 +265,7 @@ export const matchHostDecisionsTx = async (
               decisionDate: persistedDecisionDate,
               docketKeys,
               caseNumber: observed.caseNumber,
+              orderMark: orderMarkFor(declaration, observed),
             },
           }),
   });
@@ -1528,3 +1540,72 @@ export const attachToHeldDecision = async (
       : settled({ type: "attached", hostDecisionId: host.id, basis }),
   );
 };
+
+export type HeldAttachmentRemoval =
+  { type: "absent" } | { type: "removed"; sourceRawS3Key: string | null };
+
+/**
+ * Remove a record its publisher no longer serves from the decision it
+ * enriches: the attachment row goes, its declared identifiers leave the host
+ * unless another claim still holds them. The caller erases its listed
+ * payloads and deletes the returned raw object once this has committed. A later
+ * observation, should the publisher serve the record again, attaches it anew.
+ */
+export const removeHeldAttachmentAtPublisher = async ({
+  scopedDb,
+  sourceId,
+  sourceDocumentId,
+}: {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  sourceDocumentId: string;
+}): Promise<HeldAttachmentRemoval> =>
+  await runCitationGraphTransaction(scopedDb, async (tx) => {
+    await lockSourceIdentitiesTx(tx, sourceId, [sourceDocumentId]);
+    const stored = await readAttachmentTx(tx, sourceId, sourceDocumentId);
+    if (stored === undefined) {
+      return { type: "absent" };
+    }
+    const host =
+      stored.hostDecisionId === null
+        ? undefined
+        : (
+            await tx
+              .select({
+                id: caseLawDecisions.id,
+                sourceId: caseLawDecisions.sourceId,
+              })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, stored.hostDecisionId))
+              .limit(1)
+          ).at(0);
+    const projectionLock =
+      host === undefined
+        ? null
+        : await lockActiveCorpusProjectionSourceByIdTx(tx, {
+            family: "case_law",
+            sourceId: host.sourceId,
+          });
+    if (host !== undefined) {
+      await lockCaseLawDecisionRows({ tx, decisionIds: [host.id] });
+    }
+    // audit: skip — publisher removal of a source record; its host decision stays
+    await tx
+      .delete(caseLawHeldDecisionAttachments)
+      .where(attachmentKey(sourceId, sourceDocumentId));
+    if (host !== undefined) {
+      // After the row is gone, so its own claim no longer holds them.
+      await withdrawAttachmentIdentifiersTx(tx, {
+        decisionId: host.id,
+        identifiers: stored.declaredIdentifiers,
+      });
+      if (projectionLock !== null && stored.declaredIdentifiers.length > 0) {
+        await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+          lock: projectionLock,
+          subject: { family: "case_law", entityId: host.id },
+        });
+      }
+    }
+    await clearIngestionFailureEvidenceTx(tx, { sourceId, sourceDocumentId });
+    return { type: "removed", sourceRawS3Key: stored.sourceRawS3Key };
+  });

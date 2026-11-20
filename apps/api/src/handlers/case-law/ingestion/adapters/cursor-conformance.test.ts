@@ -514,6 +514,11 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    disposition: "excluded",
+    reason:
+      "the feed walk by action id, the cursor standing still at the feed's end and the stop on an unread document are covered by cz-isir.test.ts against a composed feed page",
+  },
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
     disposition: "excluded",
     reason:

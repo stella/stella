@@ -40,8 +40,8 @@
       {
         "position": "root/0/0/0/1",
         "relation": "case_law_decision_identifiers",
-        "nodeType": "Index Only Scan",
-        "index": "case_law_decision_identifiers_lookup_idx"
+        "nodeType": "Index Scan",
+        "index": "case_law_decision_identifiers_match_key_idx"
       },
       {
         "position": "root/0/1",
@@ -62,14 +62,14 @@
       {
         "position": "root/0/1/0/0",
         "relation": "case_law_decisions",
-        "nodeType": "Index Only Scan",
-        "index": "case_law_decisions_citation_candidate_published_idx"
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_citation_match_key_published_idx"
       },
       {
         "position": "root/0/1/0/1",
         "relation": "case_law_decision_identifiers",
         "nodeType": "Bitmap Heap Scan",
-        "index": "case_law_decision_identifiers_lookup_idx"
+        "index": "case_law_decision_identifiers_match_key_idx"
       }
     ]
   },
@@ -84,14 +84,14 @@
       {
         "position": "root/0/1/0/0",
         "relation": "case_law_decisions",
-        "nodeType": "Index Only Scan",
-        "index": "case_law_decisions_citation_candidate_published_idx"
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_citation_match_key_published_idx"
       },
       {
         "position": "root/0/1/0/1",
         "relation": "case_law_decision_identifiers",
         "nodeType": "Bitmap Heap Scan",
-        "index": "case_law_decision_identifiers_lookup_idx"
+        "index": "case_law_decision_identifiers_match_key_idx"
       },
       {
         "position": "root/0/1/0/2",

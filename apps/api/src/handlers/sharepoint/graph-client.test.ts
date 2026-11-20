@@ -6,6 +6,8 @@ import {
   SHAREPOINT_REFUSAL_CODE,
   SHAREPOINT_ROOT_ITEM_ID,
 } from "@stll/api-contract/sharepoint";
+import { readFailureBrand } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
 
 import {
   sharepointDriveIdSchema,
@@ -15,6 +17,7 @@ import {
 import {
   cursorFromNextLink,
   downloadSharepointFile,
+  fetchAccountLabel,
   type GraphDriveItem,
   graphRefusal,
   listSharepointChildren,
@@ -23,7 +26,11 @@ import {
   replayQuery,
   toSharepointDriveItem,
 } from "@/api/handlers/sharepoint/graph-client";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
 import { secretSchema } from "@/api/lib/secret-brands";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 
 const accessToken = v.parse(secretSchema, "graph-access-token");
@@ -498,4 +505,104 @@ describe("downloading a file", () => {
       expect(result.error.code).toBe(SHAREPOINT_REFUSAL_CODE.reconnectRequired);
     }
   });
+});
+
+const accountResponse = async (
+  status: number,
+  body: string,
+): ReturnType<typeof safeOutboundFetchBytes> =>
+  await Promise.resolve(
+    Result.ok({
+      body: new TextEncoder().encode(body).buffer,
+      headers: new Headers(),
+      ok: status >= 200 && status < 300,
+      status,
+    }),
+  );
+
+test("the account label read uses pinned outbound transport and a byte ceiling", async () => {
+  const limits: (number | undefined)[] = [];
+  const fetchBytes: typeof safeOutboundFetchBytes = async (input) => {
+    limits.push(input.maxBytes);
+    expect(input.redirect).toBe("error");
+    expect(input.timeoutMs).toBe(10_000);
+    const url = new URL(input.url);
+    expect(url.hostname).toBe("graph.microsoft.com");
+    expect(url.pathname).toBe("/v1.0/me");
+    return await accountResponse(
+      200,
+      JSON.stringify({ userPrincipalName: "person@example.test" }),
+    );
+  };
+  expect(
+    await fetchAccountLabel({
+      accessToken: "access-token",
+      fetchBytes,
+      permit: grantThirdPartyOutboundPermit(),
+    }),
+  ).toEqual(Result.ok("person@example.test"));
+  expect(limits).toEqual([64 * 1024]);
+});
+
+test("an optional account label failure is observed without exposing its provider detail", async () => {
+  const logs = installRecordingLogger();
+  try {
+    const label = await fetchAccountLabel({
+      accessToken: "access-token",
+      permit: grantThirdPartyOutboundPermit(),
+      fetchBytes: async () =>
+        Result.err(
+          new SafeOutboundFetchError({ message: "private provider detail" }),
+        ),
+    });
+    expect(Result.isError(label)).toBe(true);
+    expect(logs.records.map(({ message }) => message)).toContain(
+      "sharepoint.account_label_lookup_failed",
+    );
+    expect(JSON.stringify(logs.records)).not.toContain(
+      "private provider detail",
+    );
+  } finally {
+    logs.restore();
+  }
+});
+
+test("an invalid account payload does not enter telemetry or error causes", async () => {
+  const privateText = "privileged-account-label";
+  const logs = installRecordingLogger();
+  try {
+    const label = await fetchAccountLabel({
+      accessToken: "access-token",
+      permit: grantThirdPartyOutboundPermit(),
+      fetchBytes: async () =>
+        await accountResponse(200, `{"userPrincipalName":"${privateText}"`),
+    });
+    expect(Result.isError(label)).toBe(true);
+    if (Result.isError(label)) {
+      expect(JSON.stringify(label.error)).not.toContain(privateText);
+    }
+    expect(JSON.stringify(logs.records)).not.toContain(privateText);
+  } finally {
+    logs.restore();
+  }
+});
+
+test("account label refusals distinguish availability, credentials and request errors", async () => {
+  for (const { status, reason } of [
+    { status: 429, reason: "upstream_unavailable" },
+    { status: 503, reason: "upstream_unavailable" },
+    { status: 401, reason: "provider_credentials_rejected" },
+    { status: 403, reason: "provider_credentials_rejected" },
+    { status: 400, reason: "provider_request_rejected" },
+  ] as const satisfies readonly { status: number; reason: FailureReason }[]) {
+    const result = await fetchAccountLabel({
+      accessToken: "access-token",
+      permit: grantThirdPartyOutboundPermit(),
+      fetchBytes: async () => await accountResponse(status, ""),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(readFailureBrand(result.error)?.reason).toBe(reason);
+    }
+  }
 });

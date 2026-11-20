@@ -285,6 +285,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Kept provider transcript ids: the dictation door records them on the
   // owner connection and the scheduler deletes them; request roles never.
   "kept_transcript_deletions",
+  // Delivery failures per address: the provider event consumer and the
+  // sign-in door use the owner connection; request roles never.
+  "email_delivery_failures",
   // Chat content repair receipts: forced owner-only RLS; the owner-run
   // backfill and deploy repair write them, request roles never see them.
   "chat_content_v3_backfill_receipts",

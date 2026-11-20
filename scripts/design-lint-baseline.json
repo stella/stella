@@ -458,8 +458,6 @@
   "no-unbounded-response-body/no-unbounded-response-body": {
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 6,
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
-    "apps/api/src/handlers/sharepoint/graph-client.ts": 1,
-    "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
     "apps/api/src/lib/files/gotenberg.ts": 1
   },
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
@@ -767,7 +765,6 @@
     "apps/api/src/handlers/reports/report-export-notification.ts": 2,
     "apps/api/src/handlers/reports/report-export-queue.ts": 3,
     "apps/api/src/handlers/reports/views/export.ts": 1,
-    "apps/api/src/handlers/sharepoint/graph-client.ts": 2,
     "apps/api/src/handlers/sharepoint/oauth-callback.ts": 1,
     "apps/api/src/handlers/signals/transition.ts": 1,
     "apps/api/src/handlers/skills/proposals/review.ts": 2,

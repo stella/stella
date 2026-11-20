@@ -68,6 +68,7 @@ export const ADAPTER_MODULES = {
     (await import("./br-tjdft")).brTjdftAdapter,
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: async () =>
     (await import("./cz-ns-sbirka")).czNsSbirkaAdapter,
+  [ADAPTER_KEYS.CZ_ISIR]: async () => (await import("./cz-isir")).czIsirAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

@@ -181,6 +181,69 @@ test("same-source posts find an existing sibling", async () => {
   });
 });
 
+test("a record stating its order matches only the decision of that order on the day", async () => {
+  const f = await fixture(21);
+  const marked = {
+    ...f.declaration,
+    docketHeldUnderOtherDate: "own-row",
+    orderMarkOf: ({
+      sheetNumber,
+    }: {
+      readonly sheetNumber?: string | undefined;
+    }) =>
+      sheetNumber === undefined ? null : { sheetNumber, filePosition: null },
+  } satisfies HeldDecisionAttachment<string>;
+  await f.host({ sheetNumber: "24" });
+  const second = await f.host({ sheetNumber: "25" });
+  expect(
+    await f.match({ ...f.input, sheetNumber: "25" }, marked),
+  ).toMatchObject({
+    type: "one",
+    basis: "court-docket-date",
+    host: { id: second },
+  });
+  // A third order of that day is no decision held yet.
+  expect(await f.match({ ...f.input, sheetNumber: "26" }, marked)).toEqual({
+    type: "none",
+  });
+});
+
+test("a same-source sibling of another file position on the day is another decision", async () => {
+  const f = await fixture(22);
+  const positioned = {
+    ...f.declaration,
+    docketHeldUnderOtherDate: "own-row",
+    orderMarkOf: ({
+      metadata,
+    }: {
+      readonly metadata: Readonly<Record<string, unknown>>;
+    }) => {
+      const entry = metadata["collectionEntry"];
+      return typeof entry === "object" &&
+        entry !== null &&
+        "filePosition" in entry &&
+        typeof entry.filePosition === "string"
+        ? { sheetNumber: null, filePosition: entry.filePosition }
+        : null;
+    },
+  } satisfies HeldDecisionAttachment<string>;
+  const sibling = await f.host({
+    sourceId: f.collection.id,
+    metadata: { collectionEntry: { filePosition: "B-24" } },
+  });
+  const atB25 = {
+    ...f.input,
+    metadata: { collectionEntry: { filePosition: "B-25" } },
+  };
+  expect(await f.match(atB25, positioned)).toEqual({ type: "none" });
+  expect(
+    await f.match(
+      { ...f.input, metadata: { collectionEntry: { filePosition: "B-24" } } },
+      positioned,
+    ),
+  ).toMatchObject({ type: "one", host: { id: sibling } });
+});
+
 test("approved retired aliases collapse before the bounded candidate cap", async () => {
   const f = await fixture(4);
   const hostId = await f.host();
