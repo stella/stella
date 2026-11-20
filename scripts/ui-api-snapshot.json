@@ -1578,6 +1578,7 @@
     "./kanban-card-shell": ["KanbanCardShell"],
     "./kanban-column-header-shell": [
       "KANBAN_COLUMN_NAME_CLASS",
+      "KANBAN_COLUMN_WIDTH_CLASS",
       "KanbanColumnHeaderShell",
       "KanbanColumnNameFace",
       "KanbanColumnTitleSlot"

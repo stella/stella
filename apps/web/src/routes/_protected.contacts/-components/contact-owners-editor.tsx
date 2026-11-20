@@ -5,11 +5,16 @@ import { useTranslations } from "use-intl";
 
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import type { MemberOption } from "@/components/member-combobox";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  DetailRow,
+  DetailRows,
+  DetailSection,
+} from "@/routes/_protected.contacts/-components/detail-section.pending";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -61,12 +66,13 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
   };
 
   return (
-    <section className="rounded-lg border p-4">
-      <QueryViewFeedback view={organizationView} />
-      <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-        {t("contacts.attorneys.title")}
-      </h2>
-      <div className="space-y-3 text-sm">
+    <DetailSection
+      // The pickers stay disabled while the members load; only a failure
+      // says anything.
+      notice={<SettledQueryViewFeedback view={organizationView} />}
+      title={t("contacts.attorneys.title")}
+    >
+      <DetailRows className="space-y-3">
         <OwnerField
           disabled={
             updateContact.isPending || organizationView.type !== "items"
@@ -89,8 +95,8 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
           selectedOwner={contact.responsibleAttorney}
           value={contact.responsibleAttorneyId}
         />
-      </div>
-    </section>
+      </DetailRows>
+    </DetailSection>
   );
 };
 
@@ -113,8 +119,7 @@ const OwnerField = ({
   selectedOwner,
   value,
 }: OwnerFieldProps) => (
-  <div className="flex items-center gap-2">
-    <span className="text-muted-foreground w-32 shrink-0">{label}</span>
+  <DetailRow align="center" label={label}>
     <div className="min-w-0 flex-1">
       <MemberCombobox
         choice={{ type: MEMBER_CHOICE.memberOrNone, noneLabel }}
@@ -136,5 +141,5 @@ const OwnerField = ({
         value={value}
       />
     </div>
-  </div>
+  </DetailRow>
 );

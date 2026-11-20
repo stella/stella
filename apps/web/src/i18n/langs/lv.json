@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Arī aplūkoti ({count, number})"
+      "moreConsulted": "{count, plural, zero {+# vēl pārskatīti} one {+# vēl pārskatīts} other {+# vēl pārskatīti}}"
     },
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",

@@ -791,3 +791,211 @@ const ledgerExternalSources = (ledger: ChatStepLedger): ExternalSourceEntry[] =>
       return source === null ? [] : [source];
     }),
   );
+
+/**
+ * The answer's sources under one name, as the row under an answer counts
+ * them ("Nejvyšší soud 4 · o. s. ř. 2"): one court's decisions, or the
+ * provisions of one act.
+ */
+export type SourceGroup = {
+  readonly key: string;
+  readonly label: string;
+  readonly entries: readonly SourceChipEntry[];
+};
+
+// A statute's public slug opens with its citation (`262-2006-sb-…`), and an
+// ELI ends with it (`/eli/cz/sb/2006/262`).
+const STATUTE_SLUG_CITATION = /^(\d{1,6})-(\d{4})-([a-z]{1,8})(?:-|$)/u;
+const ELI_CITATION =
+  /\/eli\/[a-z]{2}\/([a-z]{1,8})\/(\d{4})\/(\d{1,6})(?:\/|$)/u;
+// How an act's collection is printed after its number and year.
+const STATUTE_COLLECTION_LABELS: ReadonlyMap<string, string> = new Map([
+  ["sb", "Sb."],
+  ["zz", "Z. z."],
+]);
+// The provision a citation's link text opens with ("§ 106 odst. 4 písm. e)",
+// "čl. 38 odst. 1"); what follows it names the act ("ZP", "o. s. ř.").
+const PROVISION_PREFIX =
+  /^(?:§{1,2}|čl\.|Art\.)\s?\d[\p{L}\d]*\)?(?:\s+(?:odst\.|písm\.|věta|bod|ods\.|Abs\.|lit\.)\s?[\p{L}\d]+\)?)*\s+/u;
+const MARKDOWN_LINK = /\[([^[\]\n]{1,160})\]\(([^()\s]{1,2048})\)/gu;
+const ACT_NAME_MAX_LENGTH = 24;
+const URL_BASE = "https://stll.app";
+
+const statuteAct = (
+  source: ExternalSourceEntry,
+): { key: string; citation: string } | null => {
+  for (const url of [source.url, source.sourceUrl]) {
+    if (url === undefined || !URL.canParse(url, URL_BASE)) {
+      continue;
+    }
+    const { pathname } = new URL(url, URL_BASE);
+    const slug = parseStatutePath(pathname)?.slug;
+    const fromSlug =
+      slug === undefined ? null : STATUTE_SLUG_CITATION.exec(slug);
+    const fromEli = ELI_CITATION.exec(pathname);
+    const [number, year, collection] =
+      fromSlug === null
+        ? [fromEli?.[3], fromEli?.[2], fromEli?.[1]]
+        : [fromSlug[1], fromSlug[2], fromSlug[3]];
+    if (
+      number !== undefined &&
+      year !== undefined &&
+      collection !== undefined
+    ) {
+      const printed =
+        STATUTE_COLLECTION_LABELS.get(collection) ??
+        `${collection.charAt(0).toUpperCase()}${collection.slice(1)}.`;
+      return {
+        key: `${number}-${year}-${collection}`,
+        citation: `${number}/${year} ${printed}`,
+      };
+    }
+  }
+  return null;
+};
+
+/** The words each link in the answer is written as, by the link's key. */
+const answerLinkTexts = (
+  parts: ChatMessage["parts"],
+  appOrigins: ReadonlySet<string>,
+): ReadonlyMap<string, readonly string[]> => {
+  const links = chatAnswerMarkdownDocuments({ parts }).flatMap((markdown) =>
+    [...markdown.matchAll(MARKDOWN_LINK)].map(([, text = "", href = ""]) => ({
+      key: citationUrlKey(href, appOrigins),
+      text: text.trim(),
+    })),
+  );
+  const texts = new Map<string, readonly string[]>();
+  for (const [key, written] of Map.groupBy(links, (link) => link.key)) {
+    texts.set(
+      key,
+      written.map((link) => link.text),
+    );
+  }
+  return texts;
+};
+
+/** The act a provision's link text names ("§ 106 odst. 4 ZP" names "ZP"). */
+const actNameInLinkText = (text: string): string | null => {
+  const prefix = PROVISION_PREFIX.exec(text)?.[0];
+  const name = prefix === undefined ? "" : text.slice(prefix.length).trim();
+  return name.length > 0 &&
+    name.length <= ACT_NAME_MAX_LENGTH &&
+    /\p{L}/u.test(name)
+    ? name
+    : null;
+};
+
+/**
+ * The name the answer gives an act, read from how it cites the act's
+ * provisions ("§ 106 odst. 4 písm. e) ZP" names it "ZP"); the most used
+ * name wins. Null when the answer names it no way this can read.
+ */
+const actNameInAnswer = (
+  entries: readonly SourceChipEntry[],
+  texts: ReadonlyMap<string, readonly string[]>,
+  appOrigins: ReadonlySet<string>,
+): string | null => {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.type !== "external") {
+      continue;
+    }
+    const urls = [entry.source.url, entry.source.sourceUrl].flatMap((url) =>
+      url === undefined ? [] : [citationUrlKey(url, appOrigins)],
+    );
+    for (const url of urls) {
+      // A source the answer never links has no words to read a name from.
+      const written = texts.get(url);
+      if (written === undefined) {
+        continue;
+      }
+      for (const text of written) {
+        const name = actNameInLinkText(text);
+        if (name !== null) {
+          counts.set(name, (counts.get(name) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  return (
+    [...counts.entries()].toSorted(
+      ([, left], [, right]) => right - left,
+    )[0]?.[0] ?? null
+  );
+};
+
+/**
+ * An answer's sources as the row under it shows them: decisions grouped by
+ * their court, highest tier first, provisions grouped by their act, each
+ * group under the name the answer gives it; every other source (a document,
+ * a web page) stays a chip of its own, in `rest`.
+ */
+export const groupSourceEntries = ({
+  appOrigins,
+  entries,
+  parts,
+}: {
+  appOrigins: ReadonlySet<string>;
+  entries: readonly SourceChipEntry[];
+  parts: ChatMessage["parts"];
+}): { groups: SourceGroup[]; rest: SourceChipEntry[] } => {
+  const courts = new Map<
+    string,
+    { label: string; rank: number; entries: SourceChipEntry[] }
+  >();
+  const acts = new Map<
+    string,
+    { citation: string; entries: SourceChipEntry[] }
+  >();
+  const rest: SourceChipEntry[] = [];
+  for (const entry of entries) {
+    if (entry.type === "case-law") {
+      const label = entry.caseLaw.court.trim() || entry.caseLaw.courtShortCode;
+      const key = label.toLocaleLowerCase();
+      const group = courts.get(key) ?? {
+        label,
+        rank: COURT_TIER_LABELS.indexOf(entry.caseLaw.tier),
+        entries: [],
+      };
+      group.entries.push(entry);
+      courts.set(key, group);
+      continue;
+    }
+    const act = entry.type === "external" ? statuteAct(entry.source) : null;
+    if (act === null) {
+      rest.push(entry);
+      continue;
+    }
+    const group = acts.get(act.key) ?? { citation: act.citation, entries: [] };
+    group.entries.push(entry);
+    acts.set(act.key, group);
+  }
+  const texts = answerLinkTexts(parts, appOrigins);
+  const byCount = (left: SourceGroup, right: SourceGroup) =>
+    right.entries.length - left.entries.length;
+  return {
+    groups: [
+      ...[...courts.entries()]
+        .toSorted(
+          ([, left], [, right]) =>
+            left.rank - right.rank ||
+            right.entries.length - left.entries.length,
+        )
+        .map(([key, group]) => ({
+          key: `court:${key}`,
+          label: group.label,
+          entries: group.entries,
+        })),
+      ...[...acts.entries()]
+        .map(([key, group]) => ({
+          key: `act:${key}`,
+          label:
+            actNameInAnswer(group.entries, texts, appOrigins) ?? group.citation,
+          entries: group.entries,
+        }))
+        .toSorted(byCount),
+    ],
+    rest,
+  };
+};
