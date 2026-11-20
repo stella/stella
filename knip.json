@@ -229,6 +229,9 @@
     "packages/sanctions": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/recording-wasm": {
+      "ignore": ["generated/**"]
+    },
     "packages/scan-engine": {
       "entry": ["src/**/*.test.ts"],
       "ignore": ["generated/**"]

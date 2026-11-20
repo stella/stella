@@ -977,6 +977,34 @@
       "Setup Bun"
     ]
   },
+  "recording-wasm-drift": {
+    "displayName": { "prefix": "recording-wasm-drift", "suffix": "" },
+    "declaredStepNames": [
+      "Cancel merge group after failure in this job",
+      "Check generated WebAssembly from a fresh Cargo cache",
+      "Checkout",
+      "Fetch Rust dependencies and wasm-bindgen",
+      "Fetch license audit inputs",
+      "Install cargo-deny",
+      "Install dependencies",
+      "License audit",
+      "Record fresh WebAssembly checksums",
+      "Restore Rust build cache",
+      "Save Rust build cache",
+      "Setup Bun",
+      "Setup Rust",
+      "Upload failed Bun install logs",
+      "Upload fresh WebAssembly on mismatch"
+    ],
+    "steps": [
+      "Checkout",
+      "Install dependencies",
+      "Post Checkout",
+      "Post Install dependencies",
+      "Post Setup Bun",
+      "Setup Bun"
+    ]
+  },
   "desktop-rust-tests": {
     "displayName": { "prefix": "Desktop Rust Tests (", "suffix": ")" },
     "declaredStepNames": [

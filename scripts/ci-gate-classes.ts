@@ -251,6 +251,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   },
   "windows-scripts": { class: "correctness" },
   "scan-engine-wasm-drift": { class: "correctness" },
+  "recording-wasm-drift": { class: "correctness" },
   "desktop-rust-tests": { class: "correctness" },
   "desktop-rust-lint": { class: "correctness" },
   "dependency-audit": { class: "correctness" },

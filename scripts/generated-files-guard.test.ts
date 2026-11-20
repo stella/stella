@@ -552,7 +552,11 @@ test("rejects delegated checks that no other CI step runs", () => {
 
 // Every family Guard B may hand to another job, each exactly in the runs whose
 // owning job runs its `checkedBy` step.
-const DELEGABLE = ["scan-engine-wasm", "api-typecheck-projects"] as const;
+const DELEGABLE = [
+  "scan-engine-wasm",
+  "recording-wasm",
+  "api-typecheck-projects",
+] as const;
 
 type DelegationCase = {
   readonly guardCondition: string;

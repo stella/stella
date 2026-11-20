@@ -1,0 +1,37 @@
+[package]
+name = "stella-recording-wasm"
+version = "0.0.1"
+edition = "2024"
+description = "The desktop's recording reader (format detection, decoding, 16 kHz mono, pieces cut at pauses) as WebAssembly for the API"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+unwrap_used = "deny"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+incremental = false
+
+# The reader is the desktop's own crate, so a recording is cut into the same
+# pieces wherever it is transcribed.
+[dependencies]
+stella-desktop-recording = { path = "../../apps/desktop/src-tauri/crates/recording" }
+symphonia-core = { version = "=0.6.1", default-features = false }
+wasm-bindgen = "=0.2.130"
