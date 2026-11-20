@@ -371,6 +371,15 @@ type CopyFormat = "formatted" | "plain";
 
 const COPY_FORMAT_KEY = "stella.transcribe.copyFormat";
 
+/** Stores the copy format; without storage the choice lasts only while
+ *  the window is open. */
+const rememberCopyFormat = (next: CopyFormat): boolean =>
+  Result.isOk(
+    Result.try(() => {
+      localStorage.setItem(COPY_FORMAT_KEY, next);
+    }),
+  );
+
 /** The copy format the user chose last; formatted by default. */
 export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
   const [format, setFormat] = useState<CopyFormat>(() => {
@@ -382,11 +391,7 @@ export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
   });
   const choose = useCallback((next: CopyFormat) => {
     setFormat(next);
-    const stored = Result.try(() => {
-      localStorage.setItem(COPY_FORMAT_KEY, next);
-    });
-    // Without storage the choice lasts only while the window is open.
-    return Result.isOk(stored);
+    rememberCopyFormat(next);
   }, []);
   return [format, choose];
 };
