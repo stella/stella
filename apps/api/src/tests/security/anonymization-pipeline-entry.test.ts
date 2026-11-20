@@ -8,12 +8,7 @@ const apiRoot = path.resolve(import.meta.dir, "../../..");
 // for every caller.
 const PIPELINE_ENTRY =
   /\brunChatAnonPipeline\b|\.redactText(?:WithCallerDetections)?\(|\bredactStaticEntities\w*\(/u;
-// The insolvency register's court decisions are anonymised one paragraph per
-// call, nothing joined, so no field boundary exists to split.
-const ALLOWED_PIPELINE_CALLERS = [
-  "src/handlers/case-law/ingestion/adapters/cz-isir-anonymization.ts",
-  "src/mcp/anonymization-core.ts",
-];
+const ALLOWED_PIPELINE_CALLERS = ["src/mcp/anonymization-core.ts"];
 
 const isTestSource = (relativePath: string) =>
   relativePath.includes(".test.") ||
