@@ -7246,6 +7246,7 @@
         "title": "Remove Word template links?",
         "unknownLocation": "Template location: an address stella cannot verify"
       },
+      "checkingFiles": "Checking files…",
       "desktopEdit": {
         "accountRequiredTitle": "Connect stella desktop to your account",
         "action": "Edit in desktop",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
       "downloadWithComments": "Download with comments",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# file is identical to a document this matter already holds.} other {# files are identical to documents this matter already holds.}} Choose what to do with each.",
+        "matchedDocument": "Identical to <bdi>{documentName}</bdi>",
+        "skip": "Skip this file",
+        "skipAll": "Skip duplicates",
+        "title": "Already in this matter",
+        "uploadAnyway": "Upload anyway"
+      },
       "emptyFile": "The file is empty.",
       "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",

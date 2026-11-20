@@ -91,6 +91,7 @@ import {
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
+import { ExactDuplicateUploadDialog } from "@/routes/-protected-app/-components/exact-duplicate-upload-dialog";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -318,6 +319,7 @@ export const ProtectedAppFrame = ({
                 <MakeSkillReviewDialog />
                 <AttachedTemplateUploadDialog />
                 <DocumentReferenceUploadDialog />
+                <ExactDuplicateUploadDialog />
                 <ShortcutEchoHud />
                 <KeyboardShortcutsDialog />
               </ChatEditorProvider>

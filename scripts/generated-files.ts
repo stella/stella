@@ -479,6 +479,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/template-binding/build-binding-context.ts",
     "apps/api/src/lib/templates/*",
     "apps/api/src/lib/uploads/entity-create.ts",
+    "apps/api/src/lib/uploads/exact-duplicates.ts",
     "apps/api/src/lib/uploads/runtime.ts",
     "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts",
     "apps/api/src/lib/uploads/file-comparison/uploads.ts",

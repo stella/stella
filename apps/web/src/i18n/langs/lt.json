@@ -7246,6 +7246,7 @@
         "title": "Pašalinti „Word“ šablonų saitus?",
         "unknownLocation": "Šablono vieta: adresas, kurio stella negali patikrinti"
       },
+      "checkingFiles": "Tikrinami failai…",
       "desktopEdit": {
         "accountRequiredTitle": "Prijunkite stella desktop prie savo paskyros",
         "action": "Redaguoti darbalaukio programoje",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
       "downloadWithComments": "Atsisiųsti su komentarais",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# failas sutampa su dokumentu, kuris jau yra šioje byloje.} few {# failai sutampa su dokumentais, kurie jau yra šioje byloje.} many {# failo sutampa su dokumentais, kurie jau yra šioje byloje.} other {# failų sutampa su dokumentais, kurie jau yra šioje byloje.}} Pasirinkite, ką daryti su kiekvienu.",
+        "matchedDocument": "Sutampa su dokumentu <bdi>{documentName}</bdi>",
+        "skip": "Praleisti šį failą",
+        "skipAll": "Praleisti dublikatus",
+        "title": "Jau yra šioje byloje",
+        "uploadAnyway": "Vis tiek įkelti"
+      },
       "emptyFile": "Failas tuščias.",
       "fileTooLarge": "Failas didesnis nei {limit, number} MB.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
