@@ -666,7 +666,7 @@
     "customWords": {
       "group": "Savi vārdi",
       "title": "Vārdi un nosaukumi, kas stella jāraksta pareizi",
-      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Šī datora runas modelis tos neizmanto.",
+      "description": "Piemēram, klientu vārdi vai angļu termini, ko lietojat, runājot citā valodā. Tie tiek glabāti šajā datorā šim kontam un nosūtīti tikai kopā ar diktātu: pārvēršanai ar stella AI un labošanai ar MI. Kad pārvērš šī datora runas modelis un labošana ar MI ir izslēgta, stella izlabo to rakstību šajā datorā.",
       "count": "{count, number} no {limit, number}",
       "input": "Pievienot vārdu vai nosaukumu",
       "add": "Pievienot",
@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Skaņa transkribēšanai tiek nosūtīta stella un modeļa {model} nodrošinātājam. stella to neglabā.",
       "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
       "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
-      "retainsData": "{provider} glabā visu šim modelim nosūtīto ierakstu skaņu un transkripciju. Netranskribējiet ar to konfidenciālus vai klientu ierakstus vai izvēlieties citu modeli sadaļā Iestatījumi, Diktēšana.",
+      "retainsData": "Lūdzu, ņemiet vērā {provider} apstrādes noteikumus.",
       "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
     },
     "matter": {

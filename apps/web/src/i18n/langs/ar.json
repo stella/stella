@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "تم رفض الدعوة",
       "declinedDescription": "لم تنضم إلى هذه المؤسسة.",
-      "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail} بصفة {role}.",
+      "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail}{role, select, owner { بصفة مالك} admin { بصفة مسؤول} member { بصفة عضو} intern { بصفة متدرب} external { بصفة متعاون خارجي} other {}}.",
       "goToWorkspaces": "الانتقال إلى الملفات القانونية",
       "title": "دعوة المؤسسة",
       "verifyEmailHint": "لتأكيد {email}، سجّل الخروج، ثم سجّل الدخول برمز لمرة واحدة سنرسله إلى هذا العنوان.",
@@ -7246,6 +7246,7 @@
         "title": "هل تريد إزالة روابط قوالب Word؟",
         "unknownLocation": "موقع القالب: عنوان لا تستطيع stella التحقق منه"
       },
+      "checkingFiles": "جارٍ فحص الملفات…",
       "desktopEdit": {
         "accountRequiredTitle": "اربط stella desktop بحسابك",
         "action": "التحرير في تطبيق سطح المكتب",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "تنزيل بصيغة PDF",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
       "downloadWithComments": "تنزيل مع التعليقات",
+      "duplicateUpload": {
+        "description": "{count, plural, zero {لا توجد ملفات مطابقة لمستندات في هذا الملف القانوني.} one {ملف واحد مطابق لمستند موجود مسبقًا في هذا الملف القانوني.} two {ملفان مطابقان لمستندين موجودين مسبقًا في هذا الملف القانوني.} few {# ملفات مطابقة لمستندات موجودة مسبقًا في هذا الملف القانوني.} many {# ملفًا مطابقًا لمستندات موجودة مسبقًا في هذا الملف القانوني.} other {# ملف مطابق لمستندات موجودة مسبقًا في هذا الملف القانوني.}} اختر ما تريد فعله بكل منها.",
+        "matchedDocument": "مطابق لـ <bdi>{documentName}</bdi>",
+        "skip": "تخطي هذا الملف",
+        "skipAll": "تخطي الملفات المكررة",
+        "title": "موجود مسبقًا في هذا الملف القانوني",
+        "uploadAnyway": "الرفع على أي حال"
+      },
       "emptyFile": "الملف فارغ.",
       "fileTooLarge": "الملف أكبر من {limit, number} ميغابايت.",
       "includeReferenceNumber": "تضمين الرقم المرجعي",

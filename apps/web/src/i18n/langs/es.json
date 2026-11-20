@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitación rechazada",
       "declinedDescription": "No te has unido a esta organización.",
-      "description": "{inviterEmail} le ha invitado a unirse a {organizationName} como {role}.",
+      "description": "{inviterEmail} le ha invitado a unirse a {organizationName}{role, select, owner { como propietario} admin { como administrador} member { como miembro} intern { como pasante} external { como colaborador externo} other {}}.",
       "goToWorkspaces": "Ir a asuntos",
       "title": "Invitación a la organización",
       "verifyEmailHint": "Para verificar {email}, cierre sesión e inicie sesión con un código de un solo uso que enviaremos a esa dirección.",
@@ -7246,6 +7246,7 @@
         "title": "¿Quitar los enlaces a plantillas de Word?",
         "unknownLocation": "Ubicación de la plantilla: una dirección que stella no puede verificar"
       },
+      "checkingFiles": "Comprobando archivos…",
       "desktopEdit": {
         "accountRequiredTitle": "Conecta stella desktop a tu cuenta",
         "action": "Editar en la app de escritorio",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Descargar como PDF",
       "downloadSearchablePdf": "PDF con texto buscable",
       "downloadWithComments": "Descargar con comentarios",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# archivo es idéntico a un documento que este asunto ya contiene.} other {# archivos son idénticos a documentos que este asunto ya contiene.} many {# archivos son idénticos a documentos que este asunto ya contiene.}} Elige qué hacer con cada uno.",
+        "matchedDocument": "Idéntico a <bdi>{documentName}</bdi>",
+        "skip": "Omitir este archivo",
+        "skipAll": "Omitir duplicados",
+        "title": "Ya está en este asunto",
+        "uploadAnyway": "Subir de todos modos"
+      },
       "emptyFile": "El archivo está vacío.",
       "fileTooLarge": "El archivo supera los {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referencia",

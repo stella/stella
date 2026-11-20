@@ -816,5 +816,12 @@
     "parserVersion": 39,
     "type": "pending-enrolment-wave",
     "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-isir",
+    "parserVersion": 2,
+    "type": "no-stored-row-effect",
+    "reason": "stored-raw-unavailable",
+    "explanation": "The stored text is now the register's text as published, without a redaction step. The source has never been enabled, so no stored row or raw payload exists to replay."
   }
 ]

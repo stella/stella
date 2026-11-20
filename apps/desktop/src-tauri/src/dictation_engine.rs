@@ -36,7 +36,7 @@ use crate::{
   dictation_live::{Ended, Live, Transcribe, Transcription},
   dictation_microphone::{self, Choice, InputDevice},
   dictation_pauses::Segmenter,
-  dictation_preview,
+  dictation_preview, dictation_spelling,
   dictation_trace::{self, Cleanup, GlobeKey, Line, Outcome, Trace},
   dictation_worker::{self, Response},
 };
@@ -48,6 +48,9 @@ const LISTEN: Duration = Duration::from_millis(100);
 const MAX_RECORDING_SECONDS: usize = 600;
 /// A shorter hold that heard nothing is a tap, not a dictation that failed.
 const MIN_NOTICED_HOLD: Duration = Duration::from_millis(500);
+/// Recording goes on this long after the key comes up: speakers often let go
+/// while still saying the last word.
+const RELEASE_TAIL: Duration = Duration::from_millis(200);
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// The speaker waits on every request, so a busy machine must not starve it.
@@ -81,6 +84,9 @@ struct Active {
 /// What a dictation that did not fail came to.
 enum Delivered {
   Typed,
+  /// The microphone stopped while the key was down: what it heard before
+  /// was typed, and the speaker is still told it stopped.
+  CutShort(Failed),
   /// No words to type.
   Empty,
   Cancelled,
@@ -165,6 +171,7 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
           dictation::set_phase(app, Phase::Transcribing);
           trace.release();
           dictation_preview::release(app);
+          thread::sleep(release_tail(trace.held()));
           let device = capture.recorder.device.clone();
           let mut moved = None;
           let outcome = match finish(
@@ -177,6 +184,10 @@ fn run(app: &AppHandle, commands: &Receiver<Command>) {
             &mut moved,
           ) {
             Ok(Delivered::Typed) => Outcome::Typed,
+            Ok(Delivered::CutShort(failed)) => {
+              dictation::report_input_failure(app, failed, device);
+              Outcome::Typed
+            }
             Ok(Delivered::Empty) => Outcome::Empty,
             Ok(Delivered::Cancelled) => Outcome::Cancelled,
             Err(failed) => {
@@ -380,11 +391,9 @@ fn finish(
   let rate = recorder.rate;
   let stretches = live.sent();
   let held = trace.held();
-  let Some(last) = recorder.finish() else {
-    log_hold(app, held, recorded, rate, stretches);
-    discard(live, worker);
-    return Err(Failure::Microphone.into());
-  };
+  // A microphone that stopped midway leaves what it already delivered: the
+  // stretches sent while the key was down still count.
+  let Finished { last, lost } = recorder.finish();
   // Counted once the stream stopped, so the last frames it delivered count.
   log_hold(
     app,
@@ -404,6 +413,9 @@ fn finish(
   }
   live.send(rest.samples);
   let (ended, engines, tally) = live.finish_tallied().ok_or(Failure::Transcription)?;
+  // Some stretches went to the speech model on this computer, which takes
+  // no custom words.
+  let transcribed_here = engines.destination == Destination::Local || tally.fell_back;
   Line::Transcribe {
     duration: trace.since_release(),
     destination: engines.destination,
@@ -424,11 +436,24 @@ fn finish(
   };
   let text = text.trim();
   if text.is_empty() {
+    if lost {
+      return Err(Failure::Microphone.into());
+    }
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
+  let cleanup_enabled = dictation::cleanup_enabled(app);
+  // Cleanup spells the custom words itself; without it, the words the speech
+  // model here missed are spelled on this computer.
+  let respelled;
+  let text = if transcribed_here && !cleanup_enabled {
+    respelled = dictation_spelling::respell(text, &crate::dictation_words::words(app));
+    respelled.as_str()
+  } else {
+    text
+  };
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
-    if dictation::cleanup_enabled(app) {
+    if cleanup_enabled {
       let words = crate::dictation_words::words(app);
       dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
     } else {
@@ -449,7 +474,19 @@ fn finish(
     kept_in_history,
   }
   .log();
-  result.map(|()| Delivered::Typed)
+  result.map(|()| typed(lost, kept_in_history))
+}
+
+/// What typing came to: a microphone that stopped midway is still told.
+const fn typed(lost: bool, kept_in_history: bool) -> Delivered {
+  if lost {
+    Delivered::CutShort(Failed {
+      failure: Failure::Microphone,
+      kept_in_history,
+    })
+  } else {
+    Delivered::Typed
+  }
 }
 
 /// Keeps the text and types it: what came of it, how long the focus read
@@ -489,6 +526,16 @@ fn heard_nothing(held: Duration) -> Result<(), Failed> {
     Ok(())
   } else {
     Err(Failure::NothingHeard.into())
+  }
+}
+
+/// How long recording goes on after a hold of `held`. A tap gets none: it
+/// is not a dictation, and its sound is better not heard.
+fn release_tail(held: Duration) -> Duration {
+  if held < MIN_NOTICED_HOLD {
+    Duration::ZERO
+  } else {
+    RELEASE_TAIL
   }
 }
 
@@ -687,6 +734,9 @@ impl Drop for Worker {
 struct Tape {
   samples: Vec<f32>,
   taken: usize,
+  /// The device went away or the stream stopped for good: nothing more
+  /// arrives, though what arrived before still counts.
+  lost: bool,
 }
 
 type Shared = Arc<Mutex<Tape>>;
@@ -757,9 +807,9 @@ impl Recorder {
     lock(&self.tape).samples.len() / self.channels.max(1)
   }
 
-  /// Stops the stream and takes the last of its audio; `None` when capture
-  /// did not survive.
-  fn finish(self) -> Option<Vec<f32>> {
+  /// Stops the stream and takes the last of its audio, and whether capture
+  /// stopped on its own before.
+  fn finish(self) -> Finished {
     let Self {
       stop,
       thread,
@@ -768,11 +818,24 @@ impl Recorder {
       ..
     } = self;
     drop(stop);
-    if thread.join().is_err() {
-      return None;
+    let survived = thread.join().is_ok();
+    let (last, lost) = {
+      let mut tape = lock(&tape);
+      (take_frames(&mut tape, channels), tape.lost)
+    };
+    Finished {
+      last,
+      lost: lost || !survived,
     }
-    Some(take_frames(&mut lock(&tape), channels))
   }
+}
+
+/// The end of a recording.
+struct Finished {
+  /// The audio captured since the last take.
+  last: Vec<f32>,
+  /// The device went away or capture failed before the key came up.
+  lost: bool,
 }
 
 /// What the capture thread hands over once its stream plays.
@@ -810,17 +873,51 @@ fn capture(
 
 /// An input device as Settings lists it; `None` without a stable id.
 fn listed(device: &cpal::Device) -> Option<InputDevice> {
-  let id = device.id().ok()?.to_string();
+  let device_id = device.id().ok()?;
+  let id = device_id.to_string();
   let description = device.description().ok();
+  let connection = connection(&device_id, description.as_ref());
   Some(InputDevice {
     name: description
       .as_ref()
       .map_or_else(|| id.clone(), |description| description.name().to_string()),
-    bluetooth: description.is_some_and(|description| {
-      description.interface_type() == cpal::InterfaceType::Bluetooth
-    }),
+    bluetooth: connection == Some(Connection::Bluetooth),
+    built_in: connection == Some(Connection::BuiltIn),
     id,
   })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Connection {
+  BuiltIn,
+  Bluetooth,
+}
+
+/// How a device is connected, when that matters to dictation. CoreAudio
+/// tells it by the device's UID; elsewhere the audio library reads it.
+#[cfg(target_os = "macos")]
+fn connection(
+  id: &cpal::DeviceId,
+  _description: Option<&cpal::DeviceDescription>,
+) -> Option<Connection> {
+  use stella_desktop_macos::AudioTransport;
+  match stella_desktop_macos::audio_device_transport(id.id())? {
+    AudioTransport::BuiltIn => Some(Connection::BuiltIn),
+    AudioTransport::Bluetooth => Some(Connection::Bluetooth),
+    AudioTransport::Other => None,
+  }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn connection(
+  _id: &cpal::DeviceId,
+  description: Option<&cpal::DeviceDescription>,
+) -> Option<Connection> {
+  match description?.interface_type() {
+    cpal::InterfaceType::BuiltIn => Some(Connection::BuiltIn),
+    cpal::InterfaceType::Bluetooth => Some(Connection::Bluetooth),
+    _ => None,
+  }
 }
 
 /// Every input device, in the order the OS lists them.
@@ -837,13 +934,43 @@ pub(crate) fn input_devices() -> Vec<InputDevice> {
   listed_devices
 }
 
-/// The system default input device.
+/// The input device dictation records from without a choice.
 pub(crate) fn default_input() -> Option<InputDevice> {
-  listed(&cpal::default_host().default_input_device()?)
+  listed(&default_device(&cpal::default_host())?)
 }
 
-/// The device `choice` names when it is connected, otherwise the system
-/// default with the chosen name it stands in for.
+/// The system default input device, or the built-in microphone in place of
+/// a Bluetooth default.
+fn default_device(host: &cpal::Host) -> Option<cpal::Device> {
+  let system_default = host.default_input_device()?;
+  let Some(listed_default) = listed(&system_default).filter(|device| device.bluetooth)
+  else {
+    return Some(system_default);
+  };
+  let devices = host
+    .input_devices()
+    .into_iter()
+    .flatten()
+    .filter_map(|device| listed(&device).map(|listed_device| (device, listed_device)))
+    .collect::<Vec<_>>();
+  let listed_devices = devices
+    .iter()
+    .map(|(_, listed_device)| listed_device.clone())
+    .collect::<Vec<_>>();
+  let preferred =
+    dictation_microphone::without_choice(&listed_default, &listed_devices)
+      .id
+      .clone();
+  Some(
+    devices
+      .into_iter()
+      .find(|(_, listed_device)| listed_device.id == preferred)
+      .map_or(system_default, |(device, _)| device),
+  )
+}
+
+/// The device `choice` names when it is connected, otherwise the device
+/// recorded without a choice, with the chosen name it stands in for.
 fn pick_device(choice: Option<&Choice>) -> Option<(cpal::Device, Option<String>)> {
   let host = cpal::default_host();
   if let Some(choice) = choice {
@@ -855,9 +982,9 @@ fn pick_device(choice: Option<&Choice>) -> Option<(cpal::Device, Option<String>)
     if let Some(device) = chosen {
       return Some((device, None));
     }
-    return Some((host.default_input_device()?, Some(choice.name.clone())));
+    return Some((default_device(&host)?, Some(choice.name.clone())));
   }
-  Some((host.default_input_device()?, None))
+  Some((default_device(&host)?, None))
 }
 
 fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
@@ -888,6 +1015,17 @@ fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
   ))
 }
 
+/// Whether a stream error means no more audio comes, rather than a glitch
+/// or a reroute the stream survives.
+const fn ends_capture(kind: cpal::ErrorKind) -> bool {
+  matches!(
+    kind,
+    cpal::ErrorKind::DeviceNotAvailable
+      | cpal::ErrorKind::HostUnavailable
+      | cpal::ErrorKind::StreamInvalidated
+  )
+}
+
 fn build<T>(
   device: &cpal::Device,
   config: &cpal::StreamConfig,
@@ -899,6 +1037,7 @@ where
   f32: FromSample<T>,
 {
   let sink = Arc::clone(tape);
+  let failed = Arc::clone(tape);
   device
     .build_input_stream(
       *config,
@@ -913,7 +1052,12 @@ where
             .map(|sample| sample.to_sample::<f32>()),
         );
       },
-      |error| tracing::warn!(%error, "dictation audio stream failed"),
+      move |error: cpal::Error| {
+        tracing::warn!(%error, "dictation audio stream failed");
+        if ends_capture(error.kind()) {
+          lock(&failed).lost = true;
+        }
+      },
       None,
     )
     .ok()
@@ -942,10 +1086,22 @@ mod tests {
   }
 
   #[test]
+  fn recording_goes_on_after_a_hold_but_not_after_a_tap() {
+    assert_eq!(release_tail(Duration::from_millis(200)), Duration::ZERO);
+    assert_eq!(
+      release_tail(MIN_NOTICED_HOLD - Duration::from_millis(1)),
+      Duration::ZERO
+    );
+    assert_eq!(release_tail(MIN_NOTICED_HOLD), RELEASE_TAIL);
+    assert_eq!(release_tail(Duration::from_secs(90)), RELEASE_TAIL);
+  }
+
+  #[test]
   fn only_whole_frames_are_taken_and_the_rest_waits() {
     let mut tape = Tape {
       samples: vec![0.1, 0.2, 0.3, 0.4, 0.5],
       taken: 0,
+      lost: false,
     };
     assert_eq!(take_frames(&mut tape, 2), vec![0.1, 0.2, 0.3, 0.4]);
     assert_eq!(tape.samples, vec![0.5]);
@@ -954,5 +1110,25 @@ mod tests {
     assert!(tape.samples.is_empty());
     // Taken audio still counts toward the recording limit.
     assert_eq!(tape.taken, 6);
+  }
+
+  #[test]
+  fn a_microphone_that_stopped_is_told_even_when_its_words_were_typed() {
+    assert!(matches!(typed(false, true), Delivered::Typed));
+    assert!(matches!(
+      typed(true, true),
+      Delivered::CutShort(Failed {
+        failure: Failure::Microphone,
+        kept_in_history: true,
+      })
+    ));
+  }
+
+  #[test]
+  fn only_a_stream_that_cannot_go_on_ends_capture() {
+    assert!(ends_capture(cpal::ErrorKind::DeviceNotAvailable));
+    assert!(ends_capture(cpal::ErrorKind::StreamInvalidated));
+    assert!(!ends_capture(cpal::ErrorKind::Xrun));
+    assert!(!ends_capture(cpal::ErrorKind::DeviceChanged));
   }
 }

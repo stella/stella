@@ -149,6 +149,7 @@ type PendingTextMessageKey =
   | "billing.vatRates.title"
   | "billing.vatRates.validFrom"
   | "billing.vatRates.validTo"
+  | "caseLaw.viewer.appealReviews.title"
   | "catalogue.addCustom"
   | "catalogue.filter.mcps"
   | "catalogue.filter.skills"

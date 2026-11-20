@@ -208,6 +208,7 @@ describe("account email deliverability", () => {
       email: account.email,
       device: "Firefox on Linux",
       ipAddress: "192.0.2.1",
+      location: { type: "unknown" },
       time: "26 October 2026, 04:37",
       sessionsUrl: "https://app.example.test/settings/sessions",
       lang: "en",
