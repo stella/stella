@@ -1,9 +1,15 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import {
+  agentSkillComments,
+  agentSkillProposals,
+  agentSkillResources,
+  agentSkillRevisions,
+  agentSkills,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import getSkill from "@/api/handlers/skills/get";
 import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
@@ -127,6 +133,83 @@ const visibleTo = async ({
     }),
     userId,
   );
+
+/** A proposal and a comment on the skill's first revision, written as root. */
+const insertSkillDiscussion = async (skillId: SafeId<"agentSkill">) => {
+  const [revision] = await testDb
+    .select({ id: agentSkillRevisions.id })
+    .from(agentSkillRevisions)
+    .where(eq(agentSkillRevisions.skillId, skillId));
+  if (revision === undefined) {
+    throw new TypeError("expected the trigger to record a first revision");
+  }
+  await testDb.insert(agentSkillProposals).values({
+    id: testId<"agentSkillProposal">(),
+    organizationId: ids.orgA,
+    skillId,
+    baseRevisionId: revision.id,
+    body: "Proposed body",
+    authorId: ids.userA1,
+  });
+  await testDb.insert(agentSkillComments).values({
+    id: testId<"agentSkillComment">(),
+    organizationId: ids.orgA,
+    skillId,
+    revisionId: revision.id,
+    rangeStart: 0,
+    rangeEnd: 3,
+    anchorText: "Use",
+    body: "A comment",
+    authorId: ids.userA1,
+  });
+};
+
+const childRowsVisibleTo = async ({
+  skillId,
+  userId,
+  workspaceIds,
+}: {
+  skillId: SafeId<"agentSkill">;
+  userId: SafeId<"user">;
+  workspaceIds: SafeId<"workspace">[];
+}) =>
+  await scopedQuery(
+    workspaceIds,
+    ids.orgA,
+    async (tx) => ({
+      comments: await tx.$count(
+        agentSkillComments,
+        eq(agentSkillComments.skillId, skillId),
+      ),
+      proposals: await tx.$count(
+        agentSkillProposals,
+        eq(agentSkillProposals.skillId, skillId),
+      ),
+      resources: await tx.$count(
+        agentSkillResources,
+        eq(agentSkillResources.skillId, skillId),
+      ),
+      revisions: await tx.$count(
+        agentSkillRevisions,
+        eq(agentSkillRevisions.skillId, skillId),
+      ),
+    }),
+    userId,
+  );
+
+// Every policy a member's read or write of a skill's child rows goes through.
+const CHILD_ROW_POLICIES = [
+  "agent_skill_comment_delete",
+  "agent_skill_comment_insert",
+  "agent_skill_comment_select",
+  "agent_skill_comment_update",
+  "agent_skill_proposal_delete",
+  "agent_skill_proposal_insert",
+  "agent_skill_proposal_select",
+  "agent_skill_proposal_update",
+  "agent_skill_resource_select",
+  "agent_skill_revision_select",
+] as const;
 
 const tryCatch = async (fn: () => Promise<unknown>) => {
   try {
@@ -283,6 +366,65 @@ describe("bound agent skill RLS", () => {
         workspaceIds: [ids.wsA2],
       }),
     ).toEqual({ resources: 0, skills: 0 });
+  });
+
+  test.each(["matter", "client"] as const)(
+    "every row hanging off a %s-bound skill is hidden where its binding is not reached",
+    async (binding) => {
+      const skillId = await insertBoundSkill({
+        boundClientId: binding === "client" ? ids.contactA : null,
+        boundWorkspaceId: binding === "matter" ? ids.wsA1 : null,
+        scope: "team",
+        userId: ids.userAdmin,
+      });
+      await insertSkillDiscussion(skillId);
+
+      expect(
+        await childRowsVisibleTo({
+          skillId,
+          userId: ids.userA2,
+          workspaceIds: [ids.wsA1],
+        }),
+      ).toEqual({ comments: 1, proposals: 1, resources: 1, revisions: 1 });
+      expect(
+        await childRowsVisibleTo({
+          skillId,
+          userId: ids.userA2,
+          workspaceIds: [ids.wsA2],
+        }),
+      ).toEqual({ comments: 0, proposals: 0, resources: 0, revisions: 0 });
+    },
+  );
+
+  test("each policy on a skill's child rows states the binding reach itself", async () => {
+    // A child policy that only inherited the reach through the agent_skills
+    // select policy would widen as soon as that policy did.
+    const policies = await testDb.execute<{
+      expression: string;
+      policy: string;
+    }>(sql`
+      SELECT policyname AS policy,
+        COALESCE(qual, '') || ' ' || COALESCE(with_check, '') AS expression
+      FROM pg_policies
+      WHERE schemaname = 'public'
+        AND policyname IN (${sql.join(
+          CHILD_ROW_POLICIES.map((policy) => sql`${policy}`),
+          sql`, `,
+        )})
+      ORDER BY policyname
+    `);
+    const withoutReach = policies.rows
+      .filter(
+        ({ expression }) =>
+          !expression.includes("s.bound_workspace_id") ||
+          !expression.includes("s.bound_client_id"),
+      )
+      .map(({ policy }) => policy);
+
+    expect(policies.rows.map(({ policy }) => policy)).toEqual([
+      ...CHILD_ROW_POLICIES,
+    ]);
+    expect(withoutReach).toEqual([]);
   });
 
   test("a member may create a team skill only for a matter they reach", async () => {

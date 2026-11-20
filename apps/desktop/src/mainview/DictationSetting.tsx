@@ -35,8 +35,11 @@ import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
+import { DictationInputFix } from "./DictationInputFix";
+import { DictationMicrophoneRow } from "./DictationMicrophone";
 import {
   SettingsGroup,
   SettingsPageHeader,
@@ -68,6 +71,9 @@ export type DictationSnapshot = {
   cloudAvailable: boolean;
   /** The stella AI model the user picked; null: the region's default. */
   cloudModel: string | null;
+  /** The speaker's custom words, kept on this computer for the dictation
+   *  account. */
+  customWords: string[];
   /** Where speech is transcribed: always this computer while stella AI is
    *  not available. */
   destination: DictationDestinationValue;
@@ -90,6 +96,7 @@ export type DictationSnapshot = {
     | "focusUnconfirmed"
     | "microphone"
     | "modelMissing"
+    | "nothingHeard"
     | "passwordField"
     | "shortcutHeld"
     | "transcription"
@@ -120,6 +127,11 @@ const languageHasEffect = (snapshot: DictationSnapshot): boolean =>
   snapshot.cleanup ||
   snapshot.destination === "cloud" ||
   (snapshot.model.status === "ready" && snapshot.language.supported.length > 0);
+
+/** Custom words reach stella AI transcription and AI cleanup only; with
+ *  neither they change nothing, so they are hidden. */
+const customWordsHaveEffect = (snapshot: DictationSnapshot): boolean =>
+  snapshot.cleanup || snapshot.destination === "cloud";
 
 /** Orders the snapshots the native side answers with. Each read or change
  *  takes a ticket as it starts; an answer is shown only when no answer to a
@@ -200,12 +212,17 @@ export const useDictationAvailability = () => {
 /** The Dictation page: the switch, where speech is transcribed, AI cleanup,
  *  the speech model and what went wrong. Renders nothing for an account
  *  without the feature. */
-export const DictationSetting = () => {
+export const DictationSetting = ({
+  focus = null,
+  onFocusShown = ignoreFocusShown,
+}: Partial<DictationFocus>) => {
   // Reading again after a failure starts the page afresh.
   const [attempt, setAttempt] = useState(0);
   return (
     <DictationPage
+      focus={focus}
       key={attempt}
+      onFocusShown={onFocusShown}
       onRetry={() => {
         setAttempt((current) => current + 1);
       }}
@@ -213,7 +230,19 @@ export const DictationSetting = () => {
   );
 };
 
-const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
+const ignoreFocusShown = () => undefined;
+
+type DictationFocus = {
+  /** Where a link that opened the page points: the microphone choice. */
+  focus: "microphone" | null;
+  onFocusShown: () => void;
+};
+
+const DictationPage = ({
+  focus,
+  onFocusShown,
+  onRetry,
+}: DictationFocus & { onRetry: () => void }) => {
   const t = useTranslations("dictation");
   const tDestination = useTranslations("dictation.destination");
   const locale = useLocale();
@@ -328,6 +357,9 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
     await change("dictation_set_cloud_model", { modelId });
   };
 
+  const setCustomWords = async (words: string[]) =>
+    await change("dictation_set_custom_words", { words });
+
   const download = async () => {
     await change("dictation_download_model");
   };
@@ -381,10 +413,15 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
           {snapshot.failureKeptInHistory && ` ${t("failureKeptInHistory")}`}
         </p>
       )}
+      {(snapshot.failure === "microphone" ||
+        snapshot.failure === "nothingHeard") && (
+        // Keyed by the failure, so a new one reads its action afresh.
+        <DictationInputFix key={snapshot.failure} />
+      )}
       {snapshot.enabled && (
         <>
-          {snapshot.holdKeys.length > 1 && (
-            <SettingsGroup title={t("groups.shortcut")}>
+          <SettingsGroup title={t("groups.shortcut")}>
+            {snapshot.holdKeys.length > 1 && (
               <DictationHoldKeyRow
                 holdKey={snapshot.holdKey}
                 holdKeys={snapshot.holdKeys}
@@ -393,8 +430,12 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
                   void setHoldKey(holdKey);
                 }}
               />
-            </SettingsGroup>
-          )}
+            )}
+            <DictationMicrophoneRow
+              focused={focus === "microphone"}
+              onFocused={onFocusShown}
+            />
+          </SettingsGroup>
           <SettingsGroup title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
@@ -479,6 +520,12 @@ const DictationPage = ({ onRetry }: { onRetry: () => void }) => {
               />
             )}
           </SettingsGroup>
+          {customWordsHaveEffect(snapshot) && (
+            <DictationCustomWords
+              onChange={setCustomWords}
+              words={snapshot.customWords}
+            />
+          )}
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||

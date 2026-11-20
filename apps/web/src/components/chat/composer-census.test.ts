@@ -26,7 +26,7 @@ components/ai-suggestions/host.tsx
 components/chat-input-surface.tsx
 components/inspector/chat-tab-panel.tsx
 routes/_protected.chat/-components/chat-index.page.tsx
-routes/_protected.chat/-components/chat-thread-page.tsx
+routes/_protected.chat/-components/chat-thread.page.tsx
 routes/dev/-components/chat-composer-reference-playground.tsx
 routes/dev/-components/chat-long-paste-playground.tsx
 routes/knowledge/-components/template-studio-chat.tsx`;
@@ -67,7 +67,7 @@ const sendEntryPoints = {
     controllerSubmit: 1,
     promptBar: 1,
   },
-  "routes/_protected.chat/-components/chat-thread-page.tsx": {
+  "routes/_protected.chat/-components/chat-thread.page.tsx": {
     chatInputSurface: 1,
     controllerSubmit: 1,
   },
@@ -116,7 +116,7 @@ const runOnDeclines = {
 
 const followupSurfaces = `components/ai-suggestions/file-chat-overlay.tsx
 components/inspector/chat-tab-panel.tsx
-routes/_protected.chat/-components/chat-thread-page.tsx`;
+routes/_protected.chat/-components/chat-thread.page.tsx`;
 
 describe("chat composer census", () => {
   test("pins every chat editor module", () => {
@@ -212,7 +212,7 @@ describe("chat composer census", () => {
     expect(strays).toEqual([]);
     for (const surface of [
       "routes/_protected.chat/-components/chat-index.page.tsx",
-      "routes/_protected.chat/-components/chat-thread-page.tsx",
+      "routes/_protected.chat/-components/chat-thread.page.tsx",
       "components/inspector/chat-tab-panel.tsx",
     ]) {
       const source = sourceOf(surface);
@@ -223,29 +223,29 @@ describe("chat composer census", () => {
     }
   });
 
-  test("every follow-up chip surface gives its editor the same follow-up", () => {
+  test("follow-ups appear only under the answer they follow", () => {
+    // Every surface that fetches suggestions hands them to the transcript,
+    // which draws them after the answer's actions; none draws its own row
+    // over the answer or beside the composer.
     const discovered = sourceModules.filter((file) =>
-      /<SuggestedFollowupChips\b/u.test(sourceOf(file)),
+      /\buseSuggestedFollowupPrompts\s*\(/u.test(sourceOf(file)),
     );
     expect(discovered.join("\n")).toBe(followupSurfaces);
 
     const failures: string[] = [];
     for (const file of discovered) {
-      const source = sourceOf(file);
-      const sharesFollowupSource =
-        /const\s*\{[\s\S]*?suggestedFollowupPrompt[\s\S]*?\}\s*=\s*useSuggestedFollowupPrompts\s*\(/u.test(
-          source,
-        );
-      const givesFollowupToEditor =
-        /useChatEditor\s*\(\s*\{[\s\S]*?suggestedFollowupPrompt[\s\S]*?\}\s*\)/u.test(
-          source,
-        );
-      if (!sharesFollowupSource || !givesFollowupToEditor) {
+      if (!/<ChatThreadMessages\b[\s\S]*?followUps=\{/u.test(sourceOf(file))) {
         failures.push(
-          `${file} renders SuggestedFollowupChips but its shared composer does not pass suggestedFollowupPrompt to useChatEditor`,
+          `${file} fetches follow-ups but does not give them to ChatThreadMessages`,
         );
       }
     }
     expect(failures).toEqual([]);
+    const drawers = sourceModules.filter(
+      (file) =>
+        file !== "features/chat/components/suggested-followups.tsx" &&
+        /<SuggestedFollowups\b/u.test(sourceOf(file)),
+    );
+    expect(drawers).toEqual(["components/chat/chat-thread-messages.tsx"]);
   });
 });

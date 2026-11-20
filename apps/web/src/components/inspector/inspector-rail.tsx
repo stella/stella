@@ -41,6 +41,7 @@ import {
   railChatOpenArgs,
   railChatSkill,
 } from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -48,6 +49,7 @@ import {
 import type {
   ChatTab,
   InspectorTab,
+  InspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
@@ -143,13 +145,14 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(
-      railChatOpenArgs({
+    onOpenChat({
+      ...railChatOpenArgs({
         activeSkill,
         legalDocument,
         workspaceId: routeWorkspaceId,
       }),
-    );
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   };
 
   const toggleLabel = (() => {
@@ -250,16 +253,7 @@ type InspectorRailProps = {
   minimized: boolean;
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onOpenChat: (
-    args?: Parameters<
-      (args?: {
-        label?: string;
-        workspaceId?: string | undefined;
-        contextMatterIds?: string[];
-        activeSkill?: ChatTab["activeSkill"];
-      }) => void
-    >[0],
-  ) => void;
+  onOpenChat: InspectorTabsStore["openChat"];
   onSetMinimized: (minimized: boolean) => void;
   tabs: InspectorTab[];
 };

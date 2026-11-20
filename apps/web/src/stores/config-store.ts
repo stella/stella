@@ -15,7 +15,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 type ViewMode = "grid" | "table";
 type MattersGroupBy = "none" | "client";
 
-type MattersConfig = {
+export type MattersConfig = {
   viewMode: ViewMode;
   sortKey: MattersSortKey;
   sortDesc: boolean;

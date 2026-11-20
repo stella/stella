@@ -13,13 +13,13 @@ import type { ListingCourtIdentity } from "@/api/lib/case-law/decision-court-ide
 import { splitStoredDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { FALLBACK_DECISION_IDENTITY_PREFIX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
-import {
-  payloadCarriesDocument,
-  rowHoldsDocumentFor,
-} from "@/api/lib/case-law/stored-payload";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
-import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
+import {
+  corpusContentHash,
+  payloadCarriesDocument,
+} from "@/api/lib/legal-search/corpus-content-hash";
 import {
   decisionIdentifiersFromPersistedMetadata,
   storeDecisionIdentifiersInMetadata,

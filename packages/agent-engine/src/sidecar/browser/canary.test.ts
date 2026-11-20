@@ -27,6 +27,7 @@ import {
   toolCalls,
   toolResults,
 } from "../../../scripts/fake-desktop";
+import { readFakeHarnessLog } from "../../../scripts/fake-harness-peer";
 import { browserEndpointFor } from "./holder-browser";
 
 /**
@@ -208,12 +209,7 @@ const browse = async (
   // What the fake agent noted on this computer about the pages it read.
   const harnessLogFile = path.join(root, "fake.log");
   // No file when the harness never started; the run's outcome says why.
-  const harnessLog = (
-    existsSync(harnessLogFile) ? readFileSync(harnessLogFile, "utf-8") : ""
-  )
-    .split("\n")
-    .filter((line) => line !== "")
-    .map((line): unknown => JSON.parse(line));
+  const harnessLog = readFakeHarnessLog(harnessLogFile);
   return { api, chrome, chunks, desktop, finished, harnessLog, library };
 };
 

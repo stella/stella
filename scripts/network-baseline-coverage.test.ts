@@ -475,6 +475,8 @@ test("public visitor declarations resolve tools only when the tool route needs t
     "/knowledge/templates/catalogue/general-legal/sample",
     "/knowledge/tools/contract-review",
     "/knowledge/tools/contribute",
+    "/knowledge/playbooks/catalogue",
+    "/knowledge/tools/catalogue",
   ]);
   expect(routes[2]).toEqual({
     path: "/knowledge/tools/contract-review",

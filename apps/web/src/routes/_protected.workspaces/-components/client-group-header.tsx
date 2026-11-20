@@ -9,6 +9,11 @@ import { cn } from "@stll/ui/utils";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";
+import {
+  CLIENT_GROUP_BAND_CLASS,
+  CLIENT_GROUP_COUNT_CLASS,
+  CLIENT_GROUP_TITLE_CLASS,
+} from "@/routes/_protected.workspaces/-components/client-group-section.pending";
 
 type ClientGroupHeaderProps = {
   group: WorkspaceGroup;
@@ -35,13 +40,7 @@ export const ClientGroupHeader = ({
       variant="plain"
     >
       {/* The sticky band the matters scroll under. */}
-      <span
-        className={cn(
-          "flex w-full items-center gap-2",
-          "bg-background/95 border-b backdrop-blur-sm",
-          "pt-4 pb-2 group-first/client-section:pt-0",
-        )}
-      >
+      <span className={CLIENT_GROUP_BAND_CLASS}>
         <DirectionalIcon
           className={cn(
             "text-muted-foreground size-3.5 shrink-0 transition-transform",
@@ -50,7 +49,7 @@ export const ClientGroupHeader = ({
           flip={collapsed}
           icon={ChevronRightIcon}
         />
-        <h3 className="text-sm font-semibold">
+        <h3 className={CLIENT_GROUP_TITLE_CLASS}>
           {group.type === "personal" ? (
             <span>{personalLabel}</span>
           ) : (
@@ -86,12 +85,7 @@ export const ClientGroupHeader = ({
             </span>
           )}
         </h3>
-        <span
-          className={cn(
-            "bg-muted rounded-full px-1.5 py-0.5",
-            "text-muted-foreground text-3xs tabular-nums",
-          )}
-        >
+        <span className={CLIENT_GROUP_COUNT_CLASS}>
           {format.number(matterCount)}
         </span>
         {group.type === "client" && group.responsibleAttorneyName && (

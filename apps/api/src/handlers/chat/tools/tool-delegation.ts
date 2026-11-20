@@ -189,6 +189,7 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     reason:
       "The memories create handler is internal to assistant chat, absent from the capability catalog; persistExplicitMemory owns persistence.",
   },
+  save_skill_package: { type: "capability", delegatesTo: "skills.create" },
   "search-chat-history": {
     type: "waiver",
     reason: "Searches authorized chat messages without modifying them.",
@@ -211,6 +212,11 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     delegatesTo: "skills.resources.update",
   },
   "update-entity-fields": { type: "capability", delegatesTo: "fields.upsert" },
+  validate_skill_package: {
+    type: "waiver",
+    reason:
+      "Checks a package in memory, or a skill the caller may edit, without modifying it.",
+  },
   spawn_subagents: {
     type: "waiver",
     reason:

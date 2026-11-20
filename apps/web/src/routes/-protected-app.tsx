@@ -42,6 +42,7 @@ import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
@@ -258,14 +259,18 @@ export const ProtectedAppFrame = ({
       return;
     }
     if (activeWorkspaceId) {
-      store.openChat(newChatMatterScope(activeWorkspaceId));
+      store.openChat({
+        ...newChatMatterScope(activeWorkspaceId),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
     }
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
   useHotkey(useEffectiveHotkey("newChat"), () => {
-    useInspectorTabsStore
-      .getState()
-      .openChat(newChatMatterScope(activeWorkspaceId));
+    useInspectorTabsStore.getState().openChat({
+      ...newChatMatterScope(activeWorkspaceId),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   });
 
   return (
@@ -361,11 +366,12 @@ function ProtectedContent() {
       // No tabs yet — open a new chat. With a matter context the
       // chat is workspace-scoped and seeded with that matter's
       // contextMatterIds; outside a matter we open a global chat.
-      openInspectorChat(
-        workspaceId === undefined
+      openInspectorChat({
+        ...(workspaceId === undefined
           ? {}
-          : { workspaceId, contextMatterIds: [workspaceId] },
-      );
+          : { workspaceId, contextMatterIds: [workspaceId] }),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
       return;
     }
     toggleInspector();
@@ -403,11 +409,12 @@ function ProtectedContent() {
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
-    openInspectorChat(
-      workspaceId === undefined
+    openInspectorChat({
+      ...(workspaceId === undefined
         ? {}
-        : { workspaceId, contextMatterIds: [workspaceId] },
-    );
+        : { workspaceId, contextMatterIds: [workspaceId] }),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     setChatMenuOpen(false);
   };
 

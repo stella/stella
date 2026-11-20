@@ -36,6 +36,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useEntityRowHost } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-host";
 import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout";
+import { isGroupedTableView } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
 import { useTableColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
@@ -77,10 +78,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     openIfAIUnavailable();
   });
 
-  if (
-    view.layout.groupByPropertyId &&
-    !includesListItems(view.layout.filters)
-  ) {
+  if (isGroupedTableView(view)) {
     return (
       <GroupedTableLayout
         key={tableKey}

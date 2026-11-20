@@ -19,11 +19,17 @@ import { describe, expect, test } from "bun:test";
 
 import { resolveDecisionIdentity } from "@stll/api-contract/decision-query-intent";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/decision-reporter-grammar";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  type DecisionIdentifierType,
+  normalizeStructuredDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
 
 import {
   decisionIdentityLocatorOf,
   decisionIdentityReadKeys,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import { normalizeDecisionIdentifierValueIn } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { plannedIdentifiers } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import { decisionResolveIntent } from "@/api/handlers/legal-resolve/decision-constraints";
@@ -109,6 +115,7 @@ describe("every decision resolves by the references it displays", () => {
         const entries = [
           result.caseNumber,
           ...(result.ecli === undefined ? [] : [result.ecli]),
+          ...storedIdentityOf(result).identifierRows.map(({ value }) => value),
         ];
         expect(
           entries
@@ -189,5 +196,231 @@ describe("a reference no grammar claims", () => {
     expect(resolverReadOf("CZE", "29 Cdo 4084/2009").intent.kind).toBe(
       "docket",
     );
+  });
+});
+
+/** A displayed value of every stored kind, including ones no grammar claims. */
+const IDENTIFIER_EXAMPLES = {
+  [DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER]: {
+    country: "CZE",
+    value: "ÚOHS-S0236/2016/KD-17418/2016/851/LŠt",
+  },
+  [DECISION_IDENTIFIER_TYPES.CASE_NUMBER]: {
+    country: "CZE",
+    value: "29 Cdo 4084/2009",
+  },
+  [DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER]: {
+    country: "EU",
+    value: "SA.12345",
+  },
+  [DECISION_IDENTIFIER_TYPES.ECLI]: {
+    country: "CZE",
+    value: "ECLI:CZ:NS:2020:29.CDO.4084.2009.1",
+  },
+  [DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION]: {
+    country: "GBR",
+    value: "[2024] CSIH 4",
+  },
+  [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION]: {
+    country: "CZE",
+    value: "Rc 60/2015",
+  },
+} as const satisfies Record<
+  DecisionIdentifierType,
+  { country: string; value: string }
+>;
+
+describe("every stored identifier kind remains reachable", () => {
+  for (const type of Object.values(DECISION_IDENTIFIER_TYPES)) {
+    test(type, () => {
+      const { country, value } = IDENTIFIER_EXAMPLES[type];
+      const { intent, keys } = resolverReadOf(country, value);
+      expect(keys.identifierRows).toContainEqual({
+        type,
+        keys: expect.arrayContaining([
+          normalizeDecisionIdentifierValueIn(country, type, value),
+        ]),
+      });
+      const resolution = resolveDecisionIdentity(
+        intent,
+        [
+          {
+            caseNumber: "unrelated primary reference",
+            ecli: null,
+            identifiers: [{ type, value }],
+          },
+        ],
+        { reporters: decisionReporterGrammarForJurisdiction(country) },
+      );
+      expect(["unique", "incomplete_identifier"]).toContain(resolution.status);
+      const reference = decisionIdentityReadKeys({
+        country,
+        locator: { kind: "reference", value },
+      });
+      expect(reference.identifierRows).toContainEqual({
+        type,
+        keys: [normalizeDecisionIdentifierValueIn(country, type, value)],
+      });
+    });
+  }
+
+  test("recognized collection citations read only typed reporter rows", () => {
+    for (const entry of ["Rc 60/2015", "R 60/2014", "č. 3528/2017 Sb. NSS"]) {
+      const { intent, keys } = resolverReadOf("CZE", entry);
+      expect(intent.kind).toBe("reporter");
+      expect(keys.ownColumn).toBeNull();
+      expect(keys.identifierRows.map(({ type }) => type)).toEqual([
+        DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      ]);
+      for (const type of Object.values(DECISION_IDENTIFIER_TYPES)) {
+        if (type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION) {
+          continue;
+        }
+        expect(
+          resolveDecisionIdentity(
+            intent,
+            [
+              {
+                caseNumber: entry,
+                ecli: null,
+                identifiers: [{ type, value: entry }],
+              },
+            ],
+            { reporters: decisionReporterGrammarForJurisdiction("CZE") },
+          ).status,
+        ).toBe("none");
+      }
+    }
+  });
+});
+
+describe("Constitutional Court reporter references", () => {
+  const reported = {
+    caseNumber: "Pl. ÚS 18/01",
+    ecli: null,
+    identifiers: [{ type: "reporter-citation", value: "N 53/26 SbNU 73" }],
+  } as const;
+  for (const entry of [
+    "N 53/26 SbNU 73",
+    "N 53/26 SbNU",
+    "svazek 26, nález č. 53",
+    "SbNU sv. 26 N 53",
+  ]) {
+    test(`retains one identity through parse, stored-key lookup and filtering: ${entry}`, () => {
+      const { intent, keys } = resolverReadOf("CZE", entry);
+      expect(intent.kind).toBe("reporter");
+      expect(intent.value).toBe("SbNU sv. 26 N 53");
+      expect(resolverReadOf("CZE", intent.value).intent).toEqual(intent);
+      expect(keys.identifierRows).toContainEqual({
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        keys: [
+          normalizeDecisionIdentifierValueIn(
+            "CZE",
+            DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            reported.identifiers[0].value,
+          ),
+        ],
+      });
+      expect(
+        resolveDecisionIdentity(intent, [reported], {
+          reporters: decisionReporterGrammarForJurisdiction("CZE"),
+        }).status,
+      ).toBe("unique");
+      for (const value of ["U 53/26 SbNU 73", "N 5/326 SbNU 73"]) {
+        expect(
+          resolveDecisionIdentity(
+            intent,
+            [
+              {
+                ...reported,
+                identifiers: [{ type: "reporter-citation", value }],
+              },
+            ],
+            { reporters: decisionReporterGrammarForJurisdiction("CZE") },
+          ).status,
+        ).toBe("none");
+      }
+      expect(
+        resolveDecisionIdentity(
+          intent,
+          [
+            {
+              ...reported,
+              identifiers: [{ type: "case-number", value: entry }],
+            },
+          ],
+          { reporters: decisionReporterGrammarForJurisdiction("CZE") },
+        ).status,
+      ).toBe("none");
+    });
+  }
+  test("does not claim a bare gazette number as a decision reporter", () => {
+    expect(
+      decisionReporterGrammarForJurisdiction("CZE")?.canonicalCitation(
+        "234/2002 Sb.",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("Czech collection keys across writer generations", () => {
+  for (const { suffix, canonical } of [
+    { suffix: "ob", canonical: "Rc 45/2012" },
+    { suffix: "obč", canonical: "Rc 45/2012" },
+    { suffix: "tr", canonical: "Rt 45/2012" },
+  ]) {
+    for (const marker of ["č", "c"]) {
+      const value = `${marker}. 45/2012 Sb. rozh. ${suffix}.`;
+      test(`reads both the canonical writer key and the actual legacy key: ${value}`, () => {
+        const type = DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
+        const writerKey = normalizeDecisionIdentifierValueIn(
+          "CZE",
+          type,
+          value,
+        );
+        const legacyKey = normalizeStructuredDecisionIdentifier({
+          type,
+          value,
+        });
+        expect(writerKey).toBe(
+          normalizeStructuredDecisionIdentifier({ type, value: canonical }),
+        );
+        expect(writerKey).not.toBe(legacyKey);
+        for (const entry of [value, canonical]) {
+          const { intent, keys } = resolverReadOf("CZE", entry);
+          expect(intent.kind).toBe("reporter");
+          expect(intent.value).toBe(canonical);
+          expect(keys.identifierRows).toContainEqual({
+            type,
+            keys: expect.arrayContaining([writerKey, legacyKey]),
+          });
+          expect(
+            resolveDecisionIdentity(
+              intent,
+              [
+                {
+                  caseNumber: "unrelated primary reference",
+                  ecli: null,
+                  identifiers: [{ type, value }],
+                },
+              ],
+              { reporters: decisionReporterGrammarForJurisdiction("CZE") },
+            ).status,
+          ).toBe("unique");
+        }
+      });
+    }
+  }
+  test("retains old ASCII NSS marker keys while the writer uses its canonical spelling", () => {
+    const type = DECISION_IDENTIFIER_TYPES.REPORTER_CITATION;
+    const value = "c. 3528/2017 Sb. NSS";
+    const writerKey = normalizeDecisionIdentifierValueIn("CZE", type, value);
+    const legacyKey = normalizeStructuredDecisionIdentifier({ type, value });
+    expect(writerKey).not.toBe(legacyKey);
+    const { keys } = resolverReadOf("CZE", "č. 3528/2017 Sb. NSS");
+    expect(keys.identifierRows).toContainEqual({
+      type,
+      keys: expect.arrayContaining([writerKey, legacyKey]),
+    });
   });
 });

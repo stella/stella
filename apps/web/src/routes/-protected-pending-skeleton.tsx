@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import type { ReactElement } from "react";
 
 import type { RouteComponent } from "@tanstack/react-router";
@@ -35,19 +36,53 @@ import {
 } from "@/components/sidebar-sizing";
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
+import {
+  rememberedTimeBillingAccess,
+  rememberedTimeBillingAccessHint,
+} from "@/lib/workspaces/time-billing-access-memory";
 
-// The primary entries every signed-in person sees, from the same list the
-// real sidebar renders. Flag-gated entries (inbox, timesheets, case law) join
-// once the real sidebar mounts, rather than flashing in and out here.
-const STATIC_NAV_ITEMS = getWorkspacePrimaryNavItems({
-  includeInbox: false,
-  includePublicLaw: false,
-  includePublicTools: false,
-  includeTimesheets: false,
-  publicKnowledge: false,
-});
+type PrimaryNavItem = ReturnType<typeof getWorkspacePrimaryNavItems>[number];
+
+const neverChanges = () => () => undefined;
+
+/**
+ * The primary entries the real sidebar's first paint shows, from the same
+ * list and the same inputs, so the nav keeps its length when the sidebar
+ * replaces the frame. What the build decides (case law, Knowledge, the inbox
+ * when the deployment ships it) is read as it is: the server and the client
+ * read the same build, so even the server's paint has those entries. What
+ * this browser keeps is read once the page can read it, never during
+ * hydration (the server has no browser storage): the inbox preview switch,
+ * and the member's last time billing answer, which the sidebar also shows
+ * until the server answers again (for the member's organization once the
+ * frame knows it, before that whichever one this browser kept).
+ */
+const usePendingNavItems = (
+  inspectorScope: InspectorStorageScope | undefined,
+): readonly PrimaryNavItem[] => {
+  const includeInbox = usePublicShellInboxEntryEnabled();
+  const includeTimesheets = useSyncExternalStore(
+    neverChanges,
+    () =>
+      inspectorScope === undefined
+        ? rememberedTimeBillingAccessHint()
+        : rememberedTimeBillingAccess(inspectorScope.organizationId),
+    () => false,
+  );
+  return getWorkspacePrimaryNavItems({
+    includeInbox,
+    includePublicLaw: isPublicLawEnabled(),
+    // The app sidebar never lists the public tools catalogue.
+    includePublicTools: false,
+    includeTimesheets,
+    publicKnowledge: isPublicKnowledgeEnabled(),
+  });
+};
 const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 
 // Static, SSR-safe placeholder for the client-only `_protected` subtree.
@@ -116,7 +151,7 @@ function PendingPageBody({ body: Body }: { body: RouteComponent | undefined }) {
 const NavItemLabel = ({
   labelKey,
 }: {
-  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+  labelKey: PrimaryNavItem["labelKey"];
 }) => {
   const t = useTranslations();
   return t(labelKey);
@@ -128,7 +163,7 @@ function NavItemText({
   sidebarOpen,
 }: {
   intlMounted: boolean;
-  labelKey: (typeof STATIC_NAV_ITEMS)[number]["labelKey"];
+  labelKey: PrimaryNavItem["labelKey"];
   sidebarOpen: boolean;
 }) {
   if (!intlMounted) {
@@ -160,6 +195,7 @@ function ProtectedPendingSkeletonContent({
   inspectorScope: InspectorStorageScope | undefined;
 }) {
   const intlMounted = useIntlMounted();
+  const navItems = usePendingNavItems(inspectorScope);
   const { prefs } = usePresentationPrefs();
   const viewportWidth = useViewportWidth();
   // The restore policy the authenticated frame applies, on the stored tabs:
@@ -220,8 +256,12 @@ function ProtectedPendingSkeletonContent({
           </span>
         </div>
         <div className="flex flex-col gap-1 p-2">
-          {STATIC_NAV_ITEMS.map((item) => (
-            <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
+          {navItems.map((item) => (
+            <div
+              className="flex h-8 items-center gap-2 px-2"
+              data-nav-item={item.id}
+              key={item.id}
+            >
               <item.icon className="text-muted-foreground size-4 shrink-0" />
               <NavItemText
                 intlMounted={intlMounted}

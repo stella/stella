@@ -2,21 +2,24 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { parsePlainDate } from "@stll/time";
-import { Skeleton } from "@stll/ui/skeleton";
 
-import { todayIn } from "@/components/billing/work-week.logic";
-import { MyWeek, myWeekQueries } from "@/features/my-week/my-week";
+import { todayIn, weekOf } from "@/components/billing/work-week.logic";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { routeSearchSchema } from "@/route-search-params";
 import { routePresentation } from "@/routes/-route-presentation";
+
+import { MyWeekPage } from "./-my-week.page";
+import { MyWeekPending } from "./-my-week.pending";
 
 export const Route = createFileRoute("/_protected/time")({
   staticData: {
@@ -54,67 +57,35 @@ export const Route = createFileRoute("/_protected/time")({
       redirect({ to: "/workspaces", throw: true });
     }
   },
-  loader: async ({ context, deps }) => {
-    const { timezoneId } = context.user;
-    const queries = myWeekQueries({
-      organizationId: context.user.activeOrganizationId,
-      userId: context.user.id,
+  loader: async ({ cause, context, deps }) => {
+    const {
+      activeOrganizationId: organizationId,
+      id: userId,
       timezoneId,
-      date: deps.date ?? todayIn(timezoneId),
+    } = context.user;
+    const week = weekOf(deps.date ?? todayIn(timezoneId));
+    const range = { startDate: week.start, endDate: week.end };
+    const entries = myTimeEntriesInfiniteOptions(organizationId, userId, range);
+    const suggestions = myTimeSuggestionsOptions(organizationId, userId, {
+      ...range,
+      timezoneId,
     });
+    let hasCachedPages = true;
+    for (const options of [entries, suggestions]) {
+      if (context.queryClient.getQueryData(options.queryKey) === undefined) {
+        hasCachedPages = false;
+        break;
+      }
+    }
+    if (routeLoadMode({ cause, hasCachedPages }) === "background") {
+      return;
+    }
     await Promise.all([
-      ensureRouteInfiniteQueryData(context.queryClient, queries.entries),
-      ensureRouteQueryData(context.queryClient, queries.suggestions),
+      ensureRouteInfiniteQueryData(context.queryClient, entries),
+      ensureRouteQueryData(context.queryClient, suggestions),
     ]);
   },
   pendingComponent: MyWeekPending,
   component: MyWeekPage,
   head: () => ({ meta: [{ title: pageTitle("billing.timesheets") }] }),
 });
-
-function MyWeekPending() {
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-11 w-64" />
-      </div>
-      <div className="grid grid-cols-7 gap-1 border-b px-4 py-2">
-        {Array.from({ length: 7 }, (_, index) => (
-          <Skeleton className="h-14 rounded-md" key={index} />
-        ))}
-      </div>
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 p-4">
-        <Skeleton className="h-5 w-48" />
-        {Array.from({ length: 3 }, (_, index) => (
-          <Skeleton className="h-14 w-full rounded-lg" key={index} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MyWeekPage() {
-  const searchDate = Route.useSearch({ select: (search) => search.date });
-  const { organizationId, userId, timezoneId } = Route.useRouteContext({
-    select: (context) => ({
-      organizationId: context.user.activeOrganizationId,
-      userId: context.user.id,
-      timezoneId: context.user.timezoneId,
-    }),
-  });
-  const navigate = Route.useNavigate();
-
-  return (
-    <MyWeek
-      date={searchDate ?? todayIn(timezoneId)}
-      onSelectDate={(date) =>
-        detached(navigate({ search: { date } }), "my-week.navigate")
-      }
-      onToday={() => detached(navigate({ search: {} }), "my-week.today")}
-      organizationId={organizationId}
-      timezoneId={timezoneId}
-      userId={userId}
-    />
-  );
-}

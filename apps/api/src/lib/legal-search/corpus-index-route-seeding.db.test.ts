@@ -127,7 +127,7 @@ const insertDecisions = async (tx: Transaction, ns: readonly number[]) => {
       caseNumber: `${n} As 1/2020`,
       court: "Nejvyšší správní soud",
       country: n % 2 === 0 ? "CZE" : "POL",
-      language: "cs",
+      language: n % 2 === 0 ? "cs" : "pl",
       contentHash: String(n % 10).repeat(64),
     })),
   );

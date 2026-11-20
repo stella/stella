@@ -19,7 +19,10 @@ import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { PlaybooksBreadcrumb } from "@/components/breadcrumbs/playbooks-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
-import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
+import {
+  SkillBreadcrumb,
+  ToolBreadcrumb,
+} from "@/components/breadcrumbs/skill-breadcrumb";
 import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -121,6 +124,9 @@ function renderBreadcrumb(
   }
   if (decision.detail === "skill") {
     return <SkillBreadcrumb />;
+  }
+  if (decision.detail === "tool") {
+    return <ToolBreadcrumb />;
   }
   return <TemplatesBreadcrumb />;
 }

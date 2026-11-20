@@ -142,6 +142,37 @@ describe("buildRegistryWriteSummaryRows", () => {
     ]);
   });
 
+  test("save_skill_package names the skill, its scope and every file, never their text", () => {
+    const rows = build("save_skill_package", {
+      scope: "team",
+      skillMd: '---\nname: "contract-review"\ndescription: Reviews.\n---\nBody',
+      resources: [
+        { path: "references/a.md", content: "Secret text" },
+        { path: "references/b.md", content: "More text" },
+      ],
+    });
+
+    expect(rows.map(({ label, value }) => [label, value])).toEqual([
+      ["Skill", "contract-review"],
+      ["Scope", "team"],
+      ["Skill md", "SKILL.md"],
+      ["Files", "references/a.md; references/b.md"],
+    ]);
+    expect(JSON.stringify(rows)).not.toContain("Secret text");
+  });
+
+  test("save_skill_package names the saved skill and the files a call removes", () => {
+    const rows = build("save_skill_package", {
+      skillId: "44444444-4444-4444-8444-444444444444",
+      deletePaths: ["references/old.md"],
+    });
+
+    expect(rows.map(({ label, value }) => [label, value])).toEqual([
+      ["Skill id", "44444444-4444-4444-8444-444444444444"],
+      ["Delete paths", "references/old.md"],
+    ]);
+  });
+
   test("save_playbook names every position of a grouped save in full", () => {
     const issues = Array.from(
       { length: 5 },

@@ -15,6 +15,8 @@ import contract from "./desktop-dictation-transcription.json";
 import {
   MAX_TRANSCRIPTION_AUDIO_BYTES,
   MAX_TRANSCRIPTION_AUDIO_SECONDS,
+  MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS,
 } from "./transcription";
 
 test("the typed transcription contract reads the native one", () => {
@@ -26,6 +28,8 @@ test("the typed transcription contract reads the native one", () => {
     transcriptsPath: DESKTOP_DICTATION_TRANSCRIPTS_PATH,
     maxAudioBytes: MAX_TRANSCRIPTION_AUDIO_BYTES,
     maxAudioSeconds: MAX_TRANSCRIPTION_AUDIO_SECONDS,
+    maxVocabularyTerms: MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+    maxVocabularyTermLength: MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
   });
 });
 

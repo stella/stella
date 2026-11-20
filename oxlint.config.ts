@@ -1890,7 +1890,9 @@ const config = defineConfig({
       {
         routeFiles: [
           "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/tools.page.tsx",
           "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+          "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
         ],
       },
     ],
@@ -6065,6 +6067,7 @@ const config = defineConfig({
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
               "apps/api/src/env-ingestion.ts",
+              "apps/api/src/env-soft-law.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/env-file-derivative-worker.ts",
@@ -8053,7 +8056,7 @@ const config = defineConfig({
         "apps/web/src/components/auth/password-sign-in-form.tsx",
         "apps/web/src/components/auth/sign-in-panel.tsx",
         "apps/web/src/components/organization/invite-member-dialog.tsx",
-        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+        "apps/web/src/routes/auth/-error.page.tsx",
       ],
       rules: {
         "require-valibot-message/require-valibot-message": "error",

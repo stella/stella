@@ -48,6 +48,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type {
   AttemptStep,
+  DecisionRecoveryFence,
   DecisionRowWriteStatus,
   ProcessDecisionAttemptOptions,
   ProcessDecisionOptions,
@@ -141,11 +142,39 @@ const settleRowWriteStatus = async ({
 const storedInputMatchesDecision = (
   input: ProcessDecisionAttemptOptions["inputProvenance"],
   existing: DecisionRowWrite["existing"],
-) =>
-  input.type !== "stored" ||
-  (existing !== undefined &&
-    existing.id === input.decisionId &&
-    existing.sourceRawS3Key === input.sourceRawS3Key);
+): boolean => {
+  switch (input.type) {
+    case "observation":
+      return true;
+    case "stored":
+      return (
+        existing !== undefined &&
+        existing.id === input.decisionId &&
+        existing.sourceRawS3Key === input.sourceRawS3Key
+      );
+    case "recovery":
+      return existing !== undefined && existing.id === input.fence.decisionId;
+    default:
+      input satisfies never;
+      return panic("Unhandled decision input provenance");
+  }
+};
+
+const provenanceDecisionId = (
+  input: ProcessDecisionAttemptOptions["inputProvenance"],
+) => {
+  switch (input.type) {
+    case "observation":
+      return undefined;
+    case "stored":
+      return input.decisionId;
+    case "recovery":
+      return input.fence.decisionId;
+    default:
+      input satisfies never;
+      return panic("Unhandled decision input provenance");
+  }
+};
 
 /**
  * A decision without a publisher id whose docket, court and evidence do not
@@ -276,10 +305,7 @@ const runDecisionAttempt = async (
         sourceId,
         statedEcliIdentity,
         proposedDecisionId,
-        storedDecisionId:
-          inputProvenance.type === "stored"
-            ? inputProvenance.decisionId
-            : undefined,
+        storedDecisionId: provenanceDecisionId(inputProvenance),
       }),
   );
   const { existing, decisionId, composition } = identity;
@@ -568,6 +594,25 @@ export const processStoredDecision = async (
       ...options,
       refresh: DECISION_REFRESH.ALWAYS,
       inputProvenance: { type: "stored", sourceRawS3Key, decisionId },
+    },
+    resolveSourceContract,
+  );
+
+/** Fresh publisher bytes, admitted only by the selected observation's atomic row fence. */
+export const processRecoveredDecision = async (
+  {
+    fence,
+    ...options
+  }: Omit<ProcessDecisionOptions, "refresh"> & {
+    fence: DecisionRecoveryFence;
+  },
+  resolveSourceContract?: SourceContractResolver,
+): Promise<Result<ProcessResult, unknown>> =>
+  await processDecisionFromInput(
+    {
+      ...options,
+      refresh: DECISION_REFRESH.ALWAYS,
+      inputProvenance: { type: "recovery", fence },
     },
     resolveSourceContract,
   );

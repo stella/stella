@@ -14,6 +14,7 @@ import {
 } from "@/features/knowledge/public/tools/public-tool-content";
 import { ToolDetailPanelView } from "@/features/knowledge/views/tools/tool-detail-panel-view";
 import { detached } from "@/lib/detached";
+import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
 
 const AddToStella = lazy(async () => ({
   default: (await import("@/features/knowledge/public/tools/add-to-stella"))
@@ -41,32 +42,30 @@ export function PublicToolDetail({
   const displayName = labelKey ? t(labelKey) : entry.displayName;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <ToolDetailPanelView
-        body={<ToolContent entry={entry} markdown={markdown} />}
-        footer={
-          <>
-            <ClientOnly fallback={<InstallButtonPlaceholder />}>
-              <Suspense fallback={<InstallButtonPlaceholder />}>
-                <AddToStella
-                  displayName={displayName}
-                  entry={entry}
-                  installIntent={installIntent}
-                  onClearInstallIntent={onClearInstallIntent}
-                />
-              </Suspense>
-            </ClientOnly>
-            <DownloadAffordance entry={entry} />
-          </>
-        }
-        onClose={() => {
-          detached(
-            navigate({ to: "/knowledge/tools" }),
-            "public-tool-detail.close",
-          );
-        }}
-        tool={toKnowledgeToolDetail(entry)}
-      />
-    </div>
+    <ToolDetailPanelView
+      body={<ToolContent entry={entry} markdown={markdown} />}
+      footer={
+        <>
+          <ClientOnly fallback={<InstallButtonPlaceholder />}>
+            <Suspense fallback={<InstallButtonPlaceholder />}>
+              <AddToStella
+                displayName={displayName}
+                entry={entry}
+                installIntent={installIntent}
+                onClearInstallIntent={onClearInstallIntent}
+              />
+            </Suspense>
+          </ClientOnly>
+          <DownloadAffordance entry={entry} />
+        </>
+      }
+      onClose={() => {
+        detached(
+          navigate({ to: KNOWLEDGE_CATALOGUE_PATHS.tools }),
+          "public-tool-detail.close",
+        );
+      }}
+      tool={toKnowledgeToolDetail(entry)}
+    />
   );
 }

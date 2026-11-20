@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 /**
@@ -14,6 +14,27 @@ export const fakeHarnessLog = (): ((entry: object) => void) => {
     appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
   };
 };
+
+/**
+ * The complete lines of a log another process may still be appending to.
+ * A line counts once its newline is written; a trailing line without one is
+ * still being written and is left for the next read. A log not yet created
+ * has no lines.
+ */
+export const readCompleteLines = (logPath: string): string[] => {
+  if (!existsSync(logPath)) {
+    return [];
+  }
+  const text = readFileSync(logPath, "utf-8");
+  return text
+    .slice(0, text.lastIndexOf("\n") + 1)
+    .split("\n")
+    .filter((line) => line !== "");
+};
+
+/** Each complete JSON line of a log written by `fakeHarnessLog`, in order. */
+export const readFakeHarnessLog = (logPath: string): unknown[] =>
+  readCompleteLines(logPath).map((line): unknown => JSON.parse(line));
 
 export const openFakeHarnessPeer = <
   TSchema extends v.GenericSchema,

@@ -158,6 +158,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("menu"),
     "a context menu is a menu opened by the pointer",
   ),
+  "control-face": noNative("unavailable faces of controls for loading views"),
   "control-size": notComponent("control size tokens"),
   "copy-button": noNative(
     "a Button with clipboard feedback; its markup is the button rule's",
@@ -255,6 +256,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "input-otp": native("InputOTP from @stll/ui/input-otp", {
     attributes: [{ name: "autoComplete", values: ["one-time-code"] }],
   }),
+  "input-otp-face": noNative("presentational one-time code group and slots"),
   inspector: noNative("the inspector panel layout"),
   kanban: noNative("a board layout"),
   kbd: noNative(
@@ -268,6 +270,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   list: noNative(
     "grouped settings rows; a plain <ul> or <ol> is ordinary markup",
   ),
+  "list-shell": noNative("the grouped list's shell and its pending rows"),
   loader: owned(LOADER_RULE, "hand-rolled spinners are reported there"),
   "matter-colors": notComponent("matter colour tokens"),
   "matter-icon": owned(
@@ -399,6 +402,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     ],
   }),
   "table-chart": noNative("a chart drawn from table data"),
+  "table-shell": owned(
+    nativeRuleId("table"),
+    "native table markup is reported by the table rule",
+  ),
   tabs: native("Tabs from @stll/ui/tabs", {
     roles: ["tablist", "tab", "tabpanel"],
   }),
@@ -451,6 +458,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("tooltip"),
     "a title on truncated text is reported by the tooltip rule",
   ),
+  "truncated-text-face": noNative(
+    "cut text's box without its hint, for loading views",
+  ),
   "typed-character": notComponent("keystroke classification"),
   "use-contained-handler": notComponent("a React hook"),
   "use-content-dir": notComponent("a React hook"),
@@ -461,6 +471,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   utils: notComponent("class name helpers"),
   "view-toolbar": noNative(
     "a view's filter row; ARIA toolbars have no general @stll/ui primitive",
+  ),
+  "view-toolbar-shell": noNative(
+    "the view chrome's rows without their controls, for loading views",
   ),
   week: notComponent("week arithmetic"),
   "workspace-shell": noNative("the workspace page layout"),
@@ -562,6 +575,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "context-menu": webOnly(
     "a phone opens a context menu through the platform (expo-router Link.Menu)",
   ),
+  "control-face": webOnly(
+    "faces for the web's server-painted loading views; the app has none",
+  ),
   "copy-button": webOnly(
     "a Button with clipboard feedback the app does not offer yet",
   ),
@@ -627,6 +643,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "input-otp": webOnly(
     "the app signs in through the browser, not a code field",
   ),
+  "input-otp-face": webOnly("the app opens the web sign-in flow in a browser"),
   inspector: webOnly(
     "the web's docked inspector; a phone shows details on their own screen",
   ),
@@ -639,6 +656,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "landing-shell": webOnly("the landing layout of the web home screens"),
   list: webOnly(
     'the app\'s lists are FlatList rows of Button size="row" divided by Separator',
+  ),
+  "list-shell": webOnly(
+    "the web list's shell for loading views; the app's lists are FlatList rows",
   ),
   loader: renderer("Loader from @stll/ui/loader", ["ActivityIndicator"]),
   "matter-icon": renderer("MatterIcon from @stll/ui/matter-icon", []),
@@ -704,6 +724,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   switch: renderer("Switch from @stll/ui/switch", ["Switch"]),
   table: webOnly("a phone lists records in rows, not a table"),
   "table-chart": webOnly("the app draws no charts"),
+  "table-shell": webOnly("a phone lists records in rows, not a table"),
   tabs: webOnly("a phone switches sections with the platform's tab bar"),
   text: renderer("Text from @stll/ui/text", ["Text"]),
   "text-mark": webOnly("the app highlights no text"),
@@ -727,8 +748,14 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "truncated-text": webOnly(
     "reveals the full text in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
   ),
+  "truncated-text-face": webOnly(
+    "the web's cut-text box for loading views; a phone caps lines with Text's numberOfLines",
+  ),
   "view-toolbar": webOnly(
     "the web's view filter row; the app filters from the header",
+  ),
+  "view-toolbar-shell": webOnly(
+    "the web view chrome's rows for loading views; the app filters from the header",
   ),
   "workspace-shell": webOnly(
     "the web's page layout; screens lay out with the platform's navigation",
