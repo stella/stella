@@ -596,41 +596,37 @@ const CaseLawAppDisclosure = ({
       }}
       open={isOpen}
     >
-      <CollapsibleTrigger
-        render={<Button className="max-w-full" variant="plain" />}
-      >
-        <span className="text-muted-foreground hover:text-foreground inline-flex min-h-8 max-w-full min-w-0 items-center gap-1.5 text-xs pointer-coarse:min-h-11">
-          <CaseLawIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="text-foreground shrink-0 font-medium">
-            {t("common.caseLaw")}
-          </span>
-          {disclosure.query.length > 0 && (
-            <>
-              <span aria-hidden="true">·</span>
-              <TruncatedText hint={false} render={<span />}>
-                {disclosure.query}
-              </TruncatedText>
-            </>
-          )}
-          {disclosure.decisionCount !== null && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="shrink-0 tabular-nums">
-                {t("caseLaw.citation.decisionCount", {
-                  count: disclosure.decisionCount,
-                })}
-              </span>
-            </>
-          )}
-          <DirectionalIcon
-            className={cn(
-              "size-3.5 shrink-0 transition-transform duration-150",
-              isOpen && "rotate-90",
-            )}
-            flip={!isOpen}
-            icon={ChevronRightIcon}
-          />
+      <CollapsibleTrigger render={<Button size="sm" variant="muted" />}>
+        <CaseLawIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <span className="text-foreground shrink-0 font-medium">
+          {t("common.caseLaw")}
         </span>
+        {disclosure.query.length > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <TruncatedText hint={false} render={<span />}>
+              {disclosure.query}
+            </TruncatedText>
+          </>
+        )}
+        {disclosure.decisionCount !== null && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="shrink-0 tabular-nums">
+              {t("caseLaw.citation.decisionCount", {
+                count: disclosure.decisionCount,
+              })}
+            </span>
+          </>
+        )}
+        <DirectionalIcon
+          className={cn(
+            "size-3.5 shrink-0 transition-transform duration-150",
+            isOpen && "rotate-90",
+          )}
+          flip={!isOpen}
+          icon={ChevronRightIcon}
+        />
       </CollapsibleTrigger>
       <CollapsiblePanel>
         {hasOpened && <div className="pt-1">{children}</div>}
