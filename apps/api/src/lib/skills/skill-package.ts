@@ -17,6 +17,7 @@ import {
   hashSkillEntrypoint,
   isReservedSkillPackagePath,
   SKILL_PACKAGE_LIMITS,
+  SKILL_PACKAGE_RESOURCE_PATH_PATTERN,
 } from "@stll/skills/format";
 import {
   isZipArchiveBytes,
@@ -28,10 +29,12 @@ import type {
   SkillPackageManifest,
   SkillPackageManifestRefusal,
 } from "@stll/skills/package";
+import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
+import type { SkillResourceOriginalFile } from "@/api/lib/agent-skills/resource-originals";
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { loadDocx } from "@/api/lib/docx-archive";
@@ -152,6 +155,12 @@ export type SkippedSkillFile = {
  * does not keep, so the caller can say what was left out.
  */
 export type ImportedSkillPackage = ParsedSkillPackage & {
+  /**
+   * Files without text the skill keeps as their bytes (an archive's images,
+   * PDFs, fonts), at their paths in the skill folder. Sources read file by
+   * file (GitHub folders) leave them out and list them as skipped instead.
+   */
+  binaryFiles: SkillResourceOriginalFile[];
   skippedFiles: SkippedSkillFile[];
 };
 
@@ -528,7 +537,7 @@ const parseMarkdownSkillPackageBytes = (
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
-  return Result.ok({ ...parsed.value, skippedFiles: [] });
+  return Result.ok({ ...parsed.value, binaryFiles: [], skippedFiles: [] });
 };
 
 type ZipPackageEntry = {
@@ -537,6 +546,7 @@ type ZipPackageEntry = {
 };
 
 type PackagePathVerdict =
+  | { type: "binary" }
   | { type: "entrypoint" }
   | { type: "ignored" }
   | { type: "manifest" }
@@ -549,10 +559,13 @@ type PackagePathVerdict =
  * decoded. Zip uploads, zip URLs and GitHub folders all classify through it.
  */
 const classifyPackageFilePath = ({
+  keepBinaries = false,
   path,
   rootPrefix,
   skillFilePath,
 }: {
+  /** An archive keeps binary files; a source fetched file by file skips them. */
+  keepBinaries?: boolean;
   path: string;
   rootPrefix: string;
   skillFilePath: string;
@@ -581,6 +594,9 @@ const classifyPackageFilePath = ({
   // Any folder and file is part of the skill (Agent Skills spec); a file
   // whose extension says it is binary is left out before it is read.
   if (isKnownBinaryResourcePath(relativePath)) {
+    if (keepBinaries) {
+      return { type: "binary" };
+    }
     return {
       type: "skipped",
       reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_EXTENSION,
@@ -624,6 +640,7 @@ const parseZipSkillPackage = async (
   }
   const rootPrefix = skillFolderPrefix(skillFilePath.value);
   const files: SkillFile[] = [];
+  const binaryFiles: SkillResourceOriginalFile[] = [];
   const skippedFiles: SkippedSkillFile[] = [];
   // SHA-256 of every file read, by its path in the skill folder, for the
   // manifest check.
@@ -633,6 +650,7 @@ const parseZipSkillPackage = async (
 
   for (const { file, path } of packageEntries) {
     const verdict = classifyPackageFilePath({
+      keepBinaries: true,
       path,
       rootPrefix,
       skillFilePath: skillFilePath.value,
@@ -662,18 +680,23 @@ const parseZipSkillPackage = async (
       manifestBytes = bytes;
       continue;
     }
-    digests.set(path.slice(rootPrefix.length), sha256Hex(bytes));
+    const relativePath = path.slice(rootPrefix.length);
+    digests.set(relativePath, sha256Hex(bytes));
 
-    // SKILL.md must be text; a resource that is not (a binary asset) is left
-    // out and reported rather than failing the whole package.
-    const content = decodePackageFile({ bytes, verdict });
+    // SKILL.md must be text; a resource that is not (a binary asset) is kept
+    // as its bytes.
+    const content =
+      verdict.type === "binary"
+        ? Result.ok(null)
+        : decodePackageFile({ bytes, verdict });
     if (content.isErr()) {
       return Result.err(content.error);
     }
     if (content.value === null) {
-      skippedFiles.push({
-        path,
-        reason: SKIPPED_SKILL_FILE_REASON.NOT_UTF8_TEXT,
+      binaryFiles.push({
+        bytes,
+        mediaType: mediaTypeOfPath(relativePath),
+        path: relativePath,
       });
       continue;
     }
@@ -690,15 +713,112 @@ const parseZipSkillPackage = async (
     }
     identity = read.value;
   }
-  const parsed = parseSkillFiles(files, unread);
+  // A binary file is in the package: SKILL.md naming it is no missing file.
+  const parsed = parseSkillFiles(
+    files,
+    new Set([...unread, ...binaryFiles.map(({ path }) => path)]),
+  );
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
+  const binaries = checkBinaryFiles({
+    binaryFiles,
+    resources: parsed.value.resources,
+  });
+  if (binaries.isErr()) {
+    return Result.err(binaries.error);
+  }
   return Result.ok({
     ...parsed.value,
+    binaryFiles,
     identity,
     skippedFiles,
   });
+};
+
+/** Media type of a kept binary, from its extension; bytes are not sniffed. */
+const BINARY_MEDIA_TYPES: ReadonlyMap<string, string> = new Map([
+  ["avif", "image/avif"],
+  ["bmp", "image/bmp"],
+  [
+    "docx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
+  ["gif", "image/gif"],
+  ["ico", "image/x-icon"],
+  ["jpeg", "image/jpeg"],
+  ["jpg", "image/jpeg"],
+  ["mp3", "audio/mpeg"],
+  ["mp4", "video/mp4"],
+  ["otf", "font/otf"],
+  ["pdf", "application/pdf"],
+  ["png", "image/png"],
+  [
+    "pptx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ],
+  ["svg", "image/svg+xml"],
+  ["ttf", "font/ttf"],
+  ["txt", "text/plain"],
+  ["wav", "audio/wav"],
+  ["webp", "image/webp"],
+  ["woff", "font/woff"],
+  ["woff2", "font/woff2"],
+  ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  ["zip", "application/zip"],
+]);
+
+const mediaTypeOfPath = (path: string): string => {
+  const name = path.split("/").at(-1) ?? "";
+  const dot = name.lastIndexOf(".");
+  const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  return BINARY_MEDIA_TYPES.get(extension) ?? "application/octet-stream";
+};
+
+/**
+ * Binary files take the same path rules and share the same limits as the
+ * text files beside them: a safe path, no two files unpacking onto one, and
+ * the skill's file count and total bytes.
+ */
+const checkBinaryFiles = ({
+  binaryFiles,
+  resources,
+}: {
+  binaryFiles: readonly SkillResourceOriginalFile[];
+  resources: readonly { path: string; sizeBytes: number }[];
+}): Result<void, HandlerError> => {
+  const collisionKey = (path: string) =>
+    normalizeUnicode(path, "NFC").toLowerCase();
+  const taken = new Set([
+    collisionKey(SKILL_FILE_NAME),
+    ...resources.map(({ path }) => collisionKey(path)),
+  ]);
+  for (const { path } of binaryFiles) {
+    if (
+      path.length > SKILL_PACKAGE_LIMITS.resourcePathMaxChars ||
+      !SKILL_PACKAGE_RESOURCE_PATH_PATTERN.test(path)
+    ) {
+      return rejectSkillPackage(`Skill resource path is invalid: ${path}`);
+    }
+    if (taken.has(collisionKey(path))) {
+      return rejectSkillPackage(
+        `Skill contains a duplicate resource path: ${path}`,
+      );
+    }
+    taken.add(collisionKey(path));
+  }
+  if (
+    resources.length + binaryFiles.length >
+    SKILL_PACKAGE_LIMITS.resourcesPerSkillMax
+  ) {
+    return rejectSkillPackage("Skill has too many resources");
+  }
+  const totalBytes =
+    resources.reduce((sum, { sizeBytes }) => sum + sizeBytes, 0) +
+    binaryFiles.reduce((sum, { bytes }) => sum + bytes.byteLength, 0);
+  return totalBytes > SKILL_PACKAGE_LIMITS.packageFilesMaxBytes
+    ? rejectSkillPackage("Skill files exceed their limit")
+    : Result.ok();
 };
 
 /**
@@ -785,7 +905,7 @@ type DecodePackageFileOptions = {
   bytes: ArrayBuffer | Uint8Array;
   verdict: Exclude<
     PackagePathVerdict,
-    { type: "ignored" | "manifest" | "skipped" }
+    { type: "binary" | "ignored" | "manifest" | "skipped" }
   >;
 };
 
@@ -956,7 +1076,12 @@ const fetchGithubSkillPackage = async (
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
-  return Result.ok({ ...parsed.value, skippedFiles, sourceUrl: originalUrl });
+  return Result.ok({
+    ...parsed.value,
+    binaryFiles: [],
+    skippedFiles,
+    sourceUrl: originalUrl,
+  });
 };
 
 export type GithubSkillFiles = {
@@ -1016,6 +1141,14 @@ const fetchGithubSkillFiles = async (
     }
     if (verdict.type === "skipped") {
       skippedFiles.push({ path: normalizedPath, reason: verdict.reason });
+      continue;
+    }
+    if (verdict.type === "binary") {
+      // Classified without `keepBinaries`, so no folder file lands here.
+      skippedFiles.push({
+        path: normalizedPath,
+        reason: SKIPPED_SKILL_FILE_REASON.UNSUPPORTED_EXTENSION,
+      });
       continue;
     }
 
