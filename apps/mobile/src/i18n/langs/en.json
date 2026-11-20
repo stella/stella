@@ -609,6 +609,13 @@
     "dictationCleanup": "Clean up with AI",
     "dictationCleanupHint": "Fixes recognition mistakes and spoken formatting such as “new line”. Only the text, not the audio, goes through stella to your organization’s AI provider; stella does not store it."
   },
+  "signedFile": {
+    "layer": "Signature layer {number, number}",
+    "noReadableContent": "No readable content is available for preview.",
+    "unknownSigner": "Unknown signer",
+    "unreadable": "The signed file could not be read.",
+    "unverified": "The signatures have not been verified."
+  },
   "header": {
     "search": "Search"
   },

@@ -3,7 +3,7 @@
 export const devices = Object.freeze({
   "Desktop Chrome": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.8127.18 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/159.0.8154.6 Safari/537.36",
     viewport: Object.freeze({ width: 1280, height: 720 } as const),
     screen: Object.freeze({ width: 1920, height: 1080 } as const),
     deviceScaleFactor: 1,

@@ -202,14 +202,14 @@
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::RouteComponentInner": {
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx::RouteComponentInner": {
     "memos": 2,
     "reasons": [
       "Cannot access refs during render",
       "Logical assignment operators (||=, &&=, ??=) are not yet supported"
     ]
   },
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::VersionDropZone": {
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx::VersionDropZone": {
     "memos": 0,
     "reasons": [
       "`try`/`finally` without `catch` is not supported by React Compiler"

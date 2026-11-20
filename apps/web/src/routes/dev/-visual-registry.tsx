@@ -192,6 +192,13 @@ const visualLoaders = {
       };
     },
   },
+  "chat-matter-reads": {
+    load: async () => {
+      const { ChatMatterReadsPlayground } =
+        await import("./-components/chat-matter-reads-playground");
+      return { default: ChatMatterReadsPlayground };
+    },
+  },
   "chat-answer-typography": {
     load: async () => {
       const [{ ChatCitationsPlayground }, { CHAT_ANSWER_TYPOGRAPHY_CASSETTE }] =

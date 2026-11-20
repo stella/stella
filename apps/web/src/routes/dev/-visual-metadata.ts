@@ -95,6 +95,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
+  "chat-matter-reads": { label: "Chat matter reads", layout: "plain" },
   "chat-answer-typography": {
     label: "Chat answer typography",
     layout: "plain",

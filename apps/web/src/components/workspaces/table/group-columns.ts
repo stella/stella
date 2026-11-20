@@ -11,7 +11,7 @@ import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 const DOCUMENT_TYPE_CLASSIFIER_NAME = "document type";
 
 export const resolveDocumentTypeClassifier = (
-  properties: WorkspaceProperty[],
+  properties: readonly WorkspaceProperty[],
 ): WorkspaceProperty | null => {
   const byRole = properties.find(
     (property) =>
@@ -85,7 +85,7 @@ export const buildDocTypeGateLabels = ({
   properties,
   classifierPropertyId,
 }: {
-  properties: WorkspaceProperty[];
+  properties: readonly WorkspaceProperty[];
   classifierPropertyId: string;
 }): Map<string, Set<string>> => {
   const gateLabelsByPropertyId = new Map<string, Set<string>>();

@@ -1,0 +1,4 @@
+{
+  "add-column": "Adds nullable descriptor and immutable-reference columns without defaults or backfills; catalog-only under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "Adds NOT VALID shape and basis checks so no existing attachment rows are scanned; future writes are checked under 1s lock_timeout and 5s statement_timeout."
+}

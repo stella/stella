@@ -8,7 +8,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 // page keeps the body text full-width in the inspector instead of
 // leaving the page margins as dead whitespace. The page edges then
 // overflow horizontally and the user can scroll to inspect margins.
-export const DOCX_TEXT_AREA_WIDTH = 624;
+const DOCX_TEXT_AREA_WIDTH = 624;
 
 // The full Letter page at 96 DPI (8.5 × 11 inches). Callers fitting the whole page
 // — margins included — divide their available width by DOCX_PAGE_WIDTH instead of
@@ -23,11 +23,24 @@ export const DOCX_PAGE_HEIGHT = 1056;
 const DOCX_PAGE_SIDE_GUTTER = 0.075;
 export const DOCX_PAGE_FIT_WIDTH =
   DOCX_PAGE_WIDTH / (1 - 2 * DOCX_PAGE_SIDE_GUTTER);
-export const DOCX_FIT_PADDING = 4;
+const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;
-export const DOCX_MIN_ZOOM = 0.25;
+const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
 const DOCX_PINCH_SENSITIVITY = 0.005;
+
+/**
+ * The width `useDocxFitZoom` gives the whole page, as CSS, for a view that
+ * cannot measure before it paints: the measured box's width (`100cqw`, the
+ * nearest inline-size query container, which must be as wide as the box the
+ * hook measures) less the fit padding, over the fitted width, capped at the
+ * largest automatic zoom, times the page. The hook rounds its zoom to
+ * hundredths, so the two can differ by under half a percent of the page.
+ */
+export const docxFitPageWidthCss = (maxAutoZoom: number): string =>
+  `min(${String(maxAutoZoom * DOCX_PAGE_WIDTH)}px, calc((100cqw - ${String(
+    DOCX_FIT_PADDING * 2,
+  )}px) * ${String(DOCX_PAGE_WIDTH / DOCX_TEXT_AREA_WIDTH)}))`;
 
 type ZoomableDocxEditor = {
   getZoom: () => number;

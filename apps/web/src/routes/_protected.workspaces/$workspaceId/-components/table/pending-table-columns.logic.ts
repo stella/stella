@@ -9,6 +9,7 @@ import type {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { propertiesQueryRoot } from "@/lib/resource-query-roots.logic";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import type { StoredColumnSizing } from "@/lib/workspaces/stored-column-sizing.logic";
 import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
@@ -77,18 +78,21 @@ export type PendingTableGrid = GridColumnsInput & {
  * the loaded table lays them out from the same saved view: the schema's
  * columns at their widths, the view's hidden columns left out, its order
  * applied, the selection column and the view's pinned columns docked at the
- * start, and the add-property column after the filler. Widths a reader
- * dragged in this browser are not read here; those columns settle to them
- * when the table mounts.
+ * start, and the add-property column after the filler. A column a reader
+ * dragged in this browser takes the width the table store keeps for it,
+ * within the column's minimum, as the table's column model takes it.
  */
 export const pendingTableGrid = ({
   properties,
+  sizing = {},
   view,
 }: {
   properties: readonly WorkspaceProperty[];
+  /** The widths the table store holds for this view (`storedColumnSizing`). */
+  sizing?: StoredColumnSizing | undefined;
   view: WorkspaceView<"table">;
 }): PendingTableGrid => {
-  const { columns } = workspaceTableSchema({
+  const schema = workspaceTableSchema({
     properties,
     view,
     labels: NO_LABELS,
@@ -98,6 +102,18 @@ export const pendingTableGrid = ({
   const hidden = new Set<string>(
     view.layout.hiddenProperties.filter((id) => !isUtility(id)),
   );
+  // A utility column's width is never kept: the table drops it from the
+  // stored widths before it reads them.
+  const columns = schema.columns.map((column) => {
+    const stored = isUtility(column.id) ? undefined : sizing[column.id];
+    return {
+      id: column.id,
+      size: Math.max(
+        stored ?? column.size,
+        column.minSize ?? schema.defaultMinSize,
+      ),
+    };
+  });
   const visible = columns.filter((column) => !hidden.has(column.id));
   const byId = new Map(visible.map((column) => [column.id, column]));
 
