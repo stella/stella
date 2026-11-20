@@ -3,13 +3,6 @@ import { useId, useSyncExternalStore } from "react";
 import { useTranslations } from "use-intl";
 
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { stellaToast } from "@stll/ui/toast";
 
 import { Switch } from "@/components/switch";
@@ -19,6 +12,10 @@ import {
   useChatTurnNotificationsEnabled,
 } from "@/features/chat/use-chat-turn-notifications";
 import { detached } from "@/lib/detached";
+import {
+  SETTINGS_SWITCH_ROW_CLASS,
+  SettingsSwitchCard,
+} from "@/routes/_protected.settings/-components/settings-card.pending";
 
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
@@ -45,42 +42,32 @@ export const ChatNotificationsCard = () => {
   };
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("settings.account.chatNotifications")}</FrameTitle>
-        <FrameDescription>
-          {t("settings.account.chatNotificationsDescription")}
-        </FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        {/* The description belongs to the field, so it is announced with
-            the switch; a browser without notifications explains why here. */}
-        <div className="p-4">
-          <Field className="gap-2">
-            <div className="flex min-h-11 flex-row items-center gap-2">
-              <Switch
-                checked={enabled}
-                disabled={!supported}
-                id={id}
-                onCheckedChange={(next) => {
-                  detached(
-                    handleChange(next),
-                    "chat-notifications-card.toggle",
-                  );
-                }}
-              />
-              <FieldLabel htmlFor={id}>
-                {t("settings.account.chatNotificationsToggle")}
-              </FieldLabel>
-            </div>
-            {!supported && (
-              <FieldDescription>
-                {t("settings.account.chatNotificationsUnsupported")}
-              </FieldDescription>
-            )}
-          </Field>
+    <SettingsSwitchCard
+      description="settings.account.chatNotificationsDescription"
+      title="settings.account.chatNotifications"
+    >
+      {/* The description belongs to the field, so it is announced with
+          the switch; a browser without notifications explains why here. */}
+      <Field className="gap-2">
+        <div className={SETTINGS_SWITCH_ROW_CLASS}>
+          <Switch
+            checked={enabled}
+            disabled={!supported}
+            id={id}
+            onCheckedChange={(next) => {
+              detached(handleChange(next), "chat-notifications-card.toggle");
+            }}
+          />
+          <FieldLabel htmlFor={id}>
+            {t("settings.account.chatNotificationsToggle")}
+          </FieldLabel>
         </div>
-      </FramePanel>
-    </Frame>
+        {!supported && (
+          <FieldDescription>
+            {t("settings.account.chatNotificationsUnsupported")}
+          </FieldDescription>
+        )}
+      </Field>
+    </SettingsSwitchCard>
   );
 };

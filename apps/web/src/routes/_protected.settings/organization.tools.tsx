@@ -6,7 +6,7 @@ import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { NativeToolsList } from "@/routes/_protected.settings/organization/-components/native-tools-list";
 import { SharepointCard } from "@/routes/_protected.settings/organization/-components/organization/sharepoint-card";
 

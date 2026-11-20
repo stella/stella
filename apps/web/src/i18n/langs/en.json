@@ -1740,6 +1740,18 @@
       "verified": "Verified citation",
       "verifiedHint": "Word for word in {source}"
     },
+    "answerTable": {
+      "copy": "Copy table",
+      "copyAs": "Copy as {format}",
+      "download": "Download table",
+      "downloadAs": "Download as {format}",
+      "fullscreen": "Open full screen",
+      "fullscreenTitle": "Full-screen table",
+      "singleLine": "Single line",
+      "size": "{rows, plural, one {# row} other {# rows}} · {columns, plural, one {# column} other {# columns}}",
+      "textMode": "Cell text",
+      "wrap": "Wrap text"
+    },
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.",
       "direct": "No, apply directly",
@@ -2346,6 +2358,11 @@
     "suggestionStatus": {
       "accepted": "Applied",
       "rejected": "Rejected"
+    },
+    "switcher": {
+      "allChats": "All chats",
+      "searchPlaceholder": "Find a chat…",
+      "trigger": "Switch chat"
     },
     "tableChart": {
       "bar": "Bar",
@@ -7930,7 +7947,6 @@
         "endDate": "End date",
         "month": "Month",
         "quarter": "Quarter",
-        "showTable": "Show table",
         "startDate": "Start date",
         "week": "Week"
       },

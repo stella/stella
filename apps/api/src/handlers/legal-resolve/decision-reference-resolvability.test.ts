@@ -15,6 +15,7 @@
  *    keeps the decision.
  */
 
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { resolveDecisionIdentity } from "@stll/api-contract/decision-query-intent";
@@ -245,14 +246,35 @@ describe("every stored identifier kind remains reachable", () => {
         intent,
         [
           {
+            id: "stored-owner",
             caseNumber: "unrelated primary reference",
             ecli: null,
             identifiers: [{ type, value }],
           },
         ],
-        { reporters: decisionReporterGrammarForJurisdiction(country) },
+        {
+          reporters: decisionReporterGrammarForJurisdiction(country),
+          exactIdentityRead: "complete",
+        },
       );
-      expect(["unique", "incomplete_identifier"]).toContain(resolution.status);
+      switch (resolution.status) {
+        case "unique":
+          expect(resolution.decision.id).toBe("stored-owner");
+          break;
+        case "ambiguous":
+          expect(resolution.candidates.map(({ id }) => id)).toContain(
+            "stored-owner",
+          );
+          break;
+        case "incomplete_identifier":
+        case "none":
+          return panic(
+            `Stored identifier did not resolve to its owner: ${resolution.status}`,
+          );
+        default:
+          resolution satisfies never;
+          return panic("Unexpected resolution status");
+      }
       const reference = decisionIdentityReadKeys({
         country,
         locator: { kind: "reference", value },
@@ -261,6 +283,7 @@ describe("every stored identifier kind remains reachable", () => {
         type,
         keys: [normalizeDecisionIdentifierValueIn(country, type, value)],
       });
+      return undefined;
     });
   }
 

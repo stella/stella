@@ -152,7 +152,7 @@ export const SYNTHETIC_SCALE_PROFILE = {
       table: "case_law_decisions",
       column: "citation_key",
       nullFraction: 0.2,
-      distinctValues: -0.7,
+      distinctValues: -0.8,
       mostCommonValues: [],
       mostCommonFrequencies: [],
     },
@@ -437,6 +437,7 @@ export const injectScaleProfile = async (
   db: ScaleDb,
   profile: ScaleProfile,
 ): Promise<void> => {
+  await assertSeedMatchesProfile(db, profile);
   for (const table of PLAN_GUARD_TABLES) {
     const stats = await relationStats(db, table);
     if (stats.relpages < 1) {
@@ -585,6 +586,48 @@ export const scaleTableToProfile = async <Table extends string>(
     );
   }
   await injectExpressionColumnStats(db, [table], profile.attributes);
+};
+
+/**
+ * Refuse a physical seed that contradicts the profile it is scaled to. The
+ * profile rewrites a column's statistics, but every index over the column
+ * keeps the seed's pages: a column profiled as mostly set but seeded all NULL
+ * leaves its partial indexes empty, so a whole-index read ties with a probe
+ * and no statistic can break the tie.
+ */
+export const assertSeedMatchesProfile = async (
+  db: ScaleDb,
+  profile: ScaleProfile,
+): Promise<void> => {
+  for (const attribute of profile.attributes) {
+    const name = `${attribute.table}.${attribute.column}`;
+    const row = executedRows(
+      await db.execute(sql`
+        SELECT count(${sql.identifier(attribute.column)})::integer AS set_rows,
+               count(DISTINCT ${sql.identifier(attribute.column)})::integer AS distinct_values
+          FROM ${sql.identifier(attribute.table)}
+      `),
+    ).at(0);
+    if (
+      !isRecord(row) ||
+      typeof row["set_rows"] !== "number" ||
+      typeof row["distinct_values"] !== "number"
+    ) {
+      return panic(`Scale profile could not read the seed of ${name}`);
+    }
+    if (attribute.nullFraction < 1 && row["set_rows"] === 0) {
+      panic(
+        `Scale profile contradicts the seed: ${name} is profiled with null fraction ${String(attribute.nullFraction)} but seeded entirely NULL`,
+      );
+    }
+    const profiledDistinct =
+      attribute.distinctValues < 0 || attribute.distinctValues > 1;
+    if (profiledDistinct && row["distinct_values"] < 2) {
+      panic(
+        `Scale profile contradicts the seed: ${name} is profiled with n_distinct ${String(attribute.distinctValues)} but seeded with ${String(row["distinct_values"])} distinct values`,
+      );
+    }
+  }
 };
 
 /** Detect an ANALYZE or incomplete seed before any plan is judged. */

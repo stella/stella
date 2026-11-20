@@ -6,7 +6,7 @@ import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { TimePolicyCard } from "@/routes/_protected.settings/organization/-components/organization/time-policy-card";
 
 export const Route = createFileRoute(

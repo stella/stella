@@ -8,7 +8,7 @@ import citationsBackfillMatchKey from "./online-migration-entries/indexes-case-l
 import citationsReopenableIdentifierMatchKey from "./online-migration-entries/indexes-case-law-citations-reopenable-identifier-match-key-idx";
 import citationsReopenableMatchKey from "./online-migration-entries/indexes-case-law-citations-reopenable-match-key-idx";
 import identifiersMatchKey from "./online-migration-entries/indexes-case-law-decision-identifiers-match-key-idx";
-import decisionsMatchKey from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-idx";
+import decisionsMatchKey from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-all-idx";
 import decisionsPublishedMatchKey from "./online-migration-entries/indexes-case-law-decisions-citation-match-key-published-idx";
 
 /**
@@ -19,7 +19,10 @@ import decisionsPublishedMatchKey from "./online-migration-entries/indexes-case-
  * built from `caseNumberMatchKeySql` meets the expression it indexes.
  */
 
-const MIGRATION = "20261119215600_case_number_match_key_indexes";
+const MIGRATIONS = new Set([
+  "20261119215600_case_number_match_key_indexes",
+  "20261120003000_case_number_match_key_full_index",
+]);
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 
@@ -58,23 +61,23 @@ test("each online entry builds the match-key index the schema declares", async (
     "case_law_citations_reopenable_identifier_match_key_idx",
     "case_law_citations_reopenable_match_key_idx",
     "case_law_decision_identifiers_match_key_idx",
-    "case_law_decisions_citation_match_key_idx",
+    "case_law_decisions_citation_match_key_all_idx",
     "case_law_decisions_citation_match_key_published_idx",
   ]);
-  const migration = readFileSync(
-    nodePath.resolve(
-      import.meta.dir,
-      `../../drizzle/${MIGRATION}/migration.sql`,
-    ),
-    "utf-8",
-  );
   for (const {
     name,
     introducedBy,
     createSql,
     definitionBody,
   } of matchKeyIndexes) {
-    expect(introducedBy).toBe(MIGRATION);
+    expect(MIGRATIONS.has(introducedBy)).toBe(true);
+    const migration = readFileSync(
+      nodePath.resolve(
+        import.meta.dir,
+        `../../drizzle/${introducedBy}/migration.sql`,
+      ),
+      "utf-8",
+    );
     expect(migration).toContain(name);
     const expected = `CREATE INDEX ${name} ${definitionBody}`;
     // db-await-in-loop: six indexes, each read, dropped and rebuilt in order
