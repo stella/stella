@@ -1492,6 +1492,9 @@ describe("missing effective rate", () => {
     const dialog = await openCreate();
     await within(dialog).findByText(
       messages.billing.rates.effectiveRateRequired,
+      {
+        selector: "p",
+      },
     );
     const save = () =>
       within(dialog).getByRole("button", {
@@ -1543,6 +1546,9 @@ describe("missing effective rate", () => {
     });
     await within(dialog).findByText(
       messages.billing.rates.effectiveRateRequired,
+      {
+        selector: "p",
+      },
     );
     expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
     expect(save().getAttribute("aria-disabled")).toBe("true");
@@ -1582,6 +1588,9 @@ describe("missing effective rate", () => {
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByText(
       messages.billing.rates.effectiveRateRequired,
+      {
+        selector: "p",
+      },
     );
     expect(
       within(dialog)

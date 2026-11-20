@@ -149,11 +149,16 @@ test("shows linked methods and prevents disconnecting the last one", () => {
     screen.getByText(messages.settings.account.signInMethods.emailCode),
   ).toBeDefined();
   expect(
-    screen.getByText(messages.settings.account.signInMethods.lastMethod),
+    screen.getByText(messages.settings.account.signInMethods.lastMethod, {
+      selector: '[data-slot="list-item-description"]',
+    }),
   ).toBeDefined();
   expect(
     screen
-      .getByRole("button", { name: messages.common.disconnect })
+      .getByRole("button", {
+        name: messages.common.disconnect,
+        description: messages.settings.account.signInMethods.lastMethod,
+      })
       .getAttribute("aria-disabled"),
   ).toBe("true");
 });
