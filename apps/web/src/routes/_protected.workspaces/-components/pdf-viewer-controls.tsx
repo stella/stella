@@ -198,6 +198,7 @@ export const PdfViewerControls = ({
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Button
             disabled={currentPage <= 1}
+            disabledReason={t("common.firstPageReached")}
             onClick={() => {
               setEditingPage(null);
               navigateToPage(currentPage - 1);
@@ -210,6 +211,7 @@ export const PdfViewerControls = ({
           </Button>
           <Button
             disabled={currentPage >= totalPages}
+            disabledReason={t("common.lastPageReached")}
             onClick={() => {
               setEditingPage(null);
               navigateToPage(currentPage + 1);
@@ -263,6 +265,16 @@ export const PdfViewerControls = ({
     </div>
   );
 
+  const resolvePrintDisabledReason = () => {
+    if (isPrinting) {
+      return t("common.printing");
+    }
+    if (printDisabled) {
+      return t("common.loading");
+    }
+    return t("workspaces.files.pdfSelectToPrint");
+  };
+
   const fileActions =
     showFileActions || extraControls !== undefined ? (
       <div className="flex items-center">
@@ -301,6 +313,7 @@ export const PdfViewerControls = ({
             )}
             <Button
               disabled={printDisabled || isPrinting || fieldId.length === 0}
+              disabledReason={resolvePrintDisabledReason()}
               onClick={() => {
                 detached(handlePrint(), "pdf-viewer-controls.print");
               }}
