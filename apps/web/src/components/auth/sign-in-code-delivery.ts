@@ -1,5 +1,5 @@
 import { queryOptions, skipToken } from "@tanstack/react-query";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -11,6 +11,7 @@ import { Temporal } from "@stll/time";
 
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { readQueryResult } from "@/lib/errors/query-result";
 
 const SIGN_IN_CODE_DELIVERY_POLL_MS = 10_000;
 /** The server forgets an attempt shortly after its code expires. */
@@ -29,16 +30,19 @@ const readSignInCodeDelivery = async (
     body: { attempt },
     signal,
   });
-  if (error) {
-    throw toAuthClientError(error);
-  }
-  const parsed = v.safeParse(signInCodeDeliverySchema, data);
-  if (!parsed.success) {
-    throw new SignInCodeDeliveryShapeError({
-      message: "Sign-in code delivery answer has an unexpected shape",
-    });
-  }
-  return parsed.output;
+  const answer = readQueryResult(
+    error ? Result.err(toAuthClientError(error)) : Result.ok(data),
+  );
+  const parsed = v.safeParse(signInCodeDeliverySchema, answer);
+  return readQueryResult(
+    parsed.success
+      ? Result.ok(parsed.output)
+      : Result.err(
+          new SignInCodeDeliveryShapeError({
+            message: "Sign-in code delivery answer has an unexpected shape",
+          }),
+        ),
+  );
 };
 
 type SignInCodeDeliveryOptions = {

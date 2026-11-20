@@ -38,6 +38,7 @@ export const HANDOFF_AUTH_ENDPOINT_POLICY = {
   "/email-otp/request-password-reset": "step-up-method",
   "/email-otp/reset-password": "step-up-method",
   "/email-otp/send-verification-otp": "step-up-method",
+  "/email-otp/sign-in-delivery": "ordinary",
   "/email-otp/verify-email": "ordinary",
   "/error": "ordinary",
   "/forget-password/email-otp": "step-up-method",

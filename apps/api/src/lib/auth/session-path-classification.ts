@@ -90,6 +90,10 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
       "/email-otp/send-verification-otp",
       noSession("verification message request"),
     ],
+    [
+      "/email-otp/sign-in-delivery",
+      noSession("sign-in code delivery follow-up"),
+    ],
     ["/email-otp/check-verification-otp", noSession("verification code check")],
     ["/email-otp/request-password-reset", noSession("password reset request")],
     ["/email-otp/reset-password", noSession("password reset")],

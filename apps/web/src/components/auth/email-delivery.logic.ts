@@ -9,10 +9,13 @@ const SIGN_IN_ATTEMPT_BYTES = 32;
  */
 export const newSignInAttempt = (): string => {
   const bytes = crypto.getRandomValues(new Uint8Array(SIGN_IN_ATTEMPT_BYTES));
-  return btoa(String.fromCodePoint(...bytes))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/[=]+$/u, "");
+  return (
+    btoa(String.fromCodePoint(...bytes))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      // Padding only ever ends a base64 string.
+      .replaceAll("=", "")
+  );
 };
 
 /** The request headers that name a code request's attempt. */
