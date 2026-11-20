@@ -196,6 +196,17 @@ const HOST_COLUMNS = {
   ecli: caseLawDecisions.ecli,
 };
 
+/** The record's order mark, with where a same-source candidate keeps its own. */
+const orderMarkFor = (
+  declaration: HeldDecisionAttachment<string>,
+  observed: ObservedDecision["observed"],
+) => {
+  const mark = declaration.orderMarkOf?.(observed) ?? null;
+  return mark === null
+    ? null
+    : { ...mark, metadataKey: declaration.metadataKey };
+};
+
 /**
  * The held decisions the record names: by its stated ECLI where any host
  * decision carries it as an identifier, otherwise by court, docket and
@@ -254,6 +265,7 @@ export const matchHostDecisionsTx = async (
               decisionDate: persistedDecisionDate,
               docketKeys,
               caseNumber: observed.caseNumber,
+              orderMark: orderMarkFor(declaration, observed),
             },
           }),
   });
