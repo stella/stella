@@ -971,7 +971,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/agent-claim.tsx",
+    path: "apps/web/src/routes/-agent-claim.page.tsx",
     class: "operator-configured-infrastructure",
     reason: "Confirms agent identity claims through the configured API.",
     transports: ["module:@stll/fetch"],

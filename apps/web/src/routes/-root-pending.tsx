@@ -1,9 +1,13 @@
 import { useRouter, useRouterState } from "@tanstack/react-router";
+import type { RouteComponent } from "@tanstack/react-router";
+import { IntlProvider } from "use-intl";
 
+import { PendingTextIntlScope } from "@/components/pending-text";
 import {
   DefaultPendingComponent,
   PENDING_STATUS_PROPS,
 } from "@/components/route-components";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import { selectAppFrame } from "@/routes/-app-frame.logic";
@@ -14,6 +18,20 @@ import {
   PendingViewOf,
   useLeafPendingView,
 } from "@/routes/-route-pending-view";
+
+// The request-local message snapshot is also restored before the browser
+// hydrates, so wrapping labels have the same geometry on both first paints.
+const LocalizedStandalonePending = ({ view }: { view: RouteComponent }) => {
+  const locale = useI18nStore((state) => state.loadedLang);
+  const messages = useI18nStore((state) => state.messages);
+  return (
+    <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+      <PendingTextIntlScope formattingLocale={locale}>
+        <PendingViewOf view={view} />
+      </PendingTextIntlScope>
+    </IntlProvider>
+  );
+};
 
 /**
  * The root's pending view: what a cold load paints before the app mounts,
@@ -38,6 +56,10 @@ export function RootPendingComponent() {
       }),
   });
   const pagePending = useLeafPendingView();
+  const localizeStandalone = useRouterState({
+    select: ({ matches }) =>
+      matches.at(-1)?.staticData.pendingText === "request-locale",
+  });
   if (frame === "auth") {
     return (
       <div {...PENDING_STATUS_PROPS}>
@@ -48,6 +70,17 @@ export function RootPendingComponent() {
             <DefaultPendingComponent announce={false} />
           )}
         </AuthFrameShell>
+      </div>
+    );
+  }
+  if (frame === "none" && pagePending) {
+    return (
+      <div {...PENDING_STATUS_PROPS} className="flex h-dvh w-full flex-col">
+        {localizeStandalone ? (
+          <LocalizedStandalonePending view={pagePending} />
+        ) : (
+          <PendingViewOf view={pagePending} />
+        )}
       </div>
     );
   }
