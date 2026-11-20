@@ -1227,6 +1227,9 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     this.#passReserved = 0;
     this.#passStarted = 0;
     this.#progress.cursor = null;
+    // Keep the consecutive-page bound, but a head rewind precedes every
+    // mismatch from both walks, including canceled rows before the old cursor.
+    this.#beforeMismatchPages = null;
     this.#report();
     return "next";
   }

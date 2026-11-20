@@ -1371,6 +1371,54 @@ describe("offline route build", () => {
     ).toBe(true);
   });
 
+  test("a walk boundary resets the mismatch cursor before every rejected input", async () => {
+    const lateCount =
+      (CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT - 2) *
+        SHARD_REVISIONS +
+      1;
+    const model = await newModel(lateCount + SHARD_REVISIONS * 2);
+    const mismatchedIds = model.entityIds
+      .filter(
+        (_id, index) => index < SHARD_REVISIONS || index >= SHARD_REVISIONS * 2,
+      )
+      .map((id) => toSafeId<"legislationDocument">(id));
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "e".repeat(64) })
+      .where(inArray(legislationDocuments.id, mismatchedIds));
+    const stopped = await runBuild(model, QUIET_RUN);
+    expect(stopped?.status).toBe("canonical_input_mismatch");
+    expect(stopped?.progress.walk.passes).toBe(2);
+    expect(stopped?.progress.cursor).toBeNull();
+    expect(stopped?.progress.canonicalInputMismatch.revisions).toBe(
+      mismatchedIds.length + SHARD_REVISIONS,
+    );
+    expect(stopped?.progress.canonicalInputMismatch.consecutivePages).toBe(
+      CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+    );
+    expect(stopped?.progress.proved).toBe(SHARD_REVISIONS);
+    expect(stopped?.progress.notStarted.leaseLost).toBe(0);
+    expect(
+      (await readIntents(model.entityIds)).every(
+        ({ status, leaseToken }) =>
+          (status === "cancelled" || status === "applied") &&
+          leaseToken === null,
+      ),
+    ).toBe(true);
+    await db
+      .update(legislationDocuments)
+      .set({ contentHash: "d".repeat(64) })
+      .where(inArray(legislationDocuments.id, mismatchedIds));
+    const resumed = await runBuild(model, QUIET_RUN, stopped?.progress.cursor);
+    expect(resumed?.status).toBe("drained");
+    expect(resumed?.progress.proved).toBe(mismatchedIds.length);
+    expect(
+      (await readStates(model.entityIds)).every(
+        ({ appliedRevision }) => appliedRevision !== null,
+      ),
+    ).toBe(true);
+  });
+
   test("mixed pages and an isolated canonical mismatch still settle healthy revisions", async () => {
     const model = await newModel(
       CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT *
