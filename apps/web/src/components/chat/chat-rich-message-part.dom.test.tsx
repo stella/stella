@@ -54,7 +54,7 @@ globalThis.fetch = Object.assign(
 
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
-const { act, cleanup, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { buildStellaMcpAppPart } =
@@ -85,8 +85,10 @@ const threadRef = {
 
 const built = buildStellaMcpAppPart({
   call: {
-    input: { query: "výpověď", country: "cze" },
-    result: { structuredContent: { results: [], nextCursor: null } },
+    input: { queries: ["výpověď", "výpovědní doba"], country: "cze" },
+    result: {
+      structuredContent: { results: [{}, {}, {}], nextCursor: null },
+    },
   },
   toolCallId: "call_search_case_law",
   toolName: "search_case_law",
@@ -120,9 +122,46 @@ const renderPart = (part: RichChatPart) => {
   return { view, fingerprints };
 };
 
+type RenderedPart = ReturnType<typeof renderPart>["view"];
+
+const caseLawTrigger = (view: RenderedPart) =>
+  view.getByRole("button", { name: /Case Law/u });
+
+const openCaseLaw = async (view: RenderedPart) => {
+  await act(async () => {
+    fireEvent.click(caseLawTrigger(view));
+  });
+};
+
 describe("stella app parts in a chat thread", () => {
+  test("starts a case-law result list as one closed line", () => {
+    const { view, fingerprints } = renderPart(appPart);
+
+    const trigger = caseLawTrigger(view);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.textContent).toContain("výpověď · výpovědní doba");
+    expect(trigger.textContent).toContain("3 decisions");
+    expect(view.queryByLabelText("App sandbox")).toBeNull();
+    expect(bundleRequests).toEqual([]);
+    expect(fingerprints).toEqual([]);
+  });
+
+  test("keeps an opened case-law list mounted when it closes again", async () => {
+    const { view } = renderPart(appPart);
+
+    await openCaseLaw(view);
+    await waitFor(() => view.getByLabelText("App sandbox"));
+    expect(caseLawTrigger(view).getAttribute("aria-expanded")).toBe("true");
+
+    await openCaseLaw(view);
+    expect(caseLawTrigger(view).getAttribute("aria-expanded")).toBe("false");
+    expect(view.container.querySelector("output")).not.toBeNull();
+    expect(bundleRequests).toHaveLength(1);
+  });
+
   test("frames a stored app when the browser API shares the page's origin", async () => {
     const { view, fingerprints } = renderPart(appPart);
+    await openCaseLaw(view);
 
     const sandbox = await waitFor(
       () => view.getByLabelText("App sandbox").textContent,
@@ -156,6 +195,7 @@ describe("stella app parts in a chat thread", () => {
   test("reports an app document that did not load", async () => {
     bundleAnswer = "fails";
     const { view, fingerprints } = renderPart(appPart);
+    await openCaseLaw(view);
 
     await waitFor(() => {
       expect(fingerprints).toEqual(["ChatRichContent.refused:app-bundle"]);
