@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE legislation search",
       "borme_get_summary": "BORME daily summary",
       "business_registry_lookup": "Searching business registry",
+      "calendar_free_busy": "Check calendar availability",
+      "calendar_list_events": "Read calendar events",
       "command_execution": "Running a command",
       "compare_versions": "Comparing versions",
       "configure_template_fields": "Configure template fields",
@@ -5462,6 +5464,7 @@
       "title": "Organization instructions",
       "tooLong": "Instructions must be at most {maxLength} characters."
     },
+    "createdSwitchPrompt": "<bdi>{name}</bdi> has been created. Switch to it to set it up and invite members.",
     "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
     "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
     "creationNotAllowed": "This account cannot create organizations.",
@@ -6139,7 +6142,7 @@
         "title": "AI billing drafts"
       },
       "dataBoxes": {
-        "description": "A data-box message sent from one of these boxes is filed as outgoing, one sent to them as incoming. Each change re-derives the direction of messages already filed in the matters you can access.",
+        "description": "Messages sent from these boxes are filed as outgoing, messages sent to them as incoming. Changes also apply to messages already filed.",
         "invalid": "A data box ID has seven letters or digits.",
         "remove": "Remove data box {address}",
         "title": "Organization data boxes"
@@ -6172,6 +6175,7 @@
         "title": "Memory extraction",
         "toggleLabel": "Suggest memories from chat history in the background"
       },
+      "organizationIdHint": "Permanent ID that never changes. Use it when contacting support or setting up integrations.",
       "pastInvitations": "Past invitations",
       "pendingInvitations": "Pending invitations",
       "practiceJurisdictions": "Jurisdictions",
@@ -6185,11 +6189,12 @@
       "renameTitle": "Rename organization",
       "renameTypeToConfirm": "Type the new name to confirm: {name}",
       "slug": {
-        "change": "Change slug",
-        "conflict": "This slug is already used by another organization.",
-        "description": "Choose a new slug or generate a random one. The previous slug will stop working.",
-        "opaque": "Generate a random slug",
-        "title": "Organization slug"
+        "change": "Change handle",
+        "conflict": "This handle is already used by another organization.",
+        "description": "Choose a new handle or generate a random one. The previous handle will stop working.",
+        "hint": "A unique short name for this organization, separate from its display name.",
+        "opaque": "Generate a random handle",
+        "title": "Organization handle"
       },
       "timePolicy": {
         "description": "Set time rounding, editing limits and monthly locks.",

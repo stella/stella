@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
@@ -6,7 +7,7 @@ import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disableAndPurgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
@@ -36,18 +37,9 @@ const setSharepointEnablement = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
 
     if (!body.enabled) {
-      const purge = await Result.tryPromise({
-        try: async () =>
-          await disableAndPurgeSharepointForOrg({
-            organizationId,
-            recordAuditEvent,
-          }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Failed to disable the SharePoint connection",
-            cause,
-          }),
+      const purge = await disableAndPurgeSharepointForOrg({
+        organizationId,
+        recordAuditEvent,
       });
       if (Result.isError(purge)) {
         return Result.err(purge.error);
@@ -63,22 +55,15 @@ const setSharepointEnablement = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: organizationId } },
-          columns: { sharepointConnectionEnabled: true },
+        const existing = await lockSharepointPolicy({
+          tx,
+          organizationId,
+          recordAuditEvent,
         });
-
         await tx
-          .insert(organizationSettings)
-          .values({
-            id: createSafeId<"organizationSettings">(),
-            organizationId,
-            sharepointConnectionEnabled: true,
-          })
-          .onConflictDoUpdate({
-            target: organizationSettings.organizationId,
-            set: { sharepointConnectionEnabled: true, updatedAt: new Date() },
-          });
+          .update(organizationSettings)
+          .set({ sharepointConnectionEnabled: true, updatedAt: new Date() })
+          .where(eq(organizationSettings.organizationId, organizationId));
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
@@ -87,7 +72,7 @@ const setSharepointEnablement = createSafeRootHandler(
           workspaceId: null,
           changes: {
             sharepointConnectionEnabled: {
-              old: existing?.sharepointConnectionEnabled ?? false,
+              old: existing.sharepointConnectionEnabled,
               new: true,
             },
           },

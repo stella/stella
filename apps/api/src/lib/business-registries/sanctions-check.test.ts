@@ -17,6 +17,7 @@ import {
   personDateOfBirth,
   runEntityCheckShared,
 } from "@/api/lib/business-registries/entity-checks";
+import { IsirLookupBudgetError } from "@/api/lib/business-registries/isir-lookup-budget";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type { SanctionsCheckDependencies } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -440,6 +441,31 @@ describe("counterparty check subject routing", () => {
       });
     },
   );
+
+  test("an insolvency lookup the register's budget cannot pay for is refused before it asks", async () => {
+    const result = await runEntityCheckShared({
+      observer: "unobserved",
+      permit,
+      check: "cz-insolvency",
+      subject: { type: "company-id", value: "27082440", country: "CZ" },
+      runCheck: neverRunCheck,
+      reserveLookup: async () =>
+        await Promise.resolve(
+          Result.err(
+            new IsirLookupBudgetError({
+              message: "The insolvency register's lookups for today are spent",
+              reason: "spent",
+            }),
+          ),
+        ),
+      sanctions,
+    });
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 503,
+      code: "upstream_unavailable",
+      retryable: true,
+    });
+  });
 
   test("does not ask for a birth date the VAT check would not use", async () => {
     const result = await runEntityCheckShared({

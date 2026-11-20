@@ -82,12 +82,50 @@ type CandidateIdentityPath =
       decisionDate: string;
       docketKeys: readonly string[];
       caseNumber: string;
+      /** Set where the record states which order of the docket it is. */
+      orderMark?: CandidateOrderMark | null | undefined;
     }
   | {
       basis: "court-docket-other-date";
       docketKeys: readonly string[];
       caseNumber: string;
     };
+
+type CandidateOrderMark = {
+  readonly sheetNumber: string | null;
+  readonly filePosition: string | null;
+  /** Where a same-source candidate keeps its own file position. */
+  readonly metadataKey: string;
+};
+
+const DOCKET_DASH = "[-‐‑‒–—]";
+
+/**
+ * A candidate states the same order: the same sheet, or the same file
+ * position in its metadata or at the end of its docket (`…/2023-B-24`). A
+ * candidate that states no order is not taken for any one of several.
+ */
+const sameOrderPredicate = ({
+  sheetNumber,
+  filePosition,
+  metadataKey,
+}: CandidateOrderMark) => {
+  const positionParts =
+    filePosition === null
+      ? null
+      : /^([A-Z]{1,3})-(\d{1,5})$/u.exec(filePosition);
+  return or(
+    sheetNumber === null
+      ? undefined
+      : eq(caseLawDecisions.sheetNumber, sheetNumber),
+    filePosition === null
+      ? undefined
+      : sql`(${caseLawDecisions.metadata} -> ${metadataKey} ->> 'filePosition') = ${filePosition}`,
+    positionParts === null
+      ? undefined
+      : sql`${caseLawDecisions.caseNumber} ~ ${`${DOCKET_DASH} ?${positionParts[1] ?? ""} ?${DOCKET_DASH} ?${positionParts[2] ?? ""}$`}`,
+  );
+};
 
 type HeldDecisionCandidateQueryOptions = {
   country: string;
@@ -150,6 +188,11 @@ export const readHeldDecisionCandidates = async (
           }),
           path.basis === "court-docket-date"
             ? eq(caseLawDecisions.decisionDate, path.decisionDate)
+            : undefined,
+          path.basis === "court-docket-date" &&
+            path.orderMark !== null &&
+            path.orderMark !== undefined
+            ? sameOrderPredicate(path.orderMark)
             : undefined,
         );
   const identity =

@@ -22,6 +22,7 @@ import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { createCalendarTools } from "@/api/handlers/chat/tools/calendar-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { SHOW_APP_DEPLOYMENT_FEATURE } from "@/api/handlers/chat/tools/show-app-tool";
@@ -190,6 +191,14 @@ const buildChatToolsForScenario = ({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
       status: "connected",
     },
+    calendarTools: createCalendarTools({
+      organizationId,
+      recordAuditEvent: inertAuditRecorder,
+      safeDb: inertSafeDb,
+      userId,
+      createAbortSignal: () =>
+        panic("The provider canary must not execute calendar tools."),
+    }),
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,

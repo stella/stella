@@ -271,6 +271,15 @@ export const CENSUS_CAPABILITIES = {
     evidenceRef:
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns-sbirka.ts",
   },
+  "cz-isir": {
+    type: "none-exposed",
+    evidence: {
+      type: "unverified",
+      reason:
+        "The register's feed counts actions of every kind, not decisions, and states no count for a range of them.",
+    },
+    evidenceRef: "apps/api/src/handlers/case-law/ingestion/adapters/cz-isir.ts",
+  },
   "us-courtlistener": {
     type: "none-exposed",
     evidence: {

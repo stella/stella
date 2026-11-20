@@ -417,6 +417,25 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
   }
 });
 
+test("shipped web source selects every production leg; its unit tests none", () => {
+  const { root, write } = fixture();
+  try {
+    const component = "apps/web/src/components/chat/rename.tsx";
+    const unitTest = "apps/web/src/components/chat/rename.dom.test.tsx";
+    write(component, "export const Rename = () => null;\n");
+    write(unitTest, 'import "./rename";\n');
+    expect(selectedE2ePlan([component], root)).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+      suiteSpecs: [],
+    });
+    expect(selectedE2ePlan([unitTest], root).matrix.shard).not.toContain(1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("an unknown change set selects every production leg", () => {
   const { root } = fixture();
   try {

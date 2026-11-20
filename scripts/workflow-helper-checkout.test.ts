@@ -48,6 +48,75 @@ const helperReadsAfterRootCheckout = (source: string, file: string) => {
   return offenders;
 };
 
+// actions/checkout reusing a directory that a sparse checkout set up runs
+// `git sparse-checkout disable`, then removes the worktree config that
+// disable wrote, which restores `core.sparseCheckout` and the old patterns.
+// The full checkout then stays sparse and reports every file it cannot
+// remove, so a sparse checkout must not share its directory with a later
+// full one.
+const sparseCheckoutReuses = (source: string, file: string) => {
+  const offenders: string[] = [];
+  const jobs = record(record(Bun.YAML.parse(source))["jobs"]);
+  for (const [job, definition] of Object.entries(jobs)) {
+    const sparse = new Set<string>();
+    for (const value of list(record(definition)["steps"])) {
+      const step = record(value);
+      if (!isRepositoryCheckoutAction(step["uses"])) {
+        continue;
+      }
+      const settings = record(step["with"]);
+      const checkoutPath =
+        path.posix
+          .normalize(text(settings["path"]) || ".")
+          .replace(/\/$/u, "") || ".";
+      if (settings["sparse-checkout"] !== undefined) {
+        sparse.add(checkoutPath);
+      } else if (sparse.has(checkoutPath)) {
+        offenders.push(`${file} ${job}: ${text(step["name"])}`);
+      }
+    }
+  }
+  return offenders;
+};
+
+test("no full checkout reuses a sparse checkout's directory", () => {
+  const offenders = readdirSync(workflowsDirectory)
+    .filter((file) => file.endsWith(".yml"))
+    .flatMap((file) =>
+      sparseCheckoutReuses(
+        readFileSync(path.join(workflowsDirectory, file), "utf-8"),
+        file,
+      ),
+    );
+  expect(offenders).toEqual([]);
+});
+
+test("the check finds a full checkout over a sparse one", () => {
+  const workflow = `
+jobs:
+  resolve:
+    steps:
+      - name: Scripts aside
+        uses: actions/checkout@v1
+        with:
+          path: .scripts
+          sparse-checkout: scripts
+      - name: Source
+        uses: actions/checkout@v1
+      - name: Scripts in root
+        uses: actions/checkout@v1
+        with:
+          sparse-checkout: scripts
+      - name: Source again
+        uses: actions/checkout@v1
+        with:
+          path: ./
+`;
+  expect(sparseCheckoutReuses(workflow, "fixture.yml")).toEqual([
+    "fixture.yml resolve: Source again",
+  ]);
+});
+
 test("no step reads the helper checkout after a root checkout removed it", () => {
   const offenders = readdirSync(workflowsDirectory)
     .filter((file) => file.endsWith(".yml"))

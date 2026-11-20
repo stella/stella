@@ -19,8 +19,9 @@ import { OrganizationTimeZoneCardPending } from "@/routes/_protected.settings/or
 
 /*
  * The organization's General page, drawn by both phases: the heading, the
- * profile, the slug and the id, then the practice jurisdictions, the time
- * zone and the data boxes under their headings, and the danger zone. The
+ * profile and the slug, then the practice jurisdictions, the time zone and
+ * the data boxes under their headings, the id (for support and
+ * integrations, so it sits apart from the settings), and the danger zone. The
  * page fills the slots with the live cards; the pending phase with their
  * faces, so each card that loads lands in its own box.
  */
@@ -68,7 +69,6 @@ export const OrganizationGeneralPageShell = ({
     <SettingsPageHeaderPending title="admin.general" />
     {profile}
     {slug}
-    {organizationId}
     <GeneralSection title="settings.organization.practiceJurisdictions">
       {jurisdictions}
     </GeneralSection>
@@ -78,6 +78,7 @@ export const OrganizationGeneralPageShell = ({
     <GeneralSection title="settings.organization.dataBoxes.title">
       {dataBoxes}
     </GeneralSection>
+    {organizationId}
     {dangerZone}
   </>
 );
@@ -98,6 +99,7 @@ const OrganizationGeneralPendingView = () => {
         organizationId={
           <IdentifierPanelPending
             action={<CopyControlFace variant="outline" />}
+            description="settings.organization.organizationIdHint"
             title="admin.organizationId"
           />
         }
@@ -112,6 +114,7 @@ const OrganizationGeneralPendingView = () => {
                 />
               </ButtonFace>
             }
+            description="settings.organization.slug.hint"
             title="settings.organization.slug.title"
           />
         }

@@ -124,6 +124,7 @@ import {
 } from "./reader-answers";
 import { reportExports } from "./reports";
 import { savedSearches } from "./saved-searches";
+import { sharepointConnections } from "./sharepoint";
 import { scoutRuns, signalEvents, signals } from "./signals";
 import { agentSkillResources, agentSkills } from "./skills";
 import { styleSets } from "./style-sets";
@@ -147,6 +148,7 @@ import {
 
 export const relations = defineRelations(
   {
+    sharepointConnections,
     legalReaderAnswers,
     legalReaderAnswerMessages,
     agentSkills,

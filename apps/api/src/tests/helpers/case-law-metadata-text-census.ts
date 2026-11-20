@@ -171,6 +171,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   courtSuccession: INSPECTED,
   courtType: INSPECTED,
   crossReference: INSPECTED,
+  czIsir: INSPECTED,
   czNsCollection: INSPECTED,
   dataPrimeiraPublicacao: INSPECTED,
   dataSegundaPublicacao: INSPECTED,

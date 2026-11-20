@@ -116,6 +116,7 @@ const importSharepointFiles = createSafeHandler(
     getWorkspaceAccess,
     memberRole,
     recordAuditEvent,
+    request,
     safeDb,
     scopedDb,
     session,
@@ -132,6 +133,8 @@ const importSharepointFiles = createSafeHandler(
         organizationId,
         userId: user.id,
         safeDb,
+        recordAuditEvent,
+        signal: request.signal,
         call: async (accessToken) =>
           await Result.gen(async function* () {
             const imported: SharepointImportResult[] = [];

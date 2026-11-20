@@ -62,7 +62,7 @@ export const ContactsPreview = ({
             · {company.registry}
           </span>
         </h3>
-        <DetailsGrid className="gap-y-1.5">
+        <DetailsGrid density="compact">
           {company.details.map((detail) => (
             <DetailsItem key={detail.label} label={detail.label}>
               {detail.value}
