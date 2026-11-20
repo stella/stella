@@ -361,6 +361,7 @@ const readPendingBudget = (
   };
 };
 
+// The directory scripts/startup-gate-base.sh writes the base's copies into.
 const baseDirArgument = (): string | undefined => {
   const index = process.argv.indexOf("--base-dir");
   if (index === -1) {

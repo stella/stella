@@ -588,9 +588,9 @@
       "Install dependencies",
       "Prepare environment",
       "Prod-deps web boot smoke",
-      "Select startup gate base from the target branch",
       "Setup Bun",
       "Startup bundle gates",
+      "Startup gate base",
       "Upload failed Bun install logs",
       "Upload production E2E web build"
     ],

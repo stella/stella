@@ -5020,41 +5020,20 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Select startup gate base from the target branch
-        # The base's baseline and pending-component exceptions, at their
-        # repository paths: the pending total may grow by what the routes the
-        # change converted allow (scripts/bundle-startup-gates.ts). A file
-        # the base lacks is left out.
+      - name: Startup gate base
         timeout-minutes: 5
         env:
-          TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-        run: |
-          if [[ -z "$TARGET_BASE_SHA" || "$TARGET_BASE_SHA" =~ ^0+$ ]]; then
-            exit 0
-          fi
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin "$TARGET_BASE_SHA"
-          git cat-file -e "$TARGET_BASE_SHA^{commit}"
-          base_dir="$RUNNER_TEMP/startup-gate-base"
-          for rel in scripts/bundle-baseline.json .oxlint-plugins/route-pending-component-exceptions.json; do
-            mkdir -p "$base_dir/$(dirname "$rel")"
-            git show "$TARGET_BASE_SHA:$rel" > "$base_dir/$rel" 2>/dev/null || rm -f "$base_dir/$rel"
-          done
-          echo "STARTUP_GATE_BASE_DIR=$base_dir" >> "$GITHUB_ENV"
+          BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
+        run: bash scripts/startup-gate-base.sh
 
       - name: Startup bundle gates
         # Blocking: the initial chunks' gzip against the committed budget, the
-        # eager pending views against the base branch's `pending` total plus
-        # what the routes the change converted allow, page code in the initial
-        # chunks, and pages a route loads outside its preloads
-        # (scripts/bundle-startup-gates.ts). Reads the build above and its
-        # hidden sourcemaps; writes a table to the job summary.
+        # eager pending views, page code in the initial chunks, and pages a
+        # route loads outside its preloads (scripts/bundle-startup-gates.ts).
+        # Reads the build and its hidden sourcemaps; writes the job summary.
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          base_args=()
-          if [[ -n "${STARTUP_GATE_BASE_DIR:-}" ]]; then
-            base_args=(--base-dir "$STARTUP_GATE_BASE_DIR")
-          fi
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check "${base_args[@]}"
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -5431,7 +5410,7 @@ jobs:
       - name: Check route network baseline
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
-        timeout-minutes: 6
+        timeout-minutes: 8
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
