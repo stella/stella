@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_ISIR",
   "key": "cz-isir",
-  "parserVersion": 1,
+  "parserVersion": 2,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "the source's first parser; there are no stored rows to narrow"
+    "reason": "the source has never been enabled; there are no stored rows to narrow"
   }
 }

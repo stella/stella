@@ -2,7 +2,7 @@
  * What the insolvency register served as a decision's text.
  *
  * The adapter never stores the register's PDF: it stores the document's
- * paragraphs after anonymisation, as a JSON list of `{ text, bold }` under
+ * paragraphs as read from it, as a JSON list of `{ text, bold }` under
  * the envelope part `text`, and the decision is parsed from that list. The
  * list is therefore the publisher's text as the corpus may hold it, and the
  * projection reads it back paragraph by paragraph.
@@ -18,7 +18,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
-/** The envelope parts the adapter stores the anonymised paragraphs and the action under. */
+/** The envelope parts the adapter stores the paragraphs and the action under. */
 const TEXT_PART = "text";
 const ACTION_PART = "action";
 

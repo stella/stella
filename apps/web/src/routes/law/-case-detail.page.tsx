@@ -1,6 +1,10 @@
 import { lazy, Suspense, useRef, useState } from "react";
 
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  getRouteApi,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 
 import { DECISION_ANCHOR_RESOLUTION } from "@stll/api-contract/case-law-anchor-redirects";
 import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
@@ -29,6 +33,7 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import { DecisionAppealReviews } from "@/features/case-law/components/case-viewer/decision-appeal-reviews";
+import { APPEAL_REVIEWS_COUNTRY } from "@/features/case-law/components/case-viewer/decision-appeal-reviews.pending";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { fragmentBlockAnchor } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
@@ -51,12 +56,58 @@ import {
 import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
 import { PublicDecisionTextNotice } from "@/routes/law/-components/public-decision-text-notice";
 
+import {
+  DecisionReaderColumn,
+  DecisionReaderContent,
+  DecisionReaderFrame,
+  DecisionReviewsBand,
+} from "./-case-detail.pending";
+
 const AuthenticatedDecisionTools = lazy(async () => {
   const module = await import("@/components/authenticated-decision-tools");
   return {
     default: module.AuthenticatedDecisionTools,
   };
 });
+
+const decisionRouteApi = getRouteApi("/law/$country/cases/$court/$slug");
+const languageDecisionRouteApi = getRouteApi(
+  "/law/$country/cases/$court/$language/$slug",
+);
+
+/** A decision at its address without a language segment. */
+export function PublicDecisionPage() {
+  const decision = decisionRouteApi.useLoaderData();
+  const initialSearchQuery = decisionRouteApi.useSearch({
+    select: (search) => search.q,
+  });
+
+  return (
+    <PublicDecisionViewer
+      key={`${decision.id}:${initialSearchQuery ?? ""}`}
+      decision={decision}
+      initialSearchQuery={initialSearchQuery}
+      routeId={decisionRouteApi.id}
+    />
+  );
+}
+
+/** A decision in one of the languages its court published it in. */
+export function PublicLanguageDecisionPage() {
+  const decision = languageDecisionRouteApi.useLoaderData();
+  const initialSearchQuery = languageDecisionRouteApi.useSearch({
+    select: (search) => search.q,
+  });
+
+  return (
+    <PublicDecisionViewer
+      key={`${decision.id}:${initialSearchQuery ?? ""}`}
+      decision={decision}
+      initialSearchQuery={initialSearchQuery}
+      routeId={languageDecisionRouteApi.id}
+    />
+  );
+}
 
 type PublicDecisionViewerProps = {
   decision: PublicCaseLawDecision;
@@ -248,10 +299,7 @@ export function PublicDecisionViewer({
   };
 
   return (
-    <main
-      className="flex min-h-0 flex-1 flex-col overflow-hidden"
-      ref={panelRef}
-    >
+    <DecisionReaderFrame panelRef={panelRef}>
       <DecisionDetailsTab
         decision={decision}
         key={decision.id}
@@ -269,16 +317,16 @@ export function PublicDecisionViewer({
         />
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}
-      {decision.country === "CZE" && (
-        <div className="px-4 py-2">
+      {decision.country === APPEAL_REVIEWS_COUNTRY && (
+        <DecisionReviewsBand>
           <DecisionAppealReviews
             reviews={decision.appealReviews}
             country={decision.country}
           />
-        </div>
+        </DecisionReviewsBand>
       )}
       {!noDocument && <InspectorFindBar find={find} />}
-      <div className="flex min-h-0 flex-1 overflow-hidden" ref={contentRef}>
+      <DecisionReaderContent contentRef={contentRef}>
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
         {!noDocument &&
           (authStatus.isAuthenticated ? (
@@ -297,8 +345,8 @@ export function PublicDecisionViewer({
               landingSessionId={landingSessionId}
             />
           ))}
-      </div>
-    </main>
+      </DecisionReaderContent>
+    </DecisionReaderFrame>
   );
 }
 
@@ -325,7 +373,7 @@ const MemberDecisionWorkspace = ({
 
   return (
     <AuthenticatedUserProvider user={user}>
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <DecisionReaderColumn>
         <DecisionWorkspace
           {...reader}
           {...(aiGate === null
@@ -335,7 +383,7 @@ const MemberDecisionWorkspace = ({
                 ensureAIAvailable: aiGate.ensureAIAvailable,
               })}
         />
-      </div>
+      </DecisionReaderColumn>
       <Suspense fallback={null}>
         <AuthenticatedDecisionTools
           decisionId={reader.decisionId}
@@ -355,7 +403,7 @@ const GuestDecisionWorkspace = ({
   const ensureAccount = useRequireAccount();
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <DecisionReaderColumn>
       <DecisionWorkspace
         aiMode="gated"
         decision={decision}
@@ -366,7 +414,7 @@ const GuestDecisionWorkspace = ({
           ensureAccount();
         }}
       />
-    </div>
+    </DecisionReaderColumn>
   );
 };
 

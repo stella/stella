@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Pozvánka odmietnutá",
       "declinedDescription": "K tejto organizácii ste sa nepripojili.",
-      "description": "{inviterEmail} vás pozval/a do organizácie {organizationName} ako {role}.",
+      "description": "{inviterEmail} vás pozval/a do organizácie {organizationName}{role, select, owner { ako vlastníka} admin { ako administrátora} member { ako člena} intern { ako stážistu} external { ako externého spolupracovníka} other {}}.",
       "goToWorkspaces": "Prejsť na spisy",
       "title": "Pozvánka do organizácie",
       "verifyEmailHint": "Ak chcete overiť adresu {email}, odhláste sa a prihláste sa jednorazovým kódom, ktorý na ňu odošleme.",
@@ -7246,6 +7246,7 @@
         "title": "Odstrániť odkazy na vzory Wordu?",
         "unknownLocation": "Umiestnenie vzoru: adresa, ktorú stella nedokáže overiť"
       },
+      "checkingFiles": "Kontrola súborov…",
       "desktopEdit": {
         "accountRequiredTitle": "Pripojte stella desktop k svojmu účtu",
         "action": "Upraviť v desktopovej aplikácii",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
       "downloadWithComments": "Stiahnuť s komentármi",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# súbor je totožný s dokumentom, ktorý tento spis už obsahuje.} few {# súbory sú totožné s dokumentmi, ktoré tento spis už obsahuje.} many {# súboru je totožných s dokumentmi, ktoré tento spis už obsahuje.} other {# súborov je totožných s dokumentmi, ktoré tento spis už obsahuje.}} Vyberte, čo s každým z nich urobiť.",
+        "matchedDocument": "Totožné s dokumentom <bdi>{documentName}</bdi>",
+        "skip": "Preskočiť tento súbor",
+        "skipAll": "Preskočiť duplicity",
+        "title": "Už v spise",
+        "uploadAnyway": "Napriek tomu nahrať"
+      },
       "emptyFile": "Súbor je prázdny.",
       "fileTooLarge": "Súbor je väčší ako {limit, number} MB.",
       "includeReferenceNumber": "Pridať referenčné číslo",

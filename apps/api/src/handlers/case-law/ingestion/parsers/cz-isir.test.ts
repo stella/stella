@@ -1,7 +1,7 @@
 /**
- * The register's decisions read from their stored, anonymised paragraphs.
- * The fixtures are two high-court decisions as the reader and anonymiser
- * produced them, shortened, with the companies' names invented.
+ * The register's decisions read from their stored paragraphs. The fixtures
+ * are two high-court decisions as the reader produced them, shortened, with
+ * personal data replaced and the companies' names invented.
  */
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";

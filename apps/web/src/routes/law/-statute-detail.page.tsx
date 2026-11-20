@@ -1,7 +1,11 @@
 import { lazy, Suspense, useId, useRef, useState } from "react";
 import type { ReactElement, RefObject } from "react";
 
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  getRouteApi,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { statuteEliParts } from "@stll/api-contract/statute-act-number";
@@ -27,7 +31,6 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { outlineEntryText, OutlineRail } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -36,11 +39,8 @@ import {
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
-import {
-  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
-  LEGAL_READER_LAYOUT_CLASS_NAME,
-  LegalReaderControls,
-} from "@/components/legal-reader/legal-reader-controls";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import { ReaderScrollViewport } from "@/components/legal-reader/legal-reader-controls.pending";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { OutlineJumpField } from "@/components/legal-reader/outline-jump-field";
 import {
@@ -69,6 +69,12 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
+
+import {
+  StatuteDocumentColumn,
+  StatuteReaderFrame,
+  StatuteReaderLayout,
+} from "./-statute-detail.pending";
 
 // The comparison runs Folio's content diff over two whole consolidations;
 // the reader loads neither the engine nor the view until one is asked for.
@@ -288,19 +294,8 @@ export const PublicStatuteViewer = ({
 
   const readerWithChat = (
     <StatuteReaderChat activeLegal={activeLegal}>
-      <div
-        className="reader-scroll h-full overflow-y-auto"
-        ref={attachViewport}
-        {...textScale.rootProps}
-      >
-        <div
-          className={cn(
-            "flex flex-col gap-4 pb-6",
-            LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
-          )}
-          data-slot="reader-document-column"
-          ref={attachContent}
-        >
+      <ReaderScrollViewport ref={attachViewport} {...textScale.rootProps}>
+        <StatuteDocumentColumn columnRef={attachContent}>
           {statute === null ? (
             <NoVersionOnDay windowGap={windowGap} />
           ) : (
@@ -316,13 +311,13 @@ export const PublicStatuteViewer = ({
               />
             </>
           )}
-        </div>
-      </div>
+        </StatuteDocumentColumn>
+      </ReaderScrollViewport>
     </StatuteReaderChat>
   );
 
   return (
-    <main className="relative flex min-h-0 flex-1 flex-col" ref={panelRef}>
+    <StatuteReaderFrame panelRef={panelRef}>
       <ChromeHeaderActions>
         {canPickDate && (versions.length > 1 || asOf !== undefined) && (
           <div className="flex min-w-0 items-center gap-1">
@@ -369,12 +364,7 @@ export const PublicStatuteViewer = ({
       ) : (
         <>
           <InspectorFindBar find={find} />
-          <div
-            className={cn(
-              LEGAL_READER_LAYOUT_CLASS_NAME,
-              "relative min-h-0 flex-1",
-            )}
-          >
+          <StatuteReaderLayout>
             {/* The rail hides itself when a document has no outline to show. */}
             <OutlineRail
               topOffset={READER_BREADCRUMB_CLEARANCE}
@@ -453,12 +443,89 @@ export const PublicStatuteViewer = ({
                 key={statute.id}
               />
             )}
-          </div>
+          </StatuteReaderLayout>
         </>
       )}
-    </main>
+    </StatuteReaderFrame>
   );
 };
+
+const statuteRouteApi = getRouteApi("/law/$country/statutes/$slug/");
+const statuteVersionRouteApi = getRouteApi(
+  "/law/$country/statutes/$slug/v/$version",
+);
+
+/**
+ * A statute at its canonical address: the version in force on the day the
+ * search asks about, today when it asks about none.
+ */
+export function PublicStatutePage() {
+  const { statute, versions, windowGap, work } =
+    statuteRouteApi.useLoaderData();
+  const asOf = statuteRouteApi.useSearch({ select: (search) => search.asOf });
+  const searchQuery = statuteRouteApi.useSearch({
+    select: (search) => search.q,
+  });
+  const requestedJump = statuteRouteApi.useSearch({
+    select: (search) => search.jump,
+  });
+  const compare = statuteRouteApi.useSearch({
+    select: (search) => search.compare,
+  });
+  const provision = statuteRouteApi.useSearch({
+    select: (search) => search.provision,
+  });
+  const show = statuteRouteApi.useSearch({ select: (search) => search.show });
+
+  return (
+    <PublicStatuteViewer
+      comparison={{ compare, provision, show }}
+      asOf={asOf}
+      key={`${statute?.id ?? work.id}:${searchQuery ?? ""}`}
+      searchQuery={searchQuery}
+      requestedJump={requestedJump}
+      statute={statute}
+      versions={versions}
+      windowGap={windowGap}
+      work={work}
+    />
+  );
+}
+
+/** One consolidation, addressed by the day its validity window opened. */
+export function PublicStatuteVersionPage() {
+  const { statute, versions, windowGap, work } =
+    statuteVersionRouteApi.useLoaderData();
+  const searchQuery = statuteVersionRouteApi.useSearch({
+    select: (search) => search.q,
+  });
+  const requestedJump = statuteVersionRouteApi.useSearch({
+    select: (search) => search.jump,
+  });
+  const compare = statuteVersionRouteApi.useSearch({
+    select: (search) => search.compare,
+  });
+  const provision = statuteVersionRouteApi.useSearch({
+    select: (search) => search.provision,
+  });
+  const show = statuteVersionRouteApi.useSearch({
+    select: (search) => search.show,
+  });
+
+  return (
+    <PublicStatuteViewer
+      comparison={{ compare, provision, show }}
+      asOf={undefined}
+      key={`${statute?.id ?? work.id}:${searchQuery ?? ""}`}
+      searchQuery={searchQuery}
+      requestedJump={requestedJump}
+      statute={statute}
+      versions={versions}
+      windowGap={windowGap}
+      work={work}
+    />
+  );
+}
 
 type StatuteNavigationOptions = {
   /** The find bar's query, which a move to another consolidation keeps. */
