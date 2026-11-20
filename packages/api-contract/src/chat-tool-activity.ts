@@ -465,6 +465,9 @@ const RESEARCH_TOOL_READ_AREA = {
   boe_search_legislation: "legislation",
   borme_get_summary: "registers",
   business_registry_lookup: "registers",
+  // The caller's own Outlook calendar is neither legal research nor a document.
+  calendar_free_busy: "other",
+  calendar_list_events: "other",
   compare_versions: "openDocument",
   counterparty_check: "registers",
   "describe-stella-api": null,
