@@ -6,6 +6,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 GlobalRegistrator.register();
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { Button } = await import("./button");
+const { SplitButton } = await import("./split-button");
 
 afterAll(async () => {
   cleanup();
@@ -111,6 +112,27 @@ test("focus stays on a button as its disabled reason appears and clears", () => 
     view.rerender(action(disabled));
     expect(document.activeElement).toBe(button);
     expect(button.getAttribute("aria-disabled")).toBe(disabled ? "true" : null);
+  }
+});
+
+test("the split primary keeps focus as its disabled reason appears and clears", () => {
+  const action = (reason: string | undefined) => (
+    <SplitButton
+      menu={null}
+      menuLabel="More create options"
+      onPrimaryClick={() => undefined}
+      primaryDisabledReason={reason}
+    >
+      Create document
+    </SplitButton>
+  );
+  const view = render(action(undefined));
+  const button = view.getByRole("button", { name: "Create document" });
+  button.focus();
+  for (const reason of ["A document is being created.", undefined]) {
+    view.rerender(action(reason));
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute("aria-disabled")).toBe(reason ? "true" : null);
   }
 });
 

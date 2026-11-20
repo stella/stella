@@ -71,6 +71,13 @@ export const SplitButton = (props: SplitButtonProps) => {
     size = "md",
     className,
   } = props;
+  // Supplying a reason prop opts into focus retention as its value changes.
+  const primaryState = Object.hasOwn(props, "primaryDisabledReason")
+    ? {
+        disabled: primaryDisabledReason !== undefined,
+        disabledReason: primaryDisabledReason,
+      }
+    : {};
   const triggerButton = (
     <Button
       className={SPLIT_BUTTON_TRIGGER_CLASS[size]}
@@ -89,8 +96,7 @@ export const SplitButton = (props: SplitButtonProps) => {
         aria-describedby={primaryDescriptionId}
         aria-label={primaryLabel}
         className={SPLIT_BUTTON_PRIMARY_CLASS[size]}
-        disabled={primaryDisabledReason !== undefined}
-        disabledReason={primaryDisabledReason}
+        {...primaryState}
         onClick={onPrimaryClick}
         size="sm"
         tooltip={

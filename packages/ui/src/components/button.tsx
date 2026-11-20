@@ -314,7 +314,7 @@ const useButtonDescription = ({
   const ref = useCallback(
     (button: HTMLElement | null) => {
       if (!button || !hasReason || render === undefined) {
-        return;
+        return undefined;
       }
       const previous = button.getAttribute("aria-describedby");
       const merged = [

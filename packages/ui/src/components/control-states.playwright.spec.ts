@@ -146,9 +146,13 @@ test("inspector actions retain the fixed row and explain why duplication is disa
     name: "Duplicate content",
     exact: true,
   });
+  const reason = "Select content to duplicate.";
   await expect(duplicate).toBeDisabled();
-  await duplicate.focus();
-  await expect(page.getByRole("tooltip")).toHaveText(
-    "Select content to duplicate.",
-  );
+  await expect(duplicate).toHaveAccessibleDescription(reason);
+  await action.focus();
+  await page.keyboard.press("Tab");
+  await expect(duplicate).toBeFocused();
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toHaveText(reason);
 });
