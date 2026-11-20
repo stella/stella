@@ -8,6 +8,7 @@ import {
   CHAT_STEP_LEDGER_KEY,
   type ChatStepLedger,
   readChatStepLedger,
+  readChatStepRefTargets,
 } from "@stll/api-contract/chat-step-ledger";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
@@ -16,6 +17,7 @@ import {
   chatMessageFromPersisted,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
@@ -26,6 +28,16 @@ import { createTurnMessageIdMapper } from "@/api/handlers/chat/stream-message-id
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
+import {
+  CHAT_REF_ENCODING,
+  type ChatRefContext,
+  getChatRefBindings,
+  isChatRefContext,
+} from "@/api/lib/chat/ref-token";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -37,6 +49,7 @@ import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 
 import { createChatCodeModeSurface } from "./chat-code-mode";
 import type { ChatCodeModeReadRunner } from "./chat-code-mode";
+import { chatStepRefScope } from "./chat-step-ledger";
 import { registerSandboxTestHygiene } from "./sandbox/sandbox-test-hygiene";
 
 // The real code-mode tool in the real SDK loop, folded into the message the
@@ -120,9 +133,11 @@ const tapToolResults = async function* <TChunk extends StreamChunk>(
 
 const runAndStore = async ({
   history,
+  tool = surface().tool,
   turns,
 }: {
   history: ChatMessage[];
+  tool?: ReturnType<typeof surface>["tool"];
   turns: readonly ScriptedTurn[];
 }) => {
   const requests: (readonly ModelMessage[])[] = [];
@@ -172,7 +187,7 @@ const runAndStore = async ({
           messages: initialMessages,
           workspaceIds: [],
         }),
-        tools: [surface().tool],
+        tools: [tool],
       }),
       toolResults,
     ),
@@ -340,5 +355,210 @@ describe("a code step's ledger", () => {
       );
     },
     propertyTestTimeout(60_000),
+  );
+});
+
+const MATTER_ID = toSafeId<"workspace">("0dc54d0c-10d7-501d-897e-e801dbd0998c");
+const DOCUMENT_ID = toSafeId<"entity">("11111111-1111-5111-8111-111111111111");
+const OUTSIDE_MATTER_ID = toSafeId<"workspace">(
+  "7a1f0f7e-2c3b-5d4e-8f90-112233445566",
+);
+const OUTSIDE_DOCUMENT_ID = toSafeId<"entity">(
+  "22222222-2222-5222-8222-222222222222",
+);
+const TENANT_IDS = [
+  MATTER_ID,
+  DOCUMENT_ID,
+  OUTSIDE_MATTER_ID,
+  OUTSIDE_DOCUMENT_ID,
+];
+
+const matterHit = ({
+  entityId,
+  workspaceId,
+  name,
+}: {
+  entityId: string;
+  workspaceId: string;
+  name: string;
+}) => ({ entityId, workspaceId, name, kind: "document" });
+
+/**
+ * Matter reads in a turn whose registry is `refRegistry` and whose matter is
+ * `MATTER_ID`: each read answers with real ids, and the script receives
+ * them as the read's projection hands them over, as the turn's chat refs.
+ */
+const matterReadSurface = (refRegistry: ChatRefRegistry) =>
+  createChatCodeModeSurface({
+    concurrencyKey: "step-ledger-refs-test",
+    documentedReads: ["list_matters", "search_across_matters"],
+    stepLedgerScope: chatStepRefScope({
+      refRegistry,
+      workspaceIds: [MATTER_ID],
+    }),
+    runReadTool: async (toolName, args, step) => {
+      await Promise.resolve();
+      if (toolName === "list_matters") {
+        step.answered({
+          args,
+          data: { matters: [{ id: MATTER_ID, name: "Harbrook acquisition" }] },
+        });
+        return Result.ok({
+          matters: [
+            {
+              id: refRegistry.toMatterRef(MATTER_ID),
+              name: "Harbrook acquisition",
+            },
+          ],
+        });
+      }
+      if (toolName === "search_across_matters") {
+        const found = [
+          {
+            entityId: DOCUMENT_ID,
+            workspaceId: MATTER_ID,
+            name: "Share purchase agreement.docx",
+          },
+          {
+            entityId: OUTSIDE_DOCUMENT_ID,
+            workspaceId: OUTSIDE_MATTER_ID,
+            name: "Board minutes.docx",
+          },
+        ];
+        step.answered({ args, data: { hits: found.map(matterHit) } });
+        return Result.ok({
+          hits: found.map((hit) =>
+            matterHit({
+              entityId: refRegistry.toEntityRef(hit),
+              workspaceId: refRegistry.toMatterRef(hit.workspaceId),
+              name: hit.name,
+            }),
+          ),
+        });
+      }
+      return Result.err(
+        new ChatToolError({ kind: "not-found", message: "No such read." }),
+      );
+    },
+  });
+
+const MATTER_SCRIPT = [
+  "const matters = await external_list_matters({});",
+  `const found = await external_search_across_matters({ query: "indemnity cap" });`,
+  'return "Checked " + String(found.hits.length) + " documents";',
+].join("\n");
+
+describe("a code step's matter items", () => {
+  test(
+    "are named by the turn's chat refs, which the stored message binds, resolve alike live and after a reload, and replay with no tenant id",
+    async () => {
+      const refRegistry = createChatRefRegistry();
+      const { toolResults, stored } = await runAndStore({
+        history: [question],
+        tool: matterReadSurface(refRegistry).tool,
+        turns: [
+          codeCall(MATTER_SCRIPT),
+          { type: "text", text: "Hotovo.", finishReason: "stop" },
+        ],
+      });
+
+      const [live] = toolResults.map(readChatStepLedger);
+      expect(live?.calls.map((call) => call.found)).toEqual([
+        [{ type: "matter", ref: "mat_1", title: "Harbrook acquisition" }],
+        [
+          {
+            type: "document",
+            ref: "ent_1",
+            title: "Share purchase agreement.docx",
+            kind: "document",
+          },
+        ],
+      ]);
+      const storedLedger = readChatStepLedger(storedCallOutput(stored));
+      expect(storedLedger).toEqual(live ?? null);
+      // The step names its items by refs alone, live and stored.
+      for (const id of TENANT_IDS) {
+        expect(JSON.stringify(toolResults)).not.toContain(id);
+        expect(JSON.stringify(stored.parts)).not.toContain(id);
+      }
+
+      // What the turn stores beside the message: the binding of every ref
+      // its parts hold, as `resolveAssistantMessageRefs` (`turns/settle.ts`)
+      // collects them.
+      const refContext = {
+        version: 2,
+        refs: refRegistry.collectRefBindings(
+          chatRefsWrittenIn({ isServerTool: () => true, parts: stored.parts }),
+        ),
+        entities: [],
+        unresolvedInputs: [],
+        workspaceScope: [],
+      } satisfies ChatRefContext;
+      const liveTargets = readChatStepRefTargets(refContext);
+      expect(Object.fromEntries(liveTargets)).toEqual({
+        mat_1: { type: "matter", matterId: MATTER_ID },
+        ent_1: { type: "document", entityId: DOCUMENT_ID, matterId: MATTER_ID },
+      });
+
+      // Reload: the stored row, read back, binds the same refs to the same
+      // items.
+      const row = JSON.stringify(
+        chatMessageContentFromMessage(
+          toPersistableChatMessage({
+            id: STORED_ASSISTANT_ID,
+            parts: stored.parts,
+            role: "assistant",
+            metadata: {
+              refContext,
+              refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+            },
+          }),
+        ),
+      );
+      const reloaded = chatMessageFromPersisted({
+        content: JSON.parse(row),
+        id: STORED_ASSISTANT_ID,
+        role: "assistant",
+      });
+      expect(readChatStepLedger(storedCallOutput(reloaded))).toEqual(
+        storedLedger,
+      );
+      const reloadedContext = reloaded.metadata?.refContext;
+      expect(readChatStepRefTargets(reloadedContext)).toEqual(liveTargets);
+      // The next request's registry, restored from those bindings, spells
+      // each item the same way.
+      const restored = createChatRefRegistry(
+        isChatRefContext(reloadedContext)
+          ? getChatRefBindings(reloadedContext)
+          : [],
+      );
+      expect(restored.resolveEntityRefTargets(["ent_1"])).toEqual(
+        Result.ok([{ entityId: DOCUMENT_ID, workspaceId: MATTER_ID }]),
+      );
+      expect(restored.resolveMatterRefs(["mat_1"])).toEqual(
+        Result.ok([MATTER_ID]),
+      );
+
+      // The next turn replays the stored step with no tenant id, though the
+      // ingress guard is given none to redact.
+      const next = await runAndStore({
+        history: [
+          question,
+          { ...stored, id: STORED_ASSISTANT_ID },
+          {
+            id: "user-2",
+            role: "user",
+            parts: [{ type: "text", content: "A dál?" }],
+          },
+        ],
+        turns: [{ type: "text", text: "Nic dalšího.", finishReason: "stop" }],
+      });
+      const replayed = JSON.stringify(next.requests);
+      expect(replayed).toContain("Checked 2 documents");
+      for (const id of TENANT_IDS) {
+        expect(replayed).not.toContain(id);
+      }
+    },
+    propertyTestTimeout(30_000),
   );
 });
