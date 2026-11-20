@@ -146,6 +146,7 @@ export const DictationCustomWords = ({
           />
           <Button
             disabled={draft.trim() === "" || full}
+            disabledReason={full ? problemText("full") : t("input")}
             type="submit"
             variant="outline"
           >
