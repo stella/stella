@@ -1,9 +1,8 @@
 import type { ReactNode, Ref } from "react";
 
-import { useTranslations } from "use-intl";
+import { FaceLabelPending } from "@stll/ui/control-face";
 
-import { Skeleton } from "@stll/ui/skeleton";
-
+import { PendingText } from "@/components/pending-text";
 import { PublicLawPagerPending } from "@/components/public-law-table/public-law-pager.pending";
 import {
   PublicLawColumnsFace,
@@ -17,6 +16,7 @@ import { DEFAULT_PUBLIC_LAW_PAGE_SIZE } from "@/components/public-law-table/publ
 import { CaseLawSearchFace } from "@/features/case-law/components/case-law-search.pending";
 import { DecisionTableSkeleton } from "@/features/case-law/components/decision-table.pending";
 import { QuestionColumnControlsPending } from "@/features/case-law/research/question-column-controls.pending";
+import { framePendingView } from "@/routes/-pending-view.logic";
 
 // The case-law results' shell and their loading view. The route renders
 // PublicCaseLawIndexPending eagerly while the page chunk and the first page
@@ -37,9 +37,11 @@ export const CaseLawIndexLayout = ({
   afterSearch,
   chips,
   paneRef,
+  pending = false,
   results,
   scope,
   search,
+  title,
   toolbar,
 }: {
   /** Notices about the search that stand over the rows. */
@@ -48,37 +50,38 @@ export const CaseLawIndexLayout = ({
   afterSearch?: ReactNode | undefined;
   chips?: ReactNode | undefined;
   paneRef?: Ref<HTMLDivElement> | undefined;
+  pending?: boolean | undefined;
   results: ReactNode;
   /** The jurisdiction the results are scoped to, in its chip. */
   scope: ReactNode;
   search: ReactNode;
+  title: ReactNode;
   toolbar: ReactNode;
-}) => {
-  const t = useTranslations();
-
-  return (
-    <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      {/*
+}) => (
+  <main
+    aria-busy={pending || undefined}
+    className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4"
+  >
+    {/*
         The breadcrumb already names the screen, so the heading is for the
         document outline and for a screen reader, not for the eye.
       */}
-      <h1 className="sr-only">{t("common.caseLaw")}</h1>
-      {search}
-      {afterSearch}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
-        {toolbar}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="bg-muted rounded-md border px-2 py-1 text-xs">
-            {scope}
-          </div>
-          {chips}
+    <h1 className="sr-only">{title}</h1>
+    {search}
+    {afterSearch}
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
+      {toolbar}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="bg-muted rounded-md border px-2 py-1 text-xs">
+          {scope}
         </div>
-        {aboveResults}
-        {results}
+        {chips}
       </div>
-    </main>
-  );
-};
+      {aboveResults}
+      {results}
+    </div>
+  </main>
+);
 
 /**
  * The results before their first page is there. The box, the toolbar, the
@@ -86,32 +89,34 @@ export const CaseLawIndexLayout = ({
  * names (the entry, the jurisdiction, the filters, the order, the page) is the
  * page's to read, so those slots wait.
  */
-export const PublicCaseLawIndexPending = () => {
-  const t = useTranslations();
-
-  return (
-    <CaseLawIndexLayout
-      results={
-        <>
-          <DecisionTableSkeleton
-            expectedRowCount={DEFAULT_PUBLIC_LAW_PAGE_SIZE}
-          />
-          <PublicLawPagerPending />
-        </>
-      }
-      scope={<Skeleton className="my-0.5 h-3 w-16" />}
-      search={<CaseLawSearchFace />}
-      toolbar={
-        <PublicLawResultsToolbarFace
-          actions={<QuestionColumnControlsPending />}
-          columns={<PublicLawColumnsFace />}
-          contentMode={<PublicLawContentModeFace />}
-          filters={<PublicLawFiltersFace />}
-          find={<PublicLawFindFace />}
-          sort={<PublicLawToolbarSelectFace label={t("common.sort")} />}
-          summary={<Skeleton className="my-0.5 h-3 w-24" />}
+export const PublicCaseLawIndexPending = framePendingView(() => (
+  <CaseLawIndexLayout
+    pending
+    title={<PendingText id="common.caseLaw" />}
+    results={
+      <>
+        <DecisionTableSkeleton
+          expectedRowCount={DEFAULT_PUBLIC_LAW_PAGE_SIZE}
         />
-      }
-    />
-  );
-};
+        <PublicLawPagerPending />
+      </>
+    }
+    scope={<FaceLabelPending />}
+    search={<CaseLawSearchFace />}
+    toolbar={
+      <PublicLawResultsToolbarFace
+        actions={<QuestionColumnControlsPending />}
+        columns={<PublicLawColumnsFace />}
+        contentMode={<PublicLawContentModeFace />}
+        filters={<PublicLawFiltersFace />}
+        find={<PublicLawFindFace />}
+        sort={
+          <PublicLawToolbarSelectFace
+            label={<PendingText barClassName="w-8" id="common.sort" />}
+          />
+        }
+        summary={<FaceLabelPending className="w-24" />}
+      />
+    }
+  />
+));

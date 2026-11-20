@@ -116,7 +116,7 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
       reason: "Redirects to the public case-law search.",
     },
     "/law/cases/research/$tableId": {
-      reason: "The public law shell owns research presentation.",
+      reason: "Redirects to the public case-law search.",
     },
     "/law/coverage": {
       reason: "The public law shell owns coverage breadcrumbs.",

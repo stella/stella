@@ -770,6 +770,7 @@ export function PublicCaseLawIndex() {
 
   return (
     <CaseLawIndexLayout
+      title={t("common.caseLaw")}
       aboveResults={
         <>
           {feedback.aboveResults}

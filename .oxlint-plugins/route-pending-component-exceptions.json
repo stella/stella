@@ -34,9 +34,5 @@
   "apps/web/src/routes/law/route.tsx",
   "apps/web/src/routes/mcp.oauth-callback.tsx",
   "apps/web/src/routes/onboarding/route.tsx",
-  "apps/web/src/routes/sharepoint.oauth-callback.tsx",
-  "apps/web/src/routes/tools/$slug.tsx",
-  "apps/web/src/routes/tools/contribute.tsx",
-  "apps/web/src/routes/tools/index.tsx",
-  "apps/web/src/routes/tools/route.tsx"
+  "apps/web/src/routes/sharepoint.oauth-callback.tsx"
 ]

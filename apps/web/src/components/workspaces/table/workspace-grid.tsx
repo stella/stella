@@ -2,6 +2,8 @@ import { cn } from "@stll/ui/utils";
 
 import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
+export const SELECT_COLUMN_SIZE = 48;
+
 const WORKSPACE_TABLE_COLUMNS_VAR = "var(--workspace-table-columns)";
 
 /**
