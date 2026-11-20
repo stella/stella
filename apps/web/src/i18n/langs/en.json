@@ -2356,6 +2356,10 @@
     "stopResponse": "Stop",
     "stopped": "Stopped",
     "stopping": "Stopping…",
+    "subagentRun": {
+      "browseWeb": "Browsing the web",
+      "generic": "Working on a subtask"
+    },
     "suggestTitle": "Suggest a title",
     "suggestTitleUnavailableAnonymized": "Title suggestions are unavailable for anonymized conversations.",
     "suggestingTitle": "Suggesting a title…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Default: {model}",
       "defaultModelOption": "Default",
       "defaultRationale": {
+        "browse": "For working on websites in the browser.",
         "chat": "For conversation and everyday questions.",
         "fast": "For short, routine tasks.",
         "pdf": "For reading and analysing PDF documents.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "Replace key",
       "roleUnavailable": "{provider} does not support this role.",
       "roles": {
+        "browse": "Browsing",
         "chat": "Chat",
         "fast": "Fast",
         "pdf": "PDF",
@@ -5518,7 +5524,7 @@
     "members": {
       "billingAccess": "Billing visibility",
       "changeRole": "Change role",
-      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
+      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}} to {newRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}}.",
       "confirmRoleChangeTitle": "Change role",
       "joined": "Joined",
       "noMembersFound": "No members found",

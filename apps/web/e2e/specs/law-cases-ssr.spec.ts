@@ -25,3 +25,19 @@ for (const query of ["27 Cdo 59/2022", "fiktivní", ""]) {
     expect(html).toContain(`value="${query}"`);
   });
 }
+
+for (const path of ["/law/cases/research", "/law/cases/research/old-table"]) {
+  test(`the retired research address ${path} sends an HTTP redirect`, async ({
+    request,
+    baseURL,
+  }) => {
+    const response = await request.get(path, {
+      maxRedirects: 0,
+      timeout: SSR_RESPONSE_TIMEOUT_MS,
+    });
+    const location = response.headers()["location"];
+    expect(response.status()).toBe(307);
+    expect(location).toBeDefined();
+    expect(new URL(location ?? "", baseURL).pathname).toBe("/law/cases");
+  });
+}

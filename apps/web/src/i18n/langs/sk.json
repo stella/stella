@@ -2356,6 +2356,10 @@
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "stopping": "Zastavujem…",
+    "subagentRun": {
+      "browseWeb": "Prehliadanie webu",
+      "generic": "Práca na čiastkovej úlohe"
+    },
     "suggestTitle": "Navrhnúť názov",
     "suggestTitleUnavailableAnonymized": "Návrhy názvu nie sú dostupné pre anonymizované konverzácie.",
     "suggestingTitle": "Navrhujem názov…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
       "defaultRationale": {
+        "browse": "Na prácu s webovými stránkami v prehliadači.",
         "chat": "Na konverzáciu a bežné otázky.",
         "fast": "Na krátke, rutinné úlohy.",
         "pdf": "Na čítanie a analýzu dokumentov PDF.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "Nahradiť kľúč",
       "roleUnavailable": "{provider} túto rolu nepodporuje.",
       "roles": {
+        "browse": "Prehliadanie webu",
         "chat": "Chat",
         "fast": "Rýchly",
         "pdf": "PDF",
@@ -5518,7 +5524,7 @@
     "members": {
       "billingAccess": "Prístup k fakturačným údajom",
       "changeRole": "Zmeniť rolu",
-      "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení z {oldRole} na {newRole}.",
+      "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení {oldRole, select, owner {z vlastníka} admin {z administrátora} member {z člena} intern {zo stážistu} external {z externého spolupracovníka} other {}} {newRole, select, owner {na vlastníka} admin {na administrátora} member {na člena} intern {na stážistu} external {na externého spolupracovníka} other {}}.",
       "confirmRoleChangeTitle": "Zmeniť rolu",
       "joined": "Pripojil/a sa",
       "noMembersFound": "Neboli nájdení žiadni členovia",

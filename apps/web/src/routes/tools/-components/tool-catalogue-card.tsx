@@ -3,14 +3,9 @@ import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { BidiText } from "@stll/ui/bidi-text";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ArrowRightIcon,
-  BookOpenCheckIcon,
-  DatabaseIcon,
-  PlugIcon,
-} from "@stll/ui/icons";
+import { BookOpenCheckIcon, DatabaseIcon, PlugIcon } from "@stll/ui/icons";
 import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
 
 import { CostBadge, SetupBadge } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
@@ -18,6 +13,7 @@ import {
   nativeToolDescriptionKey,
   nativeToolLabelKey,
 } from "@/components/catalogue/native-tool-label";
+import { ToolCatalogueCardFace } from "@/routes/tools/-components/tool-catalogue-card.pending";
 
 type ToolCatalogueCardProps = {
   entry: LoadedCatalogueEntry;
@@ -36,24 +32,28 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
   const isIncluded = entry.kind === "native-tool" && entry.pinned;
 
   return (
-    <Link
-      className="bg-background group hover:bg-muted/25 shadow-floating flex min-h-32 cursor-pointer items-start gap-4 rounded-xl p-4 text-start transition-transform duration-150 hover:-translate-y-px"
-      from="/tools/"
-      params={{ slug: entry.slug }}
-      to="/tools/$slug"
-    >
-      <PublicToolIcon entry={entry} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex min-h-7 items-start gap-2">
-          <BidiText as="span" className="text-sm font-medium">
-            {displayName}
-          </BidiText>
-          <DirectionalIcon
-            className="text-muted-foreground ms-auto shrink-0 transition-opacity group-hover:opacity-70"
-            icon={ArrowRightIcon}
-          />
-        </div>
-        {description.length > 0 && (
+    <ToolCatalogueCardFace
+      icon={<PublicToolIcon entry={entry} />}
+      render={({ children, className }) => (
+        <Link
+          className={cn(
+            className,
+            "hover:bg-muted/25 cursor-pointer transition-transform duration-150 hover:-translate-y-px",
+          )}
+          from="/tools/"
+          params={{ slug: entry.slug }}
+          to="/tools/$slug"
+        >
+          {children}
+        </Link>
+      )}
+      title={
+        <BidiText as="span" className="text-sm font-medium">
+          {displayName}
+        </BidiText>
+      }
+      description={
+        description.length > 0 && (
           <TruncatedText
             className="text-muted-foreground mt-1.5 text-xs leading-5"
             lines={2}
@@ -61,8 +61,10 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
           >
             {description}
           </TruncatedText>
-        )}
-        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
+        )
+      }
+      badges={
+        <>
           {isIncluded ? (
             <span className="bg-muted text-muted-foreground rounded-md px-1.5 py-0.5 text-xs font-medium">
               {t("publicTools.discovery.includedBadge")}
@@ -90,9 +92,9 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
               ))}
             </div>
           )}
-        </div>
-      </div>
-    </Link>
+        </>
+      }
+    />
   );
 };
 

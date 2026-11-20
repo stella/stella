@@ -2356,6 +2356,10 @@
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "stopping": "Leállítás…",
+    "subagentRun": {
+      "browseWeb": "Böngészés az interneten",
+      "generic": "Részfeladat feldolgozása"
+    },
     "suggestTitle": "Cím javaslata",
     "suggestTitleUnavailableAnonymized": "Anonimizált beszélgetésekhez nem érhető el címjavaslat.",
     "suggestingTitle": "Cím javaslása…",
@@ -5397,6 +5401,7 @@
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
       "defaultRationale": {
+        "browse": "Weboldalakon végzett munkához a böngészőben.",
         "chat": "Beszélgetésekhez és mindennapi kérdésekhez.",
         "fast": "Rövid, rutinszerű feladatokhoz.",
         "pdf": "PDF-dokumentumok olvasásához és elemzéséhez.",
@@ -5456,6 +5461,7 @@
       "replaceKey": "Kulcs cseréje",
       "roleUnavailable": "A(z) {provider} nem támogatja ezt a szerepkört.",
       "roles": {
+        "browse": "Böngészés",
         "chat": "Csevegés",
         "fast": "Gyors",
         "pdf": "PDF",
@@ -5518,7 +5524,7 @@
     "members": {
       "billingAccess": "Számlázási adatok megtekintése",
       "changeRole": "Szerepkör módosítása",
-      "confirmRoleChangeDescription": "{email} szerepköre erről: {oldRole} erre módosul: {newRole}.",
+      "confirmRoleChangeDescription": "{email} szerepköre {oldRole, select, owner {tulajdonosról} admin {adminisztrátorról} member {tagról} intern {gyakornokról} external {külső együttműködőről} other {}} {newRole, select, owner {tulajdonosra} admin {adminisztrátorra} member {tagra} intern {gyakornokra} external {külső együttműködőre} other {}} módosul.",
       "confirmRoleChangeTitle": "Szerepkör módosítása",
       "joined": "Csatlakozott",
       "noMembersFound": "Nincsenek tagok",
