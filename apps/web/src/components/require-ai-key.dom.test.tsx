@@ -396,8 +396,17 @@ test("a provider under another provider reuses the outer gate", async () => {
   queryClient.clear();
 });
 
-const { AIProviderSettingsBoundary } =
+const { AIProviderSettingsBoundary: AIProviderSettingsAdmission } =
   await import("@/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary");
+
+/** The settings boundary with a stand-in for the settings' pending phase. */
+const AIProviderSettingsBoundary = ({ children }: PropsWithChildren) => (
+  <AIProviderSettingsAdmission
+    pending={<p role="status">{messages.common.loading}</p>}
+  >
+    {children}
+  </AIProviderSettingsAdmission>
+);
 
 const surfaceBoundaries = {
   panel: ({ children }: PropsWithChildren) => (

@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -25,6 +26,7 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawDecisionSupplements,
+  caseLawHeldDecisionAttachments,
   caseLawIndexJobs,
   caseLawJudges,
   caseLawPopulationCountsLive,
@@ -1197,6 +1199,112 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(caseLawSources)
         .where(eq(caseLawSources.id, disabledSourceId));
+    });
+
+    test("a record attached to another source's decision leaves its host once its publisher removes it", async () => {
+      const registerSourceId = createSafeId<"caseLawSource">();
+      const hostSourceId = createSafeId<"caseLawSource">();
+      const hostId = createSafeId<"caseLawDecision">();
+      await db.insert(caseLawSources).values([
+        caseLawSourceRow({
+          id: registerSourceId,
+          adapterKey: `removal-attached-${registerSourceId}`,
+          name: "Attached record source",
+          config: enabledRemovalConfig,
+        }),
+        caseLawSourceRow({
+          id: hostSourceId,
+          adapterKey: `removal-host-${hostSourceId}`,
+          name: "Host source",
+          config: {},
+        }),
+      ]);
+      await db.insert(caseLawDecisions).values({
+        id: hostId,
+        sourceId: hostSourceId,
+        sourceDocumentId: `host-${hostId}`,
+        caseNumber: "3 VSPH 1361/2023",
+        country: "CZE",
+        court: "Vrchní soud v Praze",
+        language: "cs",
+        fulltext: "host decision",
+      });
+      const declared = ["R 12/2024", "R 13/2024"].map((value) => ({
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value,
+        normalizedValue: value.toLocaleLowerCase("cs"),
+      }));
+      await db.insert(caseLawDecisionIdentifiers).values(
+        declared.map((identifier) => ({
+          decisionId: hostId,
+          ...identifier,
+          declaredAt: cycleNow,
+          independentClaims: [],
+        })),
+      );
+      const attachment = (
+        sourceDocumentId: string,
+        identifiers: typeof declared,
+      ) => ({
+        sourceId: registerSourceId,
+        sourceDocumentId,
+        matchBasis: "court-docket-date" as const,
+        hostDecisionId: hostId,
+        metadata: {},
+        declaredIdentifiers: identifiers,
+        sourceHash: "e".repeat(64),
+        sourceRawS3Key: `case-law/raw/${hostId}/${sourceDocumentId}`,
+        observedAt: cycleNow,
+        observationOrder: 1n,
+      });
+      await db
+        .insert(caseLawHeldDecisionAttachments)
+        .values([
+          attachment("65350048", declared.slice(0, 1)),
+          attachment("65350049", declared.slice(1)),
+        ]);
+      const deleted: string[] = [];
+      const outcome = await reconcilePublisherRemovals({
+        scopedDb,
+        sourceId: registerSourceId,
+        signal: AbortSignal.timeout(10_000),
+        now: () => cycleNow,
+        probe: publisherRemovalProbe(async (identity) =>
+          identity === "65350048"
+            ? { type: "absent", evidence: "http-404" }
+            : { type: "present", value: null },
+        ),
+        deleteRaw: async (key) => {
+          deleted.push(key);
+          await Promise.resolve();
+        },
+      });
+      expect(outcome.unwrap()).toMatchObject({ type: "complete", checked: 2 });
+      const left = await db
+        .select({
+          sourceDocumentId: caseLawHeldDecisionAttachments.sourceDocumentId,
+        })
+        .from(caseLawHeldDecisionAttachments)
+        .where(eq(caseLawHeldDecisionAttachments.sourceId, registerSourceId));
+      expect(left).toEqual([{ sourceDocumentId: "65350049" }]);
+      const identifiers = await db
+        .select({ value: caseLawDecisionIdentifiers.value })
+        .from(caseLawDecisionIdentifiers)
+        .where(eq(caseLawDecisionIdentifiers.decisionId, hostId));
+      expect(identifiers).toEqual([{ value: "R 13/2024" }]);
+      expect(deleted).toEqual([`case-law/raw/${hostId}/65350048`]);
+      await db
+        .delete(caseLawHeldDecisionAttachments)
+        .where(eq(caseLawHeldDecisionAttachments.sourceId, registerSourceId));
+      await db
+        .delete(caseLawDecisionIdentifiers)
+        .where(eq(caseLawDecisionIdentifiers.decisionId, hostId));
+      await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, hostId));
+      await db
+        .delete(caseLawSources)
+        .where(
+          sql`${caseLawSources.id} IN (${registerSourceId}, ${hostSourceId})`,
+        );
     });
 
     test("a bounded sweep resumes from its durable cursor and waits for the next cycle", async () => {

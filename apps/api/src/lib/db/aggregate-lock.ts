@@ -816,10 +816,12 @@ type AuxiliaryRowIdentityOptions = Extract<
     aggregate:
       | "accountDeletionRequest"
       | "organizationSettings"
+      | "sharepointConnection"
       | "correspondence"
       | "desktopMembership"
       | "memory"
       | "searchProjectionRepair"
+      | "searchHistory"
       | "savedSearch";
   }
 >;
@@ -857,6 +859,13 @@ const auxiliaryRowResource = (
         "organization_id",
         options.id,
       );
+    case "sharepointConnection":
+      return byIdWithin(
+        "sharepoint_connections",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -872,6 +881,14 @@ const auxiliaryRowResource = (
         "organization_id",
         options.id.organizationId,
       );
+    case "searchHistory":
+      return {
+        table: "search_history_owners",
+        columns: ["organization_id", "user_id"],
+        values: [options.id.organizationId, options.id.userId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
     case "searchProjectionRepair":
       return {
         table: "search_projection_repair_queue",
@@ -912,20 +929,14 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
       );
     case "accountDeletionRequest":
     case "organizationSettings":
+    case "sharepointConnection":
     case "correspondence":
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
     case "savedSearch":
-      return auxiliaryRowResource(options);
     case "searchHistory":
-      return {
-        table: "search_history_owners",
-        columns: ["organization_id", "user_id"],
-        values: [options.id.organizationId, options.id.userId],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+      return auxiliaryRowResource(options);
     case "desktopCredential":
       return byIdWithin(
         "apikey",

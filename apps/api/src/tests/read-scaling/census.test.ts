@@ -87,7 +87,8 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
-import { skillExportScalingScenario } from "./skill-export";
+import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -113,6 +114,7 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
   savedSearchReadScalingScenario,
   ...dataExportReadScalingScenarios,
+  ...skillExportScalingScenarios,
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   verifyQuoteApiScalingScenario,
@@ -163,6 +165,7 @@ const measuredApiScenarios = [
   memberCandidatesScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  sharepointCapabilitiesScalingScenario,
   ...invoiceSendScalingScenarios,
   ...outboundActionScalingScenarios,
   ...legalHoldScalingScenarios,
@@ -175,7 +178,6 @@ const measuredApiScenarios = [
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
-  skillExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

@@ -277,6 +277,7 @@ const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { PendingTextIntlScope } = await import("@/components/pending-text");
 const { organizationSettingsOptions } =
   await import("@/queries/organization-settings");
 const { QueryClient, QueryClientProvider, notifyManager } =
@@ -392,9 +393,11 @@ const mount = async (
         }}
       >
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <router.RouterProvider router={appRouter} />
-          </FormattingProvider>
+          <PendingTextIntlScope formattingLocale="en">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <router.RouterProvider router={appRouter} />
+            </FormattingProvider>
+          </PendingTextIntlScope>
         </IntlProvider>
       </AuthenticatedUserProvider>
     </QueryClientProvider>,

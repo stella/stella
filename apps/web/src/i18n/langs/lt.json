@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Taip pat peržiūrėta ({count, number})"
+      "moreConsulted": "{count, plural, one {+# dar peržiūrėtas} few {+# dar peržiūrėti} many {+# dar peržiūrėto} other {+# dar peržiūrėtų}}"
     },
     "sourcePlaceholder": "Kalbėtis apie {title}",
     "sourcePlaceholderAction": "Kalbėtis apie",
@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE teisės aktų paieška",
       "borme_get_summary": "BORME dienos suvestinė",
       "business_registry_lookup": "Ieškoma įmonių registre",
+      "calendar_free_busy": "Tikrinti laisvą laiką kalendoriuje",
+      "calendar_list_events": "Skaityti kalendoriaus įvykius",
       "command_execution": "Vykdoma komanda",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",
@@ -4713,6 +4715,10 @@
       "dropPack": "Vilkite .zip/.skill arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
+      "exportAsSkill": "Eksportuoti kaip .skill",
+      "exportAsZip": "Eksportuoti kaip .zip",
+      "exportFailed": "Nepavyko eksportuoti įgūdžio",
+      "exportSkill": "Eksportuoti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
       "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
@@ -5458,6 +5464,7 @@
       "title": "Organizacijos nurodymai",
       "tooLong": "Nurodymuose gali būti ne daugiau kaip {maxLength} simbolių."
     },
+    "createdSwitchPrompt": "Organizacija <bdi>{name}</bdi> sukurta. Persijunkite į ją, kad galėtumėte ją nustatyti ir pakviesti narius.",
     "creationEvaluationLimitReached": "Išnaudojote visus {limit} organizacijų bandomuosius laikotarpius. Ištrynus organizaciją, bandomasis laikotarpis neatkuriamas. Naudokite esamą organizaciją arba kreipkitės į pagalbos tarnybą dėl mokamos prieigos.",
     "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
     "creationNotAllowed": "Ši paskyra negali kurti organizacijų.",
@@ -6135,7 +6142,7 @@
         "title": "DI atsiskaitymo juodraščiai"
       },
       "dataBoxes": {
-        "description": "Pranešimas, išsiųstas iš vienos iš šių dėžučių, registruojamas kaip siunčiamas, o joms išsiųstas – kaip gaunamas. Kiekvienas pakeitimas iš naujo nustato jau užregistruotų pranešimų kryptį bylose, prie kurių turite prieigą.",
+        "description": "Pranešimai, išsiųsti iš šių dėžučių, registruojami kaip siunčiami, o joms išsiųsti – kaip gaunami. Pakeitimai taikomi ir jau užregistruotiems pranešimams.",
         "invalid": "Duomenų dėžutės ID sudaro septynios raidės arba skaitmenys.",
         "remove": "Pašalinti duomenų dėžutę {address}",
         "title": "Organizacijos duomenų dėžutės"
@@ -6168,6 +6175,7 @@
         "title": "Atminties išgavimas",
         "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
       },
+      "organizationIdHint": "Nuolatinis ID, kuris niekada nesikeičia. Naudokite jį kreipdamiesi į pagalbos tarnybą arba nustatydami integracijas.",
       "pastInvitations": "Ankstesni kvietimai",
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
@@ -6181,11 +6189,12 @@
       "renameTitle": "Pervadinti organizaciją",
       "renameTypeToConfirm": "Norėdami patvirtinti, įveskite naują pavadinimą: {name}",
       "slug": {
-        "change": "Keisti identifikatorių",
-        "conflict": "Šį identifikatorių jau naudoja kita organizacija.",
-        "description": "Pasirinkite naują identifikatorių arba sugeneruokite atsitiktinį. Ankstesnis identifikatorius nebeveiks.",
-        "opaque": "Sugeneruoti atsitiktinį identifikatorių",
-        "title": "Organizacijos identifikatorius"
+        "change": "Keisti trumpąjį pavadinimą",
+        "conflict": "Šį trumpąjį pavadinimą jau naudoja kita organizacija.",
+        "description": "Pasirinkite naują trumpąjį pavadinimą arba sugeneruokite atsitiktinį. Ankstesnis trumpasis pavadinimas nebeveiks.",
+        "hint": "Unikalus šios organizacijos trumpasis pavadinimas, nepriklausomas nuo rodomo pavadinimo.",
+        "opaque": "Sugeneruoti atsitiktinį trumpąjį pavadinimą",
+        "title": "Organizacijos trumpasis pavadinimas"
       },
       "timePolicy": {
         "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",

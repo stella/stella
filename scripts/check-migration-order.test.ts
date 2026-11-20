@@ -865,6 +865,9 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     expect(stale.stderr.toString()).toContain(
       "Re-stamp the unmerged migration",
     );
+    expect(stale.stderr.toString()).toContain(
+      "Fix on the branch: git fetch origin main && bun scripts/migration-restamp.ts --write --base origin/main --update-tests",
+    );
     runGit("switch", "main");
 
     const added = migrationDirectory("20260801130000_added");

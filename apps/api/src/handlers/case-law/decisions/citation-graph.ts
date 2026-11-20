@@ -34,6 +34,7 @@ import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { sameStoredCaseNumberKeySql } from "@/api/lib/case-law/case-number-match-key";
 import {
   CITATION_DIRECTIONS,
   CITATION_TREATMENTS,
@@ -132,7 +133,7 @@ const doctrineEvidenceQuoteField = (available: boolean) =>
     ? sql<string | null>`(SELECT ${caseLawCitationDoctrineReviews.evidenceQuote}
         FROM ${caseLawCitationDoctrineReviews}
         WHERE ${caseLawCitationDoctrineReviews.citingDecisionId} = ${caseLawCitations.citingDecisionId}
-          AND ${caseLawCitationDoctrineReviews.citationKey} = ${caseLawCitations.citationKey}
+          AND ${sameStoredCaseNumberKeySql(caseLawCitationDoctrineReviews.citationKey, caseLawCitations.citationKey)}
           AND ${caseLawCitationDoctrineReviews.doctrinalTreatment} = ${caseLawCitations.doctrinalTreatment})`
     : sql<string | null>`NULL::text`
   ).as("evidence_quote");

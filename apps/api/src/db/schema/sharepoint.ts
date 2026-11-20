@@ -1,3 +1,4 @@
+import { stateFieldsCheck } from "../state-fields";
 import {
   bytea,
   organization,
@@ -68,6 +69,17 @@ export const sharepointConnections = p.pgTable(
     p
       .index("sharepoint_connections_org_user_status_idx")
       .on(table.organizationId, table.userId, table.status),
+    // A usable connection names the scopes Microsoft granted; capabilities
+    // are derived from them. Rows written before this rule carry no scope
+    // and read as reconnect-required, so the constraint is added NOT VALID.
+    stateFieldsCheck({
+      name: "sharepoint_connections_state_fields_check",
+      state: table.status,
+      rules: {
+        connected: { required: [table.scope] },
+        reconnect_required: {},
+      },
+    }),
     ...sharepointConnectionPolicies(),
   ],
 );
@@ -88,6 +100,8 @@ export const sharepointOAuthState = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     codeVerifier: p.text("code_verifier").notNull(),
     redirectUri: p.text("redirect_uri").notNull(),
+    /** Exact server-authorized scopes for this consent attempt. */
+    requestedScope: p.text("requested_scope"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

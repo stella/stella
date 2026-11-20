@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Také konzultováno ({count, number})"
+      "moreConsulted": "{count, plural, one {+# další prověřený} few {+# další prověřené} many {+# dalšího prověřeného} other {+# dalších prověřených}}"
     },
     "sourcePlaceholder": "Chatovat o {title}",
     "sourcePlaceholderAction": "Chatovat o",
@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "Vyhledávání v BOE",
       "borme_get_summary": "Denní souhrn BORME",
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
+      "calendar_free_busy": "Zjištění dostupnosti v kalendáři",
+      "calendar_list_events": "Čtení událostí kalendáře",
       "command_execution": "Spouštění příkazu",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
@@ -4713,6 +4715,10 @@
       "dropPack": "Přetáhněte sem .zip/.skill nebo SKILL.md a dovednost se naimportuje",
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
+      "exportAsSkill": "Uložit jako .skill",
+      "exportAsZip": "Uložit jako .zip",
+      "exportFailed": "Dovednost se nepodařilo uložit do souboru",
+      "exportSkill": "Uložit dovednost do souboru",
       "fileExists": "Soubor s touto cestou již existuje",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
@@ -5458,6 +5464,7 @@
       "title": "Pokyny organizace",
       "tooLong": "Pokyny mohou obsahovat nejvýše {maxLength} znaků."
     },
+    "createdSwitchPrompt": "Organizace <bdi>{name}</bdi> byla vytvořena. Přepněte se do ní, abyste ji mohli nastavit a pozvat členy.",
     "creationEvaluationLimitReached": "Využili jste všechna {limit} zkušební období organizací. Smazáním organizace se zkušební období neobnoví. Použijte existující organizaci nebo kontaktujte podporu a domluvte si placený přístup.",
     "creationInvalidName": "Zadejte platný název organizace (nejvýše {maxLength} znaků).",
     "creationNotAllowed": "Tento účet nemůže vytvářet organizace.",
@@ -6135,7 +6142,7 @@
         "title": "AI návrhy výkazů práce"
       },
       "dataBoxes": {
-        "description": "Datová zpráva odeslaná z některé z těchto schránek se založí jako odchozí, zpráva do nich jako příchozí. Každá změna znovu odvodí směr zpráv již založených ve spisech, ke kterým máte přístup.",
+        "description": "Zprávy odeslané z těchto schránek se zakládají jako odchozí, zprávy do nich jako příchozí. Změny se projeví i u již založených zpráv.",
         "invalid": "ID datové schránky má sedm písmen nebo číslic.",
         "remove": "Odebrat datovou schránku {address}",
         "title": "Datové schránky organizace"
@@ -6168,6 +6175,7 @@
         "title": "Extrakce paměti",
         "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
       },
+      "organizationIdHint": "Trvalé ID, které se nikdy nemění. Použijte ho při kontaktu s podporou nebo při nastavování integrací.",
       "pastInvitations": "Dřívější pozvánky",
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
@@ -6181,11 +6189,12 @@
       "renameTitle": "Přejmenovat organizaci",
       "renameTypeToConfirm": "Pro potvrzení napište nový název: {name}",
       "slug": {
-        "change": "Změnit identifikátor",
-        "conflict": "Tento identifikátor již používá jiná organizace.",
-        "description": "Zvolte nový identifikátor nebo vygenerujte náhodný. Původní identifikátor přestane fungovat.",
-        "opaque": "Vygenerovat náhodný identifikátor",
-        "title": "Identifikátor organizace"
+        "change": "Změnit krátký název",
+        "conflict": "Tento krátký název již používá jiná organizace.",
+        "description": "Zvolte nový krátký název nebo vygenerujte náhodný. Původní krátký název přestane fungovat.",
+        "hint": "Jedinečný krátký název organizace, nezávislý na jejím zobrazovaném názvu.",
+        "opaque": "Vygenerovat náhodný krátký název",
+        "title": "Krátký název organizace"
       },
       "timePolicy": {
         "description": "Nastavte zaokrouhlování času, omezení úprav a uzamykání měsíců.",

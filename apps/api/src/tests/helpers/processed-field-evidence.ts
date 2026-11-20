@@ -10,6 +10,7 @@
 
 import { panic, Result } from "better-result";
 import path from "node:path";
+import * as v from "valibot";
 
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -28,6 +29,7 @@ import {
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { parseCzIsirDecision as parseCzIsirDecisionUnguarded } from "@/api/handlers/case-law/ingestion/parsers/cz-isir";
 import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import {
@@ -470,6 +472,23 @@ const readCzNsSbirka: EvidenceReader = async (fixture) => {
     : panic(`${fixture}: the collection entry parsed to no document`);
 };
 
+const parseCzIsirDecision = guardParser(parseCzIsirDecisionUnguarded);
+
+/** The anonymised paragraphs the cz-isir reader stored, parsed as a replay parses them. */
+const readCzIsir: EvidenceReader = async (fixture) => {
+  const paragraphs = v.parse(
+    v.array(v.strictObject({ text: v.string(), bold: v.boolean() })),
+    await jsonOf(fixture),
+  );
+  const parsed = parseCzIsirDecision(paragraphs, {
+    documentId: path.basename(fixture),
+    sourceUrl: fixture,
+  });
+  return Result.isOk(parsed)
+    ? [{ id: fixture, ast: parsed.value.documentAst }]
+    : panic(`${fixture}: the register document parsed to no decision`);
+};
+
 /** Every source's reader, or `null` where its declaration names no recording. */
 export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-regional": readCzRegional,
@@ -478,6 +497,7 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-us": readCzUs,
   "cz-uohs": readCzUohs,
   "cz-ns-sbirka": readCzNsSbirka,
+  "cz-isir": readCzIsir,
   "br-tst": readBrTst,
   "sk-courts": null,
   "sk-us": readSkUs,

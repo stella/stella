@@ -81,6 +81,7 @@ const insertCredentials = async ({
         accessTokenEncrypted: Buffer.from(Bun.randomUUIDv7()),
         accessTokenIv: Buffer.from(Bun.randomUUIDv7()),
         status: "connected",
+        scope: "Files.Read.All Sites.Read.All",
       });
       await tx.insert(sharepointOAuthState).values({
         state: Bun.randomUUIDv7(),

@@ -25,9 +25,13 @@ import {
   collectSourceChipEntries,
   courtTierForSource,
   dedupeExternalSources,
+  groupSourceEntries,
   sortCourtTiers,
 } from "@/components/chat/source-chips.logic";
-import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
+import type {
+  ExternalSourceEntry,
+  SourceChipEntry,
+} from "@/components/chat/source-chips.logic";
 
 const APP_ORIGINS: ReadonlySet<string> = new Set(["https://app.test"]);
 
@@ -742,5 +746,49 @@ describe("answer source classification", () => {
     );
 
     expect(sources.at(0)?.caseLaw?.decisionDate).toBeUndefined();
+  });
+});
+
+describe("the sources row's groups", () => {
+  const appOrigins = new Set(["https://my.stll.app"]);
+  const statute = (url: string): SourceChipEntry => ({
+    relation: "cited",
+    type: "external",
+    source: { url, title: "e-sbirka.cz" },
+  });
+
+  test("names an act by its citation when the answer names it no other way", () => {
+    const { groups, rest } = groupSourceEntries({
+      appOrigins,
+      entries: [
+        statute(
+          "https://my.stll.app/law/cze/statutes/262-2006-sb-zakonik-prace/v/2026-08-29#par_52",
+        ),
+        // A publisher ELI names the same act.
+        statute("https://www.e-sbirka.cz/eli/cz/sb/2006/262/2026-08-29"),
+        statute("https://example.test/article"),
+      ],
+      parts: [{ type: "text", content: "Výpověď je možná." }],
+    });
+    expect(groups.map(({ label, entries }) => [label, entries.length])).toEqual(
+      [["262/2006 Sb.", 2]],
+    );
+    expect(rest).toHaveLength(1);
+  });
+
+  test("takes the act's name from how the answer cites its provisions", () => {
+    const url =
+      "https://my.stll.app/law/cze/statutes/262-2006-sb-zakonik-prace/v/2026-08-29#par_106";
+    const { groups } = groupSourceEntries({
+      appOrigins,
+      entries: [statute(url)],
+      parts: [
+        {
+          type: "text",
+          content: `Podle [§ 106 odst. 4 písm. e) ZP](${url}) nesmí.`,
+        },
+      ],
+    });
+    expect(groups.map(({ label }) => label)).toEqual(["ZP"]);
   });
 });
