@@ -77,6 +77,7 @@ import type {
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseNumberMatchKeySql } from "@/api/lib/case-law/case-number-match-key";
 import { citationEvidenceWindowsValidSql } from "@/api/lib/case-law/citation-evidence";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import {
@@ -97,6 +98,7 @@ import {
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
+import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-failure-identity";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
@@ -739,6 +741,55 @@ const publishedLanguageDateIndex = (
     .where(publishedCaseLawDecisionFor(t));
 
 /**
+ * The resolver's candidate lookup, answered entirely from the index. The key
+ * alone finds the candidates; jurisdiction and date are what decide between
+ * them, and the target id is what gets written. Carrying all four keeps the
+ * per-citation cost to one index probe instead of a probe plus a heap fetch
+ * per candidate, which on a corpus of this size is the difference between a
+ * resolution pass that fits in cache and one that reads the decisions table
+ * at random.
+ *
+ * `id` is a fourth key column rather than an INCLUDE payload only because the
+ * Drizzle version in use cannot express INCLUDE; the two are the same
+ * index-only scan here, since nothing ever ranges on `id` in this order.
+ *
+ * The resolver reads candidate holders before its caller applies a
+ * publication gate, so keep the existing all-row lookup. The public identity
+ * read has a separate publication-partial index.
+ *
+ * Every comparison of a key reads its match key (`case-number-match-key.ts`),
+ * so a citation printed with a four-digit year finds the holder stored with
+ * two, and the reverse; the match-key pair serves those reads. It does not
+ * carry the raw key, so a raw-key read is never answered from it. The
+ * raw-key pair stays until no running release reads it.
+ */
+const citationCandidateIndexes = (
+  t: PublishedCourtDateColumns & { citationKey: PgColumn },
+) => [
+  p
+    .index("case_law_decisions_citation_candidate_idx")
+    .on(t.citationKey, t.country, t.decisionDate, t.id)
+    .where(isNotNull(t.citationKey)),
+  p
+    .index("case_law_decisions_citation_candidate_published_idx")
+    .on(t.citationKey, t.country, t.decisionDate, t.id)
+    .where(
+      sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
+    ),
+  p
+    // Full, not partial: the match-key expression's statistics come only
+    // from a non-partial index.
+    .index("case_law_decisions_citation_match_key_all_idx")
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id),
+  p
+    .index("case_law_decisions_citation_match_key_published_idx")
+    .on(caseNumberMatchKeySql(t.citationKey), t.country, t.decisionDate, t.id)
+    .where(
+      sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
+    ),
+];
+
+/**
  * A source's decisions in the order their content changed. A row unchanged
  * since the column was added holds NULL and is never read through it, so the
  * index starts small.
@@ -1232,31 +1283,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_authority_due_idx")
       .on(t.citationAuthorityComputedAt.asc().nullsFirst(), t.id),
-    // The resolver's candidate lookup, answered entirely from the index. The
-    // key alone finds the candidates; jurisdiction and date are what decide
-    // between them, and the target id is what gets written. Carrying all four
-    // keeps the per-citation cost to one index probe instead of a probe plus a
-    // heap fetch per candidate, which on a corpus of this size is the
-    // difference between a resolution pass that fits in cache and one that
-    // reads the decisions table at random.
-    //
-    // `id` is a fourth key column rather than an INCLUDE payload only because
-    // the Drizzle version in use cannot express INCLUDE; the two are the same
-    // index-only scan here, since nothing ever ranges on `id` in this order.
-    //
-    // The resolver reads candidate holders before its caller applies a
-    // publication gate, so keep the existing all-row lookup. The public
-    // identity read has a separate publication-partial index below.
-    p
-      .index("case_law_decisions_citation_candidate_idx")
-      .on(t.citationKey, t.country, t.decisionDate, t.id)
-      .where(isNotNull(t.citationKey)),
-    p
-      .index("case_law_decisions_citation_candidate_published_idx")
-      .on(t.citationKey, t.country, t.decisionDate, t.id)
-      .where(
-        sql`${isNotNull(t.citationKey)} AND ${publishedCaseLawDecisionFor(t)}`,
-      ),
+    ...citationCandidateIndexes(t),
     // The search's candidate read, answered entirely from the index. A page of
     // ten is blended from a few hundred candidates the engine proposed, and
     // each one was a random fetch into a heap far too large to cache: the ids
@@ -1403,6 +1430,11 @@ export const caseLawDecisionIdentifiers = p.pgTable(
     p
       .index("case_law_decision_identifiers_lookup_idx")
       .on(t.type, t.normalizedValue, t.decisionId),
+    // Every lookup and join by an identifier's value compares match keys
+    // (`case-number-match-key.ts`), whichever year form each side printed.
+    p
+      .index("case_law_decision_identifiers_match_key_idx")
+      .on(t.type, caseNumberMatchKeySql(t.normalizedValue), t.decisionId),
     p.check(
       "case_law_decision_identifiers_type_values",
       sql`${t.type} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,
@@ -2804,6 +2836,38 @@ export const caseLawCitations = p.pgTable(
         effectiveCitationIdentifierValueSql(
           t.normalizedIdentifierValue,
           t.citationKey,
+        ),
+      )
+      .where(settledCitationSql(t.resolutionStatus)),
+    // The reverse direction by match key (`case-number-match-key.ts`): the
+    // citations an arriving key or identifier can answer, printed in either
+    // year form. The identifier arms key the citation's effective identity,
+    // as the reopen and backfill statements read it.
+    p
+      .index("case_law_citations_reopenable_match_key_idx")
+      .on(caseNumberMatchKeySql(t.citationKey))
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_reopenable_identifier_match_key_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        caseNumberMatchKeySql(
+          effectiveCitationIdentifierValueSql(
+            t.normalizedIdentifierValue,
+            t.citationKey,
+          ),
+        ),
+      )
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
+    p
+      .index("case_law_citations_identifier_backfill_match_key_idx")
+      .on(
+        effectiveCitationIdentifierTypeSql(t.identifierType),
+        caseNumberMatchKeySql(
+          effectiveCitationIdentifierValueSql(
+            t.normalizedIdentifierValue,
+            t.citationKey,
+          ),
         ),
       )
       .where(settledCitationSql(t.resolutionStatus)),
@@ -4553,6 +4617,55 @@ export const caseLawIngestionEvents = p.pgTable(
       .index("case_law_ingestion_events_source_finished_idx")
       .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Replay inputs for rejected records; never exposed through public failure summaries. */
+export const caseLawIngestionFailureEvidence = p.pgTable(
+  "case_law_ingestion_failure_evidence",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    recordIdentity: p.varchar("record_identity", { length: 256 }).notNull(),
+    identityKind: p
+      .varchar("identity_kind", {
+        length: 32,
+        enum: INGESTION_FAILURE_IDENTITY_KINDS,
+      })
+      .notNull(),
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** Versioned JSON text with explicit base64 binary fields; retained verbatim. */
+    payload: p.text().notNull(),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_ingestion_failure_evidence_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      columns: [t.sourceId, t.recordIdentity, t.payloadHash, t.errorType],
+      name: "case_law_ingestion_failure_evidence_pk",
+    }),
+    p.check(
+      "case_law_ingestion_failure_evidence_identity_kind",
+      sql`${t.identityKind} IN (${sql.join(
+        INGESTION_FAILURE_IDENTITY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_ingestion_failure_evidence_document_idx")
+      .on(t.sourceId, t.sourceDocumentId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

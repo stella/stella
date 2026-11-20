@@ -53,7 +53,7 @@ type HoldKeyLabelOptions = {
 };
 
 /** One keycap per key held, ids stable per row. */
-export const holdKeyCaps = ({
+const holdKeyCaps = ({
   holdKey,
   keys,
   layout,

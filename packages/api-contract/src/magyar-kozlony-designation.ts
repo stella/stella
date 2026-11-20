@@ -55,6 +55,14 @@ const ROMAN_DIGITS = [
 ] as const;
 
 const ROMAN_MAX = 3999;
+/** The highest number a numbered act's series reaches, as the readers bound it. */
+const NUMBERED_ACT_MAX = 99_999;
+
+const EARLIEST_YEAR = 1800;
+const LATEST_YEAR = 9999;
+
+const isActYear = (year: number) =>
+  Number.isSafeInteger(year) && year >= EARLIEST_YEAR && year <= LATEST_YEAR;
 
 /** `5` as `V`; null outside 1..3999, which Roman numerals do not write. */
 export const romanNumeral = (value: number): string | null => {
@@ -160,6 +168,104 @@ export const hungarianDesignationWorkEli = (
   return printed === null ? null : magyarKozlonyWorkEli(printed);
 };
 
+const slugOf = (text: string): string =>
+  slugify(text, {
+    charset: "ascii",
+    separator: "-",
+    maxLength: 200,
+    fallback: "",
+  });
+
+/** The series laws are numbered in, as a list filters by it. */
+export const MAGYAR_KOZLONY_LAW_COLLECTION = "torveny";
+
+const NUMBERED_COLLECTION_SOURCE = `[a-z0-9]+(?:-[a-z0-9]+)*-(?:${HUNGARIAN_NUMBERED_ACT_FORMS.join("|")})`;
+const NUMBERED_COLLECTION_RE = new RegExp(
+  `^${NUMBERED_COLLECTION_SOURCE}$`,
+  "u",
+);
+
+/** A Magyar Közlöny series key, unanchored: `torveny` or `korm-rendelet`. */
+export const MAGYAR_KOZLONY_COLLECTION_SOURCE = `(?:${MAGYAR_KOZLONY_LAW_COLLECTION}|${NUMBERED_COLLECTION_SOURCE})`;
+
+/**
+ * The series an act is numbered in, as a list filters by it: `torveny` for
+ * laws, the issuer and kind folded for every other act (`korm-rendelet`,
+ * `im-rendelet`, `ab-hatarozat`). Number, year and series name one act.
+ */
+export const hungarianDesignationCollection = (
+  act: HungarianActDesignation,
+): string =>
+  act.kind === "law"
+    ? MAGYAR_KOZLONY_LAW_COLLECTION
+    : slugOf(`${act.issuer} ${FORM_SPELLING[act.form]}`);
+
+/** Whether a collection key names a Magyar Közlöny series. */
+export const isMagyarKozlonyCollection = (collection: string): boolean =>
+  collection === MAGYAR_KOZLONY_LAW_COLLECTION ||
+  NUMBERED_COLLECTION_RE.test(collection);
+
+const URN_PATTERN_PREFIX = `^${MAGYAR_KOZLONY_WORK_URN_PREFIX}`;
+const SIGNED_DAY_PATTERN = "[ivx]+-[0-9]{1,2}";
+
+/**
+ * A pattern for the Work identifiers an act number names in a series, valid
+ * in JavaScript and PostgreSQL alike. A numbered act's identifier carries
+ * the day it was signed, which a number does not, so the pattern leaves the
+ * day open: the series numbers each act once a year, so at most one Work
+ * answers. Without a series, the law of that number and every numbered act
+ * of it qualify, and the caller shows the candidates. Null for a number no
+ * Work can carry.
+ */
+export const magyarKozlonyWorkPattern = ({
+  number,
+  year,
+  collection,
+}: {
+  number: number;
+  year: number;
+  collection: string | undefined;
+}): string | null => {
+  if (
+    !isActYear(year) ||
+    !Number.isSafeInteger(number) ||
+    number < 1 ||
+    number > NUMBERED_ACT_MAX
+  ) {
+    return null;
+  }
+  // Laws are numbered in Roman numerals, which stop at 3999; a numbered act
+  // of a higher number has no law beside it.
+  const roman = romanNumeral(number)?.toLowerCase() ?? null;
+  const law =
+    roman === null
+      ? null
+      : `${String(year)}-evi-${roman}-${MAGYAR_KOZLONY_LAW_COLLECTION}`;
+  const numbered = (series: string) =>
+    `${String(number)}-${String(year)}-${SIGNED_DAY_PATTERN}-${series}`;
+  if (collection === undefined) {
+    const any = numbered("[a-z0-9-]+");
+    return `${URN_PATTERN_PREFIX}(?:${law === null ? any : `${law}|${any}`})$`;
+  }
+  if (collection === MAGYAR_KOZLONY_LAW_COLLECTION) {
+    return law === null ? null : `${URN_PATTERN_PREFIX}${law}$`;
+  }
+  return NUMBERED_COLLECTION_RE.test(collection)
+    ? `${URN_PATTERN_PREFIX}${numbered(collection)}$`
+    : null;
+};
+
+/**
+ * The Work identifier of a numbered act, its number the first group; valid
+ * in JavaScript and PostgreSQL alike. A law's Roman numeral is not a group,
+ * so a list ordered by number places laws by their year alone.
+ */
+export const MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN = `${URN_PATTERN_PREFIX}([0-9]{1,5})-[0-9]{4}-${SIGNED_DAY_PATTERN}-`;
+
+/** A pattern for the Work identifiers of every act of a year. */
+export const magyarKozlonyYearPattern = (year: number): string =>
+  `${URN_PATTERN_PREFIX}(?:${String(year)}-evi-|[0-9]{1,5}-${String(year)}-)`;
+
 /**
  * The comparison form: compatibility-normalised, diacritics folded, runs of
  * whitespace one space. `törvény`, `törvénnyel` and `torveny` read alike.
@@ -170,15 +276,13 @@ const foldCitation = (text: string): string =>
 // The patterns run on folded text, where whitespace is one space, so they
 // spell it literally: two adjacent unbounded quantifiers backtrack.
 const LAW_RE =
-  /(?<![\p{L}\p{N}])(?<year>\d{4}) ?\. ?evi (?<roman>[ivxlcdm]{1,12}) ?\. ?(?:torven|tv\.)/giu;
+  /(?<![\p{L}\p{N}])(?<year>\d{4}) ?\. ?evi (?<roman>[ivxlcdm]{1,15}) ?\. ?(?:torven|tv\.)/giu;
 
 const NUMBERED_RE = new RegExp(
   String.raw`(?<![\p{L}\p{N}/])(?<number>\d{1,5}) ?\/ ?(?<year>\d{4}) ?\.?(?: ?\( ?(?<month>[ivx]{1,4}) ?\. ?(?<day>\d{1,2}) ?\.? ?\))? ?(?<issuer>[a-z]{1,8}\.?(?:[ -][a-z]{1,8}\.?)?) (?<form>${HUNGARIAN_NUMBERED_ACT_FORMS.join("|")})`,
   "giu",
 );
 
-const EARLIEST_YEAR = 1800;
-const LATEST_YEAR = 9999;
 const ACT_YEARS = { min: EARLIEST_YEAR, max: LATEST_YEAR };
 
 /** A whole number written in digits, read through the shared token reader. */
@@ -204,7 +308,7 @@ const readLaw = (groups: Record<string, string | undefined>) => {
 const readNumbered = (
   groups: Record<string, string | undefined>,
 ): HungarianActDesignation | null => {
-  const number = digitsOf(groups["number"], { min: 1, max: 99_999 });
+  const number = digitsOf(groups["number"], { min: 1, max: NUMBERED_ACT_MAX });
   const year = digitsOf(groups["year"], ACT_YEARS);
   const form = groups["form"]?.toLowerCase() ?? "";
   const issuer = groups["issuer"] ?? "";

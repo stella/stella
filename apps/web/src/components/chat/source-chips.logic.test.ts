@@ -7,6 +7,10 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import {
+  CHAT_STEP_LEDGER_KEY,
+  type ChatStepLedger,
+} from "@stll/api-contract/chat-step-ledger";
+import {
   UNTRUSTED_CONTENT_CLOSE,
   UNTRUSTED_CONTENT_OPEN,
 } from "@stll/api-contract/untrusted-content-fence";
@@ -440,6 +444,77 @@ describe("answer source classification", () => {
       type: "case-law",
       caseLaw: { caseNumber: "I. ÚS 1/26", holding: "A holding." },
     });
+  });
+
+  test("a code step's ledger names every decision it found, whatever its script returned", () => {
+    const decisionId = "f46d5994-ab9f-5a53-8172-80d000959426";
+    const otherId = "0a6d5994-ab9f-5a53-8172-80d000959426";
+    const decision = (id: string, caseNumber: string) => ({
+      type: "decision" as const,
+      decisionId: id,
+      caseNumber,
+      court: "Ústavní soud",
+      courtAbbreviation: "ÚS",
+      country: "CZE",
+      decisionDate: "2026-04-15",
+      ecli: null,
+      summary: "Zákonný soudce.",
+      url: `https://app.test/law/cze/cases/ustavni-soud/${caseNumber}`,
+      sourceUrl: null,
+    });
+    const ledger = {
+      calls: [
+        {
+          tool: "search_case_law",
+          queries: ["zákonný soudce"],
+          filters: [],
+          outcome: "ok",
+          found: [
+            decision(decisionId, "iii-us-2429-24"),
+            decision(otherId, "i-us-1-26"),
+          ],
+          foundOmitted: 0,
+        },
+      ],
+      callsOmitted: 0,
+    } satisfies ChatStepLedger;
+    // The script cut its serialization off mid-record: nothing in it parses.
+    const truncated = JSON.stringify({
+      results: [{ decisionId, caseNumber: "III.ÚS 2429/24", url: "https://a" }],
+    }).slice(0, 50);
+    const result = collectSourceChipEntries({
+      appOrigins: APP_ORIGINS,
+      parts: [
+        {
+          type: "tool-call",
+          id: "code-1",
+          name: "execute_typescript",
+          arguments: "{}",
+          input: { typescriptCode: "return …" },
+          output: {
+            logs: [],
+            result: truncated,
+            success: true,
+            [CHAT_STEP_LEDGER_KEY]: ledger,
+          },
+          state: "complete",
+        },
+        {
+          type: "text",
+          content: `[III. ÚS 2429/24](#stella-decision=${decisionId})`,
+        },
+      ],
+    });
+    expect(
+      result.entries.map((entry) =>
+        entry.type === "case-law"
+          ? [entry.caseLaw.decisionId, entry.relation]
+          : null,
+      ),
+    ).toEqual([
+      [decisionId, "cited"],
+      [otherId, "consulted"],
+    ]);
   });
 
   test("keeps the date and id of an earlier hit for the same decision", () => {

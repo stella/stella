@@ -11,6 +11,10 @@ import {
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
+import {
+  caseLawBrowseCourtSegment,
+  createCaseLawBrowsePath,
+} from "../../src/features/case-law/browse-path";
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
 import { apiJson, respond } from "./route-mock";
@@ -82,6 +86,17 @@ export const DOCKED_CHAT_LEGAL_ROUTES = {
 
 /** Resolve each host template through the same canonical route owners as the readers. */
 export const dockedLegalPath = (template: string): string => {
+  if (template === "/law/$country/courts/$") {
+    // The court hub of the decision fixture's court; its years come from
+    // the browse reads installed below.
+    return createCaseLawBrowsePath(
+      DOCKED_CHAT_LEGAL_ROUTES.decision.params.country,
+      {
+        level: "court",
+        court: caseLawBrowseCourtSegment(decision.court),
+      },
+    );
+  }
   if (template.includes("/cases/") && template.includes("$slug")) {
     const params = template.includes("$language")
       ? DOCKED_CHAT_LEGAL_ROUTES.bilingualDecision.params
@@ -204,6 +219,21 @@ export const installDockedLegalFixtures = async (page: Page) => {
     {
       pathname: `/v1/case/decisions/by-slug/${decision.slug}`,
       reply: decisionBySlug(decision),
+    },
+    {
+      pathname: "/v1/case/browse/courts",
+      reply: apiJson("v1/case/browse/courts", "get", {
+        courts: [decision.court],
+        truncated: false,
+      }),
+    },
+    {
+      pathname: "/v1/case/browse/calendar",
+      reply: apiJson("v1/case/browse/calendar", "get", {
+        level: "years",
+        periods: [{ value: 2024, count: 1 }],
+        undated: 0,
+      }),
     },
     {
       pathname: `/v1/case/decisions/by-slug/${bilingualDecision.slug}`,

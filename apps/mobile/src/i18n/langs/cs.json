@@ -212,6 +212,11 @@
       "validate_skill_package": "Zkontrolovat dovednost",
       "web_search": "Vyhledávání na webu"
     },
+    "toolResearch": {
+      "caseLaw": "Hledám v judikatuře",
+      "legislation": "Čtu předpisy",
+      "legislationAndCaseLaw": "Hledám v předpisech a judikatuře"
+    },
     "localRun": {
       "title": {
         "sign_in": "Pro pokračování se přihlaste",
@@ -526,6 +531,7 @@
     "title": "Dokument",
     "failedTitle": "Dokument nelze otevřít",
     "failure": {
+      "dataBoxUnreadable": "Soubor se nepodařilo přečíst jako datovou zprávu ani jako doručenku.",
       "offline": "Jste offline. Připojte se k internetu a zkuste to znovu.",
       "noFile": "Tento dokument zatím nemá soubor.",
       "failed": "Při otevírání se něco pokazilo. Zkuste to za chvíli znovu.",
@@ -533,6 +539,7 @@
       "android": "V aplikaci pro Android zatím dokumenty otevřít nelze."
     },
     "retry": "Zkusit znovu",
+    "openOriginal": "Otevřít originál",
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "unrendered": "Tento dokument zde nelze zobrazit, systémový náhled ho ale možná otevře.",

@@ -19,6 +19,8 @@ import {
   caseLawDecisionViewGrantStatement,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -361,6 +363,8 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
       CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
       CASE_LAW_SITEMAP_RANGE_COLUMN_GRANTS_BY_RELATION,
       COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
     ]
       .flatMap(publicLawColumnPairs)
       .map(({ relation, column }) => `${relation}.${column}`),
@@ -520,6 +524,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
       "case_law_held_decision_attachments",
+      "case_law_ingestion_failure_evidence",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",

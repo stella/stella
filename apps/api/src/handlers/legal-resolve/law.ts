@@ -23,7 +23,7 @@ import {
 } from "@stll/api-contract/statute-gazette";
 import {
   STATUTE_QUERY_CAPABILITIES,
-  type StatuteQueryCountry,
+  type StatuteGazetteCountry,
 } from "@stll/api-contract/statute-query-capability";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
@@ -61,7 +61,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 type LawProfile = {
   citation: JurisdictionProfile;
-  queryCountry: StatuteQueryCountry;
+  queryCountry: StatuteGazetteCountry;
   gazette: (typeof PROVISION_CITATION_GRAMMARS)[JurisdictionProfile["jurisdiction"]]["gazette"];
 };
 

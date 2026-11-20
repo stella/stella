@@ -2,6 +2,10 @@ import type { GenericSchema, InferInput } from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
+import {
+  LEGAL_RESOLVE_PROJECTION,
+  VERIFY_QUOTE_PROJECTION,
+} from "@/api/lib/chat/legal-verification-projections";
 import type {
   ChatProjectionSchema,
   RegistryRefKind,
@@ -300,11 +304,21 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     projection: SEARCH_CASE_LAW_PROJECTION,
   },
-  // Resolve returns source AST blocks; chat reads bounded text through its existing corpus readers.
-  resolve_case_law_decision: { chatProjectable: false },
-  resolve_law_citation: { chatProjectable: false },
-  // Every exact occurrence is returned; chat requires a separate bounded projection.
-  verify_quote: { chatProjectable: false },
+  resolve_case_law_decision: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: LEGAL_RESOLVE_PROJECTION,
+  },
+  resolve_law_citation: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: LEGAL_RESOLVE_PROJECTION,
+  },
+  verify_quote: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: VERIFY_QUOTE_PROJECTION,
+  },
   read_case_law_decision: {
     chatProjectable: true,
     inputRefs: [],

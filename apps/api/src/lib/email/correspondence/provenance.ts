@@ -8,8 +8,8 @@ import type {
 
 import type { correspondence } from "@/api/db/schema";
 import {
-  deriveDataBoxDirectionBasis,
   DIRECTION_BY_BASIS,
+  withDataBoxDirection,
 } from "@/api/lib/email/correspondence/data-box/direction";
 
 type StoredCorrespondenceProvenance = Pick<
@@ -137,15 +137,11 @@ export const readCorrespondenceChannel = (
       ) {
         return panic("Data-box correspondence has invalid stored metadata");
       }
-      const directionBasis = deriveDataBoxDirectionBasis({
-        senderBoxId: dataBox.sender.boxId,
-        recipientBoxId: dataBox.recipient.boxId,
-        organizationBoxIds,
-      });
+      const envelope = withDataBoxDirection(dataBox, organizationBoxIds);
       return {
         channel,
-        dataBox: { ...dataBox, directionBasis },
-        direction: DIRECTION_BY_BASIS[directionBasis],
+        dataBox: envelope,
+        direction: DIRECTION_BY_BASIS[envelope.directionBasis],
       };
     }
     default:

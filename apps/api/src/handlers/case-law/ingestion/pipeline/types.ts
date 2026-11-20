@@ -125,9 +125,21 @@ export const DECISION_REFRESH = {
 export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
+/** The selected observation a single-decision recovery is allowed to replace. */
+export type DecisionRecoveryFence = {
+  decisionId: SafeId<"caseLawDecision">;
+  sourceDocumentId: string;
+  sourceHash: string | null;
+  sourceHashVersion: number;
+  sourceRawS3Key: string | null;
+  sourceObservationOrder: bigint | null;
+  rowFingerprint: string;
+};
+
 /** A fresh observation or the exact immutable object a stored parse consumed. */
 export type DecisionInputProvenance =
   | { type: "observation" }
+  | { type: "recovery"; fence: DecisionRecoveryFence }
   | {
       type: "stored";
       sourceRawS3Key: string;
@@ -144,6 +156,8 @@ export type ProcessDecisionAttemptOptions = {
   heldDecisionAttachment: HeldDecisionAttachment<string> | null;
   retention: SourceRetention;
   input: IngestionResult;
+  /** An exact caller-provided failure identity, independent of host identity. */
+  recordIdentity?: string | undefined;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;

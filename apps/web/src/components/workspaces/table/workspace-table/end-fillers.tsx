@@ -9,7 +9,6 @@ import type {
 } from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
-  WorkspaceGridFillerCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
@@ -20,7 +19,6 @@ import {
   isPinnedBoundaryColumn,
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import type { EndFillerInput } from "@/components/workspaces/table/workspace-table/internals-helpers";
 
 type TableEndFillerProps<TRow extends TableRowData> = {
   renderColumns: TableColumn<TRow>[];
@@ -72,46 +70,6 @@ export const TableEndFiller = <TRow extends TableRowData>({
     )}
   </WorkspaceGridRow>
 );
-
-type RowEndFillerCellProps<TRow extends TableRowData> = EndFillerInput<TRow> & {
-  actions?: React.ReactNode;
-  selected: boolean;
-};
-
-export const RowEndFillerCell = <TRow extends TableRowData>({
-  renderColumns,
-  addPropertyColumn,
-  actions: fallbackActions,
-  selected,
-}: RowEndFillerCellProps<TRow>) => {
-  const { actionsColumnIndex } = getWorkspaceGridColumnMetadata({
-    renderColumns,
-    addPropertyColumn,
-  });
-  const actions =
-    actionsColumnIndex === undefined ? undefined : fallbackActions;
-  const Cell =
-    actions === undefined ? WorkspaceGridFillerCell : WorkspaceGridCell;
-  return (
-    <Cell
-      aria-colindex={actions === undefined ? undefined : actionsColumnIndex}
-      aria-hidden={actions === undefined ? true : undefined}
-      className={cn(
-        "flex items-center justify-end p-0",
-        addPropertyColumn && "border-e-0",
-      )}
-      data-state={selected ? "selected" : undefined}
-      style={{
-        gridColumn: getEndFillerGridColumn({
-          renderColumns,
-          addPropertyColumn,
-        }),
-      }}
-    >
-      {actions}
-    </Cell>
-  );
-};
 
 type AddPropertyCellProps<TRow extends TableRowData> = {
   cell: TableCell<TRow> | undefined;

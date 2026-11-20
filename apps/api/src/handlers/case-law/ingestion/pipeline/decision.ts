@@ -31,6 +31,10 @@ import {
   CASE_LAW_CORPUS_DEPENDENCIES,
   CASE_LAW_JUDGE_DEPENDENCIES,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import {
+  IngestionFailureEvidenceError,
+  parkIngestionFailureTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import { attachToHeldDecision } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -48,6 +52,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type {
   AttemptStep,
+  DecisionRecoveryFence,
   DecisionRowWriteStatus,
   ProcessDecisionAttemptOptions,
   ProcessDecisionOptions,
@@ -60,6 +65,7 @@ import {
 import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DecisionCourtUnrecognizedError } from "@/api/lib/case-law/decision-court-identity";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -141,11 +147,39 @@ const settleRowWriteStatus = async ({
 const storedInputMatchesDecision = (
   input: ProcessDecisionAttemptOptions["inputProvenance"],
   existing: DecisionRowWrite["existing"],
-) =>
-  input.type !== "stored" ||
-  (existing !== undefined &&
-    existing.id === input.decisionId &&
-    existing.sourceRawS3Key === input.sourceRawS3Key);
+): boolean => {
+  switch (input.type) {
+    case "observation":
+      return true;
+    case "stored":
+      return (
+        existing !== undefined &&
+        existing.id === input.decisionId &&
+        existing.sourceRawS3Key === input.sourceRawS3Key
+      );
+    case "recovery":
+      return existing !== undefined && existing.id === input.fence.decisionId;
+    default:
+      input satisfies never;
+      return panic("Unhandled decision input provenance");
+  }
+};
+
+const provenanceDecisionId = (
+  input: ProcessDecisionAttemptOptions["inputProvenance"],
+) => {
+  switch (input.type) {
+    case "observation":
+      return undefined;
+    case "stored":
+      return input.decisionId;
+    case "recovery":
+      return input.fence.decisionId;
+    default:
+      input satisfies never;
+      return panic("Unhandled decision input provenance");
+  }
+};
 
 /**
  * A decision without a publisher id whose docket, court and evidence do not
@@ -276,10 +310,7 @@ const runDecisionAttempt = async (
         sourceId,
         statedEcliIdentity,
         proposedDecisionId,
-        storedDecisionId:
-          inputProvenance.type === "stored"
-            ? inputProvenance.decisionId
-            : undefined,
+        storedDecisionId: provenanceDecisionId(inputProvenance),
       }),
   );
   const { existing, decisionId, composition } = identity;
@@ -474,6 +505,32 @@ const processDecisionAttempt = async (
   options.signal?.throwIfAborted();
   const observed = observeDecision(options);
   if (observed.isErr()) {
+    if (
+      options.inputProvenance.type === "observation" &&
+      observed.error instanceof DecisionCourtUnrecognizedError
+    ) {
+      const parked = await options.scopedDb(
+        async (tx) =>
+          await parkIngestionFailureTx(tx, {
+            sourceId: options.sourceId,
+            input: options.input,
+            observation: {
+              order: options.observationOrder,
+              observedAt: options.observedAt,
+            },
+            errorType: observed.error._tag,
+            errorMessage: observed.error.message,
+            ...(options.recordIdentity === undefined
+              ? {}
+              : { recordIdentity: options.recordIdentity }),
+          }),
+      );
+      return parked.map(() => ({
+        status: PROCESS_DECISION_STATUS.COMPLETE,
+        inserted: false,
+        searchVectorFailed: false,
+      }));
+    }
     return observed;
   }
   const observation = observed.value;
@@ -526,7 +583,7 @@ const processDecisionFromInput = async (
     statedEcliIdentity,
     heldDecisionAttachment,
   } = await resolveSourceContract(options.sourceId);
-  return await processDecisionAttempt({
+  const attempted = await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
     retention,
@@ -539,6 +596,18 @@ const processDecisionFromInput = async (
     corpus,
     judges,
   });
+  if (
+    Result.isError(attempted) &&
+    attempted.error instanceof IngestionFailureEvidenceError &&
+    attempted.error.reason === "owner-unavailable"
+  ) {
+    return Result.ok({
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+    });
+  }
+  return attempted;
 };
 
 export const processDecision = async (
@@ -568,6 +637,25 @@ export const processStoredDecision = async (
       ...options,
       refresh: DECISION_REFRESH.ALWAYS,
       inputProvenance: { type: "stored", sourceRawS3Key, decisionId },
+    },
+    resolveSourceContract,
+  );
+
+/** Fresh publisher bytes, admitted only by the selected observation's atomic row fence. */
+export const processRecoveredDecision = async (
+  {
+    fence,
+    ...options
+  }: Omit<ProcessDecisionOptions, "refresh"> & {
+    fence: DecisionRecoveryFence;
+  },
+  resolveSourceContract?: SourceContractResolver,
+): Promise<Result<ProcessResult, unknown>> =>
+  await processDecisionFromInput(
+    {
+      ...options,
+      refresh: DECISION_REFRESH.ALWAYS,
+      inputProvenance: { type: "recovery", fence },
     },
     resolveSourceContract,
   );

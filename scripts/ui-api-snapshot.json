@@ -174,6 +174,7 @@
       "INSPECTOR_PANE_MIN_WIDTH",
       "INSPECTOR_RAIL_WIDTH",
       "InlineRenameInput",
+      "InlineSkeleton",
       "Input",
       "InputGroup",
       "InputGroupAddon",
@@ -952,7 +953,7 @@
       "useSidebarInlineSize",
       "useSidebarLayout"
     ],
-    "./components/skeleton": ["Skeleton"],
+    "./components/skeleton": ["InlineSkeleton", "Skeleton"],
     "./components/stella-mark": ["StellaMark"],
     "./components/stella-wordmark": ["StellaWordmarkLatin"],
     "./components/table": [
@@ -1038,13 +1039,18 @@
     "./context-menu": ["ContextMenu", "ContextMenuActionItems"],
     "./control-face": [
       "ButtonFace",
+      "CheckboxFace",
       "FaceLabelPending",
+      "FieldTriggerFace",
       "InputFace",
+      "LabelFace",
       "SPLIT_BUTTON_PRIMARY_CLASS",
       "SPLIT_BUTTON_ROOT_CLASS",
       "SPLIT_BUTTON_TRIGGER_CLASS",
       "SplitButtonChevron",
       "SplitButtonFace",
+      "SwitchFace",
+      "TabsFace",
       "buttonFaceClassName"
     ],
     "./control-size": ["CONTROL_SIZE", "CONTROL_SIZES"],
@@ -1208,6 +1214,11 @@
       "CalendarClockIcon",
       "CalendarIcon",
       "CaseLawIcon",
+      "ChartColumnIcon",
+      "ChartLineIcon",
+      "ChartNoAxesColumnIcon",
+      "ChartPieIcon",
+      "ChartScatterIcon",
       "CheckCheckIcon",
       "CheckCircle2Icon",
       "CheckIcon",
@@ -1282,6 +1293,7 @@
       "FolderPlusIcon",
       "FolderSyncIcon",
       "FolderTreeIcon",
+      "FollowUpIcon",
       "FunctionSquareIcon",
       "GanttChartIcon",
       "GaugeIcon",
@@ -1454,6 +1466,7 @@
       "InputOTPSeparator",
       "InputOTPSlot"
     ],
+    "./input-otp-face": ["InputOTPGroup", "InputOTPSlotFace"],
     "./inspector": [
       "INSPECTOR_CONTENT_MIN_WIDTH",
       "INSPECTOR_EDITOR_MIN_WIDTH",
@@ -1625,6 +1638,7 @@
       "LIST_ITEM_ROW_CLASS",
       "List",
       "ListGroup",
+      "ListGroupDescription",
       "ListGroupHeader",
       "ListGroupHeading",
       "ListGroupTitle",
@@ -1855,7 +1869,7 @@
       "useSidebarInlineSize",
       "useSidebarLayout"
     ],
-    "./skeleton": ["Skeleton"],
+    "./skeleton": ["InlineSkeleton", "Skeleton"],
     "./split-button": ["SplitButton"],
     "./status-mark": ["StatusMark"],
     "./stella-mark": ["StellaMark"],
@@ -1876,6 +1890,24 @@
       "TableRow"
     ],
     "./table-chart": ["TableChart"],
+    "./table-shell": [
+      "HEAD_CONTENT_CLASS",
+      "SORT_ICON_SLOT_CLASS",
+      "SortDirectionIcon",
+      "SortableHeadFace",
+      "Table",
+      "TableBody",
+      "TableCaption",
+      "TableCellFace",
+      "TableFooter",
+      "TableHead",
+      "TableHeadLabel",
+      "TableHeader",
+      "TableRow",
+      "TableSkeletonRows",
+      "ariaSortOf",
+      "sortableHeadButtonClassName"
+    ],
     "./tabs": [
       "Tabs",
       "TabsContent",
@@ -1920,6 +1952,10 @@
       "TooltipTrigger"
     ],
     "./truncated-text": ["TruncatedText", "isTextOverflowing"],
+    "./truncated-text-face": [
+      "TRUNCATED_TEXT_LINES_CLASS",
+      "TruncatedTextFace"
+    ],
     "./typed-character": ["typedCharacter"],
     "./use-contained-handler": ["containedEventHandler", "containedHandler"],
     "./use-content-dir": [
@@ -1938,6 +1974,7 @@
       "ViewFilterChip",
       "ViewToolbarChrome"
     ],
+    "./view-toolbar-shell": ["ViewChromeBar", "ViewToolbarChrome"],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
     "./workspace-shell": ["WorkspaceEndRail", "WorkspaceShell"]
   },
@@ -2030,6 +2067,7 @@
       "plain",
       "secondary"
     ],
+    "ButtonFace.layout": ["wrap"],
     "ButtonFace.size": [
       "chip",
       "default",
@@ -2143,6 +2181,7 @@
     "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
       "csv",
+      "dataBox",
       "excel",
       "markdown",
       "openDocumentSheet",
@@ -2160,6 +2199,7 @@
     "EntityActionsButton.side": ["bottom", "left", "right", "top"],
     "Form.density": ["compact", "default", "snug"],
     "Form.layout": ["inline", "stack"],
+    "FrameTitle.tone": ["default", "destructive"],
     "HighlightedTextarea.dir": ["ltr", "rtl"],
     "InlineDropIndicator.position": ["after", "before"],
     "InputGroupAddon.align": [
@@ -2273,8 +2313,11 @@
     "SidebarMenuButton.size": ["default", "lg", "rail", "sm"],
     "SidebarMenuButton.variant": ["default", "outline"],
     "SidebarMenuSubButton.size": ["md", "sm"],
+    "SortDirectionIcon.direction": ["asc", "desc"],
     "SortableHead.align": ["center", "end", "start"],
     "SortableHead.sortDirection": ["asc", "desc"],
+    "SortableHeadFace.align": ["center", "end", "start"],
+    "SortableHeadFace.sortDirection": ["asc", "desc"],
     "SplitButton.size": ["md", "sm"],
     "SplitButton.surface": ["menu", "popover"],
     "SplitButtonFace.size": ["md", "sm"],
@@ -2282,12 +2325,16 @@
     "Step.status": ["completed", "current", "upcoming"],
     "Steps.variant": ["compact", "default", "progress"],
     "Switch.size": ["default", "sm"],
+    "SwitchFace.size": ["default", "sm"],
     "SwitchField.size": ["default", "sm"],
-    "Table.density": ["compact", "default"],
+    "Table.cellText": ["single-line", "wrap"],
+    "Table.density": ["compact", "default", "prose"],
     "Table.inset": ["card", "default"],
     "Table.scroll": ["parent", "self"],
     "TableCell.align": ["center", "end", "start"],
     "TableCell.tone": ["default", "muted"],
+    "TableCellFace.align": ["center", "end", "start"],
+    "TableCellFace.tone": ["default", "muted"],
     "TableChart.kind": ["bar", "line", "pie", "scatter"],
     "TableChart.xMode": ["category", "numeric"],
     "TableHead.align": ["center", "end", "start"],

@@ -672,10 +672,6 @@
     "reason": "Existing READER_ANNOTATION_EDIT_TOOL_NAMES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/chat/tool-call-title.logic.ts::CODE_SOURCE_INPUT_KEYS::domain:[\"typescriptCode\",\"code\"]::1",
-    "reason": "Existing CODE_SOURCE_INPUT_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/docx/docx-editor-host.logic.test.ts::slotOperations::maxLength:24::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -840,10 +836,6 @@
     "reason": "Existing VersionLabelInput UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/public-law-table/public-law-results-state.logic.test.ts::<module>::domain:[\"enter\",\"preload\",\"stay\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/registry-credential-setup.tsx::inputProps::maxLength:2000::1",
     "reason": "Existing inputProps UI validation or presentation bound; contract migration pending."
   },
@@ -874,10 +866,6 @@
   {
     "id": "apps/web/src/components/workspaces/cell-metadata-flags.tsx::TINT_PRIORITY::domain:[\"verified\",\"contradiction\",\"follow-up\",\"needs-review\",\"important\"]::1",
     "reason": "Existing TINT_PRIORITY domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/components/workspaces/entity-utils.ts::INTERNAL_PROPERTIES::domain:[\"name\",\"created-by\",\"updated-at\",\"version\",\"kind\",\"list-item-type\",\"status\",\"priority\",\"due-date\",\"assignee\"]::1",
-    "reason": "Existing INTERNAL_PROPERTIES domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/components/workspaces/properties/composer-primitives.tsx::CREATABLE_CONTENT_TYPES::domain:[\"text\",\"int\",\"date\",\"single-select\",\"multi-select\"]::1",
@@ -1408,36 +1396,28 @@
     "reason": "Existing STEP_KEYS domain; contract ownership pending migration."
   },
   {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:120::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:120::2",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:16::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-account.profile.page.tsx::ProfilePageBody::maxLength:6::1",
+    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
+  },
+  {
     "id": "apps/web/src/routes/_protected.settings/-queries/connections.ts::connectedAppsKeys::domain:[\"settings\",\"connections\",\"connected-apps\"]::1",
     "reason": "Existing connectedAppsKeys domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_ROW_SKELETON_KEYS::domain:[\"primary\",\"secondary\",\"tertiary\"]::1",
-    "reason": "Existing MEMORY_ROW_SKELETON_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_TAB_PRIMED_STATUSES::domain:[\"suggested\",\"active\"]::1",
     "reason": "Existing MEMORY_TAB_PRIMED_STATUSES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.memory.tsx::MEMORY_TAB_SKELETON_KEYS::domain:[\"mine\",\"firm\",\"matter\"]::1",
-    "reason": "Existing MEMORY_TAB_SKELETON_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:120::1",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:120::2",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:16::1",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.settings/account.profile.tsx::ProfilePageBody::maxLength:6::1",
-    "reason": "Existing ProfilePageBody UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.test.ts::<module>::domain:[\"invoice\",\"advance\",\"credit_note\"]::1",
@@ -1574,50 +1554,6 @@
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx::CorrespondenceDetailPage::domain:[\"spf\",\"dkim\",\"dmarc\"]::1",
     "reason": "Existing CorrespondenceDetailPage domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
-    "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::ENTRY_COLUMN_KEYS::domain:[\"context\",\"date\",\"narrative\",\"hours\",\"amount\"]::1",
-    "reason": "Existing ENTRY_COLUMN_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::ENTRY_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\"]::1",
-    "reason": "Existing ENTRY_ROW_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::EditInvoiceForm::maxLength:3::1",
-    "reason": "Existing EditInvoiceForm UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::INFO_CELL_KEYS::domain:[\"a\",\"b\",\"c\",\"d\"]::1",
-    "reason": "Existing INFO_CELL_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx::editInvoiceSchema::maxLength:64::1",
-    "reason": "Existing editInvoiceSchema UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListDetail::maxLength:255::1",
-    "reason": "Existing LegalListDetail UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListDetail::maxLength:256::1",
-    "reason": "Existing LegalListDetail UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/lists.tsx::LegalListsPage::maxLength:256::1",
-    "reason": "Existing LegalListsPage UI validation or presentation bound; contract migration pending."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/index.tsx::SKELETON_CARD_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"]::1",
-    "reason": "Existing SKELETON_CARD_KEYS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/routes/_protected.workspaces/index.tsx::SKELETON_TABLE_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
-    "reason": "Existing SKELETON_TABLE_ROW_KEYS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/agent-claim.tsx::AgentClaimPage::maxLength:32::1",

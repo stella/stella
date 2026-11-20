@@ -66,6 +66,7 @@ describe("chat composer dock", () => {
                   type: "choice",
                   selected: runTarget,
                   select: () => undefined,
+                  startedInCloud: null,
                 },
               }}
               status="pending"

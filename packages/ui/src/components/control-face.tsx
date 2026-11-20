@@ -1,10 +1,14 @@
 import type { ReactNode } from "react";
 
-import { ChevronDownIcon } from "../icons";
+import { ChevronDownIcon, ChevronsUpDownIcon } from "../icons";
+import { CONTROL_SIZE } from "../lib/control-size";
+import type { ControlSize } from "../lib/control-size";
+import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { cn } from "../lib/utils";
 import {
   BUTTON_BASE_CLASS,
   BUTTON_FACE_SIZE_CLASS_NAMES,
+  BUTTON_LAYOUT_CLASS_NAMES,
   BUTTON_VARIANT_CLASS_NAMES,
   type ButtonFaceSize,
 } from "./button-classes";
@@ -12,14 +16,29 @@ import type { ButtonTokenVariant } from "./button.shared";
 import {
   INPUT_CONTROL_CLASS_NAME,
   INPUT_ELEMENT_CLASS_NAME,
+  INPUT_SIZE_CLASS_NAMES,
 } from "./input-control";
-import { Skeleton } from "./skeleton";
+import { LABEL_VARIANT_CLASS_NAME } from "./label-classes";
+import { InlineSkeleton } from "./skeleton";
+import {
+  TABS_INDICATOR_DEFAULT_CLASS,
+  TABS_LIST_BASE_CLASS,
+  TABS_LIST_DEFAULT_CLASS,
+  TABS_TAB_CLASS,
+} from "./tabs-classes";
+import {
+  CHECKBOX_CLASS_NAME,
+  SWITCH_ROOT_CLASS_NAME,
+  SWITCH_ROOT_SIZE_CLASS_NAME,
+  type SwitchSize,
+} from "./toggle-classes";
 
 /*
  * The faces of controls a loading view draws before the page mounts: a
- * button, a text field and a split button with no behaviour, from the same
- * classes the real controls are built from, so the control that replaces a
- * face lands in its box. A face takes no focus and no click, says nothing to
+ * button, a text field, a picker's trigger, a checkbox, a switch, a split
+ * button and a field's caption with no behaviour, from the same classes the
+ * real controls are built from, so the control that replaces a face lands in
+ * its box. A face takes no focus and no click, says nothing to
  * assistive technology, and reads as unavailable, which it is until the page
  * is there. It imports no Base UI and no popup, so a pending view that the
  * server paints before the providers mount can draw one.
@@ -31,6 +50,7 @@ const FACE_UNAVAILABLE_CLASS = "pointer-events-none opacity-64";
 type ButtonFaceProps = {
   children?: ReactNode;
   className?: string | undefined;
+  layout?: keyof typeof BUTTON_LAYOUT_CLASS_NAMES;
   size: ButtonFaceSize;
   variant: ButtonTokenVariant;
 };
@@ -51,6 +71,7 @@ export const buttonFaceClassName = ({
     BUTTON_BASE_CLASS,
     BUTTON_FACE_SIZE_CLASS_NAMES[size],
     BUTTON_VARIANT_CLASS_NAMES[variant],
+    size === "inline" && variant === "link" && "underline",
     FACE_UNAVAILABLE_CLASS,
   );
 
@@ -58,12 +79,17 @@ export const buttonFaceClassName = ({
 export const ButtonFace = ({
   children,
   className,
+  layout,
   size,
   variant,
 }: ButtonFaceProps) => (
   <span
     aria-hidden="true"
-    className={cn(buttonFaceClassName({ size, variant }), className)}
+    className={cn(
+      buttonFaceClassName({ size, variant }),
+      layout === undefined ? undefined : BUTTON_LAYOUT_CLASS_NAMES[layout],
+      className,
+    )}
     data-slot="button-face"
   >
     {children}
@@ -83,10 +109,10 @@ export const FaceLabelPending = ({
 }) => (
   <span
     aria-hidden="true"
-    className="inline-flex h-[1lh] items-center"
+    className="inline-flex h-[1lh] items-center align-top"
     data-slot="face-label-skeleton"
   >
-    <Skeleton className={cn("h-[0.75em]", className)} />
+    <InlineSkeleton className={cn("h-[0.75em]", className)} />
   </span>
 );
 
@@ -96,10 +122,19 @@ type InputFaceProps = {
   /** The placeholder line, as the field shows it while empty. */
   children?: ReactNode;
   className?: string | undefined;
+  size?: ControlSize;
+  /** Classes for the line the placeholder sits on (the field's own box). */
+  fieldClassName?: string | undefined;
 };
 
-/** A text field's face at its default size: the box and the placeholder. */
-export const InputFace = ({ children, className, icon }: InputFaceProps) => (
+/** A text field's face: its box and the placeholder. */
+export const InputFace = ({
+  children,
+  className,
+  fieldClassName,
+  icon,
+  size = CONTROL_SIZE.default,
+}: InputFaceProps) => (
   <span
     aria-hidden="true"
     className={cn(
@@ -118,12 +153,136 @@ export const InputFace = ({ children, className, icon }: InputFaceProps) => (
     <span
       className={cn(
         INPUT_ELEMENT_CLASS_NAME,
+        INPUT_SIZE_CLASS_NAMES[size],
         "text-foreground-placeholder flex items-center overflow-hidden whitespace-nowrap",
         icon !== undefined && "ps-8",
+        fieldClassName,
       )}
     >
       {children}
     </span>
+  </span>
+);
+
+/**
+ * The face of a picker's trigger inside a form (a select, a combobox with
+ * `variant="field"`): the field box, the current choice, and the up-down
+ * chevron at the end.
+ */
+export const FieldTriggerFace = ({
+  children,
+  className,
+}: {
+  /** The current choice, or a bar while it waits on data. */
+  children?: ReactNode;
+  className?: string | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(FIELD_TRIGGER_CLASS_NAME, FACE_UNAVAILABLE_CLASS, className)}
+    data-slot="field-trigger-face"
+  >
+    <span className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap">
+      {children}
+    </span>
+    <ChevronsUpDownIcon className="-me-1 size-4.5 opacity-80 sm:size-4" />
+  </span>
+);
+
+/** A checkbox's face: its box, unticked (the value waits on data). */
+export const CheckboxFace = ({
+  className,
+}: {
+  className?: string | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(CHECKBOX_CLASS_NAME, FACE_UNAVAILABLE_CLASS, className)}
+    data-slot="checkbox-face"
+  />
+);
+
+/** A switch's face: its track, off (the value waits on data). */
+export const SwitchFace = ({
+  className,
+  size = "default",
+}: {
+  className?: string | undefined;
+  size?: SwitchSize | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      SWITCH_ROOT_CLASS_NAME,
+      SWITCH_ROOT_SIZE_CLASS_NAME[size],
+      "bg-input",
+      FACE_UNAVAILABLE_CLASS,
+      className,
+    )}
+    data-slot="switch-face"
+  />
+);
+
+/**
+ * A field's caption, as `Label` draws it (its `default` variant), for a
+ * label whose text a pending view renders itself (a bar until the app's
+ * messages are there).
+ */
+export const LabelFace = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string | undefined;
+}) => (
+  <span
+    className={cn(LABEL_VARIANT_CLASS_NAME.default, className)}
+    data-slot="label-face"
+  >
+    {children}
+  </span>
+);
+
+/**
+ * A `default` tab strip's face: the well, each tab's box and label, and the
+ * raised chip under the tab that opens first.
+ */
+export const TabsFace = ({
+  activeIndex = 0,
+  tabs,
+}: {
+  /** The tabs in order, each with its label (or a bar). */
+  tabs: readonly { key: string; label: ReactNode }[];
+  /** Which tab is open when the strip mounts. */
+  activeIndex?: number | undefined;
+}) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      TABS_LIST_BASE_CLASS,
+      TABS_LIST_DEFAULT_CLASS,
+      // Decoration: it never scrolls, it stays inside its box.
+      "pointer-events-none overflow-hidden",
+    )}
+    data-slot="tabs-face"
+  >
+    {tabs.map((tab, index) => (
+      <span
+        className={cn(
+          TABS_TAB_CLASS,
+          index === activeIndex && "text-foreground",
+        )}
+        key={tab.key}
+      >
+        {index === activeIndex && (
+          <span
+            // The live chip covers the tab's border box, not its padding box.
+            className={cn("absolute -inset-px", TABS_INDICATOR_DEFAULT_CLASS)}
+          />
+        )}
+        {tab.label}
+      </span>
+    ))}
   </span>
 );
 
