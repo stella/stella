@@ -542,6 +542,33 @@ export const EM_DASH_GUIDANCE =
   "no em dash: rewrite the break with a period, comma, colon or parentheses";
 
 // Prefer the single Unicode horizontal ellipsis (…) over three ASCII dots (...).
+// Extract only literal text from an ICU message so placeholder names (e.g.
+// `{dir}` in German) and select branch keys are excluded from prose checks.
+const collectLiteralText = (
+  elements: readonly MessageFormatElement[],
+): string =>
+  elements
+    .map((el) => {
+      if (el.type === TYPE.literal) {
+        return el.value;
+      }
+      if (el.type === TYPE.plural || el.type === TYPE.select) {
+        return Object.values(el.options)
+          .map((opt) => collectLiteralText(opt.value))
+          .join(" ");
+      }
+      if (el.type === TYPE.tag) {
+        return collectLiteralText(el.children);
+      }
+      return " ";
+    })
+    .join("");
+
+const literalMessageText = (value: string): string => {
+  const ast = safeParse(value);
+  return ast === null ? value : collectLiteralText(ast);
+};
+
 export const hasAsciiEllipsis = (value: string): boolean =>
   value.includes("...");
 
@@ -602,7 +629,10 @@ const FIRST_PERSON_APP_VOICE_PATTERNS = new Map<string, RegExp>([
 export const hasFirstPersonAppVoice = (
   value: string,
   locale: string,
-): boolean => FIRST_PERSON_APP_VOICE_PATTERNS.get(locale)?.test(value) ?? false;
+): boolean =>
+  FIRST_PERSON_APP_VOICE_PATTERNS.get(locale)?.test(
+    literalMessageText(value),
+  ) ?? false;
 
 export const FIRST_PERSON_APP_VOICE_GUIDANCE =
   "avoid 1st-person app voice (e.g. cs 'Analyzuji…', sk 'Pracujem…'); use impersonal forms ('Analyzuje se…', 'Probíhá…') so the app does not speak as a persona";
@@ -624,7 +654,7 @@ const REGISTER_DRIFT_PATTERNS = new Map<string, RegExp>([
 ]);
 
 export const hasRegisterDrift = (value: string, locale: string): boolean =>
-  REGISTER_DRIFT_PATTERNS.get(locale)?.test(value) ?? false;
+  REGISTER_DRIFT_PATTERNS.get(locale)?.test(literalMessageText(value)) ?? false;
 
 export const REGISTER_DRIFT_GUIDANCE =
   "keep the locale's established register (de Sie, cs/sk vykání, hu Ön, es tú)";

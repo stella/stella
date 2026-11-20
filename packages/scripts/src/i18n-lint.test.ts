@@ -158,6 +158,7 @@ describe("register drift", () => {
   test("flags pronouns that break the locale's established register", () => {
     expect(hasRegisterDrift("Dein Konto ist bereit", "de")).toBe(true);
     expect(hasRegisterDrift("Ihr Konto ist bereit", "de")).toBe(false);
+    expect(hasRegisterDrift("Ordner {dir} öffnen", "de")).toBe(false);
     expect(hasRegisterDrift("Tvůj účet je připraven", "cs")).toBe(true);
     expect(hasRegisterDrift("Váš účet je připraven", "cs")).toBe(false);
     expect(hasRegisterDrift("Tvoj účet je pripravený", "sk")).toBe(true);
