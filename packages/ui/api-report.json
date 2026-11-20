@@ -11235,6 +11235,11 @@
           "space": "value"
         },
         {
+          "name": "inspectorPaneWidthCss",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "resolveInspectorDockWidth",
           "kind": "variable",
           "space": "value"

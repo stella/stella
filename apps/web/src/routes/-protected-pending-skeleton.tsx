@@ -17,6 +17,7 @@ import {
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
 } from "@stll/ui/inspector";
+import { inspectorPaneWidthCss } from "@stll/ui/pane-width";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -222,13 +223,20 @@ function ProtectedPendingSkeletonContent({
       inspectorPaneOpen: paneRequested,
       viewportWidth,
     });
-  const paneWidth = paneRequested
-    ? resolveInspectorPaneWidth({
-        desiredWidth: prefs.inspectorWidth,
-        sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
-        viewportWidth,
-      })
-    : undefined;
+  const paneSize = {
+    desiredWidth: prefs.inspectorWidth,
+    sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
+  };
+  // Before the viewport is known (the server's paint and its hydration) the
+  // pane takes the same clamp in CSS, so it is the measured width at once.
+  const paneWidth = (() => {
+    if (!paneRequested) {
+      return undefined;
+    }
+    return viewportWidth > 0
+      ? resolveInspectorPaneWidth({ ...paneSize, viewportWidth })
+      : inspectorPaneWidthCss(paneSize);
+  })();
   return (
     <div
       aria-hidden={content === undefined ? "true" : undefined}
