@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Type your question here, / for skills, @ to add context",
     "processSummary": {
-      "analyses": "{count, plural, one {# analysis} other {# analyses}}",
       "changesSaved": "{count, plural, one {# change saved} other {# changes saved}}",
+      "checkedRegisters": "Checked public registers",
       "documentEdits": "{count, plural, one {# document edit} other {# document edits}}",
+      "readDocument": "Read the document",
+      "readDocuments": "Read documents",
+      "searchedCaseLaw": "Searched case law",
+      "searchedChats": "Searched chat history",
+      "searchedLegislation": "Searched legislation",
+      "searchedLegislationAndCaseLaw": "Searched legislation and case law",
+      "searchedMatters": "Looked through matters",
+      "searchedWeb": "Searched the web",
       "sourcesChecked": "{count, plural, one {# source checked} other {# sources checked}}"
     },
     "promptImprovementStrategies": {

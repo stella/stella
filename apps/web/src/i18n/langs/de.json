@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "processSummary": {
-      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}",
       "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
+      "checkedRegisters": "Öffentliche Register geprüft",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
+      "readDocument": "Dokument gelesen",
+      "readDocuments": "Dokumente gelesen",
+      "searchedCaseLaw": "Rechtsprechung durchsucht",
+      "searchedChats": "Chatverlauf durchsucht",
+      "searchedLegislation": "Rechtsvorschriften durchsucht",
+      "searchedLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsucht",
+      "searchedMatters": "Akten durchgesehen",
+      "searchedWeb": "Web durchsucht",
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}"
     },
     "promptImprovementStrategies": {

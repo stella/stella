@@ -2162,9 +2162,17 @@
     },
     "placeholder": "اكتب سؤالك هنا، / للمهارات، @ لإضافة سياق",
     "processSummary": {
-      "analyses": "{count, plural, zero {# تحليلات} one {تحليل واحد} two {تحليلان} few {# تحليلات} many {# تحليلًا} other {# تحليل}}",
       "changesSaved": "{count, plural, zero {# تغييرات محفوظة} one {تغيير واحد محفوظ} two {تغييران محفوظان} few {# تغييرات محفوظة} many {# تغييرًا محفوظًا} other {# تغيير محفوظ}}",
+      "checkedRegisters": "تم التحقق من السجلات العامة",
       "documentEdits": "{count, plural, zero {# تعديلات على المستند} one {تعديل واحد على المستند} two {تعديلان على المستند} few {# تعديلات على المستند} many {# تعديلًا على المستند} other {# تعديل على المستند}}",
+      "readDocument": "تمت قراءة المستند",
+      "readDocuments": "تمت قراءة المستندات",
+      "searchedCaseLaw": "تم البحث في الاجتهاد القضائي",
+      "searchedChats": "تم البحث في سجلّ الدردشة",
+      "searchedLegislation": "تم البحث في التشريعات",
+      "searchedLegislationAndCaseLaw": "تم البحث في التشريعات والاجتهاد القضائي",
+      "searchedMatters": "تمت مراجعة الملفات القانونية",
+      "searchedWeb": "تم البحث على الويب",
       "sourcesChecked": "{count, plural, zero {# مصادر تمت مراجعتها} one {مصدر واحد تمت مراجعته} two {مصدران تمت مراجعتهما} few {# مصادر تمت مراجعتها} many {# مصدرًا تمت مراجعته} other {# مصدر تمت مراجعته}}"
     },
     "promptImprovementStrategies": {

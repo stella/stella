@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análisis} other {# análisis} many {# análisis}}",
       "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados} many {# cambios guardados}}",
+      "checkedRegisters": "Registros públicos consultados",
       "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento} many {# ediciones del documento}}",
+      "readDocument": "Documento leído",
+      "readDocuments": "Documentos leídos",
+      "searchedCaseLaw": "Jurisprudencia consultada",
+      "searchedChats": "Historial del chat consultado",
+      "searchedLegislation": "Legislación consultada",
+      "searchedLegislationAndCaseLaw": "Legislación y jurisprudencia consultadas",
+      "searchedMatters": "Asuntos revisados",
+      "searchedWeb": "Web consultada",
       "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas} many {# fuentes consultadas}}"
     },
     "promptImprovementStrategies": {
