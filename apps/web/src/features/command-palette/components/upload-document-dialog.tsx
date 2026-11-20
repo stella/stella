@@ -167,6 +167,39 @@ type UploadDocumentForMatterProps = {
   workspaceId: string;
 };
 
+type UploadBlockedReasonOptions = {
+  isUploadPending: boolean;
+  workflowView: ReturnType<typeof useIsWorkflowRunning>;
+  t: (
+    key:
+      | "workspaces.files.uploading"
+      | "common.loading"
+      | "common.loadFailed"
+      | "workspaces.files.uploadBlockedByWorkflow",
+  ) => string;
+};
+
+const uploadBlockedReason = ({
+  isUploadPending,
+  workflowView,
+  t,
+}: UploadBlockedReasonOptions) => {
+  if (isUploadPending) {
+    return t("workspaces.files.uploading");
+  }
+  switch (workflowView.type) {
+    case "pending":
+    case "empty":
+      return t("common.loading");
+    case "error":
+      return t("common.loadFailed");
+    case "items":
+      return workflowView.refetchError === undefined
+        ? t("workspaces.files.uploadBlockedByWorkflow")
+        : t("common.loadFailed");
+  }
+};
+
 const UploadDocumentForMatter = ({
   onClose,
   workspaceId,
@@ -183,6 +216,12 @@ const UploadDocumentForMatter = ({
     isEntitiesLimitReached ||
     workflowDisabled ||
     isUploadPending;
+
+  const uploadDisabledReason = uploadBlockedReason({
+    isUploadPending,
+    workflowView,
+    t,
+  });
 
   if (!canCreateEntity) {
     return (
@@ -203,6 +242,7 @@ const UploadDocumentForMatter = ({
       <Button
         className="min-h-11 border border-dashed"
         disabled={disabled}
+        disabledReason={uploadDisabledReason}
         onClick={() =>
           openFilePicker({
             multiple: true,
