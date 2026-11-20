@@ -113,7 +113,10 @@ pub fn audio_device_transport(uid: &str) -> Option<AudioTransport> {
       (&raw mut transport).cast(),
     )
   };
-  (status == 0).then(|| match transport {
+  if status != 0 {
+    return None;
+  }
+  Some(match transport {
     TRANSPORT_BUILT_IN => AudioTransport::BuiltIn,
     TRANSPORT_BLUETOOTH | TRANSPORT_BLUETOOTH_LE => AudioTransport::Bluetooth,
     _ => AudioTransport::Other,
