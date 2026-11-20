@@ -724,7 +724,24 @@
       "nothingBody": "Parlez en maintenant la touche, ou choisissez une autre entrée dans les réglages Son.",
       "inputDevice": "Entrée : {device}",
       "openSoundMac": "Ouvrir les réglages Son",
-      "openSoundPc": "Ouvrir les paramètres de son"
+      "openSoundPc": "Ouvrir les paramètres de son",
+      "missingTitle": "{missing} n'est pas connecté",
+      "missingBody": "La dictée utilise {device} à la place.",
+      "chooseMicrophone": "Choisir le micro…"
+    },
+    "microphone": {
+      "title": "Micro",
+      "hint": "Les casques Bluetooth mettent un moment à passer sur leur micro et enregistrent en qualité moindre. Le micro intégré est généralement plus clair.",
+      "systemDefault": "Par défaut du système",
+      "systemDefaultNamed": "Par défaut du système ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (non connecté)",
+      "test": "Tester le micro",
+      "stopTest": "Arrêter",
+      "level": "Niveau d'entrée",
+      "hearing": "Nous vous entendons.",
+      "noSound": "Aucun son de {device}.",
+      "checkAccess": "Vérifier l'accès au micro"
     },
     "preview": {
       "label": "Ce que vous avez dicté jusqu’ici",
