@@ -292,7 +292,8 @@ describe("drawing an answer from its events", () => {
       createdAt: "2026-10-20T10:00:00.000Z",
       text: "Checking the register\n\nTwo found.",
       blocks: [
-        { type: "text", key: "0", markdown: "Checking the register" },
+        // Written before the step, it reads as the run's plan.
+        { type: "intent", key: "0", text: "Checking the register" },
         {
           type: "steps",
           key: "1",

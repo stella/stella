@@ -46,12 +46,13 @@ import type {
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  ARCHIVE_PREVIEW_WORKER_EXIT,
+  ASIC_PREVIEW_WORKER_MODE,
+  STRUCTURED_DOCUMENT_PREVIEW_MODE,
+} from "@/api/lib/files/archive-preview-protocol";
 import type { AsicParseError } from "@/api/lib/files/asic-container";
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
-import {
-  ASIC_PREVIEW_WORKER_EXIT,
-  ASIC_PREVIEW_WORKER_MODE,
-} from "@/api/lib/files/asic-preview-protocol";
 import { extractAsicPreview } from "@/api/lib/files/asic-preview-worker";
 import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
 import {
@@ -60,6 +61,7 @@ import {
   type CadesWorkerMode,
 } from "@/api/lib/files/cades-preview-protocol";
 import { scanCadesPayload } from "@/api/lib/files/cades-preview-worker";
+import type { DocumentPackageError } from "@/api/lib/files/document-archive";
 import {
   type EmailAttachment,
   type EmailParseError,
@@ -67,6 +69,7 @@ import {
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import type { P7mParseError } from "@/api/lib/files/p7m";
+import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -320,6 +323,7 @@ type LegalTextReadOptions = {
 
 type LegalTextReadError =
   | AsicParseError
+  | DocumentPackageError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -410,7 +414,14 @@ const extractAsicText = async ({
   return Result.ok(asicDocumentText(preview.value));
 };
 
+const extractStructuredText = async (options: LegalTextReadOptions) => {
+  const read = await extractStructuredDocument(options);
+  return read.map(({ text }) => text);
+};
+
 const LEGAL_TEXT_READERS = {
+  ofd: extractStructuredText,
+  uyap: extractStructuredText,
   asicE: extractAsicText,
   asicS: extractAsicText,
   cades: extractCadesText,
@@ -655,9 +666,9 @@ const writeAsicPreview = async (options: {
   if (preview.isErr()) {
     switch (preview.error._tag) {
       case "AsicParseError":
-        return Result.ok(ASIC_PREVIEW_WORKER_EXIT.unreadable);
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
       case "FileScanRejectedError":
-        return Result.ok(ASIC_PREVIEW_WORKER_EXIT.rejected);
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
       case "FileScanFailedError":
       case "UnhandledException":
         return Result.err(preview.error);
@@ -700,6 +711,18 @@ try {
       exitWithWorkerError(preview.error);
     }
     process.exit(preview.value);
+  }
+  if (mimeType === STRUCTURED_DOCUMENT_PREVIEW_MODE) {
+    const preview = await extractStructuredDocument({
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      process.exit(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+    }
+    await writeWorkerStdout(JSON.stringify(preview.value));
+    process.exit(0);
   }
   if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
     const preview = await writeAsicPreview({

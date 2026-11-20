@@ -40,6 +40,7 @@ import {
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import { CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
@@ -860,6 +861,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Erase skill file originals recorded by committed deletions",
+    id: "agentSkills.cleanOriginalObjects.oneMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+    reads: { budget: "scheduled.agentSkills.cleanOriginalObjects" },
   },
   {
     description:

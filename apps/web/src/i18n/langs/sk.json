@@ -2942,6 +2942,7 @@
     "playbooks": "Playbooky",
     "preparing": "Pripravuje sa…",
     "preview": "Náhľad",
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii.",
     "previous": "Predchádzajúci",
     "previousMatch": "Predchádzajúci výskyt",
     "print": "Tlačiť",
@@ -6313,7 +6314,6 @@
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
     "pdfUnavailable": "Náhľad PDF nie je k dispozícii.",
-    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii.",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
     "unverified": "Podpisy neboli overené."
@@ -6458,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# vypustené ustanovenie} few {# vypustené ustanovenia} many {# vypusteného ustanovenia} other {# vypustených ustanovení}}",
     "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložené slová} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypustené slovo} few {# vypustené slová} many {# vypusteného slova} other {# vypustených slov}}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Na náhľad nie je k dispozícii čitateľný text.",
+    "textOnly": "Textový náhľad bez rozloženia strany a obrázkov."
   },
   "styleSets": {
     "create": "Vytvoriť",

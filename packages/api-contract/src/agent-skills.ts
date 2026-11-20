@@ -14,11 +14,13 @@ export const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 export const SKILL_SOURCE_UNREACHABLE_CODE = "skill_source_unreachable";
 
 /**
- * A skill resource refusal by size: the file's text is past what one stored
- * resource may hold, or past what a model may read in one piece (an AI
- * rewrite reads the whole file).
+ * A skill resource refusal: an unsafe path, a DOCX or PDF whose text cannot
+ * be read, or a file's text past what one stored resource may hold or past
+ * what a model may read in one piece (an AI rewrite reads the whole file).
  */
 export const SKILL_RESOURCE_REFUSAL_CODE = {
+  pathInvalid: "skill_resource_path_invalid",
+  textUnreadable: "skill_resource_text_unreadable",
   tooLarge: "skill_resource_too_large",
   tooLargeForAi: "skill_resource_too_large_for_ai",
 } as const;

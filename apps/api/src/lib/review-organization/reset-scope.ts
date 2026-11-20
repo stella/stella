@@ -71,6 +71,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Storage tombstones: they must outlive the rows they erase.",
   entity_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
+  agent_skill_original_cleanup_requests:
+    "Storage tombstones: they must outlive the rows they erase.",
   template_deletion_cleanup_requests:
     "Storage tombstones: they must outlive the rows they erase.",
   mcp_web_handoff: "Short-lived OAuth state; never reviewer content.",
