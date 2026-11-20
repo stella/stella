@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { framePendingView } from "@/routes/-pending-view.logic";
-import { SkillEditorPending } from "@/routes/knowledge/-components/skill-editor.pending";
+import { SkillDetailPending } from "@/routes/knowledge/-components/skill-detail.pending";
 
 /** The column a skill's editor fills. */
 export const ToolSkillShell = ({ children }: { children?: ReactNode }) => (
@@ -12,6 +12,6 @@ export const ToolSkillShell = ({ children }: { children?: ReactNode }) => (
  *  own lines. */
 export const ToolSkillPending = framePendingView(() => (
   <ToolSkillShell>
-    <SkillEditorPending />
+    <SkillDetailPending />
   </ToolSkillShell>
 ));

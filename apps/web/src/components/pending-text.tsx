@@ -271,6 +271,8 @@ type PendingTextMessageKey =
   | "folio.listsGroup"
   | "guidance.notCaseLaw"
   | "inspector.matterPicker.allMatters"
+  | "knowledge.agentSkills.availabilityFixedHelp"
+  | "knowledge.agentSkills.availabilityLabel"
   | "knowledge.agentSkills.howItRuns"
   | "knowledge.catalogue.addToLibrary"
   | "knowledge.playbooks.review.run"

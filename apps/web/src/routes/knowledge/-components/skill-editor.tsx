@@ -73,7 +73,7 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import { SkillAvailabilitySummary } from "./skill-availability-field";
-import { SkillFilesPending } from "./skill-editor.pending";
+import { SkillFilesPending } from "./skill-detail.pending";
 import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
