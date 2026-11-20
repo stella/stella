@@ -53,10 +53,8 @@ import {
 } from "@stll/workspace-ui/calculations";
 
 import { InlineEdit } from "@/components/inline-edit";
-import {
-  KanbanCard,
-  KanbanCardsPending,
-} from "@/components/workspaces/kanban/kanban-card";
+import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import { KanbanCardsPending } from "@/components/workspaces/kanban/kanban-card.pending";
 import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
 import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
@@ -74,6 +72,13 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { toCalculationValue } from "@/lib/workspaces/calculations";
+import {
+  KANBAN_COLUMN_BODY_CLASS,
+  KANBAN_COLUMN_CLASS,
+  KANBAN_COLUMN_PLAIN_CLASS,
+  KANBAN_COLUMN_SWATCH_CLASS,
+  kanbanColumnRestingBackground,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 import { useWorkspaceCalculationLabels } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;
@@ -269,9 +274,7 @@ export const KanbanColumn = ({
   // instead of a generic highlight; a colourless column keeps that generic
   // highlight unchanged.
   const isColumnActive = isFileDragOver || isEntityDragOver;
-  const restingBackground = colorBg
-    ? `color-mix(in srgb, ${colorBg} 50%, transparent)`
-    : undefined;
+  const restingBackground = kanbanColumnRestingBackground(colorBg);
   const activeAccentBackground =
     isColumnActive && color
       ? `color-mix(in srgb, ${color} 22%, var(--background))`
@@ -285,8 +288,8 @@ export const KanbanColumn = ({
   return (
     <div
       className={cn(
-        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-opacity",
-        !colorBg && "bg-muted/50",
+        KANBAN_COLUMN_CLASS,
+        !colorBg && KANBAN_COLUMN_PLAIN_CLASS,
         isColumnActive && !color && "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",
       )}
@@ -380,7 +383,7 @@ export const KanbanColumn = ({
         }
       />
       <div
-        className="flex-1 overflow-y-auto p-2"
+        className={KANBAN_COLUMN_BODY_CLASS}
         onContextMenu={containedEventHandler(handleContextMenu)}
         ref={scrollRef}
       >
@@ -685,7 +688,7 @@ export const KanbanColumnSwatch = ({
   if (!showPicker) {
     return (
       <span
-        className="size-2.5 rounded-full"
+        className={KANBAN_COLUMN_SWATCH_CLASS}
         style={{ backgroundColor: color }}
       />
     );
@@ -704,7 +707,7 @@ export const KanbanColumnSwatch = ({
           variant="plain"
         >
           <span
-            className="block size-2.5 rounded-full"
+            className={cn("block", KANBAN_COLUMN_SWATCH_CLASS)}
             style={{ backgroundColor: color }}
           />
         </Button>

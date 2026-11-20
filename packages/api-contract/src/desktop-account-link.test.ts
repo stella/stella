@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { CHAT_LOCAL_RUN_HARNESSES } from "./chat-run-target";
+import { DESKTOP_SET_UP_HARNESSES } from "./chat-run-target";
 import {
   desktopAccountConnectUrl,
   desktopAgentSettingsUrl,
@@ -59,7 +59,7 @@ describe("desktop account link contract", () => {
 
   test("the page opens exactly the settings links the app parses", () => {
     expect(fixtures.settingsLinks.valid).toEqual([
-      ...CHAT_LOCAL_RUN_HARNESSES.map((harness) => ({
+      ...DESKTOP_SET_UP_HARNESSES.map((harness) => ({
         harness,
         url: desktopAgentSettingsUrl(harness),
       })),

@@ -189,6 +189,7 @@ const importSkillsFromUrls = createSafeRootHandler(
 
       const result = await installSkill({
         memberRole,
+        onSlugTaken: "copy",
         origin: "url",
         parsed: parsed.value,
         recordAuditEvent,

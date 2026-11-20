@@ -621,6 +621,7 @@
   "signedFile": {
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "previewTruncated": "A teljes szöveg nem érhető el ebben az előnézetben.",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."

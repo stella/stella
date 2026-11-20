@@ -63,6 +63,7 @@ import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
+import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -1084,6 +1085,9 @@ const runSafeHandlerInDeliveryScope = async <
     const handlerError =
       requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
@@ -1165,6 +1169,9 @@ const runSafeHandlerInDeliveryScope = async <
     const handlerError =
       requestAbortRefusal(ctx.request.signal, error) ??
       publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
       resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       applyRetryAfterHeader(ctx, handlerError.retryAfterMs);

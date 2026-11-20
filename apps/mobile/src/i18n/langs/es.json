@@ -621,6 +621,7 @@
   "signedFile": {
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
+    "previewTruncated": "El texto completo no está disponible en esta vista previa.",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
     "unverified": "Las firmas no se han verificado."

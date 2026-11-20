@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The view toolbar's loading face draws one chip per saved filter (apps/web/src/components/workspaces/view-toolbar-filters.pending.tsx). A filter condition is a plain value object with no id, so the face keys its chips by position, as the loaded filter chips already do under the same directive; the face holds no state per chip."
+}

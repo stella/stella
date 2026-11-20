@@ -2259,6 +2259,7 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
+      "hintAntigravity": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -4708,7 +4709,7 @@
       "discoveredSkills": "{count, plural, zero {لم يُعثر على أي مهارات} one {تم العثور على مهارة واحدة} two {تم العثور على مهارتين} few {تم العثور على # مهارات} many {تم العثور على # مهارة} other {تم العثور على # مهارة}}",
       "discoveryEmpty": "لم يُعثر على أي مهارات في هذا المستودع أو المجلد.",
       "discoverySkippedInvalid": "{count, plural, zero {لم يتم تخطي أي مهارات غير صالحة} one {تم تخطي مهارة واحدة غير صالحة} two {تم تخطي مهارتين غير صالحتين} few {تم تخطي # مهارات غير صالحة} many {تم تخطي # مهارة غير صالحة} other {تم تخطي # مهارة غير صالحة}}",
-      "dropPack": "أفلِت ملف .zip أو SKILL.md هنا لاستيراد المهارة",
+      "dropPack": "أفلِت ملف .zip/.skill أو SKILL.md هنا لاستيراد المهارة",
       "editSkill": "تعديل المهارة",
       "enableSkill": "تفعيل المهارة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
@@ -4765,8 +4766,8 @@
           "name": "تلخيص مستند"
         }
       },
-      "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
-      "uploadPack": "رفع ملف .zip أو SKILL.md",
+      "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip/.skill يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
+      "uploadPack": "رفع ملف .zip/.skill أو SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },
@@ -6312,6 +6313,7 @@
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "previewTruncated": "النص الكامل غير متاح في هذه المعاينة.",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."

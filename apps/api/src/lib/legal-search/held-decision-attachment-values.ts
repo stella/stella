@@ -27,6 +27,7 @@ export const HELD_DECISION_MATCH_BASIS = {
    * acceptable without a reader's look.
    */
   COURT_DOCKET_OTHER_DATE: "court-docket-other-date",
+  SOURCE_POLICY: "source-policy",
 } as const;
 
 export type HeldDecisionMatchBasis =
@@ -36,6 +37,7 @@ export const HELD_DECISION_MATCH_BASES = [
   HELD_DECISION_MATCH_BASIS.ECLI,
   HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE,
   HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE,
+  HELD_DECISION_MATCH_BASIS.SOURCE_POLICY,
 ] as const satisfies readonly HeldDecisionMatchBasis[];
 
 /** The bases that can name a host; the other parks the record for review. */
@@ -50,6 +52,7 @@ export const HELD_DECISION_REVIEW = {
   SEVERAL_HELD: "several-held",
   /** Its court and docket are held, under another decision date. */
   DOCKET_HELD_OTHER_DATE: "docket-held-other-date",
+  SOURCE_POLICY: "source-policy",
 } as const;
 
 export type HeldDecisionReview =
@@ -76,6 +79,8 @@ export const heldDecisionReviewOf = ({
       return HELD_DECISION_REVIEW.SEVERAL_HELD;
     case HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE:
       return HELD_DECISION_REVIEW.DOCKET_HELD_OTHER_DATE;
+    case HELD_DECISION_MATCH_BASIS.SOURCE_POLICY:
+      return HELD_DECISION_REVIEW.SOURCE_POLICY;
     default:
       matchBasis satisfies never;
       return panic(
@@ -101,3 +106,21 @@ export type HeldDecisionDeclaredIdentifier = {
  * several; an ambiguous record lists up to this many.
  */
 export const HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX = 8;
+
+/** Identity evidence is separate from a publisher's document-part declaration. */
+export type HeldDecisionMatchEvidence =
+  | {
+      status: "matched";
+      basis:
+        | typeof HELD_DECISION_MATCH_BASIS.ECLI
+        | typeof HELD_DECISION_MATCH_BASIS.COURT_DOCKET_DATE;
+      /** Both values stay attributed through the attachment source and host source. */
+      ecliDiscrepancy: { sourceValue: string; hostValue: string } | null;
+    }
+  | {
+      status: "conflict";
+      ecliCandidateIds: string[];
+      courtDocketDateCandidateIds: string[];
+    }
+  | { status: "ambiguous"; completeness: "complete" | "overflow" }
+  | { status: "outside-policy"; adapterKey: string };

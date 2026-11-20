@@ -51,3 +51,11 @@ export const KANBAN_BAND_CAPTION_ROW_HEIGHT_PX = KANBAN_CHROME_ROW_HEIGHT_PX;
  */
 export const KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS =
   "relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:-translate-y-1/2";
+
+/**
+ * Sticks a card's identity row under everything pinned above it. The fallback
+ * keeps the row usable inside a card rendered outside a cell that publishes the
+ * offset, where nothing is pinned above it at all.
+ */
+export const KANBAN_CARD_STICKY_TOP_CLASS =
+  "top-(--kanban-card-sticky-top,0px)";

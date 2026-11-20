@@ -1,7 +1,11 @@
 import { panic, Result } from "better-result";
 
-import { SKILL_SOURCE_UNREACHABLE_CODE } from "@stll/api-contract";
+import {
+  SKILL_PACKAGE_REFUSAL_CODE,
+  SKILL_SOURCE_UNREACHABLE_CODE,
+} from "@stll/api-contract";
 import type { ZipEntry } from "@stll/docx-core/zip";
+import { sha256Hex } from "@stll/sha256/bun";
 import {
   isKnownBinaryResourcePath,
   isOsMetadataPath,
@@ -9,7 +13,21 @@ import {
   validateSkillPackage,
 } from "@stll/skills";
 import type { SkillInvocation, SkillPackageDiagnostic } from "@stll/skills";
-import { hashSkillEntrypoint, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
+import {
+  hashSkillEntrypoint,
+  isReservedSkillPackagePath,
+  SKILL_PACKAGE_LIMITS,
+} from "@stll/skills/format";
+import {
+  isZipArchiveBytes,
+  parseSkillPackageManifest,
+  SKILL_PACKAGE_MANIFEST_PATH,
+  verifySkillPackageFiles,
+} from "@stll/skills/package";
+import type {
+  SkillPackageManifest,
+  SkillPackageManifestRefusal,
+} from "@stll/skills/package";
 import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
@@ -80,11 +98,19 @@ type ParsedSkillResource = {
   sizeBytes: number;
 };
 
+/**
+ * What a stella package's manifest restores beyond SKILL.md: the slug, the
+ * display name and the command the skill was exported with.
+ */
+type SkillPackageIdentity = SkillPackageManifest["skill"];
+
 export type ParsedSkillPackage = {
   body: string;
   compatibility: string | null;
   description: string;
   entrypointHash: string;
+  /** From the package manifest; null for a plain skill folder or file. */
+  identity: SkillPackageIdentity | null;
   /**
    * From the package's `metadata.stella-invocation` or its top-level
    * `disable-model-invocation`; stored on the row's own column.
@@ -296,7 +322,9 @@ export const parseUploadedSkillPackage = async (
         return rejectSkillPackage("Skill pack is too large");
       }
 
-      const parsed = isZipFile({ buffer, name: file.fileName })
+      // Read by content: a `.zip`, a `.skill` and a file with no extension
+      // holding the same archive import alike.
+      const parsed = isZipArchiveBytes(new Uint8Array(buffer))
         ? await parseZipSkillPackage(buffer)
         : parseMarkdownSkillPackageBytes(buffer);
       if (parsed.isErr()) {
@@ -341,13 +369,10 @@ export const fetchSkillPackageFromUrl = async (
       if (response.isErr()) {
         return Result.err(response.error);
       }
-      const { body, headers } = response.value;
-      const contentType = headers.get("content-type") ?? "";
-      const parsed = isZipSkillSource({
-        buffer: body,
-        contentType,
-        path: url.pathname,
-      })
+      const { body } = response.value;
+      // The bytes decide, as for an upload: a `.skill` link and one whose
+      // server mislabels the type import like a `.zip`.
+      const parsed = isZipSkillSource(body)
         ? await parseZipSkillPackage(body)
         : parseMarkdownSkillPackageBytes(body);
       if (parsed.isErr()) {
@@ -514,6 +539,7 @@ type ZipPackageEntry = {
 type PackagePathVerdict =
   | { type: "entrypoint" }
   | { type: "ignored" }
+  | { type: "manifest" }
   | { type: "resource" }
   | { type: "skipped"; reason: SkippedSkillFileReason };
 
@@ -541,8 +567,15 @@ const classifyPackageFilePath = ({
     };
   }
   const relativePath = path.slice(rootPrefix.length);
-  // Finder and archiver metadata is no part of any skill: dropped unreported.
-  if (isOsMetadataPath(relativePath)) {
+  if (relativePath === SKILL_PACKAGE_MANIFEST_PATH) {
+    return { type: "manifest" };
+  }
+  // Finder and archiver metadata is no part of any skill, and the reserved
+  // folder holds only the manifest: both dropped unreported.
+  if (
+    isOsMetadataPath(relativePath) ||
+    isReservedSkillPackagePath(relativePath)
+  ) {
     return { type: "ignored" };
   }
   // Any folder and file is part of the skill (Agent Skills spec); a file
@@ -592,6 +625,10 @@ const parseZipSkillPackage = async (
   const rootPrefix = skillFolderPrefix(skillFilePath.value);
   const files: SkillFile[] = [];
   const skippedFiles: SkippedSkillFile[] = [];
+  // SHA-256 of every file read, by its path in the skill folder, for the
+  // manifest check.
+  const digests = new Map<string, string>();
+  let manifestBytes: Uint8Array | null = null;
   let totalUncompressedBytes = 0;
 
   for (const { file, path } of packageEntries) {
@@ -621,6 +658,11 @@ const parseZipSkillPackage = async (
     if (inflatedLimit.isErr()) {
       return Result.err(inflatedLimit.error);
     }
+    if (verdict.type === "manifest") {
+      manifestBytes = bytes;
+      continue;
+    }
+    digests.set(path.slice(rootPrefix.length), sha256Hex(bytes));
 
     // SKILL.md must be text; a resource that is not (a binary asset) is left
     // out and reported rather than failing the whole package.
@@ -639,14 +681,87 @@ const parseZipSkillPackage = async (
     files.push({ content: content.value, path, sizeBytes: bytes.byteLength });
   }
 
-  const parsed = parseSkillFiles(
-    files,
-    skippedResourcePaths({ rootPrefix, skippedFiles }),
-  );
+  const unread = skippedResourcePaths({ rootPrefix, skippedFiles });
+  let identity: SkillPackageIdentity | null = null;
+  if (manifestBytes !== null) {
+    const read = readPackageIdentity({ digests, manifestBytes, unread });
+    if (read.isErr()) {
+      return Result.err(read.error);
+    }
+    identity = read.value;
+  }
+  const parsed = parseSkillFiles(files, unread);
   if (parsed.isErr()) {
     return Result.err(parsed.error);
   }
-  return Result.ok({ ...parsed.value, skippedFiles });
+  return Result.ok({
+    ...parsed.value,
+    identity,
+    skippedFiles,
+  });
+};
+
+/**
+ * The identity a package's manifest carries, once every file it lists is
+ * there unchanged. A newer format or a changed file refuses the whole
+ * package: importing it would silently lose or alter part of the skill.
+ */
+const readPackageIdentity = ({
+  digests,
+  manifestBytes,
+  unread,
+}: {
+  digests: ReadonlyMap<string, string>;
+  manifestBytes: Uint8Array;
+  unread: ReadonlySet<string>;
+}): Result<SkillPackageIdentity, HandlerError> => {
+  const manifest = parseSkillPackageManifest(manifestBytes);
+  if (manifest.isErr()) {
+    return Result.err(manifestRefusalError(manifest.error));
+  }
+  const verified = verifySkillPackageFiles({
+    digests,
+    manifest: manifest.value,
+    unread,
+  });
+  if (verified.isErr()) {
+    return Result.err(manifestRefusalError(verified.error));
+  }
+  return Result.ok(manifest.value.skill);
+};
+
+const manifestRefusalError = (
+  refusal: SkillPackageManifestRefusal,
+): HandlerError => {
+  switch (refusal.type) {
+    case "manifest_invalid":
+      return new HandlerError({
+        status: 400,
+        code: SKILL_PACKAGE_REFUSAL_CODE.manifestInvalid,
+        message: `Skill package manifest is invalid: ${refusal.reason}`,
+      });
+    case "format_version_unsupported":
+      return new HandlerError({
+        status: 400,
+        code: SKILL_PACKAGE_REFUSAL_CODE.formatUnsupported,
+        message: `Skill package format ${String(refusal.formatVersion)} is newer than the one stella reads`,
+        hint: "Export the skill again, or import its folder without .stella/manifest.json.",
+      });
+    case "file_missing":
+      return new HandlerError({
+        status: 400,
+        code: SKILL_PACKAGE_REFUSAL_CODE.fileMissing,
+        message: `Skill package is missing a file its manifest lists: ${refusal.path}`,
+      });
+    case "file_changed":
+      return new HandlerError({
+        status: 400,
+        code: SKILL_PACKAGE_REFUSAL_CODE.fileChanged,
+        message: `Skill package file changed after export: ${refusal.path}`,
+      });
+    default:
+      return unreachable("Unknown skill package manifest refusal");
+  }
 };
 
 /**
@@ -668,7 +783,10 @@ const skippedResourcePaths = ({
 
 type DecodePackageFileOptions = {
   bytes: ArrayBuffer | Uint8Array;
-  verdict: Exclude<PackagePathVerdict, { type: "ignored" | "skipped" }>;
+  verdict: Exclude<
+    PackagePathVerdict,
+    { type: "ignored" | "manifest" | "skipped" }
+  >;
 };
 
 /**
@@ -720,6 +838,7 @@ export const parseSkillFiles = (
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
     entrypointHash: hashSkillEntrypoint(source),
+    identity: null,
     invocation: metadata.invocation,
     license: metadata.license ?? null,
     metadata: metadata.metadata ?? {},
@@ -890,7 +1009,9 @@ const fetchGithubSkillFiles = async (
       rootPrefix: "",
       skillFilePath: SKILL_FILE_NAME,
     });
-    if (verdict.type === "ignored") {
+    // A repository folder is read as the folder it is: a manifest there
+    // describes some other export, so it is neither fetched nor trusted.
+    if (verdict.type === "ignored" || verdict.type === "manifest") {
       continue;
     }
     if (verdict.type === "skipped") {
@@ -2266,43 +2387,15 @@ const checkSafeGithubSkillUrl = (url: URL): Result<void, HandlerError> =>
     ? Result.ok()
     : rejectSkillPackage("GitHub skill URL is not allowed");
 
-export const isZipSkillSource = ({
-  buffer,
-  contentType,
-  path,
-}: {
-  buffer: ArrayBuffer | Uint8Array;
-  contentType: string;
-  path: string;
-}) => {
-  const normalizedContentType = contentType.toLowerCase();
-  return (
-    normalizedContentType.includes("application/zip") ||
-    normalizedContentType.includes("application/x-zip-compressed") ||
-    isZipFile({ buffer, name: path })
+/**
+ * Whether uploaded bytes are a skill archive. Decided by the bytes alone,
+ * never by the file name or declared type, so a `.skill` file, a renamed
+ * archive and one without an extension are all read as what they hold.
+ */
+export const isZipSkillSource = (buffer: ArrayBuffer | Uint8Array) =>
+  isZipArchiveBytes(
+    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer),
   );
-};
-
-const isZipFile = ({
-  buffer,
-  name,
-}: {
-  buffer: ArrayBuffer | Uint8Array;
-  name: string;
-}) => {
-  if (name.toLowerCase().endsWith(".zip")) {
-    return true;
-  }
-
-  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  return (
-    bytes.length >= 4 &&
-    bytes.at(0) === 0x50 &&
-    bytes.at(1) === 0x4b &&
-    bytes.at(2) === 0x03 &&
-    bytes.at(3) === 0x04
-  );
-};
 
 /** UTF-8 text, or `null` for bytes that are not (invalid UTF-8 or a NUL). */
 const tryDecodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string | null => {

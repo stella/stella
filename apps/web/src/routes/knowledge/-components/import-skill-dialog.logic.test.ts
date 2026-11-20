@@ -101,6 +101,16 @@ describe("picking the skill pack from a drop", () => {
     );
   });
 
+  test("installs a .skill pack like a .zip", () => {
+    const pack = file("contract-review.skill");
+    expect(pickSkillPackFile([file("notes.txt"), pack])).toBe(pack);
+  });
+
+  test("leaves a file without an extension to the server to read", () => {
+    const pack = file("contract-review");
+    expect(pickSkillPackFile([pack])).toBe(pack);
+  });
+
   test("installs a markdown skill dropped on its own", () => {
     const skill = file("SKILL.md");
     expect(pickSkillPackFile([skill])).toBe(skill);

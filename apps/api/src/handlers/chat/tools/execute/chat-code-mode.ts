@@ -32,6 +32,8 @@ import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script
 import {
   type ChatStepCallSink,
   type ChatStepLedgerRecorder,
+  type ChatStepRefScope,
+  chatStepRefScope,
   createChatStepLedgerRecorder,
   runRecordedStepCall,
   stepCallSink,
@@ -248,10 +250,11 @@ type CreateChatCodeModeSurfaceProps = {
   nameGuide?: CreateStellaIsolateDriverProps["nameGuide"];
   runReadTool: ChatCodeModeReadRunner;
   /**
-   * The matters whose documents a step's ledger may name. Without it the
-   * ledger names no matter item at all.
+   * The matters whose documents a step's ledger may name, and the turn's
+   * chat refs it names them by. Without it the ledger names no matter item
+   * at all.
    */
-  stepLedgerWorkspaceIds?: ReadonlySet<string> | undefined;
+  stepLedgerScope?: ChatStepRefScope | undefined;
 };
 
 /**
@@ -264,7 +267,7 @@ export const createChatCodeModeSurface = ({
   documentedReads,
   nameGuide,
   runReadTool,
-  stepLedgerWorkspaceIds,
+  stepLedgerScope,
 }: CreateChatCodeModeSurfaceProps): CreateCodeModeResult => {
   const tools = buildChatReadTools({
     featureAccessContext,
@@ -308,11 +311,7 @@ export const createChatCodeModeSurface = ({
   const tool = withStepLedger({
     tool: codeMode.tool,
     startRun: (toolContext) => {
-      const recorder = createChatStepLedgerRecorder(
-        stepLedgerWorkspaceIds === undefined
-          ? undefined
-          : { workspaceIds: stepLedgerWorkspaceIds },
-      );
+      const recorder = createChatStepLedgerRecorder(stepLedgerScope);
       recorders.set(toolContext, recorder);
       return recorder;
     },
@@ -518,7 +517,10 @@ export const buildChatCodeMode = (
     featureAccessContext: context,
     concurrencyKey: contextDeps.userId,
     documentedReads,
-    stepLedgerWorkspaceIds: new Set(contextDeps.toolWorkspaceIds),
+    stepLedgerScope: chatStepRefScope({
+      refRegistry,
+      workspaceIds: contextDeps.toolWorkspaceIds,
+    }),
     runReadTool: async (toolName, toolArgs, step) =>
       await runChatScriptRead({
         toolName,

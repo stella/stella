@@ -18,7 +18,6 @@
   "apps/web/src/routes/_protected.settings/organization.usage.tsx",
   "apps/web/src/routes/_protected.settings/organization.vat-rates.tsx",
   "apps/web/src/routes/_protected.verify.$code.tsx",
-  "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
   "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx",
   "apps/web/src/routes/agent-claim.tsx",
   "apps/web/src/routes/auth/organization.tsx",

@@ -1047,6 +1047,8 @@
       "SPLIT_BUTTON_PRIMARY_CLASS",
       "SPLIT_BUTTON_ROOT_CLASS",
       "SPLIT_BUTTON_TRIGGER_CLASS",
+      "SegmentedIconToggleFace",
+      "SelectTriggerFace",
       "SplitButtonChevron",
       "SplitButtonFace",
       "SwitchFace",
@@ -1573,6 +1575,21 @@
       "useKanbanSortable",
       "useKanbanSortableSensors"
     ],
+    "./kanban-card-shell": ["KanbanCardShell"],
+    "./kanban-column-header-shell": [
+      "KANBAN_COLUMN_NAME_CLASS",
+      "KanbanColumnHeaderShell",
+      "KanbanColumnNameFace",
+      "KanbanColumnTitleSlot"
+    ],
+    "./kanban-grouping": [
+      "getKanbanGroupingPropertyId",
+      "getKanbanGroups",
+      "isKanbanGroupingRenderable",
+      "resolveKanbanGroupOptions",
+      "resolveKanbanGrouping",
+      "selectKanbanRows"
+    ],
     "./kbd": ["Kbd", "formatKeys", "kbdPlatformOf", "useKbdPlatform"],
     "./label": ["Label"],
     "./landing": [
@@ -1974,7 +1991,12 @@
       "ViewFilterChip",
       "ViewToolbarChrome"
     ],
-    "./view-toolbar-shell": ["ViewChromeBar", "ViewToolbarChrome"],
+    "./view-toolbar-shell": [
+      "ViewChromeBar",
+      "ViewFilterButtonFace",
+      "ViewFilterChipFace",
+      "ViewToolbarChrome"
+    ],
     "./week": ["getFirstWeekday", "getLocaleWeekInfo", "getWeekendDays"],
     "./workspace-shell": ["WorkspaceEndRail", "WorkspaceShell"]
   },
@@ -2180,6 +2202,8 @@
     ],
     "DocumentIdentityBadge.size": ["default", "inline", "prose"],
     "DocumentMark.kind": [
+      "asicE",
+      "asicS",
       "cades",
       "csv",
       "dataBox",
@@ -2292,6 +2316,7 @@
     "RunStateMark.state": ["needs-you", "working"],
     "ScrollArea.axis": ["both", "vertical"],
     "SegmentedIconToggle.size": ["compact", "touch"],
+    "SegmentedIconToggleFace.size": ["compact", "touch"],
     "SelectTrigger.align": ["center", "start"],
     "SheetContent.side": [
       "block-end",
