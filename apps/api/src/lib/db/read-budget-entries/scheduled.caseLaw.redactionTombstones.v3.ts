@@ -11,5 +11,5 @@ export default {
       "Thirty pages per cleared decision cover the indexed payload, pointer and search-row updates; the run retains the existing 12,000-page envelope.",
   },
   reason:
-    "One 100-decision audit page, including durable pointer cleanup, search removal and inline publisher-payload cleanup. Measurements at 60,000 and 120,000 audited decisions stay below 9,100 shared pages; 12,000 leaves over 30% for deeper indexes and TOAST layout variation.",
+    "One 50-decision audit page, including durable pointer cleanup, search removal and inline publisher-payload cleanup. A 100-decision page measured below 9,100 shared pages at 60,000 and 120,000 audited decisions; the 12,000-page envelope holds a 50-decision page with wider margin for deeper indexes and TOAST layout variation.",
 } as const satisfies ReadBudget;

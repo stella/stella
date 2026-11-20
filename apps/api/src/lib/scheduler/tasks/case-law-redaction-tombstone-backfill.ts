@@ -29,7 +29,9 @@ export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
 export const REDACTION_TOMBSTONE_BACKFILL_JOB_ID =
   "caseLaw.backfillRedactionTombstones.v3";
 export const REDACTION_TOMBSTONE_BACKFILL_STATEMENT_TIMEOUT_MS = 30_000;
-const BACKFILL_LIMIT = 100;
+// Fifty decisions keep one page's projection writes, one statement each,
+// under the scheduler's default statement ceiling.
+const BACKFILL_LIMIT = 50;
 
 const extendRepairedDecisions = async (
   tx: Transaction,

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { DEFAULT_STATEMENT_CEILING } from "@/api/lib/db/statement-ceiling";
 import {
   BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   REDACTION_TOMBSTONE_BACKFILL_JOB_ID,
@@ -57,6 +58,10 @@ describe.skipIf(!enabled)("redaction tombstone read budget (postgres)", () => {
                 ),
               ),
             ).toBe(true);
+            // One page stays under the scheduler's default statement ceiling.
+            expect(measured.statements.length).toBeLessThanOrEqual(
+              DEFAULT_STATEMENT_CEILING,
+            );
             measurements.push(measured.metrics.sharedBlocks);
             console.info(
               "redaction-tombstone-read-budget",

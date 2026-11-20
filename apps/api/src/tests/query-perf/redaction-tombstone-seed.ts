@@ -26,7 +26,7 @@ const SOURCE_ID = toSafeId<"caseLawSource">(
   "01890000-00d3-7000-8000-000000000000",
 );
 const PAGE_END = toSafeId<"caseLawDecision">(
-  "01890000-00d4-7000-8000-000000000100",
+  "01890000-00d4-7000-8000-000000000050",
 );
 const CONTROL_ID = toSafeId<"caseLawDecision">(
   "01890000-00d5-7000-8000-000000000001",
@@ -75,13 +75,13 @@ export const seedRedactionTombstoneScenario = async (
        text_s3_key, normalized_s3_key, ast_s3_key, redacted_at)
       SELECT ('01890000-00d4-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         ${SOURCE_ID}::uuid, 'Measurement ' || n, NULL, 'CZE', 'Measurement court', 'cs',
-        CASE WHEN n <= 100 AND ${cohort} = 'repair' THEN 'Rozhodnutí o náhradě nákladů.' ELSE NULL END,
-        CASE WHEN n <= 100 AND ${cohort} <> 'settled' THEN
+        CASE WHEN n <= 50 AND ${cohort} = 'repair' THEN 'Rozhodnutí o náhradě nákladů.' ELSE NULL END,
+        CASE WHEN n <= 50 AND ${cohort} <> 'settled' THEN
           (SELECT string_agg(md5(n::text || ':' || part::text), '') FROM generate_series(1, 128) part)
           ELSE NULL END,
-        CASE WHEN n <= 100 AND ${cohort} = 'repair' THEN 'fixture/text/' || n ELSE NULL END,
-        CASE WHEN n <= 100 AND ${cohort} = 'repair' THEN 'fixture/sections/' || n ELSE NULL END,
-        CASE WHEN n <= 100 AND ${cohort} = 'repair' THEN 'fixture/ast/' || n ELSE NULL END,
+        CASE WHEN n <= 50 AND ${cohort} = 'repair' THEN 'fixture/text/' || n ELSE NULL END,
+        CASE WHEN n <= 50 AND ${cohort} = 'repair' THEN 'fixture/sections/' || n ELSE NULL END,
+        CASE WHEN n <= 50 AND ${cohort} = 'repair' THEN 'fixture/ast/' || n ELSE NULL END,
         CASE WHEN ${cohort} = 'repair' THEN NULL ELSE '2026-01-01'::timestamptz END
       FROM generate_series(1, ${rows}::integer) n`);
     await tx.execute(sql`INSERT INTO case_law_decisions
