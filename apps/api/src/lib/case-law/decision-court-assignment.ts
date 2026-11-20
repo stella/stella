@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -7,9 +7,44 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import {
   CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
+  CorpusIndexProjectionSubjectMissingError,
   lockActiveCorpusProjectionSourceByIdTx,
+  lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCaseLawProjectionBatchTx,
+  synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+
+type WriteDecisionCourtIdentityOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  write: (tx: Transaction) => Promise<boolean>;
+};
+
+/** A decision removed since selection is unchanged, before any write is attempted. */
+export const writeDecisionCourtIdentityTx = async (
+  tx: Transaction,
+  { decisionId, write }: WriteDecisionCourtIdentityOptions,
+): Promise<boolean> => {
+  const subject = { family: "case_law", entityId: decisionId } as const;
+  const locked = await Result.tryPromise({
+    try: async () => await lockActiveCorpusProjectionSourceTx(tx, subject),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new UnhandledException({ cause }),
+  });
+  if (locked.isErr()) {
+    if (locked.error instanceof CorpusIndexProjectionSubjectMissingError) {
+      return false;
+    }
+    return await Promise.reject(locked.error);
+  }
+  const written = await write(tx);
+  if (written && locked.value !== null) {
+    await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+      lock: locked.value,
+      subject,
+    });
+  }
+  return written;
+};
 
 type DecisionCourtIdAssignment = {
   decisionId: SafeId<"caseLawDecision">;

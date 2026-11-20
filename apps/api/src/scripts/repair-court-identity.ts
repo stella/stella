@@ -52,17 +52,16 @@ import { chunk } from "@stll/concurrency/chunk";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { assignDecisionCourtIdsTx } from "@/api/lib/case-law/decision-court-assignment";
+import {
+  assignDecisionCourtIdsTx,
+  writeDecisionCourtIdentityTx,
+} from "@/api/lib/case-law/decision-court-assignment";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import {
-  CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
-  lockActiveCorpusProjectionSourceTx,
-  synchronizeLockedCorpusProjectionDesiredStateTx,
-} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   COURT_IDENTITY_REPAIR_ADAPTERS,
@@ -169,28 +168,15 @@ const logWrite = (write: CourtIdentityWrite): void => {
   appendFileSync(logTarget, `${line}\n`);
 };
 
-/**
- * Write one row under its corpus projection source lock, reconciling its projection in the
- * same transaction when the change is projected text.
- */
 const writeWithProjection = async (
   decisionId: SafeId<"caseLawDecision">,
   write: (
     tx: Parameters<Parameters<typeof ingestionDb>[0]>[0],
   ) => Promise<boolean>,
 ): Promise<boolean> =>
-  await ingestionDb(async (tx) => {
-    const subject = { family: "case_law", entityId: decisionId } as const;
-    const lock = await lockActiveCorpusProjectionSourceTx(tx, subject);
-    const written = await write(tx);
-    if (written && lock !== null) {
-      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-        lock,
-        subject,
-      });
-    }
-    return written;
-  });
+  await ingestionDb(
+    async (tx) => await writeDecisionCourtIdentityTx(tx, { decisionId, write }),
+  );
 
 const rollback = async (file: string): Promise<void> => {
   const lines = readFileSync(file, "utf-8")

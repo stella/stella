@@ -14,13 +14,20 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { assignDecisionCourtIdsTx } from "@/api/lib/case-law/decision-court-assignment";
+import {
+  assignDecisionCourtIdsTx,
+  writeDecisionCourtIdentityTx,
+} from "@/api/lib/case-law/decision-court-assignment";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { bootstrapCorpusProjectionDesiredStateBatchTx } from "@/api/lib/legal-search/corpus-index-projection-bootstrap";
-import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  advanceCorpusProjectionDesiredStateTx,
+  CorpusIndexProjectionSubjectMissingError,
+  lockActiveCorpusProjectionSourceTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/corpus-index-projection-materials";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -301,4 +308,104 @@ test("court ID assignment refuses a changed printed court and another source", a
         )
     ).at(0)?.courtId,
   ).toBeNull();
+});
+
+test("a missing decision is unchanged without invoking its court identity write", async () => {
+  const decisionId = createSafeId<"caseLawDecision">();
+  expect(
+    await rejectionOf(
+      inTx(
+        async (tx) =>
+          await lockActiveCorpusProjectionSourceTx(tx, {
+            family: "case_law",
+            entityId: decisionId,
+          }),
+      ),
+    ),
+  ).toBeInstanceOf(CorpusIndexProjectionSubjectMissingError);
+  let writes = 0;
+  expect(
+    await inTx(
+      async (tx) =>
+        await writeDecisionCourtIdentityTx(tx, {
+          decisionId,
+          write: async () => {
+            writes += 1;
+            return true;
+          },
+        }),
+    ),
+  ).toBe(false);
+  expect(writes).toBe(0);
+});
+
+test("clearing a court ID reconciles every active generation and remains replayable", async () => {
+  const base = FIXTURES.at(0) ?? panic("Missing source fixture");
+  const fixture = { ...base, decisionId: createSafeId<"caseLawDecision">() };
+  await inTx(async (tx) => {
+    await tx.insert(caseLawDecisions).values({
+      id: fixture.decisionId,
+      sourceId: fixture.sourceId,
+      country: fixture.country,
+      language: fixture.language,
+      court: fixture.court,
+      courtId: fixture.courtId,
+      caseNumber: "3 C 3/2020",
+      contentHash: "a".repeat(64),
+      textS3Key: "fixture/clear-court-id.zst",
+      updatedAt: STORED_AT,
+    });
+    await advanceCorpusProjectionDesiredStateTx(tx, {
+      family: "case_law",
+      entityId: fixture.decisionId,
+    });
+  });
+  const states = async () =>
+    await db
+      .select()
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, fixture.decisionId))
+      .orderBy(asc(corpusIndexProjectionStates.generation));
+  const before = await states();
+  const clear = async () =>
+    await inTx(
+      async (tx) =>
+        await writeDecisionCourtIdentityTx(tx, {
+          decisionId: fixture.decisionId,
+          write: async (writer) =>
+            (
+              await writer
+                .update(caseLawDecisions)
+                .set({ courtId: null, updatedAt: caseLawDecisions.updatedAt })
+                .where(
+                  and(
+                    eq(caseLawDecisions.id, fixture.decisionId),
+                    eq(caseLawDecisions.courtId, fixture.courtId),
+                  ),
+                )
+                .returning({ id: caseLawDecisions.id })
+            ).length > 0,
+        }),
+    );
+  expect(await clear()).toBe(true);
+  const after = await states();
+  expect(after.map(({ desiredEpoch }) => desiredEpoch)).toEqual(
+    before.map(({ desiredEpoch }) => desiredEpoch + 1n),
+  );
+  expect(after.map(({ desiredFingerprint }) => desiredFingerprint)).not.toEqual(
+    before.map(({ desiredFingerprint }) => desiredFingerprint),
+  );
+  expect(await clear()).toBe(false);
+  expect(await states()).toEqual(after);
+  expect(
+    (
+      await db
+        .select({
+          courtId: caseLawDecisions.courtId,
+          updatedAt: caseLawDecisions.updatedAt,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, fixture.decisionId))
+    ).at(0),
+  ).toEqual({ courtId: null, updatedAt: STORED_AT });
 });
