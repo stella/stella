@@ -7222,6 +7222,7 @@
         "title": "Kas eemaldada Wordi mallide lingid?",
         "unknownLocation": "Malli asukoht: aadress, mida stella ei saa kontrollida"
       },
+      "checkingFiles": "Faile kontrollitakse…",
       "desktopEdit": {
         "accountRequiredTitle": "Ühenda stella desktop oma kontoga",
         "action": "Muuda töölauarakenduses",
@@ -7269,6 +7270,7 @@
         "description": "{count, plural, one {# fail on identne dokumendiga, mis on selles toimikus juba olemas.} other {# faili on identsed dokumentidega, mis on selles toimikus juba olemas.}} Valige, mida igaühega teha.",
         "matchedDocument": "Identne dokumendiga <bdi>{documentName}</bdi>",
         "skip": "Jäta see fail vahele",
+        "skipAll": "Jäta duplikaadid vahele",
         "title": "Juba selles toimikus olemas",
         "uploadAnyway": "Laadi siiski üles"
       },

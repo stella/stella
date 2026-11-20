@@ -7222,6 +7222,7 @@
         "title": "Odebrat odkazy na vzory Wordu?",
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
+      "checkingFiles": "Kontrola souborů…",
       "desktopEdit": {
         "accountRequiredTitle": "Připojte stella desktop ke svému účtu",
         "action": "Upravit v desktopu",
@@ -7268,7 +7269,8 @@
       "duplicateUpload": {
         "description": "{count, plural, one {# soubor je totožný s dokumentem, který tento spis již obsahuje.} few {# soubory jsou totožné s dokumenty, které tento spis již obsahuje.} many {# souboru je totožných s dokumenty, které tento spis již obsahuje.} other {# souborů je totožných s dokumenty, které tento spis již obsahuje.}} Vyberte, co s každým z nich udělat.",
         "matchedDocument": "Totožné s dokumentem <bdi>{documentName}</bdi>",
-        "skip": "Tento soubor přeskočit",
+        "skip": "Přeskočit tento soubor",
+        "skipAll": "Přeskočit duplicity",
         "title": "Již ve spisu",
         "uploadAnyway": "Přesto nahrát"
       },

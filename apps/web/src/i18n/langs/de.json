@@ -7222,6 +7222,7 @@
         "title": "Word-Vorlagenverknüpfungen entfernen?",
         "unknownLocation": "Vorlagenspeicherort: eine Adresse, die stella nicht prüfen kann"
       },
+      "checkingFiles": "Dateien werden geprüft…",
       "desktopEdit": {
         "accountRequiredTitle": "Verbinden Sie stella desktop mit Ihrem Konto",
         "action": "Im Desktop bearbeiten",
@@ -7269,6 +7270,7 @@
         "description": "{count, plural, one {# Datei ist mit einem Dokument identisch, das diese Akte bereits enthält.} other {# Dateien sind mit Dokumenten identisch, die diese Akte bereits enthält.}} Wählen Sie für jede Datei aus, was geschehen soll.",
         "matchedDocument": "Identisch mit <bdi>{documentName}</bdi>",
         "skip": "Diese Datei überspringen",
+        "skipAll": "Duplikate überspringen",
         "title": "Bereits in dieser Akte vorhanden",
         "uploadAnyway": "Trotzdem hochladen"
       },

@@ -7222,6 +7222,7 @@
         "title": "Remover links para modelos do Word?",
         "unknownLocation": "Local do modelo: um endereço que a stella não consegue verificar"
       },
+      "checkingFiles": "Verificando arquivos…",
       "desktopEdit": {
         "accountRequiredTitle": "Conecte o stella desktop à sua conta",
         "action": "Editar no desktop",
@@ -7269,6 +7270,7 @@
         "description": "{count, plural, one {# arquivo é idêntico a um documento que este caso já contém.} other {# arquivos são idênticos a documentos que este caso já contém.} many {# arquivos são idênticos a documentos que este caso já contém.}} Escolha o que fazer com cada um.",
         "matchedDocument": "Idêntico a <bdi>{documentName}</bdi>",
         "skip": "Ignorar este arquivo",
+        "skipAll": "Ignorar duplicados",
         "title": "Já está neste caso",
         "uploadAnyway": "Enviar mesmo assim"
       },

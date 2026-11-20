@@ -61,6 +61,11 @@ import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
 } from "@/lib/files/attached-template-upload-preflight";
+import {
+  exactDuplicateLookup,
+  resolveExactDuplicates,
+} from "@/lib/files/exact-duplicate-queries";
+import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -136,6 +141,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const format = useFormatter();
   const labels = useBatchUploadLabels();
   const analytics = useAnalytics();
+  const askAboutDuplicateFiles = useExactDuplicateUploadStore(
+    (store) => store.ask,
+  );
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const upsertField = useUpsertField();
   const renameEntity = useRenameEntity();
@@ -582,6 +590,32 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       default:
         preflight satisfies never;
         panic(`Unhandled attached-template preflight: ${String(preflight)}`);
+    }
+
+    const duplicates = await resolveExactDuplicates({
+      files: filesToUpload,
+      lookup: exactDuplicateLookup(workspaceId),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey: "KanbanView.handleFileUpload.duplicates:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleFileUpload.duplicates:failure",
+          },
+        }),
+    });
+    if (duplicates.length > 0) {
+      const uploadAnyway = new Set(
+        await new Promise<readonly File[]>((resolve) => {
+          askAboutDuplicateFiles({ duplicates, onResolved: resolve });
+        }),
+      );
+      const skipped = new Set(
+        duplicates
+          .map(({ file }) => file)
+          .filter((file) => !uploadAnyway.has(file)),
+      );
+      filesToUpload = filesToUpload.filter((file) => !skipped.has(file));
     }
 
     const results = await uploadFileEntitiesBatched({

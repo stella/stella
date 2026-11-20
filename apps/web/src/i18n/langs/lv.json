@@ -7222,6 +7222,7 @@
         "title": "Noņemt Word veidņu saites?",
         "unknownLocation": "Veidnes atrašanās vieta: adrese, kuru stella nevar pārbaudīt"
       },
+      "checkingFiles": "Pārbauda failus…",
       "desktopEdit": {
         "accountRequiredTitle": "Savienojiet stella desktop ar savu kontu",
         "action": "Rediģēt datora lietotnē",
@@ -7269,6 +7270,7 @@
         "description": "{count, plural, zero {# failu sakrīt ar dokumentiem, kas jau ir šajā lietā.} one {# fails sakrīt ar dokumentu, kas jau ir šajā lietā.} other {# faili sakrīt ar dokumentiem, kas jau ir šajā lietā.}} Izvēlieties, ko darīt ar katru.",
         "matchedDocument": "Sakrīt ar dokumentu <bdi>{documentName}</bdi>",
         "skip": "Izlaist šo failu",
+        "skipAll": "Izlaist dublikātus",
         "title": "Jau ir šajā lietā",
         "uploadAnyway": "Tomēr augšupielādēt"
       },

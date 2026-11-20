@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -9,6 +9,7 @@ import {
   Dialog,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -25,7 +26,10 @@ import {
 
 import type { DuplicateFile } from "@/lib/files/exact-duplicate-queries";
 import type { ExactDuplicateUploadPrompt } from "@/lib/files/exact-duplicate-upload-store";
-import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
+import {
+  currentExactDuplicateUploadPrompt,
+  useExactDuplicateUploadStore,
+} from "@/lib/files/exact-duplicate-upload-store";
 import { createUuid } from "@/lib/uuid";
 
 const DUPLICATE_UPLOAD_ACTION = {
@@ -46,25 +50,37 @@ type DuplicateFileRowState = {
  * Asks what to do with uploaded files whose exact bytes the matter already
  * holds. Mounted once at the protected layout, beside the document-reference
  * dialog; a batch with no duplicate never opens it.
+ *
+ * Every way out continues the batch: closing the dialog skips the duplicates
+ * and uploads the rest, the same as confirming it untouched.
  */
 export const ExactDuplicateUploadDialog = () => {
-  const prompt = useExactDuplicateUploadStore(
-    (store) => store.prompts.at(0) ?? null,
+  const queuedPrompt = useExactDuplicateUploadStore(
+    currentExactDuplicateUploadPrompt,
   );
   const close = useExactDuplicateUploadStore((store) => store.close);
 
-  if (prompt === null) {
+  if (queuedPrompt === null) {
     return null;
   }
 
   return (
     <ExactDuplicateUploadDialogBody
-      key={prompt.id}
-      onClose={() => close(prompt.id)}
-      prompt={prompt}
+      key={queuedPrompt.id}
+      onClose={() => close(queuedPrompt.id)}
+      prompt={queuedPrompt.prompt}
     />
   );
 };
+
+const defaultRows = (
+  duplicates: readonly DuplicateFile[],
+): readonly DuplicateFileRowState[] =>
+  duplicates.map((entry) => ({
+    id: createUuid(),
+    entry,
+    choice: DUPLICATE_UPLOAD_ACTION.skip,
+  }));
 
 type ExactDuplicateUploadDialogBodyProps = {
   prompt: ExactDuplicateUploadPrompt;
@@ -76,33 +92,44 @@ const ExactDuplicateUploadDialogBody = ({
   onClose,
 }: ExactDuplicateUploadDialogBodyProps) => {
   const t = useTranslations();
-  const [rows, setRows] = useState<readonly DuplicateFileRowState[]>(() =>
-    duplicates.map((entry) => ({
-      id: createUuid(),
-      entry,
-      choice: DUPLICATE_UPLOAD_ACTION.skip,
-    })),
-  );
+  const [rows, setRows] = useState(() => defaultRows(duplicates));
+  // The dialog's close animation can report "closed" after a button already
+  // resolved the prompt; the batch continues exactly once.
+  const resolvedRef = useRef(false);
 
-  const confirm = () => {
-    onResolved(
+  const resolve = (uploadAnywayFiles: readonly File[]) => {
+    if (resolvedRef.current) {
+      return;
+    }
+    resolvedRef.current = true;
+    onResolved(uploadAnywayFiles);
+    onClose();
+  };
+
+  const confirm = () =>
+    resolve(
       rows
         .filter((row) => row.choice === DUPLICATE_UPLOAD_ACTION.uploadAnyway)
         .map((row) => row.entry.file),
     );
-    onClose();
-  };
+  const skipDuplicates = () => resolve([]);
 
   return (
     <Dialog
       onOpenChange={(open) => {
         if (!open) {
-          onClose();
+          skipDuplicates();
         }
       }}
       open
     >
       <DialogPopup className="max-w-lg">
+        <DialogFormState
+          dirty={rows.some(
+            (row) => row.choice !== DUPLICATE_UPLOAD_ACTION.skip,
+          )}
+          onDiscard={() => setRows(defaultRows(duplicates))}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("workspaces.files.duplicateUpload.title")}
@@ -132,10 +159,10 @@ const ExactDuplicateUploadDialogBody = ({
         </DialogPanel>
 
         <DialogFooter>
-          <Button onClick={onClose} variant="ghost">
-            {t("common.cancel")}
+          <Button onClick={skipDuplicates} variant="ghost">
+            {t("workspaces.files.duplicateUpload.skipAll")}
           </Button>
-          <Button onClick={confirm}>{t("common.confirm")}</Button>
+          <Button onClick={confirm}>{t("common.uploadFiles")}</Button>
         </DialogFooter>
       </DialogPopup>
     </Dialog>
@@ -165,9 +192,7 @@ const DuplicateFileRow = ({
       <span className="text-muted-foreground text-xs">
         {t.rich("workspaces.files.duplicateUpload.matchedDocument", {
           bdi,
-          documentName:
-            entityName ??
-            t("workspaces.files.versionOrNewFile.unnamedDocument"),
+          documentName: entityName,
         })}
       </span>
       <Label className="sr-only" htmlFor={selectId}>

@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -9,7 +11,6 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
-import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -29,11 +30,24 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
-import { resolveExactDuplicates } from "@/lib/files/exact-duplicate-queries";
+import {
+  exactDuplicateLookup,
+  resolveExactDuplicates,
+} from "@/lib/files/exact-duplicate-queries";
 import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
+import type { CreateFileEntitiesInput } from "@/lib/workspaces/mutations/create-file-entities-input.logic";
+import {
+  afterDuplicateChoice,
+  DUPLICATE_CHECK,
+  hasUploadInputItems,
+  REFERENCE_CHECK,
+  uploadInputFiles,
+  withoutUploadInputFiles,
+  withUploadInputFileReplacements,
+} from "@/lib/workspaces/mutations/create-file-entities-input.logic";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
@@ -601,96 +615,20 @@ const runUploadBatch = async ({
     queue.enqueue(files);
   });
 
-/**
- * Whether these files still owe the user the question "is this a new version
- * of a document you already have?".
- */
-export const REFERENCE_CHECK = {
-  ask: "ask",
-  /** The caller has already put the question and acted on the answer. */
-  skip: "skip",
-} as const;
-
-type ReferenceCheckMode =
-  (typeof REFERENCE_CHECK)[keyof typeof REFERENCE_CHECK];
-
-type CreateFileEntitiesOptions = {
-  parentId?: string | null | undefined;
-  referenceCheck?: ReferenceCheckMode | undefined;
-};
-
-export type CreateFileEntitiesInput =
-  | ({ files: File[] } & CreateFileEntitiesOptions)
-  | ({ tree: DroppedFileTree } & CreateFileEntitiesOptions);
-
-const hasUploadInputItems = (input: CreateFileEntitiesInput): boolean => {
-  if ("tree" in input) {
-    return input.tree.files.length > 0 || input.tree.directoryPaths.length > 0;
-  }
-
-  return input.files.length > 0;
-};
-
-const uploadInputFiles = (input: CreateFileEntitiesInput): File[] =>
-  "tree" in input ? input.tree.files.map(({ file }) => file) : [...input.files];
-
-const withUploadInputFileReplacements = (
-  input: CreateFileEntitiesInput,
-  replacements: ReadonlyMap<File, File>,
-): CreateFileEntitiesInput => {
-  if ("tree" in input) {
-    return {
-      tree: {
-        files: input.tree.files.map(({ file, pathSegments }) => ({
-          file: replacements.get(file) ?? file,
-          pathSegments,
-        })),
-        directoryPaths: input.tree.directoryPaths,
-      },
-      parentId: input.parentId,
-      referenceCheck: input.referenceCheck,
-    };
-  }
-
-  return {
-    files: input.files.map((file) => replacements.get(file) ?? file),
-    parentId: input.parentId,
-    referenceCheck: input.referenceCheck,
-  };
-};
-
-/**
- * The same upload minus the files the user chose to file as versions. A
- * dropped folder keeps its directories: they are created whether or not any
- * file lands inside them.
- */
-const withoutUploadInputFiles = (
-  input: CreateFileEntitiesInput,
-  excluded: ReadonlySet<File>,
-): CreateFileEntitiesInput => {
-  if ("tree" in input) {
-    return {
-      tree: {
-        files: input.tree.files.filter(({ file }) => !excluded.has(file)),
-        directoryPaths: input.tree.directoryPaths,
-      },
-      parentId: input.parentId ?? null,
-      referenceCheck: REFERENCE_CHECK.skip,
-    };
-  }
-
-  return {
-    files: input.files.filter((file) => !excluded.has(file)),
-    parentId: input.parentId ?? null,
-    referenceCheck: REFERENCE_CHECK.skip,
-  };
+type UploadAfterDuplicateCheckOptions = {
+  workspaceId: string;
+  /** Holds the upload controls disabled while files are hashed and looked up. */
+  whileCheckingFiles: <T>(check: () => Promise<T>) => Promise<T>;
 };
 
 /**
  * Ask about files whose exact bytes the matter already holds, then upload
- * the ones the user did not skip.
+ * the ones the user did not skip along with the rest of the batch.
  */
-const useUploadAfterDuplicateCheck = (workspaceId: string) => {
+const useUploadAfterDuplicateCheck = ({
+  workspaceId,
+  whileCheckingFiles,
+}: UploadAfterDuplicateCheckOptions) => {
   const analytics = useAnalytics();
   const askAboutDuplicateFiles = useExactDuplicateUploadStore(
     (store) => store.ask,
@@ -700,18 +638,26 @@ const useUploadAfterDuplicateCheck = (workspaceId: string) => {
     input: CreateFileEntitiesInput,
     upload: (input: CreateFileEntitiesInput) => void,
   ): Promise<void> => {
-    const duplicates = await resolveExactDuplicates({
-      files: uploadInputFiles(input),
-      workspaceId,
-      onError: (error) =>
-        analytics.captureError(error, {
-          fingerprintKey: "useUploadAfterDuplicateCheck:failure",
-          scope: {
-            type: "handler",
-            handlerId: "useUploadAfterDuplicateCheck:failure",
-          },
+    if (input.duplicateCheck === DUPLICATE_CHECK.skip) {
+      upload(input);
+      return;
+    }
+
+    const duplicates = await whileCheckingFiles(
+      async () =>
+        await resolveExactDuplicates({
+          files: uploadInputFiles(input),
+          lookup: exactDuplicateLookup(workspaceId),
+          onError: (error) =>
+            analytics.captureError(error, {
+              fingerprintKey: "useUploadAfterDuplicateCheck:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useUploadAfterDuplicateCheck:failure",
+              },
+            }),
         }),
-    });
+    );
 
     if (duplicates.length === 0) {
       upload(input);
@@ -721,15 +667,11 @@ const useUploadAfterDuplicateCheck = (workspaceId: string) => {
     askAboutDuplicateFiles({
       duplicates,
       onResolved: (uploadAnywayFiles) => {
-        const kept = new Set(uploadAnywayFiles);
-        const remaining = withoutUploadInputFiles(
+        const remaining = afterDuplicateChoice({
           input,
-          new Set(
-            duplicates
-              .map(({ file }) => file)
-              .filter((file) => !kept.has(file)),
-          ),
-        );
+          duplicateFiles: duplicates.map(({ file }) => file),
+          uploadAnywayFiles,
+        });
         if (hasUploadInputItems(remaining)) {
           upload(remaining);
         }
@@ -738,9 +680,69 @@ const useUploadAfterDuplicateCheck = (workspaceId: string) => {
   };
 };
 
+/** How long a file check runs before the "checking files" notice appears. */
+const CHECKING_FILES_NOTICE_DELAY_MS = 400;
+
+/**
+ * Counts the hashing and lookups that run before an upload starts, so the
+ * caller's controls stay disabled until the upload itself takes over, and
+ * names the wait once it is long enough to notice.
+ */
+const useCheckingFiles = () => {
+  const t = useTranslations();
+  const [checkingCount, setCheckingCount] = useState(0);
+
+  const whileCheckingFiles = async <T>(check: () => Promise<T>): Promise<T> => {
+    setCheckingCount((count) => count + 1);
+    let toastId: string | null = null;
+    const notice = setTimeout(() => {
+      toastId = stellaToast.loading(t("workspaces.files.checkingFiles"));
+    }, CHECKING_FILES_NOTICE_DELAY_MS);
+    try {
+      return await check();
+    } finally {
+      clearTimeout(notice);
+      if (toastId !== null) {
+        stellaToast.close(toastId);
+      }
+      setCheckingCount((count) => count - 1);
+    }
+  };
+
+  return [checkingCount > 0, whileCheckingFiles] as const;
+};
+
+/** The files that carry a reference to a document stella already holds. */
+const useResolveReferencedFiles = (
+  whileCheckingFiles: <T>(check: () => Promise<T>) => Promise<T>,
+) => {
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = useAuthenticatedUser();
+  const analytics = useAnalytics();
+
+  return async (input: CreateFileEntitiesInput) =>
+    await whileCheckingFiles(
+      async () =>
+        await resolveDocumentReferenceMatches({
+          queryClient,
+          files: uploadInputFiles(input),
+          organizationId: activeOrganizationId,
+          onError: (error) =>
+            analytics.captureError(error, {
+              fingerprintKey:
+                "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+              scope: {
+                type: "handler",
+                handlerId:
+                  "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+              },
+            }),
+        }),
+    );
+};
+
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
   const labels = useBatchUploadLabels();
   const queryClient = useQueryClient();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -749,7 +751,12 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const askAboutReferencedFiles = useDocumentReferenceUploadStore(
     (store) => store.ask,
   );
-  const uploadAfterDuplicateCheck = useUploadAfterDuplicateCheck(workspaceId);
+  const [isCheckingFiles, whileCheckingFiles] = useCheckingFiles();
+  const uploadAfterDuplicateCheck = useUploadAfterDuplicateCheck({
+    workspaceId,
+    whileCheckingFiles,
+  });
+  const resolveReferencedFiles = useResolveReferencedFiles(whileCheckingFiles);
 
   const ensureFileProperty = async (): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
@@ -874,21 +881,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const createFileEntitiesAfterReferenceCheck = async (
     input: CreateFileEntitiesInput,
   ): Promise<void> => {
-    const referenced = await resolveDocumentReferenceMatches({
-      queryClient,
-      files: uploadInputFiles(input),
-      organizationId: activeOrganizationId,
-      onError: (error) =>
-        analytics.captureError(error, {
-          fingerprintKey:
-            "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
-          scope: {
-            type: "handler",
-            handlerId:
-              "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
-          },
-        }),
-    });
+    const referenced = await resolveReferencedFiles(input);
 
     if (referenced.length === 0) {
       await uploadAfterDuplicateCheck(input, mutate);
@@ -966,5 +959,5 @@ export const useCreateFileEntities = (workspaceId: string) => {
     );
   };
 
-  return [isPending, handleCreateFileEntities] as const;
+  return [isPending || isCheckingFiles, handleCreateFileEntities] as const;
 };
