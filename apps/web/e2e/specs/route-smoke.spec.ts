@@ -557,6 +557,26 @@ test("records inbox and contact loading landmarks in English and Czech", async (
     body: JSON.stringify(measurement, null, 2),
     contentType: "application/json",
   });
+  for (const sample of measurement.evidence) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      // The inbox's body is drawn from the layout this browser keeps, which
+      // the server's paint cannot read: it is absent there, never elsewhere.
+      if (sample.route === "/inbox" && landmark === "body") {
+        expect(sample.server[landmark]).toBeNull();
+        continue;
+      }
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject({ top: loaded?.top, left: loaded?.left });
+    }
+  }
 });
 
 test("route coverage matches the authenticated route tree", async () => {
