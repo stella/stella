@@ -19,7 +19,7 @@ const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { ChatEditorProvider, useChatEditor } =
   await import("@/components/chat-editor-provider");
 const { installStrayFileDropGuard } =
-  await import("@/components/stray-file-drop-guard");
+  await import("@/routes/-stray-file-drop-guard");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");

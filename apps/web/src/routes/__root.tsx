@@ -25,7 +25,6 @@ import {
   DefaultNotFoundComponent,
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
-import { StrayFileDropGuard } from "@/components/stray-file-drop-guard";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
 import { loadDocumentPresentation } from "@/i18n/document-presentation";
@@ -66,6 +65,7 @@ import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import { RootPendingComponent } from "@/routes/-root-pending";
+import { StrayFileDropGuard } from "@/routes/-stray-file-drop-guard";
 import "@/styles/app.css";
 import "@/styles/print.css";
 
