@@ -1995,13 +1995,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/web/src/routes/agent-claim.tsx",
-    "function": "module/confirmAgentClaim",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "packages/agent-engine/src/bun-docker/api.ts",
     "function": "module/send",
     "kind": "total-timeout-body",

@@ -28,8 +28,6 @@ import type {
   ProviderCredentialDraft,
   ProviderPreview,
 } from "@/components/ai-config-role-models.logic";
-import { LanguagePicker } from "@/components/language-picker";
-import { ThemePicker } from "@/components/theme-picker";
 import {
   GUIDE_DRAWER_OPEN_SOURCES,
   useGuideDrawerStore,
@@ -72,6 +70,11 @@ import {
   ONBOARDING_TRANSITION_TYPE,
   OnboardingLayout,
 } from "@/routes/onboarding/-components/onboarding-layout";
+import {
+  ONBOARDING_STEP_COUNT,
+  onboardingStepIndex,
+} from "@/routes/onboarding/-components/onboarding-steps.logic";
+import type { OnboardingStep } from "@/routes/onboarding/-components/onboarding-steps.logic";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
@@ -88,9 +91,6 @@ import {
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
-type Step =
-  "organization" | "jurisdiction" | "catalogue" | "ai" | "invite" | "download";
-
 type WizardData = {
   orgName: string;
   practiceJurisdictions: PracticeJurisdiction[];
@@ -98,17 +98,6 @@ type WizardData = {
   emails: string[];
   aiProviders: ProviderCredentialDraft[];
 };
-
-const TOTAL_STEPS = 6;
-
-const STEP_TO_PROGRESS = {
-  organization: 0,
-  jurisdiction: 1,
-  catalogue: 2,
-  ai: 3,
-  invite: 4,
-  download: 5,
-} as const satisfies Record<Step, number>;
 
 const onboardingRouteApi = getRouteApi("/onboarding");
 
@@ -135,11 +124,11 @@ export const OnboardingWizard = () => {
   const nativeToolDeployAvailability =
     nativeToolView.type === "items" ? nativeToolView.items : undefined;
   const userEmail = sessionData?.user.email ?? "";
-  const [step, setStep] = useState<Step>("organization");
-  const navigateStep = (nextStep: Step) => {
+  const [step, setStep] = useState<OnboardingStep>("organization");
+  const navigateStep = (nextStep: OnboardingStep) => {
     startTransition(() => {
       addTransitionType(
-        STEP_TO_PROGRESS[nextStep] > STEP_TO_PROGRESS[step]
+        onboardingStepIndex(nextStep) > onboardingStepIndex(step)
           ? ONBOARDING_TRANSITION_TYPE.forward
           : ONBOARDING_TRANSITION_TYPE.backward,
       );
@@ -615,9 +604,9 @@ export const OnboardingWizard = () => {
     if (step === "organization") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.organization}
+          currentStep={onboardingStepIndex("organization")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
+          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <OrganizationStep
             defaultName={data.orgName}
@@ -638,10 +627,10 @@ export const OnboardingWizard = () => {
     if (step === "jurisdiction") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.jurisdiction}
+          currentStep={onboardingStepIndex("jurisdiction")}
           onBack={() => navigateStep("organization")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
+          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <JurisdictionStep
             selected={data.practiceJurisdictions}
@@ -669,10 +658,10 @@ export const OnboardingWizard = () => {
     if (step === "catalogue") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.catalogue}
+          currentStep={onboardingStepIndex("catalogue")}
           onBack={() => navigateStep("jurisdiction")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
+          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <CatalogueStep
             focusedSlug={catalogueFocusedSlug}
@@ -715,9 +704,9 @@ export const OnboardingWizard = () => {
     if (step === "invite") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.invite}
+          currentStep={onboardingStepIndex("invite")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
+          totalSteps={ONBOARDING_STEP_COUNT}
           {...(isCreating ? {} : { onBack: () => navigateStep("ai") })}
         >
           <InviteStep
@@ -740,10 +729,10 @@ export const OnboardingWizard = () => {
     if (step === "ai") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.ai}
+          currentStep={onboardingStepIndex("ai")}
           onBack={() => navigateStep("catalogue")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
+          totalSteps={ONBOARDING_STEP_COUNT}
         >
           <AIStep
             onNext={() => navigateStep("invite")}
@@ -770,9 +759,9 @@ export const OnboardingWizard = () => {
     // land the user in the app.
     return (
       <OnboardingLayout
-        currentStep={STEP_TO_PROGRESS.download}
+        currentStep={onboardingStepIndex("download")}
         preview={preview}
-        totalSteps={TOTAL_STEPS}
+        totalSteps={ONBOARDING_STEP_COUNT}
       >
         <DownloadStep
           onSelect={setDownloadTarget}
@@ -789,13 +778,5 @@ export const OnboardingWizard = () => {
     );
   };
 
-  return (
-    <>
-      {renderStep()}
-      <div className="fixed end-4 top-4 z-20 flex items-center gap-2 lg:end-8 lg:top-6">
-        <ThemePicker />
-        <LanguagePicker />
-      </div>
-    </>
-  );
+  return renderStep();
 };

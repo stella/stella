@@ -25,8 +25,8 @@ export type OutcomeDetail = {
 
 type OutcomeLayoutProps = {
   tone: OutcomeTone;
-  /** What happened, in a few words. Also the document title. */
-  title: string;
+  /** What happened, in a few words. */
+  title: ReactNode;
   /** What it means, or what to do next. */
   description?: ReactNode;
   /** The other side's identity (a logo), drawn in a tile beside stella's. */
@@ -52,8 +52,10 @@ type OutcomeLayoutProps = {
 
 export type OutcomeScreenViewProps = Omit<
   OutcomeLayoutProps,
-  "details" | "command" | "note"
+  "details" | "command" | "note" | "title"
 > & {
+  /** What happened. Also the document title when none is supplied. */
+  title: string;
   /**
    * What the flow connected, 1 to 3 facts it already holds (the account, the
    * organization, the access granted). Leave it out when there is nothing
@@ -262,7 +264,10 @@ export const OutcomeLayout = ({
       {note}
     </section>
   );
-  const titleElement = <title>{documentTitle ?? title}</title>;
+  const titleText =
+    documentTitle ?? (typeof title === "string" ? title : undefined);
+  const titleElement =
+    titleText === undefined ? null : <title>{titleText}</title>;
   if (surface === "embedded") {
     return (
       <div

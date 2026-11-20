@@ -1556,10 +1556,6 @@
     "reason": "Existing CorrespondenceDetailPage domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/routes/agent-claim.tsx::AgentClaimPage::maxLength:32::1",
-    "reason": "Existing AgentClaimPage UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/routes/auth/-components/dev-quick-start-storage.ts::devQuickStartAttemptSchema::maxLength:128::1",
     "reason": "Existing devQuickStartAttemptSchema UI validation or presentation bound; contract migration pending."
   },

@@ -8,7 +8,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 // page keeps the body text full-width in the inspector instead of
 // leaving the page margins as dead whitespace. The page edges then
 // overflow horizontally and the user can scroll to inspect margins.
-const DOCX_TEXT_AREA_WIDTH = 624;
+export const DOCX_TEXT_AREA_WIDTH = 624;
 
 // The full Letter page at 96 DPI (8.5 × 11 inches). Callers fitting the whole page
 // — margins included — divide their available width by DOCX_PAGE_WIDTH instead of
@@ -23,9 +23,9 @@ export const DOCX_PAGE_HEIGHT = 1056;
 const DOCX_PAGE_SIDE_GUTTER = 0.075;
 export const DOCX_PAGE_FIT_WIDTH =
   DOCX_PAGE_WIDTH / (1 - 2 * DOCX_PAGE_SIDE_GUTTER);
-const DOCX_FIT_PADDING = 4;
+export const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;
-const DOCX_MIN_ZOOM = 0.25;
+export const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
 const DOCX_PINCH_SENSITIVITY = 0.005;
 

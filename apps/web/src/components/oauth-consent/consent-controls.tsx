@@ -1,7 +1,6 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { DetailsItem } from "@stll/ui/details-grid";
 import {
   Select,
   SelectItem,
@@ -11,9 +10,15 @@ import {
 } from "@stll/ui/select";
 
 import {
+  ConsentActingAsLine,
+  ConsentActingAsPending,
+  ConsentDecisionBarFace,
+  ConsentOrganizationPending,
+  ConsentOrganizationRow,
+  ConsentOrganizationValue,
   OAuthAccountList,
-  OAuthAccountRow,
-} from "@/components/oauth-consent/oauth-account";
+} from "@/components/oauth-consent/consent-control-faces.pending";
+import { OAuthAccountRow } from "@/components/oauth-consent/oauth-account";
 
 type ConsentAccountRowsProps = {
   activeOrganizationId: string | null;
@@ -22,6 +27,7 @@ type ConsentAccountRowsProps = {
   onAccountSwitch: () => void;
   onOrganizationSwitch: (organizationId: string) => void;
   organizationName: string | null;
+  organizationsPending?: boolean;
   organizations: readonly { id: string; name: string }[] | undefined;
 };
 
@@ -34,6 +40,7 @@ export const ConsentAccountRows = ({
   onOrganizationSwitch,
   organizationName,
   organizations,
+  organizationsPending = false,
 }: ConsentAccountRowsProps) => {
   const tCommon = useTranslations("common");
   const tOrganization = useTranslations("organization");
@@ -45,7 +52,7 @@ export const ConsentAccountRows = ({
         onAccountSwitch={onAccountSwitch}
       />
       {organizationName ? (
-        <DetailsItem label={tCommon("organization")}>
+        <ConsentOrganizationRow label={tCommon("organization")}>
           {organizations !== undefined && organizations.length > 1 ? (
             <Select
               disabled={disabled}
@@ -74,11 +81,36 @@ export const ConsentAccountRows = ({
               </SelectPopup>
             </Select>
           ) : (
-            <p className="flex min-h-11 items-center">{organizationName}</p>
+            <ConsentOrganizationValue>
+              {organizationName}
+            </ConsentOrganizationValue>
           )}
-        </DetailsItem>
-      ) : null}
+        </ConsentOrganizationRow>
+      ) : (
+        organizationsPending &&
+        activeOrganizationId !== null && <ConsentOrganizationPending />
+      )}
     </OAuthAccountList>
+  );
+};
+
+export const ConsentActingAs = ({
+  organizationName,
+  pending,
+  clientName,
+}: {
+  organizationName: string | null;
+  pending: boolean;
+  clientName: string;
+}) => {
+  const t = useTranslations("consent");
+  if (organizationName === null) {
+    return pending ? <ConsentActingAsPending /> : null;
+  }
+  return (
+    <ConsentActingAsLine>
+      {t("actingAs", { clientName, organizationName })}
+    </ConsentActingAsLine>
   );
 };
 
@@ -97,14 +129,13 @@ export const ConsentDecisionBar = ({
   const t = useTranslations("consent");
   const tCommon = useTranslations("common");
   return (
-    <div
-      className="border-border/64 bg-background flex shrink-0 flex-col gap-2 border-t px-6 py-4"
-      data-slot="consent-decision-bar"
-    >
-      {hasError ? (
-        <p className="text-destructive text-sm">{t("error")}</p>
-      ) : null}
-      <div className="grid grid-cols-2 gap-3">
+    <ConsentDecisionBarFace
+      error={
+        hasError ? (
+          <p className="text-destructive text-sm">{t("error")}</p>
+        ) : null
+      }
+      decline={
         <Button
           className="min-h-11 w-full"
           disabled={isPending}
@@ -116,6 +147,8 @@ export const ConsentDecisionBar = ({
         >
           {tCommon("decline")}
         </Button>
+      }
+      allow={
         <Button
           className="min-h-11 w-full"
           disabled={isPending || allowDisabled}
@@ -127,7 +160,7 @@ export const ConsentDecisionBar = ({
         >
           {t("allow")}
         </Button>
-      </div>
-    </div>
+      }
+    />
   );
 };

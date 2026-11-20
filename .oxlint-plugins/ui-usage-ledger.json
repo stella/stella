@@ -117,7 +117,7 @@
     "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-components/client-group-header.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx": 1,
-    "apps/web/src/routes/auth/organization.tsx": 1,
+    "apps/web/src/routes/auth/-organization.page.tsx": 1,
     "apps/web/src/routes/knowledge/-components/blueprint-gallery-sheet.tsx": 2,
     "apps/web/src/routes/knowledge/-components/clause-detail.tsx": 1,
     "apps/web/src/routes/knowledge/-components/clause-list.tsx": 1,

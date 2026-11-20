@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_CLAIM_CODE_MAX_LENGTH } from "@stll/api-contract/limits";
+
 import { confirmServiceAuthRegistration } from "@/api/lib/agent-auth";
 import { confirmIdJagDelegation } from "@/api/lib/agent-auth-idjag";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -16,7 +18,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   contract: "patch",
   body: v.object({
-    user_code: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+    user_code: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(AGENT_CLAIM_CODE_MAX_LENGTH),
+    ),
   }),
   // Binding an agent client to oneself is an integration the member owns:
   // the agent inherits the confirming user's least-privilege scopes, not

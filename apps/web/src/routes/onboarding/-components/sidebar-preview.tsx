@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useState } from "react";
 
 import { useTranslations } from "use-intl";
@@ -23,6 +22,11 @@ import { StellaWordmark } from "@/components/stella-wordmark";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
+
+import {
+  OnboardingSidebarFrame,
+  OnboardingSidebarNavItem,
+} from "./sidebar-preview.pending";
 
 type SidebarPreviewProps = {
   organizationName: string;
@@ -56,31 +60,6 @@ const ANIMATION_STYLE = `
 }
 `;
 
-const NavItem = ({
-  icon: Icon,
-  label,
-  active,
-  trailing,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active?: boolean;
-  trailing?: ReactNode;
-}) => (
-  <div
-    className={cn(
-      "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-      active
-        ? "bg-accent text-foreground font-medium"
-        : "text-muted-foreground",
-    )}
-  >
-    <Icon className="size-4" />
-    <TruncatedText className="flex-1">{label}</TruncatedText>
-    {trailing}
-  </div>
-);
-
 /**
  * Animated mock of the Stella sidebar for the onboarding
  * wizard. Shows contextual micro-animations based on the
@@ -109,13 +88,10 @@ export const SidebarPreview = ({
   });
 
   return (
-    <div className="bg-background w-[340px] overflow-hidden rounded-xl shadow-lg">
+    <OnboardingSidebarFrame
+      wordmark={<StellaWordmark className="text-foreground h-4 w-auto" />}
+    >
       <style>{ANIMATION_STYLE}</style>
-
-      {/* Header */}
-      <div className="border-b px-4 py-3">
-        <StellaWordmark className="text-foreground h-4 w-auto" />
-      </div>
 
       {/* Org name */}
       <div className="border-b px-4 py-2.5">
@@ -135,26 +111,45 @@ export const SidebarPreview = ({
 
       {/* Nav items */}
       <div className="flex flex-col gap-0.5 px-3 py-3">
-        <NavItem
+        <OnboardingSidebarNavItem
           icon={SearchIcon}
-          label={t("navigation.search")}
+          label={
+            <TruncatedText className="flex-1">
+              {t("navigation.search")}
+            </TruncatedText>
+          }
           trailing={
             <kbd className="text-foreground-strong-muted text-3xs">
               {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
             </kbd>
           }
         />
-        <NavItem
+        <OnboardingSidebarNavItem
           active={showChatActive}
           icon={MessageSquareIcon}
-          label={t("navigation.chat")}
+          label={
+            <TruncatedText className="flex-1">
+              {t("navigation.chat")}
+            </TruncatedText>
+          }
         />
-        <NavItem
+        <OnboardingSidebarNavItem
           active={!showChatActive}
           icon={MattersNavIcon}
-          label={t("common.matters")}
+          label={
+            <TruncatedText className="flex-1">
+              {t("common.matters")}
+            </TruncatedText>
+          }
         />
-        <NavItem icon={LibraryBigIcon} label={t("navigation.knowledge")} />
+        <OnboardingSidebarNavItem
+          icon={LibraryBigIcon}
+          label={
+            <TruncatedText className="flex-1">
+              {t("navigation.knowledge")}
+            </TruncatedText>
+          }
+        />
       </div>
 
       {/* Documents section — placeholder skeleton when no matter exists */}
@@ -244,6 +239,6 @@ export const SidebarPreview = ({
           </div>
         </div>
       )}
-    </div>
+    </OnboardingSidebarFrame>
   );
 };

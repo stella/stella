@@ -1706,7 +1706,7 @@
     ],
     "./number-input": ["NumberInput"],
     "./option-color": ["emptyColor", "optionColors", "resolveOptionColor"],
-    "./outcome-screen": ["OutcomeScreen"],
+    "./outcome-screen": ["OutcomeScreen", "OutcomeScreenPending"],
     "./outline-rail": [
       "OUTLINE_CONTROL_MIN_SIZE",
       "OUTLINE_EMPHASIS",

@@ -28,7 +28,7 @@ const AVATAR_MODULES: ReadonlySet<string> = new Set([
 ]);
 const ALLOWED_FILES = [
   "apps/web/src/components/public-workspace-shell.tsx",
-  "apps/web/src/routes/auth/organization.tsx",
+  "apps/web/src/routes/auth/-organization.page.tsx",
   "apps/web/src/routes/dev/-components/ui-playground.tsx",
   "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
 ];
