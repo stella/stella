@@ -4691,6 +4691,16 @@ type HeldContentChunk = Extract<
   }
 >;
 
+/**
+ * The fields that route a content event to the run that produced it: a child
+ * run's `subagentRunId`, which the engine sets on each of that run's events.
+ * A released delta that lost it would land in the parent's message.
+ */
+const routingOf = (chunk: HeldContentChunk): { subagentRunId?: string } => {
+  const subagentRunId: unknown = Reflect.get(chunk, "subagentRunId");
+  return typeof subagentRunId === "string" ? { subagentRunId } : {};
+};
+
 /** An event whose text arrives in message chunks without an END of its own. */
 type TextLikeChunk = Extract<
   StreamChunk,
@@ -4707,9 +4717,8 @@ const createOutgoingChunkTransformer = ({
   restorationPairs,
   holdStellaHrefs = false,
 }: OutgoingChunkTransformerOptions) => {
-  // Held text with the event it came from: what is released later is that
-  // event with a new delta, so every field the engine set on it (a child
-  // run's `subagentRunId` among them) reaches the processor and the client.
+  // Held text with the event it came from, so what is released later keeps
+  // that event's routing (`routingOf`).
   const buffers = new Map<string, { chunk: HeldContentChunk; text: string }>();
   const emittedPlaceholders = new Set(initialRestorationPlaceholders);
   const toolNamesByCallId = new Map<string, string>();
@@ -4785,25 +4794,50 @@ const createOutgoingChunkTransformer = ({
       return [];
     }
     const timestamp = Temporal.Now.instant().epochMilliseconds;
-    if (chunk.type === EventType.TOOL_CALL_ARGS) {
-      return [
-        ...emitRestorationDelta(
-          collectPlaceholdersFromText(text, lenientCollector),
-        ),
-        {
-          ...chunk,
-          delta:
-            boundary.type === "anonymized"
-              ? deanonymizeToolInputText(boundary, text)
-              : text,
-          timestamp,
-        },
-      ];
+    const routing = routingOf(chunk);
+    switch (chunk.type) {
+      case EventType.TOOL_CALL_ARGS:
+        return [
+          ...emitRestorationDelta(
+            collectPlaceholdersFromText(text, lenientCollector),
+          ),
+          {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: chunk.toolCallId,
+            delta:
+              boundary.type === "anonymized"
+                ? deanonymizeToolInputText(boundary, text)
+                : text,
+            timestamp,
+            ...routing,
+          },
+        ];
+      case EventType.TEXT_MESSAGE_CONTENT:
+        return [
+          ...emitRestorationDelta(collectTextPlaceholders(text)),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: chunk.messageId,
+            delta: transformText(text),
+            timestamp,
+            ...routing,
+          },
+        ];
+      case EventType.REASONING_MESSAGE_CONTENT:
+        return [
+          ...emitRestorationDelta(collectTextPlaceholders(text)),
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: chunk.messageId,
+            delta: transformText(text),
+            timestamp,
+            ...routing,
+          },
+        ];
+      default:
+        chunk satisfies never;
+        return panic("Unhandled held content event");
     }
-    return [
-      ...emitRestorationDelta(collectTextPlaceholders(text)),
-      { ...chunk, delta: transformText(text), timestamp },
-    ];
   };
 
   /** The text held under `key`, released, and the hold dropped. */
