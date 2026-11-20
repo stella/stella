@@ -7,6 +7,8 @@ ALTER TABLE "organization_settings"
 ALTER TABLE "sharepoint_oauth_state"
   ADD COLUMN "requested_scope" text;--> statement-breakpoint
 
+ALTER TABLE "sharepoint_connections" ADD CONSTRAINT "sharepoint_connections_state_fields_check" CHECK (("status" = 'connected' AND "scope" IS NOT NULL) OR ("status" = 'reconnect_required') OR ("status" NOT IN ('connected', 'reconnect_required'))) NOT VALID;--> statement-breakpoint
+
 ALTER TABLE "sharepoint_connections" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "sharepoint_oauth_state" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
