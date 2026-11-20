@@ -28,8 +28,11 @@
     "@/components/pending-text",
     "@/components/workspaces/table/workspace-grid",
     "@/components/workspaces/table/workspace-table/skeleton-rows",
+    "@/features/knowledge/views/playbooks/playbooks-page-shape",
+    "@/features/knowledge/views/templates/template-list-shape",
     "@/lib/workspaces/types",
     "@/routes/_protected.chat/-components/chat-reading-column",
+    "@/routes/knowledge/-tools/tools-page-shape",
     "@/stores/config-store"
   ],
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",

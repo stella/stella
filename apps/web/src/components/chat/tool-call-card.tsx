@@ -60,6 +60,7 @@ import { getToolCallTitleKey } from "@/components/chat/tool-call-title.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
   BUILT_IN_SKILL_ORIGIN,
+  INSPECTOR_FOCUS_INTENT,
   parseSkillResourceSource,
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
@@ -682,6 +683,7 @@ const ToolCallCardComponent = ({
                 ...(skillResourceOutput.target
                   ? { target: skillResourceOutput.target }
                   : {}),
+                focus: INSPECTOR_FOCUS_INTENT.claim,
               });
               return;
             }
