@@ -145,3 +145,44 @@ test("a file of exactly the limit is hashed", async () => {
 
   expect(reads).toBeGreaterThan(0);
 });
+
+test("a file is read once however many checks hash it", async () => {
+  let reads = 0;
+  class CountedFile extends Blob {
+    override slice(start?: number, end?: number): Blob {
+      reads += 1;
+      return super.slice(start, end);
+    }
+  }
+  const file = new CountedFile(["the same bytes"]);
+  const sameBytesElsewhere = new CountedFile(["the same bytes"]);
+
+  const first = await hashActiveUploadFile(file);
+  const readsForFirst = reads;
+  expect(readsForFirst).toBeGreaterThan(0);
+  const second = await hashActiveUploadFile(file);
+
+  expect(second).toBe(first);
+  expect(reads).toBe(readsForFirst);
+  expect(hasActiveUpload()).toBe(false);
+
+  // The cache is keyed by the file, not its bytes: another file is read.
+  expect(await hashActiveUploadFile(sameBytesElsewhere)).toBe(first);
+  expect(reads).toBe(readsForFirst * 2);
+});
+
+test("a cached file is still refused by size before its hash is returned", async () => {
+  let size = 5;
+  class ResizableFile extends Blob {
+    override get size(): number {
+      return size;
+    }
+  }
+  const file = new ResizableFile(["bytes"]);
+  await hashActiveUploadFile(file);
+
+  size = UPLOAD_DOCUMENT_MAX_BYTES + 1;
+  expect(
+    UploadFileSizeError.is(await rejectionOf(hashActiveUploadFile(file))),
+  ).toBe(true);
+});

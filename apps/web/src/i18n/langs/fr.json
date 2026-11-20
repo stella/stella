@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitation refusée",
       "declinedDescription": "Vous n’avez pas rejoint cette organisation.",
-      "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail} en tant que {role}.",
+      "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail}{role, select, owner { en tant que propriétaire} admin { en tant qu'administrateur} member { en tant que membre} intern { en tant que stagiaire} external { en tant que collaborateur externe} other {}}.",
       "goToWorkspaces": "Accéder aux dossiers",
       "title": "Invitation à l'organisation",
       "verifyEmailHint": "Pour vérifier {email}, déconnectez-vous, puis connectez-vous avec un code à usage unique envoyé à cette adresse.",
@@ -7246,6 +7246,7 @@
         "title": "Supprimer les liens vers des modèles Word ?",
         "unknownLocation": "Emplacement du modèle : une adresse que stella ne peut pas vérifier"
       },
+      "checkingFiles": "Vérification des fichiers…",
       "desktopEdit": {
         "accountRequiredTitle": "Connectez stella desktop à votre compte",
         "action": "Modifier dans l’app de bureau",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
       "downloadWithComments": "Télécharger avec les commentaires",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# fichier est identique à un document que ce dossier contient déjà.} other {# fichiers sont identiques à des documents que ce dossier contient déjà.} many {# fichiers sont identiques à des documents que ce dossier contient déjà.}} Choisissez quoi faire pour chacun.",
+        "matchedDocument": "Identique à <bdi>{documentName}</bdi>",
+        "skip": "Ignorer ce fichier",
+        "skipAll": "Ignorer les doublons",
+        "title": "Déjà dans ce dossier",
+        "uploadAnyway": "Importer quand même"
+      },
       "emptyFile": "Le fichier est vide.",
       "fileTooLarge": "Le fichier dépasse {limit, number} Mo.",
       "includeReferenceNumber": "Inclure le numéro de référence",

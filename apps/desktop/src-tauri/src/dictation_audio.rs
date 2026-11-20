@@ -9,8 +9,29 @@
 pub const MODEL_SAMPLE_RATE: u32 = 16_000;
 /// Shorter holds are accidental presses.
 const MIN_SPEECH_SAMPLES: usize = MODEL_SAMPLE_RATE as usize * 3 / 10;
-/// Quieter audio is silence, on which speech models invent closing phrases.
-const SILENCE_RMS: f32 = 0.002;
+/// A window at least this loud is speech on any microphone. Quieter audio is
+/// silence, on which speech models invent closing phrases, unless it stands
+/// clearly above the noise of a quiet microphone.
+const SPEECH_DBFS: f32 = -54.0;
+/// On a quiet microphone, windows this far above its noise floor are speech.
+const ABOVE_FLOOR_DB: f32 = 12.0;
+/// Even above a very low noise floor, quieter windows are never speech.
+const LOWEST_SPEECH_DBFS: f32 = -66.0;
+/// Speech above the noise floor lasts this long; a click or a breath does not.
+const SUSTAINED_MILLIS: usize = 180;
+/// Sound at the speech level counts once it lasts this long; a click does not.
+const LOUD_SUSTAINED_MILLIS: usize = 90;
+/// While a recording goes on, its noise floor follows louder frames this
+/// slowly, in dB per frame, and quieter ones at once.
+const FLOOR_RISE_DB: f32 = 0.02;
+/// Loudness is judged over windows this long when deciding on speech.
+const WINDOW_MILLIS: usize = 30;
+/// The noise floor is the level this fraction of windows stays under.
+const FLOOR_QUANTILE: f64 = 0.2;
+/// The noise floor needs at least this many windows to be measured.
+const FLOOR_WINDOWS: usize = 5;
+/// Exact digital silence reads as this level.
+const SILENT_DBFS: f32 = -120.0;
 /// Loudness is judged over frames this long while recording.
 pub const FRAME_MILLIS: usize = 20;
 /// This much silence after speech ends a stretch, which is then transcribed
@@ -90,21 +111,96 @@ fn hann(position: f64) -> f64 {
   0.5 * (1.0 + (std::f64::consts::PI * position).cos())
 }
 
-/// Whether audio is below the silence level, at any rate. Nothing is quiet.
-pub fn quiet(samples: &[f32]) -> bool {
-  if samples.is_empty() {
-    return true;
+/// Level of a window in dBFS once its steady offset is removed: some built-in
+/// microphones deliver a constant offset that is not sound.
+fn level_dbfs(window: &[f32]) -> f32 {
+  if window.is_empty() {
+    return SILENT_DBFS;
   }
-  let energy = samples
+  let count = window.len() as f64;
+  let offset = window.iter().map(|sample| f64::from(*sample)).sum::<f64>() / count;
+  let energy = window
     .iter()
-    .map(|sample| f64::from(*sample).powi(2))
+    .map(|sample| (f64::from(*sample) - offset).powi(2))
     .sum::<f64>();
-  (energy / samples.len() as f64).sqrt() < f64::from(SILENCE_RMS)
+  let rms = (energy / count).sqrt();
+  if rms <= 0.0 {
+    return SILENT_DBFS;
+  }
+  ((20.0 * rms.log10()) as f32).max(SILENT_DBFS)
+}
+
+/// The level a window must reach to count as sound: the speech level, or on
+/// a quiet microphone a level clearly above its noise floor.
+fn threshold(floor: Option<f32>) -> f32 {
+  floor.map_or(SPEECH_DBFS, |floor| {
+    (floor + ABOVE_FLOOR_DB).clamp(LOWEST_SPEECH_DBFS, SPEECH_DBFS)
+  })
+}
+
+/// Judges frames one by one as a recording arrives, at any rate: a frame is
+/// sound when it reaches the speech level or, on a quiet microphone, stands
+/// clearly above the noise heard so far. Nothing is quiet.
+#[derive(Debug, Default)]
+pub struct FrameGate {
+  floor: Option<f32>,
+}
+
+impl FrameGate {
+  pub fn quiet(&mut self, frame: &[f32]) -> bool {
+    let level = level_dbfs(frame);
+    let quiet = level < threshold(self.floor);
+    // Exact digital silence says nothing about the room.
+    if level > SILENT_DBFS {
+      self.floor = Some(match self.floor {
+        Some(floor) if floor < level => (floor + FLOOR_RISE_DB).min(level),
+        _ => level,
+      });
+    }
+    quiet
+  }
+}
+
+/// The level most windows of background stay under, from the quieter windows.
+/// Exact digital silence says nothing about the room and is left out.
+fn noise_floor(levels: &[f32]) -> Option<f32> {
+  let mut heard = levels
+    .iter()
+    .copied()
+    .filter(|level| *level > SILENT_DBFS)
+    .collect::<Vec<_>>();
+  if heard.len() < FLOOR_WINDOWS {
+    return None;
+  }
+  heard.sort_by(f32::total_cmp);
+  let index = ((heard.len() - 1) as f64 * FLOOR_QUANTILE).round() as usize;
+  Some(heard[index])
+}
+
+/// Whether 16 kHz audio holds speech: a short run of windows at the speech
+/// level, or, on a quiet microphone, a longer run clearly above its noise.
+fn heard(samples: &[f32]) -> bool {
+  let window = samples_in(WINDOW_MILLIS, MODEL_SAMPLE_RATE);
+  let levels = samples
+    .chunks_exact(window)
+    .map(level_dbfs)
+    .collect::<Vec<_>>();
+  let lasts = |threshold: f32, millis: usize| {
+    let needed = millis.div_ceil(WINDOW_MILLIS);
+    let mut run = 0;
+    levels.iter().any(|level| {
+      run = if *level >= threshold { run + 1 } else { 0 };
+      run >= needed
+    })
+  };
+  lasts(SPEECH_DBFS, LOUD_SUSTAINED_MILLIS)
+    || noise_floor(&levels)
+      .is_some_and(|floor| lasts(threshold(Some(floor)), SUSTAINED_MILLIS))
 }
 
 /// Whether 16 kHz audio is long and loud enough to be worth transcribing.
 pub fn holds_speech(samples: &[f32]) -> bool {
-  samples.len() >= MIN_SPEECH_SAMPLES && !quiet(samples)
+  samples.len() >= MIN_SPEECH_SAMPLES && heard(samples)
 }
 
 #[cfg(test)]
@@ -199,13 +295,122 @@ mod tests {
     assert!(holds_speech(&sine(440.0, MODEL_SAMPLE_RATE, 1.0)));
   }
 
+  /// A tone whose level is `dbfs`, riding on a constant `offset`.
+  fn tone_at(dbfs: f32, offset: f32, seconds: f64) -> Vec<f32> {
+    let peak = 10f64.powf(f64::from(dbfs) / 20.0) * std::f64::consts::SQRT_2;
+    sine(220.0, MODEL_SAMPLE_RATE, seconds)
+      .into_iter()
+      .map(|sample| (f64::from(sample) * 2.0 * peak) as f32 + offset)
+      .collect()
+  }
+
+  /// Steady noise at about `dbfs`, the same on every run.
+  fn noise_at(dbfs: f32, seconds: f64) -> Vec<f32> {
+    let amplitude = 10f64.powf(f64::from(dbfs) / 20.0) * 3f64.sqrt();
+    let count = (f64::from(MODEL_SAMPLE_RATE) * seconds) as usize;
+    let mut state = 0x2545_f491_u32;
+    (0..count)
+      .map(|_| {
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let unit = f64::from(state) / f64::from(u32::MAX) * 2.0 - 1.0;
+        (unit * amplitude) as f32
+      })
+      .collect()
+  }
+
+  fn mix(base: &mut [f32], from: usize, added: &[f32]) {
+    for (sample, extra) in base[from..].iter_mut().zip(added) {
+      *sample += extra;
+    }
+  }
+
+  fn quiet(frame: &[f32]) -> bool {
+    FrameGate::default().quiet(frame)
+  }
+
   #[test]
   fn quiet_is_the_same_level_speech_is_measured_against() {
-    let level = |amplitude: f32| vec![amplitude; MODEL_SAMPLE_RATE as usize];
-    assert!(quiet(&level(SILENCE_RMS * 0.9)));
-    assert!(!quiet(&level(SILENCE_RMS * 1.1)));
-    assert!(!holds_speech(&level(SILENCE_RMS * 0.9)));
-    assert!(holds_speech(&level(SILENCE_RMS * 1.1)));
+    assert!(quiet(&tone_at(SPEECH_DBFS - 1.0, 0.0, 1.0)));
+    assert!(!quiet(&tone_at(SPEECH_DBFS + 1.0, 0.0, 1.0)));
+    assert!(!holds_speech(&tone_at(SPEECH_DBFS - 1.0, 0.0, 1.0)));
+    assert!(holds_speech(&tone_at(SPEECH_DBFS + 1.0, 0.0, 1.0)));
     assert!(quiet(&[]));
+  }
+
+  #[test]
+  fn a_steady_offset_is_not_sound() {
+    assert!(quiet(&vec![0.05; 320]));
+    assert!(!holds_speech(&vec![0.05; MODEL_SAMPLE_RATE as usize]));
+  }
+
+  #[test]
+  fn speech_on_a_steady_offset_is_heard() {
+    assert!(holds_speech(&tone_at(SPEECH_DBFS + 3.0, 0.05, 1.0)));
+  }
+
+  #[test]
+  fn quiet_speech_above_a_quiet_room_is_heard() {
+    let mut audio = noise_at(-78.0, 2.0);
+    mix(&mut audio, 8_000, &tone_at(-60.0, 0.0, 0.5));
+
+    assert!(holds_speech(&audio));
+  }
+
+  #[test]
+  fn quiet_speech_needs_to_last() {
+    let mut audio = noise_at(-78.0, 2.0);
+    mix(&mut audio, 8_000, &tone_at(-60.0, 0.0, 0.06));
+
+    assert!(!holds_speech(&audio));
+  }
+
+  #[test]
+  fn sound_close_to_the_room_noise_is_not_speech() {
+    let mut audio = noise_at(-64.0, 2.0);
+    mix(&mut audio, 8_000, &tone_at(-60.0, 0.0, 0.5));
+
+    assert!(!holds_speech(&audio));
+  }
+
+  #[test]
+  fn a_click_is_not_speech() {
+    let mut audio = vec![0.0; MODEL_SAMPLE_RATE as usize];
+    mix(&mut audio, 8_000, &tone_at(-40.0, 0.0, 0.03));
+
+    assert!(!holds_speech(&audio));
+  }
+
+  #[test]
+  fn frames_of_quiet_speech_stand_out_from_the_noise_heard_before() {
+    let frame = samples_in(20, MODEL_SAMPLE_RATE);
+    let mut gate = FrameGate::default();
+    let mut noise = noise_at(-78.0, 1.0);
+    for sample in &mut noise {
+      *sample += 0.05;
+    }
+    assert!(noise.chunks_exact(frame).all(|part| gate.quiet(part)));
+    let speech = tone_at(-60.0, 0.05, 1.0);
+
+    assert!(speech.chunks_exact(frame).all(|part| !gate.quiet(part)));
+    // Without the noise before it, the same speech is below the speech level.
+    assert!(quiet(&speech[..frame]));
+  }
+
+  #[test]
+  fn room_noise_alone_is_not_speech() {
+    assert!(!holds_speech(&noise_at(-60.0, 2.0)));
+  }
+
+  #[test]
+  fn sound_below_the_lowest_speech_level_is_not_speech() {
+    let mut audio = vec![0.0; MODEL_SAMPLE_RATE as usize * 2];
+    mix(&mut audio, 8_000, &noise_at(-100.0, 1.9));
+    mix(
+      &mut audio,
+      16_000,
+      &tone_at(LOWEST_SPEECH_DBFS - 2.0, 0.0, 0.5),
+    );
+
+    assert!(!holds_speech(&audio));
   }
 }

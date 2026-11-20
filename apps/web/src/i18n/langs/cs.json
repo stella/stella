@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Pozvánka odmítnuta",
       "declinedDescription": "K této organizaci jste se nepřipojili.",
-      "description": "{inviterEmail} vás pozval/a do organizace {organizationName} jako {role}.",
+      "description": "{inviterEmail} vás pozval/a do organizace {organizationName}{role, select, owner { jako vlastníka} admin { jako administrátora} member { jako člena} intern { jako stážistu} external { jako externího spolupracovníka} other {}}.",
       "goToWorkspaces": "Přejít na spisy",
       "title": "Pozvánka do organizace",
       "verifyEmailHint": "Chcete-li ověřit adresu {email}, odhlaste se a přihlaste se jednorázovým kódem, který na ni odešleme.",
@@ -7246,6 +7246,7 @@
         "title": "Odebrat odkazy na vzory Wordu?",
         "unknownLocation": "Umístění vzoru: adresa, kterou stella nedokáže ověřit"
       },
+      "checkingFiles": "Kontrola souborů…",
       "desktopEdit": {
         "accountRequiredTitle": "Připojte stella desktop ke svému účtu",
         "action": "Upravit v desktopu",
@@ -7289,6 +7290,14 @@
       "downloadPdf": "Stáhnout jako PDF",
       "downloadSearchablePdf": "Prohledávatelné PDF",
       "downloadWithComments": "Stáhnout s komentáři",
+      "duplicateUpload": {
+        "description": "{count, plural, one {# soubor je totožný s dokumentem, který tento spis již obsahuje.} few {# soubory jsou totožné s dokumenty, které tento spis již obsahuje.} many {# souboru je totožných s dokumenty, které tento spis již obsahuje.} other {# souborů je totožných s dokumenty, které tento spis již obsahuje.}} Vyberte, co s každým z nich udělat.",
+        "matchedDocument": "Totožné s dokumentem <bdi>{documentName}</bdi>",
+        "skip": "Přeskočit tento soubor",
+        "skipAll": "Přeskočit duplicity",
+        "title": "Již ve spisu",
+        "uploadAnyway": "Přesto nahrát"
+      },
       "emptyFile": "Soubor je prázdný.",
       "fileTooLarge": "Soubor je větší než {limit, number} MB.",
       "includeReferenceNumber": "Přidat referenční číslo",

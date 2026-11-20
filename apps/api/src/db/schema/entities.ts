@@ -1581,6 +1581,14 @@ export const fields = p.pgTable(
         table.id,
       )
       .where(sql`${table.content}->>'type' = 'file'`),
+    p
+      .index("fields_workspace_file_sha256_idx")
+      .on(
+        table.workspaceId,
+        sql`(${table.content}->>'sha256Hex')`,
+        table.entityVersionId,
+      )
+      .where(sql`${table.content}->>'type' = 'file'`),
     // Bounded document-processing recovery has a global ID cursor, so its
     // partial candidate index must start with that cursor column.
     p

@@ -58,6 +58,7 @@ mod dictation_models;
 mod dictation_notice;
 mod dictation_pauses;
 mod dictation_preview;
+mod dictation_spelling;
 mod dictation_trace;
 mod dictation_words;
 #[cfg(dictation)]
