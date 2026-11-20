@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import type { ActivitySettingsSnapshot } from "../../src/activity/activity-types";
+import type { MicrophonesSnapshot } from "../../src/mainview/dictation-microphone";
 import { ONBOARDING_STEPS } from "../../src/onboarding/onboarding-types";
 import type { OnboardingSnapshot } from "../../src/onboarding/onboarding-types";
 import type {
@@ -21,6 +22,7 @@ import {
   APP_STATE,
   CLOUD_MODELS,
   DICTATION_READY,
+  MICROPHONES,
   PERMISSIONS,
   SETTINGS_DICTATION,
   SETUP_PERMISSIONS,
@@ -136,6 +138,8 @@ type WindowFixture = {
   dictation: unknown;
   /** What the dictation notice panel offers, where that window is open. */
   dictationNotice?: unknown;
+  /** The microphones Settings → Dictation lists. */
+  microphones: MicrophonesSnapshot;
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
@@ -193,6 +197,7 @@ const openWindow = async (
       get_state: () => data.appState,
       onboarding_get_snapshot: () => data.onboarding,
       permissions_get_snapshot: () => data.permissions,
+      permissions_open_settings: () => null,
       permissions_request: (args) => {
         data.permissions = {
           rows: data.permissions.rows.map((row) =>
@@ -206,6 +211,17 @@ const openWindow = async (
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
       dictation_get_snapshot: () => data.dictation,
+      dictation_get_microphones: () => data.microphones,
+      dictation_set_microphone: (args) => {
+        const id = args["id"];
+        data.microphones = {
+          ...data.microphones,
+          chosen: typeof id === "string" ? id : null,
+        };
+        return data.microphones;
+      },
+      dictation_test_microphone_start: () => null,
+      dictation_test_microphone_stop: () => null,
       dictation_notice_get_state: () => data.dictationNotice,
       dictation_notice_respond: () => null,
       dictation_get_cloud_models: () => data.cloudModels,
@@ -242,6 +258,7 @@ export const openOnboardingWindow = async (
       cloudModels: CLOUD_MODELS,
       dictation: DICTATION_READY,
       language: options.language,
+      microphones: MICROPHONES,
       onboarding: snapshot,
       permissions: SETUP_PERMISSIONS,
       requestOutcome: options.requestOutcome ?? "granted",
@@ -262,9 +279,10 @@ export const openOnboardingWindow = async (
 export const openDictationNoticeWindow = async (
   page: Page,
   notice: {
-    fix: "openSettings" | "openSound" | "request" | null;
+    fix: "chooseMicrophone" | "openSettings" | "openSound" | "request" | null;
     inputDevice: string | null;
-    kind: "microphone" | "nothingHeard";
+    kind: "microphone" | "microphoneMissing" | "nothingHeard";
+    missing: string | null;
   },
   options: WindowVariant,
 ) => {
@@ -277,6 +295,7 @@ export const openDictationNoticeWindow = async (
       dictation: DICTATION_READY,
       dictationNotice: notice,
       language: options.language,
+      microphones: MICROPHONES,
       onboarding: null,
       permissions: PERMISSIONS,
       requestOutcome: "granted",
@@ -332,6 +351,7 @@ export const openSettingsWindow = async (
       cloudModels: CLOUD_MODELS,
       dictation: SETTINGS_DICTATION,
       language: options.language,
+      microphones: MICROPHONES,
       onboarding: null,
       permissions: PERMISSIONS,
       requestOutcome: "granted",

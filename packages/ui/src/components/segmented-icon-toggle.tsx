@@ -11,6 +11,8 @@ import {
 import type { SegmentedIconToggleSize } from "./toggle-group-classes";
 
 type SegmentedIconToggleOption<T extends string> = {
+  /** A fixed id for the option, where generated ones would differ per mount. */
+  id?: string | undefined;
   value: T;
   icon: ComponentType<{ className?: string }>;
   /** Already-translated label; shown as a tooltip and the accessible name. */
@@ -52,6 +54,7 @@ export const SegmentedIconToggle = <T extends string>({
           aria-label={option.label}
           className={segmentedIconToggleItemClassName(size)}
           data-control-value={option.value}
+          id={option.id}
           key={option.value}
           size="icon-xs"
           value={option.value}
