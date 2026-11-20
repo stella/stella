@@ -1,7 +1,7 @@
 //! Cuts a recording into stretches of speech while it is still going on, so
 //! each stretch can be transcribed as soon as the speaker pauses. A pause is
-//! [`PAUSE_MILLIS`] of frames below the silence level that already decides
-//! whether audio holds speech; a stretch is cut in the middle of its pause.
+//! [`PAUSE_MILLIS`] of frames below the level at which any window counts as
+//! speech, a steady offset aside; a stretch is cut in the middle of its pause.
 //! A stretch that grows to the length of one stella AI chunk is cut at its
 //! quietest moment, the same cut an upload makes.
 //!
