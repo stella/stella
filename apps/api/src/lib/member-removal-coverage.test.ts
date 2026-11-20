@@ -343,6 +343,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "dictation_vocabulary_terms.created_by":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legislation_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_research_columns.created_by":

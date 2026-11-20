@@ -12,6 +12,9 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 
 import {
@@ -32,13 +35,49 @@ import {
  *  transcript; a generation that outlives it would only spend usage. */
 const CLEANUP_DEADLINE_MS = 5000;
 const CLEANUP_OUTPUT_TOKENS = 8000;
+const ORGANIZATION_VOCABULARY_READ_FAILED = failureSink({
+  event: "dictation.organization_vocabulary.read_failed",
+  expected: [],
+});
 
-type DictationCleanupOptions = DictationGeneration & {
+/** The model call and the organization's words a test puts in place. */
+export type DictationCleanupGeneration = DictationGeneration & {
+  readVocabulary?: typeof readCleanupVocabulary;
+};
+
+type DictationCleanupOptions = DictationCleanupGeneration & {
   caller: DictationModelCaller;
   body: v.InferOutput<typeof desktopDictationCleanupRequestSchema>;
   /** The admission the caller's action admission granted this cleanup. */
   modelAdmission: ModelDispatchAdmission;
   actionSignal: AbortSignal;
+};
+
+/**
+ * The words the model is told to spell: the speaker's own, then the
+ * organization's words this transcript seems to mention. They only help,
+ * so when the organization's cannot be read the cleanup runs with the
+ * speaker's and the failure is reported.
+ */
+const cleanupVocabulary = async (
+  { safeDb, organizationId }: DictationModelCaller,
+  { transcript, vocabulary }: DictationCleanupOptions["body"],
+  readVocabulary: typeof readCleanupVocabulary,
+): Promise<string[] | undefined> => {
+  const words = await readVocabulary({
+    safeDb,
+    organizationId,
+    transcript,
+    personal: vocabulary,
+  });
+  if (words.isErr()) {
+    observeFailure(words.error, {
+      sink: ORGANIZATION_VOCABULARY_READ_FAILED,
+      ctx: { operation: "dictation.cleanup" },
+    });
+    return vocabulary;
+  }
+  return words.value;
 };
 
 /**
@@ -49,9 +88,15 @@ type DictationCleanupOptions = DictationGeneration & {
  */
 export const cleanUpDictation = async ({
   body,
+  readVocabulary = readCleanupVocabulary,
   ...options
-}: DictationCleanupOptions) =>
-  await generateDictationAnswer({
+}: DictationCleanupOptions) => {
+  const vocabulary = await cleanupVocabulary(
+    options.caller,
+    body,
+    readVocabulary,
+  );
+  return await generateDictationAnswer({
     ...options,
     feature: "dictation.cleanup",
     failureName: "Dictation cleanup",
@@ -59,15 +104,15 @@ export const cleanUpDictation = async ({
     deadlineMs: CLEANUP_DEADLINE_MS,
     outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
     system: DICTATION_CLEANUP_SYSTEM_PROMPT,
-    prompt: buildDictationCleanupPrompt(body),
+    prompt: buildDictationCleanupPrompt(
+      vocabulary === undefined ? body : { ...body, vocabulary },
+    ),
     outputSchema: dictationCleanupModelOutputSchema,
     accept: (output) => acceptDictationCleanup(output, body.transcript),
   });
+};
 
-/** The model call a test puts in place of the organization's model. */
-export type DictationCleanupGeneration = DictationGeneration;
-
-type DictationCleanupEndpointOptions = DictationGeneration &
+type DictationCleanupEndpointOptions = DictationCleanupGeneration &
   DesktopDictationGate;
 
 /**
@@ -81,6 +126,7 @@ type DictationCleanupEndpointOptions = DictationGeneration &
  */
 export const createDictationCleanupEndpoint = ({
   generateObjectForTask,
+  readVocabulary,
   ...gate
 }: DictationCleanupEndpointOptions = {}) =>
   declareAggregateMutation(
@@ -110,6 +156,7 @@ export const createDictationCleanupEndpoint = ({
                 ...(generateObjectForTask === undefined
                   ? {}
                   : { generateObjectForTask }),
+                ...(readVocabulary === undefined ? {} : { readVocabulary }),
               }),
             );
             return Result.ok(segments);

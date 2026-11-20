@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -10,6 +11,15 @@ import { createTestState } from "@stll/test-state";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
+import {
+  CLEANUP_ORGANIZATION_TERMS,
+  mergeDictationTerms,
+} from "@/api/lib/dictation/organization-vocabulary";
+import type { readCleanupVocabulary } from "@/api/lib/dictation/organization-vocabulary";
+import {
+  buildVocabularyIndex,
+  selectVocabulary,
+} from "@/api/lib/dictation/vocabulary-index";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -63,8 +73,30 @@ const CLEANED: DictationCleanupModelOutput = {
   ],
 };
 
+/** The organization's words as the real selection picks them, without a
+ *  database. */
+const organizationWords =
+  (newestFirst: readonly string[]): typeof readCleanupVocabulary =>
+  async ({ transcript, personal = [] }) =>
+    await Promise.resolve(
+      Result.ok(
+        mergeDictationTerms(
+          [
+            personal,
+            selectVocabulary(
+              buildVocabularyIndex(newestFirst),
+              transcript,
+              CLEANUP_ORGANIZATION_TERMS,
+            ),
+          ],
+          personal.length + CLEANUP_ORGANIZATION_TERMS,
+        ),
+      ),
+    );
+
 type ExerciseOptions = {
   input?: unknown;
+  organization?: readonly string[];
   granted?: boolean;
   role?: "member" | "external";
   limited?: boolean;
@@ -74,10 +106,15 @@ type ExerciseOptions = {
 const exercise = async ({
   input = { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
   answer = () => CLEANED,
+  organization = [],
   ...options
 }: ExerciseOptions = {}) =>
   await exerciseDesktopDictationEndpoint({
-    createEndpoint: createDictationCleanupEndpoint,
+    createEndpoint: (endpointOptions) =>
+      createDictationCleanupEndpoint({
+        ...endpointOptions,
+        readVocabulary: organizationWords(organization),
+      }),
     testState,
     servers,
     input,
@@ -108,6 +145,20 @@ test("a granted desktop gets the model's segments for its transcript text", asyn
     transcript: TRANSCRIPT,
   });
   expect(limit.mock.calls.at(0)?.[0]).toMatchObject({ operation: "cleanup" });
+});
+
+test("the organization's words the transcript mentions follow the speaker's own", async () => {
+  const { response, calls } = await exercise({
+    input: {
+      transcript: "pošli to do Majkrosoftu a Novakovi",
+      vocabulary: ["Novák"],
+    },
+    organization: ["Deloitte", "Microsoft", "novák"],
+  });
+  expect(response.status).toBe(200);
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toMatchObject({
+    vocabulary: ["Novák", "Microsoft"],
+  });
 });
 
 testDesktopDictationGate({
@@ -247,6 +298,7 @@ const exerciseMember = async ({
     limit: asTestRaw<typeof consumeDictationLimit>(limit),
     generateObjectForTask:
       asTestRaw<typeof generateTanStackObjectForTask>(generate),
+    readVocabulary: organizationWords([]),
   });
   const result = await endpoint.handler(
     createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
