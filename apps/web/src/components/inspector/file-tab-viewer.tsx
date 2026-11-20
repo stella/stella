@@ -49,6 +49,11 @@ import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 
+const AsicFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/asic-file-viewer");
+  return { default: m.AsicFileViewer };
+});
+
 const CadesFileViewer = lazy(async () => {
   const m = await import("@/components/inspector/cades-file-viewer");
   return { default: m.CadesFileViewer };
@@ -66,7 +71,16 @@ type LegalFileViewer = {
   surface: ViewerSurface;
 };
 
+const asicFileViewer = {
+  Viewer: AsicFileViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-asic",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
+  asicE: asicFileViewer,
+  asicS: asicFileViewer,
   cades: {
     Viewer: CadesFileViewer,
     unreadable: "signedFile.unreadable",
@@ -202,6 +216,8 @@ const FileTabViewerComponent = ({
 
   const fileViewer = (() => {
     switch (nativePreviewKind) {
+      case "asicE":
+      case "asicS":
       case "cades":
       case "dataBox": {
         const { Viewer, unreadable, download, surface } =

@@ -1059,8 +1059,9 @@ describe("chat thread messages", () => {
             type: "tool-call",
             id: "tool-call-failed",
             // An external tool name keeps the output untyped, so the fixture
-            // can carry the runtime error shape the renderer inspects.
-            name: "mcp__external-lookup",
+            // can carry the runtime error shape the renderer inspects. Its
+            // verb makes it a read the run's summary counts as a source.
+            name: "mcp__external__lookup",
             arguments: JSON.stringify({ query: "deadline" }),
             state: "error",
             input: { query: "deadline" },
@@ -1078,7 +1079,7 @@ describe("chat thread messages", () => {
           {
             type: "tool-call",
             id: "tool-call-complete",
-            name: "mcp__external-lookup",
+            name: "mcp__external__lookup",
             arguments: JSON.stringify({ query: "governing law" }),
             state: "complete",
             input: { query: "governing law" },
@@ -1114,9 +1115,10 @@ describe("chat thread messages", () => {
     // collapsed by default: the failed call is left out of it. The turn went
     // on to answer, so the failed step reads as retried, with no failure line
     // in the summary; its raw output stays behind the step's own disclosure.
-    expect(html).toContain(">1 analysis<");
+    expect(html).toContain(">1 source checked<");
+    expect(html).not.toContain("2 sources checked");
     expect(html).not.toContain("3 steps");
-    expect(disclosureExpanded(html, "1 analysis")).toBe("false");
+    expect(disclosureExpanded(html, "1 source checked")).toBe("false");
     expect(html).toContain(">Retried<");
     expect(html).not.toContain("This step failed");
     expect(html).not.toContain("work around it");

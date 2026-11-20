@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
+import { archivePathKey } from "@/api/lib/files/archive-path-key";
 
 const caseVariants = [
   ["a", "A"],

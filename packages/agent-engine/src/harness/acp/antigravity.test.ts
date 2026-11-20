@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -10,7 +11,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { ANTIGRAVITY, antigravityTokenPath } from "./antigravity";
+import {
+  ANTIGRAVITY,
+  ANTIGRAVITY_CLI,
+  antigravityCliTokenPath,
+  antigravityDefinition,
+  antigravityTokenPath,
+} from "./antigravity";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -50,12 +57,12 @@ describe("Antigravity over ACP", () => {
 
   test("is signed in once its token is in the state directory", () => {
     const configDir = stateDir();
-    expect(ANTIGRAVITY.storedSignIn?.signedIn(configDir)).toBe(false);
+    expect(ANTIGRAVITY.storedSignIn?.signedIn(configDir, {})).toBe(false);
     mkdirSync(path.dirname(antigravityTokenPath(configDir)), {
       recursive: true,
     });
     writeFileSync(antigravityTokenPath(configDir), "{}");
-    expect(ANTIGRAVITY.storedSignIn?.signedIn(configDir)).toBe(true);
+    expect(ANTIGRAVITY.storedSignIn?.signedIn(configDir, {})).toBe(true);
   });
 
   test("steers from 1.5.0", () => {
@@ -90,5 +97,45 @@ describe("Antigravity over ACP", () => {
     expect(readdirSync(path.join(state, "conversations"))).toEqual([
       "chat-1.db",
     ]);
+  });
+
+  test("the member's own CLI runs as `agy acp` with their own Antigravity home", () => {
+    expect(antigravityDefinition("/home/m/.local/bin/agy")).toBe(
+      ANTIGRAVITY_CLI,
+    );
+    expect(antigravityDefinition("C:\\Tools\\agy.exe")).toBe(ANTIGRAVITY_CLI);
+    expect(antigravityDefinition("/state/agy_acp_server.par")).toBe(
+      ANTIGRAVITY,
+    );
+    expect(ANTIGRAVITY_CLI.args("darwin")).toEqual(["acp"]);
+    expect(
+      ANTIGRAVITY_CLI.environment({
+        configDir: "/state/antigravity",
+        executable: "/home/m/.local/bin/agy",
+        platform: "darwin",
+      }),
+    ).toEqual({});
+    expect(ANTIGRAVITY_CLI.removedEnvironment).not.toContain("GEMINI_HOME");
+    expect(ANTIGRAVITY_CLI.removedEnvironment).toContain("GEMINI_API_KEY");
+    expect(antigravityCliTokenPath({ HOME: "/home/m" })).toBe(
+      "/home/m/.gemini/antigravity-cli/antigravity-oauth-token",
+    );
+    expect(
+      antigravityCliTokenPath({ GEMINI_HOME: "/g", HOME: "/home/m" }),
+    ).toBe("/g/antigravity-cli/antigravity-oauth-token");
+  });
+
+  test("the CLI's version is read with --version, before it is started", async () => {
+    const dir = stateDir();
+    const agy = path.join(dir, "agy");
+    writeFileSync(agy, "#!/bin/sh\necho 'agy 1.3.5'\n");
+    chmodSync(agy, 0o755);
+    expect(ANTIGRAVITY_CLI.minimumVersion?.version).toBe("1.5.0");
+    expect(await ANTIGRAVITY_CLI.minimumVersion?.read(agy)).toBe("1.3.5");
+    // An executable that cannot be run rejects: it is not "no version".
+    const [missing] = await Promise.allSettled([
+      ANTIGRAVITY_CLI.minimumVersion?.read(path.join(dir, "missing")),
+    ]);
+    expect(missing.status).toBe("rejected");
   });
 });

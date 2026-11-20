@@ -271,9 +271,18 @@
       "sourcesChecked": "{count, plural, one {# Quelle geprüft} other {# Quellen geprüft}}",
       "documentEdits": "{count, plural, one {# Dokumentänderung} other {# Dokumentänderungen}}",
       "changesSaved": "{count, plural, one {# Änderung gespeichert} other {# Änderungen gespeichert}}",
-      "analyses": "{count, plural, one {# Analyse} other {# Analysen}}"
+      "searchedLegislation": "Rechtsvorschriften durchsucht",
+      "searchedCaseLaw": "Rechtsprechung durchsucht",
+      "searchedLegislationAndCaseLaw": "Rechtsvorschriften und Rechtsprechung durchsucht",
+      "readDocument": "Dokument gelesen",
+      "readDocuments": "Dokumente gelesen",
+      "searchedMatters": "Akten durchgesehen",
+      "checkedRegisters": "Öffentliche Register geprüft",
+      "searchedWeb": "Web durchsucht",
+      "searchedChats": "Chatverlauf durchsucht"
     },
     "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
+    "lookupCount": "{count, plural, one {# Abfrage} other {# Abfragen}}",
     "reasoning": "Argumentation",
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "failure": {
@@ -612,6 +621,7 @@
   "signedFile": {
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "previewTruncated": "Der vollständige Text ist in dieser Vorschau nicht verfügbar.",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."

@@ -320,7 +320,6 @@
     "apps/web/src/routes/_protected.contacts/-contact-import.pending.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-contacts.page.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-contacts.pending.tsx": 1,
-    "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.route.pending.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 2,

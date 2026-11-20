@@ -77,13 +77,7 @@ const uploadSkill = createSafeRootHandler(
     }
 
     const bytes = await body.file.arrayBuffer();
-    if (
-      isZipSkillSource({
-        buffer: bytes,
-        contentType: body.file.type,
-        path: body.file.name,
-      })
-    ) {
+    if (isZipSkillSource(bytes)) {
       yield* Result.await(validateDocxArchive(bytes, SKILL_ARCHIVE_OPTIONS));
     }
 
@@ -98,6 +92,7 @@ const uploadSkill = createSafeRootHandler(
 
     const installResult = await installSkill({
       memberRole,
+      onSlugTaken: "copy",
       origin: "upload",
       parsed,
       recordAuditEvent,

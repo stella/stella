@@ -271,9 +271,18 @@
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
       "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
-      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}"
+      "searchedLegislation": "Õigusaktidest otsitud",
+      "searchedCaseLaw": "Kohtupraktikast otsitud",
+      "searchedLegislationAndCaseLaw": "Õigusaktidest ja kohtupraktikast otsitud",
+      "readDocument": "Dokument loetud",
+      "readDocuments": "Dokumendid loetud",
+      "searchedMatters": "Toimikud läbi vaadatud",
+      "checkedRegisters": "Avalikud registrid kontrollitud",
+      "searchedWeb": "Veebist otsitud",
+      "searchedChats": "Vestlusajaloost otsitud"
     },
     "stepCount": "{count, plural, one {# samm} other {# sammu}}",
+    "lookupCount": "{count, plural, one {# päring} other {# päringut}}",
     "reasoning": "Arutlus",
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "failure": {
@@ -612,6 +621,7 @@
   "signedFile": {
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval.",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."

@@ -271,9 +271,18 @@
       "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}",
       "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
       "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uloženej zmeny}}",
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}"
+      "searchedLegislation": "Prehľadané predpisy",
+      "searchedCaseLaw": "Prehľadaná judikatúra",
+      "searchedLegislationAndCaseLaw": "Prehľadané predpisy a judikatúra",
+      "readDocument": "Prečítaný dokument",
+      "readDocuments": "Prečítané dokumenty",
+      "searchedMatters": "Prehľadané spisy",
+      "checkedRegisters": "Overené verejné registre",
+      "searchedWeb": "Prehľadaný web",
+      "searchedChats": "Prehľadaná história chatu"
     },
     "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
+    "lookupCount": "{count, plural, one {# dopyt} few {# dopyty} many {# dopytu} other {# dopytov}}",
     "reasoning": "Uvažovanie",
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "failure": {
@@ -612,6 +621,7 @@
   "signedFile": {
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "previewTruncated": "Úplný text nie je v tomto náhľade k dispozícii.",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
     "unverified": "Podpisy neboli overené."

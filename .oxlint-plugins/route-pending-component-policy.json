@@ -7,6 +7,7 @@
     "@stll/ui/composer-tokens",
     "@stll/ui/control-face",
     "@stll/ui/directional-icon",
+    "@stll/ui/field-trigger",
     "@stll/ui/frame",
     "@stll/ui/icons",
     "@stll/ui/input-otp-face",
@@ -49,6 +50,7 @@
   "$namedImportsComment": "Single exports a pending half may import from a module that is otherwise not pending-safe. The router's URL hooks are there at every pending level, and only with `strict: false` (the rule checks the call).",
   "pendingSafeNamedImports": {
     "@tanstack/react-router": ["useParams", "useSearch"],
+    "@/env": ["env"],
     "@/lib/redirect": ["isAcceptInvitationRedirect", "normalizeRedirectTo"],
     "@/lib/chrome-header-actions": ["ChromeHeaderActions"]
   },

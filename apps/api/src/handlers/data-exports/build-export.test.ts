@@ -7,7 +7,6 @@ import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import {
   buildDataExport,
   DATA_EXPORT_RECORD_BYTES_CAP,
@@ -39,6 +38,7 @@ import {
   DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
   dataExportArchivePathSchema,
 } from "@/api/lib/data-export/manifest-values";
+import { archivePathKey } from "@/api/lib/files/archive-path-key";
 import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 
 const CREATED_AT = new Date("2026-10-01T08:00:00.000Z");

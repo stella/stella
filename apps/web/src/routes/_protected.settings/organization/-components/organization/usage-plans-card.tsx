@@ -9,7 +9,6 @@ import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { NumberInput } from "@stll/ui/number-input";
-import { Skeleton } from "@stll/ui/skeleton";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -20,6 +19,12 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/organization/-queries/usage-policies";
 import type { UsagePolicyEntry } from "@/routes/_protected.settings/organization/-queries/usage-policies";
+
+import {
+  UsagePlanRowFace,
+  UsagePlanSection,
+  UsagePlansPending,
+} from "./usage-plans-card.pending";
 
 /**
  * Catalog of subscription plans and one-time packs with hosted checkout.
@@ -41,7 +46,7 @@ export function UsagePlansCard({
   const { data, isLoading, isError, refetch } = useQuery(usagePoliciesOptions);
 
   if (isLoading) {
-    return <PlansSkeleton />;
+    return <UsagePlansPending />;
   }
   // A failed catalog read must not masquerade as an empty catalog:
   // purchasing silently vanishing is indistinguishable from "nothing
@@ -81,65 +86,25 @@ export function UsagePlansCard({
   return (
     <>
       {subscriptions.length > 0 && (
-        <Frame>
-          <FramePanel>
-            <h2 className="text-lg font-medium">
-              {t("settings.organization.usagePlansTitle")}
-            </h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {t("settings.organization.usagePlansDescription")}
-            </p>
-            <ul className="mt-4 space-y-3">
-              {subscriptions.map((policy) => (
-                <PolicyRow
-                  key={policy.id}
-                  policy={policy}
-                  purchasable
-                  withSeats
-                />
-              ))}
-            </ul>
-          </FramePanel>
-        </Frame>
+        <UsagePlanSection kind="subscription">
+          {subscriptions.map((policy) => (
+            <PolicyRow key={policy.id} policy={policy} purchasable withSeats />
+          ))}
+        </UsagePlanSection>
       )}
       {packs.length > 0 && (
-        <Frame>
-          <FramePanel>
-            <h2 className="text-lg font-medium">
-              {t("settings.organization.usagePacksTitle")}
-            </h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {t("settings.organization.usagePacksDescription")}
-            </p>
-            <ul className="mt-4 space-y-3">
-              {packs.map((policy) => (
-                <PolicyRow
-                  key={policy.id}
-                  policy={policy}
-                  purchasable={packsPurchasable}
-                  withSeats={false}
-                />
-              ))}
-            </ul>
-          </FramePanel>
-        </Frame>
+        <UsagePlanSection kind="addon">
+          {packs.map((policy) => (
+            <PolicyRow
+              key={policy.id}
+              policy={policy}
+              purchasable={packsPurchasable}
+              withSeats={false}
+            />
+          ))}
+        </UsagePlanSection>
       )}
     </>
-  );
-}
-
-function PlansSkeleton() {
-  return (
-    <Frame>
-      <FramePanel>
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="mt-2 h-4 w-64 max-w-full" />
-        <div className="mt-4 space-y-3">
-          <Skeleton className="h-14 w-full rounded-md" />
-          <Skeleton className="h-14 w-full rounded-md" />
-        </div>
-      </FramePanel>
-    </Frame>
   );
 }
 
@@ -185,64 +150,68 @@ function PolicyRow({
   });
 
   return (
-    <li className="border-border flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-      <div className="min-w-0 space-y-0.5">
-        <div className="font-medium">
-          <BidiText>{policy.displayName}</BidiText>
-        </div>
-        {policy.description && (
-          <p className="text-muted-foreground text-sm">
-            <BidiText>{policy.description}</BidiText>
-          </p>
-        )}
-        {policy.price && (
-          <p className="text-sm">
-            {t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
-              price: format.number(
-                toMajorUnits({
-                  amountCents: policy.price.amountCents,
-                  currency: policy.price.currency,
-                }),
-                { style: "currency", currency: policy.price.currency },
-              ),
-            })}
-          </p>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        {withSeats && perSeat && (
-          <>
-            <Label htmlFor={seatsInputId} variant="muted">
-              {t("settings.organization.usagePlanSeats")}
-            </Label>
-            <NumberInput
-              className="w-20"
-              id={seatsInputId}
-              max={MAX_SEATS}
-              min={MIN_SEATS}
-              onValueChange={(next) => {
-                if (next !== null && Number.isInteger(next)) {
-                  setSeats(Math.min(Math.max(next, MIN_SEATS), MAX_SEATS));
-                }
-              }}
-              size="sm"
-              step={1}
-              value={seats}
-            />
-          </>
-        )}
-        <Button
-          disabled={
-            pending ||
-            !purchasable ||
-            policy.hostedCheckout.status !== "available"
-          }
-          onClick={() => checkout.mutate()}
-        >
-          {t("settings.organization.usagePlanCheckout")}
-        </Button>
-      </div>
-    </li>
+    <UsagePlanRowFace
+      actions={
+        <>
+          {withSeats && perSeat && (
+            <>
+              <Label htmlFor={seatsInputId} variant="muted">
+                {t("settings.organization.usagePlanSeats")}
+              </Label>
+              <NumberInput
+                className="w-20"
+                id={seatsInputId}
+                max={MAX_SEATS}
+                min={MIN_SEATS}
+                onValueChange={(next) => {
+                  if (next !== null && Number.isInteger(next)) {
+                    setSeats(Math.min(Math.max(next, MIN_SEATS), MAX_SEATS));
+                  }
+                }}
+                size="sm"
+                step={1}
+                value={seats}
+              />
+            </>
+          )}
+          <Button
+            disabled={
+              pending ||
+              !purchasable ||
+              policy.hostedCheckout.status !== "available"
+            }
+            onClick={() => checkout.mutate()}
+          >
+            {t("settings.organization.usagePlanCheckout")}
+          </Button>
+        </>
+      }
+      details={
+        <>
+          <div className="font-medium">
+            <BidiText>{policy.displayName}</BidiText>
+          </div>
+          {policy.description && (
+            <p className="text-muted-foreground text-sm">
+              <BidiText>{policy.description}</BidiText>
+            </p>
+          )}
+          {policy.price && (
+            <p className="text-sm">
+              {t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
+                price: format.number(
+                  toMajorUnits({
+                    amountCents: policy.price.amountCents,
+                    currency: policy.price.currency,
+                  }),
+                  { style: "currency", currency: policy.price.currency },
+                ),
+              })}
+            </p>
+          )}
+        </>
+      }
+    />
   );
 }
 

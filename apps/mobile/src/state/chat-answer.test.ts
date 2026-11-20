@@ -114,14 +114,14 @@ describe("a coding agent's steps in an answer on the phone", () => {
         type: "steps",
         key: "0",
         steps: [commandStep("before")],
-        work: new Map([["computation", 1]]),
+        summary: [{ phrase: "steps", count: 1 }],
       },
       { type: "steered", key: "steered:1", text: "Also check the annex." },
       {
         type: "steps",
         key: "2",
         steps: [commandStep("after")],
-        work: new Map([["computation", 1]]),
+        summary: [{ phrase: "steps", count: 1 }],
       },
     ]);
   });
@@ -141,7 +141,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         type: "steps",
         key: "0",
         steps: [commandStep("before")],
-        work: new Map([["computation", 1]]),
+        summary: [{ phrase: "steps", count: 1 }],
       },
       {
         type: "subagent",
@@ -157,7 +157,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         type: "steps",
         key: "4",
         steps: [commandStep("after")],
-        work: new Map([["computation", 1]]),
+        summary: [{ phrase: "steps", count: 1 }],
       },
       { type: "text", key: "5", markdown: "Done." },
     ]);
@@ -186,7 +186,7 @@ describe("a coding agent's steps in an answer on the phone", () => {
         type: "steps",
         key: "2",
         steps: [commandStep("asks", "running")],
-        work: new Map(),
+        summary: [{ phrase: "steps", count: 1 }],
       },
     ]);
   });
