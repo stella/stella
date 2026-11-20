@@ -294,6 +294,18 @@ describe("a settled run's summary", () => {
     );
   });
 
+  test("counts a coding agent's direct citation resolution as research, not a change", () => {
+    expect(
+      summary([
+        call("resolve_law_citation", "complete", { results: [] }),
+        call("resolve_case_law_decision", "complete", { results: [] }),
+      ]),
+    ).toEqual(["searchedLegislationAndCaseLaw:1", "lookups:2"]);
+    expect(getChatToolActivityCategory("resolve_law_citation")).toBe(
+      "research",
+    );
+  });
+
   test("falls back to the step count when the run read and changed nothing", () => {
     expect(
       summary(

@@ -339,10 +339,14 @@ export const getChatToolActivityCategory = (
   if (toolName.startsWith("mcp__")) {
     return operationActivityCategory(toolName.split("__").slice(2).join("__"));
   }
-  if (stellaToolReadArea(toolName) !== undefined) {
-    return operationActivityCategory(toolName);
+  const area = stellaToolReadArea(toolName);
+  if (area === undefined) {
+    return "computation";
   }
-  return "computation";
+  // A stella read of law, the workspace or a register is research whatever
+  // its verb (`resolve_law_citation` resolves nothing in the workspace); any
+  // other registry tool reads from its verb.
+  return area === "other" ? operationActivityCategory(toolName) : "research";
 };
 
 const USER_INPUT_CHAT_TOOL_NAMES = {
