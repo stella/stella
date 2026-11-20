@@ -15,7 +15,8 @@
    upstream preserves the exception.
 5. Register gemini-4-neon, gemini-4-hydrogen and gemini-4-carbon with the
    metadata of their sibling Gemini 4 Argon, so the adapter knows their input
-   modalities. Remove when upstream lists these models.
+   modalities, and give Gemini 4 (Argon included) low to high reasoning.
+   Remove when upstream lists these models.
 
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
@@ -150,7 +151,7 @@ index 1bc57e5..9637499 100644
  /**
   * Runtime map from chat model name to its supported input modalities, for the
 diff --git a/dist/esm/model-meta.js b/dist/esm/model-meta.js
-index db3e847..59257d1 100644
+index db3e847..50aba00 100644
 --- a/dist/esm/model-meta.js
 +++ b/dist/esm/model-meta.js
 @@ -811,8 +811,23 @@ var GEMINI_4_ARGON = {
@@ -177,7 +178,7 @@ index db3e847..59257d1 100644
  	GEMINI_3_8_FLASH.name,
  	GEMINI_3_7_FLASH.name,
  	GEMINI_3_6_FLASH.name,
-@@ -942,7 +957,10 @@ var GEMINI_MODEL_INPUT_MODALITIES = {
+@@ -942,13 +957,20 @@ var GEMINI_MODEL_INPUT_MODALITIES = {
  	[GEMINI_2_5_PRO.name]: GEMINI_2_5_PRO.supports.input,
  	[GEMINI_2_5_FLASH_LITE.name]: GEMINI_2_5_FLASH_LITE.supports.input,
  	[GEMINI_2_5_FLASH.name]: GEMINI_2_5_FLASH.supports.input,
@@ -189,3 +190,13 @@ index db3e847..59257d1 100644
  };
  /**
  * Runtime map from chat model name to its reasoning data, for the text adapter.
+ * An unknown name gives `undefined`: the adapter sends no reasoning field.
+ */
+ var GEMINI_MODEL_REASONING = {
++	[GEMINI_4_ARGON.name]: EFFORT_LOW_TO_HIGH,
++	[GEMINI_4_CARBON.name]: EFFORT_LOW_TO_HIGH,
++	[GEMINI_4_NEON.name]: EFFORT_LOW_TO_HIGH,
++	[GEMINI_4_HYDROGEN.name]: EFFORT_LOW_TO_HIGH,
+ 	[GEMINI_3_8_FLASH.name]: GEMINI_3_8_FLASH.reasoning,
+ 	[GEMINI_3_7_FLASH.name]: GEMINI_3_7_FLASH.reasoning,
+ 	[GEMINI_3_6_FLASH.name]: GEMINI_3_6_FLASH.reasoning,

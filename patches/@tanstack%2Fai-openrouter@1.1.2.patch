@@ -12,7 +12,9 @@
    -hydrogen and -carbon with the metadata of their siblings (GPT-6.1 Sol,
    GPT-6 Astra, Gemini 4 Argon); upstream lists the same modalities and
    reasoning efforts. Without them the adapter drops the requested reasoning
-   effort. Remove when upstream lists these models.
+   effort. Gemini 4 (Argon included) also gets the reasoning efforts upstream
+   lists: Argon and Carbon low to high, Neon and Hydrogen low to xhigh.
+   Remove when upstream lists these models.
 
 
 # Unknown stop values reach Stella's shared terminal policy via providerStopReason;
@@ -197,7 +199,7 @@ index 17255f4..e6a3ba3 100644
          readonly levels: {
              readonly low: "low";
 diff --git a/dist/esm/model-meta.js b/dist/esm/model-meta.js
-index 719c13e..ec04286 100644
+index 719c13e..ed2fb48 100644
 --- a/dist/esm/model-meta.js
 +++ b/dist/esm/model-meta.js
 @@ -15085,6 +15085,26 @@ var Z_AI_GLM_5V_TURBO = {
@@ -279,7 +281,18 @@ index 719c13e..ec04286 100644
  	[OPENAI_GPT_6_1_SOL_PRO.id]: OPENAI_GPT_6_1_SOL_PRO.supports.input,
  	[OPENAI_GPT_6_1_SOL_PRO_BATCH.id]: OPENAI_GPT_6_1_SOL_PRO_BATCH.supports.input,
  	[OPENAI_GPT_6_1_SOL_BATCH.id]: OPENAI_GPT_6_1_SOL_BATCH.supports.input,
-@@ -16183,6 +16213,7 @@ var OPENROUTER_MODEL_REASONING = {
+@@ -15993,6 +16023,10 @@ var OPENROUTER_MODEL_INPUT_MODALITIES = {
+ * text adapters.
+ */
+ var OPENROUTER_MODEL_REASONING = {
++	[GOOGLE_GEMINI_4_ARGON.id]: EFFORT_LOW_TO_HIGH,
++	[GOOGLE_GEMINI_4_CARBON.id]: EFFORT_LOW_TO_HIGH,
++	[GOOGLE_GEMINI_4_NEON.id]: EFFORT_LOW_TO_XHIGH,
++	[GOOGLE_GEMINI_4_HYDROGEN.id]: EFFORT_LOW_TO_XHIGH,
+ 	[_ANTHROPIC_CLAUDE_FABLE_LATEST.id]: _ANTHROPIC_CLAUDE_FABLE_LATEST.reasoning,
+ 	[_ANTHROPIC_CLAUDE_HAIKU_LATEST.id]: _ANTHROPIC_CLAUDE_HAIKU_LATEST.reasoning,
+ 	[_ANTHROPIC_CLAUDE_OPUS_LATEST.id]: _ANTHROPIC_CLAUDE_OPUS_LATEST.reasoning,
+@@ -16183,6 +16217,7 @@ var OPENROUTER_MODEL_REASONING = {
  	[OPENAI_GPT_5_6_TERRA_PRO_BATCH.id]: OPENAI_GPT_5_6_TERRA_PRO_BATCH.reasoning,
  	[OPENAI_GPT_5_6_TERRA_BATCH.id]: OPENAI_GPT_5_6_TERRA_BATCH.reasoning,
  	[OPENAI_GPT_6_ASTRA.id]: OPENAI_GPT_6_ASTRA.reasoning,
@@ -287,7 +300,7 @@ index 719c13e..ec04286 100644
  	[OPENAI_GPT_6_ASTRA_PRO.id]: OPENAI_GPT_6_ASTRA_PRO.reasoning,
  	[OPENAI_GPT_6_ASTRA_PRO_BATCH.id]: OPENAI_GPT_6_ASTRA_PRO_BATCH.reasoning,
  	[OPENAI_GPT_6_ASTRA_BATCH.id]: OPENAI_GPT_6_ASTRA_BATCH.reasoning,
-@@ -16195,6 +16226,7 @@ var OPENROUTER_MODEL_REASONING = {
+@@ -16195,6 +16230,7 @@ var OPENROUTER_MODEL_REASONING = {
  	[OPENAI_GPT_6_SOL_PRO_BATCH.id]: OPENAI_GPT_6_SOL_PRO_BATCH.reasoning,
  	[OPENAI_GPT_6_SOL_BATCH.id]: OPENAI_GPT_6_SOL_BATCH.reasoning,
  	[OPENAI_GPT_6_1_SOL.id]: OPENAI_GPT_6_1_SOL.reasoning,
@@ -295,7 +308,7 @@ index 719c13e..ec04286 100644
  	[OPENAI_GPT_6_1_SOL_PRO.id]: OPENAI_GPT_6_1_SOL_PRO.reasoning,
  	[OPENAI_GPT_OSS_120B.id]: OPENAI_GPT_OSS_120B.reasoning,
  	[OPENAI_GPT_OSS_120B_BATCH.id]: OPENAI_GPT_OSS_120B_BATCH.reasoning,
-@@ -17535,6 +17567,9 @@ var OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
+@@ -17535,6 +17571,9 @@ var OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
  	GOOGLE_GEMINI_3_8_FLASH.id,
  	GOOGLE_GEMINI_3_8_FLASH_BATCH.id,
  	GOOGLE_GEMINI_4_ARGON.id,
@@ -305,7 +318,7 @@ index 719c13e..ec04286 100644
  	GOOGLE_GEMINI_4_ARGON_BATCH.id,
  	GOOGLE_GEMINI_NANO_BANANA_2_1.id,
  	GOOGLE_GEMMA_3_12B_IT.id,
-@@ -17663,6 +17698,7 @@ var OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
+@@ -17663,6 +17702,7 @@ var OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
  	OPENAI_GPT_5_6_TERRA_PRO_BATCH.id,
  	OPENAI_GPT_5_6_TERRA_BATCH.id,
  	OPENAI_GPT_6_ASTRA.id,
@@ -313,7 +326,7 @@ index 719c13e..ec04286 100644
  	OPENAI_GPT_6_ASTRA_PRO.id,
  	OPENAI_GPT_6_ASTRA_PRO_BATCH.id,
  	OPENAI_GPT_6_ASTRA_BATCH.id,
-@@ -17675,6 +17711,7 @@ var OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
+@@ -17675,6 +17715,7 @@ var OPENROUTER_COMBINED_TOOLS_AND_SCHEMA_MODELS = /* @__PURE__ */ new Set([
  	OPENAI_GPT_6_SOL_PRO_BATCH.id,
  	OPENAI_GPT_6_SOL_BATCH.id,
  	OPENAI_GPT_6_1_SOL.id,

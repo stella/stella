@@ -1,9 +1,12 @@
 import { GEMINI_MODELS } from "@tanstack/ai-gemini";
 import { OPENAI_CHAT_MODELS } from "@tanstack/ai-openai";
-import { OPENROUTER_CHAT_MODELS } from "@tanstack/ai-openrouter/model-meta";
+import {
+  OPENROUTER_CHAT_MODELS,
+  OPENROUTER_MODEL_REASONING,
+} from "@tanstack/ai-openrouter/model-meta";
 import { describe, expect, test } from "bun:test";
 
-import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS, getModelReasoningEfforts } from "@stll/ai-catalog";
 
 /**
  * An adapter treats a model it does not list as unknown: it drops reasoning
@@ -42,6 +45,21 @@ const offered = (provider: Provider): readonly string[] =>
 const listed = (provider: Provider): readonly string[] =>
   ADAPTER_MODELS[provider];
 
+/**
+ * OpenRouter models that reason but have no reasoning entry in the adapter,
+ * each with the reason. Without an entry the adapter drops the requested
+ * effort.
+ */
+const REVIEWED_OPENROUTER_REASONING_GAPS: ReadonlyMap<string, string> = new Map(
+  [
+    [
+      "anthropic/claude-haiku-5.5",
+      "Fast default; its task mode requests no reasoning.",
+    ],
+    ["openai/gpt-6.1-terra", "Not a default; follow-up to register upstream."],
+  ],
+);
+
 describe("adapter model coverage", () => {
   test("every offered model is known to its adapter", () => {
     const unlisted = PROVIDERS.flatMap((provider) =>
@@ -65,5 +83,23 @@ describe("adapter model coverage", () => {
         listed(provider).includes(modelId),
     ).map(({ provider, modelId }) => `${provider}:${modelId}`);
     expect(stale).toEqual([]);
+  });
+
+  test("OpenRouter knows the reasoning efforts of every reasoning model", () => {
+    const missing = offered("openrouter").filter(
+      (modelId) =>
+        (getModelReasoningEfforts(modelId)?.length ?? 0) > 0 &&
+        OPENROUTER_MODEL_REASONING[modelId] === undefined &&
+        !REVIEWED_OPENROUTER_REASONING_GAPS.has(modelId),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  test("every reviewed reasoning gap is still a gap", () => {
+    expect(
+      [...REVIEWED_OPENROUTER_REASONING_GAPS.keys()].filter(
+        (modelId) => OPENROUTER_MODEL_REASONING[modelId] !== undefined,
+      ),
+    ).toEqual([]);
   });
 });
