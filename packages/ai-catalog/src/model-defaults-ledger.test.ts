@@ -309,9 +309,8 @@ describe("task default migration", () => {
           );
           continue;
         }
-        expect(entry.candidate.modelId).toBe(
-          GENERATION_UPGRADES[provider]?.[role] ?? oldModel,
-        );
+        const modelId: string = entry.candidate.modelId;
+        expect(modelId).toBe(GENERATION_UPGRADES[provider]?.[role] ?? oldModel);
         expect(entry.candidate.mode).toEqual(LEGACY_MODES[provider][role]);
       }
     }
