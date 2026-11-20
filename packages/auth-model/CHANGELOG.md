@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.10.0
+
+### Minor Changes
+
+- [#8919](https://github.com/stella/stella/pull/8919) [`fdd1eb7`](https://github.com/stella/stella/commit/fdd1eb7769c43f9c2242d5f05399cb36314c3638) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.25 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.25"`; no entrypoints are removed.
+
 ## 0.9.0
 
 ### Minor Changes
