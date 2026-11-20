@@ -3,7 +3,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { WorkspaceView } from "@/lib/types";
 import { CalendarViewPending } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.pending";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view.pending";
+import { FilesystemViewPending } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.pending";
+import { KanbanViewPending } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 import { OverviewViewPending } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view.pending";
+import { cachedWorkspaceProperties } from "@/routes/_protected.workspaces/$workspaceId/-components/table/pending-table-columns.logic";
 import { TableViewPending } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.pending";
 
 type ViewBodyPendingProps = {
@@ -48,8 +51,28 @@ export const ViewBodyPending = ({
   if (layout.type === "correspondence") {
     return <CorrespondenceViewSkeleton />;
   }
-  // A board's columns come from its grouping, which the board resolves once
-  // it mounts; it then stands with its columns and card placeholders. A
-  // filesystem tree, a timeline and an AVT view claim no shape either.
+  if (layout.type === "kanban" || layout.type === "filesystem") {
+    // A board's columns and a tree's columns come from the matter's
+    // properties; without them neither has columns to claim.
+    const properties =
+      cache === null
+        ? undefined
+        : cachedWorkspaceProperties(cache, workspaceId);
+    if (properties === undefined) {
+      return null;
+    }
+    if (layout.type === "kanban") {
+      return <KanbanViewPending properties={properties} view={view} />;
+    }
+    return (
+      <FilesystemViewPending
+        properties={properties}
+        view={{ ...view, layout }}
+        workspaceId={workspaceId}
+      />
+    );
+  }
+  // A timeline view draws no body at all, and an AVT view first checks the
+  // caller may open it (it may redirect away): neither has a shape to claim.
   return null;
 };

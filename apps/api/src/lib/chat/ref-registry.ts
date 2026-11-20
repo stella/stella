@@ -12,6 +12,10 @@ import {
   toChatResourceHref,
   toChatSourceCitationHref,
 } from "@stll/api-contract";
+import {
+  CHAT_REF_TOKEN_PREFIX,
+  type ChatRefTokenKind,
+} from "@stll/api-contract/chat-ref-token";
 import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -19,11 +23,9 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   CHAT_REF_INPUT_STATE,
-  CHAT_REF_TOKEN_PREFIX,
   CHAT_SOURCE_REF_PREFIX,
   type ChatRefBinding,
   type ChatRefInputState,
-  type ChatRefTokenKind,
 } from "@/api/lib/chat/ref-token";
 import { ChatToolError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";

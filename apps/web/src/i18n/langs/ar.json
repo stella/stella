@@ -2359,6 +2359,11 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
+    "switcher": {
+      "allChats": "كل الدردشات",
+      "searchPlaceholder": "ابحث عن دردشة…",
+      "trigger": "تبديل الدردشة"
+    },
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",
@@ -6294,6 +6299,14 @@
     },
     "reconnectRequired": "انتهت صلاحية تسجيل الدخول",
     "title": "SharePoint وOneDrive"
+  },
+  "signedFile": {
+    "layer": "طبقة التوقيعات {number, number}",
+    "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "unknownSigner": "موقّع مجهول",
+    "unreadable": "تعذّرت قراءة الملف الموقّع.",
+    "unverified": "لم يُتحقق من التوقيعات."
   },
   "skillHistory": {
     "acceptStale": "قبول واستبدال التعديلات الأحدث",

@@ -125,7 +125,6 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
-import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { CHAT_READING_COLUMN_CLASS_NAME } from "@/routes/_protected.chat/-components/chat-reading-column";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import {
@@ -771,7 +770,6 @@ export const ChatThreadPage = ({
                     className={CHAT_THREAD_MOVE_TO_SIDE_CLASS}
                     onClick={moveToSide}
                   />
-                  <ChatHistoryLink />
                   <NewChatButton
                     hasMessages={messages.length > 0}
                     threadRef={threadRef}

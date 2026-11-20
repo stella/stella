@@ -67,7 +67,7 @@ type ViewerCoverage =
 
 const PDF_PROVIDER = "lib/pdf/pdf-context.tsx";
 const DOCUMENT_ROUTE =
-  "routes/_protected.workspaces/$workspaceId/$viewId.document.tsx";
+  "routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx";
 
 const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
   [DOCUMENT_ROUTE]: { type: "boundary", owner: DOCUMENT_ROUTE },
