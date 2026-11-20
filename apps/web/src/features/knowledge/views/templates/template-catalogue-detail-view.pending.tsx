@@ -5,6 +5,7 @@ import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { PendingText } from "@/components/pending-text";
+import type { PendingTextKey } from "@/components/pending-text";
 
 // A catalogue template's page in both phases (a pending-safe module): the
 // loaded view renders these frames with the template, the pending view with
@@ -78,6 +79,14 @@ export const TemplateCataloguePreviewPending = () => (
   </div>
 );
 
+// Use, add to the library and download, in the page's order: the first is
+// the primary action.
+const CATALOGUE_ACTIONS = [
+  { id: "templates.useTemplate", width: "w-20" },
+  { id: "knowledge.catalogue.addToLibrary", width: "w-24" },
+  { id: "common.download", width: "w-14" },
+] as const satisfies readonly { id: PendingTextKey; width: string }[];
+
 /**
  * The page before the template has been read: its title block, the actions
  * every visitor is offered, the licence and the preview, each holding its
@@ -85,22 +94,15 @@ export const TemplateCataloguePreviewPending = () => (
  */
 export const TemplateCatalogueDetailPending = () => (
   <TemplateCatalogueDetailFrame
-    actions={
-      <>
-        <ButtonFace size="sm" variant="default">
-          <PendingText barClassName="w-20" id="templates.useTemplate" />
-        </ButtonFace>
-        <ButtonFace size="sm" variant="outline">
-          <PendingText
-            barClassName="w-24"
-            id="knowledge.catalogue.addToLibrary"
-          />
-        </ButtonFace>
-        <ButtonFace size="sm" variant="outline">
-          <PendingText barClassName="w-14" id="common.download" />
-        </ButtonFace>
-      </>
-    }
+    actions={CATALOGUE_ACTIONS.map(({ id, width }, index) => (
+      <ButtonFace
+        key={id}
+        size="sm"
+        variant={index === 0 ? "default" : "outline"}
+      >
+        <PendingText barClassName={width} id={id} />
+      </ButtonFace>
+    ))}
     packName={<FaceLabelPending className="w-32" />}
     title={<FaceLabelPending className="w-72 max-w-full" />}
   >

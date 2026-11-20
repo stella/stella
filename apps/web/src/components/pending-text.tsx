@@ -319,8 +319,6 @@ type PendingTextMessageKey =
   | "publicTools.content"
   | "publicTools.contribute.form.intro"
   | "publicTools.contribute.form.name"
-  | "publicTools.contribute.form.slugHint"
-  | "publicTools.contribute.form.slugLabel"
   | "publicTools.contribute.form.title"
   | "publicTools.contribute.intro"
   | "publicTools.contribute.title"

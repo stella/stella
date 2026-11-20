@@ -7,7 +7,7 @@ import { PendingText } from "@/components/pending-text";
 
 // The contribute page in both phases (a pending-safe module): the loaded page
 // renders these frames with its form, the pending view with the form's first
-// fields as faces.
+// field as a face.
 
 /** The page's column and its heading. */
 export const ContributePageFrame = ({
@@ -82,21 +82,6 @@ export const ContributePagePending = () => (
           />
         </LabelFace>
         <InputFace />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <LabelFace>
-          <PendingText
-            barClassName="w-12"
-            id="publicTools.contribute.form.slugLabel"
-          />
-        </LabelFace>
-        <InputFace />
-        <p className="text-muted-foreground text-xs">
-          <PendingText
-            barClassName="w-64"
-            id="publicTools.contribute.form.slugHint"
-          />
-        </p>
       </div>
     </ContributeFormFrame>
   </ContributePageFrame>

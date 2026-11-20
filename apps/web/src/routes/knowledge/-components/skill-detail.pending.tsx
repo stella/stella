@@ -1,8 +1,11 @@
+import type { ReactNode } from "react";
+
 import {
   FaceLabelPending,
   InputFace,
   SelectTriggerFace,
 } from "@stll/ui/control-face";
+import { cn } from "@stll/ui/utils";
 
 import { FileTreeRowPending } from "@/components/file-tree/file-tree.pending";
 import { PendingText } from "@/components/pending-text";
@@ -14,7 +17,29 @@ import { PendingText } from "@/components/pending-text";
 // them moves. Named for the page, not the editor: the pending closure keeps
 // editor modules out of the cold-load frame by name.
 
-const FIELD_LABEL_CLASS = "text-muted-foreground mt-1.5 text-xs/4";
+// One label and field pair of the "how it runs" grid, with the field's quiet
+// line under it.
+const FieldRow = ({
+  label,
+  labelClassName = "mt-1.5 text-xs/4",
+  help,
+  children,
+}: {
+  label: ReactNode;
+  labelClassName?: string;
+  help: ReactNode;
+  children: ReactNode;
+}) => (
+  <>
+    <span className={cn("text-muted-foreground text-xs", labelClassName)}>
+      {label}
+    </span>
+    <div className="flex flex-col gap-1">
+      {children}
+      <p className="text-muted-foreground text-xs">{help}</p>
+    </div>
+  </>
+);
 
 /** The editor's files while the skill is read: its SKILL.md row, which
  *  every skill has. */
@@ -42,13 +67,20 @@ export const SkillDetailPending = () => (
           />
         </p>
         <div className="grid max-w-3xl grid-cols-[9rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5">
-          <span className={FIELD_LABEL_CLASS}>
-            <PendingText
-              barClassName="w-28"
-              id="knowledge.skills.commandLabel"
-            />
-          </span>
-          <div className="flex flex-col gap-1">
+          <FieldRow
+            help={
+              <PendingText
+                barClassName="w-48"
+                id="knowledge.skills.commandHelp"
+              />
+            }
+            label={
+              <PendingText
+                barClassName="w-28"
+                id="knowledge.skills.commandLabel"
+              />
+            }
+          >
             <div className="flex items-stretch">
               <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
                 /
@@ -60,41 +92,34 @@ export const SkillDetailPending = () => (
                 />
               </InputFace>
             </div>
-            <p className="text-muted-foreground text-xs">
-              <PendingText
-                barClassName="w-48"
-                id="knowledge.skills.commandHelp"
-              />
-            </p>
-          </div>
-          <span className={FIELD_LABEL_CLASS}>
-            <PendingText barClassName="w-20" id="common.whenToUse" />
-          </span>
-          <div className="flex flex-col gap-1">
+          </FieldRow>
+          <FieldRow
+            help={<FaceLabelPending className="w-56" />}
+            label={<PendingText barClassName="w-20" id="common.whenToUse" />}
+          >
             <SelectTriggerFace className="w-fit min-w-48">
               <FaceLabelPending className="w-24" />
             </SelectTriggerFace>
-            <p className="text-muted-foreground text-xs">
-              <FaceLabelPending className="w-56" />
-            </p>
-          </div>
-          <span className="text-muted-foreground pt-0.5 text-xs">
-            <PendingText
-              barClassName="w-20"
-              id="knowledge.agentSkills.availabilityLabel"
-            />
-          </span>
-          <div className="flex flex-col gap-1">
-            <span className="text-sm">
-              <FaceLabelPending className="w-24" />
-            </span>
-            <p className="text-muted-foreground text-xs">
+          </FieldRow>
+          <FieldRow
+            help={
               <PendingText
                 barClassName="w-64"
                 id="knowledge.agentSkills.availabilityFixedHelp"
               />
-            </p>
-          </div>
+            }
+            label={
+              <PendingText
+                barClassName="w-20"
+                id="knowledge.agentSkills.availabilityLabel"
+              />
+            }
+            labelClassName="pt-0.5"
+          >
+            <span className="text-sm">
+              <FaceLabelPending className="w-24" />
+            </span>
+          </FieldRow>
         </div>
       </div>
     </div>
