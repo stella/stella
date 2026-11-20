@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
+// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- VAT rates, number series and seller profiles compare rates, dates and patterns across columns
 import {
   Table,
   TableBody,
@@ -28,25 +29,20 @@ export const BillingSettingsFrame = ({
   description: BillingLabel;
   heading?: BillingLabel;
 }) => (
-  <Frame>
-    <FramePanel className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          {heading !== undefined && (
-            <h2 className="text-sm font-medium">
-              <PendingText id={heading} />
-            </h2>
-          )}
-          <p className="text-muted-foreground text-sm">
-            <PendingText barClassName="w-64" id={description} />
-          </p>
-        </div>
-        {actions}
+  <SettingsSection
+    action={actions}
+    description={<PendingText barClassName="w-64" id={description} />}
+    title={heading === undefined ? undefined : <PendingText id={heading} />}
+  >
+    {/* The cards put status lines, refusals and the empty state beside the
+        table, so the table shares the padded panel with them. */}
+    <SettingsPanel>
+      <div className="flex flex-col gap-4">
+        {controls}
+        {children}
       </div>
-      {controls}
-      {children}
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 export type BillingSettingsColumn = {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import { env } from "@/env";
@@ -50,16 +50,9 @@ export function ActiveEntitlementCardFace({
   formattedUsage: ReactNode;
 }) {
   return (
-    <Frame>
-      <FramePanel>
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-medium">{title}</h2>
-            <p className="text-muted-foreground text-sm">{summary}</p>
-          </div>
-          {action}
-        </div>
-        <div className="mt-6 space-y-2">
+    <SettingsSection action={action} description={summary} title={title}>
+      <SettingsPanel>
+        <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">
               <PendingText
@@ -73,8 +66,8 @@ export function ActiveEntitlementCardFace({
             {formattedUsage}
           </p>
         </div>
-      </FramePanel>
-    </Frame>
+      </SettingsPanel>
+    </SettingsSection>
   );
 }
 

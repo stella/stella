@@ -1,8 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
+import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -23,7 +22,6 @@ export const PromptCachingCard = ({
   disabled,
   feedback,
 }: ToggleSettingsSectionProps) => {
-  const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const settingsQuery = useQuery(
     organizationSettingsOptions({
@@ -39,28 +37,40 @@ export const PromptCachingCard = ({
     return <AIToggleCardPending {...PROMPT_CACHING_CARD} />;
   }
   if (!settings) {
-    return <QueryViewFeedback view={settingsView} />;
+    return (
+      <SettingsPanel>
+        <QueryViewFeedback view={settingsView} />
+      </SettingsPanel>
+    );
   }
 
   const enabled = value ?? settings.promptCachingEnabled;
+  const ids = settingsRowIds(PROMPT_CACHING_CARD.id);
 
   return (
     <AIToggleCardFrame
       description={PROMPT_CACHING_CARD.description}
-      notice={<QueryViewFeedback view={settingsView} />}
+      id={PROMPT_CACHING_CARD.id}
+      notice={
+        settingsView.type === "items" &&
+        settingsView.refetchError !== undefined ? (
+          <QueryViewFeedback view={settingsView} />
+        ) : undefined
+      }
       title={PROMPT_CACHING_CARD.title}
       toggle={
-        <Field className="flex-row items-center gap-2">
-          <Checkbox
-            checked={enabled}
-            disabled={disabled}
-            onCheckedChange={onChange}
-          />
-          <FieldLabel>{t(PROMPT_CACHING_CARD.label)}</FieldLabel>
-        </Field>
+        <Checkbox
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          checked={enabled}
+          disabled={disabled}
+          onCheckedChange={onChange}
+        />
       }
     >
-      <AISettingsSectionFeedback feedback={feedback} />
+      {feedback.status === "idle" ? undefined : (
+        <AISettingsSectionFeedback feedback={feedback} />
+      )}
     </AIToggleCardFrame>
   );
 };

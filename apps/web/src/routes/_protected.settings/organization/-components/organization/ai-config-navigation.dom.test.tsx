@@ -446,7 +446,7 @@ const mount = async (
   });
   await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
   await screen.findByRole("checkbox", {
-    name: messages.settings.organization.promptCaching.toggleLabel,
+    name: messages.settings.organization.promptCaching.title,
   });
   await waitFor(() => {
     expect(document.querySelector("#web-search-key-search") === null).toBe(
@@ -479,11 +479,15 @@ const unreadableRecoveryQueries = () => {
   return within(recovery);
 };
 const settingsSectionQueries = (title: string) => {
-  const heading = screen.getByRole("heading", { name: title });
+  // An on/off setting is a row named by its title, not a heading.
+  const heading =
+    screen.queryByRole("heading", { name: title }) ??
+    screen.getByRole("checkbox", { name: title });
   const section =
     heading.tagName === "H3"
       ? heading.parentElement?.parentElement
-      : heading.parentElement;
+      : (heading.closest('[data-slot="settings-row"]') ??
+        heading.parentElement);
   if (!section) {
     panic("Settings section must contain its heading");
   }
@@ -1623,16 +1627,16 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   fireEvent.change(fetch, { target: { value: "fixture-reader-key" } });
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.promptCaching.toggleLabel,
+      name: messages.settings.organization.promptCaching.title,
     }),
   );
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.documentProcessing.toggleLabel,
+      name: messages.settings.organization.documentProcessing.title,
     }),
   );
   const memory = screen.queryByRole("checkbox", {
-    name: messages.settings.organization.memoryExtraction.toggleLabel,
+    name: messages.settings.organization.memoryExtraction.title,
   });
   if (memory !== null) {
     fireEvent.click(memory);
@@ -1728,7 +1732,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.click(
     screen.getByRole("checkbox", {
-      name: messages.settings.organization.promptCaching.toggleLabel,
+      name: messages.settings.organization.promptCaching.title,
     }),
   );
   auxiliaryFailure = {
@@ -1812,7 +1816,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
     } else {
       fireEvent.click(
         screen.getByRole("checkbox", {
-          name: messages.settings.organization.promptCaching.toggleLabel,
+          name: messages.settings.organization.promptCaching.title,
         }),
       );
     }

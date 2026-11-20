@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Praegu",
       "currentSession": "Praegune",
-      "device": "Seade",
       "deviceOnOs": "{browser} operatsioonisüsteemis {os}",
-      "ipAddress": "IP-aadress",
-      "lastActive": "Viimati aktiivne",
       "noOtherSessions": "Teisi aktiivseid seansse pole",
       "revokeOtherSessions": "Logi teistest seadmetest välja",
       "revokeOtherSessionsConfirm": "See lõpetab kõik seansid peale praeguse.",
@@ -5827,11 +5824,9 @@
       "chatNotifications": "Vestluse teavitused",
       "chatNotificationsBlocked": "stella teavitused on selles brauseris blokeeritud. Lubage need brauseri saidiseadetes.",
       "chatNotificationsDescription": "Saate sellest brauserist teavituse, kui vestluse vastus valmib ajal, mil stella on taustal.",
-      "chatNotificationsToggle": "Teavita mind, kui vastus on valmis või vajab minu sisendit",
       "chatNotificationsUnsupported": "See brauser ei toeta teavitusi.",
       "chatTechnicalDetails": "Tehnilised üksikasjad vestluses",
       "chatTechnicalDetailsDescription": "Iga vestluse samm näitab, mida see otsis ja mida leidis. Sisse lülitatuna näete ka selle taga olevat koodi ja töötlemata tulemusi.",
-      "chatTechnicalDetailsToggle": "Näita vestluses tehnilisi üksikasju",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
       "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",
@@ -6172,7 +6167,6 @@
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",
-        "toggleLabel": "Tuvasta skannitud PDF-ides tekst automaatselt",
         "updated": "Dokumenditeksti tuvastamise seadistus uuendatud"
       },
       "documentTypes": {
@@ -6194,8 +6188,7 @@
       "membersDescription": "Halda, kellel on juurdepääs sellele organisatsioonile, ja ootel kutseid",
       "memoryExtraction": {
         "description": "Kui see on sisse lülitatud, vaatab stella taustal kokkuvõtlikke vestlusi ja pakub mälukirjeid, mille inimene peab kinnitama, enne kui need assistenti mõjutavad. See kasutab teie meeskonna enda AI-teenusepakkuja võtit, seega jätke see välja, kui te ei soovi, et see taustal toimuv AI-kasutus arvestataks teie võtmele.",
-        "title": "Mälu ekstraktimine",
-        "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
+        "title": "Mälu ekstraktimine"
       },
       "organizationIdHint": "Püsiv ID, mis ei muutu kunagi. Kasutage seda toega ühendust võttes või liidestuste seadistamisel.",
       "pastInvitations": "Varasemad kutsed",
@@ -6204,8 +6197,7 @@
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
       "promptCaching": {
         "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada; ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
-        "title": "Promptide vahemällu salvestamine",
-        "toggleLabel": "Luba promptide vahemällu salvestamine AI teenusepakkujatel"
+        "title": "Promptide vahemällu salvestamine"
       },
       "renameDescription": "Liikmed näevad uut nime kohe.",
       "renameTitle": "Nimeta organisatsioon ümber",

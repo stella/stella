@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Dabar",
       "currentSession": "Dabartinis",
-      "device": "Įrenginys",
       "deviceOnOs": "{browser} / {os}",
-      "ipAddress": "IP adresas",
-      "lastActive": "Paskutinį kartą aktyvus",
       "noOtherSessions": "Nėra kitų aktyvių sesijų",
       "revokeOtherSessions": "Atsijungti nuo kitų įrenginių",
       "revokeOtherSessionsConfirm": "Bus baigtos visos sesijos, išskyrus dabartinę.",
@@ -5827,11 +5824,9 @@
       "chatNotifications": "Pokalbių pranešimai",
       "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
       "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
-      "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
       "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
       "chatTechnicalDetails": "Techninė informacija pokalbyje",
       "chatTechnicalDetailsDescription": "Kiekvienas pokalbio žingsnis rodo, ko ieškojo ir ką rado. Įjungę matysite ir už jo esantį kodą bei neapdorotus rezultatus.",
-      "chatTechnicalDetailsToggle": "Rodyti techninę informaciją pokalbyje",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",
@@ -6172,7 +6167,6 @@
       "documentProcessing": {
         "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
         "title": "Dokumentų teksto atpažinimas",
-        "toggleLabel": "Automatiškai atpažinti tekstą nuskenuotuose PDF",
         "updated": "Dokumentų teksto atpažinimo nustatymas atnaujintas"
       },
       "documentTypes": {
@@ -6194,8 +6188,7 @@
       "membersDescription": "Tvarkykite, kas turi prieigą prie šios organizacijos, ir laukiančius kvietimus",
       "memoryExtraction": {
         "description": "Kai įjungta, stella fone peržiūri apibendrintus pokalbius ir siūlo atminties įrašus, kuriuos žmogus turi patvirtinti, kol jie nepaveikė asistento. Tai veikia naudojant jūsų komandos pačios DI teikėjo raktą, todėl palikite išjungtą, nebent norite, kad šis fone vykstantis DI naudojimas būtų apmokestinamas jūsų raktui.",
-        "title": "Atminties išgavimas",
-        "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
+        "title": "Atminties išgavimas"
       },
       "organizationIdHint": "Nuolatinis ID, kuris niekada nesikeičia. Naudokite jį kreipdamiesi į pagalbos tarnybą arba nustatydami integracijas.",
       "pastInvitations": "Ankstesni kvietimai",
@@ -6204,8 +6197,7 @@
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
       "promptCaching": {
         "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės DI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas DI teikėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau teikėjai vis tiek gali talpyklavti oportunistiškai; tik Zero Data Retention sutartis su teikėju visiškai išjungia talpyklavimą serverio pusėje.",
-        "title": "Užklausų talpyklavimas",
-        "toggleLabel": "Leisti užklausų talpyklavimą su DI teikėjais"
+        "title": "Užklausų talpyklavimas"
       },
       "renameDescription": "Nariai naują pavadinimą matys iš karto.",
       "renameTitle": "Pervadinti organizaciją",

@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 
 import { ButtonFace, InputFace } from "@stll/ui/control-face";
 import { FIELD_TRIGGER_CLASS_NAME } from "@stll/ui/field-trigger";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { CalendarIcon, ChevronsUpDownIcon, SearchIcon } from "@stll/ui/icons";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
+// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- the audit log compares time, actor, action and target across columns
 import {
   Table,
   TableBody,
@@ -169,8 +170,8 @@ export const AuditLogShell = ({
       />
       {exportAction}
     </div>
-    <Frame>
-      <FramePanel>
+    <SettingsSection>
+      <SettingsPanel>
         <div className="flex flex-col gap-6">
           {filters}
           <div
@@ -206,8 +207,8 @@ export const AuditLogShell = ({
             {next}
           </div>
         </div>
-      </FramePanel>
-    </Frame>
+      </SettingsPanel>
+    </SettingsSection>
   </>
 );
 

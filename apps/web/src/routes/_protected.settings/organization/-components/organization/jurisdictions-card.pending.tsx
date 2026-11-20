@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import { JurisdictionPickerPending } from "@/features/organization/components/jurisdiction-picker.pending";
@@ -21,13 +21,13 @@ export const OrganizationJurisdictionsCardFrame = ({
 }: {
   /** The picker, or its face. */
   children: ReactNode;
-  /** A failed refresh's notice, above the panel. */
+  /** A failed refresh's notice, above the line. */
   feedback?: ReactNode;
 }) => (
-  <Frame>
-    {feedback}
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
+        {feedback}
         <p className="text-muted-foreground text-sm">
           <PendingText
             barClassName="w-72 max-w-full"
@@ -36,8 +36,8 @@ export const OrganizationJurisdictionsCardFrame = ({
         </p>
         {children}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The card while the organization's jurisdictions are on their way. */

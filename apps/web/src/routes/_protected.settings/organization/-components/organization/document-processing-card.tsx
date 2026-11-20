@@ -1,10 +1,7 @@
-import { useId } from "react";
-
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
+import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -27,8 +24,6 @@ export const DocumentProcessingCard = ({
   disabled,
   feedback,
 }: ToggleSettingsSectionProps) => {
-  const t = useTranslations();
-  const checkboxId = useId();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const settingsQuery = useQuery(
     organizationSettingsOptions({
@@ -44,31 +39,40 @@ export const DocumentProcessingCard = ({
     return <AIToggleCardPending {...DOCUMENT_PROCESSING_CARD} />;
   }
   if (!settings) {
-    return <QueryViewFeedback view={settingsView} />;
+    return (
+      <SettingsPanel>
+        <QueryViewFeedback view={settingsView} />
+      </SettingsPanel>
+    );
   }
 
   const enabled =
     value ?? settings.documentProcessingMode === SEARCHABLE_TEXT_MODE;
+  const ids = settingsRowIds(DOCUMENT_PROCESSING_CARD.id);
   return (
     <AIToggleCardFrame
       description={DOCUMENT_PROCESSING_CARD.description}
-      notice={<QueryViewFeedback view={settingsView} />}
+      id={DOCUMENT_PROCESSING_CARD.id}
+      notice={
+        settingsView.type === "items" &&
+        settingsView.refetchError !== undefined ? (
+          <QueryViewFeedback view={settingsView} />
+        ) : undefined
+      }
       title={DOCUMENT_PROCESSING_CARD.title}
       toggle={
-        <Field className="flex-row items-center gap-2">
-          <Checkbox
-            checked={enabled}
-            disabled={disabled}
-            id={checkboxId}
-            onCheckedChange={onChange}
-          />
-          <FieldLabel htmlFor={checkboxId}>
-            {t(DOCUMENT_PROCESSING_CARD.label)}
-          </FieldLabel>
-        </Field>
+        <Checkbox
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          checked={enabled}
+          disabled={disabled}
+          onCheckedChange={onChange}
+        />
       }
     >
-      <AISettingsSectionFeedback feedback={feedback} />
+      {feedback.status === "idle" ? undefined : (
+        <AISettingsSectionFeedback feedback={feedback} />
+      )}
     </AIToggleCardFrame>
   );
 };

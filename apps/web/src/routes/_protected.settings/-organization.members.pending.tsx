@@ -3,9 +3,10 @@ import type { ReactElement, ReactNode } from "react";
 import { useSearch } from "@tanstack/react-router";
 
 import { InputFace } from "@stll/ui/control-face";
-import { Frame } from "@stll/ui/frame";
 import { SearchIcon } from "@stll/ui/icons";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
+// oxlint-disable-next-line settings-layout-primitives/settings-layout-primitives -- members sort and compare by name, role and joining date
 import {
   SortableHeadFace,
   Table,
@@ -166,13 +167,15 @@ export const MembersShell = ({
           barClassName="w-24"
         />
       </h2>
-      <Frame>
-        {toolbar}
-        <Table aria-busy={renderSortableHead === undefined || undefined}>
-          <MembersTableHeader renderSortableHead={renderSortableHead} />
-          <TableBody aria-busy={busy}>{children}</TableBody>
-        </Table>
-      </Frame>
+      <SettingsSection>
+        <SettingsPanel inset="flush">
+          {toolbar}
+          <Table aria-busy={renderSortableHead === undefined || undefined}>
+            <MembersTableHeader renderSortableHead={renderSortableHead} />
+            <TableBody aria-busy={busy}>{children}</TableBody>
+          </Table>
+        </SettingsPanel>
+      </SettingsSection>
     </section>
     {invitations}
   </>

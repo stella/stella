@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Teraz",
       "currentSession": "Aktuálna",
-      "device": "Zariadenie",
       "deviceOnOs": "{browser} na {os}",
-      "ipAddress": "IP adresa",
-      "lastActive": "Naposledy aktívna",
       "noOtherSessions": "Žiadne iné aktívne relácie",
       "revokeOtherSessions": "Odhlásiť ostatné zariadenia",
       "revokeOtherSessionsConfirm": "Týmto ukončíte všetky relácie okrem aktuálnej.",
@@ -5827,11 +5824,9 @@
       "chatNotifications": "Upozornenia z chatu",
       "chatNotificationsBlocked": "Upozornenia sú pre stellu v tomto prehliadači zablokované. Povoľte ich v nastaveniach stránky v prehliadači.",
       "chatNotificationsDescription": "Dostanete upozornenie z tohto prehliadača, keď sa odpoveď v chate dokončí, kým je stella na pozadí.",
-      "chatNotificationsToggle": "Upozorniť ma, keď je odpoveď hotová alebo potrebuje môj vstup",
       "chatNotificationsUnsupported": "Tento prehliadač upozornenia nepodporuje.",
       "chatTechnicalDetails": "Technické detaily v chate",
       "chatTechnicalDetailsDescription": "Každý krok v chate ukazuje, čo hľadal a čo našiel. Po zapnutí uvidíte aj kód a nespracované výsledky za ním.",
-      "chatTechnicalDetailsToggle": "Zobrazovať technické detaily v chate",
       "confirmDelete": "Potvrdiť vymazanie účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Natrvalo vymazať prístup k účtu a súkromné údaje účtu.",
@@ -6172,7 +6167,6 @@
       "documentProcessing": {
         "description": "Automaticky rozpoznávajte text v naskenovaných PDF, aby sa v ich obsahu dalo vyhľadávať.",
         "title": "Rozpoznávanie textu dokumentov",
-        "toggleLabel": "Automaticky rozpoznávať text v naskenovaných PDF",
         "updated": "Nastavenie rozpoznávania textu dokumentov aktualizované"
       },
       "documentTypes": {
@@ -6194,8 +6188,7 @@
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",
       "memoryExtraction": {
         "description": "Keď je zapnuté, stella na pozadí prechádza zhrnuté vlákna chatov a navrhuje záznamy do pamäte, ktoré musí človek potvrdiť, než ovplyvnia asistenta. Beží to na vlastnom kľúči poskytovateľa AI vášho tímu, takže to nechajte vypnuté, pokiaľ nechcete, aby sa toto využitie AI na pozadí účtovalo na váš kľúč.",
-        "title": "Extrakcia pamäte",
-        "toggleLabel": "Navrhovať záznamy do pamäte z histórie chatov na pozadí"
+        "title": "Extrakcia pamäte"
       },
       "organizationIdHint": "Trvalé ID, ktoré sa nikdy nemení. Použite ho pri kontakte s podporou alebo pri nastavovaní integrácií.",
       "pastInvitations": "Predchádzajúce pozvánky",
@@ -6204,8 +6197,7 @@
       "practiceJurisdictionsDescription": "Vyberte jurisdikcie, ktoré sú pre vás relevantné.",
       "promptCaching": {
         "description": "Po zapnutí stella pridáva cache značky tak, aby opakované AI dotazy nad rovnakým dokumentom alebo vláknom stáli ~10× menej a boli rýchlejšie. Cachované prompty zostávajú u poskytovateľa AI až 5 minút a sú obmedzené na vašu organizáciu. Vypnutie zastaví zasielanie cache značiek, ale poskytovatelia môžu prompty stále cachovať oportunisticky; iba zmluva Zero Data Retention s poskytovateľom úplne vypne cachovanie na strane servera.",
-        "title": "Cachovanie promptov",
-        "toggleLabel": "Povoliť cachovanie promptov u poskytovateľov AI"
+        "title": "Cachovanie promptov"
       },
       "renameDescription": "Členovia uvidia nový názov okamžite.",
       "renameTitle": "Premenovať organizáciu",

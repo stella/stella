@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Tagad",
       "currentSession": "Pašreizējā",
-      "device": "Ierīce",
       "deviceOnOs": "{browser} / {os}",
-      "ipAddress": "IP adrese",
-      "lastActive": "Pēdējoreiz aktīvs",
       "noOtherSessions": "Nav citu aktīvu sesiju",
       "revokeOtherSessions": "Izrakstīties no citām ierīcēm",
       "revokeOtherSessionsConfirm": "Tiks beigtas visas sesijas, izņemot pašreizējo.",
@@ -5827,11 +5824,9 @@
       "chatNotifications": "Tērzēšanas paziņojumi",
       "chatNotificationsBlocked": "stellas paziņojumi šajā pārlūkprogrammā ir bloķēti. Atļaujiet tos pārlūkprogrammas vietnes iestatījumos.",
       "chatNotificationsDescription": "Saņemiet paziņojumu no šīs pārlūkprogrammas, kad tērzēšanas atbilde ir pabeigta, kamēr stella darbojas fonā.",
-      "chatNotificationsToggle": "Paziņot, kad atbilde ir gatava vai gaida manu rīcību",
       "chatNotificationsUnsupported": "Šī pārlūkprogramma neatbalsta paziņojumus.",
       "chatTechnicalDetails": "Tehniskā informācija tērzēšanā",
       "chatTechnicalDetailsDescription": "Katrs tērzēšanas solis parāda, ko tas meklēja un ko atrada. Ieslēdzot redzēsiet arī kodu un neapstrādātos rezultātus.",
-      "chatTechnicalDetailsToggle": "Rādīt tehnisko informāciju tērzēšanā",
       "confirmDelete": "Apstiprināt konta dzēšanu",
       "dangerZone": "Bīstamā zona",
       "dangerZoneDescription": "Neatgriezeniski dzēst konta piekļuvi un privātos konta datus.",
@@ -6172,7 +6167,6 @@
       "documentProcessing": {
         "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",
         "title": "Dokumentu teksta atpazīšana",
-        "toggleLabel": "Automātiski atpazīt tekstu skenētos PDF",
         "updated": "Dokumentu teksta atpazīšanas iestatījums atjaunināts"
       },
       "documentTypes": {
@@ -6194,8 +6188,7 @@
       "membersDescription": "Pārvaldiet, kam ir piekļuve šai organizācijai, un gaidošos uzaicinājumus",
       "memoryExtraction": {
         "description": "Kad ieslēgts, stella fonā pārskata apkopotos tērzēšanas pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu organizācijas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
-        "title": "Atmiņas iegūšana",
-        "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
+        "title": "Atmiņas iegūšana"
       },
       "organizationIdHint": "Pastāvīgs ID, kas nekad nemainās. Izmantojiet to, sazinoties ar atbalsta dienestu vai iestatot integrācijas.",
       "pastInvitations": "Iepriekšējie uzaicinājumi",
@@ -6204,8 +6197,7 @@
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
       "promptCaching": {
         "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti AI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie AI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski; tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
-        "title": "Uzvedņu kešošana",
-        "toggleLabel": "Atļaut uzvedņu kešošanu pie AI pakalpojumu sniedzējiem"
+        "title": "Uzvedņu kešošana"
       },
       "renameDescription": "Dalībnieki jauno nosaukumu redzēs uzreiz.",
       "renameTitle": "Pārdēvēt organizāciju",

@@ -153,7 +153,7 @@ export const OrganizationProfileCard = () => {
     <>
       <OrganizationProfileCardFrame>
         <Form
-          className="gap-4 p-1"
+          className="gap-4"
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();

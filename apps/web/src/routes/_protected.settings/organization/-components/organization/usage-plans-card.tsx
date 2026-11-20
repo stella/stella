@@ -6,9 +6,9 @@ import { useTranslations } from "use-intl";
 import { toMajorUnits } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { NumberInput } from "@stll/ui/number-input";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -53,8 +53,8 @@ export function UsagePlansCard({
   // for sale" and would hide real outages.
   if (isError) {
     return (
-      <Frame>
-        <FramePanel>
+      <SettingsSection>
+        <SettingsPanel>
           <p className="text-muted-foreground text-sm">
             {t("errors.actionFailed")}
           </p>
@@ -67,8 +67,8 @@ export function UsagePlansCard({
           >
             {t("common.retry")}
           </Button>
-        </FramePanel>
-      </Frame>
+        </SettingsPanel>
+      </SettingsSection>
     );
   }
   // Unseeded deployment: nothing to sell, render nothing.
@@ -186,31 +186,25 @@ function PolicyRow({
           </Button>
         </>
       }
-      details={
-        <>
-          <div className="font-medium">
-            <BidiText>{policy.displayName}</BidiText>
-          </div>
-          {policy.description && (
-            <p className="text-muted-foreground text-sm">
-              <BidiText>{policy.description}</BidiText>
-            </p>
-          )}
-          {policy.price && (
-            <p className="text-sm">
-              {t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
-                price: format.number(
-                  toMajorUnits({
-                    amountCents: policy.price.amountCents,
-                    currency: policy.price.currency,
-                  }),
-                  { style: "currency", currency: policy.price.currency },
-                ),
-              })}
-            </p>
-          )}
-        </>
+      description={
+        policy.description ? (
+          <BidiText>{policy.description}</BidiText>
+        ) : undefined
       }
+      offerLine={
+        policy.price
+          ? t(PRICE_TEMPLATE_KEYS[priceShapeOf(policy.price)], {
+              price: format.number(
+                toMajorUnits({
+                  amountCents: policy.price.amountCents,
+                  currency: policy.price.currency,
+                }),
+                { style: "currency", currency: policy.price.currency },
+              ),
+            })
+          : undefined
+      }
+      title={<BidiText>{policy.displayName}</BidiText>}
     />
   );
 }

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, InputFace, LabelFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { EyeIcon } from "@stll/ui/icons";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -10,7 +10,7 @@ import type { PendingTextKey } from "@/components/pending-text";
 /*
  * The AI page's API key sections (DeepL, web search and fetch), each beside
  * its pending phase: the section's heading and quiet line, and the key
- * field's card (caption over a secret field). The live sections put their
+ * field's surface (caption over a secret field). The live sections put their
  * `Label` and `SecretInput` in the field's card and show the stored key's
  * mask above it once read; the pending phase the faces, empty.
  */
@@ -33,7 +33,7 @@ export const AIKeySectionHeading = ({
   </div>
 );
 
-/** A key field's card: its caption over the secret field. */
+/** A key field's surface: its caption over the secret field. */
 export const AIKeyFieldFrame = ({
   input,
   label,
@@ -43,17 +43,17 @@ export const AIKeyFieldFrame = ({
   /** The secret field, or its face. */
   input: ReactNode;
 }) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
         {label}
         {input}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
-/** A key field's card while the stored key is read: caption, empty field. */
+/** A key field's surface while the stored key is read: caption, empty field. */
 const AIKeyFieldPending = ({
   label,
   placeholder,
