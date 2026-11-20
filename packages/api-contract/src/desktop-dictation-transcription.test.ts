@@ -169,7 +169,7 @@ test("a folder reply names the cleaned-up text it could not file", () => {
     folderName: "Memo",
     files: [{ kind: "transcript", fileName: "Memo transcript.docx" }],
     notFiled: [{ kind: "cleaned", message: "No room left." }],
-  };
+  } satisfies v.InferInput<typeof desktopDictationTranscriptSavedSchema>;
   expect(v.parse(desktopDictationTranscriptSavedSchema, reply)).toStrictEqual(
     reply,
   );
