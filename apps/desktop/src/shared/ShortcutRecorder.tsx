@@ -253,6 +253,7 @@ export const ShortcutRecorder = ({
         {state.status === "ready" || state.status === "saving" ? (
           <Button
             disabled={state.status === "saving"}
+            disabledReason={t("saving")}
             onClick={() => {
               void save(state.candidate);
             }}
