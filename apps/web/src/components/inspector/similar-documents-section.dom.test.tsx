@@ -41,14 +41,19 @@ const SIGNED_ID = "0190a5d2-0000-7000-8000-000000000003";
 
 const show = (
   documents: { entityId: string; entityName: string; similarity: number }[],
+  { refetchFailed = false } = {},
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
-  queryClient.setQueryData(
-    similarDocumentsKey(WORKSPACE_ID, ENTITY_ID),
-    documents,
-  );
+  const queryKey = similarDocumentsKey(WORKSPACE_ID, ENTITY_ID);
+  queryClient.setQueryData(queryKey, documents);
+  if (refetchFailed) {
+    queryClient
+      .getQueryCache()
+      .find({ queryKey })
+      ?.setState({ status: "error", error: new Error("offline") });
+  }
   render(
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -118,4 +123,27 @@ test("a document with no similar documents shows no section", () => {
   show([]);
 
   expect(screen.queryByRole("heading")).toBeNull();
+});
+
+test("a failed refetch offers a retry beside the documents it still shows", () => {
+  show(
+    [
+      {
+        entityId: SIGNED_ID,
+        entityName: "Contract signed.pdf",
+        similarity: 0.9,
+      },
+    ],
+    { refetchFailed: true },
+  );
+
+  expect(screen.getByRole("alert")).toBeDefined();
+  expect(screen.getByText("Contract signed.pdf")).toBeDefined();
+});
+
+test("a failed refetch of an empty result still offers a retry", () => {
+  show([], { refetchFailed: true });
+
+  expect(screen.getByRole("heading")).toBeDefined();
+  expect(screen.getByRole("alert")).toBeDefined();
 });

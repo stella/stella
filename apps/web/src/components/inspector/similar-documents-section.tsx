@@ -45,11 +45,12 @@ export const SimilarDocumentsSection = ({
   return (
     <>
       {heading(t("inspector.metadata.similarDocuments.heading"))}
-      {view.type === "error" ? (
+      {(view.type === "error" || view.refetchError !== undefined) && (
         <div className="px-4 py-2">
           <QueryViewFeedback view={view} />
         </div>
-      ) : (
+      )}
+      {view.type === "items" && view.items.length > 0 && (
         <ul className="flex flex-col gap-px px-2 pb-2">
           {view.items.map((document) => (
             <li key={document.entityId}>
