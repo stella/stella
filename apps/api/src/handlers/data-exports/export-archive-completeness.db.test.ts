@@ -184,6 +184,7 @@ const TABLE_CLASSIFICATIONS = {
   caseLawHeldDecisionAttachments: RESEARCH_CORPUS_EXCLUSION,
   caseLawIndexJobs: RESEARCH_CORPUS_EXCLUSION,
   caseLawIngestionEvents: RESEARCH_CORPUS_EXCLUSION,
+  caseLawIngestionFailureEvidence: RESEARCH_CORPUS_EXCLUSION,
   caseLawIngestionFailures: RESEARCH_CORPUS_EXCLUSION,
   caseLawJudges: RESEARCH_CORPUS_EXCLUSION,
   caseLawMatterLinks: RESEARCH_CORPUS_EXCLUSION,
