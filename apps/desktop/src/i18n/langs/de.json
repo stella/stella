@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Der Ton wird zur Transkription an stella und an den Anbieter von {model} gesendet. stella speichert ihn nicht.",
       "localMissing": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, um auf diesem Computer zu transkribieren.",
       "localMissingCloud": "Laden Sie das Sprachmodell in den Einstellungen unter Diktieren herunter, oder transkribieren Sie mit stella AI.",
-      "retainsData": "{provider} speichert Ton und Transkript von allem, was an dieses Modell gesendet wird. Transkribieren Sie damit keine vertraulichen Aufnahmen oder Aufnahmen von Mandanten, oder wählen Sie in den Einstellungen unter Diktieren ein anderes Modell.",
+      "retainsData": "Bitte beachten Sie die Verarbeitungsbedingungen von {provider}.",
       "modelFailed": "Das Modell von stella AI konnte nicht gelesen werden, daher kann stella AI gerade nicht transkribieren. Versuchen Sie es erneut oder transkribieren Sie auf diesem Computer."
     },
     "matter": {

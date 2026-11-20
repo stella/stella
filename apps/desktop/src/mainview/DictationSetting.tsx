@@ -413,6 +413,7 @@ const DictationPage = ({
         // Keyed by the failure, so a new one reads its action afresh.
         <DictationInputFix key={snapshot.failure} />
       )}
+      <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
           <SettingsGroup title={t("groups.shortcut")}>
@@ -547,7 +548,6 @@ const DictationPage = ({
           )}
         </>
       )}
-      <TranscribeRecordingGroup />
     </div>
   );
 };

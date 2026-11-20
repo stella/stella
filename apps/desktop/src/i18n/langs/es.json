@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "El audio se envía a stella y al proveedor de {model} para transcribirlo. stella no lo guarda.",
       "localMissing": "Descarga el modelo de voz en Configuración, en Dictado, para transcribir en este ordenador.",
       "localMissingCloud": "Descarga el modelo de voz en Configuración, en Dictado, o transcribe con stella AI.",
-      "retainsData": "{provider} guarda el audio y la transcripción de todo lo que se envía a este modelo. No transcribas con él grabaciones confidenciales ni de clientes, o elige otro modelo en Configuración, en Dictado.",
+      "retainsData": "Ten en cuenta las condiciones de tratamiento de {provider}.",
       "modelFailed": "No se pudo leer el modelo de stella AI, así que stella AI no puede transcribir ahora. Inténtelo de nuevo o transcriba en este ordenador."
     },
     "matter": {
