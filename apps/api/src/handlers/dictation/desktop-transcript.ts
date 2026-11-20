@@ -197,10 +197,20 @@ const reserveAudioUpload = async ({
     });
   });
 
+const cleanedFilingFailure = failureSink({
+  event: "desktop_transcript.cleaned_filing_failed",
+  expected: [],
+});
+
 const audioReservationFailure = failureSink({
   event: "desktop_transcript.audio_reservation_failed",
   expected: [],
 });
+
+/** Whether a declared recording is small enough to become a matter
+ *  document; a larger one is left out and takes no place in the matter. */
+const fitsMatterDocument = (audio: NonNullable<TranscriptBody["audio"]>) =>
+  audio.size <= MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES;
 
 /** What becomes of the recording the desktop declared: an upload into the
  *  folder, or why it is left out. The documents are filed either way. */
@@ -208,7 +218,7 @@ const audioOutcome = async (
   input: ReserveAudioInput,
   reserveAudio: typeof reserveAudioUpload,
 ): Promise<DesktopDictationTranscriptAudioOutcome> => {
-  if (input.audio.size > MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES) {
+  if (!fitsMatterDocument(input.audio)) {
     return {
       status: "too_large",
       maxBytes: MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES,
@@ -371,13 +381,19 @@ export const createDesktopDictationTranscriptEndpoint = ({
             workspaceId,
             userId: account.userId,
             title: body.title,
+            // The folder and the transcript, then the cleaned-up text and a
+            // recording that will be uploaded; one left out takes no place.
             entityCount:
               2 +
               (cleaned === null ? 0 : 1) +
-              (body.audio === undefined ? 0 : 1),
+              (body.audio !== undefined && fitsMatterDocument(body.audio)
+                ? 1
+                : 0),
             recordAuditEvent,
           }),
         );
+        // A transcript that cannot be filed fails the save and leaves only
+        // the empty folder, so a retry files it once, in a new folder.
         const filedTranscript = yield* Result.await(
           fileDocument({
             buffer: transcript,
@@ -388,15 +404,30 @@ export const createDesktopDictationTranscriptEndpoint = ({
         const files: NonNullable<DesktopDictationTranscriptSaved["files"]> = [
           { kind: "transcript", fileName: filedTranscript.fileName },
         ];
+        const notFiled: NonNullable<
+          DesktopDictationTranscriptSaved["notFiled"]
+        > = [];
         if (cleaned !== null) {
-          const filedCleaned = yield* Result.await(
-            fileDocument({
-              buffer: cleaned,
-              name: folder.cleanedName,
-              parentId: created.folderId,
-            }),
-          );
-          files.push({ kind: "cleaned", fileName: filedCleaned.fileName });
+          // Once the transcript is filed the save succeeds: the reply says
+          // what the folder holds and what was left out, so the desktop
+          // never files the transcript twice by retrying the whole save.
+          const filedCleaned = await fileDocument({
+            buffer: cleaned,
+            name: folder.cleanedName,
+            parentId: created.folderId,
+          });
+          if (Result.isError(filedCleaned)) {
+            observeFailure(filedCleaned.error, { sink: cleanedFilingFailure });
+            notFiled.push({
+              kind: "cleaned",
+              message: filedCleaned.error.message,
+            });
+          } else {
+            files.push({
+              kind: "cleaned",
+              fileName: filedCleaned.value.fileName,
+            });
+          }
         }
         const audio =
           body.audio === undefined
@@ -414,6 +445,7 @@ export const createDesktopDictationTranscriptEndpoint = ({
           fileName: filedTranscript.fileName,
           folderName: created.folderName,
           files,
+          ...(notFiled.length === 0 ? {} : { notFiled }),
           ...(audio === undefined ? {} : { audio }),
         } satisfies DesktopDictationTranscriptSaved);
       },

@@ -372,11 +372,21 @@ enum AudioReply {
   Unknown,
 }
 
+/// A document the API could not file once the transcript was filed.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NotFiledReply {
+  /// `cleaned`.
+  kind: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FolderReply {
   folder_name: String,
   files: Vec<SavedFile>,
+  #[serde(default)]
+  not_filed: Vec<NotFiledReply>,
   audio: Option<AudioReply>,
 }
 
@@ -418,6 +428,9 @@ pub enum SavedAudio {
 pub struct SavedFolder {
   folder_name: String,
   files: Vec<SavedFile>,
+  /// The kinds of document the matter did not take; the folder holds
+  /// `files`, so the window says what is missing instead of saving again.
+  not_filed: Vec<String>,
   audio: SavedAudio,
 }
 
@@ -728,6 +741,11 @@ pub async fn transcribe_save_to_matter_folder(
   Ok(SavedFolder {
     folder_name: reply.folder_name,
     files: reply.files,
+    not_filed: reply
+      .not_filed
+      .into_iter()
+      .map(|document| document.kind)
+      .collect(),
     audio,
   })
 }
@@ -856,6 +874,22 @@ mod tests {
       reply.audio,
       Some(AudioReply::TooLarge { max_bytes: 10 })
     ));
+    assert!(reply.not_filed.is_empty());
+    let partial: FolderReply = serde_json::from_value(serde_json::json!({
+      "fileName": "a.docx",
+      "folderName": "Diktát",
+      "files": [{ "kind": "transcript", "fileName": "a.docx" }],
+      "notFiled": [{ "kind": "cleaned", "message": "No room left." }]
+    }))
+    .unwrap();
+    assert_eq!(
+      partial
+        .not_filed
+        .iter()
+        .map(|document| document.kind.as_str())
+        .collect::<Vec<_>>(),
+      vec!["cleaned"]
+    );
     let upload: AudioReply = serde_json::from_value(serde_json::json!({
       "status": "upload", "uploadId": "u", "url": "https://s3.example/x",
       "expiresAt": "2026-11-20T12:00:00.000Z", "headers": { "content-length": "3" }
@@ -869,10 +903,11 @@ mod tests {
       serde_json::to_value(SavedFolder {
         folder_name: "Diktát".to_string(),
         files: vec![],
+        not_filed: vec!["cleaned".to_string()],
         audio: SavedAudio::TooLarge { max_bytes: 5 },
       })
       .unwrap(),
-      serde_json::json!({ "folderName": "Diktát", "files": [], "audio": { "outcome": "tooLarge", "maxBytes": 5 } })
+      serde_json::json!({ "folderName": "Diktát", "files": [], "notFiled": ["cleaned"], "audio": { "outcome": "tooLarge", "maxBytes": 5 } })
     );
     assert_eq!(
       serde_json::to_value(SaveProgress::Uploading {

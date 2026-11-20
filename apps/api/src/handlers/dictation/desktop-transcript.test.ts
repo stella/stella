@@ -109,11 +109,14 @@ const exercise = async ({
   readOnly = false,
   visible = true,
   status = "active",
+  refusedFileName,
 }: {
   body?: unknown;
   readOnly?: boolean;
   visible?: boolean;
   status?: string;
+  /** A document the matter does not take. */
+  refusedFileName?: string;
 } = {}) => {
   const authorizeAccount = await fixtureAccount(readOnly);
   const readMatter = mock(
@@ -131,13 +134,15 @@ const exercise = async ({
       parentId?: string | null;
     }) =>
       await Promise.resolve(
-        Result.ok({
-          entityId: "entity",
-          entityVersionId: "version",
-          fieldId: "field",
-          fileName: input.fileName,
-          renamed: false,
-        }),
+        input.fileName === refusedFileName
+          ? Result.err({ _tag: "EntityLimitError" as const })
+          : Result.ok({
+              entityId: "entity",
+              entityVersionId: "version",
+              fieldId: "field",
+              fileName: input.fileName,
+              renamed: false,
+            }),
       ),
   );
   const createFolder = mock(
@@ -343,7 +348,28 @@ test("a recording larger than a matter document is left out and the documents ar
   });
   expect(createEntity).toHaveBeenCalledTimes(1);
   expect(reserveAudio).not.toHaveBeenCalled();
-  expect(createFolder.mock.calls.at(0)?.[0]).toMatchObject({ entityCount: 3 });
+  // The recording takes no place in the matter, so a matter with room for
+  // the folder and the transcript still takes them.
+  expect(createFolder.mock.calls.at(0)?.[0]).toMatchObject({ entityCount: 2 });
+});
+
+test("cleaned-up text the matter does not take is reported, and the filed transcript and recording upload stand", async () => {
+  const body = { ...BODY, folder: FOLDER, cleaned: CLEANED, audio: AUDIO };
+  const { response, createEntity, reserveAudio } = await exercise({
+    body,
+    refusedFileName: `${FOLDER.cleanedName}.docx`,
+  });
+  expect(response.status).toBe(200);
+  const reply = await response.json();
+  expect(reply).toMatchObject({
+    fileName: `${FOLDER.transcriptName}.docx`,
+    folderName: `${BODY.title} (2)`,
+    files: [{ kind: "transcript", fileName: `${FOLDER.transcriptName}.docx` }],
+    notFiled: [{ kind: "cleaned" }],
+    audio: { status: "upload" },
+  });
+  expect(createEntity).toHaveBeenCalledTimes(2);
+  expect(reserveAudio).toHaveBeenCalledTimes(1);
 });
 
 test("an older desktop files the transcript alone at the matter's root, and cleaned text or a recording needs a folder", async () => {

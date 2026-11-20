@@ -162,3 +162,22 @@ test("an older desktop reads only the file name of a filed transcript", () => {
     }).success,
   ).toBe(true);
 });
+
+test("a folder reply names the cleaned-up text it could not file", () => {
+  const reply = {
+    fileName: "Memo transcript.docx",
+    folderName: "Memo",
+    files: [{ kind: "transcript", fileName: "Memo transcript.docx" }],
+    notFiled: [{ kind: "cleaned", message: "No room left." }],
+  };
+  expect(v.parse(desktopDictationTranscriptSavedSchema, reply)).toStrictEqual(
+    reply,
+  );
+  // Only the cleaned-up text can be left out: the transcript is the save.
+  expect(
+    v.safeParse(desktopDictationTranscriptSavedSchema, {
+      ...reply,
+      notFiled: [{ kind: "transcript", message: "No room left." }],
+    }).success,
+  ).toBe(false);
+});

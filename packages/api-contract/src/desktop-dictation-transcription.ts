@@ -239,8 +239,9 @@ export type DesktopDictationTranscriptAudioOutcome = v.InferOutput<
 >;
 
 /** What a filed transcript is called in the matter. A desktop that sent
- *  `folder` also reads the folder, every document filed in it, and what
- *  happens to the recording it declared; an older one reads `fileName`. */
+ *  `folder` also reads the folder, every document filed in it, any left
+ *  out, and what happens to the recording it declared; an older one reads
+ *  `fileName`. */
 export const desktopDictationTranscriptSavedSchema = v.strictObject({
   fileName: savedFileNameSchema,
   folderName: v.optional(savedFileNameSchema),
@@ -253,6 +254,19 @@ export const desktopDictationTranscriptSavedSchema = v.strictObject({
         }),
       ),
       v.maxLength(2),
+    ),
+  ),
+  /** A document that could not be filed once the transcript was: the save
+   *  still succeeded, and the folder holds what `files` lists. */
+  notFiled: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          kind: v.picklist(["cleaned"]),
+          message: v.pipe(v.string(), v.maxLength(512)),
+        }),
+      ),
+      v.maxLength(1),
     ),
   ),
   audio: v.optional(desktopDictationTranscriptAudioOutcomeSchema),
