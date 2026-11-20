@@ -599,6 +599,8 @@ export const assertSeedMatchesProfile = async (
   db: ScaleDb,
   profile: ScaleProfile,
 ): Promise<void> => {
+  // Every contradiction at once, so one run names all of them.
+  const contradictions: string[] = [];
   for (const attribute of profile.attributes) {
     const name = `${attribute.table}.${attribute.column}`;
     const row = executedRows(
@@ -616,17 +618,55 @@ export const assertSeedMatchesProfile = async (
       return panic(`Scale profile could not read the seed of ${name}`);
     }
     if (attribute.nullFraction < 1 && row["set_rows"] === 0) {
-      panic(
-        `Scale profile contradicts the seed: ${name} is profiled with null fraction ${String(attribute.nullFraction)} but seeded entirely NULL`,
+      contradictions.push(
+        `${name} is profiled with null fraction ${String(attribute.nullFraction)} but seeded entirely NULL`,
       );
     }
     const profiledDistinct =
       attribute.distinctValues < 0 || attribute.distinctValues > 1;
     if (profiledDistinct && row["distinct_values"] < 2) {
-      panic(
-        `Scale profile contradicts the seed: ${name} is profiled with n_distinct ${String(attribute.distinctValues)} but seeded with ${String(row["distinct_values"])} distinct values`,
+      contradictions.push(
+        `${name} is profiled with n_distinct ${String(attribute.distinctValues)} but seeded with ${String(row["distinct_values"])} distinct values`,
       );
     }
+    if (attribute.mostCommonValues.length === 0) {
+      continue;
+    }
+    // A common value the seed never holds has no rows behind any index
+    // probe for it, however often the profile says it occurs.
+    const missing = executedRows(
+      await db.execute(sql`
+        SELECT profiled.value
+          FROM unnest(ARRAY[${sql.join(
+            attribute.mostCommonValues.map((value) => sql`${value}`),
+            sql`, `,
+          )}]::text[]) WITH ORDINALITY AS profiled(value, position)
+         WHERE NOT EXISTS (
+           SELECT 1 FROM ${sql.identifier(attribute.table)} AS seeded
+            WHERE seeded.${sql.identifier(attribute.column)}::text = profiled.value
+         )
+         ORDER BY profiled.position
+      `),
+    ).map((value) =>
+      isRecord(value) && typeof value["value"] === "string"
+        ? value["value"]
+        : panic(`Scale profile could not read the seed of ${name}`),
+    );
+    if (missing.length > 0) {
+      contradictions.push(
+        `${name} is profiled with common values the seed never holds: ${missing.join(", ")}`,
+      );
+    }
+  }
+  if (contradictions.length > 0) {
+    panic(
+      contradictions
+        .map(
+          (contradiction) =>
+            `Scale profile contradicts the seed: ${contradiction}`,
+        )
+        .join("\n"),
+    );
   }
 };
 
