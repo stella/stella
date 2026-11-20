@@ -118,7 +118,10 @@ pub fn valid_part(transcript: &str) -> bool {
 /// would reorder the text around them.
 fn forbidden(character: char) -> bool {
   (character.is_control() && character != '\n')
-    || matches!(character, '\u{2028}' | '\u{2029}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+    || matches!(
+      character,
+      '\u{2028}' | '\u{2029}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+    )
 }
 
 pub fn parse(body: &[u8]) -> Result<CleanedPart, String> {
@@ -228,7 +231,7 @@ mod tests {
       &b"not json"[..],
       br#"{"markdown":"x"}"#,
       br#"{"instructions":[],"markdown":"a\u0007b"}"#,
-      br#"{"instructions":["a‮b"],"markdown":"x"}"#,
+      br#"{"instructions":["a\u202Eb"],"markdown":"x"}"#,
     ] {
       assert!(parse(body).is_err(), "{}", String::from_utf8_lossy(body));
     }
