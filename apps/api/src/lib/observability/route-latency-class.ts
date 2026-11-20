@@ -665,6 +665,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/desktop-registry/request": "crud",
   "POST /v1/desktop/billing-drafts": "crud",
   "POST /v1/desktop/dictation/cleanup": "ai",
+  "POST /v1/desktop/dictation/recording-cleanup": "ai",
   "POST /v1/desktop/dictation/transcribe": "ai",
   "POST /v1/desktop/dictation/transcripts": "crud",
   "POST /v1/desktop/presence": "crud",

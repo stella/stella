@@ -272,6 +272,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop dictation lists the region's transcription models only for a caller whose cloud dictation feature decision is enabled, on every deployment",
   ],
   [
+    "/v1/desktop/dictation/recording-cleanup",
+    "Desktop recording cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
   ],
