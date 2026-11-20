@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -111,7 +112,10 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
       openCreateMatterDialog();
     },
     openNewChat: () => {
-      openChat(newChatMatterScope(workspaceId));
+      openChat({
+        ...newChatMatterScope(workspaceId),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
     },
   };
 

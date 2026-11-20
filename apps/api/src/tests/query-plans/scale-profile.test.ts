@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -48,58 +50,66 @@ const explainNodes = async (
   return planNodes(root);
 };
 
+type ScaleDb = ReturnType<typeof drizzle>;
+
+/** Every guarded table with the profiled columns, analyzed at seed size. */
+const createScaleTables = async (db: ScaleDb): Promise<Map<string, number>> => {
+  const physicalPages = new Map<string, number>();
+  for (const table of Object.keys(SYNTHETIC_SCALE_PROFILE.tables)) {
+    await db.execute(sql`
+      CREATE TABLE ${sql.identifier(table)} (
+        id uuid PRIMARY KEY, country varchar(3), language varchar(8),
+        type varchar(32), ecli text, language_group_key text,
+        case_number text, citation_key text, decision_id uuid,
+        normalized_value text, slug text, eli text, docket_family_key text
+      )
+    `);
+    await db.execute(sql`
+      INSERT INTO ${sql.identifier(table)}
+        (id, country, language, type, ecli, language_group_key,
+         case_number, decision_id, normalized_value, slug, eli,
+         docket_family_key)
+      SELECT
+        ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
+        CASE n % 4 WHEN 0 THEN 'cs' WHEN 1 THEN 'sk'
+          WHEN 2 THEN 'pl' ELSE 'en' END,
+        CASE n % 4 WHEN 0 THEN 'ecli' WHEN 1 THEN 'case-number'
+          WHEN 2 THEN 'neutral-citation' ELSE 'reporter-citation' END,
+        CASE WHEN n % 7 = 0 THEN NULL
+          ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
+        'qpg-language-group-' || (n % 180)::text,
+        'qpg-case-' || n::text,
+        ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
+        CASE WHEN n % 4 = 0 THEN 'eclieuc2024' || (n % 120)::text
+          ELSE 'other' END,
+        'qpg-slug-' || n::text,
+        '/eli/cz/sb/2024/' || n::text,
+        CASE WHEN n % 2 = 0 THEN NULL
+          ELSE 'qpg-family-' || (n % 90)::text END
+      FROM generate_series(1, ${ROW_COUNT}) AS series(n)
+    `);
+    await db.execute(sql`ANALYZE ${sql.identifier(table)}`);
+    const row = executedRows(
+      await db.execute(sql`
+        SELECT relpages FROM pg_class WHERE oid = ${table}::regclass
+      `),
+    ).at(0);
+    if (!isRecord(row) || typeof row["relpages"] !== "number") {
+      panic(`Missing physical page count for ${table}`);
+    }
+    physicalPages.set(table, row["relpages"]);
+  }
+  return physicalPages;
+};
+
 test(
   "synthetic catalog stats produce large estimates, keep physical pages, and expose a later ANALYZE",
   async () => {
     const client = new PGlite();
     try {
       const db = drizzle({ client });
-      const physicalPages = new Map<string, number>();
-      for (const table of Object.keys(SYNTHETIC_SCALE_PROFILE.tables)) {
-        await db.execute(sql`
-          CREATE TABLE ${sql.identifier(table)} (
-            id uuid PRIMARY KEY, country varchar(3), language varchar(8),
-            type varchar(32), ecli text, language_group_key text,
-            case_number text, decision_id uuid, normalized_value text,
-            slug text, eli text, docket_family_key text
-          )
-        `);
-        await db.execute(sql`
-          INSERT INTO ${sql.identifier(table)}
-            (id, country, language, type, ecli, language_group_key,
-             case_number, decision_id, normalized_value, slug, eli,
-             docket_family_key)
-          SELECT
-            ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-            CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
-            CASE n % 4 WHEN 0 THEN 'cs' WHEN 1 THEN 'sk'
-              WHEN 2 THEN 'pl' ELSE 'en' END,
-            CASE n % 4 WHEN 0 THEN 'ecli' WHEN 1 THEN 'case-number'
-              WHEN 2 THEN 'neutral-citation' ELSE 'reporter-citation' END,
-            CASE WHEN n % 7 = 0 THEN NULL
-              ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
-            'qpg-language-group-' || (n % 180)::text,
-            'qpg-case-' || n::text,
-            ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
-            CASE WHEN n % 4 = 0 THEN 'eclieuc2024' || (n % 120)::text
-              ELSE 'other' END,
-            'qpg-slug-' || n::text,
-            '/eli/cz/sb/2024/' || n::text,
-            CASE WHEN n % 2 = 0 THEN NULL
-              ELSE 'qpg-family-' || (n % 90)::text END
-          FROM generate_series(1, ${ROW_COUNT}) AS series(n)
-        `);
-        await db.execute(sql`ANALYZE ${sql.identifier(table)}`);
-        const row = executedRows(
-          await db.execute(sql`
-            SELECT relpages FROM pg_class WHERE oid = ${table}::regclass
-          `),
-        ).at(0);
-        if (!isRecord(row) || typeof row["relpages"] !== "number") {
-          panic(`Missing physical page count for ${table}`);
-        }
-        physicalPages.set(table, row["relpages"]);
-      }
+      const physicalPages = await createScaleTables(db);
       await db.execute(sql`
         CREATE INDEX case_law_decisions_country_idx
           ON case_law_decisions (country)
@@ -246,6 +256,126 @@ test(
         message:
           "Scale profile was overwritten or not applied: case_law_decisions",
       });
+    } finally {
+      await client.close();
+    }
+  },
+  TEST_TIMEOUT_MS,
+);
+
+const expressionStats = async (
+  db: ScaleDb,
+  index: string,
+  column: string,
+): Promise<Record<string, unknown>> => {
+  const row = executedRows(
+    await db.execute(sql`
+      SELECT null_frac, n_distinct, most_common_vals::text AS values
+        FROM pg_stats
+       WHERE schemaname = 'public' AND tablename = ${index}
+         AND attname = ${column}
+    `),
+  ).at(0);
+  return isRecord(row)
+    ? row
+    : panic(`Missing expression stats for ${index}.${column}`);
+};
+
+// timeout: an embedded Postgres seeds and analyzes every guarded table.
+test(
+  "an index expression over a profiled column takes the column's scaled statistics",
+  async () => {
+    const client = new PGlite();
+    try {
+      const db = drizzle({ client });
+      await createScaleTables(db);
+      await db.execute(sql`
+        CREATE INDEX case_law_decision_identifiers_folded_idx
+          ON case_law_decision_identifiers
+          (type, upper(normalized_value), decision_id)
+      `);
+      // The planner ignores a partial index's expression statistics.
+      await db.execute(sql`
+        CREATE INDEX case_law_decisions_ecli_folded_idx
+          ON case_law_decisions (upper(ecli)) WHERE ecli IS NOT NULL
+      `);
+      await db.execute(sql`ANALYZE case_law_decision_identifiers`);
+      await db.execute(sql`ANALYZE case_law_decisions`);
+      // The seed repeats 31 values, so ANALYZE keeps an absolute count and
+      // their frequencies: each would read as millions of synthetic rows.
+      expect(
+        await expressionStats(
+          db,
+          "case_law_decision_identifiers_folded_idx",
+          "upper",
+        ),
+      ).toMatchObject({ n_distinct: 31 });
+      const partialSeedStats = await expressionStats(
+        db,
+        "case_law_decisions_ecli_folded_idx",
+        "upper",
+      );
+
+      await injectScaleProfile(db, SYNTHETIC_SCALE_PROFILE);
+      const scaled = await expressionStats(
+        db,
+        "case_law_decision_identifiers_folded_idx",
+        "upper",
+      );
+      expect(scaled["null_frac"]).toBe(0);
+      expect(scaled["n_distinct"]).toBeCloseTo(-0.9);
+      expect(scaled["values"]).toBeNull();
+      const nodes = await explainNodes(
+        db,
+        sql`
+          SELECT decision_id FROM case_law_decision_identifiers
+           WHERE type = 'ecli' AND upper(normalized_value) = 'ECLIEUC202412'
+        `,
+      );
+      expect(
+        nodes.every(
+          (node) =>
+            typeof node["Plan Rows"] === "number" && node["Plan Rows"] < 10,
+        ),
+      ).toBe(true);
+      expect(
+        await expressionStats(
+          db,
+          "case_law_decisions_ecli_folded_idx",
+          "upper",
+        ),
+      ).toEqual(partialSeedStats);
+
+      await db.execute(sql`
+        SELECT pg_restore_attribute_stats(
+          'schemaname', 'public',
+          'relname', 'case_law_decision_identifiers_folded_idx',
+          'attnum', 2::smallint, 'inherited', false,
+          'n_distinct', 31::real
+        )
+      `);
+      expect(
+        await rejectionOf(
+          assertScaleProfileApplied(db, SYNTHETIC_SCALE_PROFILE),
+        ),
+      ).toMatchObject({
+        message:
+          "Scale profile left an index expression on seed statistics: case_law_decision_identifiers_folded_idx.upper",
+      });
+
+      // Many seed values share a prefix: the column's distribution is not the
+      // expression's, and no statistics are honest for it here.
+      await db.execute(sql`
+        CREATE INDEX case_law_decisions_case_prefix_idx
+          ON case_law_decisions (left(case_number, 9))
+      `);
+      const unscalable = await rejectionOf(
+        injectScaleProfile(db, SYNTHETIC_SCALE_PROFILE),
+      );
+      expect(unscalable).toBeInstanceOf(Error);
+      expect(String(unscalable)).toContain(
+        "does not map case_number one to one",
+      );
     } finally {
       await client.close();
     }

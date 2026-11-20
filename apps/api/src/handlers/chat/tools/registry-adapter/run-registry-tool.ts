@@ -194,6 +194,14 @@ export type RunRegistryReadToolProps = {
    * The id it returns rides beside the projected payload as `appId`.
    */
   recordAppRead?: ((read: TurnAppRead) => string | undefined) | undefined;
+  /**
+   * Hands the read's own answer (its normalized arguments and its payload
+   * after egress, real ids included) to the step ledger, which records what
+   * the read found for the person, never for the model.
+   */
+  onAnswered?:
+    | ((answer: { args: Record<string, unknown>; data: unknown }) => void)
+    | undefined;
 };
 
 /**
@@ -517,6 +525,7 @@ export const runRegistryReadTool = async ({
   handler,
   scopeArgs,
   recordAppRead,
+  onAnswered,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
   if (!isProjectableRegistryReadToolName(toolName)) {
     return Result.err(
@@ -547,6 +556,7 @@ export const runRegistryReadTool = async ({
   if (finished.status === "error") {
     return Result.err(toRegistryChatToolError(finished.error));
   }
+  onAnswered?.({ args: outcome.args, data: finished.data });
 
   // One schema-driven pass: strict parse (an unknown key — a field nobody
   // classified — fails closed before it can reach the model), then strip,

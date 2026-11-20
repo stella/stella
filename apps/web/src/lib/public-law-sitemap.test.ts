@@ -901,7 +901,7 @@ describe("public law sitemap", () => {
     expect(robots).toContain("Disallow: /");
   });
 
-  test("robots opens the published template catalogue only behind the Knowledge crawl switch", () => {
+  test("robots opens the published Knowledge catalogues only behind the Knowledge crawl switch", () => {
     const allowLinesFor = (publicKnowledgeCrawlAllowed: boolean) =>
       createRobotsTxt({
         publicKnowledgeCrawlAllowed,
@@ -915,6 +915,7 @@ describe("public law sitemap", () => {
     expect(allowLinesFor(true)).toEqual([
       "Allow: /knowledge/templates/catalogue/",
       "Allow: /knowledge/templates/catalogue$",
+      "Allow: /knowledge/playbooks/catalogue$",
     ]);
     expect(allowLinesFor(false)).toEqual([]);
   });

@@ -10,7 +10,7 @@ export type RouteBreadcrumb =
   | { type: "entity"; entity: "chat" | "contact" | "matter" | "pdf" }
   | {
       type: "knowledge-detail";
-      detail: "clauses" | "playbooks" | "skill" | "templates";
+      detail: "clauses" | "playbooks" | "skill" | "templates" | "tool";
     }
   | { type: "inherit" }
   | { type: "none" };

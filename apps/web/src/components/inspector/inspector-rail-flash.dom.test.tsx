@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -50,6 +51,7 @@ const openMarkdownTab = (resourcePath: string) => {
     label: resourcePath,
     mimeType: "text/markdown",
     content: `# ${resourcePath}`,
+    focus: INSPECTOR_FOCUS_INTENT.claim,
   });
 };
 

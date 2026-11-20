@@ -1732,6 +1732,7 @@
       "unorderedList": "Bulleted list",
       "wholeBlockRequired": "Select a whole paragraph or list to change its style."
     },
+    "answerNotFinished": "stella couldn't finish this answer.",
     "answerQuote": {
       "showInDecision": "Show in decision",
       "unverified": "Citation not verified",
@@ -2248,6 +2249,8 @@
       "localPlace": "Your computer, {harness}",
       "localSelection": "Your computer · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "This new chat started in the cloud because {harness} on your computer is unavailable ({state})",
+      "startedInCloudCheckFailed": "This new chat started in the cloud because your computer could not be checked",
       "stepsCheck": "Opening stella desktop. If it does not open, open it on your computer and check {harness} under Settings › General › AI subscriptions.",
       "stepsInstall": "Opening stella desktop. If it does not open, open it on your computer and, under Settings › General, choose Install for {harness}.",
       "stepsSignInClaudeCode": "Opening stella desktop to sign in. If it does not open, open it and choose Settings › General › Sign in with Claude.",
@@ -2313,6 +2316,20 @@
       "runFull": "The agent cannot take more messages right now.",
       "title": "Your message is queued until the agent finishes",
       "turnNotRunning": "The agent is not working right now."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# decision found} other {# decisions found}}",
+      "decisionsFoundUsed": "{found, plural, one {# decision found} other {# decisions found}}, {used, plural, one {# used in the answer} other {# used in the answer}}",
+      "filterAsOf": "As of {date}",
+      "legislationFound": "{count, plural, one {# statute or provision} other {# statutes and provisions}}",
+      "lookupDidNotGoThrough": "This search didn't go through.",
+      "moreFound": "{count, plural, one {# more not shown} other {# more not shown}}",
+      "moreLookups": "{count, plural, one {# more lookup not shown} other {# more lookups not shown}}",
+      "notRecorded": "This step ran before stella recorded what each step looks up.",
+      "nothingFound": "Nothing matched.",
+      "technicalDetails": "Technical details",
+      "usedInAnswer": "Used in the answer",
+      "versionFrom": "Version from {date}"
     },
     "stopFailed": "Couldn't stop the answer. Try again.",
     "stopResponse": "Stop",
@@ -5756,6 +5773,9 @@
       "chatNotificationsDescription": "Get a notification from this browser when a chat reply finishes while stella is in the background.",
       "chatNotificationsToggle": "Notify me when a reply is ready or needs my input",
       "chatNotificationsUnsupported": "This browser does not support notifications.",
+      "chatTechnicalDetails": "Technical details in chat",
+      "chatTechnicalDetailsDescription": "Each chat step shows what it looked up and what it found. Turn this on to also see the code and raw results behind it.",
+      "chatTechnicalDetailsToggle": "Show technical details in chat",
       "confirmDelete": "Confirm delete account",
       "dangerZone": "Danger zone",
       "dangerZoneDescription": "Permanently delete your account access and private account data.",

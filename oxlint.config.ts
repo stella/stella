@@ -1890,7 +1890,9 @@ const config = defineConfig({
       {
         routeFiles: [
           "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/tools.page.tsx",
           "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+          "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
         ],
       },
     ],

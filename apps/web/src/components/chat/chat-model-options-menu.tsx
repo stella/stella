@@ -58,6 +58,7 @@ import {
   useHarnessHint,
 } from "@/components/chat/chat-run-target-menu";
 import {
+  type ChatCloudStart,
   chatLocalHarnessOptionsFor,
   localRunMaxApprovals,
   localRunTargetFor,
@@ -113,6 +114,11 @@ export type ChatRunOn =
       type: "choice";
       selected: ChatRunTarget;
       select: (target: ChatRunTarget) => void;
+      /**
+       * Why a new chat runs in the cloud although the member last chose
+       * their computer, which the where chip says; `null` otherwise.
+       */
+      startedInCloud: ChatCloudStart | null;
     }
   | { type: "cloud_only" };
 
