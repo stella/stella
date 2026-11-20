@@ -667,6 +667,10 @@ export const ENUM_COLUMN_ROLES = {
   session: {
     refresh_mode: ATTRIBUTE,
   },
+  session_sign_ins: {
+    location_status: ATTRIBUTE,
+    review: LIFECYCLE,
+  },
   signal_events: {
     type: ATTRIBUTE,
   },

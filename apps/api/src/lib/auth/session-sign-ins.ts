@@ -15,10 +15,12 @@ import {
   createAuditRecorder,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
+import { SESSION_SIGN_IN_REVIEW_TRANSITIONS } from "@/api/lib/auth/session-sign-in-review-transitions";
 import type { ViewerLocation } from "@/api/lib/auth/viewer-location";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { liveSessionPredicate } from "@/api/lib/db/session-liveness";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 
 type SessionSignInDatabase = {
   transaction: <T>(run: (tx: Transaction) => Promise<T>) => Promise<T>;
@@ -137,6 +139,10 @@ const ownLiveSession = ({ userId, sessionId }: SessionSignInScope, now: Date) =>
     liveSessionPredicate(now),
   );
 
+/** The sign-in row of one of the account holder's own live sessions. */
+const ownSignIn = (scope: SessionSignInScope, now: Date) =>
+  sql`${sessionSignIns.sessionId} = ${scope.sessionId} AND EXISTS (SELECT 1 FROM ${session} WHERE ${ownLiveSession(scope, now)})`;
+
 export const createSessionSignInStore = ({
   database,
   now = () => new Date(),
@@ -162,23 +168,20 @@ export const createSessionSignInStore = ({
    */
   requestReview: async ({ userId, sessionId }: SessionSignInScope) => {
     await withAggregateTransaction(database, async (tx) => {
-      const moved = await tx
-        .update(sessionSignIns)
-        .set({ review: SESSION_SIGN_IN_REVIEW.pending })
-        .where(
-          and(
-            eq(sessionSignIns.sessionId, sessionId),
-            eq(sessionSignIns.review, SESSION_SIGN_IN_REVIEW.notRequired),
-            sql`EXISTS (SELECT 1 FROM ${session} WHERE ${ownLiveSession({ userId, sessionId }, now())})`,
-          ),
-        )
-        .returning({ sessionId: sessionSignIns.sessionId });
-      if (moved.length === 0) {
-        return;
-      }
-      await createBackgroundAuditRecorder({ account: { userId } })(tx, {
-        type: "account.sign_in.review_requested",
-        resourceId: sessionId,
+      await transitionScopedCount({
+        tx,
+        spec: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
+        where: ownSignIn({ userId, sessionId }, now()),
+        options: {
+          from: [SESSION_SIGN_IN_REVIEW.notRequired],
+          to: SESSION_SIGN_IN_REVIEW.pending,
+        },
+        recordTransitionAuditEvent: async (auditTx) => {
+          await createBackgroundAuditRecorder({ account: { userId } })(
+            auditTx,
+            { type: "account.sign_in.review_requested", resourceId: sessionId },
+          );
+        },
       });
     });
   },
@@ -200,28 +203,29 @@ export const createSessionSignInStore = ({
       const scope = ownLiveSession({ userId, sessionId }, now());
       // The expected status and the ownership scope sit in the statement that
       // moves the row, so a concurrent decision cannot be overwritten.
-      const moved = await tx
-        .update(sessionSignIns)
-        .set({ review })
-        .where(
-          and(
-            eq(sessionSignIns.sessionId, sessionId),
-            eq(sessionSignIns.review, REVIEW_SOURCE[review]),
-            sql`EXISTS (SELECT 1 FROM ${session} WHERE ${scope})`,
-          ),
-        )
-        .returning({ sessionId: sessionSignIns.sessionId });
-      if (moved.length > 0) {
-        const event = {
-          type: REVIEW_AUDIT_EVENT[review],
-          resourceId: sessionId,
-        } as const;
-        await (request === undefined
-          ? createBackgroundAuditRecorder({ account: { userId } })(tx, event)
-          : createAuditRecorder({ account: { userId }, request, server: null })(
-              tx,
-              event,
-            ));
+      const moved = await transitionScopedCount({
+        tx,
+        spec: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
+        where: ownSignIn({ userId, sessionId }, now()),
+        options: { from: [REVIEW_SOURCE[review]], to: review },
+        recordTransitionAuditEvent: async (auditTx) => {
+          const event = {
+            type: REVIEW_AUDIT_EVENT[review],
+            resourceId: sessionId,
+          } as const;
+          await (request === undefined
+            ? createBackgroundAuditRecorder({ account: { userId } })(
+                auditTx,
+                event,
+              )
+            : createAuditRecorder({
+                account: { userId },
+                request,
+                server: null,
+              })(auditTx, event));
+        },
+      });
+      if (moved > 0) {
         return Result.ok(review);
       }
       const current = await tx
