@@ -152,6 +152,12 @@
     "createFreeAccount": "Vytvoriť bezplatný účet",
     "createOrganization": "Vytvoriť organizáciu",
     "createOrganizationButton": "Vytvoriť organizáciu",
+    "emailDelivery": {
+      "mailboxMissing": "Na adresu <email>{emailAddress}</email> nemôžeme doručiť e-mail: podľa poštového servera táto schránka neexistuje. Skontrolujte adresu alebo použite inú e-mailovú adresu.",
+      "mailboxUnavailable": "Na adresu <email>{emailAddress}</email> teraz nemôžeme doručiť e-mail: schránka je plná alebo dočasne nedostupná. Skúste to neskôr alebo použite inú e-mailovú adresu.",
+      "other": "Na adresu <email>{emailAddress}</email> sa nám nepodarilo doručiť e-mail. Skúste to neskôr alebo použite inú e-mailovú adresu.",
+      "tlsRequired": "Na adresy v doméne <domain>{domainName}</domain> nemôžeme doručiť e-mail: jej poštový server neprijíma šifrovanú poštu. Požiadajte svoje IT oddelenie, aby na poštovom serveri zaplo TLS (STARTTLS), alebo použite inú e-mailovú adresu."
+    },
     "emailPlaceholder": "vy@example.com",
     "error": {
       "generic": "Pri prihlasovaní sa niečo pokazilo. Skúste to znova.",

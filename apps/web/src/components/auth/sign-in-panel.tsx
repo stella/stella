@@ -37,6 +37,7 @@ import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import type { SocialProvider } from "./access-reset.logic";
+import { newSignInAttempt, signInAttemptHeaders } from "./email-delivery.logic";
 import {
   LAST_USED_BADGE_PILL_CLASS_NAME,
   LAST_USED_BADGE_POSITION_CLASS_NAME,
@@ -87,6 +88,8 @@ type SignInPanelProps = {
     email: string;
     redirectTo: string;
     mode: SignInMode;
+    /** The attempt id the code request carried, to follow its mail. */
+    signInAttempt: string;
   }) => void;
 };
 
@@ -169,15 +172,15 @@ const SignInOptionsPanel = ({
   const openPasswordEntry = (email: string) =>
     setPasswordEntry({ type: "open", email });
 
-  const handleOtpSent = async (email: string) => {
+  const handleOtpSent = async (email: string, signInAttempt: string) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo, mode });
+      onOtpSent({ email, redirectTo, mode, signInAttempt });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo, mode },
+      search: { email, redirectTo, mode, signInAttempt },
     });
   };
 
@@ -382,7 +385,8 @@ const EmailCodeSignInForm = ({
 }: {
   autoFocus: boolean;
   lastUsed: SignInMethod | null;
-  onCodeSent: (email: string) => Promise<void>;
+  /** The code was requested under `signInAttempt`. */
+  onCodeSent: (email: string, signInAttempt: string) => Promise<void>;
   /** The server sends this address no code: it signs in with a password. */
   onPasswordRequired: (email: string) => void;
   /** Opens the password form with the address typed so far, where offered. */
@@ -396,9 +400,11 @@ const EmailCodeSignInForm = ({
       defaultValues: { email: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
+        const signInAttempt = newSignInAttempt();
         const { error } = await authClient.emailOtp.sendVerificationOtp({
           email: value.email,
           type: "sign-in",
+          fetchOptions: { headers: signInAttemptHeaders(signInAttempt) },
         });
 
         if (error?.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE) {
@@ -419,7 +425,7 @@ const EmailCodeSignInForm = ({
           return;
         }
 
-        await onCodeSent(value.email);
+        await onCodeSent(value.email, signInAttempt);
       },
     }),
   );

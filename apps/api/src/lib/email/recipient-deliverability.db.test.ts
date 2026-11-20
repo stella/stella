@@ -125,6 +125,7 @@ describe("recipient delivery failures", () => {
         return emails.length;
       },
       recordFailures: recordRecipientFailures,
+      reportBouncedMessage: async () => undefined,
     });
 
     expect(drained.isOk() && drained.value).toMatchObject({

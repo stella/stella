@@ -152,6 +152,12 @@
     "createFreeAccount": "Create free account",
     "createOrganization": "Create an organization",
     "createOrganizationButton": "Create organization",
+    "emailDelivery": {
+      "mailboxMissing": "We can't deliver email to <email>{emailAddress}</email>: the mail server says this mailbox doesn't exist. Check the address, or use a different email address.",
+      "mailboxUnavailable": "We can't deliver email to <email>{emailAddress}</email> right now: the mailbox is full or temporarily unavailable. Try again later, or use a different email address.",
+      "other": "We couldn't deliver email to <email>{emailAddress}</email>. Try again later, or use a different email address.",
+      "tlsRequired": "We can't deliver email to <domain>{domainName}</domain>: its mail server doesn't accept encrypted email. Ask your IT to enable TLS (STARTTLS) on the mail server, or use a different email address."
+    },
     "emailPlaceholder": "you@example.com",
     "error": {
       "generic": "Something went wrong while signing you in. Please try again.",

@@ -14,6 +14,10 @@ import { Input } from "@stll/ui/input";
 
 import { socialProviderName } from "@/components/auth/access-reset.logic";
 import type { SocialProvider } from "@/components/auth/access-reset.logic";
+import {
+  newSignInAttempt,
+  signInAttemptHeaders,
+} from "@/components/auth/email-delivery.logic";
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -62,7 +66,11 @@ const renderProvider = (chunks: ReactNode) => (
 
 type RecoveryStep =
   | { type: "email" }
-  | { type: "otp"; email: string }
+  | {
+      type: "otp";
+      email: string;
+      signInAttempt: string;
+    }
   | { type: "connect"; provider: SocialProvider };
 
 export const SocialRecoveryPanel = ({
@@ -101,16 +109,18 @@ export const SocialRecoveryPanel = ({
   const sendCode = useMutation({
     mutationFn: async () => {
       const parsed = v.parse(emailSchema(t("validation.invalidEmail")), email);
+      const signInAttempt = newSignInAttempt();
       const result = await authClient.emailOtp.sendVerificationOtp({
         email: parsed,
         type: "sign-in",
+        fetchOptions: { headers: signInAttemptHeaders(signInAttempt) },
       });
       readQueryResult(
         result.error
           ? Result.err(toAuthClientError(result.error))
           : Result.ok(undefined),
       );
-      setStep({ type: "otp", email: parsed });
+      setStep({ type: "otp", email: parsed, signInAttempt });
     },
     onError,
   });
@@ -141,6 +151,10 @@ export const SocialRecoveryPanel = ({
   if (error === "account_not_linked" && step.type === "otp") {
     return (
       <OTPPanel
+        signInAttempt={step.signInAttempt}
+        onSignInAttemptChange={(signInAttempt) => {
+          setStep({ type: "otp", email: step.email, signInAttempt });
+        }}
         email={step.email}
         redirectTo={redirectTo}
         linkProvider={provider ?? undefined}

@@ -152,6 +152,12 @@
     "createFreeAccount": "Créer un compte gratuit",
     "createOrganization": "Créer une organisation",
     "createOrganizationButton": "Créer l'organisation",
+    "emailDelivery": {
+      "mailboxMissing": "Nous ne pouvons pas distribuer d’e-mails à <email>{emailAddress}</email> : selon le serveur de messagerie, cette boîte aux lettres n’existe pas. Vérifiez l’adresse ou utilisez une autre adresse e-mail.",
+      "mailboxUnavailable": "Nous ne pouvons pas distribuer d’e-mails à <email>{emailAddress}</email> pour le moment : la boîte aux lettres est pleine ou temporairement indisponible. Réessayez plus tard ou utilisez une autre adresse e-mail.",
+      "other": "Nous n’avons pas pu distribuer d’e-mail à <email>{emailAddress}</email>. Réessayez plus tard ou utilisez une autre adresse e-mail.",
+      "tlsRequired": "Nous ne pouvons pas distribuer d’e-mails à <domain>{domainName}</domain> : son serveur de messagerie n’accepte pas les e-mails chiffrés. Demandez à votre service informatique d’activer TLS (STARTTLS) sur le serveur de messagerie, ou utilisez une autre adresse e-mail."
+    },
     "emailPlaceholder": "vous@example.com",
     "error": {
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",

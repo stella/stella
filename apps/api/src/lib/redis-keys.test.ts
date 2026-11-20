@@ -176,6 +176,13 @@ describe("expiry discipline", () => {
         onlyIfAbsent: true,
       }),
     ).toEqual([key, "v", "PX", "500", "NX"]);
+    expect(
+      coordinationSetArguments({
+        key,
+        value: "v",
+        ttl: { unit: "epoch-milliseconds", value: 1_800_000_000_000 },
+      }),
+    ).toEqual([key, "v", "PXAT", "1800000000000"]);
     expect(coordinationExpireArguments(key, 30)).toEqual([key, "30"]);
   });
 });
