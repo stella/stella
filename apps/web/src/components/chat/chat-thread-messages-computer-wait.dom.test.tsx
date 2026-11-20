@@ -194,11 +194,30 @@ test("a turn on the computer that streams nothing for seconds still counts up fr
       turnMessages: [question],
       turnSentAt: clock.now,
     });
-    expect(liveStatus()).toBe(`${THINKING}0s`);
+    // The clock stays out of the line for its first five seconds.
+    expect(liveStatus()).toBe(THINKING);
     for (const second of [1, 2, 3, 4, 5, 6]) {
       await clock.advance(1000);
-      expect(liveStatus()).toBe(`${THINKING}${second}s`);
+      expect(liveStatus()).toBe(
+        second < 5 ? THINKING : `${THINKING}${second}s`,
+      );
     }
+  });
+});
+
+test("a long turn's clock turns from seconds to whole minutes", async () => {
+  await withFakeClock(async (clock) => {
+    await renderTurn({
+      isGenerating: true,
+      computerWait: null,
+      turnMessages: [question],
+      turnSentAt: clock.now - 58_000,
+    });
+    expect(liveStatus()).toBe(`${THINKING}58s`);
+    await clock.advance(2000);
+    expect(liveStatus()).toBe(`${THINKING}1 min`);
+    await clock.advance(61_000);
+    expect(liveStatus()).toBe(`${THINKING}2 min`);
   });
 });
 
@@ -224,8 +243,8 @@ test("a running turn this page joined counts from when it showed it until the se
       computerWait: null,
       turnMessages: [question],
     });
-    expect(liveStatus()).toBe(`${THINKING}0s`);
-    await clock.advance(3000);
-    expect(liveStatus()).toBe(`${THINKING}3s`);
+    expect(liveStatus()).toBe(THINKING);
+    await clock.advance(6000);
+    expect(liveStatus()).toBe(`${THINKING}6s`);
   });
 });

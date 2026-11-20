@@ -18,9 +18,11 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { panic, Result } from "better-result";
+import { panic, Result, type UnhandledException } from "better-result";
+import type * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import type { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { legalFileFormat } from "@stll/api-contract/document-format";
 import {
   EMAIL_MIME_TYPES,
@@ -43,12 +45,31 @@ import type {
   FileScanFailedError,
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  ARCHIVE_PREVIEW_WORKER_EXIT,
+  ASIC_PREVIEW_WORKER_MODE,
+  STRUCTURED_DOCUMENT_PREVIEW_MODE,
+} from "@/api/lib/files/archive-preview-protocol";
+import type { AsicParseError } from "@/api/lib/files/asic-container";
+import { asicDocumentText } from "@/api/lib/files/asic-document-text";
+import { extractAsicPreview } from "@/api/lib/files/asic-preview-worker";
+import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
+import {
+  CADES_WORKER_EXIT,
+  CADES_WORKER_MODE,
+  type CadesWorkerMode,
+} from "@/api/lib/files/cades-preview-protocol";
+import { scanCadesPayload } from "@/api/lib/files/cades-preview-worker";
+import type { DocumentPackageError } from "@/api/lib/files/document-archive";
 import {
   type EmailAttachment,
   type EmailParseError,
   parsedEmailToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
+import type { P7mParseError } from "@/api/lib/files/p7m";
+import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -294,12 +315,19 @@ const extractAttachmentPlaintext = async ({
 
 type LegalTextReadOptions = {
   fileBytes: Uint8Array;
+  mimeType: string;
   maxChars: number;
   nestingDepth: number;
   includeContainerAttachments: boolean;
 };
 
-type LegalTextReadError = FileScanFailedError | FileScanRejectedError;
+type LegalTextReadError =
+  | AsicParseError
+  | DocumentPackageError
+  | FileScanFailedError
+  | FileScanRejectedError
+  | P7mParseError
+  | UnhandledException;
 
 const extractDataBoxText = async ({
   fileBytes,
@@ -349,11 +377,60 @@ Attachment: ${file.fileName}
   return Result.ok(text);
 };
 
-const LEGAL_TEXT_READERS = { dataBox: extractDataBoxText } satisfies Record<
+const extractCadesText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const scanned = await scanCadesPayload(fileBytes, "");
+  if (scanned.isErr()) {
+    return Result.err(scanned.error);
+  }
+  const { file, layers } = scanned.value;
+  const content = await extractEmbeddedPayloadText(file, maxChars);
+  if (content.isErr()) {
+    return content;
+  }
+  return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
+};
+
+const extractAsicText = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractAsicPreview({
+    fileBytes,
+    expectedMimeType: mimeType,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    return Result.err(preview.error);
+  }
+  return Result.ok(asicDocumentText(preview.value));
+};
+
+const extractStructuredText = async (options: LegalTextReadOptions) => {
+  const read = await extractStructuredDocument(options);
+  return read.map(({ text }) => text);
+};
+
+const LEGAL_TEXT_READERS = {
+  ofd: extractStructuredText,
+  uyap: extractStructuredText,
+  asicE: extractAsicText,
+  asicS: extractAsicText,
+  cades: extractCadesText,
+  dataBox: extractDataBoxText,
+} satisfies Record<
   LegalFileFormatKind,
   (
     options: LegalTextReadOptions,
-  ) => Promise<Result<string | null, LegalTextReadError>>
+  ) => Promise<Result<string | null, LegalTextReadError | EmailParseError>>
 >;
 
 type ExtractOptions = {
@@ -406,6 +483,7 @@ const extract = async ({
     if (legal) {
       const legalText = await LEGAL_TEXT_READERS[legal.kind]({
         fileBytes,
+        mimeType: legal.mimeType,
         maxChars,
         nestingDepth,
         includeContainerAttachments,
@@ -485,6 +563,130 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   return parsed;
 };
 
+const extractEmbeddedPayloadText = async (
+  file: ScannedFile,
+  maxChars: number,
+) => {
+  // Embedded data is dispatched only to leaf readers, even if an archive
+  // member is itself a signed container or a message.
+  const bytes = new Uint8Array(file.bytes);
+  const mimeType = normalizeMimeType(file.mimeType);
+  const content = await Result.tryPromise(async () => {
+    if (mimeType === PDF_MIME_TYPE) {
+      return await extractPdfMarkdown(bytes);
+    }
+    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+      return await extractOfficeDocumentMarkdown(bytes);
+    }
+    if (isDirectTextMimeType(mimeType)) {
+      return extractDirectText(bytes, mimeType);
+    }
+    return null;
+  });
+  if (content.isOk()) {
+    return Result.ok(content.value?.slice(0, maxChars) || null);
+  }
+
+  const error = content.error.cause;
+  if (error instanceof Error && "code" in error) {
+    switch (error.code) {
+      case "encrypted":
+      case "malformed":
+      case "missingPart":
+      case "needsOcr":
+      case "resourceLimit":
+      case "unsupported":
+        // Keep the container metadata readable when an embedded document has
+        // no text. Only converter-declared outcomes can take this path.
+        return Result.ok(null);
+      default:
+        break;
+    }
+  }
+  return Result.err(content.error);
+};
+
+type CadesWorkerOptions = {
+  mode: CadesWorkerMode;
+  fileBytes: Uint8Array;
+  fileName: string;
+  maxChars: number;
+};
+
+const writeCadesPreview = async ({
+  mode,
+  fileBytes,
+  fileName,
+  maxChars,
+}: CadesWorkerOptions) => {
+  const payload = await scanCadesPayload(fileBytes, fileName);
+  if (payload.isErr()) {
+    switch (payload.error._tag) {
+      case "P7mParseError":
+        return Result.ok(CADES_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(CADES_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+        return Result.err(payload.error);
+    }
+  }
+  const { file, layers } = payload.value;
+  const bytes = new Uint8Array(file.bytes);
+  if (mode === CADES_WORKER_MODE.pdf) {
+    if (file.mimeType !== PDF_MIME_TYPE) {
+      return Result.ok(CADES_WORKER_EXIT.unreadable);
+    }
+    await writeWorkerStdout(bytes);
+    return Result.ok(0);
+  }
+
+  const content = await extractEmbeddedPayloadText(file, maxChars);
+  if (content.isErr()) {
+    return content;
+  }
+  const preview = {
+    fileName: sanitizeFilename(file.fileName),
+    mimeType: file.mimeType,
+    layers,
+    text: content.value ?? "",
+  } satisfies v.InferOutput<typeof cadesPreviewSchema>;
+  await writeWorkerStdout(JSON.stringify(preview));
+  return Result.ok(0);
+};
+
+const writeAsicPreview = async (options: {
+  fileBytes: Uint8Array;
+  expectedMimeType: string;
+  maxChars: number;
+}) => {
+  const preview = await extractAsicPreview({
+    ...options,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "AsicParseError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
+function exitWithWorkerError(error: unknown): never {
+  const errorClass = getWorkerErrorClass(error);
+  const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
+  process.stderr.write(
+    `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
+  );
+  process.exit(1);
+}
+
 // ── Main ──────────────────────────────────────────────────
 
 try {
@@ -495,6 +697,44 @@ try {
     await writeWorkerStdout(JSON.stringify(extractDataBoxPreview(fileBytes)));
     process.exit(0);
   }
+  if (
+    mimeType === CADES_WORKER_MODE.preview ||
+    mimeType === CADES_WORKER_MODE.pdf
+  ) {
+    const preview = await writeCadesPreview({
+      mode: mimeType,
+      fileBytes,
+      fileName: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
+  if (mimeType === STRUCTURED_DOCUMENT_PREVIEW_MODE) {
+    const preview = await extractStructuredDocument({
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      process.exit(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+    }
+    await writeWorkerStdout(JSON.stringify(preview.value));
+    process.exit(0);
+  }
+  if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
+    const preview = await writeAsicPreview({
+      fileBytes,
+      expectedMimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
   const result = await extract({
     fileBytes,
     mimeType,
@@ -502,22 +742,12 @@ try {
     includeContainerAttachments: process.argv[4] === STANDALONE_ATTACHMENT_MODE,
   });
   if (result.isErr()) {
-    const errorClass = getWorkerErrorClass(result.error);
-    const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
-    process.stderr.write(
-      `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
-    );
-    process.exit(1);
+    exitWithWorkerError(result.error);
   }
   if (result.value) {
     await writeWorkerStdout(result.value);
   }
   process.exit(0);
 } catch (error) {
-  const errorClass = getWorkerErrorClass(error);
-  const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
-  process.stderr.write(
-    `${typeof output === "string" ? output : formatWorkerErrorLine("UnknownError")}\n`,
-  );
-  process.exit(1);
+  exitWithWorkerError(error);
 }

@@ -5,6 +5,7 @@ import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import { cn } from "../lib/utils";
 import { TABLE_FIRST_LINE } from "./table-layout";
 import type { TableFirstLine } from "./table-layout";
+import { CHECKBOX_CLASS_NAME } from "./toggle-classes";
 
 const Checkbox = (props: CheckboxProps) => {
   if (props.appearance === "cell") {
@@ -125,9 +126,6 @@ const renderCellCheckbox = ({
     </span>
   </CheckboxPrimitive.Root>
 );
-
-const CHECKBOX_CLASS_NAME =
-  "border-input bg-background ring-ring focus-visible:ring-offset-background aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/48 dark:not-data-checked:bg-input/32 dark:aria-invalid:ring-destructive/24 relative inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm border shadow-xs/5 outline-none not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-sm)-1px)] not-data-disabled:not-data-checked:not-aria-invalid:before:shadow-[0_1px_--theme(--color-black/4%)] focus-visible:ring-2 focus-visible:ring-offset-1 data-disabled:opacity-64 sm:size-4 dark:not-data-disabled:not-data-checked:not-aria-invalid:before:shadow-[0_-1px_--theme(--color-white/6%)] [[data-disabled],[data-checked],[aria-invalid]]:shadow-none";
 
 const CHECKBOX_INDICATOR_CLASS_NAME =
   "text-primary-foreground data-checked:bg-primary data-indeterminate:text-foreground absolute -inset-px flex items-center justify-center rounded-sm data-unchecked:hidden";

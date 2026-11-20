@@ -2162,9 +2162,17 @@
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "processSummary": {
-      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
       "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "checkedRegisters": "Patikrinti viešieji registrai",
       "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "readDocument": "Perskaitytas dokumentas",
+      "readDocuments": "Perskaityti dokumentai",
+      "searchedCaseLaw": "Peržiūrėta teismų praktika",
+      "searchedChats": "Peržiūrėta pokalbio istorija",
+      "searchedLegislation": "Peržiūrėti teisės aktai",
+      "searchedLegislationAndCaseLaw": "Peržiūrėti teisės aktai ir teismų praktika",
+      "searchedMatters": "Peržiūrėtos bylos",
+      "searchedWeb": "Ieškota internete",
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
     },
     "promptImprovementStrategies": {
@@ -2251,6 +2259,7 @@
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
+      "hintAntigravity": "Įdiekite Antigravity 1.5 ar naujesnę versiją ir prisijunkite joje",
       "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
@@ -2358,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
+    },
+    "switcher": {
+      "allChats": "Visi pokalbiai",
+      "searchPlaceholder": "Rasti pokalbį…",
+      "trigger": "Pakeisti pokalbį"
     },
     "tableChart": {
       "bar": "Stulpelinė",
@@ -2928,6 +2942,7 @@
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",
     "preview": "Peržiūra",
+    "previewTruncated": "Visas tekstas šioje peržiūroje nepasiekiamas.",
     "previous": "Ankstesnis",
     "previousMatch": "Ankstesnis atitikmuo",
     "print": "Spausdinti",
@@ -4695,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių} many {Rasta # įgūdžių}}",
       "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
       "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių} many {Praleista # netinkamų įgūdžių}}",
-      "dropPack": "Vilkite .zip arba SKILL.md failą, kad importuotumėte įgūdį",
+      "dropPack": "Vilkite .zip/.skill arba SKILL.md failą, kad importuotumėte įgūdį",
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
@@ -4752,8 +4767,8 @@
           "name": "Apibendrinti dokumentą"
         }
       },
-      "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
-      "uploadPack": "Įkelti .zip arba SKILL.md",
+      "uploadHelp": "Naudokite SKILL.md failą arba .zip/.skill aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
+      "uploadPack": "Įkelti .zip/.skill arba SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },
@@ -6295,6 +6310,14 @@
     "reconnectRequired": "Prisijungimas nebegalioja",
     "title": "SharePoint ir OneDrive"
   },
+  "signedFile": {
+    "layer": "Parašų sluoksnis {number, number}",
+    "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "pdfUnavailable": "PDF peržiūra nepasiekiama.",
+    "unknownSigner": "Nežinomas pasirašęs asmuo",
+    "unreadable": "Nepavyko perskaityti pasirašyto failo.",
+    "unverified": "Parašai nepatikrinti."
+  },
   "skillHistory": {
     "acceptStale": "Priimti ir perrašyti naujesnius pakeitimus",
     "backToCurrent": "Grįžti į dabartinę versiją",
@@ -6435,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
     "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Peržiūrai tinkamo teksto nėra.",
+    "textOnly": "Teksto peržiūra be puslapio maketo ir vaizdų."
   },
   "styleSets": {
     "create": "Kurti",

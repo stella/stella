@@ -6,6 +6,7 @@ import {
   chatFileSource,
   runOutputMimeTypeOf,
 } from "./chat-file-types";
+import { resolveDataBoxMessageMimeType } from "./data-box";
 import { legalFileFormat } from "./document-format";
 import { LEGAL_FILE_FORMATS } from "./legal-file-formats";
 
@@ -26,16 +27,26 @@ test("every chat format resolves from its picker MIME and from each extension on
 test.each(LEGAL_FILE_FORMATS)(
   "Files and chat recognize every registered legal container by media type and name",
   (format) => {
-    expect(runOutputMimeTypeOf(`export${format.extension}`)).toBeNull();
-    expect(chatFileMimeType(`export${format.extension}`, "image/png")).toBe(
+    expect(runOutputMimeTypeOf(`export${format.extensions[0]}`)).toBeNull();
+    expect(chatFileMimeType(`export${format.extensions[0]}`, "image/png")).toBe(
       "image/png",
     );
     for (const [name, mime] of [
       ["export", format.mimeType],
-      [`export${format.extension.toUpperCase()}`, "application/octet-stream"],
-      [`export${format.extension}`, "text/plain"],
+      ...format.mimeAliases.map((alias) => ["export", alias] as const),
+      ...format.extensions.flatMap((extension) => [
+        [
+          `export${extension.toUpperCase()}`,
+          "application/octet-stream",
+        ] as const,
+        [`export${extension}`, "application/zip"] as const,
+      ]),
+      [`export${format.extensions[0]}`, "text/plain"],
     ] as const) {
       expect(legalFileFormat(mime, name)).toBe(format);
+      expect(
+        resolveDataBoxMessageMimeType({ fileName: name, mimeType: mime }),
+      ).toBe(format.kind === "dataBox" ? format.mimeType : null);
       expect(chatFileMimeType(name, mime)).toBe(format.mimeType);
       expect(chatFileSource(format.mimeType)).toBe("extracted-text");
     }

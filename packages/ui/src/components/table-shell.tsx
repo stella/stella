@@ -3,7 +3,7 @@ import type * as React from "react";
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { buttonFaceClassName } from "./control-face";
-import { Skeleton } from "./skeleton";
+import { InlineSkeleton } from "./skeleton";
 import {
   PROSE_CELL_CLASS,
   resolveTableAlign,
@@ -323,9 +323,9 @@ const SortableHeadFace = ({
 
 type TableSkeletonColumn = {
   id: string;
-  bar: string;
+  className?: string | undefined;
   align?: TableAlign | undefined;
-};
+} & ({ bar: string } | { placeholder: React.ReactNode });
 
 const SKELETON_ROW_KEYS = [
   "a",
@@ -355,11 +355,19 @@ const TableSkeletonRows = ({
 }) =>
   SKELETON_ROW_KEYS.slice(0, Math.max(0, count)).map((rowKey) => (
     <TableRow aria-hidden="true" className={rowClassName} key={rowKey}>
-      {columns.map(({ id, bar, align }) => (
-        <TableCellFace align={align} key={id}>
-          <span className="inline-flex h-8 items-center sm:h-7">
-            <Skeleton className={cn("h-3.5 max-w-full", bar)} />
-          </span>
+      {columns.map((column) => (
+        <TableCellFace
+          align={column.align}
+          className={column.className}
+          key={column.id}
+        >
+          {"bar" in column ? (
+            <span className="inline-flex h-8 items-center sm:h-7">
+              <InlineSkeleton className={cn("h-3.5 max-w-full", column.bar)} />
+            </span>
+          ) : (
+            column.placeholder
+          )}
         </TableCellFace>
       ))}
     </TableRow>

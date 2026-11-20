@@ -14,14 +14,36 @@ export const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 export const SKILL_SOURCE_UNREACHABLE_CODE = "skill_source_unreachable";
 
 /**
- * A skill resource refusal by size: the file's text is past what one stored
- * resource may hold, or past what a model may read in one piece (an AI
- * rewrite reads the whole file).
+ * A skill resource refusal: an unsafe path, a DOCX or PDF whose text cannot
+ * be read, or a file's text past what one stored resource may hold or past
+ * what a model may read in one piece (an AI rewrite reads the whole file).
  */
 export const SKILL_RESOURCE_REFUSAL_CODE = {
+  pathInvalid: "skill_resource_path_invalid",
+  textUnreadable: "skill_resource_text_unreadable",
   tooLarge: "skill_resource_too_large",
   tooLargeForAi: "skill_resource_too_large_for_ai",
 } as const;
+
+/**
+ * Why a skill package was refused: its manifest is unreadable or from a
+ * newer format, a file it lists is missing or changed, or the skill's files
+ * together exceed what one skill may hold.
+ */
+export const SKILL_PACKAGE_REFUSAL_CODE = {
+  fileChanged: "skill_package_file_changed",
+  fileMissing: "skill_package_file_missing",
+  formatUnsupported: "skill_package_format_unsupported",
+  manifestInvalid: "skill_package_manifest_invalid",
+  tooLarge: "skill_package_too_large",
+} as const;
+
+/**
+ * File name extensions a skill package is offered under. Both name the same
+ * zip archive; an import reads the bytes, not the name.
+ * `@stll/skills/package` holds the same formats.
+ */
+export const SKILL_PACKAGE_FILE_EXTENSIONS = [".zip", ".skill"] as const;
 
 /** Why a skill cannot be drafted from a chat. */
 export const SKILL_FROM_CHAT_REFUSAL_CODE = {
@@ -65,7 +87,7 @@ export type SkillDraftNameKind = (typeof SKILL_DRAFT_NAME_KINDS)[number];
  * or ends with a dot. `@stll/skills/format` holds the same pattern.
  */
 export const SKILL_RESOURCE_PATH_PATTERN =
-  /^(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
+  /^(?!\.[sS][tT][eE][lL][lL][aA](?:\/|$))(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?(?:\/(?!\.\.?(?:\/|$))[^\s/\\<>:"|?*\p{Cc}\p{Cf}](?:[^/\\<>:"|?*\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*[^\s./\\<>:"|?*\p{Cc}\p{Cf}])?)*$/u;
 
 /**
  * The document a chat composer has open, as far as the chat's tools care:

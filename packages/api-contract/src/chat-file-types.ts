@@ -29,9 +29,9 @@ const SHARED_INPUT_OUTPUT_FILE_TYPES = [
 export const CHAT_FILE_TYPE_CONFIG = [
   ...SHARED_INPUT_OUTPUT_FILE_TYPES,
   ...LEGAL_FILE_FORMATS.map(
-    ({ extension, mimeType }) =>
+    ({ extensions, mimeType }) =>
       ({
-        extensions: [extension],
+        extensions,
         mimeType,
         source: "extracted-text",
       }) as const,

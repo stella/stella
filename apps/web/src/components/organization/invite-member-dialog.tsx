@@ -21,7 +21,6 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { UserPlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -32,6 +31,11 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  INVITE_MEMBER_BUTTON_SIZE,
+  INVITE_MEMBER_BUTTON_VARIANT,
+  InviteMemberTriggerContent,
+} from "@/components/organization/invite-member-trigger.pending";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
@@ -96,8 +100,8 @@ type InviteMemberFormProps = InviteMemberDialogProps & {
 
 const InviteMemberForm = ({
   buttonLabel,
-  buttonSize = "sm",
-  buttonVariant = "outline",
+  buttonSize = INVITE_MEMBER_BUTTON_SIZE,
+  buttonVariant = INVITE_MEMBER_BUTTON_VARIANT,
   description,
   currentUserRole,
   defaultRole,
@@ -173,8 +177,10 @@ const InviteMemberForm = ({
       <DialogTrigger
         render={<Button size={buttonSize} variant={buttonVariant} />}
       >
-        {showIcon ? <UserPlusIcon className="size-4" /> : null}
-        {buttonLabel ?? t("common.invite")}
+        <InviteMemberTriggerContent
+          label={buttonLabel ?? t("common.invite")}
+          showIcon={showIcon}
+        />
       </DialogTrigger>
       <DialogPopup>
         <Form

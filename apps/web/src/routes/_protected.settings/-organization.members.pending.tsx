@@ -1,279 +1,233 @@
-import type { ComponentProps, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
-import { useTranslations } from "use-intl";
+import { useSearch } from "@tanstack/react-router";
 
+import { InputFace } from "@stll/ui/control-face";
 import { Frame } from "@stll/ui/frame";
 import { SearchIcon } from "@stll/ui/icons";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
-  SortableHead,
+  SortableHeadFace,
   Table,
   TableBody,
-  TableCell,
+  TableCellFace,
   TableHead,
   TableHeader,
   TableRow,
-} from "@stll/ui/table";
+  TableSkeletonRows,
+} from "@stll/ui/table-shell";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import {
-  InvitationsSkeletonRows,
-  InvitationsTableHeader,
-} from "@/routes/_protected.settings/organization/-components/members-invitations.pending";
+import { InviteMemberTriggerFace } from "@/components/organization/invite-member-trigger.pending";
+import { PendingText } from "@/components/pending-text";
+import { framePendingView } from "@/routes/-pending-view.logic";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
+import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
+import { PendingInvitations } from "@/routes/_protected.settings/organization/-components/members-invitations.pending";
 
 export type SortKey = "name" | "role" | "joined";
-type SortDir = "asc" | "desc";
-export type Sort = { key: SortKey; dir: SortDir };
-
-/** Rows held open while the members load. */
-const MEMBERS_SKELETON_ROW_COUNT = 8;
-
-// The members and invitations tables are hand-rolled @stll/ui markup (no
-// TanStack), so a single column descriptor array per table is the source of
-// truth: both the real header and the loading skeleton map over it, so they
-// cannot drift. `sortKey` distinguishes sortable heads from inert ones (the
-// trailing actions column has no header). `skeleton` shapes the placeholder.
-type MemberSkeletonShape = "identity" | "control" | "text" | "none";
-
-// Secondary columns give way on phones, so the columns people act on fit
-// without scrolling sideways.
-const SECONDARY_COLUMN_CLASS = "hidden sm:table-cell";
+export type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 type MemberColumn = {
-  id: "user" | "role" | "billing" | "joined" | "actions";
-  sortKey: SortKey | null;
-  label:
-    | "common.user"
-    | "common.role"
-    | "organization.members.joined"
-    | "organization.members.billingAccess"
-    | null;
-  skeleton: MemberSkeletonShape;
-  secondary?: true;
-};
+  id: string;
+  className?: string;
+} & (
+  | {
+      sortKey: SortKey;
+      label: "common.user" | "common.role" | "organization.members.joined";
+      labelWidth: string;
+    }
+  | { sortKey?: undefined; label?: undefined; labelWidth?: undefined }
+);
 
-const MEMBER_COLUMNS: readonly MemberColumn[] = [
-  { id: "user", sortKey: "name", label: "common.user", skeleton: "identity" },
-  { id: "role", sortKey: "role", label: "common.role", skeleton: "control" },
-  {
-    id: "billing",
-    sortKey: null,
-    label: "organization.members.billingAccess",
-    skeleton: "control",
-  },
+const MEMBER_COLUMNS = [
+  { id: "user", sortKey: "name", label: "common.user", labelWidth: "w-10" },
+  { id: "role", sortKey: "role", label: "common.role", labelWidth: "w-10" },
+  { id: "billing" },
   {
     id: "joined",
     sortKey: "joined",
     label: "organization.members.joined",
-    skeleton: "text",
-    secondary: true,
+    labelWidth: "w-14",
+    className: "hidden sm:table-cell",
   },
-  { id: "actions", sortKey: null, label: null, skeleton: "none" },
-];
+  { id: "actions" },
+] as const satisfies readonly MemberColumn[];
 
-const isSecondaryMemberColumn = (id: MemberColumn["id"]) =>
-  MEMBER_COLUMNS.some((column) => column.id === id && column.secondary);
+type MemberColumnId = (typeof MEMBER_COLUMNS)[number]["id"];
 
-/** A member row's cell, hidden on phones when its column is secondary. */
-export const MemberTableCell = ({
-  columnId,
-  ...props
-}: { columnId: MemberColumn["id"] } & Omit<
-  ComponentProps<typeof TableCell>,
-  "className"
->) => (
-  <TableCell
-    {...props}
-    className={cn(isSecondaryMemberColumn(columnId) && SECONDARY_COLUMN_CLASS)}
-  />
+export const INITIAL_MEMBERS_SORT: Sort = { key: "name", dir: "asc" };
+
+export const MembersTableRow = ({
+  cells,
+}: {
+  cells: Record<MemberColumnId, ReactNode>;
+}) => (
+  <TableRow className="group">
+    {MEMBER_COLUMNS.map((column) => (
+      <TableCellFace
+        align={column.id === "actions" ? "end" : undefined}
+        className={cn("className" in column && column.className)}
+        key={column.id}
+      >
+        {cells[column.id]}
+      </TableCellFace>
+    ))}
+  </TableRow>
 );
 
-const noopSort = () => undefined;
-
-// Real header and skeleton both map over MEMBER_COLUMNS, so adding, removing,
-// or reordering a column updates both at once. Without `onSort` the heads are
-// inert, as while the page loads.
-const MembersTableHeader = ({
-  sort,
-  onSort,
-}: {
-  sort: Sort;
-  onSort: ((key: SortKey) => void) | undefined;
-}) => {
-  const t = useTranslations();
-
-  return (
-    <TableHeader>
-      <TableRow>
-        {MEMBER_COLUMNS.map((column) => {
-          if (column.sortKey === null || column.label === null) {
-            return (
-              <TableHead
-                className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-                key={column.id}
-              />
-            );
-          }
-          const sortKey = column.sortKey;
-          return (
-            <SortableHead
-              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-              key={column.id}
-              onSort={onSort === undefined ? noopSort : () => onSort(sortKey)}
-              sortDirection={sort.key === sortKey ? sort.dir : null}
-            >
-              {t(column.label)}
-            </SortableHead>
-          );
-        })}
-      </TableRow>
-    </TableHeader>
-  );
+type MembersSortFaceOptions = {
+  className: string | undefined;
+  label: ReactNode;
+  sortKey: SortKey;
 };
 
-/** The heading over a members or invitations table. */
-const MembersSectionHeading = ({ children }: { children: ReactNode }) => (
-  <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-    {children}
-  </h2>
+const MembersTableHeader = ({
+  renderSortableHead,
+}: {
+  renderSortableHead?:
+    ((options: MembersSortFaceOptions) => ReactElement) | undefined;
+}) => (
+  <TableHeader>
+    <TableRow>
+      {MEMBER_COLUMNS.map((column) => {
+        const className = cn("className" in column && column.className);
+        if (!("sortKey" in column)) {
+          return <TableHead className={className} key={column.id} />;
+        }
+        const { id, sortKey, label, labelWidth } = column;
+        const text = <PendingText id={label} barClassName={labelWidth} />;
+        return renderSortableHead === undefined ? (
+          <SortableHeadFace
+            className={className}
+            key={id}
+            sortDirection={
+              sortKey === INITIAL_MEMBERS_SORT.key
+                ? INITIAL_MEMBERS_SORT.dir
+                : null
+            }
+          >
+            {text}
+          </SortableHeadFace>
+        ) : (
+          renderSortableHead({ className, label: text, sortKey })
+        );
+      })}
+    </TableRow>
+  </TableHeader>
 );
 
-/**
- * The members page's frame: the page header, then the active members table
- * under its toolbar, then the invitations. The loaded page and its pending
- * view render the same frame, so nothing moves when the members arrive.
- */
+/** Shared frame and controls of the members toolbar. */
+export const MembersToolbarFace = ({
+  search,
+  invite,
+}: {
+  search: ReactNode;
+  invite: ReactNode;
+}) => (
+  <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
+    <div className="flex max-w-sm min-w-0 flex-1">{search}</div>
+    {invite}
+  </div>
+);
+
+/** The active members table and invitations share this frame in either phase. */
 export const MembersShell = ({
+  busy,
   toolbar,
-  sort,
-  onSort,
+  renderSortableHead,
   children,
   invitations,
 }: {
+  busy?: boolean;
   toolbar: ReactNode;
-  sort: Sort;
-  onSort?: (key: SortKey) => void;
+  renderSortableHead?:
+    ((options: MembersSortFaceOptions) => ReactElement) | undefined;
   children: ReactNode;
   invitations: ReactNode;
-}) => {
-  const t = useTranslations();
+}) => (
+  <>
+    <SettingsPageHeader
+      description={
+        <PendingText
+          id="settings.organization.membersDescription"
+          barClassName="w-64 max-w-full"
+        />
+      }
+      title={<PendingText id="common.members" barClassName="w-20" />}
+    />
+    <section className="flex flex-col gap-2">
+      <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+        <PendingText
+          id="settings.organization.activeMembers"
+          barClassName="w-24"
+        />
+      </h2>
+      <Frame>
+        {toolbar}
+        <Table aria-busy={renderSortableHead === undefined || undefined}>
+          <MembersTableHeader renderSortableHead={renderSortableHead} />
+          <TableBody aria-busy={busy}>{children}</TableBody>
+        </Table>
+      </Frame>
+    </section>
+    {invitations}
+  </>
+);
 
-  return (
-    <>
-      <SettingsPageHeader
-        description={t("settings.organization.membersDescription")}
-        title={t("common.members")}
-      />
-
-      <section className="flex flex-col gap-2">
-        <MembersSectionHeading>
-          {t("settings.organization.activeMembers")}
-        </MembersSectionHeading>
-        <Frame>
-          {toolbar}
-          <Table>
-            <MembersTableHeader onSort={onSort} sort={sort} />
-            <TableBody>{children}</TableBody>
-          </Table>
-        </Frame>
-      </section>
-
-      {invitations}
-    </>
-  );
-};
-
-const MemberSkeletonCell = ({ shape }: { shape: MemberSkeletonShape }) => {
-  if (shape === "identity") {
-    return (
-      <div className="flex items-center gap-2">
-        <Skeleton className="size-8 shrink-0 rounded-full" />
-        <div className="flex flex-col gap-1">
+const MEMBER_PLACEHOLDERS = {
+  user: (
+    <div className="flex items-center gap-2">
+      <Skeleton className="size-8 shrink-0 rounded-full" />
+      <div className="flex flex-col">
+        <div className="flex h-5 items-center">
           <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="flex h-4 items-center">
           <Skeleton className="h-3 w-40" />
         </div>
       </div>
-    );
-  }
-  if (shape === "control") {
-    return <Skeleton className="h-8 w-32" />;
-  }
-  if (shape === "none") {
-    return null;
-  }
-  return <Skeleton className="h-4 w-24" />;
-};
-
-// Skeleton body derived from MEMBER_COLUMNS: one cell per column, in order, so
-// it stays aligned with both the real header and the real rows.
-const MembersSkeletonRows = () =>
-  Array.from({ length: MEMBERS_SKELETON_ROW_COUNT }, (_, row) => (
-    <TableRow key={row}>
-      {MEMBER_COLUMNS.map((column) => (
-        <TableCell
-          className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-          key={column.id}
-        >
-          <MemberSkeletonCell shape={column.skeleton} />
-        </TableCell>
-      ))}
-    </TableRow>
-  ));
-
-// Inert toolbar matching OrganizationListToolbar's layout so the pending shell
-// reserves the same space and the page does not jump when data resolves.
-const MembersToolbarPlaceholder = () => {
-  const t = useTranslations();
-
-  return (
-    <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
-      <InputGroup className="max-w-sm flex-1">
-        <InputGroupInput disabled placeholder={t("common.search")} />
-        <InputGroupAddon>
-          <SearchIcon />
-        </InputGroupAddon>
-      </InputGroup>
     </div>
-  );
-};
+  ),
+  role: <Skeleton className="h-8 w-32" />,
+  billing: <Skeleton className="size-4.5 rounded-sm sm:size-4" />,
+  joined: <Skeleton className="h-4 w-24" />,
+  actions: null,
+} satisfies Record<MemberColumnId, ReactNode>;
 
-/** The sort the page opens with. */
-export const INITIAL_MEMBERS_SORT: Sort = { key: "name", dir: "asc" };
+const MEMBER_SKELETON_COLUMNS = MEMBER_COLUMNS.map((column) => ({
+  id: column.id,
+  className: "className" in column ? column.className : undefined,
+  placeholder: MEMBER_PLACEHOLDERS[column.id],
+}));
+const MEMBERS_SKELETON_ROW_COUNT = 8;
 
-/**
- * The members page while the organization loads: the members table chrome
- * with shimmer rows, and the invitations table chrome with a few shimmer rows.
- */
-export const MembersPending = () => {
-  const t = useTranslations();
-
+export const MembersPending = framePendingView(() => {
+  const q = useSearch({
+    strict: false,
+    select: (search) => (typeof search.q === "string" ? search.q : undefined),
+  });
   return (
-    <MembersShell
-      invitations={
-        <section className="flex flex-col gap-2">
-          <MembersSectionHeading>
-            {t("settings.organization.pendingInvitations")}
-          </MembersSectionHeading>
-          <Frame>
-            <Table>
-              <InvitationsTableHeader />
-              <TableBody>
-                <InvitationsSkeletonRows />
-              </TableBody>
-            </Table>
-          </Frame>
-        </section>
-      }
-      sort={INITIAL_MEMBERS_SORT}
-      toolbar={<MembersToolbarPlaceholder />}
-    >
-      <MembersSkeletonRows />
-    </MembersShell>
+    <SettingsPagePending>
+      <MembersShell
+        busy
+        invitations={<PendingInvitations />}
+        toolbar={
+          <MembersToolbarFace
+            invite={<InviteMemberTriggerFace />}
+            search={
+              <InputFace icon={<SearchIcon />}>
+                {q ?? <PendingText id="common.search" barClassName="w-14" />}
+              </InputFace>
+            }
+          />
+        }
+      >
+        <TableSkeletonRows
+          columns={MEMBER_SKELETON_COLUMNS}
+          count={MEMBERS_SKELETON_ROW_COUNT}
+        />
+      </MembersShell>
+    </SettingsPagePending>
   );
-};
+});

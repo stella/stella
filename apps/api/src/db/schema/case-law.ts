@@ -96,8 +96,14 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import {
+  DECISION_IDENTIFIER_CLAIM,
+  DECISION_IDENTIFIER_CLAIMS,
+  type DecisionIdentifierClaim,
+} from "@/api/lib/case-law/decision-identifier-claims";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
+import { INGESTION_FAILURE_IDENTITY_KINDS } from "@/api/lib/case-law/ingestion-failure-identity";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
@@ -119,13 +125,17 @@ import {
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
+import type { CollectionDocumentPart } from "@/api/lib/legal-search/collection-document-part";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
   HELD_DECISION_MATCH_BASES,
   HELD_DECISION_MATCH_BASIS,
 } from "@/api/lib/legal-search/held-decision-attachment-values";
-import type { HeldDecisionDeclaredIdentifier } from "@/api/lib/legal-search/held-decision-attachment-values";
+import type {
+  HeldDecisionDeclaredIdentifier,
+  HeldDecisionMatchEvidence,
+} from "@/api/lib/legal-search/held-decision-attachment-values";
 import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
@@ -1412,6 +1422,13 @@ export const caseLawDecisionIdentifiers = p.pgTable(
      * A refresh re-derives observed identifiers and keeps declared ones.
      */
     declaredAt: timestamptz("declared_at"),
+    /** Ingestion-only independent support; attachment claims live on their publisher posts. */
+    independentClaims: p
+      .varchar("independent_claims", { length: 32 })
+      .array()
+      .$type<DecisionIdentifierClaim>()
+      .notNull()
+      .default([DECISION_IDENTIFIER_CLAIM.UNVERIFIED]),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1437,6 +1454,13 @@ export const caseLawDecisionIdentifiers = p.pgTable(
     p.check(
       "case_law_decision_identifiers_type_values",
       sql`${t.type} IN (${sql.join(DECISION_IDENTIFIER_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_decision_identifiers_independent_claims",
+      sql`${t.independentClaims} <@ ARRAY[${sql.join(
+        DECISION_IDENTIFIER_CLAIMS.map((value) => sql`${value}`),
+        sql`, `,
+      )}]::varchar[] AND cardinality(${t.independentClaims}) <= ${DECISION_IDENTIFIER_CLAIMS.length}`,
     ),
     p.check(
       "case_law_decision_identifiers_value_non_empty",
@@ -1985,6 +2009,13 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
      * Null once the host is withdrawn: the takedown covers it.
      */
     metadata: jsonb().$type<Record<string, unknown>>(),
+    /** The identity check that admitted this association, independently of document contents. */
+    matchEvidence: jsonb("match_evidence").$type<HeldDecisionMatchEvidence>(),
+    /** The publisher's printed part boundaries and actual headnote or subject tags. */
+    documentPart: jsonb("document_part").$type<CollectionDocumentPart>(),
+    /** Immutable complete corpus payload retained under the exact host's erasure prefix. */
+    documentBodyS3Key: p.varchar("document_body_s3_key", { length: 512 }),
+    documentBodySha256: p.varchar("document_body_sha256", { length: 64 }),
     /** The identifier rows this record declared on its host. */
     declaredIdentifiers: jsonb("declared_identifiers")
       .$type<HeldDecisionDeclaredIdentifier[]>()
@@ -2039,12 +2070,21 @@ export const caseLawHeldDecisionAttachments = p.pgTable(
     // waits for review with its candidates listed.
     p.check(
       "case_law_held_decision_attachments_review_shape",
-      sql`${t.matchBasis} <> ${HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE} OR ${t.hostDecisionId} IS NULL`,
+      sql`${t.matchBasis} NOT IN (${HELD_DECISION_MATCH_BASIS.COURT_DOCKET_OTHER_DATE}, ${HELD_DECISION_MATCH_BASIS.SOURCE_POLICY}) OR ${t.hostDecisionId} IS NULL`,
     ),
     // A withdrawn host's takedown leaves nothing of the record but its key.
     p.check(
       "case_law_held_decision_attachments_withdrawn_shape",
       sql`${t.hostWithdrawnAt} IS NULL OR (${t.hostDecisionId} IS NOT NULL AND ${t.metadata} IS NULL AND ${t.sourceRawS3Key} IS NULL)`,
+    ),
+    p.check(
+      "case_law_held_decision_attachments_document_shape",
+      sql`(${t.documentBodyS3Key} IS NULL) = (${t.documentBodySha256} IS NULL)
+        AND (${t.documentBodyS3Key} IS NULL OR (${t.documentPart} IS NOT NULL
+          AND ${t.hostDecisionId} IS NOT NULL AND ${t.hostWithdrawnAt} IS NULL
+          AND (${t.matchEvidence}->>'status') IS NOT DISTINCT FROM 'matched'))
+        AND (${t.hostWithdrawnAt} IS NULL OR (${t.documentPart} IS NULL
+          AND ${t.documentBodyS3Key} IS NULL AND ${t.documentBodySha256} IS NULL))`,
     ),
     ...caseLawIngestionOnlyPolicies(),
   ],
@@ -4616,6 +4656,55 @@ export const caseLawIngestionEvents = p.pgTable(
       .index("case_law_ingestion_events_source_finished_idx")
       .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Replay inputs for rejected records; never exposed through public failure summaries. */
+export const caseLawIngestionFailureEvidence = p.pgTable(
+  "case_law_ingestion_failure_evidence",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    recordIdentity: p.varchar("record_identity", { length: 256 }).notNull(),
+    identityKind: p
+      .varchar("identity_kind", {
+        length: 32,
+        enum: INGESTION_FAILURE_IDENTITY_KINDS,
+      })
+      .notNull(),
+    sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    observationOrder: p
+      .bigint("observation_order", { mode: "bigint" })
+      .notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    /** Versioned JSON text with explicit base64 binary fields; retained verbatim. */
+    payload: p.text().notNull(),
+    errorType: p.varchar("error_type", { length: 128 }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "case_law_ingestion_failure_evidence_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("cascade"),
+    p.primaryKey({
+      columns: [t.sourceId, t.recordIdentity, t.payloadHash, t.errorType],
+      name: "case_law_ingestion_failure_evidence_pk",
+    }),
+    p.check(
+      "case_law_ingestion_failure_evidence_identity_kind",
+      sql`${t.identityKind} IN (${sql.join(
+        INGESTION_FAILURE_IDENTITY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_ingestion_failure_evidence_document_idx")
+      .on(t.sourceId, t.sourceDocumentId),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

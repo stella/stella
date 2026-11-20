@@ -60,6 +60,9 @@ export {
   preferNewerManifest,
   resolveHarnessCompatibility,
 } from "./harness/compatibility";
+export type { AcpHarnessAdapterOptions } from "./harness/acp/adapter";
+export { createAcpHarnessAdapter } from "./harness/acp/adapter";
+export type { AcpAgentDefinition } from "./harness/acp/definition";
 export type { ClaudeCodeHarnessAdapterOptions } from "./harness/claude-code/adapter";
 export {
   claudeCodeLaunch,

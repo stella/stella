@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Pilns teksts šajā priekšskatījumā nav pieejams."
+  },
   "tabs": {
     "chat": "Tērzēšana",
     "close": "Aizvērt",
@@ -271,9 +274,18 @@
       "sourcesChecked": "{count, plural, zero {# pārbaudītu avotu} one {# pārbaudīts avots} other {# pārbaudīti avoti}}",
       "documentEdits": "{count, plural, zero {# dokumenta labojumu} one {# dokumenta labojums} other {# dokumenta labojumi}}",
       "changesSaved": "{count, plural, zero {# saglabātu izmaiņu} one {# saglabāta izmaiņa} other {# saglabātas izmaiņas}}",
-      "analyses": "{count, plural, zero {# analīžu} one {# analīze} other {# analīzes}}"
+      "searchedLegislation": "Pārskatīti tiesību akti",
+      "searchedCaseLaw": "Pārskatīta tiesu prakse",
+      "searchedLegislationAndCaseLaw": "Pārskatīti tiesību akti un tiesu prakse",
+      "readDocument": "Izlasīts dokuments",
+      "readDocuments": "Izlasīti dokumenti",
+      "searchedMatters": "Pārskatītas lietas",
+      "checkedRegisters": "Pārbaudīti publiskie reģistri",
+      "searchedWeb": "Meklēts tīmeklī",
+      "searchedChats": "Pārskatīta tērzēšanas vēsture"
     },
     "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
+    "lookupCount": "{count, plural, zero {# vaicājumu} one {# vaicājums} other {# vaicājumi}}",
     "reasoning": "Argumentācija",
     "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa.",
     "failure": {
@@ -608,6 +620,17 @@
     "dictationModelsUnavailable": "Modeļus neizdevās ielādēt. Diktēšana izmanto jūsu izvēlēto modeli vai noklusējuma modeli, ja serveris to vairs nepiedāvā.",
     "dictationCleanup": "Labot ar MI",
     "dictationCleanupHint": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda”. Tikai teksts, nevis audio, caur stella nonāk pie jūsu organizācijas MI pakalpojumu sniedzēja; stella to neglabā."
+  },
+  "signedFile": {
+    "layer": "Parakstu slānis {number, number}",
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "unknownSigner": "Nezināms parakstītājs",
+    "unreadable": "Parakstīto failu neizdevās nolasīt.",
+    "unverified": "Paraksti nav pārbaudīti."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms teksts.",
+    "textOnly": "Teksta priekšskatījums bez lapas izkārtojuma un attēliem."
   },
   "header": {
     "search": "Meklēt"

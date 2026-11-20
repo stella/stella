@@ -1,0 +1,875 @@
+import { useState } from "react";
+import type { PropsWithChildren } from "react";
+import { useFormStatus } from "react-dom";
+
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import {
+  DestructiveActionConfirmation,
+  useDestructiveActionConfirmation,
+} from "@stll/ui/destructive-action-confirmation";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogFormState,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
+import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
+import { stellaToast } from "@stll/ui/toast";
+
+import { setLang } from "@/i18n/client-document-locale";
+import {
+  LANG_ENDONYMS,
+  REGIONAL_FORMAT_LABELS,
+  REGIONAL_FORMATS,
+  supportedLanguages,
+  useI18nStore,
+} from "@/i18n/i18n-store";
+import { pendingDeletionTasksOptions } from "@/lib/account/queries";
+import { hideSessionDocument } from "@/lib/account/session-document";
+import { signalSessionChange } from "@/lib/account/session-signal";
+import { createUserUpdateMutation } from "@/lib/account/update-user";
+import { forgetUserStorage } from "@/lib/account/user-scoped-storage";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
+import { sessionOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
+import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
+import { TimeZonePicker } from "@/lib/time-zone-picker";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
+import {
+  LOCALE_PREFERENCE_LABELS,
+  PreferenceRow,
+  PROFILE_NAME_FIELD_CLASS,
+  PROFILE_SHORTCUT_FIELD_CLASS,
+  ProfilePageShell,
+} from "@/routes/_protected.settings/-account.profile.pending";
+import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
+import { ChatTechnicalDetailsCard } from "@/routes/_protected.settings/-components/account/chat-technical-details-card";
+import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
+import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
+import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
+import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
+import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
+import { FormField } from "@/routes/_protected.settings/-components/settings-card.pending";
+
+import {
+  accountDeletionLeavesTasksUnassigned,
+  validAccountDeletionReassignments,
+} from "./-components/account/deletion-reassignments.logic";
+
+/** The profile page: its shell (`ProfilePageShell`) with the live forms. */
+export function ProfilePage() {
+  const { data: session } = useSuspenseQuery(sessionOptions);
+  const user = session?.user;
+
+  return (
+    <ProfilePageBody
+      key={[
+        user?.id ?? "anonymous",
+        user?.name ?? "",
+        user?.preferredName ?? "",
+        user?.wordEditShortcut ?? "",
+      ].join(":")}
+    />
+  );
+}
+
+function ProfilePageBody() {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const authenticatedUser = useAuthenticatedUser();
+  const { data: session } = useSuspenseQuery(sessionOptions);
+  const deleteAccountConfirmation = useDestructiveActionConfirmation(
+    t("settings.account.deleteAccountConfirmationPhrase"),
+  );
+  const storedTz = session?.user.timezoneId ?? "UTC";
+  // Jurisdiction suggestions are optional: the profile renders without them.
+  const organizationSettings = queryView(
+    useQuery(
+      organizationSettingsOptions({
+        organizationId: authenticatedUser.activeOrganizationId,
+        userId: authenticatedUser.id,
+      }),
+    ),
+  );
+  const [displayName, setDisplayName] = useState(
+    () => session?.user.name ?? "",
+  );
+  const [preferredName, setPreferredName] = useState(
+    () => session?.user.preferredName ?? "",
+  );
+  const [wordEditShortcut, setWordEditShortcut] = useState(
+    () => session?.user.wordEditShortcut ?? "",
+  );
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [step, setStep] = useState<"loading" | "tasks" | "confirm" | "otp">(
+    "loading",
+  );
+  const [reassignments, setReassignments] = useState<
+    Record<string, string | null>
+  >({});
+
+  const {
+    data: pendingTasksData,
+    error: pendingTasksError,
+    isFetching: isPendingTasksFetching,
+    refetch: refetchPendingTasks,
+  } = useQuery({
+    ...pendingDeletionTasksOptions(authenticatedUser.id),
+    enabled: isDeleteDialogOpen,
+  });
+
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      setOtpError(null);
+      // Deleting an account is never an automation capability.
+      return await invokeAppOnlyWrite("account.delete.send-otp", async () =>
+        unwrapApiResponse(await api.me.delete["send-otp"].post()),
+      );
+    },
+    onSuccess: () => {
+      setStep("otp");
+      stellaToast.add({
+        title: t("settings.account.otpSentSuccess"),
+        type: "success",
+      });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : t("errors.actionFailed");
+      setOtpError(msg);
+    },
+  });
+
+  const verifyDeleteMutation = useMutation({
+    mutationFn: async (payload: {
+      code: string;
+      reassignments?: {
+        entityId: SafeId<"entity">;
+        reassignedUserId: string;
+      }[];
+    }) => {
+      setOtpError(null);
+      // Named before the delete: afterwards the session may name no one.
+      const deletedUserId = authenticatedUser.id;
+      await invokeAppOnlyWrite("account.delete.verify", async () =>
+        unwrapApiResponse(await api.me.delete.verify.post(payload)),
+      );
+      return { deletedUserId };
+    },
+    onSuccess: async ({ deletedUserId }) => {
+      stellaToast.add({
+        title: t("settings.account.deleteAccountSuccess"),
+        type: "success",
+      });
+      const signedOut = await Result.tryPromise(
+        async () => await authClient.signOut(),
+      );
+      if (Result.isError(signedOut)) {
+        // Expected: the server may already have ended the session with the
+        // account. The page leaves for sign-in either way.
+      }
+      forgetUserStorage(deletedUserId);
+      signalSessionChange();
+      hideSessionDocument();
+      window.location.href = "/auth";
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : t("errors.actionFailed");
+      setOtpError(msg);
+    },
+  });
+
+  const updateTimezone = useMutation({
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: (timezoneId: string) => ({ timezoneId }),
+    }),
+    onSuccess: async () => {
+      stellaToast.add({
+        title: t("settings.account.timezoneSaved"),
+        type: "success",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: sessionOptions.queryKey,
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const updateDisplayName = useMutation({
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: () => ({ name: displayName.trim() }),
+    }),
+    onSuccess: async () => {
+      stellaToast.add({
+        title: t("settings.account.displayNameSaved"),
+        type: "success",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: sessionOptions.queryKey,
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const updateWordEditIdentity = useMutation({
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner: {
+        userId: authenticatedUser.id,
+        organizationId: authenticatedUser.activeOrganizationId,
+      },
+      input: () => ({
+        preferredName: preferredName.trim(),
+        wordEditShortcut: wordEditShortcut.trim(),
+      }),
+    }),
+    onSuccess: async () => {
+      stellaToast.add({
+        title: t("settings.account.wordEditIdentitySaved"),
+        type: "success",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: sessionOptions.queryKey,
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const activeTasks = pendingTasksData ? pendingTasksData.tasks : [];
+  const activeTaskMembers = pendingTasksData ? pendingTasksData.members : [];
+  const activeTaskGroups: DeletionTaskGroup[] = [];
+  const activeTaskGroupsByWorkspace = new Map<string, DeletionTaskGroup>();
+  for (const task of activeTasks) {
+    let group = activeTaskGroupsByWorkspace.get(task.workspaceId);
+    if (!group) {
+      group = {
+        workspaceId: task.workspaceId,
+        workspaceName: task.workspaceName,
+        tasks: [],
+        members: activeTaskMembers.filter(
+          (member) => member.workspaceId === task.workspaceId,
+        ),
+      };
+      activeTaskGroupsByWorkspace.set(task.workspaceId, group);
+      activeTaskGroups.push(group);
+    }
+    group.tasks.push(task);
+  }
+  const selectedTaskReassignmentsAreValid = validAccountDeletionReassignments({
+    tasks: activeTasks,
+    members: activeTaskMembers,
+    reassignments,
+  });
+  const tasksLeftUnassigned = accountDeletionLeavesTasksUnassigned({
+    tasks: activeTasks,
+    reassignments,
+  });
+  let dialogStep:
+    "loading" | "tasks" | "confirm" | "otp" | "pendingTasksError" = step;
+  if (step === "loading" && pendingTasksError) {
+    dialogStep = "pendingTasksError";
+  }
+  if (step === "loading" && pendingTasksData && !pendingTasksError) {
+    dialogStep = activeTasks.length > 0 ? "tasks" : "confirm";
+  }
+  const pendingTasksErrorMessage =
+    pendingTasksError instanceof Error
+      ? pendingTasksError.message
+      : t("errors.actionFailed");
+  const dialogTitle =
+    dialogStep === "tasks"
+      ? t("settings.account.deleteAccountTasksTitle")
+      : t("settings.account.deleteAccount");
+  let dialogDescription = t("settings.account.deleteAccountConfirmDescription");
+  if (dialogStep === "otp") {
+    dialogDescription = t("settings.account.deleteAccountOtpDescription");
+  }
+  if (dialogStep === "tasks") {
+    dialogDescription = "";
+  }
+
+  return (
+    <ProfilePageShell
+      accountCards={
+        <>
+          <ChatNotificationsCard />
+          <ChatTechnicalDetailsCard />
+          <SignInMethods />
+          <TwoFactorCard />
+          <SessionsCard />
+          <PersonalDataExportCard />
+        </>
+      }
+      deleteAccount={
+        <Button
+          variant="destructive"
+          onClick={() => setIsDeleteDialogOpen(true)}
+        >
+          {t("settings.account.deleteAccount")}
+        </Button>
+      }
+      displayName={
+        <Form
+          action={async () => {
+            // The column must never go blank: it is the label every
+            // identity surface renders. Stop the empty submit here rather
+            // than letting the server silently keep the previous value.
+            if (displayName.trim().length === 0) {
+              notifyUserProblem(t("settings.account.displayNameRequired"));
+              return;
+            }
+            // Awaited, not detached: `ProfileSubmitButton` disables itself
+            // from `useFormStatus().pending`, so returning before the save
+            // settles re-enables it mid-flight and lets a second submit
+            // race the first. The mutation's `onError` renders the toast;
+            // the result keeps the rejection off the unhandled channel and
+            // records it.
+            const saved = await Result.tryPromise(
+              async () => await updateDisplayName.mutateAsync(),
+            );
+            if (Result.isError(saved)) {
+              getAnalytics().captureError(saved.error.cause, {
+                fingerprintKey: "ProfilePageBody:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "ProfilePageBody:failure",
+                },
+              });
+            }
+          }}
+        >
+          <FormField
+            className={PROFILE_NAME_FIELD_CLASS}
+            label={
+              <Label className="sr-only" htmlFor="display-name-input">
+                {t("common.displayName")}
+              </Label>
+            }
+          >
+            <Input
+              id="display-name-input"
+              maxLength={120}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+            />
+          </FormField>
+          <ProfileSubmitButton label={t("common.save")} />
+        </Form>
+      }
+      localePreferences={<LocalePreferences />}
+      timeZone={
+        <>
+          <Label className="sr-only" htmlFor="timezone-select">
+            {t("settings.account.timezone")}
+          </Label>
+          <TimeZonePicker
+            id="timezone-select"
+            label={t("settings.account.timezone")}
+            disabled={updateTimezone.isPending}
+            jurisdictionCountries={
+              organizationSettings.type === "items"
+                ? organizationSettings.items.practiceJurisdictions.map(
+                    ({ countryCode }) => countryCode,
+                  )
+                : []
+            }
+            onValueChange={(tz) => {
+              if (tz !== storedTz) {
+                updateTimezone.mutate(tz);
+              }
+            }}
+            value={storedTz}
+          />
+        </>
+      }
+      wordEditIdentity={
+        <Form
+          action={async () => {
+            // Awaited for the same reason as the display-name form above.
+            const saved = await Result.tryPromise(
+              async () => await updateWordEditIdentity.mutateAsync(),
+            );
+            if (Result.isError(saved)) {
+              getAnalytics().captureError(saved.error.cause, {
+                fingerprintKey: "ProfilePageBody:failure-2",
+                scope: {
+                  type: "handler",
+                  handlerId: "ProfilePageBody:failure-2",
+                },
+              });
+            }
+          }}
+        >
+          <FormField
+            className={PROFILE_NAME_FIELD_CLASS}
+            description={t("settings.account.preferredNameDescription")}
+            label={
+              <Label htmlFor="preferred-name-input">
+                {t("settings.account.preferredName")}
+              </Label>
+            }
+          >
+            <Input
+              id="preferred-name-input"
+              maxLength={120}
+              placeholder={t("settings.account.preferredNamePlaceholder")}
+              value={preferredName}
+              onChange={(event) => setPreferredName(event.target.value)}
+            />
+          </FormField>
+          <FormField
+            className={PROFILE_SHORTCUT_FIELD_CLASS}
+            description={t("settings.account.wordEditShortcutDescription")}
+            label={
+              <Label htmlFor="word-edit-shortcut-input">
+                {t("settings.account.wordEditShortcut")}
+              </Label>
+            }
+          >
+            <Input
+              dir="ltr"
+              id="word-edit-shortcut-input"
+              maxLength={16}
+              placeholder={t("settings.account.wordEditShortcutPlaceholder")}
+              value={wordEditShortcut}
+              onChange={(event) => setWordEditShortcut(event.target.value)}
+            />
+          </FormField>
+          <ProfileSubmitButton label={t("common.save")} />
+        </Form>
+      }
+    >
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsDeleteDialogOpen(false);
+            setOtpCode("");
+            setOtpError(null);
+            setReassignments({});
+            setStep("loading");
+            deleteAccountConfirmation.reset();
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogFormState
+            dirty={otpCode !== "" || Object.keys(reassignments).length > 0}
+            onDiscard={() => {
+              setOtpCode("");
+              setReassignments({});
+            }}
+          />
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <div className="flex flex-col gap-4 py-2">
+              {otpError && (
+                <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border p-3 text-sm">
+                  {otpError}
+                </div>
+              )}
+              {dialogStep === "loading" && (
+                <div className="flex justify-center py-4">
+                  <Loader
+                    className="size-6"
+                    label={t("common.loading")}
+                    size="sm"
+                  />
+                </div>
+              )}
+              {dialogStep === "pendingTasksError" && (
+                <div className="flex flex-col items-start gap-3">
+                  <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border p-3 text-sm">
+                    {pendingTasksErrorMessage}
+                  </div>
+                  <Button
+                    loading={isPendingTasksFetching}
+                    variant="outline"
+                    onClick={() => {
+                      detached(
+                        refetchPendingTasks(),
+                        "settings-account-profile.refetch-pending-tasks",
+                      );
+                    }}
+                  >
+                    {t("common.retry")}
+                  </Button>
+                </div>
+              )}
+              {dialogStep === "tasks" && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    {t("settings.account.deleteAccountTasksDescription")}
+                  </p>
+                  {tasksLeftUnassigned && (
+                    <p className="text-sm" role="status">
+                      {t("settings.account.deleteAccountTasksUnassignedNotice")}
+                    </p>
+                  )}
+                  <DeletionTaskReassignments
+                    groups={activeTaskGroups}
+                    onReassignmentsChange={setReassignments}
+                    reassignments={reassignments}
+                  />
+                </div>
+              )}
+              {dialogStep === "confirm" && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    {t("settings.account.deleteAccountWarningExplanation")}
+                  </p>
+                  <DestructiveActionConfirmation
+                    confirmation={t(
+                      "settings.account.deleteAccountConfirmationPhrase",
+                    )}
+                    label={t("settings.account.deleteAccountConfirmationLabel")}
+                    onValueChange={deleteAccountConfirmation.onValueChange}
+                    placeholder={t(
+                      "settings.account.deleteAccountConfirmationPhrase",
+                    )}
+                    value={deleteAccountConfirmation.value}
+                  />
+                </div>
+              )}
+              {dialogStep === "tasks" && (
+                <DestructiveActionConfirmation
+                  confirmation={t(
+                    "settings.account.deleteAccountConfirmationPhrase",
+                  )}
+                  label={t("settings.account.deleteAccountConfirmationLabel")}
+                  onValueChange={deleteAccountConfirmation.onValueChange}
+                  placeholder={t(
+                    "settings.account.deleteAccountConfirmationPhrase",
+                  )}
+                  value={deleteAccountConfirmation.value}
+                />
+              )}
+              {dialogStep === "otp" && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="otp-input">
+                    {t("settings.account.enterOtp")}
+                  </Label>
+                  <Input
+                    dir="ltr"
+                    id="otp-input"
+                    placeholder="123456"
+                    maxLength={6}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={otpCode}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/gu, ""))
+                    }
+                    className="max-w-[200px] text-center text-lg tracking-widest"
+                  />
+                </div>
+              )}
+            </div>
+          </DialogPanel>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setOtpCode("");
+                setOtpError(null);
+                setReassignments({});
+                setStep("loading");
+                deleteAccountConfirmation.reset();
+              }}
+              disabled={
+                sendOtpMutation.isPending || verifyDeleteMutation.isPending
+              }
+            >
+              {t("common.cancel")}
+            </Button>
+            {dialogStep === "otp" ? (
+              <Button
+                variant="destructive"
+                onClick={() =>
+                  verifyDeleteMutation.mutate({
+                    code: otpCode,
+                    reassignments: Object.entries(reassignments).flatMap(
+                      ([entityId, reassignedUserId]) =>
+                        reassignedUserId
+                          ? [
+                              {
+                                entityId: toSafeId<"entity">(entityId),
+                                reassignedUserId,
+                              },
+                            ]
+                          : [],
+                    ),
+                  })
+                }
+                disabled={
+                  otpCode.length !== 6 || verifyDeleteMutation.isPending
+                }
+                loading={verifyDeleteMutation.isPending}
+              >
+                {t("settings.account.confirmDelete")}
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={() => sendOtpMutation.mutate()}
+                disabled={
+                  sendOtpMutation.isPending ||
+                  dialogStep === "loading" ||
+                  dialogStep === "pendingTasksError" ||
+                  !deleteAccountConfirmation.confirmed ||
+                  (dialogStep === "tasks" && !selectedTaskReassignmentsAreValid)
+                }
+                loading={sendOtpMutation.isPending}
+              >
+                {t("settings.account.sendOtpCode")}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+    </ProfilePageShell>
+  );
+}
+
+const LocalePreferenceRow = ({
+  children,
+  htmlFor,
+  label,
+}: PropsWithChildren<{ htmlFor: string; label: string }>) => (
+  <PreferenceRow
+    label={
+      <Label className="text-sm font-medium" htmlFor={htmlFor}>
+        {label}
+      </Label>
+    }
+  >
+    {children}
+  </PreferenceRow>
+);
+
+const LocalePreferences = () => {
+  const queryClient = useQueryClient();
+  const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+  const regionalFormat = useI18nStore((s) => s.regionalFormat);
+  const setRegionalFormat = useI18nStore((s) => s.setRegionalFormat);
+  const calendar = useI18nStore((s) => s.calendar);
+  const setCalendar = useI18nStore((s) => s.setCalendar);
+  const weekStart = useI18nStore((s) => s.weekStart);
+  const setWeekStart = useI18nStore((s) => s.setWeekStart);
+  const numberingSystem = useI18nStore((s) => s.numberingSystem);
+  const setNumberingSystem = useI18nStore((s) => s.setNumberingSystem);
+
+  // The calendar select collapses "auto" to its resolved value because it has
+  // no Auto option; the numbering select binds to the raw store value so its
+  // own Auto option can round-trip.
+  const activeCalendar = calendar === "auto" ? "gregory" : calendar;
+
+  return (
+    <>
+      <LocalePreferenceRow
+        htmlFor="language-select"
+        label={t(LOCALE_PREFERENCE_LABELS.language)}
+      >
+        <Select
+          onValueChange={(value) => {
+            if (value) {
+              detached(
+                setLang(queryClient, value),
+                "settings-account-profile.set-lang",
+              );
+            }
+          }}
+          value={lang}
+        >
+          <SelectTrigger className="w-56" id="language-select">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {supportedLanguages.map((code) => (
+              <SelectItem key={code} value={code}>
+                {LANG_ENDONYMS[code]}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </LocalePreferenceRow>
+
+      <LocalePreferenceRow
+        htmlFor="regional-format-select"
+        label={t(LOCALE_PREFERENCE_LABELS.regionalFormat)}
+      >
+        <Select
+          onValueChange={(value) => {
+            if (value) {
+              setRegionalFormat(value);
+            }
+          }}
+          value={regionalFormat}
+        >
+          <SelectTrigger className="w-56" id="regional-format-select">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="auto">
+              {t("appearance.regionalFormatAuto")}
+            </SelectItem>
+            {REGIONAL_FORMATS.map((code) => (
+              <SelectItem key={code} value={code}>
+                {REGIONAL_FORMAT_LABELS[code]}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </LocalePreferenceRow>
+
+      <LocalePreferenceRow
+        htmlFor="calendar-select"
+        label={t(LOCALE_PREFERENCE_LABELS.calendar)}
+      >
+        <Select
+          onValueChange={(value) => {
+            if (value) {
+              setCalendar(value);
+            }
+          }}
+          value={activeCalendar}
+        >
+          <SelectTrigger className="w-56" id="calendar-select">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="gregory">
+              {t("appearance.calendarGregorian")}
+            </SelectItem>
+            <SelectItem value="islamic-umalqura">
+              {t("appearance.calendarHijri")}
+            </SelectItem>
+          </SelectPopup>
+        </Select>
+      </LocalePreferenceRow>
+
+      <LocalePreferenceRow
+        htmlFor="week-start-select"
+        label={t(LOCALE_PREFERENCE_LABELS.weekStart)}
+      >
+        <Select
+          onValueChange={(value) => {
+            if (value) {
+              setWeekStart(value);
+            }
+          }}
+          value={weekStart}
+        >
+          <SelectTrigger className="w-56" id="week-start-select">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="auto">
+              {t("appearance.weekStartAuto")}
+            </SelectItem>
+            <SelectItem value="saturday">
+              {t("appearance.weekStartSaturday")}
+            </SelectItem>
+            <SelectItem value="sunday">
+              {t("appearance.weekStartSunday")}
+            </SelectItem>
+            <SelectItem value="monday">
+              {t("appearance.weekStartMonday")}
+            </SelectItem>
+          </SelectPopup>
+        </Select>
+      </LocalePreferenceRow>
+
+      <LocalePreferenceRow
+        htmlFor="numbers-select"
+        label={t(LOCALE_PREFERENCE_LABELS.numbers)}
+      >
+        <Select
+          onValueChange={(value) => {
+            if (value) {
+              setNumberingSystem(value);
+            }
+          }}
+          value={numberingSystem}
+        >
+          <SelectTrigger className="w-56" id="numbers-select">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="auto">{t("appearance.numbersAuto")}</SelectItem>
+            <SelectItem value="latn">
+              {t("appearance.numbersWestern")}
+            </SelectItem>
+            <SelectItem value="arab">
+              {t("appearance.numbersEastern")}
+            </SelectItem>
+          </SelectPopup>
+        </Select>
+      </LocalePreferenceRow>
+    </>
+  );
+};
+
+const ProfileSubmitButton = ({ label }: { label: string }) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button className="w-fit" disabled={pending} type="submit">
+      {label}
+    </Button>
+  );
+};
