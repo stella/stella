@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@stll/agent-engine": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",

@@ -71,7 +71,7 @@ export const visualRegistry = {
     label: "Connector sign-in confirmation",
     layout: "plain",
   },
-  "table-chart": { label: "Chat table chart", layout: "plain" },
+  "table-chart": { label: "Answer tables", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
@@ -95,6 +95,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
+  "chat-matter-reads": { label: "Chat matter reads", layout: "plain" },
   "chat-answer-typography": {
     label: "Chat answer typography",
     layout: "plain",

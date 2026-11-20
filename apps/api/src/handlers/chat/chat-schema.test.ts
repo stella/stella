@@ -728,7 +728,7 @@ describe("validateChatFileParts", () => {
     (format) => {
       const part = (url: string) =>
         createChatAttachmentPart({
-          filename: `archive${format.extension}`,
+          filename: `archive${format.extensions[0]}`,
           mimeType: "application/octet-stream",
           url,
         });

@@ -9,6 +9,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -22,7 +23,14 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import uploadSkill from "./upload";
+import { createUploadSkill } from "./upload";
+
+// Object storage standing in for the bucket: key to bytes.
+const storedObjects = new Map<string, Uint8Array | string>();
+const uploadSkill = createUploadSkill(async ({ data, key }) => {
+  storedObjects.set(key, data);
+  return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+});
 
 /**
  * A skill pack sent as a multipart body passes the same file scan as one
@@ -95,7 +103,7 @@ test("a pack the file scan rejects is refused and nothing is installed", async (
   expect(await installedCount(name)).toBe(0);
 });
 
-test("a pack with a binary asset is installed and the response lists the file left out", async () => {
+test("a pack with a binary asset is installed and keeps the asset's bytes", async () => {
   const name = `binary-asset-${Bun.randomUUIDv7().slice(-8)}`;
   const zip = new ZipArchive();
   zip.set(
@@ -114,9 +122,10 @@ test("a pack with a binary asset is installed and the response lists the file le
     throw new TypeError("expected the pack to be installed");
   }
   expect(result.name).toBe(name);
-  expect(result.skippedFiles).toEqual([
-    { path: "assets/logo.png", reason: "unsupported-extension" },
-  ]);
+  expect(result.skippedFiles).toEqual([]);
+  expect([...storedObjects.values()]).toContainEqual(
+    new Uint8Array([0x89, 0x50, 0xff, 0xfe]),
+  );
   expect(await installedCount(name)).toBe(1);
 });
 

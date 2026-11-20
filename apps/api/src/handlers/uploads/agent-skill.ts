@@ -102,7 +102,9 @@ export const finalizeAgentSkill = async function* ({
   }
 
   const installResult = await installSkill({
+    binaryFiles: parsed.value.binaryFiles,
     memberRole,
+    onSlugTaken: "copy",
     onInstalled: async (tx, skill) => {
       const finalized: Extract<
         PendingUploadFinalizedResult,

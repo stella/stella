@@ -54,6 +54,7 @@ import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -124,7 +125,6 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { ChatBackgroundTasks } from "@/routes/_protected.chat/-components/chat-background-tasks";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
-import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { CHAT_READING_COLUMN_CLASS_NAME } from "@/routes/_protected.chat/-components/chat-reading-column";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import {
@@ -492,6 +492,7 @@ export const ChatThreadPage = ({
         id: threadRef.threadId,
         workspaceId: threadRef.workspaceId,
         contextMatterIds: selectedContextMatterIds,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       detached(
         navigate({
@@ -505,6 +506,7 @@ export const ChatThreadPage = ({
     openInspectorChat({
       id: threadRef.threadId,
       contextMatterIds: selectedContextMatterIds,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     detached(navigate({ to: "/chat" }), "chat-thread-page.navigate");
   };
@@ -768,7 +770,6 @@ export const ChatThreadPage = ({
                     className={CHAT_THREAD_MOVE_TO_SIDE_CLASS}
                     onClick={moveToSide}
                   />
-                  <ChatHistoryLink />
                   <NewChatButton
                     hasMessages={messages.length > 0}
                     threadRef={threadRef}

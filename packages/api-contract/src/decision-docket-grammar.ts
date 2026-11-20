@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] Optional zero senate spellings and their lookup policy affect only CZE; POL acceptance and parsed values are unchanged.
 // parser-output-unchanged: [pl-uokik] Five-digit Czech sheet numbers and sheet-neutral Czech canonical keys change only the CZE grammar; this adapter reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] BRA adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] POL.parse is used only as a null check; filingYear is not projected, and the explicit whitespace class equals ECMAScript whitespace.
@@ -539,10 +540,46 @@ export const polishConstitutionalDocketKey = (
  * registry mark is written all-caps (`NSČR`, `ÚS`) and title-case (`Cdo`,
  * `As`) by different courts and lowercase by a reader typing a query.
  */
+const CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX = 3;
+const CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX = 1;
+const CZE_OPTIONAL_NUMERIC_SENATE_COMPONENT_SOURCE = Array.from(
+  { length: CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX },
+  () => String.raw`(?:\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?)?`,
+).join("");
+
+/** All-zero numeric prefixes accepted by the Czech grammar, including absence. */
+export const CZE_ZERO_SENATE_PREFIXES = Object.freeze(
+  Array.from(
+    {
+      length:
+        CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX *
+          (1 + CZE_OPTIONAL_NUMERIC_SENATE_COMPONENTS_MAX) +
+        1,
+    },
+    (_, length) => "0".repeat(length),
+  ),
+);
+
+/** Preserved citation keys can distinguish the grammar's two numeric components. */
+export const CZE_ZERO_SENATE_PREFIX_SPELLINGS = Object.freeze(
+  CZE_ZERO_SENATE_PREFIXES.flatMap((prefix) => {
+    const spellings = [prefix];
+    for (let split = 1; split < prefix.length; split += 1) {
+      if (
+        split <= CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX &&
+        prefix.length - split <= CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX
+      ) {
+        spellings.push(`${prefix.slice(0, split)} ${prefix.slice(split)}`);
+      }
+    }
+    return spellings;
+  }),
+);
+
 export const CZE_SHEET_NUMBER_SOURCE = String.raw`\d{1,5}`;
 const CZE_SHEET_SUFFIX_RE = new RegExp(`-${CZE_SHEET_NUMBER_SOURCE}$`, "u");
 const CZE_SENATE_DOCKET_RE = new RegExp(
-  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,3} ?)(?:\d{1,3} ?)?\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
+  String.raw`^(?:(?:pl|i|ii|iii|iv)\.? ?|\d{1,${CZE_NUMERIC_SENATE_COMPONENT_DIGITS_MAX}} ?)${CZE_OPTIONAL_NUMERIC_SENATE_COMPONENT_SOURCE}\p{L}{1,7}\.? \d{1,6}\/(?<year>\d{2}(?:\d{2})?)(?:-${CZE_SHEET_NUMBER_SOURCE})?$`,
   "iu",
 );
 
@@ -1292,7 +1329,7 @@ export const DECISION_DOCKET_GRAMMARS = {
     canonicalize: (folded) =>
       canonicalDocketKey(
         folded.replace(CZE_SHEET_SUFFIX_RE, "").replaceAll(".", ""),
-      ),
+      ).replace(/^0+(?=\p{L})/u, ""),
     format: formatCzechDocket,
     jurisdiction: "CZE",
     patterns: CZE_DOCKET_PATTERNS,

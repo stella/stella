@@ -3,6 +3,7 @@ import type {
   CaseLawCorpusDependencies,
   CaseLawJudgeDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import type { AttachToHeldDecisionOptions } from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { SourceRetention } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
@@ -154,8 +155,11 @@ export type ProcessDecisionAttemptOptions = {
   statedEcliIdentity: StatedEcliIdentity;
   /** See `HeldDecisionAttachment`; null for a source that does not declare one. */
   heldDecisionAttachment: HeldDecisionAttachment<string> | null;
+  heldDecisionPayloadWriter?: AttachToHeldDecisionOptions["rawPayloadWriter"];
   retention: SourceRetention;
   input: IngestionResult;
+  /** An exact caller-provided failure identity, independent of host identity. */
+  recordIdentity?: string | undefined;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;

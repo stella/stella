@@ -11,13 +11,23 @@ import {
   DOCUMENT_PROPERTIES_RESULT_SCHEMA,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { asicPreviewSchema } from "@stll/api-contract/asic";
+import { cadesPreviewSchema } from "@stll/api-contract/cades";
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
+import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  readBodyJsonWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
+import { PDF_MIME } from "@/lib/consts";
 import {
   APIError,
+  type ApiResponse,
   shouldRetryAPIRequest,
   unwrapApiResponse,
 } from "@/lib/errors/api";
@@ -97,6 +107,12 @@ const parseSuccessBody = <TSchema extends v.GenericSchema>(
 export const filesKeys = {
   all: filesQueryRoot,
   byFieldId: fileContentQueryKey,
+  cadesByFieldId: ({ fieldId, workspaceId }: FileByFieldIdKey) => [
+    ...filesKeys.all(),
+    "cades",
+    workspaceId,
+    fieldId,
+  ],
   contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
@@ -224,6 +240,156 @@ export const dataBoxPreviewOptions = (props: FileOptionsProps) =>
         RESOURCE_TYPE.USER_FILE,
       ],
       scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const asicPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: [...filesKeys.all(), "asic", props.workspaceId, props.fieldId],
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .asic({
+            fieldId: props.fieldId,
+          })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          asicPreviewSchema,
+          unwrapApiResponse(response),
+          "ASiC preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const structuredDocumentPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: [
+        ...filesKeys.all(),
+        "structured-document",
+        props.workspaceId,
+        props.fieldId,
+      ],
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes["structured-document"]({
+          fieldId: props.fieldId,
+        }).get({ fetch: { signal } });
+        return parseSuccessBody(
+          structuredDocumentPreviewSchema,
+          unwrapApiResponse(response),
+          "Structured document preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const cadesPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: filesKeys.cadesByFieldId(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .cades({
+            fieldId: props.fieldId,
+          })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          cadesPreviewSchema,
+          unwrapApiResponse(response),
+          "Signed file preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      gcTime: 0,
+      retry: false,
+      queryKey: [...filesKeys.cadesByFieldId({ fieldId, workspaceId }), "pdf"],
+      queryFn: async ({ signal }) => {
+        const response = await fetchWithTimeout(
+          apiUrl(
+            `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
+          ),
+          {
+            credentials: "include",
+            signal,
+            timeout: { type: "headers", ms: 60_000 },
+          },
+        );
+        let result: ApiResponse<ArrayBuffer>;
+        if (!response.ok) {
+          const value = await readBodyJsonWithIdleDeadline(response, {
+            idleMs: 30_000,
+            maxBytes: 64 * 1024,
+            signal,
+          });
+          result = { data: null, error: { status: response.status, value } };
+        } else if (response.headers.get("content-type") !== PDF_MIME) {
+          await Promise.allSettled([response.body?.cancel()]);
+          result = {
+            data: null,
+            error: {
+              status: 502,
+              value: {
+                message: "Invalid PDF response from the signed file preview",
+              },
+            },
+          };
+        } else {
+          const bytes = await readBodyWithIdleDeadline(response, {
+            idleMs: 30_000,
+            maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+            signal,
+          });
+          result = {
+            data:
+              bytes.buffer instanceof ArrayBuffer
+                ? bytes.buffer
+                : new Uint8Array(bytes).buffer,
+            error: null,
+          };
+        }
+        return unwrapApiResponse(result);
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId },
     },
   );
 

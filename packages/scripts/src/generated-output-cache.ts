@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readdirSync,
@@ -24,6 +25,57 @@ const cacheManifestSchema = v.record(
 const GENERATED_OUTPUT_CACHE_IDENTITY_LIMIT = 2;
 const ATOMIC_GENERATED_FILE_TEMP_SUFFIX =
   /\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/u;
+
+// Git-ignored files are build output and local state, never sources. Other
+// tasks write them while a generator runs (a Rust test compiling into its
+// target directory, for one), so hashing them would race those writers and
+// refuse a clean generation. A checkout answers from its ignore rules; a
+// source archive without one has only the caller's explicit exclusions.
+// `ls-files --directory` names a wholly ignored directory once (`target/`)
+// and, unlike `check-ignore`, accepts a tree that holds submodules.
+const gitIgnoredPredicate = (
+  root: string,
+  name: string,
+): ((file: string) => boolean) => {
+  if (!existsSync(path.join(root, ".git"))) {
+    return () => false;
+  }
+  const listed = Bun.spawnSync(
+    [
+      "git",
+      "ls-files",
+      "-z",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "--directory",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (listed.exitCode !== 0) {
+    panic(
+      `git ls-files failed for generator ${name}: ${listed.stderr.toString()}`,
+    );
+  }
+  const entries = listed.stdout.toString().split("\0").filter(Boolean);
+  const files = new Set(entries.filter((entry) => !entry.endsWith("/")));
+  const directories = new Set(entries.filter((entry) => entry.endsWith("/")));
+  return (file) => {
+    if (files.has(file)) {
+      return true;
+    }
+    for (
+      let slash = file.indexOf("/");
+      slash !== -1;
+      slash = file.indexOf("/", slash + 1)
+    ) {
+      if (directories.has(file.slice(0, slash + 1))) {
+        return true;
+      }
+    }
+    return false;
+  };
+};
 
 type GeneratedOutputCacheOptions = {
   root: string;
@@ -62,7 +114,11 @@ export const withGeneratedOutputCache = async ({
     hash.update(
       JSON.stringify([Bun.version, environment, name, inputs, outputs]),
     );
+    const ignored = gitIgnoredPredicate(root, name);
     for (const file of scan(included)) {
+      if (ignored(file)) {
+        continue;
+      }
       // Atomic generated-file writers use UUID-named siblings. A sibling of
       // an excluded output is no more a source than its final destination.
       const destination = file.replace(ATOMIC_GENERATED_FILE_TEMP_SUFFIX, "");

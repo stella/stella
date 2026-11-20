@@ -94,6 +94,22 @@ test.each([
       {
         type: "label",
         labelKey: "knowledge.sections.tools.title",
+        to: "/knowledge/tools/catalogue",
+      },
+      { type: "knowledge-detail", detail: "tool" },
+    ],
+  },
+  {
+    pathname: "/knowledge/tools/skills/11111111-1111-4111-8111-111111111111",
+    decisions: [
+      {
+        type: "label",
+        labelKey: "navigation.knowledge",
+        to: "/knowledge",
+      },
+      {
+        type: "label",
+        labelKey: "knowledge.sections.tools.title",
         to: "/knowledge/tools",
       },
       { type: "knowledge-detail", detail: "skill" },

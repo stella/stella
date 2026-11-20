@@ -3,8 +3,9 @@ import type * as React from "react";
 import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { buttonFaceClassName } from "./control-face";
-import { Skeleton } from "./skeleton";
+import { InlineSkeleton } from "./skeleton";
 import {
+  PROSE_CELL_CLASS,
   resolveTableAlign,
   TABLE_ALIGN_CLASS,
   TableCellFace,
@@ -39,16 +40,31 @@ type TableScroll = "self" | "parent";
  * do not highlight because nothing in them is a row-wide target. A row
  * header (`<TableHead scope="row">`) in a compact body reads as the row's
  * first cell rather than as a column heading.
+ *
+ * `prose` is a table of sentences read across columns (an AI answer's
+ * comparison, a clause review): ruled columns and rows, cells padded and set
+ * at reading leading from their top, a quiet header in normal weight, and a
+ * first column wide enough to hold a few words per line. Its cells wrap or
+ * stay on one line as `cellText` says.
  */
-type TableDensity = "default" | "compact";
+type TableDensity = "default" | "compact" | "prose";
+
+/**
+ * How a `prose` table sets long cell text: `wrap` breaks it over lines,
+ * `single-line` keeps every cell on one line and leaves the table wider than
+ * its box for the scroller around it.
+ */
+type TableCellText = "wrap" | "single-line";
 
 type TableProps = React.ComponentProps<"table"> & {
+  cellText?: TableCellText;
   density?: TableDensity;
   inset?: TableInset;
   scroll?: TableScroll;
 };
 
 const Table = ({
+  cellText = "wrap",
   className,
   density = "default",
   inset = "default",
@@ -59,8 +75,12 @@ const Table = ({
     <table
       className={cn(
         "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
+        // Separate borders: a sticky header keeps only the borders its own
+        // cells draw.
+        density === "prose" && "border-separate border-spacing-0",
         className,
       )}
+      data-cell-text={cellText}
       data-density={density}
       data-inset={inset}
       data-slot="table"
@@ -101,9 +121,13 @@ const TableHeader = ({
 }: TableHeaderProps) => (
   <thead
     className={cn(
-      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
+      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[density=prose]:*:[tr]:hover:bg-transparent in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
       surface === "muted" && "bg-muted/50",
       sticky && "bg-muted/80 sticky top-0 z-10 backdrop-blur",
+      // A prose header is opaque: wrapped rows scrolling under it would
+      // otherwise read through the band.
+      sticky &&
+        "in-data-[density=prose]:bg-card in-data-[density=prose]:backdrop-blur-none",
       className,
     )}
     data-slot="table-header"
@@ -173,6 +197,8 @@ const TableHead = ({
       "text-muted-foreground h-10 px-2.5 align-middle leading-none font-medium whitespace-nowrap in-data-[inset=card]:px-4 has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
       "in-data-[density=compact]:h-auto in-data-[density=compact]:px-0 in-data-[density=compact]:py-1 in-data-[density=compact]:pe-3 in-data-[density=compact]:text-xs",
       "in-data-[density=compact]:[tbody_&]:py-1.5 in-data-[density=compact]:[tbody_&]:text-sm in-data-[density=compact]:[tbody_&]:leading-6 in-data-[density=compact]:[tbody_&]:font-normal in-data-[density=compact]:[tbody_&]:whitespace-normal in-data-[density=compact]:[tbody_&]:text-inherit",
+      PROSE_CELL_CLASS,
+      "in-data-[density=prose]:[thead_&]:bg-muted in-data-[density=prose]:font-normal",
       TABLE_ALIGN_CLASS[resolveTableAlign(align, numeric) ?? "start"],
       numeric && "tabular-nums",
       className,
@@ -297,9 +323,9 @@ const SortableHeadFace = ({
 
 type TableSkeletonColumn = {
   id: string;
-  bar: string;
+  className?: string | undefined;
   align?: TableAlign | undefined;
-};
+} & ({ bar: string } | { placeholder: React.ReactNode });
 
 const SKELETON_ROW_KEYS = [
   "a",
@@ -329,11 +355,19 @@ const TableSkeletonRows = ({
 }) =>
   SKELETON_ROW_KEYS.slice(0, Math.max(0, count)).map((rowKey) => (
     <TableRow aria-hidden="true" className={rowClassName} key={rowKey}>
-      {columns.map(({ id, bar, align }) => (
-        <TableCellFace align={align} key={id}>
-          <span className="inline-flex h-8 items-center sm:h-7">
-            <Skeleton className={cn("h-3.5 max-w-full", bar)} />
-          </span>
+      {columns.map((column) => (
+        <TableCellFace
+          align={column.align}
+          className={column.className}
+          key={column.id}
+        >
+          {"bar" in column ? (
+            <span className="inline-flex h-8 items-center sm:h-7">
+              <InlineSkeleton className={cn("h-3.5 max-w-full", column.bar)} />
+            </span>
+          ) : (
+            column.placeholder
+          )}
         </TableCellFace>
       ))}
     </TableRow>
@@ -360,6 +394,7 @@ export {
 export type {
   SortDirection,
   TableAlign,
+  TableCellText,
   TableDensity,
   TableHeadProps,
   TableHeaderProps,

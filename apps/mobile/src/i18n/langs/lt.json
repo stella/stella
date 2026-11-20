@@ -1,4 +1,7 @@
 {
+  "common": {
+    "previewTruncated": "Visas tekstas šioje peržiūroje nepasiekiamas."
+  },
   "tabs": {
     "chat": "Pokalbis",
     "close": "Uždaryti",
@@ -212,6 +215,11 @@
       "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
+    "toolResearch": {
+      "caseLaw": "Ieškoma teismų praktikoje",
+      "legislation": "Skaitomi teisės aktai",
+      "legislationAndCaseLaw": "Ieškoma teisės aktuose ir teismų praktikoje"
+    },
     "localRun": {
       "title": {
         "sign_in": "Prisijunkite, kad tęstumėte",
@@ -266,9 +274,18 @@
       "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}",
       "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
       "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
-      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}"
+      "searchedLegislation": "Peržiūrėti teisės aktai",
+      "searchedCaseLaw": "Peržiūrėta teismų praktika",
+      "searchedLegislationAndCaseLaw": "Peržiūrėti teisės aktai ir teismų praktika",
+      "readDocument": "Perskaitytas dokumentas",
+      "readDocuments": "Perskaityti dokumentai",
+      "searchedMatters": "Peržiūrėtos bylos",
+      "checkedRegisters": "Patikrinti viešieji registrai",
+      "searchedWeb": "Ieškota internete",
+      "searchedChats": "Peržiūrėta pokalbio istorija"
     },
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių} many {# žingsnių}}",
+    "lookupCount": "{count, plural, one {# užklausa} few {# užklausos} many {# užklausos} other {# užklausų}}",
     "reasoning": "Mąstymas",
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "failure": {
@@ -603,6 +620,17 @@
     "dictationModelsUnavailable": "Nepavyko įkelti modelių. Diktuojant naudojamas jūsų pasirinktas modelis arba numatytasis, jei serveris jo nebesiūlo.",
     "dictationCleanup": "Taisyti su DI",
     "dictationCleanupHint": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“. Tik tekstas, ne garsas, per stella siunčiamas jūsų organizacijos DI paslaugų teikėjui; stella jo nesaugo."
+  },
+  "signedFile": {
+    "layer": "Parašų sluoksnis {number, number}",
+    "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
+    "unknownSigner": "Nežinomas pasirašęs asmuo",
+    "unreadable": "Nepavyko perskaityti pasirašyto failo.",
+    "unverified": "Parašai nepatikrinti."
+  },
+  "structuredDocument": {
+    "noReadableContent": "Peržiūrai tinkamo teksto nėra.",
+    "textOnly": "Teksto peržiūra be puslapio maketo ir vaizdų."
   },
   "header": {
     "search": "Ieškoti"

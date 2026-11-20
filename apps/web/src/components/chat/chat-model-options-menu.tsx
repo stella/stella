@@ -58,6 +58,7 @@ import {
   useHarnessHint,
 } from "@/components/chat/chat-run-target-menu";
 import {
+  type ChatCloudStart,
   chatLocalHarnessOptionsFor,
   localRunMaxApprovals,
   localRunTargetFor,
@@ -113,6 +114,11 @@ export type ChatRunOn =
       type: "choice";
       selected: ChatRunTarget;
       select: (target: ChatRunTarget) => void;
+      /**
+       * Why a new chat runs in the cloud although the member last chose
+       * their computer, which the where chip says; `null` otherwise.
+       */
+      startedInCloud: ChatCloudStart | null;
     }
   | { type: "cloud_only" };
 
@@ -152,6 +158,7 @@ const EMPTY_BENCHMARK_OPTIONS: readonly ChatModelBenchmarkOption[] = [];
 const HARNESS_PROVIDER = {
   codex: "openai",
   "claude-code": "anthropic",
+  antigravity: "google",
 } as const satisfies Record<ChatLocalRunHarness, ProviderValue>;
 
 type ModelTradeoff = ChatModelBenchmarkOption["tradeoff"];

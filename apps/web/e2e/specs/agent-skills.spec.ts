@@ -20,7 +20,8 @@ const AGENT_SKILLS_TEST_TIMEOUT_MS = 180_000;
 // (apps/api/scripts/seed-test-user.ts).
 const MEMBER_EMAIL = "alice@stella.dev";
 
-const SKILL_URL_PATTERN = /\/knowledge\/tools\/(?<skillId>[0-9a-f-]{36})$/u;
+const SKILL_URL_PATTERN =
+  /\/knowledge\/tools\/skills\/(?<skillId>[0-9a-f-]{36})$/u;
 
 // The owner's seeded session always has its organization active.
 const sessionSchema = v.object({
@@ -269,7 +270,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
           response.url().includes("/organization/get-active-member-role") &&
           response.ok(),
       );
-      await memberPage.goto(`/knowledge/tools/${teamSkillId}`, {
+      await memberPage.goto(`/knowledge/tools/skills/${teamSkillId}`, {
         waitUntil: "commit",
       });
       await memberRoleLoaded;

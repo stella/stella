@@ -5,10 +5,15 @@ import { assertProperty } from "@stll/property-testing";
 import { stripDiacritics } from "@stll/text-normalize";
 
 import {
+  hungarianDesignationCollection,
   hungarianDesignationWorkEli,
   type HungarianProvision,
+  isMagyarKozlonyCollection,
   isMagyarKozlonyWorkEli,
+  MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN,
   magyarKozlonyWorkEli,
+  magyarKozlonyWorkPattern,
+  magyarKozlonyYearPattern,
   parseRomanNumeral,
   readHungarianActCitations,
   readHungarianLawParts,
@@ -237,5 +242,87 @@ describe("Hungarian provision numbers", () => {
     ["IIII", []],
   ] satisfies [string, HungarianProvision[]][])("%s", (written, expected) => {
     expect(readHungarianProvision(written)).toEqual(expected);
+  });
+});
+
+describe("Magyar Közlöny Work patterns", () => {
+  const designation = fc.oneof(
+    fc.record({
+      kind: fc.constant("law" as const),
+      year: fc.integer({ min: 1990, max: 2030 }),
+      number: fc.integer({ min: 1, max: 260 }),
+    }),
+    fc.record({
+      kind: fc.constant("numbered" as const),
+      year: fc.integer({ min: 1990, max: 2030 }),
+      number: fc.integer({ min: 1, max: 1200 }),
+      signed: fc.record({
+        month: fc.integer({ min: 1, max: 12 }),
+        day: fc.integer({ min: 1, max: 31 }),
+      }),
+      issuer: fc.constantFrom("Korm.", "IM", "NGM", "MNB", "AB"),
+      form: fc.constantFrom("rendelet" as const, "hatarozat" as const),
+    }),
+  );
+
+  test("an act's number, year and series match its Work and no neighbour's", () => {
+    assertProperty(
+      "an act's number, year and series match its Work and no neighbour's",
+      fc.property(designation, fc.integer({ min: 1, max: 9 }), (act, shift) => {
+        const eli = hungarianDesignationWorkEli(act) ?? "";
+        const collection = hungarianDesignationCollection(act);
+        expect(isMagyarKozlonyCollection(collection)).toBe(true);
+        for (const series of [collection, undefined]) {
+          const own = magyarKozlonyWorkPattern({ ...act, collection: series });
+          expect(new RegExp(own ?? "^$", "u").test(eli)).toBe(true);
+          const neighbour = magyarKozlonyWorkPattern({
+            ...act,
+            number: act.number + shift,
+            collection: series,
+          });
+          expect(new RegExp(neighbour ?? "^$", "u").test(eli)).toBe(false);
+        }
+        expect(
+          new RegExp(magyarKozlonyYearPattern(act.year), "u").test(eli),
+        ).toBe(true);
+        expect(
+          new RegExp(magyarKozlonyYearPattern(act.year + shift), "u").test(eli),
+        ).toBe(false);
+        const numbered = new RegExp(
+          MAGYAR_KOZLONY_NUMBERED_WORK_PATTERN,
+          "u",
+        ).exec(eli);
+        expect(numbered?.[1]).toBe(
+          act.kind === "numbered" ? String(act.number) : undefined,
+        );
+      }),
+    );
+  });
+});
+
+describe("Magyar Közlöny numbers past the Roman numerals", () => {
+  test("a numbered act above 3999 keeps its pattern; a law cannot carry that number", () => {
+    const eli = workOf("4000/2020. (IV. 30.) Korm. rendelet") ?? "";
+    for (const collection of ["korm-rendelet", undefined]) {
+      const pattern = magyarKozlonyWorkPattern({
+        number: 4000,
+        year: 2020,
+        collection,
+      });
+      expect(new RegExp(pattern ?? "^$", "u").test(eli)).toBe(true);
+    }
+    expect(
+      magyarKozlonyWorkPattern({
+        number: 4000,
+        year: 2020,
+        collection: "torveny",
+      }),
+    ).toBeNull();
+  });
+
+  test("the longest numeral the printer writes is read back", () => {
+    expect(workOf("1990. évi MMMDCCCLXXXVIII. törvény")).toBe(
+      "urn:hu:magyar-kozlony:1990-evi-mmmdccclxxxviii-torveny",
+    );
   });
 });

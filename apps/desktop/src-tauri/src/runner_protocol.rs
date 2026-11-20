@@ -136,6 +136,7 @@ wire_values!(Harness {
   Codex => "codex",
   ClaudeCode => "claude-code",
   Opencode => "opencode",
+  Antigravity => "antigravity",
 });
 
 wire_values!(HarnessCapability {

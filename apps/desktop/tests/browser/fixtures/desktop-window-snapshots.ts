@@ -8,6 +8,7 @@ import type {
   DesktopAccountSnapshot,
 } from "../../../src/shared/rpc";
 import type { ClipboardShortcutSnapshot } from "../../../src/shared/shortcut-keys";
+import type { MicrophonesSnapshot } from "../../../src/mainview/dictation-microphone";
 
 /**
  * What the native side answers the settings and setup windows in the
@@ -43,6 +44,9 @@ export const SETUP_PERMISSIONS = {
 export const DICTATION_READY = {
   available: true,
   cleanup: true,
+  cloudAvailable: true,
+  cloudModel: null,
+  customWords: [],
   destination: "local",
   enabled: true,
   failure: null,
@@ -51,7 +55,10 @@ export const DICTATION_READY = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  shareTextBeforeCursor: false,
+  shareWindowTitle: false,
   shortcutTaken: false,
+  textBeforeCursorAvailable: true,
 } as const satisfies DictationSnapshot;
 
 /** Dictation in Settings at its tallest: stella AI with a model whose
@@ -183,3 +190,18 @@ export const ACTIVITY_SETTINGS = {
   ],
   sourceAppVisuals: [],
 } satisfies ActivitySettingsSnapshot;
+
+/** The microphones Settings lists: the built-in one and a Bluetooth headset. */
+export const MICROPHONES: MicrophonesSnapshot = {
+  chosen: null,
+  chosenMissing: null,
+  defaultName: "AirPods Pro 3",
+  devices: [
+    {
+      bluetooth: false,
+      id: "coreaudio:BuiltInMicrophoneDevice",
+      name: "Built-in Microphone",
+    },
+    { bluetooth: true, id: "coreaudio:AA-BB-CC:input", name: "AirPods Pro 3" },
+  ],
+};

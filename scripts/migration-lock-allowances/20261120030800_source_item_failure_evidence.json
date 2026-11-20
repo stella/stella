@@ -1,0 +1,5 @@
+{
+  "create-table-references": "Creates an empty ingestion-only evidence table and adds one source foreign key. The referenced source table takes a bounded catalog lock under 1s lock_timeout and 30s statement_timeout; no existing evidence rows are scanned.",
+  "row-level-security": "Enables and forces RLS on the newly created empty evidence table before any grants or ingestion writes. Both catalog changes are bounded by 1s lock_timeout and 30s statement_timeout.",
+  "create-policy": "Creates the ingestion-only policy on the newly created empty evidence table in the same migration before application use; no row scan, bounded by 1s lock_timeout and 30s statement_timeout."
+}

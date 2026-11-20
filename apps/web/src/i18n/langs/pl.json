@@ -1732,12 +1732,25 @@
       "unorderedList": "Lista punktowana",
       "wholeBlockRequired": "Aby zmienić styl, zaznacz cały akapit lub listę."
     },
+    "answerNotFinished": "stella nie dokończyła tej odpowiedzi.",
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
       "unverified": "Cytat niezweryfikowany",
       "unverifiedHint": "Cytowane orzeczenia nie zawierają tego tekstu dosłownie",
       "verified": "Zweryfikowany cytat",
       "verifiedHint": "Dosłownie w {source}"
+    },
+    "answerTable": {
+      "copy": "Kopiuj tabelę",
+      "copyAs": "Kopiuj jako {format}",
+      "download": "Pobierz tabelę",
+      "downloadAs": "Pobierz jako {format}",
+      "fullscreen": "Otwórz na pełnym ekranie",
+      "fullscreenTitle": "Tabela na pełnym ekranie",
+      "singleLine": "W jednym wierszu",
+      "size": "{rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} · {columns, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}}",
+      "textMode": "Tekst komórek",
+      "wrap": "Zawijaj tekst"
     },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
@@ -2149,9 +2162,17 @@
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
     "processSummary": {
-      "analyses": "{count, plural, one {# analiza} few {# analizy} many {# analiz} other {# analizy}}",
       "changesSaved": "{count, plural, one {# zapisana zmiana} few {# zapisane zmiany} many {# zapisanych zmian} other {# zapisanej zmiany}}",
+      "checkedRegisters": "Sprawdzono rejestry publiczne",
       "documentEdits": "{count, plural, one {# edycja dokumentu} few {# edycje dokumentu} many {# edycji dokumentu} other {# edycji dokumentu}}",
+      "readDocument": "Odczytano dokument",
+      "readDocuments": "Odczytano dokumenty",
+      "searchedCaseLaw": "Przeszukano orzecznictwo",
+      "searchedChats": "Przeszukano historię czatu",
+      "searchedLegislation": "Przeszukano przepisy",
+      "searchedLegislationAndCaseLaw": "Przeszukano przepisy i orzecznictwo",
+      "searchedMatters": "Przejrzano sprawy",
+      "searchedWeb": "Przeszukano sieć",
       "sourcesChecked": "{count, plural, one {# sprawdzone źródło} few {# sprawdzone źródła} many {# sprawdzonych źródeł} other {# sprawdzonego źródła}}"
     },
     "promptImprovementStrategies": {
@@ -2238,6 +2259,7 @@
       "chipLabel": "Gdzie działa: {place}",
       "cloud": "Chmura",
       "cloudDescription": "Działa w chmurze. Dostępne z każdego miejsca.",
+      "hintAntigravity": "Zainstaluj Antigravity 1.5 lub nowszy, a następnie zaloguj się w nim",
       "hintCheck": "Sprawdź go w stella desktop",
       "hintInstall": "Zainstaluj go w stella desktop",
       "hintOffline": "Otwórz stella desktop na swoim komputerze",
@@ -2248,6 +2270,8 @@
       "localPlace": "Twój komputer, {harness}",
       "localSelection": "Twój komputer · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Nowy czat uruchomiono w chmurze, ponieważ {harness} na Twoim komputerze jest niedostępny ({state})",
+      "startedInCloudCheckFailed": "Nowy czat uruchomiono w chmurze, ponieważ nie udało się sprawdzić Twojego komputera",
       "stepsCheck": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i sprawdź agenta {harness} w sekcji Ustawienia › Ogólne › Subskrypcje AI.",
       "stepsInstall": "Otwieranie stella desktop. Jeśli aplikacja się nie otworzy, otwórz ją na swoim komputerze i w sekcji Ustawienia › Ogólne wybierz Zainstaluj przy agencie {harness}.",
       "stepsSignInClaudeCode": "Otwieranie stella desktop, aby się zalogować. Jeśli aplikacja się nie otworzy, otwórz ją i wybierz Ustawienia › Ogólne › Zaloguj się przez Claude.",
@@ -2314,6 +2338,20 @@
       "title": "Twoja wiadomość czeka w kolejce, aż agent skończy",
       "turnNotRunning": "Agent w tej chwili nie pracuje."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Znaleziono # orzeczenie} few {Znaleziono # orzeczenia} many {Znaleziono # orzeczeń} other {Znaleziono # orzeczenia}}",
+      "decisionsFoundUsed": "{found, plural, one {Znaleziono # orzeczenie} few {Znaleziono # orzeczenia} many {Znaleziono # orzeczeń} other {Znaleziono # orzeczenia}}, {used, plural, one {# użyte w odpowiedzi} few {# użyte w odpowiedzi} many {# użytych w odpowiedzi} other {# użytego w odpowiedzi}}",
+      "filterAsOf": "Na dzień {date}",
+      "legislationFound": "{count, plural, one {# akt lub przepis} few {# akty i przepisy} many {# aktów i przepisów} other {# aktu i przepisu}}",
+      "lookupDidNotGoThrough": "To wyszukiwanie się nie powiodło.",
+      "moreFound": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}",
+      "moreLookups": "{count, plural, one {Nie pokazano # zapytania} few {Nie pokazano # zapytań} many {Nie pokazano # zapytań} other {Nie pokazano # zapytania}}",
+      "notRecorded": "Ten krok został wykonany, zanim stella zaczęła zapisywać, czego szuka każdy krok.",
+      "nothingFound": "Brak wyników.",
+      "technicalDetails": "Szczegóły techniczne",
+      "usedInAnswer": "Użyte w odpowiedzi",
+      "versionFrom": "Wersja od {date}"
+    },
     "stopFailed": "Nie udało się zatrzymać odpowiedzi. Spróbuj ponownie.",
     "stopResponse": "Zatrzymaj",
     "stopped": "Zatrzymano",
@@ -2329,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
+    },
+    "switcher": {
+      "allChats": "Wszystkie czaty",
+      "searchPlaceholder": "Znajdź czat…",
+      "trigger": "Przełącz czat"
     },
     "tableChart": {
       "bar": "Słupkowy",
@@ -2899,6 +2942,7 @@
     "playbooks": "Playbooki",
     "preparing": "Przygotowywanie…",
     "preview": "Podgląd",
+    "previewTruncated": "Pełny tekst nie jest dostępny w tym podglądzie.",
     "previous": "Poprzedni",
     "previousMatch": "Poprzednie wystąpienie",
     "print": "Drukuj",
@@ -4666,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Znaleziono # umiejętność} few {Znaleziono # umiejętności} many {Znaleziono # umiejętności} other {Znaleziono # umiejętności}}",
       "discoveryEmpty": "W tym repozytorium lub folderze nie znaleziono umiejętności.",
       "discoverySkippedInvalid": "{count, plural, one {Pominięto # nieprawidłową umiejętność} few {Pominięto # nieprawidłowe umiejętności} many {Pominięto # nieprawidłowych umiejętności} other {Pominięto # nieprawidłowych umiejętności}}",
-      "dropPack": "Upuść plik .zip lub SKILL.md, aby zaimportować umiejętność",
+      "dropPack": "Upuść plik .zip/.skill lub SKILL.md, aby zaimportować umiejętność",
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
@@ -4723,8 +4767,8 @@
           "name": "Podsumuj dokument"
         }
       },
-      "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
-      "uploadPack": "Prześlij .zip lub SKILL.md",
+      "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip/.skill zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
+      "uploadPack": "Prześlij .zip/.skill lub SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
     },
@@ -5756,6 +5800,9 @@
       "chatNotificationsDescription": "Otrzymuj powiadomienie z tej przeglądarki, gdy odpowiedź na czacie zakończy się, a stella działa w tle.",
       "chatNotificationsToggle": "Powiadamiaj mnie, gdy odpowiedź jest gotowa lub wymaga mojej reakcji",
       "chatNotificationsUnsupported": "Ta przeglądarka nie obsługuje powiadomień.",
+      "chatTechnicalDetails": "Szczegóły techniczne na czacie",
+      "chatTechnicalDetailsDescription": "Każdy krok na czacie pokazuje, czego szukał i co znalazł. Po włączeniu zobaczysz też kod i surowe wyniki.",
+      "chatTechnicalDetailsToggle": "Pokazuj szczegóły techniczne na czacie",
       "confirmDelete": "Potwierdź usunięcie konta",
       "dangerZone": "Strefa zagrożenia",
       "dangerZoneDescription": "Trwale usuń dostęp do konta i prywatne dane konta.",
@@ -6263,6 +6310,14 @@
     "reconnectRequired": "Logowanie wygasło",
     "title": "SharePoint i OneDrive"
   },
+  "signedFile": {
+    "layer": "Warstwa podpisów {number, number}",
+    "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "unknownSigner": "Nieznany podpisujący",
+    "unreadable": "Nie udało się odczytać podpisanego pliku.",
+    "unverified": "Podpisy nie zostały zweryfikowane."
+  },
   "skillHistory": {
     "acceptStale": "Zaakceptuj i nadpisz nowsze zmiany",
     "backToCurrent": "Wróć do bieżącej wersji",
@@ -6403,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# skreślony przepis} few {# skreślone przepisy} many {# skreślonych przepisów} other {# skreślonego przepisu}}",
     "versionChangesWords": "{inserted, plural, one {# dodane słowo} few {# dodane słowa} many {# dodanych słów} other {# dodanego słowa}}, {deleted, plural, one {# skreślone słowo} few {# skreślone słowa} many {# skreślonych słów} other {# skreślonego słowa}}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Brak czytelnego tekstu do wyświetlenia w podglądzie.",
+    "textOnly": "Podgląd tekstu bez układu strony i obrazów."
   },
   "styleSets": {
     "create": "Utwórz",
@@ -7910,7 +7969,6 @@
         "endDate": "Data zakończenia",
         "month": "Miesiąc",
         "quarter": "Kwartał",
-        "showTable": "Pokaż tabelę",
         "startDate": "Data rozpoczęcia",
         "week": "Tydzień"
       },

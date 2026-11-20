@@ -475,6 +475,12 @@ const LEGAL_REFERENCE_RULE =
 const USER_FACING_LANGUAGE_RULE =
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.";
 
+// The sentence the chat shows above the turn's steps (`narratedIntentIndex`
+// in `@stll/api-contract/chat-tool-activity`), so a person sees what is
+// being looked up in their own language rather than a reasoning trace.
+const PLAN_LINE_RULE =
+  "PLAN LINE: When you will use tools to answer, first write one short sentence in the user's language saying what you will look up or do (which provisions, courts, documents or matters), then make your first tool call. Write it once per turn, before the first call only, as plain prose without headings or lists. Skip it when you answer without tools. It is shown above your steps, so do not repeat it in the answer.";
+
 const DOCX_REVIEW_TAGS_RULE = `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`;
 
 const CITATIONS_RULE =
@@ -544,6 +550,7 @@ const buildCoreRuleSections = ({
   LEGAL_REFERENCE_RULE,
   CORPUS_ONLY_CASE_LAW_SECTION,
   USER_FACING_LANGUAGE_RULE,
+  PLAN_LINE_RULE,
   ...(subagents ? [SUBAGENT_DELEGATION_SECTION] : []),
 ];
 
@@ -614,6 +621,7 @@ const buildLocalRunCoreRuleSections = (
   LEGAL_REFERENCE_RULE,
   CORPUS_ONLY_CASE_LAW_SECTION,
   USER_FACING_LANGUAGE_RULE,
+  PLAN_LINE_RULE,
 ];
 
 /**

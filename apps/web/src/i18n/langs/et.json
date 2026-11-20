@@ -1732,12 +1732,25 @@
       "unorderedList": "Täpploend",
       "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
     },
+    "answerNotFinished": "stella ei saanud seda vastust lõpetada.",
     "answerQuote": {
       "showInDecision": "Näita lahendis",
       "unverified": "Tsitaati ei õnnestunud kontrollida",
       "unverifiedHint": "Viidatud lahendid ei sisalda seda teksti sõna-sõnalt",
       "verified": "Kontrollitud tsitaat",
       "verifiedHint": "Sõna-sõnalt: {source}"
+    },
+    "answerTable": {
+      "copy": "Kopeeri tabel",
+      "copyAs": "Kopeeri {format}-vormingus",
+      "download": "Laadi tabel alla",
+      "downloadAs": "Laadi alla {format}-vormingus",
+      "fullscreen": "Ava täisekraanil",
+      "fullscreenTitle": "Tabel täisekraanil",
+      "singleLine": "Ühel real",
+      "size": "{rows, plural, one {# rida} other {# rida}} · {columns, plural, one {# veerg} other {# veergu}}",
+      "textMode": "Lahtrite tekst",
+      "wrap": "Murra tekst"
     },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
@@ -2149,9 +2162,17 @@
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "processSummary": {
-      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}",
       "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
+      "checkedRegisters": "Avalikud registrid kontrollitud",
       "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
+      "readDocument": "Dokument loetud",
+      "readDocuments": "Dokumendid loetud",
+      "searchedCaseLaw": "Kohtupraktikast otsitud",
+      "searchedChats": "Vestlusajaloost otsitud",
+      "searchedLegislation": "Õigusaktidest otsitud",
+      "searchedLegislationAndCaseLaw": "Õigusaktidest ja kohtupraktikast otsitud",
+      "searchedMatters": "Toimikud läbi vaadatud",
+      "searchedWeb": "Veebist otsitud",
       "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}"
     },
     "promptImprovementStrategies": {
@@ -2238,6 +2259,7 @@
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
+      "hintAntigravity": "Paigaldage Antigravity 1.5 või uuem ja logige selles sisse",
       "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",
@@ -2248,6 +2270,8 @@
       "localPlace": "Sinu arvuti, {harness}",
       "localSelection": "Sinu arvuti · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "See uus vestlus algas pilves, sest {harness} pole sinu arvutis saadaval ({state})",
+      "startedInCloudCheckFailed": "See uus vestlus algas pilves, sest sinu arvutit ei õnnestunud kontrollida",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
       "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",
@@ -2314,6 +2338,20 @@
       "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
       "turnNotRunning": "Agent praegu ei tööta."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}",
+      "decisionsFoundUsed": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}, {used, plural, one {vastuses kasutati #} other {vastuses kasutati #}}",
+      "filterAsOf": "Seisuga {date}",
+      "legislationFound": "{count, plural, one {# õigusakt või säte} other {# õigusakti ja sätet}}",
+      "lookupDidNotGoThrough": "See otsing ei õnnestunud.",
+      "moreFound": "{count, plural, one {veel # pole näidatud} other {veel # pole näidatud}}",
+      "moreLookups": "{count, plural, one {Veel # päringut pole näidatud} other {Veel # päringut pole näidatud}}",
+      "notRecorded": "See samm tehti enne, kui stella hakkas salvestama, mida iga samm otsib.",
+      "nothingFound": "Vasteid ei leitud.",
+      "technicalDetails": "Tehnilised üksikasjad",
+      "usedInAnswer": "Kasutati vastuses",
+      "versionFrom": "Redaktsioon alates {date}"
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
@@ -2329,6 +2367,11 @@
     "suggestionStatus": {
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
+    },
+    "switcher": {
+      "allChats": "Kõik vestlused",
+      "searchPlaceholder": "Leia vestlus…",
+      "trigger": "Vaheta vestlust"
     },
     "tableChart": {
       "bar": "Tulpdiagramm",
@@ -2899,6 +2942,7 @@
     "playbooks": "Playbookid",
     "preparing": "Ettevalmistamine…",
     "preview": "Eelvaade",
+    "previewTruncated": "Täistekst ei ole selles eelvaates saadaval.",
     "previous": "Eelmine",
     "previousMatch": "Eelmine vaste",
     "print": "Prindi",
@@ -4666,7 +4710,7 @@
       "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
       "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
       "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
-      "dropPack": "Lohistage siia .zip või SKILL.md, et oskus importida",
+      "dropPack": "Lohistage siia .zip/.skill või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
@@ -4723,8 +4767,8 @@
           "name": "Tee dokumendist kokkuvõte"
         }
       },
-      "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
-      "uploadPack": "Laadi üles .zip või SKILL.md",
+      "uploadHelp": "Kasuta SKILL.md-faili või .zip/.skill-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
+      "uploadPack": "Laadi üles .zip/.skill või SKILL.md",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },
@@ -5756,6 +5800,9 @@
       "chatNotificationsDescription": "Saate sellest brauserist teavituse, kui vestluse vastus valmib ajal, mil stella on taustal.",
       "chatNotificationsToggle": "Teavita mind, kui vastus on valmis või vajab minu sisendit",
       "chatNotificationsUnsupported": "See brauser ei toeta teavitusi.",
+      "chatTechnicalDetails": "Tehnilised üksikasjad vestluses",
+      "chatTechnicalDetailsDescription": "Iga vestluse samm näitab, mida see otsis ja mida leidis. Sisse lülitatuna näete ka selle taga olevat koodi ja töötlemata tulemusi.",
+      "chatTechnicalDetailsToggle": "Näita vestluses tehnilisi üksikasju",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
       "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",
@@ -6263,6 +6310,14 @@
     "reconnectRequired": "Sisselogimine aegus",
     "title": "SharePoint ja OneDrive"
   },
+  "signedFile": {
+    "layer": "Allkirjakiht {number, number}",
+    "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "pdfUnavailable": "PDF-i eelvaade pole saadaval.",
+    "unknownSigner": "Tundmatu allkirjastaja",
+    "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
+    "unverified": "Allkirju ei ole kontrollitud."
+  },
   "skillHistory": {
     "acceptStale": "Võta vastu ja kirjuta uuemad muudatused üle",
     "backToCurrent": "Tagasi praeguse versiooni juurde",
@@ -6403,6 +6458,10 @@
     "versionChangesRemoved": "{count, plural, one {# säte välja jäetud} other {# sätet välja jäetud}}",
     "versionChangesWords": "{inserted, plural, one {# sõna lisatud} other {# sõna lisatud}}, {deleted, plural, one {# sõna kustutatud} other {# sõna kustutatud}}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
+  },
+  "structuredDocument": {
+    "noReadableContent": "Eelvaates kuvamiseks pole loetavat teksti.",
+    "textOnly": "Teksti eelvaade ilma leheküljekujunduse ja piltideta."
   },
   "styleSets": {
     "create": "Loo",
@@ -7910,7 +7969,6 @@
         "endDate": "Lõppkuupäev",
         "month": "Kuu",
         "quarter": "Kvartal",
-        "showTable": "Näita tabelit",
         "startDate": "Alguskuupäev",
         "week": "Nädal"
       },

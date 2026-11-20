@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
 import {
   caseLawCitations,
@@ -28,12 +29,14 @@ import {
   statuteSitemapShards,
   systemAuditRuns,
 } from "@/api/db/schema";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
@@ -51,6 +54,51 @@ const CASE_LAW_GENERATION = "case_law_v5";
 const emptyContentHash =
   EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
   panic("The empty corpus hash fixture must exist");
+
+/** In seed order: decision `n` is in `SEEDED_COUNTRIES[n % 3]`. */
+const SEEDED_COUNTRIES = ["CZE", "SVK", "POL"] as const;
+
+/**
+ * Decision `n`'s primary reference as a publisher prints it. Its docket
+ * columns come from the ingestion writer (`decisionDocketColumns`), never a
+ * format of the seed's own. The mix: dockets with a four-digit year, whose
+ * match key folds the year; sheets that share one case file; dockets with a
+ * two-digit year and references without one, whose keys the match key keeps;
+ * and neutral citations, which are no docket and get no key.
+ */
+const seededPrimaryReference = (
+  n: number,
+): { caseNumber: string; caseNumberType: DecisionPrimaryReferenceType } => {
+  // Within each run of 30, two decisions of one country share a case file.
+  const file = Math.floor(n / 30);
+  switch (n % 5) {
+    case 0:
+      return {
+        caseNumber: `QPG ${String(n)}/2024`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      };
+    case 1:
+      return {
+        caseNumber: `${String(1 + (n % 30))} Cdo ${String(n)}/${String(2000 + (n % 20))}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+    case 2:
+      return {
+        caseNumber: `${String(1 + (file % 30))} Tdo ${String(file)}/${String(2000 + (file % 20))}-${String(n)}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+    case 3:
+      return {
+        caseNumber: `${String(1 + (n % 30))} Odo ${String(n)}/${String(n % 20).padStart(2, "0")}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+    default:
+      return {
+        caseNumber: `qpg-case-${String(n)}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+  }
+};
 
 const makeUuid = (prefix: string, number: number): string =>
   `${prefix}${String(number).padStart(12, "0")}`;
@@ -104,17 +152,45 @@ export const seedQueryPlanData = async (
     }),
   );
 
+  const decisionReferences = Array.from(
+    { length: QUERY_PLAN_ROW_COUNT },
+    (_, index) => {
+      const n = index + 1;
+      const country = SEEDED_COUNTRIES[n % SEEDED_COUNTRIES.length] ?? "CZE";
+      const columns = decisionDocketColumns({
+        ...seededPrimaryReference(n),
+        country,
+      });
+      // Pairs of decisions alternate between the jurisdiction's own language
+      // and the English translation its apex courts publish beside it.
+      const language =
+        Math.floor((n + 1) / 2) % 2 === 0
+          ? (corpusMorphologyLanguage(country) ??
+            panic(
+              `The seeded jurisdiction has no primary language: ${country}`,
+            ))
+          : "en";
+      return sql`(${n}::integer, ${country}::varchar, ${language}::varchar,
+        ${columns.caseNumber}::varchar,
+        ${columns.caseNumberType}::varchar, ${columns.citationKey}::varchar,
+        ${columns.docketFamilyKey}::varchar)`;
+    },
+  );
   await db.execute(sql`
     INSERT INTO ${caseLawDecisions}
-      (id, source_id, case_number, court, country, language, ecli,
+      (id, source_id, case_number, case_number_type, citation_key,
+       docket_family_key, court, country, language, ecli,
        language_group_key, decision_date, metadata, created_at, updated_at)
     SELECT
       (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
       ${caseLawSourceId}::uuid,
-      'qpg-case-' || n::text,
+      reference.case_number,
+      reference.case_number_type,
+      reference.citation_key,
+      reference.docket_family_key,
       'Query Plan Court ' || (n % 40)::text,
-      CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
-      CASE ((n + 1) / 2) % 2 WHEN 0 THEN 'cs' ELSE 'en' END,
+      reference.country,
+      reference.language,
       CASE WHEN n % 7 = 0 THEN NULL
         ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
       CASE WHEN n % 5 = 0 THEN NULL
@@ -124,7 +200,10 @@ export const seedQueryPlanData = async (
       '{}'::jsonb,
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute',
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute'
-    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+    FROM (VALUES ${sql.join(decisionReferences, sql`, `)}) AS reference(
+      n, country, language, case_number, case_number_type, citation_key,
+      docket_family_key
+    )
   `);
 
   await db.execute(sql`

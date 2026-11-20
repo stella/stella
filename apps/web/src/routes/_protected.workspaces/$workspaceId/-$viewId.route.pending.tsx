@@ -6,7 +6,6 @@ import { useParams, useSearch } from "@tanstack/react-router";
 import { FaceLabelPending } from "@stll/ui/control-face";
 import { PlusIcon } from "@stll/ui/icons";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/layout-tokens";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 import { ViewChromeBar, ViewToolbarChrome } from "@stll/ui/view-toolbar-shell";
 import { WorkspaceViewSwitcherFace } from "@stll/workspace-ui/view-strip";
@@ -21,6 +20,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-chrome.logic";
 import type { CachedViewChrome } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-chrome.logic";
 import { VIEW_LAYOUT_ICONS } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-icons.logic";
+import { ViewToolbarFace } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.pending";
 
 /**
  * The view tabs row. Loaded views and the route-pending state render the same
@@ -98,12 +98,10 @@ const ViewLayoutTabIcon = ({ view }: { view: WorkspaceView }) => {
   return <Icon className="size-3.5 shrink-0" />;
 };
 
-/** The toolbar's place while its controls load. */
-const ViewToolbarPending = () => (
+/** The toolbar while its controls load: their faces, for the cached view. */
+const ViewToolbarPending = ({ view }: { view: WorkspaceView }) => (
   <ViewToolbarChrome aria-hidden="true">
-    <Skeleton className="size-7 shrink-0 rounded-md" />
-    <Skeleton className="size-7 shrink-0 rounded-md" />
-    <Skeleton className="h-7 w-24 shrink-0 rounded-md" />
+    <ViewToolbarFace view={view} />
   </ViewToolbarChrome>
 );
 
@@ -160,7 +158,9 @@ const ViewChromePending = ({ chrome }: { chrome: CachedViewChrome | null }) => {
           />
         }
         toolbar={
-          hasViewToolbar(chrome.activeView) ? <ViewToolbarPending /> : null
+          hasViewToolbar(chrome.activeView) ? (
+            <ViewToolbarPending view={chrome.activeView} />
+          ) : null
         }
       />
     </div>
