@@ -257,3 +257,4 @@ export { default as replacements_legislation_documents_eli_current_lang_idx } fr
 export { default as replacements_legislation_documents_eli_version_lang_idx } from "./online-migration-entries/replacements-legislation-documents-eli-version-lang-idx";
 export { default as replacements_organization_file_objects_org_pending_reconcile_idx } from "./online-migration-entries/replacements-organization-file-objects-org-pending-reconcile-idx";
 export { default as replacements_organization_file_objects_pending_reconcile_idx } from "./online-migration-entries/replacements-organization-file-objects-pending-reconcile-idx";
+export { default as replacements_previous_fallback_decision_index } from "./online-migration-entries/replacements-previous-fallback-decision-index";

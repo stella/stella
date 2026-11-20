@@ -65,6 +65,7 @@ import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import { RootPendingComponent } from "@/routes/-root-pending";
+import { StrayFileDropGuard } from "@/routes/-stray-file-drop-guard";
 import "@/styles/app.css";
 import "@/styles/print.css";
 
@@ -281,6 +282,7 @@ function RootApp() {
         <AppFrameHost>
           <Outlet />
         </AppFrameHost>
+        <StrayFileDropGuard />
         {DevRoot ? (
           <ClientOnly>
             <Suspense fallback={null}>

@@ -5,6 +5,7 @@ import { getTableName } from "drizzle-orm";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
 import { readOnlineIndexConfig } from "../env-online-index";
@@ -59,7 +60,6 @@ import {
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
   type ExecutableOnlineUniqueIndexName,
   FALLBACK_DECISION_UNIQUE_INDEXES,
-  ONLINE_UNIQUE_INDEX_NAMES,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -169,10 +169,10 @@ const REPORT_EXPORT_INDEX = "report_exports_workspace_requester_created_idx";
 const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
 const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
-const [{ name: FALLBACK_IDENTITY_INDEX_NAME }] =
-  FALLBACK_DECISION_UNIQUE_INDEXES;
-const PREVIOUS_FALLBACK_DECISION_INDEX =
-  ONLINE_UNIQUE_INDEX_NAMES.CASE_LAW_DECISIONS_SOURCE_CASE_LANG_NULL_IDX;
+const [
+  { name: FALLBACK_IDENTITY_INDEX_NAME },
+  { name: FALLBACK_CONTENT_INDEX_NAME },
+] = FALLBACK_DECISION_UNIQUE_INDEXES;
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
 const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
 const LEGACY_DOCUMENT_DATE_INDEX =
@@ -214,14 +214,12 @@ describe("online migrations", () => {
     },
   );
 
-  test("the expansion keeps the docket-only fallback index until its contract release", () => {
-    // The contract release retires it through an index replacement; until
-    // then the schema still declares it, so the runner keeps it valid.
+  test("the online runner does not rebuild the retired docket-only fallback index", () => {
     expect(
       ONLINE_MIGRATION_INDEXES.some(
         ({ name }) => name === PREVIOUS_FALLBACK_DECISION_INDEX,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       ONLINE_INDEX_REPLACEMENTS.flatMap(
         ({ replacementNames }) => replacementNames,
@@ -1796,12 +1794,37 @@ describe("online migrations", () => {
       harness.statements,
       `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_SOURCE_CASE_INDEX}"`,
     );
-    expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, SOURCE_DOCUMENT_INDEX),
+    for (const replacement of [
+      SOURCE_DOCUMENT_INDEX,
+      FALLBACK_IDENTITY_INDEX_NAME,
+    ]) {
+      const replacementOffset = indexOfStatement(
+        harness.statements,
+        replacement,
+      );
+      expect(replacementOffset).toBeGreaterThan(-1);
+      expect(dropOffset).toBeGreaterThan(replacementOffset);
+    }
+  });
+
+  test("retires the docket-only fallback index after both decision replacements validate", async () => {
+    const harness = createHarness({ retiredIndexes: [] });
+    await runOnlineMigrations(harness.pool, { repairs: [] });
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${PREVIOUS_FALLBACK_DECISION_INDEX}"`,
     );
-    expect(dropOffset).toBeGreaterThan(
-      indexOfStatement(harness.statements, FALLBACK_IDENTITY_INDEX_NAME),
-    );
+    for (const replacement of [
+      FALLBACK_IDENTITY_INDEX_NAME,
+      FALLBACK_CONTENT_INDEX_NAME,
+    ]) {
+      const replacementOffset = indexOfStatement(
+        harness.statements,
+        replacement,
+      );
+      expect(replacementOffset).toBeGreaterThan(-1);
+      expect(dropOffset).toBeGreaterThan(replacementOffset);
+    }
   });
 
   test("retires the broad document index only after its exact replacement validates", async () => {

@@ -93,6 +93,7 @@ const createDownloadRoute = (membership: { currentId: string | null }) =>
             userDeleted: false,
             enrolledFeatureIds: [],
             professionalUse: { status: "required" },
+            ssoAccess: { status: "not_evaluated" },
           };
     },
     recordDownload: async ({ id, userId }) => {
