@@ -99,6 +99,15 @@ const fileDataTransfer = (file: File) => ({
   types: ["Files"],
 });
 
+/** `createEvent` types every event as `Event`; a drag event is a
+ *  `DragEvent`, which carries the data transfer the guard writes to. */
+const dropEffectOf = (event: Event) => {
+  if (!(event instanceof DragEvent)) {
+    throw new TypeError(`Expected a DragEvent for ${event.type}`);
+  }
+  return event.dataTransfer?.dropEffect;
+};
+
 const docx = () =>
   new File(["docx bytes"], "contract.docx", { type: DOCX_MIME });
 
@@ -138,7 +147,7 @@ test("a file dropped where no drop zone claims it never reaches the browser", ()
   const dragOver = createEvent.dragOver(outside, { dataTransfer });
   fireEvent(outside, dragOver);
   expect(dragOver.defaultPrevented).toBe(true);
-  expect(dragOver.dataTransfer?.dropEffect).toBe("none");
+  expect(dropEffectOf(dragOver)).toBe("none");
 
   const drop = createEvent.drop(outside, { dataTransfer });
   fireEvent(outside, drop);
@@ -153,7 +162,7 @@ test("a file dropped where no drop zone claims it never reaches the browser", ()
     dataTransfer: fileDataTransfer(docx()),
   });
   fireEvent(outside, claimed);
-  expect(claimed.dataTransfer?.dropEffect).not.toBe("none");
+  expect(dropEffectOf(claimed)).not.toBe("none");
 
   outside.removeEventListener("dragover", claim);
   outside.remove();
