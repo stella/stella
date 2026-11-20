@@ -40,6 +40,10 @@ import {
 import { CopyButton } from "@/features/knowledge/public/tools/copy-button";
 import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import {
+  ContributeFormFrame,
+  ContributePageFrame,
+} from "@/features/knowledge/public/tools/tool-contribute-page.pending";
+import {
   CATALOGUE_CONTRIBUTING_URL,
   CATALOGUE_ENTRIES_URL,
 } from "@/features/knowledge/public/tools/tool-detail.logic";
@@ -86,78 +90,71 @@ export const ContributePage = () => {
   const t = useTranslations();
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-lg font-semibold">
-            {t("publicTools.contribute.title")}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {t("publicTools.contribute.intro")}
+    <ContributePageFrame
+      className="overflow-y-auto"
+      intro={t("publicTools.contribute.intro")}
+      title={t("publicTools.contribute.title")}
+    >
+      <AddSkillForm />
+
+      <div className="border-border border-t pt-6">
+        <Section title={t("knowledge.sections.skills.title")}>
+          <p>
+            <strong className="text-foreground font-medium">
+              {t("publicTools.contribute.inTreeTitle")}
+            </strong>{" "}
+            {t("publicTools.contribute.inTreeBody")}
           </p>
-        </div>
-
-        <AddSkillForm />
-
-        <div className="border-border border-t pt-6">
-          <Section title={t("knowledge.sections.skills.title")}>
-            <p>
-              <strong className="text-foreground font-medium">
-                {t("publicTools.contribute.inTreeTitle")}
-              </strong>{" "}
-              {t("publicTools.contribute.inTreeBody")}
-            </p>
-            <p>
-              <strong className="text-foreground font-medium">
-                {t("publicTools.contribute.githubTitle")}
-              </strong>{" "}
-              {t("publicTools.contribute.githubBody")}
-            </p>
-          </Section>
-        </div>
-
-        <Section title={t("publicTools.contribute.mcpTitle")}>
-          <p>{t("publicTools.contribute.mcpBody")}</p>
+          <p>
+            <strong className="text-foreground font-medium">
+              {t("publicTools.contribute.githubTitle")}
+            </strong>{" "}
+            {t("publicTools.contribute.githubBody")}
+          </p>
         </Section>
-
-        <Section title={t("publicTools.contribute.licenseTitle")}>
-          <p>{t("publicTools.contribute.licenseBody")}</p>
-        </Section>
-
-        <Section title={t("publicTools.contribute.recommendedTitle")}>
-          <p>{t("publicTools.contribute.recommendedBody")}</p>
-        </Section>
-
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Button
-            render={
-              <a
-                aria-label={t("publicTools.contribute.contributingLink")}
-                href={sanitizeHref(CATALOGUE_CONTRIBUTING_URL)}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-            variant="outline"
-          >
-            {t("publicTools.contribute.contributingLink")}
-          </Button>
-          <Button
-            render={
-              <a
-                aria-label={t("publicTools.contribute.repoLink")}
-                href={sanitizeHref(CATALOGUE_ENTRIES_URL)}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-            variant="outline"
-          >
-            {t("publicTools.contribute.repoLink")}
-          </Button>
-        </div>
       </div>
-    </main>
+
+      <Section title={t("publicTools.contribute.mcpTitle")}>
+        <p>{t("publicTools.contribute.mcpBody")}</p>
+      </Section>
+
+      <Section title={t("publicTools.contribute.licenseTitle")}>
+        <p>{t("publicTools.contribute.licenseBody")}</p>
+      </Section>
+
+      <Section title={t("publicTools.contribute.recommendedTitle")}>
+        <p>{t("publicTools.contribute.recommendedBody")}</p>
+      </Section>
+
+      <div className="flex flex-wrap gap-3 pt-2">
+        <Button
+          render={
+            <a
+              aria-label={t("publicTools.contribute.contributingLink")}
+              href={sanitizeHref(CATALOGUE_CONTRIBUTING_URL)}
+              rel="noreferrer"
+              target="_blank"
+            />
+          }
+          variant="outline"
+        >
+          {t("publicTools.contribute.contributingLink")}
+        </Button>
+        <Button
+          render={
+            <a
+              aria-label={t("publicTools.contribute.repoLink")}
+              href={sanitizeHref(CATALOGUE_ENTRIES_URL)}
+              rel="noreferrer"
+              target="_blank"
+            />
+          }
+          variant="outline"
+        >
+          {t("publicTools.contribute.repoLink")}
+        </Button>
+      </div>
+    </ContributePageFrame>
   );
 };
 
@@ -256,14 +253,10 @@ const AddSkillForm = () => {
   };
 
   return (
-    <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
-      <h2 className="text-base font-semibold">
-        {t("publicTools.contribute.form.title")}
-      </h2>
-      <p className="text-muted-foreground text-sm">
-        {t("publicTools.contribute.form.intro")}
-      </p>
-
+    <ContributeFormFrame
+      intro={t("publicTools.contribute.form.intro")}
+      title={t("publicTools.contribute.form.title")}
+    >
       <FormRow
         htmlFor="skill-name"
         label={t("publicTools.contribute.form.name")}
@@ -572,7 +565,7 @@ const AddSkillForm = () => {
           </p>
         )}
       </div>
-    </section>
+    </ContributeFormFrame>
   );
 };
 

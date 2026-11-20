@@ -1,16 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
 
-import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
 import {
   catalogueTemplateOptions,
   catalogueTemplatesOptions,
 } from "@/features/knowledge/public/public-knowledge-queries";
-import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
-import { TemplateCatalogueDetailView } from "@/features/knowledge/views/templates/template-catalogue-detail-view";
-import { detached } from "@/lib/detached";
 import { templateIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
 import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
 import {
@@ -21,7 +16,8 @@ import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
-import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
+import { CatalogueTemplatePage } from "@/routes/knowledge/-public/catalogue-template.page";
+import { CatalogueTemplatePending } from "@/routes/knowledge/-public/catalogue-template.pending";
 
 type CatalogueTemplateLoaderArgs = {
   context: { queryClient: QueryClient };
@@ -90,72 +86,5 @@ export const Route = createFileRoute(
       type: "article",
     }),
   component: CatalogueTemplatePage,
+  pendingComponent: CatalogueTemplatePending,
 });
-
-function CatalogueTemplatePage() {
-  const t = useTranslations();
-  const { available, status } =
-    publicKnowledgeSource.useCatalogueTemplatesAvailable();
-  if (status !== "success") {
-    return (
-      <KnowledgeStatusMessage>
-        {t(
-          status === "error"
-            ? "knowledge.catalogue.unavailable"
-            : "common.loading",
-        )}
-      </KnowledgeStatusMessage>
-    );
-  }
-  return available ? <AvailableCatalogueTemplatePage /> : null;
-}
-
-function AvailableCatalogueTemplatePage() {
-  const t = useTranslations();
-  const packId = Route.useParams({ select: (params) => params.packId });
-  const templateId = Route.useParams({ select: (params) => params.templateId });
-  const intent = Route.useSearch({ select: (search) => search.intent });
-  const navigate = Route.useNavigate();
-  const { template } = publicKnowledgeSource.useCatalogueTemplate(
-    packId,
-    templateId,
-  );
-  const preview = publicKnowledgeSource.useCatalogueTemplatePreview(
-    packId,
-    templateId,
-  );
-
-  if (template === undefined) {
-    return (
-      <KnowledgeStatusMessage>{t("common.loading")}</KnowledgeStatusMessage>
-    );
-  }
-  if (template === null) {
-    return (
-      <KnowledgeStatusMessage>
-        {t("knowledge.catalogue.notFound")}
-      </KnowledgeStatusMessage>
-    );
-  }
-
-  return (
-    <TemplateCatalogueDetailView
-      actions={
-        <CatalogueTemplateActions
-          intent={intent}
-          onIntentSettled={() => {
-            detached(
-              navigate({ replace: true, search: {} }),
-              "knowledge-catalogue.clear-intent",
-            );
-          }}
-          packId={packId}
-          templateName={template.title}
-          templateSlug={templateId}
-        />
-      }
-      preview={preview}
-      template={template}
-    />
-  );
-}
