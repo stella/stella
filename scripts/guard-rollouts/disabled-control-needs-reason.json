@@ -1,21 +1,14 @@
 {
   "id": "disabled-control-needs-reason",
   "rules": ["disabled-control-needs-reason/disabled-control-needs-reason"],
-  "type": "changed-lines",
-  "expiresAt": "2026-11-27T00:00:00.000Z",
+  "type": "full",
   "check": [
     "bun",
     "--bun",
     "oxlint",
     "-c",
     "oxlint.config.ts",
-    "--allow",
-    "all",
-    "--deny",
-    "disabled-control-needs-reason/disabled-control-needs-reason",
-    "apps/web/src",
-    "apps/desktop/src",
-    "apps/outlook/src",
-    "packages/ui/src"
+    "apps",
+    "packages"
   ]
 }

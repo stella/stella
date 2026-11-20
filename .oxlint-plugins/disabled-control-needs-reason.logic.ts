@@ -1,10 +1,5 @@
 // What counts as a disabled control with nothing to say about why.
 //
-// Shared by the oxlint rule (`disabled-control-needs-reason.ts`) and the
-// ratchet counter in `scripts/ratchet.ts`, so the burn-down count and the
-// lint verdict can never disagree about a site. Pure over the ESTree JSX
-// shape that both oxlint and `@stll/scripts/src/syntax-tree` produce.
-//
 // A disabled control that is silent about why is a dead end: the reader
 // reaches for it, nothing happens, and nothing says what to do. `Button`
 // takes a `disabledReason`, which becomes its tooltip while disabled and keeps
