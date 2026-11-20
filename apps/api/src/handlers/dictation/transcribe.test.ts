@@ -148,7 +148,7 @@ const fixture = (
           });
         },
       }),
-    organizationVocabulary: async ({ first }) =>
+    organizationVocabulary: async ({ first = [] }) =>
       await Promise.resolve(Result.ok([...first, ...ORGANIZATION_WORDS])),
     credential: async () => {
       credentials++;
@@ -1157,7 +1157,7 @@ describe("organization dictation words", () => {
     let reads = 0;
     const result = await executeDictation(f.context, {
       ...f.dependencies,
-      organizationVocabulary: async ({ first }) => {
+      organizationVocabulary: async ({ first = [] }) => {
         reads += 1;
         return await Promise.resolve(Result.ok([...first]));
       },
