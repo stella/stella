@@ -85,7 +85,18 @@ export const saveDownload = async ({
       message: `The download failed with HTTP ${String(response.value.status)}; run the command again for a fresh link`,
     });
   }
-  const bytes = new Uint8Array(await response.value.arrayBuffer());
+  // The body can still fail after the headers arrived (a dropped connection,
+  // the deadline); that is a failed download, and nothing is written.
+  const body = await Result.tryPromise(
+    async () => new Uint8Array(await response.value.arrayBuffer()),
+  );
+  if (Result.isError(body)) {
+    return Result.err({
+      kind: "download",
+      message: `The download failed: ${body.error.message}`,
+    });
+  }
+  const bytes = body.value;
   const written = await Result.tryPromise(async () => {
     await write(path, bytes);
   });

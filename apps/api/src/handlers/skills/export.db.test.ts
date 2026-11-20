@@ -213,6 +213,9 @@ const definitionOf = async (skillId: SafeId<"agentSkill">) => {
     })
     .from(agentSkills)
     .where(eq(agentSkills.id, skillId));
+  if (skill === undefined) {
+    throw new TypeError(`no stored skill ${skillId}`);
+  }
   const files = await testDb
     .select({
       content: agentSkillResources.content,
@@ -286,7 +289,14 @@ describe("skill export", () => {
       expect(write.key.startsWith(`exports/${ids.orgA}/skills/${id}/`)).toBe(
         true,
       );
-      expect(copy.skill).toEqual(original.skill);
+      // The instructions name the file at the path the package gives it.
+      expect(copy.skill).toEqual({
+        ...original.skill,
+        body: BODY.replace(
+          "references/precedent.pdf",
+          "references/precedent.md",
+        ),
+      });
       expect(copy.files).toEqual([
         ...original.files.slice(0, 1),
         // Extracted text travels as the Markdown it is.
@@ -332,6 +342,46 @@ describe("skill export", () => {
     });
   });
 
+  test("extracted text whose Markdown name is taken goes to the first free name, and the instructions follow it", async () => {
+    const { id } = await seedSkill({
+      resources: [
+        { content: "Report notes.\n", path: "references/report.md" },
+        { content: "Older notes.\n", path: "references/report.pdf.md" },
+        { content: "# Report\n", path: "references/report.pdf" },
+      ],
+      scope: "private",
+      userId: ids.userA1,
+    });
+    await testDb
+      .update(agentSkills)
+      .set({
+        body: "Read references/report.pdf. Then references/report.pdf.md and references/report.md.",
+      })
+      .where(eq(agentSkills.id, id));
+    const { write } = await exportedBytes(id, "zip");
+
+    const imported = await importAs(
+      colleague(),
+      new File([write.data], "report.zip"),
+    );
+    if ("code" in imported) {
+      throw new TypeError(`expected the import to succeed: ${imported.code}`);
+    }
+    const copy = await definitionOf(toSafeId<"agentSkill">(imported.id));
+
+    expect(copy.files).toHaveLength(3);
+    expect(copy.files).toEqual(
+      expect.arrayContaining([
+        { content: "# Report\n", path: "references/report-2.md" },
+        { content: "Report notes.\n", path: "references/report.md" },
+        { content: "Older notes.\n", path: "references/report.pdf.md" },
+      ]),
+    );
+    expect(copy.skill.body).toBe(
+      "Read references/report-2.md. Then references/report.pdf.md and references/report.md.",
+    );
+  });
+
   test("a bound skill exports for a member who reaches it, without the binding", async () => {
     const { id } = await seedSkill({
       boundWorkspaceId: ids.wsA1,
@@ -343,6 +393,8 @@ describe("skill export", () => {
       format: "zip",
       skillId: id,
     });
+    expect(reached.response).toMatchObject({ format: "zip" });
+    expect("downloadUrl" in reached.response).toBe(true);
     const [write] = reached.writes;
     if (write === undefined) {
       throw new TypeError("expected one stored archive");

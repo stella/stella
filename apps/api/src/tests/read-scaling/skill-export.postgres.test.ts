@@ -21,6 +21,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const storage = startFakeS3();
         const fixtures: Awaited<ReturnType<typeof seedSkillExportScaling>>[] =
           [];
+        const cleanupFailures: unknown[] = [];
         try {
           const small = await seedSkillExportScaling(db, 10);
           fixtures.push(small);
@@ -47,14 +48,16 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             ).toEqual([]);
           }
         } finally {
-          try {
-            for (const fixture of fixtures) {
-              await fixture.cleanup();
-            }
-          } finally {
-            storage.stop();
+          // Each fixture is cleaned up even when another's cleanup fails, and
+          // fake storage stops either way.
+          for (const fixture of fixtures) {
+            await fixture.cleanup().catch((error: unknown) => {
+              cleanupFailures.push(error);
+            });
           }
+          storage.stop();
         }
+        expect(cleanupFailures).toEqual([]);
       });
     });
   },

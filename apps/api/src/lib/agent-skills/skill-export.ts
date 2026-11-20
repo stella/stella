@@ -19,7 +19,7 @@ import type {
 
 import type { Transaction } from "@/api/db/root";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import { readSkillResourceOriginals } from "@/api/lib/agent-skills/resource-originals";
+import { originalFromColumns } from "@/api/lib/agent-skills/resource-originals";
 import type { SkillResourceOriginal } from "@/api/lib/agent-skills/resource-originals";
 import { renderSkillFile } from "@/api/lib/agent-skills/skill-file";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -36,8 +36,9 @@ const ORIGINAL_READ_TIMEOUT_MS = 30_000;
 /**
  * Where a stored text file goes in a package. A file kept as the text
  * extracted from a PDF or DOCX holds Markdown, not the format its name says,
- * so it is exported under `.md` (beside the name it had, if that is free)
- * rather than as a file no reader could open.
+ * so it is exported under `.md` rather than as a file no reader could open:
+ * `report.pdf` becomes `report.md`, or `report.pdf.md` when that is taken,
+ * or the first free `report-2.md`, `report-3.md` and so on.
  */
 const exportedResourcePath = (
   path: string,
@@ -46,9 +47,67 @@ const exportedResourcePath = (
   if (!isKnownBinaryResourcePath(path)) {
     return path;
   }
-  const dot = path.lastIndexOf(".");
-  const replaced = `${path.slice(0, dot)}.md`;
-  return taken.has(replaced) ? `${path}.md` : replaced;
+  const stem = path.slice(0, path.lastIndexOf("."));
+  for (const candidate of [`${stem}.md`, `${path}.md`]) {
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
+  }
+  // Each step names a path not yet taken or moves past one that is, and the
+  // set is finite, so the loop ends.
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${stem}-${String(suffix)}.md`;
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
+  }
+};
+
+/** A character that can continue a file path written in prose. */
+const PATH_CHARACTER = /[\w/-]/u;
+
+/**
+ * Whether `path` stands whole at `index` of `text`: not the tail or head of
+ * a longer path. A dot after it continues the path only when a path
+ * character follows (`a.pdf.md`), not when it ends a sentence (`a.pdf.`).
+ */
+const standsWhole = (text: string, index: number, path: string): boolean => {
+  const before = text.charAt(index - 1);
+  const after = text.charAt(index + path.length);
+  const next = text.charAt(index + path.length + 1);
+  return (
+    !PATH_CHARACTER.test(before) &&
+    before !== "." &&
+    !PATH_CHARACTER.test(after) &&
+    !(after === "." && PATH_CHARACTER.test(next))
+  );
+};
+
+/**
+ * The skill's instructions with every whole mention of a file the export
+ * renamed pointed at its new path, so the package's instructions name files
+ * it contains. Mentions of files that keep their path are untouched.
+ */
+const withRenamedReferences = (
+  body: string,
+  renamed: ReadonlyMap<string, string>,
+): string => {
+  let text = body;
+  for (const [from, to] of renamed) {
+    const parts: string[] = [];
+    let start = 0;
+    let index = text.indexOf(from);
+    while (index !== -1) {
+      if (standsWhole(text, index, from)) {
+        parts.push(text.slice(start, index), to);
+        start = index + from.length;
+      }
+      index = text.indexOf(from, index + from.length);
+    }
+    parts.push(text.slice(start));
+    text = parts.join("");
+  }
+  return text;
 };
 
 /** A skill with more files or bytes than one package carries. */
@@ -128,12 +187,18 @@ export const loadSkillPackageSource = async (
     );
   }
   // Bounded by the per-skill file cap; a package must never drop a file
-  // silently, so a skill past it is refused below.
+  // silently, so a skill past it is refused below. Each file's text and its
+  // original come from the same row read, so an edit committing during the
+  // export cannot pair the old text with the new original state.
   const read = await readBounded(
     tx
       .select({
         content: agentSkillResources.content,
+        mediaType: agentSkillResources.originalMediaType,
         path: agentSkillResources.path,
+        s3Key: agentSkillResources.originalS3Key,
+        sha256: agentSkillResources.originalSha256,
+        sizeBytes: agentSkillResources.originalSizeBytes,
       })
       .from(agentSkillResources)
       .where(eq(agentSkillResources.skillId, skillId))
@@ -143,13 +208,14 @@ export const loadSkillPackageSource = async (
   if (read.type === "overflow") {
     return Result.err(skillTooLargeToExport());
   }
-  const { rows } = read;
-  const originals = await readSkillResourceOriginals(tx, skillId);
+  const rows = read.rows.map(({ content, path, ...columns }) => ({
+    content,
+    original: originalFromColumns(columns),
+    path,
+  }));
   const packageBytes = rows.reduce(
-    (total, { content, path }) =>
-      total +
-      (originals.get(path)?.sizeBytes ??
-        UTF8_ENCODER.encode(content).byteLength),
+    (total, { content, original }) =>
+      total + (original?.sizeBytes ?? UTF8_ENCODER.encode(content).byteLength),
     0,
   );
   // Writes are held to the package size now; a skill saved before that
@@ -160,16 +226,19 @@ export const loadSkillPackageSource = async (
   const taken = new Set(rows.map(({ path }) => path));
   const resources: SkillArchiveEntry[] = [];
   const kept: { original: SkillResourceOriginal; path: string }[] = [];
-  for (const { content, path } of rows) {
+  const renamed = new Map<string, string>();
+  for (const { content, original, path } of rows) {
     // A file kept with its original travels as those bytes at its own path;
     // the text beside it was derived from them.
-    const original = originals.get(path);
     if (original !== undefined) {
       kept.push({ original, path });
       continue;
     }
     const exported = exportedResourcePath(path, taken);
     taken.add(exported);
+    if (exported !== path) {
+      renamed.set(path, exported);
+    }
     resources.push({ bytes: UTF8_ENCODER.encode(content), path: exported });
   }
   return Result.ok({
@@ -178,7 +247,10 @@ export const loadSkillPackageSource = async (
     originals: kept,
     resourceCount: rows.length,
     resources,
-    skillMd: renderSkillFile(skill),
+    skillMd: renderSkillFile({
+      ...skill,
+      body: withRenamedReferences(skill.body, renamed),
+    }),
     slug: skill.slug,
   });
 };

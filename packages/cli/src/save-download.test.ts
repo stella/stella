@@ -73,6 +73,24 @@ describe("saving a capability's download", () => {
       payload: { downloadUrl: "https://files.test/a.zip" },
       response: new Response("expired", { status: 403 }),
     },
+    {
+      case: "a body that fails after its first chunk",
+      kind: "download",
+      payload: { downloadUrl: "https://files.test/a.zip" },
+      response: new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.enqueue(archive);
+          },
+          // The read after the first chunk finds the connection gone.
+          pull: (controller) => {
+            if (controller.desiredSize !== null && controller.desiredSize > 0) {
+              controller.error(new TypeError("connection reset"));
+            }
+          },
+        }),
+      ),
+    },
   ] as const)(
     "writes nothing for $case",
     async ({ kind, payload, response }) => {
