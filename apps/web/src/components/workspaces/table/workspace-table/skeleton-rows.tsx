@@ -137,3 +137,37 @@ export const WorkspaceTableSkeletonHeader = ({
     )}
   </WorkspaceGridRow>
 );
+
+/**
+ * The header row a grouped table's section draws while its count or first
+ * page loads: a bar in each column's head, then the filler head, in the
+ * section's grid. The live section and the grouped table's pending face
+ * both draw it.
+ */
+export const WorkspaceTableGroupSkeletonHeader = ({
+  addPropertyColumn = null,
+  renderColumns,
+}: WorkspaceTableSkeletonHeaderProps) => (
+  <WorkspaceGridRow className="pointer-events-none">
+    {renderColumns.map((column) => (
+      <WorkspaceGridHead
+        className="flex items-center px-2"
+        key={column.id}
+        role="presentation"
+      >
+        <Skeleton className="h-3.5 w-2/5" />
+      </WorkspaceGridHead>
+    ))}
+    <WorkspaceGridHead
+      aria-hidden="true"
+      className={cn("pointer-events-none", addPropertyColumn && "border-e-0")}
+      role="presentation"
+      style={{
+        gridColumn: getEndFillerGridColumn({
+          renderColumns,
+          addPropertyColumn,
+        }),
+      }}
+    />
+  </WorkspaceGridRow>
+);

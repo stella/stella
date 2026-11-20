@@ -13,6 +13,11 @@ import type { ControlSize } from "../lib/control-size";
 import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
+import {
+  SELECT_TRIGGER_ICON_CLASS_NAME,
+  SELECT_TRIGGER_SIZE_CLASS_NAMES,
+  SELECT_VALUE_CLASS_NAME,
+} from "./select-classes";
 
 type SelectItemProps = SelectPrimitive.Item.Props & {
   label?: string;
@@ -101,17 +106,10 @@ const SelectTrigger = ({
   >
     {children}
     <SelectPrimitive.Icon data-slot="select-icon">
-      <ChevronsUpDownIcon className="-me-1 size-4.5 opacity-80 sm:size-4" />
+      <ChevronsUpDownIcon className={SELECT_TRIGGER_ICON_CLASS_NAME} />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 );
-
-const SELECT_TRIGGER_SIZE_CLASS_NAMES = {
-  [CONTROL_SIZE.sm]:
-    "min-h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:min-h-7 sm:text-xs",
-  [CONTROL_SIZE.default]: undefined,
-  [CONTROL_SIZE.lg]: "min-h-10 sm:min-h-9",
-} as const satisfies Record<ControlSize, string | undefined>;
 
 const SelectValue = ({
   className,
@@ -127,10 +125,7 @@ const SelectValue = ({
   if (children !== undefined || displays.size === 0) {
     return (
       <SelectPrimitive.Value
-        className={cn(
-          "data-placeholder:text-muted-foreground flex-1 truncate",
-          className,
-        )}
+        className={cn(SELECT_VALUE_CLASS_NAME, className)}
         data-slot="select-value"
         placeholder={placeholder}
         {...props}

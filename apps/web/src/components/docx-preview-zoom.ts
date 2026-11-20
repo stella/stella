@@ -29,6 +29,19 @@ const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
 const DOCX_PINCH_SENSITIVITY = 0.005;
 
+/**
+ * The width `useDocxFitZoom` gives the whole page, as CSS, for a view that
+ * cannot measure before it paints: the measured box's width (`100cqw`, the
+ * nearest inline-size query container, which must be as wide as the box the
+ * hook measures) less the fit padding, over the fitted width, capped at the
+ * largest automatic zoom, times the page. The hook rounds its zoom to
+ * hundredths, so the two can differ by under half a percent of the page.
+ */
+export const docxFitPageWidthCss = (maxAutoZoom: number): string =>
+  `min(${String(maxAutoZoom * DOCX_PAGE_WIDTH)}px, calc((100cqw - ${String(
+    DOCX_FIT_PADDING * 2,
+  )}px) * ${String(DOCX_PAGE_WIDTH / DOCX_TEXT_AREA_WIDTH)}))`;
+
 type ZoomableDocxEditor = {
   getZoom: () => number;
   setZoom: (zoom: number) => void;

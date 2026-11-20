@@ -9,7 +9,11 @@
 //   1. Initial JS ratchet: the gzip of the initial chunks stays within
 //      INITIAL_GROWTH_LIMIT_BYTES of the committed budget.
 //   2. Pending layer: `*.pending.tsx` loading views are eager by design, so
-//      each stays small and so does their sum.
+//      each stays within PENDING_MODULE_LIMIT_BYTES. Their sum has a fixed
+//      ceiling for full coverage, PENDING_TOTAL_LIMIT_BYTES: about 100 routes
+//      at about 2 KiB each plus the pieces they share. The ceiling is not a
+//      ratchet. The initial JS ratchet (gate 1) already counts the pending
+//      layer and is the binding limit on what loading views add.
 //   3. No page code at startup: no page module, no `?tsr-shared=1` module and
 //      no route-file code that only the route's `component` reaches in the
 //      initial chunks (see STARTUP_KINDS).
@@ -31,7 +35,7 @@ import * as v from "valibot";
 
 export const INITIAL_GROWTH_LIMIT_BYTES = 8 * 1024;
 export const PENDING_MODULE_LIMIT_BYTES = 6 * 1024;
-export const PENDING_TOTAL_LIMIT_BYTES = 150 * 1024;
+export const PENDING_TOTAL_LIMIT_BYTES = 240 * 1024;
 
 /** A module's minified size in one chunk, keyed by its app-relative id. */
 export type BuiltChunk = {

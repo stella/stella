@@ -47,7 +47,7 @@ export const workspace = {
     },
     {
       type: "source",
-      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
+      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx",
       contains: ["DocxBrowserEditor", "ReadOnlyDocxDocumentViewer"],
     },
     {
