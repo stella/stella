@@ -373,6 +373,7 @@ export const OTPPanelBody = ({
           <Button
             loading={verifyOtp.isPending}
             disabled={verifyOtp.isPending}
+            disabledReason={t("common.verifying")}
             onClick={() =>
               verifyOtp.mutate({
                 email,
@@ -386,6 +387,7 @@ export const OTPPanelBody = ({
           <Button
             variant="ghost"
             disabled={verifyOtp.isPending}
+            disabledReason={t("common.verifying")}
             onClick={handleUseDifferentEmail}
           >
             {t("common.cancel")}
@@ -473,6 +475,7 @@ export const OTPPanelContent = ({
               aria-disabled={!isOtpComplete || undefined}
               className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
               disabled={verifyPending}
+              disabledReason={t("common.verifying")}
               loading={verifyPending}
               onClick={() => onSubmit()}
             >
@@ -496,6 +499,9 @@ export const OTPPanelContent = ({
           {" · "}
           <Button
             disabled={verifyPending || resendPending}
+            disabledReason={
+              verifyPending ? t("common.verifying") : t("auth.sendingCode")
+            }
             onClick={onUseDifferentEmail}
             size="inline"
             variant="link"
@@ -509,6 +515,9 @@ export const OTPPanelContent = ({
       resend={
         <Button
           disabled={verifyPending || resendPending}
+          disabledReason={
+            verifyPending ? t("common.verifying") : t("auth.sendingCode")
+          }
           loading={resendPending}
           onClick={onResend}
           size="sm"
