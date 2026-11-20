@@ -33,7 +33,6 @@
     "@/features/knowledge/views/templates/template-list-shape",
     "@/lib/workspaces/types",
     "@/routes/_protected.chat/-components/chat-reading-column",
-    "@/routes/_protected.settings/-components/settings-page-header",
     "@/routes/knowledge/-tools/tools-page-shape",
     "@/stores/config-store"
   ],

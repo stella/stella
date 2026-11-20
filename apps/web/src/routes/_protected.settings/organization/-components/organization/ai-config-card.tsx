@@ -26,7 +26,7 @@ import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { AIProviderRows } from "@/routes/_protected.settings/organization/-components/organization/ai-provider-rows";
 
 import { AIConfigAdvanced } from "./ai-config-advanced";

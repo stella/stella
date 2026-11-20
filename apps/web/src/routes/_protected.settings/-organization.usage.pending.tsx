@@ -6,7 +6,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { PendingText } from "@/components/pending-text";
 import { env } from "@/env";
 import { framePendingView } from "@/routes/-pending-view.logic";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import { UsagePlansPending } from "@/routes/_protected.settings/organization/-components/organization/usage-plans-card.pending";
 

@@ -21,7 +21,7 @@ import { cn } from "@stll/ui/utils";
 import { InviteMemberTriggerFace } from "@/components/organization/invite-member-trigger.pending";
 import { PendingText } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 import { PendingInvitations } from "@/routes/_protected.settings/organization/-components/members-invitations.pending";
 

@@ -21,6 +21,13 @@ import {
 } from "@stll/api-contract/desktop-runner";
 import { hmacSha256Hex } from "@stll/sha256/node";
 
+import {
+  ACP_CLIENT_INFO,
+  ACP_PERMISSION_OPTION_KINDS,
+  ACP_STOP_REASONS,
+  ACP_TOOL_KINDS,
+  ACP_TOOL_STATUSES,
+} from "./harness/acp/protocol";
 import { ASK_USER_QUESTION_TOOL } from "./harness/claude-code/items";
 import {
   CLAUDE_CONTENT_BLOCK_TYPES,
@@ -53,7 +60,8 @@ import {
 
 /**
  * The protocol log: one line per message exchanged with a harness CLI
- * (Claude Code's stream-json, Codex's app-server JSON-RPC) or between the
+ * (Claude Code's stream-json, Codex's app-server JSON-RPC, an agent's ACP
+ * JSON-RPC) or between the
  * desktop and its sidecar, for diagnosing a run on the member's computer.
  *
  * A line keeps a message's structure only. Each field is kept by an
@@ -71,7 +79,12 @@ import {
  * later stays out of the log until it is listed here.
  */
 
-export const PROTOCOL_CHANNELS = ["claude-code", "codex", "sidecar"] as const;
+export const PROTOCOL_CHANNELS = [
+  "claude-code",
+  "codex",
+  "acp",
+  "sidecar",
+] as const;
 export type ProtocolChannel = (typeof PROTOCOL_CHANNELS)[number];
 
 /** `in`: written by the peer (the CLI, or the desktop for the sidecar). */
@@ -939,6 +952,118 @@ const CODEX_LINE: MessageShape = shape(
   },
 );
 
+// ACP: JSON-RPC 2.0 between stella and an Agent Client Protocol agent.
+
+const ACP_TOOL_CALL = {
+  toolCallId: IDENTIFIER,
+  title: SIZE,
+  kind: vocabulary(ACP_TOOL_KINDS),
+  status: vocabulary(ACP_TOOL_STATUSES),
+  content: SIZE,
+  locations: SIZE,
+  rawInput: SIZE,
+  rawOutput: SIZE,
+} as const satisfies Fields;
+
+const ACP_SESSION_UPDATES = {
+  agent_message_chunk: { content: SIZE },
+  agent_thought_chunk: { content: SIZE },
+  user_message_chunk: { content: SIZE },
+  tool_call: ACP_TOOL_CALL,
+  tool_call_update: ACP_TOOL_CALL,
+  plan: { entries: SIZE },
+  usage_update: { used: NUMBER, size: NUMBER, cost: SIZE },
+  current_mode_update: { currentModeId: OPAQUE },
+  available_commands_update: { availableCommands: SIZE },
+  config_option_update: { configOptions: SIZE },
+  session_info_update: { title: SIZE, updatedAt: SIZE },
+} as const satisfies Record<string, Fields>;
+
+const ACP_SESSION = { sessionId: IDENTIFIER } as const;
+const ACP_OPEN_SESSION = {
+  ...ACP_SESSION,
+  cwd: SIZE,
+  mcpServers: SIZE,
+  additionalDirectories: SIZE,
+} as const satisfies Fields;
+
+const ACP_PARAMS: Readonly<Record<string, Fields>> = {
+  initialize: {
+    protocolVersion: NUMBER,
+    clientCapabilities: SIZE,
+    clientInfo: object({
+      name: vocabulary([ACP_CLIENT_INFO.name]),
+      title: vocabulary([ACP_CLIENT_INFO.title]),
+      version: VERSION,
+    }),
+  },
+  authenticate: { methodId: OPAQUE },
+  "session/new": { cwd: SIZE, mcpServers: SIZE, additionalDirectories: SIZE },
+  "session/load": ACP_OPEN_SESSION,
+  "session/resume": ACP_OPEN_SESSION,
+  "session/prompt": { ...ACP_SESSION, prompt: SIZE },
+  "session/cancel": ACP_SESSION,
+  "session/set_mode": { ...ACP_SESSION, modeId: OPAQUE },
+  "session/set_model": { ...ACP_SESSION, modelId: OPAQUE },
+  "session/set_config_option": {
+    ...ACP_SESSION,
+    configId: OPAQUE,
+    value: SIZE,
+  },
+  "session/update": {
+    ...ACP_SESSION,
+    update: object(
+      {},
+      { key: "sessionUpdate", cases: casesOf(ACP_SESSION_UPDATES) },
+    ),
+  },
+  "session/request_permission": {
+    ...ACP_SESSION,
+    toolCall: object(ACP_TOOL_CALL),
+    options: list({
+      optionId: IDENTIFIER,
+      name: SIZE,
+      kind: vocabulary(ACP_PERMISSION_OPTION_KINDS),
+    }),
+  },
+};
+
+const ACP_RESULT = object({
+  protocolVersion: NUMBER,
+  agentCapabilities: SIZE,
+  authMethods: SIZE,
+  agentInfo: object({ name: OPAQUE, title: SIZE, version: VERSION }),
+  sessionId: IDENTIFIER,
+  modes: SIZE,
+  models: SIZE,
+  configOptions: SIZE,
+  stopReason: vocabulary(ACP_STOP_REASONS),
+  usage: SIZE,
+  // stella's answers to permission requests.
+  outcome: object({
+    outcome: vocabulary(["selected", "cancelled"]),
+    optionId: IDENTIFIER,
+  }),
+});
+
+const ACP_LINE: MessageShape = shape(
+  {
+    jsonrpc: vocabulary(["2.0"]),
+    id: IDENTIFIER,
+    result: ACP_RESULT,
+    error: object({ code: NUMBER, message: SIZE, data: SIZE }),
+  },
+  {
+    key: "method",
+    cases: Object.fromEntries(
+      Object.entries(ACP_PARAMS).map(([method, params]) => [
+        method,
+        shape({ params: object(params) }),
+      ]),
+    ),
+  },
+);
+
 // Sidecar: the desktop's socket to its holder.
 
 const SIDECAR_HARNESS = vocabulary(AGENT_HARNESSES);
@@ -1126,6 +1251,7 @@ export const PROTOCOL_ALLOWLISTS: Readonly<
 > = {
   "claude-code": { in: CLAUDE_LINE, out: CLAUDE_LINE },
   codex: { in: CODEX_LINE, out: CODEX_LINE },
+  acp: { in: ACP_LINE, out: ACP_LINE },
   sidecar: {
     in: shape({}, { key: "type", cases: casesOf(SIDECAR_HOST_FIELDS) }),
     out: shape({}, { key: "type", cases: casesOf(SIDECAR_FIELDS) }),

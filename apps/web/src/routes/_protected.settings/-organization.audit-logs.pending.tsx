@@ -17,7 +17,7 @@ import { cn } from "@stll/ui/utils";
 import { PendingText } from "@/components/pending-text";
 import type { RouteRowsPhase } from "@/lib/query-view.logic";
 import { framePendingView } from "@/routes/-pending-view.logic";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import { SettingsPagePending } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 export const AUDIT_LOG_COLUMNS = [
