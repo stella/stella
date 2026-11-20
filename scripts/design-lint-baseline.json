@@ -56,7 +56,6 @@
     "apps/web/src/components/matter-target-picker.tsx": 8,
     "apps/web/src/components/member-combobox.tsx": 1,
     "apps/web/src/components/pdf/page-organizer.tsx": 4,
-    "apps/web/src/components/pdf/pdf-viewer.tsx": 1,
     "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx": 3,
     "apps/web/src/components/pdf/versions-sidebar.tsx": 22,
     "apps/web/src/components/person-mention-label.tsx": 1,
