@@ -8,6 +8,7 @@ import { inArray } from "drizzle-orm";
 import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 
 import { invitation, organization } from "@/api/db/auth-schema";
+import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { getAuth } from "@/api/lib/auth";
 import { SSO_ACCESS_STATUS } from "@/api/lib/auth/member-authorization";
@@ -26,7 +27,9 @@ import { isRecord } from "@/api/lib/type-guards";
 /**
  * The SSO refusals better-auth's own endpoints raise: the organization
  * endpoints, OAuth consent and OAuth token issuance. Each asks the shared
- * decision in `sso-access.ts`; the caller hands in the database it runs on.
+ * decision in `sso-access.ts`. The organization endpoints and consent run
+ * outside any request transaction and read on the owner connection; token
+ * issuance decides inside the transaction that issues the token.
  */
 
 const ORGANIZATION_PATH_PREFIX = "/organization/";
@@ -143,7 +146,7 @@ const requestOrganizations = async (
  * neither read nor change that organization through them. The session is
  * not ended, and the recovery endpoints stay open.
  */
-export const createSsoOrganizationGuardPlugin = (db: SsoGuardDatabase) =>
+export const createSsoOrganizationGuardPlugin = () =>
   ({
     id: "stella-sso-organization-guard",
     hooks: {
@@ -164,11 +167,11 @@ export const createSsoOrganizationGuardPlugin = (db: SsoGuardDatabase) =>
             }
             const active: unknown = current.session["activeOrganizationId"];
             const organizations = await requestOrganizations(
-              db,
+              rootDb,
               { body: ctx.body, query: ctx.query },
               typeof active === "string" && active !== "" ? active : undefined,
             );
-            const refused = await ssoRefusesSessionInAny(db, {
+            const refused = await ssoRefusesSessionInAny(rootDb, {
               organizationIds: [...organizations].map((id) =>
                 brandPersistedOrganizationId(id),
               ),
@@ -198,10 +201,12 @@ type SessionGrantLookup = {
  * issuance checks the same decision again.
  */
 export const refuseConsentUnlessSsoAdmits = async (
-  db: SsoGuardDatabase,
   lookup: SessionGrantLookup,
 ): Promise<void> => {
-  const access = await readSessionSsoAccess(db, { ...lookup, session: "live" });
+  const access = await readSessionSsoAccess(rootDb, {
+    ...lookup,
+    session: "live",
+  });
   if (access.status === SSO_ACCESS_STATUS.signInRequired) {
     throw new APIError("FORBIDDEN", {
       error: SSO_SIGN_IN_REQUIRED_CODE,

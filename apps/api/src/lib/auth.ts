@@ -2728,7 +2728,7 @@ export const createAuth = (
       // Mounted always, answering 404 until FEATURE_ENTERPRISE_SSO is on.
       createSsoSignInPlugin(),
       // Holds the organization endpoints to the same SSO decision.
-      createSsoOrganizationGuardPlugin(rootDb),
+      createSsoOrganizationGuardPlugin(),
       createMemberInvitationSectionsPlugin(
         createAuthMiddleware,
         () => new Date(),
@@ -2865,7 +2865,7 @@ export const createAuth = (
                     "An organization must be selected before granting stella MCP access",
                 });
               }
-              await refuseConsentUnlessSsoAdmits(rootDb, {
+              await refuseConsentUnlessSsoAdmits({
                 organizationId:
                   brandPersistedOrganizationId(activeOrganizationId),
                 userId: brandPersistedUserId(session.userId),
