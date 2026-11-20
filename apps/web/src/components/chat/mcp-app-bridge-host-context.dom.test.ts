@@ -17,7 +17,7 @@ const recordingTransport = () => {
   let delivery = Promise.withResolvers<undefined>();
   return {
     sent,
-    nextSend: () => delivery.promise,
+    nextSend: async () => await delivery.promise,
     transport: {
       onmessage: undefined as ((message: unknown) => void) | undefined,
       start: async () => {},
@@ -38,7 +38,7 @@ test("a host context set before the bridge connects is sent at initialization", 
   bridge.notification = async (...args) => {
     const sent = notification(...args);
     notified.push(sent);
-    return await sent;
+    await sent;
   };
 
   bridge.setHostContext({ theme: "dark", locale: "cs" });
