@@ -120,6 +120,7 @@ export function TwoFactorPage() {
             aria-disabled={!isTotpComplete || undefined}
             className={cn(!isTotpComplete && "cursor-not-allowed opacity-64")}
             disabled={verifyTwoFactor.isPending}
+            disabledReason={t("common.verifying")}
             loading={verifyTwoFactor.isPending}
             onClick={() => {
               if (!isTotpComplete) {
@@ -149,6 +150,7 @@ export function TwoFactorPage() {
             backupCode.length === 0 && "cursor-not-allowed opacity-64",
           )}
           disabled={verifyTwoFactor.isPending}
+          disabledReason={t("common.verifying")}
           loading={verifyTwoFactor.isPending}
           onClick={() => {
             if (backupCode.length === 0) {
@@ -179,6 +181,7 @@ export function TwoFactorPage() {
         alternate={
           <Button
             disabled={verifyTwoFactor.isPending}
+            disabledReason={t("common.verifying")}
             onClick={() =>
               handleSwitchMode(mode === "totp" ? "backupCode" : "totp")
             }
