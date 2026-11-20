@@ -208,7 +208,7 @@ export const MembersPending = framePendingView(() => {
     select: (search) => (typeof search.q === "string" ? search.q : undefined),
   });
   return (
-    <SettingsPagePending>
+    <SettingsPagePending area="organization">
       <MembersShell
         busy
         invitations={<PendingInvitations />}

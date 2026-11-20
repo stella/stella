@@ -1,5 +1,29 @@
 # @stll/cli
 
+## 7.2.0
+
+### Minor Changes
+
+- [#8967](https://github.com/stella/stella/pull/8967) [`1f75117`](https://github.com/stella/stella/commit/1f7511718e3a1245aa182763633d57979dc9b4c5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The capability catalog lists `skills.export`, which downloads a skill as an Agent Skills archive (a ZIP with one folder named after the skill, holding `SKILL.md` and every resource file). It returns file bytes, so the generic `stella capability` transport does not run it; `skills get` covers the skill as JSON.
+
+### Patch Changes
+
+- [#8858](https://github.com/stella/stella/pull/8858) [`70ed5d3`](https://github.com/stella/stella/commit/70ed5d37580192e843944dc55a1247fc628cbf5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law ingestion-get` states, per source, whether it is parked: failing the same way for so long that it asks its publisher once a day, since when, and when it asks next.
+
+- [#8941](https://github.com/stella/stella/pull/8941) [`ebad08f`](https://github.com/stella/stella/commit/ebad08f97010ad9f165d09b4d498233c6e6c1b76) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law search` describes `strict` as every word, not necessarily adjacent, and a page ranked by score reports its partial matches as `partial_matches_ranked` instead of saying they were appended after the full ones.
+
+- [#8951](https://github.com/stella/stella/pull/8951) [`5109f95`](https://github.com/stella/stella/commit/5109f956c059f63355803964a4261bde2e866735) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The `guidance search` and `guidance read` descriptions name the tax and administrative authorities the guidance corpus covers, and the authority filter's example names `cz-gfr`.
+
+- [#8918](https://github.com/stella/stella/pull/8918) [`7c25f4c`](https://github.com/stella/stella/commit/7c25f4c58aae936df826a758d3f14554ac3d198f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tool output schemas admit fields they do not list and publish their known values as examples, so a result that gains a field or a value still validates against a tool list fetched before it.
+
+- [#8896](https://github.com/stella/stella/pull/8896) [`ae28909`](https://github.com/stella/stella/commit/ae289095a92f756251d9e3aad516cb8e267261c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Statute reads answer a work held only as published with that text, labelled `expressionKind: promulgated`. Provision reads carry `expressionKind` and `windowDisposition`.
+
+- [#8934](https://github.com/stella/stella/pull/8934) [`f6360bf`](https://github.com/stella/stella/commit/f6360bff82e3a13fcaa16dc85db2097f1300c9c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Content reads of a data-box file list its filed attachments as `attachments`, each with its one-based `position` in the envelope and its `entityId`.
+
+- [#8969](https://github.com/stella/stella/pull/8969) [`5da16af`](https://github.com/stella/stella/commit/5da16af851eec5616bbeda3484c04572e3b42855) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve exact stored docket identities with complete bounded candidate evidence and mark truncated candidate sets explicitly.
+- Updated dependencies [[`f1d0195`](https://github.com/stella/stella/commit/f1d019508fa4bdcd2160b4f90d555ce0ed99cc10)]:
+  - @stll/agent-input@0.5.0
+
 ## 7.1.0
 
 ### Minor Changes

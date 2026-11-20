@@ -1,10 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { newestCachedData } from "@/components/pending-cache-reads.logic";
-import { cachedRoleGrants } from "@/lib/organization/cached-permissions.logic";
-import { callerFeatureEnabled } from "@/lib/organization/feature-access/access.logic";
-import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { organizationSettingsQueryRoot } from "@/lib/resource-query-roots.logic";
+import {
+  cachedCallerFeatureEnabled,
+  cachedRoleGrants,
+} from "@/lib/organization/cached-permissions.logic";
 import type { WorkspaceView } from "@/lib/types";
 import {
   type CachedWorkspaceView,
@@ -13,7 +13,6 @@ import {
   viewsRootKey,
 } from "@/lib/workspaces/queries/views.logic";
 import { switcherViews } from "@/lib/workspaces/view-layout";
-import type { OrganizationSettings } from "@/queries/organization-settings";
 
 /**
  * Overview, AVT and correspondence do not show the matter's entities through
@@ -52,15 +51,7 @@ const cachedWorkspaceViews = (
   );
 
 const cachedAvtEnabled = (queryClient: QueryClient): boolean =>
-  callerFeatureEnabled(
-    newestCachedData(
-      queryClient,
-      queryClient.getQueriesData<OrganizationSettings>({
-        queryKey: organizationSettingsQueryRoot(),
-      }),
-    ),
-    CALLER_FEATURE.verification,
-  );
+  cachedCallerFeatureEnabled(queryClient, "verification");
 
 /**
  * What the view tabs row shows before the route's data has loaded, read from

@@ -9,6 +9,7 @@ import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { organizationSettingsSearchSchema } from "@/routes/-organization-settings-route";
+import { LeafPendingView } from "@/routes/-route-pending-view";
 import { routePresentation } from "@/routes/-route-presentation";
 
 export const Route = createFileRoute("/_protected/settings/organization")({
@@ -93,6 +94,10 @@ export const Route = createFileRoute("/_protected/settings/organization")({
   },
   head: () => ({ meta: [{ title: pageTitle("common.settings") }] }),
   component: OrganizationSettingsLayout,
+  // A layout: while its admission runs, its pending view is the page it
+  // leads to, which draws the settings chrome with the organization's
+  // sections itself where the shell is not mounted yet.
+  pendingComponent: LeafPendingView,
 });
 
 function OrganizationSettingsLayout() {

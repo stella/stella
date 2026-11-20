@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Samuti vaadatud ({count, number})"
+      "moreConsulted": "+{count, number} veel vaadatud"
     },
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
@@ -4715,6 +4715,10 @@
       "dropPack": "Lohistage siia .zip/.skill või SKILL.md, et oskus importida",
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
+      "exportAsSkill": "Ekspordi .skill-failina",
+      "exportAsZip": "Ekspordi .zip-failina",
+      "exportFailed": "Oskust ei õnnestunud eksportida",
+      "exportSkill": "Ekspordi oskus",
       "fileExists": "Selle teega fail on juba olemas",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",

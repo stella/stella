@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Arī aplūkoti ({count, number})"
+      "moreConsulted": "{count, plural, zero {+# vēl pārskatīti} one {+# vēl pārskatīts} other {+# vēl pārskatīti}}"
     },
     "sourcePlaceholder": "Tērzēt par {title}",
     "sourcePlaceholderAction": "Tērzēt par",
@@ -4715,6 +4715,10 @@
       "dropPack": "Nometiet .zip/.skill vai SKILL.md failu, lai importētu prasmi",
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
+      "exportAsSkill": "Eksportēt kā .skill",
+      "exportAsZip": "Eksportēt kā .zip",
+      "exportFailed": "Prasmi neizdevās eksportēt",
+      "exportSkill": "Eksportēt prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
       "howItRuns": "Kā tā darbojas",
       "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",

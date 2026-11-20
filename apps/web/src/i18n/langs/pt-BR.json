@@ -2323,7 +2323,7 @@
       }
     },
     "sourceChips": {
-      "alsoConsulted": "Também consultadas ({count, number})"
+      "moreConsulted": "{count, plural, one {+# outra consultada} many {+# outras consultadas} other {+# outras consultadas}}"
     },
     "sourcePlaceholder": "Conversar sobre {title}",
     "sourcePlaceholderAction": "Conversar sobre",
@@ -4715,6 +4715,10 @@
       "dropPack": "Solte um .zip/.skill ou SKILL.md para importar a habilidade",
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
+      "exportAsSkill": "Exportar como .skill",
+      "exportAsZip": "Exportar como .zip",
+      "exportFailed": "Não foi possível exportar a habilidade",
+      "exportSkill": "Exportar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
       "howItRuns": "Como funciona",
       "importFailureFetch": "Não foi possível carregar a origem da habilidade.",
