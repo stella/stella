@@ -65,7 +65,6 @@ import {
   PaperclipIcon,
   RotateCcwIcon,
 } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -3173,9 +3172,9 @@ const renderSubagentEntry = (
 ) =>
   entry.type === "subagent-call" ? null : (
     <SubagentRunCard
+      key={`${message.id}-subagent-${entry.part.subagent.id}`}
       {...partsProps}
       call={entry.call}
-      key={`${message.id}-subagent-${entry.part.subagent.id}`}
       part={entry.part}
     />
   );
@@ -3212,8 +3211,16 @@ const SubagentRunCard = ({
       className="border-border bg-muted/30 my-1 max-w-[min(44rem,100%)] rounded-lg border text-sm"
     >
       <Collapsible onOpenChange={setIsOpen} open={open}>
-        <CollapsibleTrigger render={<Button variant="plain" />}>
-          <span className="inline-flex min-h-8 items-center gap-1.5 px-3 py-1.5">
+        <CollapsibleTrigger
+          render={
+            <Button
+              className="w-full justify-start"
+              size="sm"
+              variant="muted"
+            />
+          }
+        >
+          <span className="inline-flex items-center gap-1.5">
             <DirectionalIcon
               className={cn(
                 "text-muted-foreground size-3.5 shrink-0 transition-transform",
@@ -3273,14 +3280,10 @@ const SubagentRunStatus = ({
 }) => {
   const t = useTranslations();
   switch (status) {
+    // The turn's own live line says the run is working
+    // (`chat-turn-status.tsx` owns every live indicator).
     case "running":
-      return (
-        <Loader
-          className="size-3.5 shrink-0"
-          label={t("tasks.statusValues.in_progress")}
-          size="sm"
-        />
-      );
+      return null;
     // Paused on a card the user answers; the card itself says what it needs.
     case "suspended":
       return (
