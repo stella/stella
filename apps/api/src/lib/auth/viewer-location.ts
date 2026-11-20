@@ -25,6 +25,21 @@ const VIEWER_LOCATION_HEADERS = {
 } as const;
 
 /**
+ * CloudFront lists the names of the headers the viewer itself sent, in order
+ * and colon-separated, plus their count. CloudFront omits a location header it
+ * cannot resolve (city for a coarse address; region and coordinates for AWS
+ * addresses) rather than overwriting it, so a viewer-sent header of the same
+ * name could otherwise reach the API on a verified request.
+ */
+const VIEWER_HEADER_LIST_HEADERS = {
+  order: "cloudfront-viewer-header-order",
+  count: "cloudfront-viewer-header-count",
+} as const;
+
+const VIEWER_HEADER_PREFIX = "cloudfront-viewer-";
+const HEADER_COUNT = /^\d+$/u;
+
+/**
  * Where a request came from, as approximate as IP geolocation is. Held only
  * for the request that produced it; never stored.
  */
@@ -50,9 +65,10 @@ type ReadViewerLocationOptions = {
 
 /**
  * The location CloudFront reported for this request, or `unknown` unless the
- * request provably came through CloudFront: anyone reaching the API another
- * way can send the same headers with any value, so neither a security notice
- * nor a stored signup country may rest on a value the caller chose.
+ * request provably came through CloudFront and the viewer sent no viewer
+ * header of its own: anyone reaching the API another way can send the same
+ * headers with any value, so neither a security notice nor a stored signup
+ * country may rest on a value the caller chose.
  */
 export const readViewerLocation = ({
   headers,
@@ -60,9 +76,31 @@ export const readViewerLocation = ({
   edgeHeader,
 }: ReadViewerLocationOptions): ViewerLocation =>
   headers !== undefined &&
-  isCloudFrontVerifiedAddress(clientAddress, edgeHeader)
+  isCloudFrontVerifiedAddress(clientAddress, edgeHeader) &&
+  viewerSentNoViewerHeader(headers)
     ? parseViewerLocation(headers)
     : UNKNOWN_LOCATION;
+
+/**
+ * True only when CloudFront's list of the viewer's own header names is present,
+ * complete (its length matches CloudFront's count) and names no
+ * `cloudfront-viewer-*` header. A missing or cut-short list proves nothing, so
+ * it fails closed.
+ */
+const viewerSentNoViewerHeader = (headers: Headers): boolean => {
+  const order = headers.get(VIEWER_HEADER_LIST_HEADERS.order);
+  const count = headers.get(VIEWER_HEADER_LIST_HEADERS.count)?.trim();
+  if (order === null || count === undefined || !HEADER_COUNT.test(count)) {
+    return false;
+  }
+  const names = order.trim() === "" ? [] : order.split(":");
+  return (
+    names.length === Number(count) &&
+    !names.some((name) =>
+      name.trim().toLowerCase().startsWith(VIEWER_HEADER_PREFIX),
+    )
+  );
+};
 
 /**
  * Reads the geolocation headers. A country is required; city, region and
