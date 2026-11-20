@@ -35,6 +35,7 @@ import { useAISettingsToggles } from "@/routes/_protected.settings/organization/
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 import { canSaveAIConfig, hasAIConfigEdits } from "./ai-config-form.logic";
+import type { AIConfigFeedback } from "./ai-config-form.logic";
 import { useAIConfigDefaults } from "./use-ai-config-defaults";
 import { useAIConfigDrafts } from "./use-ai-config-drafts";
 
@@ -67,6 +68,19 @@ const AI_CONFIG_MUTATION_OPTIONS = {
  */
 const removeAIConfig = async () =>
   unwrapApiResponse(await api["organization-settings"]["ai-config"].delete({}));
+
+/** What a failed save shows: the API's message where it gave one. */
+const saveFailureFeedback = (
+  error: unknown,
+  fallbackMessage: string,
+): AIConfigFeedback =>
+  APIError.is(error)
+    ? {
+        status: "error",
+        message: error.rawMessage ?? error.message,
+        code: error.code,
+      }
+    : { status: "error", message: fallbackMessage };
 
 export const useAIConfigForm = ({
   readState,
@@ -233,15 +247,8 @@ export const useAIConfigForm = ({
     });
 
     if (Result.isError(result)) {
-      const error = result.error;
       setFeedback(
-        APIError.is(error)
-          ? {
-              status: "error",
-              message: error.rawMessage ?? error.message,
-              code: error.code,
-            }
-          : { status: "error", message: common("somethingWentWrong") },
+        saveFailureFeedback(result.error, common("somethingWentWrong")),
       );
     }
   };
@@ -260,6 +267,7 @@ export const useAIConfigForm = ({
     toggleSections,
     blocker,
     saving: saveState === "saving",
+    hasChangesToSave,
     canClickSave: hasChangesToSave && canSaveSettings,
     saveSettings,
     feedback,

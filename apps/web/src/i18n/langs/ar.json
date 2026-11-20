@@ -5410,6 +5410,11 @@
       "googleKeyRestricted": "تحقق من قيود API وعناوين IP والمواقع المُحيلة لهذا المفتاح في Google Cloud. اسمح باستخدام API المطلوب وبطلبات خادمك، ثم حاول مرة أخرى.",
       "keepSavedKey": "الاحتفاظ بالمفتاح المحفوظ",
       "keyFormatHint": "تنسيق هذا المفتاح غير معتاد لمزود {provider}. احفظه للتحقق منه لدى المزود.",
+      "keyNeed": {
+        "builtIn": "اختياري. من دون مفتاح خاص بك، يعمل الذكاء الاصطناعي في هذه المؤسسة على نماذج توفرها stella.",
+        "keyRequired": "يحتاج الذكاء الاصطناعي في هذه المؤسسة إلى مفتاح مزوّد. أضف مفتاحًا لتشغيله.",
+        "ownKeys": "يعمل الذكاء الاصطناعي في هذه المؤسسة على المفاتيح أدناه."
+      },
       "modelForRole": "نموذج {role}",
       "modelIdPlaceholder": "البحث عن النماذج",
       "modelsDescription": "اختر مزوّدًا ونموذجًا متعدد الوسائط واحدًا معروضًا لكل فئة من فئات الذكاء الاصطناعي.",
@@ -5417,6 +5422,7 @@
       "newApiKey": "مفتاح API جديد",
       "newApiKeyDescription": "سيحل هذا محل المفتاح المحفوظ عند حفظ التغييرات.",
       "noModelResults": "لا توجد نماذج معروضة مطابقة",
+      "noProviders": "لم تُضف أي مفاتيح مزوّدين بعد.",
       "openaiInsufficientQuota": "تحقق من ميزانية مشروع OpenAI وفوترة API. أضف رصيدًا أو ارفع الحد المعني، ثم حاول مرة أخرى.",
       "openaiProjectOrganizationMismatch": "استخدم مفتاح API من مشروع OpenAI والمؤسسة المطلوبين. تحقق من إعدادات الوصول إليهما، ثم حاول مرة أخرى.",
       "openrouterNoCredits": "أضف رصيدًا في قسم الفوترة في OpenRouter، ثم حاول مرة أخرى.",
@@ -5439,6 +5445,8 @@
       "providerForRole": "مزوّد {role}",
       "providerKeyInvalid": "رفض {provider} المفتاح. تحقق منه مرة أخرى قبل الحفظ.",
       "providerKeyInvalidShort": "غير صالح",
+      "providerModes": "يُستخدم في: {modes}",
+      "providerModesNone": "لا يُستخدم في أي وضع. عيّنه لوضع من الخيارات المتقدمة.",
       "providerSetupConsole": "فتح إعدادات مزود الخدمة",
       "providersDescription": "أضف بيانات اعتماد المزوّد التي تريد أن تستخدمها stella.",
       "providersPanel": "المزوّدون",
@@ -5983,7 +5991,7 @@
     "organization": {
       "activeMembers": "الأعضاء النشطون",
       "ai": "إعدادات الذكاء الاصطناعي",
-      "aiDescription": "اربط مفاتيحك الخاصة لمزوّدي الذكاء الاصطناعي.",
+      "aiDescription": "اختر طريقة عمل الذكاء الاصطناعي في هذه المؤسسة.",
       "anonymization": {
         "addPlaceholder": "مصطلح لإخفائه دائمًا (مثل اسم الفريق)",
         "deleteAction": "حذف المصطلح",
