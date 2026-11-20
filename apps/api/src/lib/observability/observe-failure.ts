@@ -72,6 +72,9 @@ export const FAILURE_CONTEXT_KEYS = [
   "modelId",
   "operation",
   "organizationId",
+  // What a read of stored data came to (`stored-ast-outcome.ts`): a closed
+  // outcome name, never the data.
+  "outcome",
   "parameterStoreReason",
   "phase",
   "queue",
@@ -85,6 +88,9 @@ export const FAILURE_CONTEXT_KEYS = [
   "tool",
   "userFileId",
   "versionId",
+  // Stored vocabulary a reader did not declare (`block-type:sidebar`): parser
+  // identifiers, each sanitized to an identifier by its owner.
+  "vocabulary",
   "workspaceId",
 ] as const;
 
@@ -122,6 +128,53 @@ const acceptFailureContext = (
   return { accepted: Object.fromEntries(accepted), rejected };
 };
 
+/**
+ * Counts a failure record may carry beside its context, each as
+ * `measure.<key>`. Closed like the context keys, and a value is a
+ * non-negative safe integer, so a measure can carry a count and never text.
+ */
+export const FAILURE_MEASURE_KEYS = [
+  "astBlockIdentity",
+  "astBlockRole",
+  "astBlockType",
+  "astHeadMatterOrder",
+  "astInlineType",
+  "parserVersion",
+] as const;
+
+type FailureMeasureKey = (typeof FAILURE_MEASURE_KEYS)[number];
+
+export type FailureMeasures = Partial<Record<FailureMeasureKey, number>>;
+
+const FAILURE_MEASURE_KEY_SET: ReadonlySet<string> = new Set(
+  FAILURE_MEASURE_KEYS,
+);
+
+type AcceptedMeasures = {
+  readonly accepted: Record<string, number>;
+  readonly rejected: number;
+};
+
+const acceptFailureMeasures = (
+  measures: Readonly<Record<string, unknown>> | undefined,
+): AcceptedMeasures => {
+  const accepted = new Map<string, number>();
+  let rejected = 0;
+  for (const [key, value] of Object.entries(measures ?? {})) {
+    if (
+      FAILURE_MEASURE_KEY_SET.has(key) &&
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= 0
+    ) {
+      accepted.set(`measure.${key}`, value);
+    } else {
+      rejected += 1;
+    }
+  }
+  return { accepted: Object.fromEntries(accepted), rejected };
+};
+
 type ResolvedPolicy = OutputPolicy & { readonly source: "grade" | "legacy" };
 
 const resolvePolicy = (
@@ -149,6 +202,7 @@ const resolvePolicy = (
 type ObserveFailureOptions = {
   readonly sink: FailureSink;
   readonly ctx?: FailureContext | undefined;
+  readonly measures?: FailureMeasures | undefined;
   readonly escalation?: "sustained" | undefined;
 } & (
   | {
@@ -199,9 +253,12 @@ const observe = (
   }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
+  const measured = acceptFailureMeasures(options.measures);
+  const rejectedContext = context.rejected + measured.rejected;
   const summary = ownedMessageOf(error);
   const attributes: LoggerAttributes = {
     ...context.accepted,
+    ...measured.accepted,
     ...requestFields(onRequest),
     ...errorFields(evidence),
     ...(summary === undefined
@@ -209,9 +266,7 @@ const observe = (
       : { "cause.summary": sanitizeQueryErrorText(summary) }),
     ...failureFields(grading, sink),
     "failure.policy": sanitizeQueryErrorText(policy.source),
-    ...(context.rejected > 0
-      ? { "failure.ctx_rejected": context.rejected }
-      : {}),
+    ...(rejectedContext > 0 ? { "failure.ctx_rejected": rejectedContext } : {}),
   };
 
   if (onRequest || grading.reason === "limiter_store_unavailable") {

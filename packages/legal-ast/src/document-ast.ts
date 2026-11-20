@@ -245,9 +245,29 @@ export type ParagraphBlock = {
    * rather than as a prefix inside `plainText`.
    */
   number?: number | undefined;
+  /**
+   * The block type a stored row wrote that this reader does not declare.
+   * The persisted reader keeps such a block as a paragraph of role
+   * `unknown`, with its text and its identity, rather than dropping it (see
+   * `persistedBlockSchema`); this names what it was written as, so a reparse
+   * can be asked for by what it repairs. No parser writes it.
+   */
+  storedType?: string | undefined;
   inlines: Inline[];
   plainText: string;
 };
+
+/**
+ * A stored block of a type this reader does not declare, as the persisted
+ * reader keeps it: a body paragraph with no role, its text and its identity.
+ */
+export type UnreadBlock = ParagraphBlock & {
+  role: "unknown";
+  storedType: string;
+};
+
+export const isUnreadBlock = (block: Block): block is UnreadBlock =>
+  block.type === "paragraph" && block.storedType !== undefined;
 
 export type TableCell = {
   inlines: Inline[];
@@ -766,6 +786,7 @@ const paragraphEntries = {
   note: v.optional(paragraphNoteSchema),
   listDepth: v.optional(v.picklist([1, 2, 3, 4])),
   number: v.optional(v.pipe(v.number(), paragraphNumberFinite)),
+  storedType: v.optional(v.pipe(v.string(), v.nonEmpty())),
   inlines: inlineArraySchema,
 };
 
@@ -876,27 +897,140 @@ const wireBlockSchema: v.GenericSchema<unknown, WireBlock> = v.variant("type", [
   }),
 ]);
 
+// parser-output-unchanged: the persisted reader keeps an undeclared block it used to drop, and the optional `storedType` is written by no parser.
+/** Field separators of an unread block's text, as a table's own text uses. */
+const UNREAD_CELL_SEPARATOR = "\t";
+const UNREAD_LINE_SEPARATOR = "\n";
+
+/** Nested parts an unread block may hold its text in, read in this order. */
+const UNREAD_NESTED_FIELDS = ["items", "children", "blocks"] as const;
+
+/** String fields an unread block may hold its text in, read in this order. */
+const UNREAD_STRING_FIELDS = ["plainText", "text", "body", "content"] as const;
+
+/** How deep an unread block's nested parts are walked for their text. */
+const UNREAD_MAX_DEPTH = 4;
+
+const unreadPartShape = v.record(v.string(), v.unknown());
+
+const unreadRowsShape = v.array(v.array(unreadPartShape));
+
 /**
- * A block read from storage, or `null` for a block kind this reader does
- * not declare.
- *
- * Unlike a role or an inline kind, an unknown block has no neutral shape
- * to degrade to: nothing here knows where its text lives or how it should
- * read. It is dropped, and reported, rather than guessed at.
+ * The text of a stored block this reader has no shape for, from the fields
+ * every declared block keeps it in: an inline run, a grid of cells, nested
+ * parts, then a plain string. What carries no text yields none; nothing is
+ * guessed from other fields.
  */
-const persistedBlockSchema: v.GenericSchema<unknown, WireBlock | null> =
-  v.union([
-    wireBlockSchema,
-    v.pipe(
-      v.object({
-        type: v.pipe(
-          v.string(),
-          v.check((type) => !Object.hasOwn(BLOCK_ROLES, type)),
-        ),
-      }),
-      v.transform((): null => null),
-    ),
-  ]);
+const unreadText = (part: Record<string, unknown>, depth: number): string => {
+  const inlines = v.safeParse(persistedInlineArraySchema, part["inlines"]);
+  if (inlines.success && inlines.output.length > 0) {
+    return projectPlainText(inlines.output);
+  }
+  const rows = v.safeParse(unreadRowsShape, part["rows"]);
+  if (rows.success && rows.output.length > 0) {
+    return rows.output
+      .map((row) =>
+        row
+          .map((cell) => unreadText(cell, depth + 1))
+          .join(UNREAD_CELL_SEPARATOR),
+      )
+      .join(UNREAD_LINE_SEPARATOR);
+  }
+  if (depth < UNREAD_MAX_DEPTH) {
+    for (const field of UNREAD_NESTED_FIELDS) {
+      const nested = v.safeParse(v.array(unreadPartShape), part[field]);
+      if (nested.success && nested.output.length > 0) {
+        return nested.output
+          .map((child) => unreadText(child, depth + 1))
+          .filter((text) => text !== "")
+          .join(UNREAD_LINE_SEPARATOR);
+      }
+    }
+  }
+  for (const field of UNREAD_STRING_FIELDS) {
+    const text = part[field];
+    if (typeof text === "string" && text !== "") {
+      return text;
+    }
+  }
+  return "";
+};
+
+/**
+ * A stored block of a type this reader does not declare, before its
+ * identity is settled: a stored id or anchor may be absent, and only the
+ * document knows the position that stands in for one.
+ */
+type UnreadBlockDraft = {
+  kind: "unread";
+  storedType: string;
+  id: string | undefined;
+  anchorId: string | undefined;
+  text: string;
+};
+
+/**
+ * A block read from storage. A block kind this reader does not declare is
+ * kept as an `UnreadBlockDraft`, never dropped.
+ *
+ * Same doctrine as a role or an inline kind: a stored kind this reader does
+ * not know is a newer writer's or a row written past the ingestion boundary,
+ * and dropping it loses the decision's words. It is kept as a body paragraph
+ * of role `unknown` with the text its declared fields carry, its identity and
+ * its stored type name, and reported (`persistedAstDegradations`), so a
+ * reparse repairs the row and no reader loses the text meanwhile.
+ */
+const persistedBlockSchema: v.GenericSchema<
+  unknown,
+  WireBlock | UnreadBlockDraft
+> = v.union([
+  wireBlockSchema,
+  v.pipe(
+    v.looseObject({
+      type: v.pipe(
+        v.string(),
+        v.nonEmpty(),
+        v.check((type) => !Object.hasOwn(BLOCK_ROLES, type)),
+      ),
+      id: v.optional(v.unknown()),
+      anchorId: v.optional(v.unknown()),
+    }),
+    v.transform((block): UnreadBlockDraft => ({
+      kind: "unread",
+      storedType: block.type,
+      id:
+        typeof block.id === "string" && block.id !== "" ? block.id : undefined,
+      anchorId:
+        typeof block.anchorId === "string" && block.anchorId !== ""
+          ? block.anchorId
+          : undefined,
+      text: unreadText(block, 0),
+    })),
+  ),
+]);
+
+/** The identity an unread block takes when its stored row names none. */
+const unreadBlockIdentity = (index: number): string =>
+  `unread-${String(index + 1)}`;
+
+const unreadBlock = (draft: UnreadBlockDraft, index: number): UnreadBlock => {
+  const id = draft.id ?? draft.anchorId ?? unreadBlockIdentity(index);
+  const inlines: Inline[] =
+    draft.text === "" ? [] : [{ type: "text", text: draft.text }];
+  return {
+    id,
+    anchorId: draft.anchorId ?? id,
+    type: "paragraph",
+    role: "unknown",
+    storedType: draft.storedType,
+    inlines,
+    plainText: projectPlainText(inlines),
+  };
+};
+
+const isUnreadBlockDraft = (
+  block: WireBlock | UnreadBlockDraft,
+): block is UnreadBlockDraft => "kind" in block && block.kind === "unread";
 
 /** What the persisted reader could not read as written, per occurrence. */
 export type PersistedAstDegradation =
@@ -957,9 +1091,9 @@ const blockInlineTypes = (block: {
 
 /**
  * What a stored AST carries that the persisted reader degrades: a block
- * role it does not declare, a block kind it drops, an inline kind it
- * collapses to text, a block identity it re-keys because an earlier block
- * holds it.
+ * role it does not declare, a block kind it keeps as an unread paragraph
+ * (`UnreadBlock`), an inline kind it collapses to text, a block identity it
+ * re-keys because an earlier block holds it. None of them loses text.
  *
  * Reads the raw value, not the parsed AST, because parsing is where the
  * information is lost. A value that is not an AST at all reports nothing:
@@ -985,9 +1119,9 @@ export const persistedAstDegradations = (
     }
     const { anchorId, id, role, type } = parsed.output;
     const blockId = id ?? null;
-    if (!isBlockType(type)) {
+    const declared = isBlockType(type);
+    if (!declared) {
       degradations.push({ kind: "block-type", blockId, type });
-      continue;
     }
     for (const [field, value] of [
       ["id", id],
@@ -1001,7 +1135,11 @@ export const persistedAstDegradations = (
       }
       held[field].add(value);
     }
-    if (role !== undefined && !isMemberOf(BLOCK_ROLES[type], role)) {
+    if (
+      declared &&
+      role !== undefined &&
+      !isMemberOf(BLOCK_ROLES[type], role)
+    ) {
       degradations.push({ kind: "block-role", blockId, type, role });
     }
     const seen = new Set<string>();
@@ -1343,8 +1481,10 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
       source: source ?? emptyDocumentAstSource(),
       metadata: metadata ?? emptyDocumentAstMetadata(),
       blocks: withUniqueBlockIdentities(
-        blocks.flatMap((block) =>
-          block === null ? [] : [fillBlockPlainText(block)],
+        blocks.map((block, index) =>
+          isUnreadBlockDraft(block)
+            ? unreadBlock(block, index)
+            : fillBlockPlainText(block),
         ),
       ),
     })),
