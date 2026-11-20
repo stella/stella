@@ -1791,6 +1791,7 @@
   "chat.runOn.chipLabel": "Runs on: {place}",
   "chat.runOn.cloud": "Cloud",
   "chat.runOn.cloudDescription": "Runs in the cloud. Works anywhere.",
+  "chat.runOn.hintAntigravity": "Install Antigravity 1.5 or later, then sign in from it",
   "chat.runOn.hintCheck": "Check it in stella desktop",
   "chat.runOn.hintInstall": "Install it from stella desktop",
   "chat.runOn.hintOffline": "Open stella desktop on your computer",

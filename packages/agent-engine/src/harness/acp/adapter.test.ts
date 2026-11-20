@@ -56,6 +56,7 @@ const DEFINITION: AcpAgentDefinition = {
   steers: () => false,
   brokenSession: (message) => message.includes("thinking.signature"),
   discardSession: null,
+  minimumVersion: null,
 };
 
 /** Signed in once `signed-in` is in the agent's state directory. */
@@ -268,6 +269,25 @@ describe("ACP adapter over a stdio agent", () => {
     });
     // The probe's session folder is gone with it.
     expect(readdirSync(configDir)).toEqual([]);
+  });
+
+  test("an installed version older than the agent's ACP server is reported, never started", async () => {
+    const harness = harnessFor("probe", {
+      minimumVersion: { version: "1.5.0", read: async () => "1.3.5" },
+    });
+    const probed = await harness.adapter.probe();
+    expect(Result.isOk(probed) && probed.value).toMatchObject({
+      version: "1.3.5",
+      auth: { type: "signed_out" },
+      models: [],
+    });
+    expect(existsSync(harness.logPath)).toBe(false);
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    expect(Result.isError(started) && started.error.reason).toBe(
+      "start_rejected",
+    );
   });
 
   test("probe reports a signed-out agent without models", async () => {

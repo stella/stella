@@ -89,6 +89,7 @@ const UNAVAILABLE_PERMISSION_KEY = {
 const FIXED_PERMISSION_KEY = {
   codex: "chat.localRun.permissionSandboxed",
   "claude-code": "chat.localRun.permissionAskDescription",
+  antigravity: "chat.localRun.permissionAskDescription",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
 
 /**
@@ -185,10 +186,21 @@ const UNAVAILABLE_HINT_KEY = {
   offline: "chat.runOn.hintOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
+/**
+ * Agents the member installs and signs in to themselves, outside stella
+ * desktop: what to do about one that cannot take a turn yet.
+ */
+const MEMBER_SETUP_HINT_KEY: Partial<
+  Record<ChatLocalRunHarness, TranslationKey>
+> = {
+  antigravity: "chat.runOn.hintAntigravity",
+};
+
 export const useHarnessHint = () => {
   const t = useTranslations();
   const stateLabel = useHarnessStateLabel();
   return (option: ChatLocalHarnessOption): string | null => {
+    const memberSetup = MEMBER_SETUP_HINT_KEY[option.harness];
     switch (option.state) {
       case "ready":
         return null;
@@ -197,6 +209,7 @@ export const useHarnessHint = () => {
       case "needs_login":
       case "not_installed":
       case "unsupported":
+        return t(memberSetup ?? UNAVAILABLE_HINT_KEY[option.state]);
       case "unavailable":
       case "offline":
         return t(UNAVAILABLE_HINT_KEY[option.state]);
@@ -302,6 +315,8 @@ type DesktopSetupOption = {
 const SIGN_IN_STEPS_KEY = {
   codex: "chat.runOn.stepsSignInCodex",
   "claude-code": "chat.runOn.stepsSignInClaudeCode",
+  // Signed in to in the agent itself (`MEMBER_SETUP_HINT_KEY`).
+  antigravity: "chat.runOn.hintAntigravity",
 } as const satisfies Record<ChatLocalRunHarness, TranslationKey>;
 
 /**
@@ -463,6 +478,17 @@ export const ChatRunTargetMenu = ({
             );
           }
           if (option.state === "limit_until") {
+            return (
+              <MenuItem disabled key={option.harness}>
+                <PlaceLabel description={hint(option) ?? ""} title={name} />
+              </MenuItem>
+            );
+          }
+          if (
+            option.state !== "ready" &&
+            MEMBER_SETUP_HINT_KEY[option.harness] !== undefined
+          ) {
+            // Set up outside stella desktop: there is nothing to open.
             return (
               <MenuItem disabled key={option.harness}>
                 <PlaceLabel description={hint(option) ?? ""} title={name} />

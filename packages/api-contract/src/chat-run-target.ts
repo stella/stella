@@ -34,6 +34,7 @@ export const CHAT_RUN_TARGET_KIND = {
 export const CHAT_LOCAL_RUN_HARNESSES = [
   "codex",
   "claude-code",
+  "antigravity",
 ] as const satisfies readonly AgentHarness[];
 export type ChatLocalRunHarness = (typeof CHAT_LOCAL_RUN_HARNESSES)[number];
 
@@ -132,6 +133,14 @@ export const CHAT_LOCAL_RUN_WEB_SEARCH_BY_HARNESS = {
     ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
     auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
     full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+  },
+  // stella answers Antigravity's permission requests: a web fetch asks at
+  // Ask and runs at Auto. It runs in neither plan nor full auto.
+  antigravity: {
+    plan: CHAT_LOCAL_RUN_WEB_SEARCH.off,
+    ask: CHAT_LOCAL_RUN_WEB_SEARCH.asks,
+    auto: CHAT_LOCAL_RUN_WEB_SEARCH.unasked,
+    full_auto: CHAT_LOCAL_RUN_WEB_SEARCH.off,
   },
 } as const satisfies Record<
   ChatLocalRunHarness,
