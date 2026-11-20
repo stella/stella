@@ -995,6 +995,22 @@ mod tests {
   }
 
   #[test]
+  fn only_whole_frames_are_taken_and_the_rest_waits() {
+    let mut tape = Tape {
+      samples: vec![0.1, 0.2, 0.3, 0.4, 0.5],
+      taken: 0,
+      lost: false,
+    };
+    assert_eq!(take_frames(&mut tape, 2), vec![0.1, 0.2, 0.3, 0.4]);
+    assert_eq!(tape.samples, vec![0.5]);
+    tape.samples.push(0.6);
+    assert_eq!(take_frames(&mut tape, 2), vec![0.5, 0.6]);
+    assert!(tape.samples.is_empty());
+    // Taken audio still counts toward the recording limit.
+    assert_eq!(tape.taken, 6);
+  }
+
+  #[test]
   fn a_microphone_that_stopped_is_told_even_when_its_words_were_typed() {
     assert!(matches!(typed(false, true), Delivered::Typed));
     assert!(matches!(
@@ -1012,21 +1028,5 @@ mod tests {
     assert!(ends_capture(cpal::ErrorKind::StreamInvalidated));
     assert!(!ends_capture(cpal::ErrorKind::Xrun));
     assert!(!ends_capture(cpal::ErrorKind::DeviceChanged));
-  }
-
-  #[test]
-  fn only_whole_frames_are_taken_and_the_rest_waits() {
-    let mut tape = Tape {
-      samples: vec![0.1, 0.2, 0.3, 0.4, 0.5],
-      taken: 0,
-      lost: false,
-    };
-    assert_eq!(take_frames(&mut tape, 2), vec![0.1, 0.2, 0.3, 0.4]);
-    assert_eq!(tape.samples, vec![0.5]);
-    tape.samples.push(0.6);
-    assert_eq!(take_frames(&mut tape, 2), vec![0.5, 0.6]);
-    assert!(tape.samples.is_empty());
-    // Taken audio still counts toward the recording limit.
-    assert_eq!(tape.taken, 6);
   }
 }
