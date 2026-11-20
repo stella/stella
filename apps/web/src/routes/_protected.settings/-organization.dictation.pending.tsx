@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import {
   List,
   ListGroup,
-  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,
@@ -44,12 +43,6 @@ const DictationVocabularyPending = () => (
             id="settings.organization.dictation.wordsTitle"
           />
         </ListGroupTitle>
-        <ListGroupDescription>
-          <PendingText
-            barClassName="w-72 max-w-full"
-            id="settings.organization.dictation.wordsDescription"
-          />
-        </ListGroupDescription>
       </ListGroupHeading>
     </ListGroupHeader>
     <List aria-hidden="true">

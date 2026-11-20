@@ -23,7 +23,6 @@ import {
   ListGroup,
   ListGroupAction,
   ListGroupCount,
-  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,
@@ -137,9 +136,6 @@ export const DictationVocabularyCard = () => {
               />
             )}
           </ListGroupTitle>
-          <ListGroupDescription>
-            {t("settings.organization.dictation.wordsDescription")}
-          </ListGroupDescription>
         </ListGroupHeading>
         <ListGroupAction>
           <Button
@@ -169,7 +165,7 @@ export const DictationVocabularyCard = () => {
       <AddWordForm full={max !== undefined && total >= max} onAdded={refresh} />
       <div className="flex flex-wrap items-center gap-2">
         <SearchField
-          aria-label={t("settings.organization.dictation.searchLabel")}
+          aria-label={t("settings.organization.dictation.searchPlaceholder")}
           clearLabel={t("common.clearSearch")}
           groupClassName="min-w-0 flex-1"
           onValueChange={setSearch}
@@ -338,7 +334,7 @@ const AddWordForm = ({
             onChange={(event) => {
               setDraft(event.target.value);
             }}
-            placeholder={t("settings.organization.dictation.addPlaceholder")}
+            placeholder={t("settings.organization.dictation.addLabel")}
             value={draft}
           />
           {problem !== null && (

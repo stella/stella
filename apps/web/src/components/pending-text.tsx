@@ -402,7 +402,6 @@ type PendingTextMessageKey =
   | "settings.organization.anonymization.title"
   | "settings.organization.dictation.description"
   | "settings.organization.dictation.title"
-  | "settings.organization.dictation.wordsDescription"
   | "settings.organization.dictation.wordsTitle"
   | "settings.organization.auditLogs"
   | "settings.organization.auditLogsAllActions"
