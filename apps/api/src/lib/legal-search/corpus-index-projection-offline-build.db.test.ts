@@ -1260,7 +1260,7 @@ describe("offline route build", () => {
       removed === undefined ||
       lost === undefined
     ) {
-      return panic("Expected four reserved canonical inputs");
+      panic("Expected four reserved canonical inputs");
     }
     await db
       .update(legislationDocuments)
