@@ -69,9 +69,15 @@ const REVIEW_AUDIT_EVENT = {
 } as const;
 
 /** A decision moves a sign-in only out of the other reviewable status. */
-const REVIEW_SOURCE = {
-  [SESSION_SIGN_IN_REVIEW.pending]: SESSION_SIGN_IN_REVIEW.confirmed,
-  [SESSION_SIGN_IN_REVIEW.confirmed]: SESSION_SIGN_IN_REVIEW.pending,
+const REVIEW_MOVE = {
+  [SESSION_SIGN_IN_REVIEW.pending]: {
+    from: [SESSION_SIGN_IN_REVIEW.confirmed],
+    to: SESSION_SIGN_IN_REVIEW.pending,
+  },
+  [SESSION_SIGN_IN_REVIEW.confirmed]: {
+    from: [SESSION_SIGN_IN_REVIEW.pending],
+    to: SESSION_SIGN_IN_REVIEW.confirmed,
+  },
 } as const;
 
 const toLocationRow = (
@@ -79,10 +85,10 @@ const toLocationRow = (
 ): Omit<typeof sessionSignIns.$inferInsert, "sessionId"> => {
   switch (location.type) {
     case "unknown":
-      return { locationStatus: "unknown" };
+      return { locationKind: "unknown" };
     case "known":
       return {
-        locationStatus: "known",
+        locationKind: "known",
         countryCode: location.countryCode,
         region: location.region,
         city: location.city,
@@ -103,7 +109,7 @@ const toLocationRow = (
 const toLocation = (
   row: Pick<
     SessionSignInRow,
-    | "locationStatus"
+    | "locationKind"
     | "countryCode"
     | "region"
     | "city"
@@ -111,7 +117,7 @@ const toLocation = (
     | "longitude"
   >,
 ): SessionSignInLocation => {
-  switch (row.locationStatus) {
+  switch (row.locationKind) {
     case "unknown":
       return { type: "unknown" };
     case "known":
@@ -127,7 +133,7 @@ const toLocation = (
             : { latitude: row.latitude, longitude: row.longitude },
       };
     default:
-      row.locationStatus satisfies never;
+      row.locationKind satisfies never;
       return panic("Unknown sign-in location status");
   }
 };
@@ -207,7 +213,7 @@ export const createSessionSignInStore = ({
         tx,
         spec: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
         where: ownSignIn({ userId, sessionId }, now()),
-        options: { from: [REVIEW_SOURCE[review]], to: review },
+        options: REVIEW_MOVE[review],
         recordTransitionAuditEvent: async (auditTx) => {
           const event = {
             type: REVIEW_AUDIT_EVENT[review],
@@ -256,7 +262,7 @@ export const createSessionSignInStore = ({
         .select({
           id: session.id,
           signInSessionId: sessionSignIns.sessionId,
-          locationStatus: sessionSignIns.locationStatus,
+          locationKind: sessionSignIns.locationKind,
           countryCode: sessionSignIns.countryCode,
           region: sessionSignIns.region,
           city: sessionSignIns.city,
@@ -269,7 +275,7 @@ export const createSessionSignInStore = ({
         .where(and(eq(session.userId, userId), liveSessionPredicate(now())));
       return rows.map((row) =>
         row.signInSessionId === null ||
-        row.locationStatus === null ||
+        row.locationKind === null ||
         row.review === null
           ? {
               id: row.id,
@@ -279,7 +285,7 @@ export const createSessionSignInStore = ({
           : {
               id: row.id,
               location: toLocation({
-                locationStatus: row.locationStatus,
+                locationKind: row.locationKind,
                 countryCode: row.countryCode,
                 region: row.region,
                 city: row.city,

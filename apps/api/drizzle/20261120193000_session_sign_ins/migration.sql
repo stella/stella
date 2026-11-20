@@ -3,7 +3,7 @@ SET statement_timeout = '10s';--> statement-breakpoint
 
 CREATE TABLE "session_sign_ins" (
   "session_id" text PRIMARY KEY NOT NULL REFERENCES "session"("id") ON DELETE CASCADE,
-  "location_status" text NOT NULL,
+  "location_kind" text NOT NULL,
   "country_code" text,
   "region" text,
   "city" text,
@@ -12,7 +12,7 @@ CREATE TABLE "session_sign_ins" (
   "review" text DEFAULT 'not_required' NOT NULL,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "session_sign_ins_review_check" CHECK ("session_sign_ins"."review" IN ('not_required', 'pending', 'confirmed')),
-  CONSTRAINT "session_sign_ins_location_check" CHECK (("session_sign_ins"."location_status" = 'unknown' AND "session_sign_ins"."country_code" IS NULL AND "session_sign_ins"."region" IS NULL AND "session_sign_ins"."city" IS NULL AND "session_sign_ins"."latitude" IS NULL AND "session_sign_ins"."longitude" IS NULL) OR ("session_sign_ins"."location_status" = 'known' AND "session_sign_ins"."country_code" ~ '^[A-Z]{2}$' AND ("session_sign_ins"."latitude" IS NULL) = ("session_sign_ins"."longitude" IS NULL)))
+  CONSTRAINT "session_sign_ins_location_check" CHECK (("session_sign_ins"."location_kind" = 'unknown' AND "session_sign_ins"."country_code" IS NULL AND "session_sign_ins"."region" IS NULL AND "session_sign_ins"."city" IS NULL AND "session_sign_ins"."latitude" IS NULL AND "session_sign_ins"."longitude" IS NULL) OR ("session_sign_ins"."location_kind" = 'known' AND "session_sign_ins"."country_code" ~ '^[A-Z]{2}$' AND ("session_sign_ins"."latitude" IS NULL) = ("session_sign_ins"."longitude" IS NULL)))
 );--> statement-breakpoint
 ALTER TABLE "session_sign_ins" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "session_sign_ins" AS PERMISSIVE FOR ALL TO "stella" USING (false) WITH CHECK (false);--> statement-breakpoint

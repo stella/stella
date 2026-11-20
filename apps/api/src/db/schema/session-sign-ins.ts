@@ -11,7 +11,7 @@ import { session } from "@/api/db/auth-schema";
 import { timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 
-export const SESSION_SIGN_IN_LOCATION_STATUSES = ["known", "unknown"] as const;
+export const SESSION_SIGN_IN_LOCATION_KINDS = ["known", "unknown"] as const;
 
 const sqlValues = (values: readonly string[]) =>
   sql.join(
@@ -35,8 +35,8 @@ export const sessionSignIns = pgTable(
       .primaryKey()
       .references(() => session.id, { onDelete: "cascade" }),
     /** Whether the edge reported a location; `unknown` leaves the rest null. */
-    locationStatus: text("location_status", {
-      enum: SESSION_SIGN_IN_LOCATION_STATUSES,
+    locationKind: text("location_kind", {
+      enum: SESSION_SIGN_IN_LOCATION_KINDS,
     }).notNull(),
     countryCode: text("country_code").$type<CountryCode>(),
     region: text("region"),
@@ -57,7 +57,7 @@ export const sessionSignIns = pgTable(
     // A known location names its country; an unknown one carries nothing.
     check(
       "session_sign_ins_location_check",
-      sql`(${table.locationStatus} = 'unknown' AND ${table.countryCode} IS NULL AND ${table.region} IS NULL AND ${table.city} IS NULL AND ${table.latitude} IS NULL AND ${table.longitude} IS NULL) OR (${table.locationStatus} = 'known' AND ${table.countryCode} ~ '^[A-Z]{2}$' AND (${table.latitude} IS NULL) = (${table.longitude} IS NULL))`,
+      sql`(${table.locationKind} = 'unknown' AND ${table.countryCode} IS NULL AND ${table.region} IS NULL AND ${table.city} IS NULL AND ${table.latitude} IS NULL AND ${table.longitude} IS NULL) OR (${table.locationKind} = 'known' AND ${table.countryCode} ~ '^[A-Z]{2}$' AND (${table.latitude} IS NULL) = (${table.longitude} IS NULL))`,
     ),
     ...denyStellaAccessPolicies(),
   ],

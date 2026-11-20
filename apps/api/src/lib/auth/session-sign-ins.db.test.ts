@@ -178,7 +178,7 @@ describe("recorded sign-ins", () => {
     const refused = await rejectionOf(
       testDb.insert(sessionSignIns).values({
         sessionId,
-        locationStatus: "unknown",
+        locationKind: "unknown",
         city: "Bratislava",
       }),
     );
