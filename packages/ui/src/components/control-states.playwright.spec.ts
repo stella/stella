@@ -126,7 +126,7 @@ test("caption triggers keep their visible metrics and keyboard focus", async ({
   }
 });
 
-test("inspector actions retain the fixed row and native disabled behavior", async ({
+test("inspector actions retain the fixed row and explain why duplication is disabled", async ({
   page,
 }) => {
   const action = page.getByRole("button", {
@@ -142,7 +142,13 @@ test("inspector actions retain the fixed row and native disabled behavior", asyn
     expect(await height(original)).toBe(width < 640 ? 48 : 32);
     expect(await height(action)).toBe(48);
   }
-  await expect(
-    page.getByRole("button", { name: "Duplicate content", exact: true }),
-  ).toBeDisabled();
+  const duplicate = page.getByRole("button", {
+    name: "Duplicate content",
+    exact: true,
+  });
+  await expect(duplicate).toBeDisabled();
+  await duplicate.focus();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Select content to duplicate.",
+  );
 });
