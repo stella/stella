@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/case-law/held-decision-candidate-query";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
+import { HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX } from "@/api/lib/legal-search/held-decision-attachment-values";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
@@ -208,6 +209,25 @@ test("primary ECLI and canonical tuple disagreement parks instead of selecting e
       ecliCandidateIds: [ecliId],
       courtDocketDateCandidateIds: [tupleId],
     },
+  });
+});
+
+test("ambiguous candidates distinguish a full page from an overflow", async () => {
+  const f = await fixture(11);
+  const hosts = [];
+  for (let index = 0; index < HELD_DECISION_AMBIGUOUS_CANDIDATES_MAX; index++) {
+    hosts.push(await f.host());
+  }
+  expect(await f.match()).toMatchObject({
+    type: "review",
+    candidateDecisionIds: hosts.toSorted(),
+    evidence: { status: "ambiguous", completeness: "complete" },
+  });
+  await f.host();
+  expect(await f.match()).toMatchObject({
+    type: "review",
+    candidateDecisionIds: [],
+    evidence: { status: "ambiguous", completeness: "overflow" },
   });
 });
 
