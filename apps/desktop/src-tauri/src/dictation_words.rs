@@ -285,7 +285,6 @@ mod tests {
   fn seed_files() -> (std::path::PathBuf, SeedFiles) {
     let root = std::env::temp_dir()
       .join(format!("stella-dictation-seed-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&root).unwrap();
     let files = SeedFiles {
       words: DevicePreference::at(root.join("words")),
       seeded: DevicePreference::at(root.join("seeded")),
