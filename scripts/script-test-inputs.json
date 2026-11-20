@@ -286,6 +286,7 @@
     "scripts/legal-atlas-image-scope.test.ts": ["**"],
     "scripts/lint.test.ts": ["**"],
     "scripts/local-readiness-curl.test.ts": ["**"],
+    "scripts/local-run-e2e-workflow.test.ts": ["**"],
     "scripts/lockfile-workspace-versions.test.ts": ["**"],
     "scripts/main-heavy-classification.test.ts": ["**"],
     "scripts/main-heavy-plan.test.ts": ["**"],
