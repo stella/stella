@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Ieraksta transkribēšana",
     "retry": "Mēģināt vēlreiz",
+    "matterFolder": {
+      "cleanedTitle": "{title} – rediģēts teksts",
+      "instructionsLabel": "Diktāta norādījumi:",
+      "preparing": "Sagatavo ierakstu…",
+      "documents": "Saglabā Word dokumentus…",
+      "uploading": "Augšupielādē ierakstu: {percent, number}%",
+      "finishing": "Pārbauda ierakstu…",
+      "saved": "Saglabāts lietā {matter}, mapē {folder}.",
+      "audioTooLarge": "Ieraksts ir lielāks par {size}, tāpēc tas netika saglabāts lietā. Word dokumenti ir saglabāti.",
+      "audioFailed": "Ierakstu neizdevās saglabāt lietā. Word dokumenti ir saglabāti.",
+      "audioMissing": "Ieraksts šajā logā vairs nav atvērts, tāpēc saglabāti tikai Word dokumenti.",
+      "saveDocx": "Word dokuments (.docx)",
+      "docxFileName": "{title} – transkripcija.docx",
+      "cleanedDocxFileName": "{title} – rediģēts teksts.docx"
+    },
     "drop": {
       "title": "Velciet ierakstu šeit",
       "release": "Atlaidiet, lai transkribētu",

@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Transkrypcja nagrania",
     "retry": "Spróbuj ponownie",
+    "matterFolder": {
+      "cleanedTitle": "{title} – tekst poprawiony",
+      "instructionsLabel": "Polecenia w dyktacie:",
+      "preparing": "Przygotowywanie nagrania…",
+      "documents": "Zapisywanie dokumentów Word…",
+      "uploading": "Wysyłanie nagrania: {percent, number}%",
+      "finishing": "Sprawdzanie nagrania…",
+      "saved": "Zapisano w sprawie {matter}, w folderze {folder}.",
+      "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie. Dokumenty Word zostały zapisane.",
+      "audioFailed": "Nie udało się zapisać nagrania w sprawie. Dokumenty Word zostały zapisane.",
+      "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc zapisano tylko dokumenty Word.",
+      "saveDocx": "Dokument Word (.docx)",
+      "docxFileName": "{title} – transkrypcja.docx",
+      "cleanedDocxFileName": "{title} – tekst poprawiony.docx"
+    },
     "drop": {
       "title": "Upuść tutaj nagranie",
       "release": "Puść, aby transkrybować",

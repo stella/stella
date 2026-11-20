@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Prepísať nahrávku",
     "retry": "Skúsiť znova",
+    "matterFolder": {
+      "cleanedTitle": "{title} – upravený text",
+      "instructionsLabel": "Pokyny k diktátu:",
+      "preparing": "Pripravujem nahrávku…",
+      "documents": "Ukladám dokumenty Word…",
+      "uploading": "Odosielam nahrávku: {percent, number} %",
+      "finishing": "Kontrolujem nahrávku…",
+      "saved": "Uložené do spisu {matter} v priečinku {folder}.",
+      "audioTooLarge": "Nahrávka je väčšia ako {size}, preto sa do spisu neuložila. Dokumenty Word sú uložené.",
+      "audioFailed": "Nahrávku sa nepodarilo uložiť do spisu. Dokumenty Word sú uložené.",
+      "audioMissing": "Nahrávka už v tomto okne nie je otvorená, preto sa uložili len dokumenty Word.",
+      "saveDocx": "Dokument Word (.docx)",
+      "docxFileName": "{title} – prepis.docx",
+      "cleanedDocxFileName": "{title} – upravený text.docx"
+    },
     "drop": {
       "title": "Presuňte sem nahrávku",
       "release": "Pustite ju a začne sa prepis",

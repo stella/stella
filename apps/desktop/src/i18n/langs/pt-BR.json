@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Transcrever uma gravação",
     "retry": "Tentar novamente",
+    "matterFolder": {
+      "cleanedTitle": "{title} - texto revisado",
+      "instructionsLabel": "Instruções do ditado:",
+      "preparing": "Preparando a gravação…",
+      "documents": "Salvando os documentos do Word…",
+      "uploading": "Enviando a gravação: {percent, number}%",
+      "finishing": "Verificando a gravação…",
+      "saved": "Salvo em {matter}, na pasta {folder}.",
+      "audioTooLarge": "A gravação é maior que {size}, por isso não foi salva no caso. Os documentos do Word foram salvos.",
+      "audioFailed": "Não foi possível salvar a gravação no caso. Os documentos do Word foram salvos.",
+      "audioMissing": "A gravação não está mais aberta nesta janela, por isso só os documentos do Word foram salvos.",
+      "saveDocx": "Documento do Word (.docx)",
+      "docxFileName": "{title} - transcrição.docx",
+      "cleanedDocxFileName": "{title} - texto revisado.docx"
+    },
     "drop": {
       "title": "Solte uma gravação aqui",
       "release": "Solte para transcrever",

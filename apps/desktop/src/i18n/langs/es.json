@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Transcribir una grabación",
     "retry": "Intentar de nuevo",
+    "matterFolder": {
+      "cleanedTitle": "{title} - texto revisado",
+      "instructionsLabel": "Instrucciones del dictado:",
+      "preparing": "Preparando la grabación…",
+      "documents": "Guardando los documentos de Word…",
+      "uploading": "Subiendo la grabación: {percent, number} %",
+      "finishing": "Comprobando la grabación…",
+      "saved": "Guardado en {matter}, en la carpeta {folder}.",
+      "audioTooLarge": "La grabación supera {size}, así que no se guardó en el asunto. Los documentos de Word se guardaron.",
+      "audioFailed": "No se pudo guardar la grabación en el asunto. Los documentos de Word se guardaron.",
+      "audioMissing": "La grabación ya no está abierta en esta ventana, así que solo se guardaron los documentos de Word.",
+      "saveDocx": "Documento de Word (.docx)",
+      "docxFileName": "{title} - transcripción.docx",
+      "cleanedDocxFileName": "{title} - texto revisado.docx"
+    },
     "drop": {
       "title": "Suelta aquí una grabación",
       "release": "Suéltala para transcribirla",

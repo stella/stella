@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Transcribe a recording",
     "retry": "Try again",
+    "matterFolder": {
+      "cleanedTitle": "{title} cleaned up",
+      "instructionsLabel": "Instructions in the dictation:",
+      "preparing": "Preparing the recording…",
+      "documents": "Saving the Word documents…",
+      "uploading": "Uploading the recording: {percent, number}%",
+      "finishing": "Checking the recording…",
+      "saved": "Saved to {matter} in the folder {folder}.",
+      "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter. The Word documents were saved.",
+      "audioFailed": "The recording could not be saved to the matter. The Word documents were saved.",
+      "audioMissing": "The recording is no longer open in this window, so only the Word documents were saved.",
+      "saveDocx": "Word document (.docx)",
+      "docxFileName": "{title} transcript.docx",
+      "cleanedDocxFileName": "{title} cleaned up.docx"
+    },
     "drop": {
       "title": "Drop a recording here",
       "release": "Release to transcribe",

@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Transcrire un enregistrement",
     "retry": "Réessayer",
+    "matterFolder": {
+      "cleanedTitle": "{title} - texte révisé",
+      "instructionsLabel": "Instructions de la dictée :",
+      "preparing": "Préparation de l’enregistrement…",
+      "documents": "Enregistrement des documents Word…",
+      "uploading": "Envoi de l’enregistrement : {percent, number} %",
+      "finishing": "Vérification de l’enregistrement…",
+      "saved": "Enregistré dans {matter}, dans le sous-dossier {folder}.",
+      "audioTooLarge": "L’enregistrement dépasse {size} et n’a donc pas été enregistré dans le dossier. Les documents Word ont été enregistrés.",
+      "audioFailed": "Impossible d’enregistrer l’enregistrement dans le dossier. Les documents Word ont été enregistrés.",
+      "audioMissing": "L’enregistrement n’est plus ouvert dans cette fenêtre : seuls les documents Word ont été enregistrés.",
+      "saveDocx": "Document Word (.docx)",
+      "docxFileName": "{title} - transcription.docx",
+      "cleanedDocxFileName": "{title} - texte révisé.docx"
+    },
     "drop": {
       "title": "Déposez un enregistrement ici",
       "release": "Relâchez pour transcrire",

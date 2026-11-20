@@ -63,6 +63,7 @@ mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
+mod docx_writer;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -108,6 +109,7 @@ mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
 mod transcribe_recording;
+mod transcribe_save;
 mod transcribe_window;
 mod tray;
 mod types;

@@ -315,12 +315,23 @@ impl TranscribeState {
   }
 }
 
+/// The recording the window holds, while no transcription of it runs: the
+/// file the user chose, never a path the webview names.
+pub(crate) fn chosen_recording(app: &AppHandle) -> Option<PathBuf> {
+  app.state::<TranscribeState>().update(|inner| {
+    if inner.job.is_some() {
+      return None;
+    }
+    inner.file.as_ref().map(|chosen| chosen.path.clone())
+  })
+}
+
 /// Whether this computer offers the window: dictation is on its way here.
 pub(crate) fn available(app: &AppHandle) -> bool {
   dictation::available(app)
 }
 
-fn require_window(window: &Window) -> Result<(), String> {
+pub(crate) fn require_window(window: &Window) -> Result<(), String> {
   if window.label() == TRANSCRIBE_WINDOW_LABEL {
     Ok(())
   } else {
@@ -328,7 +339,7 @@ fn require_window(window: &Window) -> Result<(), String> {
   }
 }
 
-fn require_available(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn require_available(app: &AppHandle) -> Result<(), String> {
   if available(app) {
     Ok(())
   } else {
@@ -336,7 +347,7 @@ fn require_available(app: &AppHandle) -> Result<(), String> {
   }
 }
 
-fn file_name(path: &Path) -> String {
+pub(crate) fn file_name(path: &Path) -> String {
   path
     .file_name()
     .map(|name| {
@@ -349,7 +360,7 @@ fn file_name(path: &Path) -> String {
     .unwrap_or_default()
 }
 
-fn extension(path: &Path) -> Option<String> {
+pub(crate) fn extension(path: &Path) -> Option<String> {
   path
     .extension()
     .and_then(|extension| extension.to_str())
@@ -686,7 +697,7 @@ pub fn transcribe_stop(
   Ok(())
 }
 
-fn valid_id(id: &str) -> Result<(), String> {
+pub(crate) fn valid_id(id: &str) -> Result<(), String> {
   if id.len() <= 200
     && id.chars().all(|character| {
       character.is_ascii_alphanumeric() || character == '-' || character == '_'

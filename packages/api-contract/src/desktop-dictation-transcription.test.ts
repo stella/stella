@@ -6,10 +6,16 @@ import {
   DESKTOP_DICTATION_MODELS_PATH,
   DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
   DESKTOP_DICTATION_TRANSCRIBE_PATH,
+  DESKTOP_DICTATION_TRANSCRIPT_AUDIO_PATH,
+  DESKTOP_DICTATION_TRANSCRIPT_FOLDER_LIMITS,
   DESKTOP_DICTATION_TRANSCRIPT_LIMITS,
   DESKTOP_DICTATION_TRANSCRIPTS_PATH,
   desktopDictationModelsSchema,
+  desktopDictationTranscriptAudioSchema,
+  desktopDictationTranscriptCleanedSchema,
   desktopDictationTranscriptParagraphsSchema,
+  desktopDictationTranscriptSavedSchema,
+  MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES,
 } from "./desktop-dictation-transcription";
 import contract from "./desktop-dictation-transcription.json";
 import {
@@ -26,10 +32,12 @@ test("the typed transcription contract reads the native one", () => {
     modelsRetentionQuery: DESKTOP_DICTATION_MODELS_RETENTION_QUERY,
     transcribePath: DESKTOP_DICTATION_TRANSCRIBE_PATH,
     transcriptsPath: DESKTOP_DICTATION_TRANSCRIPTS_PATH,
+    transcriptAudioPath: DESKTOP_DICTATION_TRANSCRIPT_AUDIO_PATH,
     maxAudioBytes: MAX_TRANSCRIPTION_AUDIO_BYTES,
     maxAudioSeconds: MAX_TRANSCRIPTION_AUDIO_SECONDS,
     maxVocabularyTerms: MAX_TRANSCRIPTION_VOCABULARY_TERMS,
     maxVocabularyTermLength: MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
+    maxTranscriptAudioBytes: MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES,
   });
 });
 
@@ -100,4 +108,57 @@ test("a transcript has paragraphs within a four-hour recording", () => {
     (_unused, index) => ({ startMs: index * 1000, text: longest }),
   );
   expect(valid(tooMuch)).toBe(false);
+});
+
+test("a folder takes bounded cleaned text and a declared recording", () => {
+  const cleaned = (value: unknown) =>
+    v.safeParse(desktopDictationTranscriptCleanedSchema, value).success;
+  expect(cleaned({ markdown: "# Reply", instructions: [] })).toBe(true);
+  expect(cleaned({ markdown: "   ", instructions: [] })).toBe(false);
+  expect(
+    cleaned({
+      markdown: "Text",
+      instructions: Array.from(
+        {
+          length: DESKTOP_DICTATION_TRANSCRIPT_FOLDER_LIMITS.instructions + 1,
+        },
+        () => "Make it an email.",
+      ),
+    }),
+  ).toBe(false);
+  const audio = {
+    name: "Dictation.m4a",
+    mimeType: "audio/mp4",
+    size: 1024,
+    sha256Hex: "a".repeat(64),
+  };
+  const declared = (value: unknown) =>
+    v.safeParse(desktopDictationTranscriptAudioSchema, value).success;
+  expect(declared(audio)).toBe(true);
+  // A recording past the matter's limit is still declared, so the API can
+  // answer that it was left out instead of refusing the documents.
+  expect(
+    declared({
+      ...audio,
+      size: MAX_DESKTOP_DICTATION_TRANSCRIPT_AUDIO_BYTES + 1,
+    }),
+  ).toBe(true);
+  expect(declared({ ...audio, size: 0 })).toBe(false);
+  expect(declared({ ...audio, sha256Hex: "A".repeat(64) })).toBe(false);
+});
+
+test("an older desktop reads only the file name of a filed transcript", () => {
+  expect(
+    v.parse(desktopDictationTranscriptSavedSchema, {
+      fileName: "Memo transcript.docx",
+    }),
+  ).toStrictEqual({ fileName: "Memo transcript.docx" });
+  expect(
+    v.safeParse(desktopDictationTranscriptSavedSchema, {
+      fileName: "Memo transcript.docx",
+      folderName: "Memo",
+      files: [{ kind: "transcript", fileName: "Memo transcript.docx" }],
+      audio: { status: "too_large", maxBytes: 1 },
+    }).success,
+  ).toBe(true);
 });

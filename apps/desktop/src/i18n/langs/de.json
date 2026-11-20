@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Aufnahme transkribieren",
     "retry": "Erneut versuchen",
+    "matterFolder": {
+      "cleanedTitle": "{title} – überarbeitet",
+      "instructionsLabel": "Anweisungen im Diktat:",
+      "preparing": "Aufnahme wird vorbereitet…",
+      "documents": "Word-Dokumente werden gespeichert…",
+      "uploading": "Aufnahme wird hochgeladen: {percent, number} %",
+      "finishing": "Aufnahme wird geprüft…",
+      "saved": "Im Mandat {matter} im Ordner {folder} gespeichert.",
+      "audioTooLarge": "Die Aufnahme ist größer als {size} und wurde daher nicht im Mandat gespeichert. Die Word-Dokumente wurden gespeichert.",
+      "audioFailed": "Die Aufnahme konnte nicht im Mandat gespeichert werden. Die Word-Dokumente wurden gespeichert.",
+      "audioMissing": "Die Aufnahme ist in diesem Fenster nicht mehr geöffnet, daher wurden nur die Word-Dokumente gespeichert.",
+      "saveDocx": "Word-Dokument (.docx)",
+      "docxFileName": "{title} – Transkript.docx",
+      "cleanedDocxFileName": "{title} – überarbeitet.docx"
+    },
     "drop": {
       "title": "Aufnahme hier ablegen",
       "release": "Zum Transkribieren loslassen",

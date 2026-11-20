@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Felvétel átírása",
     "retry": "Újra",
+    "matterFolder": {
+      "cleanedTitle": "{title} – szerkesztett szöveg",
+      "instructionsLabel": "Utasítások a diktálásban:",
+      "preparing": "A felvétel előkészítése…",
+      "documents": "A Word-dokumentumok mentése…",
+      "uploading": "A felvétel feltöltése: {percent, number}%",
+      "finishing": "A felvétel ellenőrzése…",
+      "saved": "Elmentve ide: {matter}, a(z) {folder} mappába.",
+      "audioTooLarge": "A felvétel nagyobb, mint {size}, ezért nem került az ügybe. A Word-dokumentumok elmentve.",
+      "audioFailed": "A felvételt nem sikerült az ügybe menteni. A Word-dokumentumok elmentve.",
+      "audioMissing": "A felvétel már nincs megnyitva ebben az ablakban, ezért csak a Word-dokumentumok lettek elmentve.",
+      "saveDocx": "Word-dokumentum (.docx)",
+      "docxFileName": "{title} – átirat.docx",
+      "cleanedDocxFileName": "{title} – szerkesztett szöveg.docx"
+    },
     "drop": {
       "title": "Húzza ide a felvételt",
       "release": "Engedje el az átíráshoz",

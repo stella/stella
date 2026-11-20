@@ -3,7 +3,10 @@ import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
 import cleanup from "./cleanup";
-import { saveDesktopDictationTranscript } from "./desktop-transcript";
+import {
+  saveDesktopDictationTranscript,
+  saveDesktopDictationTranscriptAudio,
+} from "./desktop-transcript";
 import {
   readDesktopDictationModels,
   transcribeDesktopDictation,
@@ -29,6 +32,7 @@ export const desktopDictationRoute = routes(
     "/models": { GET: readDesktopDictationModels },
     "/transcribe": { POST: transcribeDesktopDictation },
     "/transcripts": { POST: saveDesktopDictationTranscript },
+    "/transcripts/audio": { POST: saveDesktopDictationTranscriptAudio },
   },
   {
     prefix: "/v1/desktop/dictation",

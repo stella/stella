@@ -1079,6 +1079,21 @@
   "transcribe": {
     "title": "Salvestise transkribeerimine",
     "retry": "Proovi uuesti",
+    "matterFolder": {
+      "cleanedTitle": "{title} – toimetatud tekst",
+      "instructionsLabel": "Dikteeritud juhised:",
+      "preparing": "Salvestise ettevalmistamine…",
+      "documents": "Wordi dokumentide salvestamine…",
+      "uploading": "Salvestise üleslaadimine: {percent, number}%",
+      "finishing": "Salvestise kontrollimine…",
+      "saved": "Salvestatud toimikusse {matter}, kausta {folder}.",
+      "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud. Wordi dokumendid salvestati.",
+      "audioFailed": "Salvestist ei õnnestunud toimikusse salvestada. Wordi dokumendid salvestati.",
+      "audioMissing": "Salvestis pole selles aknas enam avatud, seega salvestati ainult Wordi dokumendid.",
+      "saveDocx": "Wordi dokument (.docx)",
+      "docxFileName": "{title} – transkriptsioon.docx",
+      "cleanedDocxFileName": "{title} – toimetatud tekst.docx"
+    },
     "drop": {
       "title": "Lohistage salvestis siia",
       "release": "Laske lahti, et transkribeerida",
