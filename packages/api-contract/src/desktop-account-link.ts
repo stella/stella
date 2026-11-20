@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { ChatLocalRunHarness } from "./chat-run-target";
+import type { DesktopSetUpHarness } from "./chat-run-target";
 import { DESKTOP_LINK_FAILURE_REASON_PROTOCOL } from "./desktop-registry";
 import type { DesktopLinkFailure } from "./desktop-rpc.gen";
 
@@ -32,7 +32,7 @@ export const desktopAccountConnectUrl = ({
  * The app accepts exactly these links (`settingsLinks` in the fixtures) and
  * ignores any other, so no free text reaches its window.
  */
-export const desktopAgentSettingsUrl = (harness?: ChatLocalRunHarness) =>
+export const desktopAgentSettingsUrl = (harness?: DesktopSetUpHarness) =>
   harness === undefined
     ? "stella://settings/agents"
     : `stella://settings/agents?${new URLSearchParams({ harness }).toString()}`;

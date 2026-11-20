@@ -11,6 +11,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
+import arabicMessages from "@/i18n/langs/ar.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -32,7 +33,14 @@ globalThis.fetch = Object.assign(
         headers: { "content-type": "application/pdf" },
       });
     }
-    if (url.includes("/cades/field-cades-unsupported")) {
+    if (url.includes("/structured-document/field-structured")) {
+      return Response.json({ text: "İlk sayfa\n法院文件", truncated: true });
+    }
+    if (
+      url.includes("/structured-document/field-preview-unavailable") ||
+      url.includes("/asic/field-asic-unsupported") ||
+      url.includes("/cades/field-cades-unsupported")
+    ) {
       return Response.json(
         { message: "Preview unavailable", code: "preview_unavailable" },
         { status: 422 },
@@ -117,8 +125,12 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const { cadesPreviewOptions, dataBoxPreviewOptions, fileOptions } =
-  await import("@/lib/files/queries");
+const {
+  asicPreviewOptions,
+  cadesPreviewOptions,
+  dataBoxPreviewOptions,
+  fileOptions,
+} = await import("@/lib/files/queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { entityOptions } = await import("@/lib/workspaces/queries/entities");
@@ -440,10 +452,155 @@ test("keeps the original available when the signed container cannot be opened", 
   expect(pdfEngineRenderCount).toBe(0);
 });
 
+test.each([".asice", ".asics"])(
+  "lists and previews contained files in a signed %s archive",
+  async (extension) => {
+    const tab = {
+      ...pdfTab,
+      id: toSafeId<"field">("field-asic"),
+      fileName: `submission${extension}`,
+      mimeType: "application/octet-stream",
+    };
+    const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+    const mounted = renderFileTab(tab, (client) => {
+      client.setQueryData(asicPreviewOptions(key).queryKey, {
+        members: [
+          {
+            fileName: "submission.pdf",
+            status: "readable",
+            text: "The enclosed submission",
+          },
+          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "notes.txt",
+            status: "truncated",
+            text: "The first page",
+          },
+        ],
+      });
+    });
+
+    expect(
+      await mounted.findByRole("heading", { name: "submission.pdf" }),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("heading", { name: "attachment.bin" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("The enclosed submission")).toBeTruthy();
+    expect(mounted.getByText("The first page")).toBeTruthy();
+    expect(
+      mounted.getByText("The full text is unavailable in this preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText("No readable content is available for preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText("The signatures have not been verified."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test("keeps the original ASiC archive available when preview is unavailable", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-asic-unsupported"),
+    fileName: "unsupported.asice",
+    mimeType: "application/octet-stream",
+  });
+  expect(
+    await mounted.findByText("The signed file could not be read."),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("button", { name: "Download original" }),
+  ).toBeTruthy();
+});
+
+test("isolates member names in the Arabic ASiC preview", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-asic-arabic"),
+    fileName: "submission.asice",
+    mimeType: "application/octet-stream",
+  };
+  const fileName = "Appendix ٢.pdf";
+  const mounted = renderFileTab(
+    tab,
+    (client) => {
+      const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+      client.setQueryData(asicPreviewOptions(key).queryKey, {
+        members: [{ fileName, status: "truncated", text: "جزء من المستند" }],
+      });
+    },
+    "ar",
+  );
+  const member = await mounted.findByRole("heading", { name: fileName });
+  expect(member.querySelector("bdi")?.textContent).toBe(fileName);
+  expect(member.closest('[dir="rtl"]')).toBeTruthy();
+  expect(
+    mounted.getByText(arabicMessages.common.previewTruncated),
+  ).toBeTruthy();
+});
+
+test.each([".udf", ".ofd"])(
+  "renders a %s text preview with its original download",
+  async (extension) => {
+    const mounted = renderFileTab(
+      {
+        ...pdfTab,
+        id: toSafeId<"field">("field-structured"),
+        fileName: `submission${extension}`,
+        mimeType: "application/octet-stream",
+      },
+      undefined,
+      "ar",
+    );
+
+    const text = await mounted.findByText("İlk sayfa 法院文件");
+    expect(text.getAttribute("dir")).toBe("auto");
+    expect(text.closest('[dir="rtl"]')).toBeTruthy();
+    expect(
+      mounted.getByText(arabicMessages.common.previewTruncated),
+    ).toBeTruthy();
+    expect(
+      mounted.getByText(arabicMessages.structuredDocument.textOnly),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", {
+        name: arabicMessages.common.downloadOriginal,
+      }),
+    ).toBeTruthy();
+    expect(pdfEngineRenderCount).toBe(0);
+  },
+);
+
+test.each([".udf", ".ofd"])(
+  "keeps the %s original available when no text can be previewed",
+  async (extension) => {
+    const mounted = renderFileTab({
+      ...pdfTab,
+      id: toSafeId<"field">("field-preview-unavailable"),
+      fileName: `submission${extension}`,
+      mimeType: "application/octet-stream",
+    });
+    expect(
+      await mounted.findByText("No readable text is available for preview."),
+    ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: "Download original" }),
+    ).toBeTruthy();
+  },
+);
+
 function renderFileTab(
   tab: typeof docxTab | typeof pdfTab,
   seed?: (client: QueryClientInstance) => void,
+  locale: "ar" | "en" = "en",
 ) {
+  const messages = locale === "ar" ? arabicMessages : bundledEnglishMessages;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -556,12 +713,8 @@ function renderFileTab(
             wordEditShortcut: null,
           }}
         >
-          <IntlProvider
-            locale="en"
-            messages={bundledEnglishMessages}
-            timeZone="UTC"
-          >
-            <FormattingProvider locale="en" timeZone="UTC">
+          <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+            <FormattingProvider locale={locale} timeZone="UTC">
               <button
                 data-testid="parent-rerender"
                 onClick={() => setParentRender((value) => value + 1)}
@@ -618,11 +771,7 @@ function renderFileTab(
 
   render(
     <QueryClientProvider client={queryClient}>
-      <IntlProvider
-        locale="en"
-        messages={bundledEnglishMessages}
-        timeZone="UTC"
-      >
+      <IntlProvider locale={locale} messages={messages} timeZone="UTC">
         <DocxEditorHost />
       </IntlProvider>
     </QueryClientProvider>,
@@ -631,5 +780,9 @@ function renderFileTab(
     routeTree: createRootRoute({ component: Harness }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  return render(<RouterProvider router={router} />);
+  return render(
+    <div dir={locale === "ar" ? "rtl" : "ltr"}>
+      <RouterProvider router={router} />
+    </div>,
+  );
 }

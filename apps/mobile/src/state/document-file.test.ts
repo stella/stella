@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { InferOutput } from "valibot";
 
+import type { asicPreviewSchema } from "@stll/api-contract/asic";
 import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
@@ -314,7 +316,82 @@ describe("reading a document's file", () => {
     },
   );
 
+  test.each([".ASICE", ".sce", ".bdoc", ".asics", ".scs"])(
+    "reads an ASiC archive with the %s extension through the preview",
+    async (extension) => {
+      const fileName = `appendices${extension}`;
+      const preview = {
+        members: [
+          {
+            fileName: "submission.pdf",
+            status: "readable",
+            text: "The enclosed submission",
+          },
+          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "notes.txt",
+            status: "truncated",
+            text: "The first page",
+          },
+        ],
+      } satisfies InferOutput<typeof asicPreviewSchema>;
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "asic" && file.preview.unwrap()).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/asic/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([".UDF", ".ofd"])(
+    "reads a %s file through the shared text preview",
+    async (extension) => {
+      const fileName = `submission${extension}`;
+      const preview = { text: "İlk sayfa\n法院文件", truncated: true };
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(
+        file.viewer === "structured-document" && file.preview.unwrap(),
+      ).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/structured-document/field%3F1",
+      ]);
+    },
+  );
+
   test.each([
+    {
+      viewer: "asic",
+      fileName: "Detached.asice",
+      mimeType: "application/vnd.etsi.asic-e+zip",
+    },
+    {
+      viewer: "structured-document",
+      fileName: "Submission.udf",
+      mimeType: "application/octet-stream",
+    },
+    {
+      viewer: "structured-document",
+      fileName: "Submission.ofd",
+      mimeType: "application/octet-stream",
+    },
     {
       viewer: "dataBox",
       fileName: "Doručenka.zfo",

@@ -17,7 +17,7 @@ import type {
 import { createDetached } from "@stll/errors";
 
 import { createAcpHarnessAdapter } from "../harness/acp/adapter";
-import { ANTIGRAVITY } from "../harness/acp/antigravity";
+import { antigravityDefinition } from "../harness/acp/antigravity";
 import type {
   HarnessAdapter,
   HarnessContinuationRequest,
@@ -407,7 +407,7 @@ const ADAPTERS = {
       panic("Antigravity adapter: launch settings it cannot apply");
     }
     return createAcpHarnessAdapter({
-      definition: ANTIGRAVITY,
+      definition: antigravityDefinition(launch.executable),
       executable: launch.executable,
       configDir: launch.configDir,
       environment: launchEnvironment(options.environment, launch.launch),

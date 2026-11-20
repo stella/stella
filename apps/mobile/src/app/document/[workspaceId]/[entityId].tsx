@@ -83,7 +83,12 @@ const openDocument = async ({
       failure: isOffline(file.error) ? "offline" : "failed",
     };
   }
-  if (file.value.viewer === "dataBox" || file.value.viewer === "cades") {
+  if (
+    file.value.viewer === "asic" ||
+    file.value.viewer === "cades" ||
+    file.value.viewer === "dataBox" ||
+    file.value.viewer === "structured-document"
+  ) {
     return { status: "legalPreview", file: file.value };
   }
   if (!canOpenFiles()) {
@@ -427,8 +432,10 @@ const LegalFilePreview = ({
   workspaceId: string;
 }) => {
   const t = useTranslations("document");
+  const common = useTranslations("common");
   const signedFile = useTranslations("signedFile");
-  const { fieldId, preview } = file;
+  const structuredDocument = useTranslations("structuredDocument");
+  const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
   const mounted = useRef(true);
@@ -492,8 +499,8 @@ const LegalFilePreview = ({
   };
 
   const previewBody = (() => {
-    if (file.viewer === "cades" && Result.isOk(file.preview)) {
-      const { fileName, layers, text } = file.preview.value;
+    if (viewer === "cades" && Result.isOk(preview)) {
+      const { fileName, layers, text } = preview.value;
       return (
         <>
           <Text accessibilityRole="header" selectable variant="headline">
@@ -521,6 +528,42 @@ const LegalFilePreview = ({
       );
     }
     if (preview.status === "ok") {
+      if (viewer === "asic") {
+        return (
+          <>
+            <Text variant="caption">{signedFile("unverified")}</Text>
+            {preview.value.members.map(({ fileName, status, text }) => (
+              <View key={fileName}>
+                <Text accessibilityRole="header" selectable variant="label">
+                  {fileName}
+                </Text>
+                {status !== "unavailable" && text.trim() ? (
+                  <Text selectable>{text}</Text>
+                ) : null}
+                {status === "truncated" && (
+                  <Text variant="caption">{common("previewTruncated")}</Text>
+                )}
+                {status === "unavailable" && (
+                  <Text variant="caption">
+                    {signedFile("noReadableContent")}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </>
+        );
+      }
+      if (viewer === "structured-document") {
+        return (
+          <>
+            <Text variant="caption">{structuredDocument("textOnly")}</Text>
+            <Text selectable>{preview.value.text}</Text>
+            {preview.value.truncated && (
+              <Text variant="caption">{common("previewTruncated")}</Text>
+            )}
+          </>
+        );
+      }
       return <Text selectable>{preview.value.text}</Text>;
     }
     const { error } = preview;
@@ -530,10 +573,13 @@ const LegalFilePreview = ({
     const requestFailure = isOffline(error)
       ? "failure.offline"
       : "failure.failed";
-    const unreadableMessage =
-      file.viewer === "cades"
-        ? signedFile("unreadable")
-        : t("failure.dataBoxUnreadable");
+    const unreadableMessages = {
+      dataBox: t("failure.dataBoxUnreadable"),
+      "structured-document": structuredDocument("noReadableContent"),
+      asic: signedFile("unreadable"),
+      cades: signedFile("unreadable"),
+    } satisfies Record<typeof viewer, string>;
+    const unreadableMessage = unreadableMessages[viewer];
     return (
       <EmptyCard
         description={unreadable ? unreadableMessage : t(requestFailure)}

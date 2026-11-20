@@ -133,6 +133,29 @@ describe("a loading table's columns", () => {
   });
 });
 
+describe("a loading table's widths", () => {
+  test("take the widths a reader dragged, never below a column's minimum, and never for a utility column", () => {
+    const base = pendingTableGrid({ properties, view: view() });
+    const grid = pendingTableGrid({
+      properties,
+      sizing: { a: 333, b: 1, [select]: 999 },
+      view: view(),
+    });
+    const width = (g: ReturnType<typeof pendingTableGrid>, id: string) =>
+      g.renderColumns.find((column) => column.id === id)?.getSize();
+    expect(width(grid, "a")).toBe(333);
+    expect(width(grid, "b")).toBeGreaterThan(1);
+    expect(width(grid, select)).toBe(width(base, select));
+    expect(grid.tableWidth).toBe(
+      base.tableWidth +
+        333 -
+        PROPERTY_COLUMN_SIZE +
+        (width(grid, "b") ?? 0) -
+        PROPERTY_COLUMN_SIZE,
+    );
+  });
+});
+
 describe("a grouped table view", () => {
   test("is grouped by a property unless it lists items", () => {
     expect(isGroupedTableView(view())).toBe(false);

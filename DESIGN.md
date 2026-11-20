@@ -358,14 +358,14 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ComposerPlaceholder` `stature`: `compact`, `large`
 - `CourtBadge`, `DocumentIdentityBadge` `size`: `default`, `inline`, `prose`
 - `CourtBadge` `weight`: `dashed`, `outline`, `solid`, `tinted`
-- `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle` `size`: `compact`, `touch`
+- `DatePickerPopover`, `DateRangeFilter`, `SegmentedIconToggle`, `SegmentedIconToggleFace` `size`: `compact`, `touch`
 - `DatePickerPopover`, `DateRangeFilter` `variant`: `field`, `inline`
 - `DetailsGrid` `labelWidth`: `auto`, `lg`, `md`, `sm`
 - `DetailsGrid` `orientation`: `auto`, `horizontal`, `vertical`
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `cades`, `csv`, `dataBox`, `excel`, `markdown`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `word`
+- `DocumentMark` `kind`: `asicE`, `asicS`, `cades`, `csv`, `dataBox`, `excel`, `markdown`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `uyap`, `word`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`
@@ -455,6 +455,10 @@ row content, readonly row labels, struts, and Checkbox's cell appearance.
 slot and content minimum; `control` uses 28px for a line inside an editable
 field. Consumers use the same entry's `slot` and `content` values rather
 than maintaining parallel geometry maps.
+
+`TableSkeletonRows` from `@stll/ui/table-shell` follows the table's column
+specification, including responsive cell classes. Each loading cell draws
+the column's bar or a custom placeholder for its content.
 
 ### Disclosure Panels
 

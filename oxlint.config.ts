@@ -2904,6 +2904,12 @@ const config = defineConfig({
                 utilities: ["truncate"],
               },
               {
+                path: "packages/ui/src/components/select-classes.ts",
+                reason:
+                  "Base UI's Select.Value renders the chosen label itself; the open list shows it in full.",
+                utilities: ["truncate"],
+              },
+              {
                 path: "packages/ui/src/components/sidebar.tsx",
                 reason:
                   "Menu buttons style the label span their callers render as children.",

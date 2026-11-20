@@ -939,12 +939,22 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
       only !== undefined &&
       rest.length === 0 &&
       options.exactIdentityRead === DECISION_IDENTITY_READ.COMPLETE &&
-      only.identifiers?.some(
-        ({ type, value }) =>
-          type === DECISION_IDENTIFIER_TYPES.CASE_NUMBER &&
-          structuredCitationKey(value) ===
-            structuredCitationKey(identifier.value),
-      ) === true
+      only.identifiers?.some(({ type, value }) => {
+        if (type !== DECISION_IDENTIFIER_TYPES.CASE_NUMBER) {
+          return false;
+        }
+        const stored = readDecisionDocketReference(value, {
+          grammar: DECISION_DOCKET_GRAMMARS[identifier.jurisdiction],
+        });
+        return (
+          stored?.selector.kind === "none" &&
+          stored.family.canonical ===
+            decisionIdentifierComparisonKey(
+              identifier.family,
+              DECISION_DOCKET_GRAMMARS[identifier.jurisdiction],
+            )
+        );
+      }) === true
     ) {
       return { status: "unique", decision: only, basis: "identifier" };
     }
