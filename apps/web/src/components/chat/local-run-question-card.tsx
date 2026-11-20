@@ -329,7 +329,16 @@ export const LocalRunQuestionCard = ({
           {!isDone && (
             <div className="border-border/50 border-t px-3 py-2">
               <div className="flex items-center gap-2">
-                <Button disabled={!canSubmit} size="xs" type="submit">
+                <Button
+                  disabled={!canSubmit}
+                  disabledReason={
+                    sent === null
+                      ? t("chat.askUser.answerRequired")
+                      : t("common.sending")
+                  }
+                  size="xs"
+                  type="submit"
+                >
                   {t("chat.askUser.submit")}
                 </Button>
                 <Button onClick={() => send(null)} size="xs" variant="muted">
