@@ -5458,6 +5458,7 @@
       "title": "Szervezeti utasítások",
       "tooLong": "Az utasítások legfeljebb {maxLength} karaktert tartalmazhatnak."
     },
+    "createdSwitchPrompt": "A(z) <bdi>{name}</bdi> szervezet létrejött. Váltson át rá, hogy beállíthassa és tagokat hívhasson meg.",
     "creationEvaluationLimitReached": "Már mind a {limit} szervezeti próbaidőszakot felhasználta. Egy szervezet törlése nem tesz újra elérhetővé próbaidőszakot. Használjon meglévő szervezetet, vagy forduljon az ügyfélszolgálathoz fizetős hozzáférésért.",
     "creationInvalidName": "Adjon meg egy érvényes szervezetnevet (legfeljebb {maxLength} karakter).",
     "creationNotAllowed": "Ezzel a fiókkal nem hozhatók létre szervezetek.",

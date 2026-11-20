@@ -5458,6 +5458,7 @@
       "title": "Organizacijos nurodymai",
       "tooLong": "Nurodymuose gali būti ne daugiau kaip {maxLength} simbolių."
     },
+    "createdSwitchPrompt": "Organizacija <bdi>{name}</bdi> sukurta. Persijunkite į ją, kad galėtumėte ją nustatyti ir pakviesti narius.",
     "creationEvaluationLimitReached": "Išnaudojote visus {limit} organizacijų bandomuosius laikotarpius. Ištrynus organizaciją, bandomasis laikotarpis neatkuriamas. Naudokite esamą organizaciją arba kreipkitės į pagalbos tarnybą dėl mokamos prieigos.",
     "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
     "creationNotAllowed": "Ši paskyra negali kurti organizacijų.",

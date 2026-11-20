@@ -5458,6 +5458,7 @@
       "title": "Instrucciones de la organización",
       "tooLong": "Las instrucciones deben tener como máximo {maxLength} caracteres."
     },
+    "createdSwitchPrompt": "La organización <bdi>{name}</bdi> se ha creado. Cambia a ella para configurarla e invitar a miembros.",
     "creationEvaluationLimitReached": "Ha utilizado los {limit} periodos de prueba de organizaciones. Eliminar una organización no permite recuperar un periodo de prueba. Utilice una organización existente o contacte con el soporte para obtener acceso de pago.",
     "creationInvalidName": "Introduce un nombre de organización válido (hasta {maxLength} caracteres).",
     "creationNotAllowed": "Esta cuenta no puede crear organizaciones.",

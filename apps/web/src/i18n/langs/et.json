@@ -5458,6 +5458,7 @@
       "title": "Organisatsiooni juhised",
       "tooLong": "Juhised võivad sisaldada kuni {maxLength} märki."
     },
+    "createdSwitchPrompt": "Organisatsioon <bdi>{name}</bdi> on loodud. Vaheta sellele, et see seadistada ja liikmeid kutsuda.",
     "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
     "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
     "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
