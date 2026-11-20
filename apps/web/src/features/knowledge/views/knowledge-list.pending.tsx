@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactElement, ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
 import { cn } from "@stll/ui/utils";
@@ -61,7 +61,7 @@ export const KnowledgeRowsPending = ({
   row,
 }: {
   count: number;
-  row: (index: number) => ReactNode;
+  row: (index: number) => ReactElement;
 }) => (
   <ul
     aria-hidden="true"
