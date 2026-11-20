@@ -1412,8 +1412,9 @@ const nestedAnsweredCall = ({
   call: ChatToolCallPart;
   resume: AgUiResume;
 }): Result<ChatToolCallPart | null, HandlerError<400>> => {
+  const kind = awaited.type;
   const interruptId = (() => {
-    switch (awaited.type) {
+    switch (kind) {
       case "approval":
         return "approval" in call ? call.approval.id : null;
       case "ask-user":
@@ -1423,8 +1424,8 @@ const nestedAnsweredCall = ({
       case "harness-question":
         return null;
       default:
-        awaited.type satisfies never;
-        return panic(`Unhandled interaction: ${String(awaited.type)}`);
+        kind satisfies never;
+        return panic(`Unhandled interaction: ${String(kind)}`);
     }
   })();
   if (interruptId === null) {

@@ -5,7 +5,11 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TOOL_NAME,
+} from "@stll/api-contract/browser-control";
 import { assertProperty, propertySeed } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -2551,7 +2555,27 @@ describe("a suspended browsing run's child", () => {
       id: "child-call",
       input: { action: "snapshot" },
       name: BROWSER_CONTROL_TOOL_NAME,
-      output: { title: `${STORED_PART_VALUE} profile` },
+      output: {
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        snapshot: {
+          contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+          elements: [],
+          elementsLeftOut: false,
+          facts: { meta: [] },
+          revision: "rev-profile",
+          tabId: 7,
+          tabs: [{ active: true, tabId: 7, url: "https://example.cz/profile" }],
+          text: `Profile of ${STORED_PART_VALUE}.`,
+          title: `${STORED_PART_VALUE} profile`,
+          url: "https://example.cz/profile",
+          window: {
+            cursor: "r1.window-profile",
+            fromPercent: 0,
+            toPercent: 100,
+          },
+        },
+        status: "success",
+      },
       state: "complete",
       type: "tool-call",
     };
