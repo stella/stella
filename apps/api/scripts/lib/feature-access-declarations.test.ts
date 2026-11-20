@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
-  parseDeclarationSource,
+  moduleSummary,
   validateFeatureAccessDeclarations,
 } from "./feature-access-declarations";
 
@@ -827,24 +827,93 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
   });
 });
 
-describe("parsed declaration sources", () => {
-  test("reuse a tree only for the identical file name and source text", () => {
+describe("module summaries", () => {
+  test("reuse a summary only for the identical file name and source text", () => {
     const file = "apps/api/src/feature/parse-cache-probe.ts";
-    const source = "export const value = 1;";
-    const first = parseDeclarationSource(file, source);
-    expect(parseDeclarationSource(file, source)).toBe(first);
-    expect(first.parsed.sourceText).toBe(source);
+    const source = 'export const value = "one";';
+    const first = moduleSummary(file, source);
+    expect(moduleSummary(file, source)).toBe(first);
+    expect(first.exports).toEqual([
+      {
+        type: "declaration",
+        names: new Set(["value"]),
+        constants: new Set(["value"]),
+      },
+    ]);
 
-    const changed = parseDeclarationSource(file, "export const value = 2;");
+    const changed = moduleSummary(file, "export const value = 2;");
     expect(changed).not.toBe(first);
-    expect(changed.parsed.sourceText).toBe("export const value = 2;");
+    expect(changed.exports).toEqual([
+      { type: "declaration", names: new Set(["value"]), constants: new Set() },
+    ]);
 
-    const renamed = parseDeclarationSource(
+    const renamed = moduleSummary(
       "apps/api/src/feature/parse-cache-other.ts",
       "export const value = 2;",
     );
     expect(renamed).not.toBe(changed);
-    expect(renamed.fileName).toBe("apps/api/src/feature/parse-cache-other.ts");
+  });
+
+  test("a summary keeps no syntax tree node", () => {
+    const summary = moduleSummary(
+      "apps/api/src/feature/summary-probe.ts",
+      [
+        'import * as schema from "./schema";',
+        'import { run, type Shape } from "@/api/feature/core";',
+        'export { helper as alias } from "./helper";',
+        'export * from "./barrel";',
+        "export const go = async (shape: Shape) => {",
+        '  await import("./lazy");',
+        "  return db.query.featureRows.findMany({ where: schema.rows.id });",
+        "};",
+        `export const label = \`feature_rows \${run()}\`;`,
+      ].join("\n"),
+    );
+    const nodes: unknown[] = [];
+    const visit = (value: unknown) => {
+      if (value instanceof Set || Array.isArray(value)) {
+        for (const item of value) {
+          visit(item);
+        }
+      } else if (typeof value === "object" && value !== null) {
+        if ("start" in value || "end" in value) {
+          nodes.push(value);
+        }
+        for (const item of Object.values(value)) {
+          visit(item);
+        }
+      }
+    };
+    visit(summary);
+    expect(nodes).toEqual([]);
+    expect(summary.dynamicImports).toEqual(["./lazy"]);
+    expect(summary.dependencies).toEqual([
+      {
+        specifier: "./schema",
+        plan: { type: "symbols", names: ["rows"] },
+      },
+      {
+        specifier: "@/api/feature/core",
+        plan: { type: "symbols", names: ["run"] },
+      },
+      { specifier: "./helper", plan: { type: "module" } },
+      { specifier: "./barrel", plan: { type: "module" } },
+    ]);
+    expect(summary.namedImports).toEqual([
+      { local: "run", imported: "run", specifier: "@/api/feature/core" },
+    ]);
+    expect(summary.querySymbols).toEqual(new Set(["featureRows"]));
+    expect(summary.texts).toEqual(
+      new Set([
+        "./schema",
+        "@/api/feature/core",
+        "./helper",
+        "./barrel",
+        "./lazy",
+        "feature_rows ",
+        "",
+      ]),
+    );
   });
 
   test("a validation over reused trees matches the first and sees edits", () => {
