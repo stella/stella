@@ -496,6 +496,27 @@ async fn send(
 
 /// The linked account the server enabled dictation for, and no other: what
 /// dictation sends goes only there.
+/// Signs and sends a recording cleanup request for the account, which the
+/// caller holds until the answer is read, like every account request.
+pub(crate) async fn send_recording_cleanup(
+  account: &AccountRequest,
+  client: &DesktopHttpClient,
+  path: &str,
+  body: &impl Serialize,
+) -> Result<reqwest::Response, String> {
+  crate::http_client::device_proof_request(
+    client
+      .post(format!("{}{}", account.api_base_url, path))
+      .json(body),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE))
+}
+
 pub(crate) async fn dictation_account(
   app: &AppHandle,
 ) -> Result<AccountRequest, String> {

@@ -150,8 +150,7 @@ pub fn parse(body: &[u8]) -> Result<CleanedPart, String> {
 }
 
 /// Cleans up one part of a recording's transcript, only while the
-/// dictation account is still the one the recording started for. The account lease is held only while the request is signed, so
-/// a cleanup that takes a minute never holds up live dictation.
+/// dictation account is still the one the recording started for.
 pub async fn clean_up(
   app: &AppHandle,
   recording_account: &str,
@@ -174,22 +173,20 @@ pub async fn clean_up(
   if account.local_data_namespace() != recording_account {
     return Err(ACCOUNT_CHANGED.to_string());
   }
-  let request = crate::http_client::device_proof_request(
-    client()?
-      .post(format!("{}{}", account.api_base_url, route.path))
-      .json(&CleanupRequest {
-        transcript,
-        previous_text: previous,
-        locale: crate::dictation_cleanup::locale_hint(crate::i18n::active_locale()),
-        languages: &language.speaker,
-        vocabulary: &words,
-      }),
-    &account.device_key,
-    Some(&account.credential.key),
-    None,
-  )?;
-  drop(account);
-  let mut response = request.send().await.map_err(request_cause_logged(FAILURE))?;
+  let request = CleanupRequest {
+    transcript,
+    previous_text: previous,
+    locale: crate::dictation_cleanup::locale_hint(crate::i18n::active_locale()),
+    languages: &language.speaker,
+    vocabulary: &words,
+  };
+  let mut response = crate::dictation_cleanup::send_recording_cleanup(
+    &account,
+    client()?,
+    &route.path,
+    &request,
+  )
+  .await?;
   if !response.status().is_success() {
     return Err(format!(
       "recording cleanup was refused: {}",
@@ -207,6 +204,7 @@ pub async fn clean_up(
     }
     body.extend_from_slice(&chunk);
   }
+  drop(account);
   parse(&body)
 }
 
