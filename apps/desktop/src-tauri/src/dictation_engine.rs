@@ -824,17 +824,51 @@ fn capture(
 
 /// An input device as Settings lists it; `None` without a stable id.
 fn listed(device: &cpal::Device) -> Option<InputDevice> {
-  let id = device.id().ok()?.to_string();
+  let device_id = device.id().ok()?;
+  let id = device_id.to_string();
   let description = device.description().ok();
+  let connection = connection(&device_id, description.as_ref());
   Some(InputDevice {
     name: description
       .as_ref()
       .map_or_else(|| id.clone(), |description| description.name().to_string()),
-    bluetooth: description.is_some_and(|description| {
-      description.interface_type() == cpal::InterfaceType::Bluetooth
-    }),
+    bluetooth: connection == Some(Connection::Bluetooth),
+    built_in: connection == Some(Connection::BuiltIn),
     id,
   })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Connection {
+  BuiltIn,
+  Bluetooth,
+}
+
+/// How a device is connected, when that matters to dictation. CoreAudio
+/// tells it by the device's UID; elsewhere the audio library reads it.
+#[cfg(target_os = "macos")]
+fn connection(
+  id: &cpal::DeviceId,
+  _description: Option<&cpal::DeviceDescription>,
+) -> Option<Connection> {
+  use stella_desktop_macos::AudioTransport;
+  match stella_desktop_macos::audio_device_transport(id.id())? {
+    AudioTransport::BuiltIn => Some(Connection::BuiltIn),
+    AudioTransport::Bluetooth => Some(Connection::Bluetooth),
+    AudioTransport::Other => None,
+  }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn connection(
+  _id: &cpal::DeviceId,
+  description: Option<&cpal::DeviceDescription>,
+) -> Option<Connection> {
+  match description?.interface_type() {
+    cpal::InterfaceType::BuiltIn => Some(Connection::BuiltIn),
+    cpal::InterfaceType::Bluetooth => Some(Connection::Bluetooth),
+    _ => None,
+  }
 }
 
 /// Every input device, in the order the OS lists them.
@@ -851,13 +885,43 @@ pub(crate) fn input_devices() -> Vec<InputDevice> {
   listed_devices
 }
 
-/// The system default input device.
+/// The input device dictation records from without a choice.
 pub(crate) fn default_input() -> Option<InputDevice> {
-  listed(&cpal::default_host().default_input_device()?)
+  listed(&default_device(&cpal::default_host())?)
 }
 
-/// The device `choice` names when it is connected, otherwise the system
-/// default with the chosen name it stands in for.
+/// The system default input device, or the built-in microphone in place of
+/// a Bluetooth default.
+fn default_device(host: &cpal::Host) -> Option<cpal::Device> {
+  let system_default = host.default_input_device()?;
+  let Some(listed_default) = listed(&system_default).filter(|device| device.bluetooth)
+  else {
+    return Some(system_default);
+  };
+  let devices = host
+    .input_devices()
+    .into_iter()
+    .flatten()
+    .filter_map(|device| listed(&device).map(|listed_device| (device, listed_device)))
+    .collect::<Vec<_>>();
+  let listed_devices = devices
+    .iter()
+    .map(|(_, listed_device)| listed_device.clone())
+    .collect::<Vec<_>>();
+  let preferred =
+    dictation_microphone::without_choice(&listed_default, &listed_devices)
+      .id
+      .clone();
+  Some(
+    devices
+      .into_iter()
+      .find(|(_, listed_device)| listed_device.id == preferred)
+      .map_or(system_default, |(device, _)| device),
+  )
+}
+
+/// The device `choice` names when it is connected, otherwise the device
+/// recorded without a choice, with the chosen name it stands in for.
 fn pick_device(choice: Option<&Choice>) -> Option<(cpal::Device, Option<String>)> {
   let host = cpal::default_host();
   if let Some(choice) = choice {
@@ -869,9 +933,9 @@ fn pick_device(choice: Option<&Choice>) -> Option<(cpal::Device, Option<String>)
     if let Some(device) = chosen {
       return Some((device, None));
     }
-    return Some((host.default_input_device()?, Some(choice.name.clone())));
+    return Some((default_device(&host)?, Some(choice.name.clone())));
   }
-  Some((host.default_input_device()?, None))
+  Some((default_device(&host)?, None))
 }
 
 fn open_stream(choice: Option<&Choice>) -> Option<(cpal::Stream, Opened)> {
