@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Optionen zur Prompt-Verbesserung",
     "commandsSection": "Befehle",
     "composer": {
-      "addMessageContent": "Geben Sie eine Nachricht ein oder hängen Sie eine Datei an.",
       "waitForChat": "Warten Sie, bis im Chat wieder gesendet werden kann."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Fragen Sie zu dieser Akte, entwerfen Sie Text oder bitten Sie um eine kurze Recherche.",
     "emptyThreadTitle": "Konversation starten",
     "enterAuthorName": "Geben Sie den Namen für nachverfolgte Änderungen ein.",
-    "enterPromptToImprove": "Geben Sie einen Prompt ein, den Sie verbessern möchten.",
     "extractingContent": "Inhalt wird extrahiert...",
     "fileThreadRebound": "Der Chat zu dieser Datei wurde bereits in einer anderen Sitzung gestartet. Ihre Nachricht wurde beibehalten; senden Sie sie erneut.",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",

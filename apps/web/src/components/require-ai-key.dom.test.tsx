@@ -113,8 +113,16 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { act, cleanup, render, screen, waitFor, fireEvent, within } =
-  await import("@testing-library/react");
+const {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+  isInaccessible,
+} = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -832,13 +840,19 @@ test("the real chat textbox mounts during a pending availability read", async ()
   });
   expect(
     screen
-      .getByRole("button", { name: messages.chat.sendPrompt })
+      .getByRole("button", {
+        name: messages.chat.sendPrompt,
+        description: messages.common.loading,
+      })
       .getAttribute("aria-disabled"),
   ).toBe("true");
   expect(textbox.getAttribute("contenteditable")).toBe("true");
-  // The wait shows in the composer row (send unavailable), not as a line
-  // added above the page that moves it when it goes.
-  expect(screen.queryByText(messages.common.loading)).toBeNull();
+  // A visible loading line would shift the editor when admission resolves.
+  expect(
+    screen
+      .getAllByText(messages.common.loading)
+      .every((label) => isInaccessible(label)),
+  ).toBe(true);
   expect(sends.length).toBe(0);
   instanceProvisioned = true;
   await act(async () => {

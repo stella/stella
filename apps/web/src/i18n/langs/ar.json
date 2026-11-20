@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "خيارات تحسين الطلب",
     "commandsSection": "الأوامر",
     "composer": {
-      "addMessageContent": "اكتب رسالة أو أرفق ملفًا.",
       "waitForChat": "انتظر حتى تصبح الدردشة جاهزة للإرسال."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "اسأل عن هذا الملف القانوني، أو صُغ نصاً، أو اطلب مذكّرة بحثية موجزة.",
     "emptyThreadTitle": "ابدأ محادثة",
     "enterAuthorName": "أدخل الاسم الذي سيظهر في التغييرات المتعقبة.",
-    "enterPromptToImprove": "أدخل مطالبة لتحسينها.",
     "extractingContent": "جارٍ استخراج المحتوى...",
     "fileThreadRebound": "بدأت دردشة هذا الملف في جلسة أخرى. تم الاحتفاظ برسالتك؛ أرسلها مرة أخرى للمتابعة هناك.",
     "fileTooLarge": "يتجاوز الملف الحدّ المسموح به {maxSize}",

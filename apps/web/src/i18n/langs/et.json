@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Viiba täiustamise valikud",
     "commandsSection": "Käsud",
     "composer": {
-      "addMessageContent": "Sisestage sõnum või lisage fail manusena.",
       "waitForChat": "Oodake, kuni vestluses saab sõnumi saata."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Küsi selle toimiku kohta, koosta tekst või palu lühikest uurimismärkust.",
     "emptyThreadTitle": "Alusta vestlust",
     "enterAuthorName": "Sisestage jälitatud muudatuste juures kuvatav nimi.",
-    "enterPromptToImprove": "Sisestage viip, mida soovite parandada.",
     "extractingContent": "Sisu ekstraktimine...",
     "fileThreadRebound": "Selle faili vestlus alustati juba teises seansis. Teie sõnum säilitati; saatke see uuesti.",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",

@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "commandsSection": "Příkazy",
     "composer": {
-      "addMessageContent": "Napište zprávu nebo přiložte soubor.",
       "waitForChat": "Počkejte, až bude možné zprávu odeslat."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Zeptejte se na tento spis, navrhněte text nebo požádejte o krátkou rešerši.",
     "emptyThreadTitle": "Začít konverzaci",
     "enterAuthorName": "Zadejte jméno pro sledované změny.",
-    "enterPromptToImprove": "Zadejte pokyn, který chcete vylepšit.",
     "extractingContent": "Extrahování obsahu...",
     "fileThreadRebound": "Chat k tomuto souboru už byl zahájen v jiné relaci. Vaše zpráva zůstala zachována; odešlete ji znovu.",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",

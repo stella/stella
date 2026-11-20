@@ -383,7 +383,7 @@ const sendDisabledKey = ({
   }
   return isGenerating
     ? "chat.answerEdit.waitForAnswer"
-    : "chat.composer.addMessageContent";
+    : "chat.sendPromptEmpty";
 };
 
 const UserMessageEditForm = ({

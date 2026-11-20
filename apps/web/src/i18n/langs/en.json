@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Prompt improvement options",
     "commandsSection": "Commands",
     "composer": {
-      "addMessageContent": "Enter a message or attach a file.",
       "waitForChat": "Wait until the chat is ready to send."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Ask about this matter, draft text, or request a short research note.",
     "emptyThreadTitle": "Start a conversation",
     "enterAuthorName": "Enter the name to use for tracked changes.",
-    "enterPromptToImprove": "Enter a prompt to improve it.",
     "extractingContent": "Extracting content...",
     "fileThreadRebound": "This file's chat was started in another session. Your message was kept; send it again to continue there.",
     "fileTooLarge": "File exceeds {maxSize} limit",

@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Uzvednes uzlabošanas iespējas",
     "commandsSection": "Komandas",
     "composer": {
-      "addMessageContent": "Ievadiet ziņojumu vai pievienojiet failu.",
       "waitForChat": "Uzgaidiet, līdz sarunā varēs nosūtīt ziņojumu."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Jautājiet par šo lietu, sagatavojiet tekstu vai pieprasiet īsu izpētes piezīmi.",
     "emptyThreadTitle": "Sākt sarunu",
     "enterAuthorName": "Ievadiet vārdu, ko izmantot izmaiņu reģistrēšanai.",
-    "enterPromptToImprove": "Ievadiet uzvedni, ko vēlaties uzlabot.",
     "extractingContent": "Satura izgūšana...",
     "fileThreadRebound": "Šī faila tērzēšana jau ir sākta citā sesijā. Jūsu ziņojums tika saglabāts; nosūtiet to vēlreiz.",
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",

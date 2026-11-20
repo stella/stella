@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "commandsSection": "Parancsok",
     "composer": {
-      "addMessageContent": "Írjon üzenetet vagy csatoljon fájlt.",
       "waitForChat": "Várja meg, amíg a csevegésben ismét lehet üzenetet küldeni."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Kérdezzen erről az ügyről, fogalmazzon szöveget, vagy kérjen rövid kutatási jegyzetet.",
     "emptyThreadTitle": "Beszélgetés indítása",
     "enterAuthorName": "Adja meg a követett módosításokhoz használandó nevet.",
-    "enterPromptToImprove": "Adja meg a javítani kívánt utasítást.",
     "extractingContent": "Tartalom kinyerése...",
     "fileThreadRebound": "A fájlhoz tartozó csevegés már elindult egy másik munkamenetben. Az üzenete megmaradt; küldje el újra, hogy ott folytassa.",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",

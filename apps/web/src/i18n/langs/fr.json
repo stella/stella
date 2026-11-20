@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Options d’amélioration du prompt",
     "commandsSection": "Commandes",
     "composer": {
-      "addMessageContent": "Saisissez un message ou joignez un fichier.",
       "waitForChat": "Attendez que l’envoi soit de nouveau possible dans cette conversation."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Posez une question sur ce dossier, rédigez du texte ou demandez une courte note de recherche.",
     "emptyThreadTitle": "Démarrer une conversation",
     "enterAuthorName": "Saisissez le nom à utiliser pour le suivi des modifications.",
-    "enterPromptToImprove": "Saisissez une consigne à améliorer.",
     "extractingContent": "Extraction du contenu...",
     "fileThreadRebound": "La conversation sur ce fichier a déjà été lancée dans une autre session. Votre message a été conservé ; envoyez-le à nouveau pour continuer là-bas.",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",

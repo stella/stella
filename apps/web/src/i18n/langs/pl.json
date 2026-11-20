@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
     "commandsSection": "Polecenia",
     "composer": {
-      "addMessageContent": "Wpisz wiadomość lub dołącz plik.",
       "waitForChat": "Poczekaj, aż w czacie będzie można wysłać wiadomość."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Zapytaj o tę sprawę, przygotuj tekst albo poproś o krótką notatkę z researchu.",
     "emptyThreadTitle": "Rozpocznij rozmowę",
     "enterAuthorName": "Wprowadź nazwę autora śledzonych zmian.",
-    "enterPromptToImprove": "Wpisz polecenie, które chcesz ulepszyć.",
     "extractingContent": "Wyodrębnianie treści...",
     "fileThreadRebound": "Czat dotyczący tego pliku został już rozpoczęty w innej sesji. Twoja wiadomość została zachowana; wyślij ją ponownie.",
     "fileTooLarge": "Plik przekracza limit {maxSize}",

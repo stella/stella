@@ -1875,7 +1875,6 @@
     "choosePromptImprovementStrategy": "Užklausos tobulinimo parinktys",
     "commandsSection": "Komandos",
     "composer": {
-      "addMessageContent": "Įveskite žinutę arba pridėkite failą.",
       "waitForChat": "Palaukite, kol pokalbyje bus galima išsiųsti žinutę."
     },
     "composerMenu": {
@@ -1979,7 +1978,6 @@
     "emptyThreadDescription": "Paklauskite apie šią bylą, parenkite tekstą arba paprašykite trumpos tyrimo pastabos.",
     "emptyThreadTitle": "Pradėti pokalbį",
     "enterAuthorName": "Įveskite vardą, kuris bus naudojamas sekant keitimus.",
-    "enterPromptToImprove": "Įveskite užklausą, kurią norite patobulinti.",
     "extractingContent": "Turinio ištraukimas...",
     "fileThreadRebound": "Šio failo pokalbis jau pradėtas kitoje sesijoje. Jūsų žinutė išsaugota; išsiųskite ją dar kartą.",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
