@@ -33,12 +33,16 @@ export const publicCacheControl = (
 ): string =>
   `public, max-age=${cache.maxAge}${cache.swr === undefined ? "" : `, stale-while-revalidate=${cache.swr}`}`;
 
+/** Kept only by the requesting browser, never by a shared cache. */
+export const privateCacheControl = (maxAge: number): string =>
+  `private, max-age=${maxAge}`;
+
 const directiveFor = (cache: CachePolicy): string => {
   switch (cache.kind) {
     case "public":
       return publicCacheControl(cache);
     case "private":
-      return `private, max-age=${cache.maxAge}`;
+      return privateCacheControl(cache.maxAge);
     case "none":
       return PRIVATE_CACHE_CONTROL;
     default: {

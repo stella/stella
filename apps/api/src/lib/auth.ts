@@ -243,7 +243,10 @@ import {
   carriesSessionCredential,
   skippableSessionCookieOf,
 } from "@/api/lib/auth/session-credential";
-import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
+import {
+  findOtherSessionDevices,
+  sessionSignInStore,
+} from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
   decidePinnedSessionLifetime,
@@ -254,6 +257,7 @@ import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
+import { createSessionSignInsPlugin } from "@/api/lib/auth/session-sign-ins-plugin";
 import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
   DISCONNECTED_SIGN_IN_MESSAGE,
@@ -2502,6 +2506,15 @@ export const createAuth = (
                 message: DISCONNECTED_SIGN_IN_MESSAGE,
               });
             }
+            // Where the session signed in from, recorded only when the request
+            // proved it came through CloudFront; otherwise `unknown`.
+            await sessionSignInStore().record({
+              sessionId: session.id,
+              location: readViewerLocation({
+                headers: ctx?.request?.headers ?? ctx?.headers,
+                clientAddress: sealedRequestClientAddress(),
+              }),
+            });
           },
         },
       },
@@ -2631,6 +2644,7 @@ export const createAuth = (
       CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createMcpWebHandoffPlugin({ service: getWebHandoffService }),
+      createSessionSignInsPlugin(sessionSignInStore),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createReviewAccountPlugin({
@@ -3138,6 +3152,8 @@ export const createAuth = (
             : null,
           dependencies: {
             findPreviousSessions: findOtherSessionDevices,
+            requestReview: async (signIn) =>
+              await sessionSignInStore().requestReview(signIn),
             sendNotice: ({ email, device, ipAddress, createdAt }) => {
               const lang = extractLangFromRequest(ctx.request);
               const formattedTime =

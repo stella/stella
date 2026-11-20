@@ -1,0 +1,6 @@
+{
+  "create-table-references": "The new session_sign_ins table references session; the SHARE ROW EXCLUSIVE lock on session is a catalog change that scans no rows, bounded by 1s lock_timeout and 10s statement_timeout.",
+  "row-level-security": "Row security is enabled on session_sign_ins in the migration that creates it, before any row or reader exists.",
+  "create-policy": "The deny policy is created on session_sign_ins in the migration that creates it, before any row or reader exists.",
+  "add-constraint": "The expanded account-audit CHECK is added NOT VALID without scanning existing audit rows; the preceding drop and replacement are atomic, lock acquisition is bounded by 1s and each catalog statement by 10s, and the registered online phase validates after the schema lock is released."
+}

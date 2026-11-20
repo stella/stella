@@ -24,25 +24,25 @@ type Messages = {
     "subject": "{documentType, select, credit_note {Credit note} advance {Advance invoice} other {Invoice}} {invoiceNumber} from {firmName}";
   };
   "newDeviceLogin": {
-    "action": "Review sessions";
-    "body": "Your account was signed in to from a new device or location.";
+    "action": "Review signed-in devices";
+    "body": "A new device just signed in to your account.";
     "device": "Device";
     "deviceName": {
       "browserOnOs": "{browser} on {os}";
       "unknown": "Unknown device";
     };
-    "heading": "New sign-in detected";
-    "ignore": "If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.";
+    "heading": "New sign-in to your account";
+    "ignore": "If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.";
     "ipAddress": "IP address";
     "ipAddressUnknown": "Unknown";
-    "location": "Approximate location";
-    "locationNote": "The location is estimated from the IP address and may be inaccurate.";
+    "location": "Location";
     "mapAlt": "Map showing the approximate sign-in location: {location}";
     "place": {
       "cityCountry": "{city}, {country}";
       "cityRegionCountry": "{city}, {region}, {country}";
       "regionCountry": "{region}, {country}";
     };
+    "placeApproximate": "{place} (approximate)";
     "preview": "New sign-in from {device}";
     "previewUnknownDevice": "New sign-in from an unknown device";
     "subject": "New sign-in to your stella account";

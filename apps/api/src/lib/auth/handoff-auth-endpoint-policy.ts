@@ -108,6 +108,10 @@ export const HANDOFF_AUTH_ENDPOINT_POLICY = {
   "/revoke-session-by-id": "refused",
   "/revoke-sessions": "refused",
   "/send-verification-email": "ordinary",
+  // Session management stays with the browser's own session, like revocation.
+  "/session-sign-ins": "refused",
+  "/session-sign-ins/map": "refused",
+  "/session-sign-ins/review": "refused",
   "/sign-in/email": "step-up-method",
   "/sign-in/email-otp": "step-up-method",
   "/sign-in/social": "step-up-method",
