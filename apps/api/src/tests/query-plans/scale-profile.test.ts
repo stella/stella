@@ -13,6 +13,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { indexedScanNodeType } from "./plan-walker";
 import {
   assertScaleProfileApplied,
+  assertSeedMatchesProfile,
   estimateHeapFetches,
   injectScaleProfile,
   SYNTHETIC_SCALE_PROFILE,
@@ -67,8 +68,8 @@ const createScaleTables = async (db: ScaleDb): Promise<Map<string, number>> => {
     await db.execute(sql`
       INSERT INTO ${sql.identifier(table)}
         (id, country, language, type, ecli, language_group_key,
-         case_number, decision_id, normalized_value, slug, eli,
-         docket_family_key)
+         case_number, citation_key, decision_id, normalized_value, slug,
+         eli, docket_family_key)
       SELECT
         ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
@@ -80,6 +81,7 @@ const createScaleTables = async (db: ScaleDb): Promise<Map<string, number>> => {
           ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
         'qpg-language-group-' || (n % 180)::text,
         'qpg-case-' || n::text,
+        CASE WHEN n % 5 = 0 THEN NULL ELSE 'qpg-case-' || n::text END,
         ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid,
         CASE WHEN n % 4 = 0 THEN 'eclieuc2024' || (n % 120)::text
           ELSE 'other' END,
@@ -376,6 +378,55 @@ test(
       expect(String(unscalable)).toContain(
         "does not map case_number one to one",
       );
+    } finally {
+      await client.close();
+    }
+  },
+  TEST_TIMEOUT_MS,
+);
+
+// timeout: an embedded Postgres seeds and analyzes every guarded table.
+test(
+  "a seed that contradicts its profile fails the gate before any plan is read",
+  async () => {
+    const client = new PGlite();
+    try {
+      const db = drizzle({ client });
+      await createScaleTables(db);
+      await assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE);
+
+      // Profiled as mostly set, seeded as never set: every partial index
+      // over the column stays one empty page.
+      await db.execute(sql`UPDATE case_law_decisions SET citation_key = NULL`);
+      expect(
+        await rejectionOf(
+          assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE),
+        ),
+      ).toMatchObject({
+        message:
+          "Scale profile contradicts the seed: case_law_decisions.citation_key is profiled with null fraction 0.2 but seeded entirely NULL",
+      });
+      expect(
+        await rejectionOf(injectScaleProfile(db, SYNTHETIC_SCALE_PROFILE)),
+      ).toMatchObject({
+        message:
+          "Scale profile contradicts the seed: case_law_decisions.citation_key is profiled with null fraction 0.2 but seeded entirely NULL",
+      });
+
+      await db.execute(sql`
+        UPDATE case_law_decisions SET citation_key = 'qpg-case-' || id::text
+      `);
+      await db.execute(sql`
+        UPDATE case_law_decision_identifiers SET normalized_value = 'one'
+      `);
+      expect(
+        await rejectionOf(
+          assertSeedMatchesProfile(db, SYNTHETIC_SCALE_PROFILE),
+        ),
+      ).toMatchObject({
+        message:
+          "Scale profile contradicts the seed: case_law_decision_identifiers.normalized_value is profiled with n_distinct -0.9 but seeded with 1 distinct values",
+      });
     } finally {
       await client.close();
     }

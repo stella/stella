@@ -3,7 +3,7 @@
 import type * as React from "react";
 
 import { cn } from "../lib/utils";
-import { Skeleton } from "./skeleton";
+import { InlineSkeleton, Skeleton } from "./skeleton";
 
 /*
  * The grouped list's shell (./list.tsx): the group, its header and title, and
@@ -61,6 +61,18 @@ const ListGroupTitle = ({
   >
     {children}
   </h2>
+);
+
+/** The group's one quiet line under its title. */
+const ListGroupDescription = ({
+  className,
+  ...props
+}: React.ComponentProps<"p">) => (
+  <p
+    className={cn("text-muted-foreground text-xs text-pretty", className)}
+    data-slot="list-group-description"
+    {...props}
+  />
 );
 
 /**
@@ -154,13 +166,14 @@ const ListGroupTitlePending = () => (
     className="flex h-5 items-center"
     data-slot="list-group-title-skeleton"
   >
-    <Skeleton className="h-3.5 w-24" />
+    <InlineSkeleton className="h-3.5 w-24" />
   </span>
 );
 
 export {
   List,
   ListGroup,
+  ListGroupDescription,
   ListGroupHeader,
   ListGroupHeading,
   ListGroupTitle,

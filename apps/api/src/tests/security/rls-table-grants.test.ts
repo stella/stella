@@ -348,6 +348,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // A source's record held as an attachment to another source's decision:
   // ingestion state only, never read through the request role.
   "case_law_held_decision_attachments",
+  // Replay inputs contain publisher bodies and remain ingestion-only.
+  "case_law_ingestion_failure_evidence",
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",
