@@ -38,6 +38,7 @@ export const PendingReviewNewThreadPrompt = ({
       <div className="flex flex-wrap justify-end gap-1">
         <Button
           disabled={dismissing}
+          disabledReason={t("docxReview.dismissingChanges")}
           onClick={onKeep}
           size="sm"
           variant="ghost"
