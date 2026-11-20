@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE-Gesetzessuche",
       "borme_get_summary": "BORME-Tageszusammenfassung",
       "business_registry_lookup": "Handelsregister durchsuchen",
+      "calendar_free_busy": "Verfügbarkeit im Kalender prüfen",
+      "calendar_list_events": "Kalendertermine lesen",
       "command_execution": "Befehl wird ausgeführt",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",

@@ -50,6 +50,7 @@ export const FAILURE_TAGS = [
   "BrTstResponseError",
   "BufferIntentOwnershipError",
   "BufferIntentWorkspaceUnavailableError",
+  "CalendarGraphError",
   "CanaryRateLimitError",
   "CanaryTargetError",
   "CapabilityRequestMismatchError",

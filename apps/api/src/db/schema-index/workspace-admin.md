@@ -79,43 +79,44 @@ organization_settings.managed_ai_residency                 text                d
 organization_settings.ai_instructions                      text                default,not null    workspace-admin.ts:333  Admin-authored instructions applied to every organization chat turn.
 organization_settings.prompt_caching_enabled               boolean             default,not null    workspace-admin.ts:341  Whether stella may annotate AI requests with prompt-cache markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
 organization_settings.verification_decision_model_enabled  boolean             default,not null    workspace-admin.ts:350  Whether Anchor Verification asks the decision model for each claim's verdict (`lists/verification/verdict-decider.ts`).
-organization_settings.sharepoint_connection_enabled        boolean             default,not null    workspace-admin.ts:360  Org-level enablement for the delegated SharePoint / OneDrive connection.
-organization_settings.memory_extraction_enabled            boolean             default,not null    workspace-admin.ts:370  Whether stella may run background memory extraction over this organization's compacted chat threads.
-organization_settings.template_packs_hidden                boolean             default,not null    workspace-admin.ts:379  Whether the bundled template-pack catalogue is offered in this organization's template library.
-organization_settings.memory_extraction_enabled_at         timestamptz         null                workspace-admin.ts:384  Start of the current opt-in window; null while extraction is off.
-organization_settings.memory_extraction_scheduled_at       timestamptz         null                workspace-admin.ts:389  Durable tenant queue position for background extraction.
-organization_settings.updated_at                           timestamptz         default,not null    workspace-admin.ts:390
+organization_settings.sharepoint_connection_enabled        boolean             default,not null    workspace-admin.ts:359  File-read opt-in for the delegated Microsoft Graph connection.
+organization_settings.microsoft365_calendar_read_enabled   boolean             default,not null    workspace-admin.ts:364  Calendar reads require their own organization opt-in.
+organization_settings.memory_extraction_enabled            boolean             default,not null    workspace-admin.ts:374  Whether stella may run background memory extraction over this organization's compacted chat threads.
+organization_settings.template_packs_hidden                boolean             default,not null    workspace-admin.ts:383  Whether the bundled template-pack catalogue is offered in this organization's template library.
+organization_settings.memory_extraction_enabled_at         timestamptz         null                workspace-admin.ts:388  Start of the current opt-in window; null while extraction is off.
+organization_settings.memory_extraction_scheduled_at       timestamptz         null                workspace-admin.ts:393  Durable tenant queue position for background extraction.
+organization_settings.updated_at                           timestamptz         default,not null    workspace-admin.ts:394
 ```
 
-## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:487 · rls
+## anonymization_allowlist_entries · `anonymizationAllowlistEntries` · workspace-admin.ts:491 · rls
 
 Anonymization allowlist — entries that the detection pipeline should NOT mask.
 
 ```text
-anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:490
-anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:491
-anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:492
-anonymization_allowlist_entries.organization_id                           safeOrganizationId  fk,not null       workspace-admin.ts:493
-anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:494
-anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:498
-anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:501
-anonymization_allowlist_entries.canonical                                 varchar             not null          workspace-admin.ts:502
-anonymization_allowlist_entries.created_by                                text                fk,null           workspace-admin.ts:503
-anonymization_allowlist_entries.created_at                                timestamptz         default,not null  workspace-admin.ts:506
+anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:494
+anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:495
+anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:496
+anonymization_allowlist_entries.organization_id                           safeOrganizationId  fk,not null       workspace-admin.ts:497
+anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:498
+anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:502
+anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:505
+anonymization_allowlist_entries.canonical                                 varchar             not null          workspace-admin.ts:506
+anonymization_allowlist_entries.created_by                                text                fk,null           workspace-admin.ts:507
+anonymization_allowlist_entries.created_at                                timestamptz         default,not null  workspace-admin.ts:510
 ```
 
-## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:562 · rls
+## anonymization_blacklist_entries · `anonymizationBlacklistEntries` · workspace-admin.ts:566 · rls
 
 ```text
-anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:565
-anonymization_blacklist_entries.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:566
-anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:573  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
-anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:577
-anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:578
-anonymization_blacklist_entries.variants         jsonb               default,not null  workspace-admin.ts:579
-anonymization_blacklist_entries.enabled          boolean             default,not null  workspace-admin.ts:580
-anonymization_blacklist_entries.created_by       text                fk,null           workspace-admin.ts:581
-anonymization_blacklist_entries.updated_by       text                fk,null           workspace-admin.ts:584
-anonymization_blacklist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:587
-anonymization_blacklist_entries.updated_at       timestamptz         default,not null  workspace-admin.ts:588
+anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:569
+anonymization_blacklist_entries.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:570
+anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:577  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
+anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:581
+anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:582
+anonymization_blacklist_entries.variants         jsonb               default,not null  workspace-admin.ts:583
+anonymization_blacklist_entries.enabled          boolean             default,not null  workspace-admin.ts:584
+anonymization_blacklist_entries.created_by       text                fk,null           workspace-admin.ts:585
+anonymization_blacklist_entries.updated_by       text                fk,null           workspace-admin.ts:588
+anonymization_blacklist_entries.created_at       timestamptz         default,not null  workspace-admin.ts:591
+anonymization_blacklist_entries.updated_at       timestamptz         default,not null  workspace-admin.ts:592
 ```

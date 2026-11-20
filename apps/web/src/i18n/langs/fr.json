@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "Recherche dans le BOE",
       "borme_get_summary": "Sommaire quotidien BORME",
       "business_registry_lookup": "Recherche dans le registre des entreprises",
+      "calendar_free_busy": "Vérifier les disponibilités du calendrier",
+      "calendar_list_events": "Lire les événements du calendrier",
       "command_execution": "Exécution d’une commande",
       "compare_versions": "Comparaison des versions",
       "configure_template_fields": "Configurer les champs du modèle",

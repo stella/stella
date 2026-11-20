@@ -366,6 +366,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/auth/*",
     "apps/api/src/lib/auth/feature-access/context.ts",
     "apps/api/src/lib/auth/feature-access/view-eligibility.ts",
+    "apps/api/src/lib/auth/microsoft365/*",
     "apps/api/src/lib/bilingual/contract.ts",
     "apps/api/src/lib/billing/*",
     "apps/api/src/lib/billing/invoice-pdf/**",

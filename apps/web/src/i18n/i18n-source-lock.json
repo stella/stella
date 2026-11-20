@@ -1919,6 +1919,8 @@
   "chat.tool.boe_search_legislation": "BOE legislation search",
   "chat.tool.borme_get_summary": "BORME daily summary",
   "chat.tool.business_registry_lookup": "Searching business registry",
+  "chat.tool.calendar_free_busy": "Check calendar availability",
+  "chat.tool.calendar_list_events": "Read calendar events",
   "chat.tool.command_execution": "Running a command",
   "chat.tool.compare_versions": "Comparing versions",
   "chat.tool.configure_template_fields": "Configure template fields",

@@ -2403,6 +2403,8 @@
       "boe_search_legislation": "BOE teisės aktų paieška",
       "borme_get_summary": "BORME dienos suvestinė",
       "business_registry_lookup": "Ieškoma įmonių registre",
+      "calendar_free_busy": "Tikrinti laisvą laiką kalendoriuje",
+      "calendar_list_events": "Skaityti kalendoriaus įvykius",
       "command_execution": "Vykdoma komanda",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",

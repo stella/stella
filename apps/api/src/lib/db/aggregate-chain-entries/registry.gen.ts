@@ -47,8 +47,9 @@ import entry45 from "./savedSearch";
 import entry46 from "./scoutRun";
 import entry47 from "./searchHistory";
 import entry48 from "./searchProjectionRepair";
-import entry49 from "./signal";
-import entry50 from "./signingSession";
+import entry49 from "./sharepointConsent";
+import entry50 from "./signal";
+import entry51 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -100,6 +101,7 @@ export default {
   "scoutRun": entry46,
   "searchHistory": entry47,
   "searchProjectionRepair": entry48,
-  "signal": entry49,
-  "signingSession": entry50,
+  "sharepointConsent": entry49,
+  "signal": entry50,
+  "signingSession": entry51,
 } as const;
