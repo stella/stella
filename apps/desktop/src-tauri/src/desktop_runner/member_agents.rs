@@ -205,20 +205,25 @@ mod tests {
   #[cfg(unix)]
   use crate::harness_archive::tests::TempDir;
 
+  /// A file at `path` holding `text`, executable or not.
+  #[cfg(unix)]
+  fn file(path: &Path, text: &str, executable: bool) {
+    use std::io::Write;
+    let mut file = crate::local_store::create_harness_file(path, executable).unwrap();
+    file.write_all(text.as_bytes()).unwrap();
+  }
+
   #[cfg(unix)]
   #[test]
   fn finds_the_cli_on_the_path_before_the_usual_places() {
-    use std::os::unix::fs::PermissionsExt;
     let root = TempDir::new();
     let on_path = root.path().join("path-bin");
     let home = root.path().join("home");
     let local = home.join(".local").join("bin");
-    std::fs::create_dir_all(&on_path).unwrap();
-    std::fs::create_dir_all(&local).unwrap();
+    crate::local_store::create_private_dir(&on_path).unwrap();
+    crate::local_store::create_private_dir(&local).unwrap();
     for dir in [&on_path, &local] {
-      let agy = dir.join("agy");
-      std::fs::write(&agy, "#!/bin/sh\necho 1.5.0\n").unwrap();
-      std::fs::set_permissions(&agy, std::fs::Permissions::from_mode(0o755)).unwrap();
+      file(&dir.join("agy"), "#!/bin/sh\necho 1.5.0\n", true);
     }
     let path_var = std::env::join_paths([&on_path]).unwrap();
     assert_eq!(
@@ -234,7 +239,7 @@ mod tests {
   #[test]
   fn a_file_that_is_not_executable_is_not_the_cli() {
     let root = TempDir::new();
-    std::fs::write(root.path().join("agy"), "not a program").unwrap();
+    file(&root.path().join("agy"), "not a program", false);
     let path_var = std::env::join_paths([root.path()]).unwrap();
     assert_eq!(find_antigravity(Some(&path_var), None), None);
   }
