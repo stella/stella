@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { type CountryCode, isCountryCode } from "@stll/country-codes";
 import type { GeoPoint } from "@stll/transactional/map/location-map";
 
@@ -102,7 +103,6 @@ const MAX_PLACE_NAME_LENGTH = 100;
  * precision would show nothing more and only carry more personal data.
  */
 const COORDINATE_PRECISION = 10;
-const COORDINATE_PATTERN = /^-?\d{1,3}(?:\.\d+)?$/u;
 const CONTROL_CHARACTER = /\p{Cc}/u;
 
 /** CloudFront percent-encodes non-ASCII characters in these values. */
@@ -123,12 +123,8 @@ const parsePlaceName = (raw: string | null): string | null => {
 };
 
 const parseCoordinate = (raw: string | null, limit: number): number | null => {
-  const text = raw?.trim();
-  if (text === undefined || !COORDINATE_PATTERN.test(text)) {
-    return null;
-  }
-  const value = Number(text);
-  return Math.abs(value) > limit
+  const value = parseDecimalToken(raw?.trim(), { min: -limit, max: limit });
+  return Result.isError(value)
     ? null
-    : Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
+    : Math.round(value.value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
 };

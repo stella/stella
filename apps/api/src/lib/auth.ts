@@ -279,6 +279,7 @@ import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-run
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { validateUserLocale } from "@/api/lib/auth/user-locale";
 import { createUserProjectionUpdateHook } from "@/api/lib/auth/user-projection-updates";
+import { readViewerLocation } from "@/api/lib/auth/viewer-location";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -427,7 +428,6 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import { readViewerLocation } from "@/api/lib/viewer-location";
 import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,

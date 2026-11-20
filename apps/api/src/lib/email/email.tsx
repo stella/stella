@@ -24,6 +24,7 @@ import {
 import { renderEmail } from "@stll/transactional/render";
 
 import { env } from "@/api/env";
+import type { ViewerLocation } from "@/api/lib/auth/viewer-location";
 import {
   emailAddressSchema,
   normalizeEmail,
@@ -34,7 +35,6 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
-import type { ViewerLocation } from "@/api/lib/viewer-location";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { isEmailTransportConfigComplete } from "./config";

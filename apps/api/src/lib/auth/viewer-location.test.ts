@@ -3,12 +3,12 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { CLIENT_ADDRESS_SOURCE, type ClientAddress } from "@/api/lib/client-ip";
 import {
   parseViewerLocation,
   readViewerLocation,
   VIEWER_LOCATION_HEADERS,
-} from "@/api/lib/viewer-location";
+} from "@/api/lib/auth/viewer-location";
+import { CLIENT_ADDRESS_SOURCE, type ClientAddress } from "@/api/lib/client-ip";
 
 const CLOUDFRONT_ADDRESS_HEADER = "cloudfront-viewer-address";
 
