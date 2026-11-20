@@ -1740,6 +1740,18 @@
       "verified": "Citação verificada",
       "verifiedHint": "Palavra por palavra em {source}"
     },
+    "answerTable": {
+      "copy": "Copiar tabela",
+      "copyAs": "Copiar como {format}",
+      "download": "Baixar tabela",
+      "downloadAs": "Baixar como {format}",
+      "fullscreen": "Abrir em tela cheia",
+      "fullscreenTitle": "Tabela em tela cheia",
+      "singleLine": "Linha única",
+      "size": "{rows, plural, one {# linha} many {# linhas} other {# linhas}} · {columns, plural, one {# coluna} many {# colunas} other {# colunas}}",
+      "textMode": "Texto das células",
+      "wrap": "Quebrar texto"
+    },
     "applyMode": {
       "description": "O Word armazena quem fez cada alteração. Lembraremos da sua escolha.",
       "direct": "Não, aplicar diretamente",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Aplicado",
       "rejected": "Rejeitado"
+    },
+    "switcher": {
+      "allChats": "Todos os chats",
+      "searchPlaceholder": "Encontrar um chat…",
+      "trigger": "Trocar de chat"
     },
     "tableChart": {
       "bar": "Barras",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Login expirado",
     "title": "SharePoint e OneDrive"
   },
+  "signedFile": {
+    "layer": "Camada de assinaturas {number, number}",
+    "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
+    "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "unknownSigner": "Signatário desconhecido",
+    "unreadable": "Não foi possível ler o arquivo assinado.",
+    "unverified": "As assinaturas não foram verificadas."
+  },
   "skillHistory": {
     "acceptStale": "Aceitar e sobrescrever edições mais recentes",
     "backToCurrent": "Voltar à versão atual",
@@ -7938,7 +7963,6 @@
         "endDate": "Data de término",
         "month": "Mês",
         "quarter": "Trimestre",
-        "showTable": "Mostrar tabela",
         "startDate": "Data de início",
         "week": "Semana"
       },

@@ -51,20 +51,40 @@ describe("dictation notice", () => {
     ).toEqual({ action: null, body: "nothingBody", title: "nothingTitle" });
   });
 
+  test("a missing microphone leads to the microphone choice", () => {
+    expect(
+      dictationNoticeCopy(
+        { fix: "chooseMicrophone", kind: "microphoneMissing" },
+        "mac",
+      ),
+    ).toEqual({
+      action: "chooseMicrophone",
+      body: "missingBody",
+      title: "missingTitle",
+    });
+  });
+
   test("only the native side's states are accepted", () => {
-    const valid = { fix: "request", inputDevice: null, kind: "microphone" };
+    const valid = {
+      fix: "request",
+      inputDevice: null,
+      kind: "microphone",
+      missing: null,
+    };
     expect(isDictationNoticeSnapshot(valid)).toBe(true);
     expect(
       isDictationNoticeSnapshot({
         fix: "openSound",
         inputDevice: "AirPods Pro 3",
         kind: "nothingHeard",
+        missing: null,
       }),
     ).toBe(true);
     expect(isDictationNoticeSnapshot({ ...valid, fix: null })).toBe(true);
     expect(isDictationNoticeSnapshot({ ...valid, fix: "launch" })).toBe(false);
     expect(isDictationNoticeSnapshot({ ...valid, kind: "other" })).toBe(false);
     expect(isDictationNoticeSnapshot({ ...valid, inputDevice: 3 })).toBe(false);
+    expect(isDictationNoticeSnapshot({ ...valid, missing: 1 })).toBe(false);
     expect(isDictationNoticeSnapshot({ fix: null })).toBe(false);
     expect(isDictationNoticeSnapshot(null)).toBe(false);
   });

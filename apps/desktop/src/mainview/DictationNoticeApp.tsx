@@ -34,6 +34,9 @@ const NOTICE_CHANGED_EVENT = "dictation-notice-changed";
  */
 const DictationNoticeApp = () => {
   const t = useTranslations("dictation.notice");
+  const systemDefault = useTranslations("dictation.microphone")(
+    "systemDefault",
+  );
   const [snapshot, setSnapshot] = useState<DictationNoticeSnapshot | null>(
     null,
   );
@@ -50,7 +53,12 @@ const DictationNoticeApp = () => {
       if (Result.isError(result) || !isDictationNoticeSnapshot(result.value)) {
         reportFailure();
         // Still say what happened; only the action is unknown.
-        setSnapshot({ fix: null, inputDevice: null, kind: "microphone" });
+        setSnapshot({
+          fix: null,
+          inputDevice: null,
+          kind: "microphone",
+          missing: null,
+        });
         return;
       }
       setSnapshot(result.value);
@@ -73,6 +81,7 @@ const DictationNoticeApp = () => {
     return <main className="dictation-notice-window" />;
   }
   const copy = dictationNoticeCopy(snapshot, DESKTOP_PLATFORM);
+  const usingDevice = snapshot.inputDevice ?? systemDefault;
 
   return (
     <main
@@ -84,26 +93,40 @@ const DictationNoticeApp = () => {
         className="text-destructive-foreground mt-0.5 size-5 shrink-0"
       />
       <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-        <p className="text-sm font-medium">{t(copy.title)}</p>
-        <p className="text-muted-foreground text-xs leading-snug">
-          {t(copy.body)}
+        <p className="text-sm font-medium">
+          {t(copy.title, { missing: snapshot.missing ?? "" })}
         </p>
-        {snapshot.inputDevice === null ? null : (
+        <p className="text-muted-foreground text-xs leading-snug">
+          {t(copy.body, { device: usingDevice })}
+        </p>
+        {snapshot.inputDevice === null || copy.body === "missingBody" ? null : (
           <p className="text-muted-foreground text-xs">
             {t("inputDevice", { device: snapshot.inputDevice })}
           </p>
         )}
-        {copy.action === null ? null : (
-          <Button
-            className="mt-1"
-            onClick={() => {
-              respond("fix");
-            }}
-            size="sm"
-          >
-            {t(copy.action)}
-          </Button>
-        )}
+        <div className="mt-1 flex flex-wrap gap-2">
+          {copy.action === null ? null : (
+            <Button
+              onClick={() => {
+                respond("fix");
+              }}
+              size="sm"
+            >
+              {t(copy.action)}
+            </Button>
+          )}
+          {copy.action === "chooseMicrophone" ? null : (
+            <Button
+              onClick={() => {
+                respond("chooseMicrophone");
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("chooseMicrophone")}
+            </Button>
+          )}
+        </div>
       </div>
       <Button
         aria-label={t("dismiss")}

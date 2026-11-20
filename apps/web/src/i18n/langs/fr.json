@@ -1740,6 +1740,18 @@
       "verified": "Citation vérifiée",
       "verifiedHint": "Mot pour mot dans {source}"
     },
+    "answerTable": {
+      "copy": "Copier le tableau",
+      "copyAs": "Copier en {format}",
+      "download": "Télécharger le tableau",
+      "downloadAs": "Télécharger en {format}",
+      "fullscreen": "Ouvrir en plein écran",
+      "fullscreenTitle": "Tableau en plein écran",
+      "singleLine": "Sur une ligne",
+      "size": "{rows, plural, one {# ligne} many {# lignes} other {# lignes}} · {columns, plural, one {# colonne} many {# colonnes} other {# colonnes}}",
+      "textMode": "Texte des cellules",
+      "wrap": "Renvoyer à la ligne"
+    },
     "applyMode": {
       "description": "Word enregistre l’auteur de chaque modification. Nous mémoriserons votre choix.",
       "direct": "Non, appliquer directement",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Appliqué",
       "rejected": "Rejeté"
+    },
+    "switcher": {
+      "allChats": "Toutes les conversations",
+      "searchPlaceholder": "Rechercher une conversation…",
+      "trigger": "Changer de conversation"
     },
     "tableChart": {
       "bar": "Barres",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Connexion expirée",
     "title": "SharePoint et OneDrive"
   },
+  "signedFile": {
+    "layer": "Couche de signatures {number, number}",
+    "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "pdfUnavailable": "L’aperçu PDF est indisponible.",
+    "unknownSigner": "Signataire inconnu",
+    "unreadable": "Impossible de lire le fichier signé.",
+    "unverified": "Les signatures n’ont pas été vérifiées."
+  },
   "skillHistory": {
     "acceptStale": "Accepter et écraser les modifications récentes",
     "backToCurrent": "Revenir à la version actuelle",
@@ -7938,7 +7963,6 @@
         "endDate": "Date de fin",
         "month": "Mois",
         "quarter": "Trimestre",
-        "showTable": "Afficher le tableau",
         "startDate": "Date de début",
         "week": "Semaine"
       },

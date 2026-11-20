@@ -319,7 +319,7 @@ impl LocalHarnesses for StandInHarnesses {
     let (executable, version, home) = match harness {
       Harness::Codex => (&self.codex, CODEX_VERSION, "codex"),
       Harness::ClaudeCode => (&self.claude_code, CLAUDE_CODE_VERSION, "claude-code"),
-      Harness::Opencode => return None,
+      Harness::Opencode | Harness::Antigravity => return None,
     };
     Some(InstalledHarness {
       version: version.to_owned(),

@@ -1740,6 +1740,18 @@
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },
+    "answerTable": {
+      "copy": "Táblázat másolása",
+      "copyAs": "Másolás {format} formátumban",
+      "download": "Táblázat letöltése",
+      "downloadAs": "Letöltés {format} formátumban",
+      "fullscreen": "Megnyitás teljes képernyőn",
+      "fullscreenTitle": "Táblázat teljes képernyőn",
+      "singleLine": "Egy sorban",
+      "size": "{rows, plural, one {# sor} other {# sor}} · {columns, plural, one {# oszlop} other {# oszlop}}",
+      "textMode": "Cellaszöveg",
+      "wrap": "Szöveg tördelése"
+    },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
       "direct": "Nem, közvetlen alkalmazás",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Alkalmazva",
       "rejected": "Elutasítva"
+    },
+    "switcher": {
+      "allChats": "Összes csevegés",
+      "searchPlaceholder": "Csevegés keresése…",
+      "trigger": "Csevegés váltása"
     },
     "tableChart": {
       "bar": "Oszlop",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "A bejelentkezés lejárt",
     "title": "SharePoint és OneDrive"
   },
+  "signedFile": {
+    "layer": "{number, number}. aláírási réteg",
+    "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "unknownSigner": "Ismeretlen aláíró",
+    "unreadable": "Az aláírt fájl nem olvasható.",
+    "unverified": "Az aláírásokat nem ellenőriztük."
+  },
   "skillHistory": {
     "acceptStale": "Elfogadás és az újabb módosítások felülírása",
     "backToCurrent": "Vissza az aktuális változatra",
@@ -7938,7 +7963,6 @@
         "endDate": "Befejező dátum",
         "month": "Hónap",
         "quarter": "Negyedév",
-        "showTable": "Táblázat megjelenítése",
         "startDate": "Kezdő dátum",
         "week": "Hét"
       },

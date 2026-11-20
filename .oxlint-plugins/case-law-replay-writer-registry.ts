@@ -189,12 +189,12 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 688,
+    line: 710,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
-    line: 959,
+    line: 981,
     kind: "pending",
   },
   {
@@ -204,22 +204,17 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    line: 506,
+    line: 523,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 383,
+    line: 385,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 449,
-    kind: "pending",
-  },
-  {
-    file: "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
-    line: 467,
+    line: 451,
     kind: "pending",
   },
   {

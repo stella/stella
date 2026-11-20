@@ -1740,6 +1740,18 @@
       "verified": "Pārbaudīts citāts",
       "verifiedHint": "Vārds vārdā: {source}"
     },
+    "answerTable": {
+      "copy": "Kopēt tabulu",
+      "copyAs": "Kopēt kā {format}",
+      "download": "Lejupielādēt tabulu",
+      "downloadAs": "Lejupielādēt kā {format}",
+      "fullscreen": "Atvērt pilnekrāna režīmā",
+      "fullscreenTitle": "Tabula pilnekrāna režīmā",
+      "singleLine": "Vienā rindā",
+      "size": "{rows, plural, zero {# rindu} one {# rinda} other {# rindas}} · {columns, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}}",
+      "textMode": "Šūnu teksts",
+      "wrap": "Aplauzt tekstu"
+    },
     "applyMode": {
       "description": "Word saglabā, kurš veica katru izmaiņu. Mēs atcerēsimies jūsu izvēli.",
       "direct": "Nē, lietot tieši",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Lietots",
       "rejected": "Noraidīts"
+    },
+    "switcher": {
+      "allChats": "Visas tērzēšanas",
+      "searchPlaceholder": "Atrast tērzēšanu…",
+      "trigger": "Mainīt tērzēšanu"
     },
     "tableChart": {
       "bar": "Stabiņu",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Pierakstīšanās beidzās",
     "title": "SharePoint un OneDrive"
   },
+  "signedFile": {
+    "layer": "Parakstu slānis {number, number}",
+    "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "unknownSigner": "Nezināms parakstītājs",
+    "unreadable": "Parakstīto failu neizdevās nolasīt.",
+    "unverified": "Paraksti nav pārbaudīti."
+  },
   "skillHistory": {
     "acceptStale": "Pieņemt un pārrakstīt jaunākos labojumus",
     "backToCurrent": "Atpakaļ uz pašreizējo versiju",
@@ -7938,7 +7963,6 @@
         "endDate": "Beigu datums",
         "month": "Mēnesis",
         "quarter": "Ceturksnis",
-        "showTable": "Rādīt tabulu",
         "startDate": "Sākuma datums",
         "week": "Nedēļa"
       },

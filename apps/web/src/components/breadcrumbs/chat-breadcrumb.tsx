@@ -1,8 +1,9 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { BreadcrumbItem } from "@stll/ui/breadcrumb";
+import { BreadcrumbItem, BreadcrumbPage } from "@stll/ui/breadcrumb";
 
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
+import { ChatSwitcher } from "@/components/breadcrumbs/chat-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import {
@@ -115,16 +116,22 @@ export const ChatBreadcrumb = ({
       {groupedThread === null && <BreadcrumbQueryContent view={threadView} />}
       {titleEnabled && <BreadcrumbQueryContent view={titleView} />}
       {/* The rename button's hover chrome reaches past its text; the end
-          margin keeps it inside the trail, which clips its overflow. */}
+          margin keeps it inside the trail, which clips its overflow. The
+          title is the current page, which the trail's `BreadcrumbPage` marks
+          and colours as every other page's last crumb; the caret beside it
+          switches to another chat, as the matter crumb's does. */}
       <BreadcrumbItem className="me-1 min-w-0 flex-1">
-        <ChatTitleRename
-          hasMessages={hasMessages}
-          editClassName="w-full"
-          ownsRenameCommand
-          threadRef={threadRef}
-          title={currentTitle}
-          usedAnonymization={usedAnonymization}
-        />
+        <BreadcrumbPage className="flex min-w-0 items-center">
+          <ChatTitleRename
+            hasMessages={hasMessages}
+            editClassName="w-full"
+            ownsRenameCommand
+            threadRef={threadRef}
+            title={currentTitle}
+            usedAnonymization={usedAnonymization}
+          />
+          <ChatSwitcher threadId={threadId} />
+        </BreadcrumbPage>
       </BreadcrumbItem>
     </>
   );

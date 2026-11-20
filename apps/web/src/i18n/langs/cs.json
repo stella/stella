@@ -1740,6 +1740,18 @@
       "verified": "Ověřená citace",
       "verifiedHint": "Doslovně v {source}"
     },
+    "answerTable": {
+      "copy": "Kopírovat tabulku",
+      "copyAs": "Kopírovat jako {format}",
+      "download": "Stáhnout tabulku",
+      "downloadAs": "Stáhnout jako {format}",
+      "fullscreen": "Otevřít na celou obrazovku",
+      "fullscreenTitle": "Tabulka na celou obrazovku",
+      "singleLine": "Na jeden řádek",
+      "size": "{rows, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}} · {columns, plural, one {# sloupec} few {# sloupce} many {# sloupce} other {# sloupců}}",
+      "textMode": "Text buněk",
+      "wrap": "Zalamovat text"
+    },
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
       "direct": "Ne, použít přímo",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Použito",
       "rejected": "Odmítnuto"
+    },
+    "switcher": {
+      "allChats": "Všechny chaty",
+      "searchPlaceholder": "Najít chat…",
+      "trigger": "Přepnout chat"
     },
     "tableChart": {
       "bar": "Sloupcový",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Přihlášení vypršelo",
     "title": "SharePoint a OneDrive"
   },
+  "signedFile": {
+    "layer": "Vrstva podpisů {number, number}",
+    "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "pdfUnavailable": "Náhled PDF není k dispozici.",
+    "unknownSigner": "Neznámý podepisující",
+    "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
+    "unverified": "Podpisy nebyly ověřeny."
+  },
   "skillHistory": {
     "acceptStale": "Přijmout a přepsat novější úpravy",
     "backToCurrent": "Zpět na aktuální znění",
@@ -7938,7 +7963,6 @@
         "endDate": "Datum ukončení",
         "month": "Měsíc",
         "quarter": "Čtvrtletí",
-        "showTable": "Zobrazit tabulku",
         "startDate": "Datum zahájení",
         "week": "Týden"
       },

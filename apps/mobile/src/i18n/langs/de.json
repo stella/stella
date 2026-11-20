@@ -618,6 +618,13 @@
     "dictationCleanup": "Mit KI überarbeiten",
     "dictationCleanupHint": "Behebt Erkennungsfehler und gesprochene Formatierung wie „neue Zeile“. Nur der Text, nicht das Audio, geht über stella an den KI-Anbieter deiner Organisation; stella speichert ihn nicht."
   },
+  "signedFile": {
+    "layer": "Signaturebene {number, number}",
+    "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "unknownSigner": "Unbekannte unterzeichnende Person",
+    "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
+    "unverified": "Die Signaturen wurden nicht geprüft."
+  },
   "header": {
     "search": "Suchen"
   },

@@ -230,7 +230,7 @@ describe("reading a document's file", () => {
     );
   });
 
-  const zfoVersion = (fileName: string, mimeType: string) =>
+  const legalFileVersion = (fileName: string, mimeType: string) =>
     history("version-1", [
       { id: "version-1", file: { fieldId: "field?1", fileName, mimeType } },
     ]);
@@ -253,7 +253,7 @@ describe("reading a document's file", () => {
       const { fetch, calls } = server((path) =>
         Response.json(
           path.endsWith("/versions")
-            ? zfoVersion(fileName, mimeType)
+            ? legalFileVersion(fileName, mimeType)
             : { kind, text },
         ),
       );
@@ -270,44 +270,101 @@ describe("reading a document's file", () => {
     },
   );
 
-  test("keeps a refused preview visible and lets the user request the original", async () => {
-    const fileName = "Doručenka.zfo";
-    const { fetch, calls } = server((path) => {
-      if (path.endsWith("/versions")) {
-        return Response.json(zfoVersion(fileName, "application/octet-stream"));
-      }
-      if (path.endsWith("purpose=download")) {
-        return Response.json(
-          delivered(DATA_BOX_MESSAGE_MIME_TYPE, { fileName }),
-        );
-      }
-      return Response.json(
-        { message: "Unreadable", code: "preview_unavailable" },
-        { status: 422 },
+  test.each([
+    {
+      fileName: "Verbale.pdf",
+      mimeType: "application/pdf",
+      text: "Il testo del verbale",
+    },
+    {
+      fileName: "Allegato.bin",
+      mimeType: "application/octet-stream",
+      text: "",
+    },
+  ])(
+    "keeps $mimeType signed-file metadata without requesting the original",
+    async (embedded) => {
+      const fileName = `${embedded.fileName}.P7M`;
+      const preview = {
+        ...embedded,
+        layers: [
+          {
+            id: "layer-0",
+            signers: [
+              { id: "layer-0.signer-0", name: "Anna Rossi" },
+              { id: "layer-0.signer-1", name: null },
+            ],
+          },
+        ],
+      };
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
       );
-    });
-    const file = (await read(fetch)).unwrap();
-    expect(
-      file.viewer === "dataBox" && file.preview.isErr() && file.preview.error,
-    ).toMatchObject({
-      status: 422,
-      code: "preview_unavailable",
-    });
-    expect(calls).toHaveLength(2);
-    const original = await readOriginalDocumentFile({
-      fetch,
-      source: sourceFor(fetch),
-      workspaceId: "matter-1",
-      fieldId: "field?1",
-    });
-    expect(original.unwrap()).toMatchObject({
-      fileName,
-      presignedUrl: "https://storage.example.com/file-1?signature=abc",
-    });
-    expect(calls.at(-1)).toBe(
-      "/v1/files/matter-1/url/field%3F1?purpose=download",
-    );
-  });
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "cades" && file.preview.unwrap()).toEqual(preview);
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/cades/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([
+    {
+      viewer: "dataBox",
+      fileName: "Doručenka.zfo",
+      mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+    },
+    {
+      viewer: "cades",
+      fileName: "Detached.p7m",
+      mimeType: "application/pkcs7-mime",
+    },
+  ])(
+    "keeps the original available when a $viewer preview is refused",
+    async ({ viewer, fileName, mimeType }) => {
+      const { fetch, calls } = server((path) => {
+        if (path.endsWith("/versions")) {
+          return Response.json(legalFileVersion(fileName, mimeType));
+        }
+        if (path.endsWith("purpose=download")) {
+          return Response.json(delivered(mimeType, { fileName }));
+        }
+        return Response.json(
+          { message: "Unreadable", code: "preview_unavailable" },
+          { status: 422 },
+        );
+      });
+      const file = (await read(fetch)).unwrap();
+      expect(
+        file.viewer === viewer &&
+          file.preview.status === "error" &&
+          file.preview.error,
+      ).toMatchObject({
+        status: 422,
+        code: "preview_unavailable",
+      });
+      expect(calls).toHaveLength(2);
+      const original = await readOriginalDocumentFile({
+        fetch,
+        source: sourceFor(fetch),
+        workspaceId: "matter-1",
+        fieldId: "field?1",
+      });
+      expect(original.unwrap()).toMatchObject({
+        fileName,
+        presignedUrl: "https://storage.example.com/file-1?signature=abc",
+      });
+      expect(calls.at(-1)).toBe(
+        "/v1/files/matter-1/url/field%3F1?purpose=download",
+      );
+    },
+  );
 
   test("sends a password-protected file to Quick Look", async () => {
     const { fetch } = server((path) =>

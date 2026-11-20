@@ -1740,6 +1740,18 @@
       "verified": "Zweryfikowany cytat",
       "verifiedHint": "Dosłownie w {source}"
     },
+    "answerTable": {
+      "copy": "Kopiuj tabelę",
+      "copyAs": "Kopiuj jako {format}",
+      "download": "Pobierz tabelę",
+      "downloadAs": "Pobierz jako {format}",
+      "fullscreen": "Otwórz na pełnym ekranie",
+      "fullscreenTitle": "Tabela na pełnym ekranie",
+      "singleLine": "W jednym wierszu",
+      "size": "{rows, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wiersza}} · {columns, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}}",
+      "textMode": "Tekst komórek",
+      "wrap": "Zawijaj tekst"
+    },
     "applyMode": {
       "description": "Word zapisuje, kto wprowadził każdą zmianę. Zapamiętamy Twój wybór.",
       "direct": "Nie, zastosuj bezpośrednio",
@@ -2354,6 +2366,11 @@
     "suggestionStatus": {
       "accepted": "Zastosowano",
       "rejected": "Odrzucono"
+    },
+    "switcher": {
+      "allChats": "Wszystkie czaty",
+      "searchPlaceholder": "Znajdź czat…",
+      "trigger": "Przełącz czat"
     },
     "tableChart": {
       "bar": "Słupkowy",
@@ -6291,6 +6308,14 @@
     "reconnectRequired": "Logowanie wygasło",
     "title": "SharePoint i OneDrive"
   },
+  "signedFile": {
+    "layer": "Warstwa podpisów {number, number}",
+    "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "unknownSigner": "Nieznany podpisujący",
+    "unreadable": "Nie udało się odczytać podpisanego pliku.",
+    "unverified": "Podpisy nie zostały zweryfikowane."
+  },
   "skillHistory": {
     "acceptStale": "Zaakceptuj i nadpisz nowsze zmiany",
     "backToCurrent": "Wróć do bieżącej wersji",
@@ -7938,7 +7963,6 @@
         "endDate": "Data zakończenia",
         "month": "Miesiąc",
         "quarter": "Kwartał",
-        "showTable": "Pokaż tabelę",
         "startDate": "Data rozpoczęcia",
         "week": "Tydzień"
       },
