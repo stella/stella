@@ -737,7 +737,6 @@ const discoverPublisherRemovals = async ({
         now,
       });
       if (step.type === "done") {
-        // db-await-in-loop: the cycle ends once its attachments are probed.
         const committed = await commit({
           status: "waiting",
           nextCycleAt: new Date(
