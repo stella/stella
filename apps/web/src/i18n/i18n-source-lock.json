@@ -4495,6 +4495,7 @@
   "organization.aiInstructions.description": "These instructions apply to every AI conversation in your organization and take priority over personal preferences. Changes apply from the next message. Use them for compliance rules, data handling, and formatting standards.",
   "organization.aiInstructions.title": "Organization instructions",
   "organization.aiInstructions.tooLong": "Instructions must be at most {maxLength} characters.",
+  "organization.createdSwitchPrompt": "<bdi>{name}</bdi> has been created. Switch to it to set it up and invite members.",
   "organization.creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
   "organization.creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
   "organization.creationNotAllowed": "This account cannot create organizations.",

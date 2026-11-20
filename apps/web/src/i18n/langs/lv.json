@@ -5462,6 +5462,7 @@
       "title": "Organizācijas norādījumi",
       "tooLong": "Norādījumos drīkst būt ne vairāk kā {maxLength} rakstzīmes."
     },
+    "createdSwitchPrompt": "Organizācija <bdi>{name}</bdi> ir izveidota. Pārslēdzieties uz to, lai to iestatītu un uzaicinātu dalībniekus.",
     "creationEvaluationLimitReached": "Jūs esat izmantojis visus {limit} organizāciju izmēģinājuma periodus. Organizācijas dzēšana neatjauno izmēģinājuma periodu. Izmantojiet esošu organizāciju vai sazinieties ar atbalsta dienestu, lai saņemtu maksas piekļuvi.",
     "creationInvalidName": "Ievadiet derīgu organizācijas nosaukumu (ne vairāk kā {maxLength} rakstzīmes).",
     "creationNotAllowed": "Ar šo kontu nevar izveidot organizācijas.",
