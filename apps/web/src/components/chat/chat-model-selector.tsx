@@ -45,9 +45,10 @@ import { useDesktopLaunch } from "@/features/chat/use-desktop-launch";
 import { queryView } from "@/lib/query-view.logic";
 
 /**
- * A button never shrinks by default, so a chip's truncating label could not
- * take effect and a narrow status row overflowed its column instead. The
- * chip's icon keeps its size (the button exempts its svg from shrinking).
+ * A button never shrinks by default, so the model chip's truncating label
+ * could not take effect and a narrow status row overflowed its column
+ * instead. The chip's icon keeps its size (the button exempts its svg from
+ * shrinking).
  */
 const STATUS_ROW_CHIP_SHRINK_CLASS = "min-w-0 shrink";
 
@@ -221,10 +222,10 @@ const ChatRunOnChip = ({
         render={
           <Button
             aria-label={name}
-            // The chip gives way before the row overflows: it shrinks to its
-            // truncated label, and in a narrow status row (a side pane) to its
-            // icon alone. The aria-label and tooltip still name the place.
-            className={STATUS_ROW_CHIP_SHRINK_CLASS}
+            // The chip keeps its width while its menu opens: in a narrow
+            // status row (a side pane) it shows its icon alone instead of
+            // shrinking, and the model chip takes the squeeze. The aria-label
+            // and tooltip still name the place.
             data-composer-chip="run-on"
             // Until the stored choice is known, nothing can be picked on it.
             disabled={disabled}
