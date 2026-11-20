@@ -5537,6 +5537,13 @@
     "startOverTitle": "Start a new creation request?",
     "switchOrganization": "Switch organization"
   },
+  "organizationSetup": {
+    "aiAction": "Set up AI",
+    "aiOptional": "Your own AI provider keys are optional: without them, AI runs on models provided by stella.",
+    "aiRequired": "AI in this organization needs a provider key before anyone can use it.",
+    "invite": "Invite colleagues so they can work with you here.",
+    "title": "Set up your new organization"
+  },
   "publicTools": {
     "addSkill": "Add a skill",
     "addToStella": "Add to stella",

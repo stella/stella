@@ -5537,6 +5537,13 @@
     "startOverTitle": "¿Iniciar una nueva solicitud de creación?",
     "switchOrganization": "Cambiar de organización"
   },
+  "organizationSetup": {
+    "aiAction": "Configurar IA",
+    "aiOptional": "Las claves propias de proveedores de IA son opcionales: sin ellas, la IA usa modelos proporcionados por stella.",
+    "aiRequired": "La IA de esta organización necesita una clave de proveedor antes de que nadie pueda usarla.",
+    "invite": "Invita a tus colegas para que trabajen aquí contigo.",
+    "title": "Configura tu nueva organización"
+  },
   "publicTools": {
     "addSkill": "Añadir una habilidad",
     "addToStella": "Añadir a stella",

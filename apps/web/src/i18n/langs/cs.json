@@ -5537,6 +5537,13 @@
     "startOverTitle": "Zahájit nový požadavek na vytvoření?",
     "switchOrganization": "Přepnout organizaci"
   },
+  "organizationSetup": {
+    "aiAction": "Nastavit AI",
+    "aiOptional": "Vlastní klíče poskytovatelů AI jsou nepovinné: bez nich běží AI na modelech, které poskytuje stella.",
+    "aiRequired": "AI v této organizaci potřebuje klíč poskytovatele, jinak ji nikdo nemůže používat.",
+    "invite": "Pozvěte kolegy, aby tu mohli pracovat s vámi.",
+    "title": "Nastavte novou organizaci"
+  },
   "publicTools": {
     "addSkill": "Přidat dovednost",
     "addToStella": "Přidat do stella",

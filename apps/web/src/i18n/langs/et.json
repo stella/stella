@@ -5537,6 +5537,13 @@
     "startOverTitle": "Kas saata uus loomispäring?",
     "switchOrganization": "Vaheta organisatsiooni"
   },
+  "organizationSetup": {
+    "aiAction": "Seadista tehisintellekt",
+    "aiOptional": "Oma tehisintellekti teenusepakkujate võtmed on valikulised: ilma nendeta kasutab tehisintellekt stella pakutavaid mudeleid.",
+    "aiRequired": "Selle organisatsiooni tehisintellekt vajab teenusepakkuja võtit, enne kui keegi saab seda kasutada.",
+    "invite": "Kutsu kolleegid, et nad saaksid siin sinuga koos töötada.",
+    "title": "Seadista uus organisatsioon"
+  },
   "publicTools": {
     "addSkill": "Lisa oskus",
     "addToStella": "Lisa rakendusse stella",
