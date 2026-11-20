@@ -114,6 +114,35 @@ export type DesktopDictationCleanupContext = v.InferOutput<
   typeof desktopDictationCleanupContextSchema
 >;
 
+/** The desktop's language, a hint for the spoken commands to expect. */
+const localeSchema = v.optional(languageTagSchema);
+
+/** The languages the speaker dictates in; the text stays in them. */
+const languagesSchema = v.optional(
+  v.pipe(
+    v.array(languageTagSchema),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.languages),
+  ),
+);
+
+/** The speaker's custom words: how they spell names and terms they
+ *  dictate, within the transcription vocabulary's limits. Data for the
+ *  model, never instructions and never added to the answer; neither
+ *  logged nor stored. */
+const vocabularySchema = v.optional(
+  v.pipe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH),
+        v.regex(/^\P{Cc}*$/u),
+      ),
+    ),
+    v.maxLength(MAX_TRANSCRIPTION_VOCABULARY_TERMS),
+  ),
+);
+
 export const desktopDictationCleanupRequestSchema = v.strictObject({
   /** The text the computer transcribed. Never the audio. */
   transcript: v.pipe(
@@ -122,36 +151,13 @@ export const desktopDictationCleanupRequestSchema = v.strictObject({
     v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.transcriptLength),
     v.regex(/^[\P{Cc}\n\t]*$/u),
   ),
-  /** The desktop's language, a hint for the spoken commands to expect. */
-  locale: v.optional(languageTagSchema),
-  /** The languages the speaker dictates in; the text stays in them. */
-  languages: v.optional(
-    v.pipe(
-      v.array(languageTagSchema),
-      v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.languages),
-    ),
-  ),
+  locale: localeSchema,
+  languages: languagesSchema,
   /** Where the text goes, so cleanup writes in that app's register. Data
    *  for the model, never instructions and never part of the answer; it is
    *  neither logged nor stored. */
   context: v.optional(desktopDictationCleanupContextSchema),
-  /** The speaker's custom words: how they spell names and terms they
-   *  dictate, within the transcription vocabulary's limits. Data for the
-   *  model, never instructions and never added to the answer; neither
-   *  logged nor stored. */
-  vocabulary: v.optional(
-    v.pipe(
-      v.array(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH),
-          v.regex(/^\P{Cc}*$/u),
-        ),
-      ),
-      v.maxLength(MAX_TRANSCRIPTION_VOCABULARY_TERMS),
-    ),
-  ),
+  vocabulary: vocabularySchema,
 });
 export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema
@@ -191,4 +197,107 @@ export const desktopDictationCleanupResponseSchema = v.strictObject({
 });
 export type DesktopDictationCleanupResponse = v.InferOutput<
   typeof desktopDictationCleanupResponseSchema
+>;
+
+// --- Recording cleanup ------------------------------------------------------
+
+const recordingContract = contract.recordingCleanup;
+
+/** Cleans one part of a recording's transcript into formatted text, for the
+ *  desktop's "Transcribe a recording" window. */
+export const DESKTOP_DICTATION_RECORDING_CLEANUP_PATH =
+  `${STELLA_API_VERSION_PREFIX}/desktop/dictation/recording-cleanup` as const;
+
+/** Lengths in code points, the way the desktop counts them. A recording is
+ *  cleaned part by part: the desktop splits the transcript into parts of at
+ *  most `transcriptLength` and sends the end of the text cleaned so far as
+ *  `previousText`. */
+export const DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS = {
+  transcriptLength: recordingContract.maxTranscriptLength,
+  previousTextLength: recordingContract.maxPreviousTextLength,
+  instructions: recordingContract.maxInstructions,
+  instructionLength: recordingContract.maxInstructionLength,
+  markdownLength: recordingContract.maxMarkdownLength,
+} as const;
+
+const recordingTextSchema = (limit: number) =>
+  v.pipe(
+    v.string(),
+    v.minLength(1),
+    maxCodePoints(limit),
+    v.regex(/^[\P{Cc}\n\t]*$/u),
+  );
+
+export const desktopDictationRecordingCleanupRequestSchema = v.strictObject({
+  /** One part of the text the computer transcribed from a recording. Never
+   *  the audio. */
+  transcript: recordingTextSchema(
+    DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.transcriptLength,
+  ),
+  /** The end of the cleaned text before this part, so the part continues a
+   *  sentence or list instead of repeating it. Data for the model, never
+   *  instructions and never part of the answer. */
+  previousText: v.optional(
+    recordingTextSchema(
+      DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.previousTextLength,
+    ),
+  ),
+  locale: localeSchema,
+  languages: languagesSchema,
+  vocabulary: vocabularySchema,
+});
+export type DesktopDictationRecordingCleanupRequest = v.InferOutput<
+  typeof desktopDictationRecordingCleanupRequestSchema
+>;
+
+/** Characters a recording cleanup answer never holds: every control except
+ *  the line feed, the Unicode line and paragraph separators, and the
+ *  bidirectional controls. */
+export const DESKTOP_DICTATION_RECORDING_UNWRITTEN_CHARACTERS =
+  /[\p{Cc}\u2028\u2029\u202A-\u202E\u2066-\u2069]/u;
+
+const writtenText = (allowLineFeed: boolean) =>
+  v.check(
+    (text: string) =>
+      !DESKTOP_DICTATION_RECORDING_UNWRITTEN_CHARACTERS.test(
+        allowLineFeed ? text.replaceAll("\n", "") : text,
+      ),
+    "Text holds a character a cleaned recording never carries",
+  );
+
+/**
+ * The cleaned part of a recording.
+ *
+ * `instructions` are what the speaker said to whoever types the text (who it
+ * is for, copies, where it goes, how to format it), one sentence each, never
+ * part of the text.
+ *
+ * `markdown` is the text itself in a Markdown subset: paragraphs separated by
+ * a blank line, `#`, `##` and `###` headings, `**bold**`, `*italic*`, `- `
+ * bullets and `1. ` numbered lists nested at most one level. No links,
+ * images, HTML, code, tables, block quotes or rules; the server removes
+ * them. Lines end in `\n` only.
+ */
+export const desktopDictationRecordingCleanupResponseSchema = v.strictObject({
+  instructions: v.pipe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        maxCodePoints(
+          DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.instructionLength,
+        ),
+        writtenText(false),
+      ),
+    ),
+    v.maxLength(DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.instructions),
+  ),
+  markdown: v.pipe(
+    v.string(),
+    maxCodePoints(DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS.markdownLength),
+    writtenText(true),
+  ),
+});
+export type DesktopDictationRecordingCleanupResponse = v.InferOutput<
+  typeof desktopDictationRecordingCleanupResponseSchema
 >;
