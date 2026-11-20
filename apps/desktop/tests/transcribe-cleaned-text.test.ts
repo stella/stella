@@ -177,6 +177,7 @@ describe("nextCleanupPart", () => {
       maxCharacters: 1500,
     });
     expect(part?.to).toBe(2);
-    expect([...(part?.text ?? "")].length).toBeLessThanOrEqual(1500);
+    // ASCII only, so its length is its code points.
+    expect(part?.text.length ?? 0).toBeLessThanOrEqual(1500);
   });
 });

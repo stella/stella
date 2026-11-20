@@ -149,7 +149,7 @@ export const useRecordingCleanup = ({
   const retry = useCallback(
     (index: number) => {
       const part = parts[index];
-      if (part === undefined || part.status !== "failed") {
+      if (part?.status !== "failed") {
         return;
       }
       setParts((current) =>
@@ -208,6 +208,10 @@ const InlineRuns = ({ inline }: { inline: readonly Inline[] }) =>
     );
   });
 
+/** The window's own title is h1 and each pane's is h2, so the cleaned
+ *  text's headings start at h3. */
+const HEADING_TAGS = { 1: "h3", 2: "h4", 3: "h5" } as const;
+
 const HEADING_CLASSES = {
   1: "mt-2 text-lg font-semibold",
   2: "mt-2 text-base font-semibold",
@@ -219,7 +223,7 @@ const CleanedBlocks = ({ blocks }: { blocks: readonly Block[] }) =>
     const key = `${block.kind}:${index}`;
     switch (block.kind) {
       case "heading": {
-        const Heading = `h${block.level + 2}` as "h3" | "h4" | "h5";
+        const Heading = HEADING_TAGS[block.level];
         return (
           <Heading className={HEADING_CLASSES[block.level]} key={key}>
             <InlineRuns inline={block.inline} />

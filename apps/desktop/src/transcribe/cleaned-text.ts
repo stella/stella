@@ -101,7 +101,7 @@ export const parseInline = (source: string): Inline[] => {
       return;
     }
     const last = runs.at(-1);
-    if (last && last.bold === bold && last.italic === italic) {
+    if (last?.bold === bold && last.italic === italic) {
       last.text += text;
       return;
     }
@@ -297,7 +297,14 @@ export type CleanupPart = { from: number; to: number; text: string };
 export const FIRST_PART_CHARACTERS = 1500;
 export const PART_CHARACTERS = 3000;
 
-const characters = (text: string): number => [...text].length;
+/** Code points, the way the server counts a part's length. */
+const characters = (text: string): number => {
+  let count = 0;
+  for (const _codePoint of text) {
+    count += 1;
+  }
+  return count;
+};
 
 /**
  * The next part to clean up, starting at paragraph `from`, or null when it
