@@ -1149,7 +1149,8 @@
       "saveFailed": "تعذّر نسخ النص أو حفظه. حاول مرة أخرى.",
       "noSpeech": "لم يُعثر على كلام في هذا التسجيل.",
       "fileName": "{title} - نص.txt",
-      "documentTitle": "{title} - نص"
+      "documentTitle": "{title} - نص",
+      "transcriptTitle": "النص المفرّغ"
     },
     "progress": {
       "running": "جارٍ التحويل: {done, number} من {total, number} د",
@@ -1158,6 +1159,28 @@
       "stopped": "توقف بعد {done, number} د. يبقى النص الذي تم الحصول عليه حتى الآن.",
       "done": "تم تحويل {total, number} د.",
       "another": "تحويل تسجيل آخر"
+    },
+    "cleaned": {
+      "title": "النص المنقّح",
+      "running": "جارٍ التنقيح…",
+      "waiting": "يُنقَّح كل جزء فور تفريغه.",
+      "instructionsTitle": "تعليمات في الإملاء · ليست جزءًا من النص",
+      "instructionsLabel": "تعليمات:",
+      "partFailed": "تعذّر تنقيح هذا الجزء، لذا يظهر كما فُرّغ.",
+      "failedCount": "{count, plural, zero {لم يُنقَّح أي جزء} one {جزء واحد لم يُنقَّح} two {جزءان لم يُنقَّحا} few {# أجزاء لم تُنقَّح} many {# جزءًا لم يُنقَّح} other {# جزء لم يُنقَّح}}",
+      "saveMarkdown": "نص منسّق (.md)",
+      "saveText": "نص عادي (.txt)",
+      "fileNameMarkdown": "{title} منقّح.md",
+      "fileNameText": "{title} منقّح.txt",
+      "offerTitle": "تنقيح النص المفرّغ بالذكاء الاصطناعي",
+      "offerDescription": "فُرّغ هذا التسجيل على هذا الحاسوب، وتنقيح الذكاء الاصطناعي متوقف في الإعدادات. يرسل التنقيح النص، لا الصوت أبدًا، إلى نموذج الذكاء الاصطناعي الخاص بمؤسستك.",
+      "offerStart": "تنقيح"
+    },
+    "copyMenu": {
+      "label": "خيارات النسخ",
+      "formatted": "مع التنسيق",
+      "plain": "كنص عادي",
+      "hint": "مع التنسيق تُلصق العناوين والخط العريض والقوائم في Word أو Outlook. يُحفظ اختيارك."
     }
   }
 }

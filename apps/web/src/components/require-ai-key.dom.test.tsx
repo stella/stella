@@ -15,6 +15,7 @@ import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
+import { isDisabledControl } from "@/__fixtures__/disabled-control";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
@@ -788,7 +789,7 @@ test.each(composerAvailabilityCases)(
         ?.setContent(composerText("Which clauses need revision?"));
     });
     const send = screen.getByRole("button", { name: messages.chat.sendPrompt });
-    expect(send.hasAttribute("disabled")).toBe(state.type !== "available");
+    expect(isDisabledControl(send)).toBe(state.type !== "available");
     fireEvent.keyDown(textbox, { key: "Enter" });
     await settle();
     expect(sends.length).toBe(state.type === "available" ? 1 : 0);
@@ -801,7 +802,7 @@ test.each(composerAvailabilityCases)(
         screen.getByRole("button", { name: messages.common.retry }),
       );
       await waitFor(() => {
-        expect(send.hasAttribute("disabled")).toBe(false);
+        expect(isDisabledControl(send)).toBe(false);
       });
       expect(
         screen.getByRole("textbox", { name: messages.chat.placeholder }),
@@ -829,9 +830,9 @@ test("the real chat textbox mounts during a pending availability read", async ()
       ?.setContent(composerText("Which clauses need revision?"));
   });
   expect(
-    screen
-      .getByRole("button", { name: messages.chat.sendPrompt })
-      .hasAttribute("disabled"),
+    isDisabledControl(
+      screen.getByRole("button", { name: messages.chat.sendPrompt }),
+    ),
   ).toBe(true);
   expect(textbox.getAttribute("contenteditable")).toBe("true");
   // The wait shows in the composer row (send unavailable), not as a line
@@ -844,9 +845,9 @@ test("the real chat textbox mounts during a pending availability read", async ()
   });
   await waitFor(() => {
     expect(
-      screen
-        .getByRole("button", { name: messages.chat.sendPrompt })
-        .hasAttribute("disabled"),
+      isDisabledControl(
+        screen.getByRole("button", { name: messages.chat.sendPrompt }),
+      ),
     ).toBe(false);
   });
   expect(screen.getByRole("textbox", { name: messages.chat.placeholder })).toBe(

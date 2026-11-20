@@ -1795,7 +1795,6 @@
       "searchAllPastChatsQuestion": "Keresés az összes csevegésében?",
       "uploadedDocumentPlaceholder": "(feltöltött dokumentum)"
     },
-    "askAnything": "Kérdezzen bármit",
     "askUser": {
       "custom": "Saját válasz",
       "edit": "Válaszok szerkesztése",
@@ -1953,6 +1952,7 @@
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",
     "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
+    "improvePromptEmpty": "Írjon egy promptot a javításhoz.",
     "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",
     "improvePromptUnavailableAnonymized": "A prompt javítása anonimizált módban nem érhető el.",
     "improvingPrompt": "Prompt javítása…",
@@ -2312,6 +2312,7 @@
     "sendErrorToolsUnsupported": "Ez a modell nem tud eszközöket használni, ezért nem tud válaszolni az ügyével kapcsolatos kérdésekre. Váltson olyan modellre, amely támogatja az eszközöket.",
     "sendErrorTurnTooLarge": "Ez a válasz túl nagyra nőtt ahhoz, hogy teljes egészében megérkezzen. A folytatáshoz küldjön új üzenetet.",
     "sendPrompt": "Üzenet küldése",
+    "sendPromptEmpty": "Írjon egy üzenetet a küldéshez.",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "signInToChat": "Jelentkezzen be, hogy erről a dokumentumról csevegjen",

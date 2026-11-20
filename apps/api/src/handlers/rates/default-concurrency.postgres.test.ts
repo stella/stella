@@ -306,6 +306,23 @@ if (!databaseUrl || !runPostgres) {
             auditLogs,
             eq(auditLogs.workspaceId, workspaceId),
           );
+        type DeleteContext = Parameters<typeof deleteRateTable.handler>[0];
+        const remove = async (
+          safeDb: typeof firstSafe,
+          id: typeof firstTable.id,
+          recordAuditEvent: AuditRecorder,
+        ) =>
+          await deleteRateTable.handler(
+            createTestHandlerContext<DeleteContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb,
+              audit: recordAuditEvent,
+              body: { id },
+            }),
+          );
         const refusal = {
           code: 400,
           response: {
@@ -349,6 +366,30 @@ if (!databaseUrl || !runPostgres) {
         expect(await defaultIds()).toEqual([secondTable.id]);
         expect(await auditCount()).toBe(beforePairedRemoval + 1);
 
+        const beforePromoteDelete = await auditCount();
+        const promoteDelete = await compete(
+          async (gatedRecord) =>
+            await setDefault(firstSafe, firstTable.id, true, gatedRecord),
+          async () => await remove(secondSafe, firstTable.id, record),
+        );
+        expect(promoteDelete.first).toEqual({ id: firstTable.id });
+        expect(promoteDelete.second).toEqual({
+          code: 400,
+          response: {
+            message:
+              "Cannot delete the default rate table while the matter has " +
+              "other tables. Set another table as default first.",
+          },
+        });
+        expect(await defaultIds()).toEqual([firstTable.id]);
+        expect(
+          await firstDb.$count(
+            rateTables,
+            eq(rateTables.workspaceId, workspaceId),
+          ),
+        ).toBe(2);
+        expect(await auditCount()).toBe(beforePromoteDelete + 2);
+
         // A table created without isDefault stays non-default while the
         // matter has a default, and becomes the default when it has none.
         const createPlain = async (name: string) =>
@@ -363,10 +404,10 @@ if (!databaseUrl || !runPostgres) {
               body: { name, currency: "USD" },
             }),
           );
-        type DeleteContext = Parameters<typeof deleteRateTable.handler>[0];
-        const remove = async (id: typeof firstTable.id) =>
+        type PlainDeleteContext = Parameters<typeof deleteRateTable.handler>[0];
+        const removeTable = async (id: typeof firstTable.id) =>
           await deleteRateTable.handler(
-            createTestHandlerContext<DeleteContext>({
+            createTestHandlerContext<PlainDeleteContext>({
               scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
@@ -377,11 +418,11 @@ if (!databaseUrl || !runPostgres) {
             }),
           );
         await createPlain("Third");
-        expect(await defaultIds()).toEqual([secondTable.id]);
+        expect(await defaultIds()).toEqual([firstTable.id]);
 
         // The default goes only as the matter's last table.
-        expect(await remove(secondTable.id)).toMatchObject({ code: 400 });
-        expect(await defaultIds()).toEqual([secondTable.id]);
+        expect(await removeTable(firstTable.id)).toMatchObject({ code: 400 });
+        expect(await defaultIds()).toEqual([firstTable.id]);
         const others = await firstDb
           .select({ id: rateTables.id })
           .from(rateTables)
@@ -392,9 +433,9 @@ if (!databaseUrl || !runPostgres) {
             ),
           );
         for (const other of others) {
-          expect(await remove(other.id)).toEqual({ deleted: true });
+          expect(await removeTable(other.id)).toEqual({ deleted: true });
         }
-        expect(await remove(secondTable.id)).toEqual({ deleted: true });
+        expect(await removeTable(firstTable.id)).toEqual({ deleted: true });
         expect(
           await firstDb.$count(
             rateTables,

@@ -1149,7 +1149,8 @@
       "saveFailed": "Přepis se nepodařilo zkopírovat ani uložit. Zkuste to znovu.",
       "noSpeech": "V nahrávce nebyla nalezena žádná řeč.",
       "fileName": "{title} – přepis.txt",
-      "documentTitle": "{title} – přepis"
+      "documentTitle": "{title} – přepis",
+      "transcriptTitle": "Přepis"
     },
     "progress": {
       "running": "Přepisuje se {done, number} z {total, number} min",
@@ -1158,6 +1159,28 @@
       "stopped": "Zastaveno po {done, number} min. Dosavadní text zůstává.",
       "done": "Přepsáno {total, number} min.",
       "another": "Přepsat další nahrávku"
+    },
+    "cleaned": {
+      "title": "Upravený text",
+      "running": "Upravuji…",
+      "waiting": "Každá část se upraví hned, jak je přepsaná.",
+      "instructionsTitle": "Pokyny v diktátu · nejsou součástí textu",
+      "instructionsLabel": "Pokyny:",
+      "partFailed": "Tuto část se nepodařilo upravit, proto je zobrazena tak, jak byla přepsána.",
+      "failedCount": "{count, plural, one {# část neupravena} few {# části neupraveny} other {# částí neupraveno}}",
+      "saveMarkdown": "Formátovaný text (.md)",
+      "saveText": "Prostý text (.txt)",
+      "fileNameMarkdown": "{title} upravený text.md",
+      "fileNameText": "{title} upravený text.txt",
+      "offerTitle": "Upravit přepis pomocí AI",
+      "offerDescription": "Tato nahrávka byla přepsána na tomto počítači a úprava pomocí AI je v Nastavení vypnutá. Úprava pošle text, nikdy zvuk, AI modelu vaší organizace.",
+      "offerStart": "Upravit"
+    },
+    "copyMenu": {
+      "label": "Možnosti kopírování",
+      "formatted": "Včetně formátování",
+      "plain": "Jako prostý text",
+      "hint": "S formátováním se do Wordu nebo Outlooku vloží nadpisy, tučné písmo i seznamy. Kopírování si vaši volbu zapamatuje."
     }
   }
 }

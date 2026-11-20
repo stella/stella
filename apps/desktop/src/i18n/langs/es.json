@@ -1149,7 +1149,8 @@
       "saveFailed": "No se pudo copiar ni guardar la transcripción. Inténtalo de nuevo.",
       "noSpeech": "No se encontró voz en esta grabación.",
       "fileName": "{title} - transcripción.txt",
-      "documentTitle": "{title} - transcripción"
+      "documentTitle": "{title} - transcripción",
+      "transcriptTitle": "Transcripción"
     },
     "progress": {
       "running": "Transcribiendo {done, number} de {total, number} min",
@@ -1158,6 +1159,28 @@
       "stopped": "Detenido tras {done, number} min. Se conserva el texto obtenido hasta ahora.",
       "done": "{total, number} min transcritos.",
       "another": "Transcribir otra grabación"
+    },
+    "cleaned": {
+      "title": "Texto depurado",
+      "running": "Depurando…",
+      "waiting": "Cada parte se depura en cuanto se transcribe.",
+      "instructionsTitle": "Instrucciones del dictado · no forman parte del texto",
+      "instructionsLabel": "Instrucciones:",
+      "partFailed": "Esta parte no se pudo depurar, así que se muestra tal como se transcribió.",
+      "failedCount": "{count, plural, one {# parte sin depurar} other {# partes sin depurar}}",
+      "saveMarkdown": "Texto con formato (.md)",
+      "saveText": "Texto sin formato (.txt)",
+      "fileNameMarkdown": "{title} depurado.md",
+      "fileNameText": "{title} depurado.txt",
+      "offerTitle": "Depurar la transcripción con IA",
+      "offerDescription": "Esta grabación se transcribió en este ordenador y la depuración con IA está desactivada en Configuración. Al depurarla se envía el texto, nunca el audio, al modelo de IA de tu organización.",
+      "offerStart": "Depurar"
+    },
+    "copyMenu": {
+      "label": "Opciones de copia",
+      "formatted": "Con formato",
+      "plain": "Como texto sin formato",
+      "hint": "Con formato se pegan títulos, negritas y listas en Word u Outlook. Se recuerda tu elección."
     }
   }
 }

@@ -1132,8 +1132,13 @@ const reserveOrganizationFilesBytesOnce = async (
               tx,
             });
           }
+          // NO KEY UPDATE still serializes with every other organization
+          // lock and with deletes, but lets the KEY SHARE taken by foreign-key
+          // inserts in the organization through. This transaction goes on to
+          // lock destination matters, so FOR UPDATE here would deadlock with
+          // a writer that holds a matter and then inserts an organization row.
           const locked = await withAggregateParentBatch({
-            mode: "update",
+            mode: "no key update",
             organizationIds,
             tx,
           });

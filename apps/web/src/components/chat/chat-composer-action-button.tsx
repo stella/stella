@@ -19,6 +19,11 @@ type ChatComposerActionButtonProps = ChatComposerActionState & {
   className?: string;
   guideAnchorsEnabled?: boolean;
   iconClassName?: string;
+  /** Why sending is unavailable right now (an empty draft, an editor still
+   *  loading). Shown as the button's tooltip while it is disabled, so a
+   *  reader who reaches for it learns what to do instead of meeting a dead
+   *  control. */
+  disabledReason?: string | undefined;
 };
 
 export const ChatComposerActionButton = (
@@ -77,7 +82,9 @@ export const ChatComposerActionButton = (
       disabled={!enabled}
       onClick={handleClick}
       size="icon-round"
-      tooltip={false}
+      // A disabled `Button` with a tooltip stays hoverable and focusable
+      // (`aria-disabled`), so the reason is reachable exactly when needed.
+      tooltip={enabled ? label : (props.disabledReason ?? label)}
       type="button"
       variant="composer"
     >

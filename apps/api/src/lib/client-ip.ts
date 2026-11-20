@@ -279,8 +279,8 @@ const requiresOriginProof = (header: string | null | undefined): boolean =>
 /**
  * Whether the address was read from CloudFront's viewer address header, which
  * is honoured only on a request carrying the origin secret. Such a request
- * came through CloudFront, so CloudFront's other viewer headers on it (the
- * geolocation ones) were written by CloudFront rather than by the caller.
+ * came through CloudFront; whether its geolocation headers were written by
+ * CloudFront rather than the caller is decided in `readViewerLocation`.
  */
 export const isCloudFrontVerifiedAddress = (
   clientAddress: ClientAddress | null | undefined,

@@ -1149,7 +1149,8 @@
       "saveFailed": "The transcript could not be copied or saved. Try again.",
       "noSpeech": "No speech was found in this recording.",
       "fileName": "{title} transcript.txt",
-      "documentTitle": "{title} transcript"
+      "documentTitle": "{title} transcript",
+      "transcriptTitle": "Transcript"
     },
     "progress": {
       "running": "Transcribing {done, number} of {total, number} min",
@@ -1158,6 +1159,28 @@
       "stopped": "Stopped after {done, number} min. The text so far is kept.",
       "done": "Transcribed {total, number} min.",
       "another": "Transcribe another recording"
+    },
+    "cleaned": {
+      "title": "Cleaned up",
+      "running": "Cleaning up…",
+      "waiting": "Each part is cleaned up as soon as it is transcribed.",
+      "instructionsTitle": "Instructions in the dictation · not part of the text",
+      "instructionsLabel": "Instructions:",
+      "partFailed": "This part could not be cleaned up, so it is shown as transcribed.",
+      "failedCount": "{count, plural, one {# part not cleaned up} other {# parts not cleaned up}}",
+      "saveMarkdown": "Formatted text (.md)",
+      "saveText": "Plain text (.txt)",
+      "fileNameMarkdown": "{title} cleaned up.md",
+      "fileNameText": "{title} cleaned up.txt",
+      "offerTitle": "Clean up the transcript with AI",
+      "offerDescription": "This recording was transcribed on this computer and AI cleanup is off in Settings. Cleaning it up sends the text, never the audio, to your organization’s AI model.",
+      "offerStart": "Clean up"
+    },
+    "copyMenu": {
+      "label": "Copy options",
+      "formatted": "With formatting",
+      "plain": "As plain text",
+      "hint": "With formatting pastes headings, bold and lists into Word or Outlook. Copy remembers your choice."
     }
   }
 }

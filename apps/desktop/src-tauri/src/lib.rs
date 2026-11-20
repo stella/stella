@@ -100,6 +100,7 @@ mod permissions;
 mod pkcs11_module_setting;
 mod pkcs11_signing;
 mod presence;
+mod recording_cleanup;
 mod registry;
 mod relaunch;
 mod runner_protocol;
