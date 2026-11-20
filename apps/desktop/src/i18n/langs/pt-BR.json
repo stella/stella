@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Abrindo no Office",
     "sessionSavingDraft": "Salvando rascunho",
     "reconnectAccount": "Reconectar ao stella web…",
-    "transcribeRecording": "Transcrever uma gravação…"
+    "transcribeRecording": "Transcrever uma gravação…",
+    "dictation": "Ditado",
+    "dictationHint": "Segure {key} para ditar",
+    "dictationSettings": "Configurações de ditado…",
+    "dictationTurnOn": "Ativar o ditado…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: as alterações permanecem locais e serão reenviadas automaticamente",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "A stella não conseguiu confirmar qual aplicativo está em foco, então nada foi digitado. Tente novamente.",
       "shortcutHeld": "Solte as teclas do atalho para digitar. Nada foi digitado; tente novamente.",
       "passwordField": "Um campo de senha está selecionado, então o ditado não foi guardado nem digitado.",
-      "cloudTranscription": "A stella AI não conseguiu transcrever este ditado e o modelo de voz não está neste computador. Tente novamente ou, em “Transcrever com”, escolha “Este computador” e baixe o modelo."
+      "cloudTranscription": "A stella AI não conseguiu transcrever este ditado e o modelo de voz não está neste computador. Tente novamente ou, em “Transcrever com”, escolha “Este computador” e baixe o modelo.",
+      "nothingHeard": "A stella não ouviu nenhuma fala. Verifique o dispositivo de entrada nos ajustes de Som."
     },
     "failureKeptInHistory": "O texto está no histórico da área de transferência.",
     "transcribeRecording": {
@@ -705,6 +710,38 @@
       "description": "Converte em texto um arquivo de gravador, um memorando de voz ou a gravação de uma reunião de até 4 horas.",
       "open": "Abrir",
       "failed": "Não foi possível abrir a janela. Tente novamente."
+    },
+    "notice": {
+      "title": "A stella não consegue ouvir seu microfone",
+      "allowBody": "Permita o acesso ao microfone e tente de novo.",
+      "checkBodyMac": "Verifique o acesso ao microfone nos Ajustes do Sistema e tente de novo.",
+      "checkBodyPc": "Verifique o acesso ao microfone nas Configurações do Windows e tente de novo.",
+      "allow": "Permitir microfone",
+      "openSettingsMac": "Abrir Ajustes do Sistema",
+      "openSettingsPc": "Abrir Configurações",
+      "dismiss": "Fechar",
+      "nothingTitle": "A stella não ouviu nenhuma fala",
+      "nothingBody": "Fale enquanto segura a tecla ou escolha outra entrada nos ajustes de Som.",
+      "inputDevice": "Entrada: {device}",
+      "openSoundMac": "Abrir ajustes de Som",
+      "openSoundPc": "Abrir configurações de som",
+      "missingTitle": "{missing} não está conectado",
+      "missingBody": "O ditado está usando {device} no lugar.",
+      "chooseMicrophone": "Escolher microfone…"
+    },
+    "microphone": {
+      "title": "Microfone",
+      "hint": "Fones Bluetooth levam um momento para mudar para o microfone e gravam com qualidade menor. O microfone integrado costuma ser mais nítido.",
+      "systemDefault": "Padrão do sistema",
+      "systemDefaultNamed": "Padrão do sistema ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (não conectado)",
+      "test": "Testar microfone",
+      "stopTest": "Parar",
+      "level": "Nível de entrada",
+      "hearing": "Estamos ouvindo você.",
+      "noSound": "Nenhum som de {device}.",
+      "checkAccess": "Verificar acesso ao microfone"
     },
     "preview": {
       "label": "O que você ditou até agora",
@@ -809,8 +846,8 @@
     "permissionsTitlePc": "Configure este computador",
     "permissionsBody": "Cada permissão é escolha sua. Você pode alterá-las depois nas Configurações.",
     "neverRequested": "Nunca solicitado:",
-    "tryTitle": "Experimente agora",
-    "tryBody": "Copie qualquer texto e pressione {shortcut}.",
+    "tryTitle": "Experimente o histórico da área de transferência",
+    "tryBody": "Copie qualquer texto e pressione {shortcut} para abrir o histórico da área de transferência.",
     "tryWaiting": "Aguardando o atalho",
     "tryKeepGoing": "Continue…",
     "tryExtraModifier": "Isso é {pressed}. Use {shortcut}.",

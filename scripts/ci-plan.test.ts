@@ -6752,6 +6752,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
           step.run?.includes(file) ||
           (unlisted.has(file) &&
             step.run?.includes("bun scripts/run-unlisted-script-tests.ts") &&
+            !step.run.includes("--check-declarations") &&
             step.run.includes("--depth") === depthTests.has(file))
         ) {
           const existing = owners.get(file) ?? [];

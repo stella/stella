@@ -1233,6 +1233,13 @@
       "treatment": "Spätere Rezeption"
     },
     "analyzing": "Analyse läuft...",
+    "browse": {
+      "courtDescription": "{court} ({country}): Entscheidungen in der öffentlichen Rechtsdatenbank von stella, nach Jahr und Monat.",
+      "courts": "Gerichte",
+      "days": "Tage",
+      "jurisdictionDescription": "{country}: Gerichtsentscheidungen in der öffentlichen Rechtsdatenbank von stella, nach Gericht, Jahr und Monat.",
+      "periodDescription": "{court} ({country}), {period}: Entscheidungen in der öffentlichen Rechtsdatenbank von stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1725,12 +1732,25 @@
       "unorderedList": "Aufzählung",
       "wholeBlockRequired": "Wählen Sie einen ganzen Absatz oder eine ganze Liste aus, um den Stil zu ändern."
     },
+    "answerNotFinished": "stella konnte diese Antwort nicht fertigstellen.",
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
       "unverified": "Zitat nicht verifiziert",
       "unverifiedHint": "Die zitierten Entscheidungen enthalten diesen Text nicht wörtlich",
       "verified": "Verifiziertes Zitat",
       "verifiedHint": "Wörtlich in {source}"
+    },
+    "answerTable": {
+      "copy": "Tabelle kopieren",
+      "copyAs": "Als {format} kopieren",
+      "download": "Tabelle herunterladen",
+      "downloadAs": "Als {format} herunterladen",
+      "fullscreen": "Im Vollbild öffnen",
+      "fullscreenTitle": "Tabelle im Vollbild",
+      "singleLine": "Einzeilig",
+      "size": "{rows, plural, one {# Zeile} other {# Zeilen}} · {columns, plural, one {# Spalte} other {# Spalten}}",
+      "textMode": "Zellentext",
+      "wrap": "Text umbrechen"
     },
     "applyMode": {
       "description": "Word speichert, wer welche Änderung vorgenommen hat. Wir merken uns Ihre Auswahl.",
@@ -2241,6 +2261,8 @@
       "localPlace": "Ihr Computer, {harness}",
       "localSelection": "Ihr Computer · {harness}",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Dieser neue Chat wurde in der Cloud gestartet, weil {harness} auf Ihrem Computer nicht verfügbar ist ({state})",
+      "startedInCloudCheckFailed": "Dieser neue Chat wurde in der Cloud gestartet, weil Ihr Computer nicht geprüft werden konnte",
       "stepsCheck": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und prüfen Sie {harness} unter Einstellungen › Allgemein › KI-Abonnements.",
       "stepsInstall": "stella desktop wird geöffnet. Falls es sich nicht öffnet, öffnen Sie es auf Ihrem Computer und wählen Sie unter Einstellungen › Allgemein bei {harness} Installieren.",
       "stepsSignInClaudeCode": "stella desktop wird zur Anmeldung geöffnet. Falls es sich nicht öffnet, öffnen Sie es und wählen Sie Einstellungen › Allgemein › Mit Claude anmelden.",
@@ -2306,6 +2328,20 @@
       "runFull": "Der Agent nimmt gerade keine weiteren Nachrichten an.",
       "title": "Ihre Nachricht wartet, bis der Agent fertig ist",
       "turnNotRunning": "Der Agent arbeitet gerade nicht."
+    },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# Entscheidung gefunden} other {# Entscheidungen gefunden}}",
+      "decisionsFoundUsed": "{found, plural, one {# Entscheidung gefunden} other {# Entscheidungen gefunden}}, {used, plural, one {# in der Antwort verwendet} other {# in der Antwort verwendet}}",
+      "filterAsOf": "Stand {date}",
+      "legislationFound": "{count, plural, one {# Rechtsvorschrift oder Bestimmung} other {# Rechtsvorschriften und Bestimmungen}}",
+      "lookupDidNotGoThrough": "Diese Suche hat nicht geklappt.",
+      "moreFound": "{count, plural, one {# weiteres nicht angezeigt} other {# weitere nicht angezeigt}}",
+      "moreLookups": "{count, plural, one {# weitere Abfrage nicht angezeigt} other {# weitere Abfragen nicht angezeigt}}",
+      "notRecorded": "Dieser Schritt lief, bevor stella festgehalten hat, was jeder Schritt nachschlägt.",
+      "nothingFound": "Keine Treffer.",
+      "technicalDetails": "Technische Details",
+      "usedInAnswer": "In der Antwort verwendet",
+      "versionFrom": "Fassung ab {date}"
     },
     "stopFailed": "Die Antwort konnte nicht gestoppt werden. Versuchen Sie es erneut.",
     "stopResponse": "Stoppen",
@@ -5749,6 +5785,9 @@
       "chatNotificationsDescription": "Erhalten Sie eine Benachrichtigung von diesem Browser, wenn eine Chat-Antwort fertig ist, während stella im Hintergrund läuft.",
       "chatNotificationsToggle": "Benachrichtigen, wenn eine Antwort fertig ist oder meine Eingabe braucht",
       "chatNotificationsUnsupported": "Dieser Browser unterstützt keine Benachrichtigungen.",
+      "chatTechnicalDetails": "Technische Details im Chat",
+      "chatTechnicalDetailsDescription": "Jeder Schritt im Chat zeigt, was er nachgeschlagen und gefunden hat. Eingeschaltet sehen Sie auch den Code und die Rohergebnisse dahinter.",
+      "chatTechnicalDetailsToggle": "Technische Details im Chat anzeigen",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",
       "dangerZoneDescription": "Löschen Sie Ihren Kontozugriff und private Kontodaten dauerhaft.",
@@ -7903,7 +7942,6 @@
         "endDate": "Enddatum",
         "month": "Monat",
         "quarter": "Quartal",
-        "showTable": "Tabelle anzeigen",
         "startDate": "Startdatum",
         "week": "Woche"
       },

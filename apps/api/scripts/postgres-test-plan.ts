@@ -220,8 +220,12 @@ const CLUSTER_CATALOG_CACHE_TESTS = new Set([
   "src/tests/query-perf/scheduled-run.postgres.test.ts",
 ]);
 
+// Backend-local WAL counters exclude other sessions' bytes, but database clones
+// force cluster checkpoints and full-page images in the measuring backend.
+const BACKEND_WAL_MEASUREMENT = /\bpg_stat_get_backend_wal\s*\(/iu;
+
 /**
- * Migration roles, visibility proofs and single-sample block measurements
+ * Migration roles, visibility proofs and block/WAL measurements
  * require every other cluster worker to finish.
  */
 export const clusterExclusivePostgresTests = (
@@ -232,6 +236,7 @@ export const clusterExclusivePostgresTests = (
     if (
       CLUSTER_VISIBILITY_TESTS.has(testPath) ||
       CLUSTER_CATALOG_CACHE_TESTS.has(testPath) ||
+      BACKEND_WAL_MEASUREMENT.test(source) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>

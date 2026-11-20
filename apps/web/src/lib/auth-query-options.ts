@@ -1,12 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { rootKeys } from "@/lib/account/auth-query-keys.logic";
 import { STALE_TIME } from "@/lib/consts";
 
-export const rootKeys = {
-  session: ["session"],
-  role: ["role"],
-  activeMember: ["active-organization-member"],
-};
+export { rootKeys };
 
 // Public SSR shortcut readers share the typed key without loading auth modules.
 export const sessionOptions = queryOptions({

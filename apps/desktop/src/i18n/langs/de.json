@@ -36,7 +36,11 @@
     "sessionOpeningInOffice": "Wird in Office geöffnet",
     "sessionSavingDraft": "Entwurf wird gespeichert",
     "reconnectAccount": "Erneut mit stella web verbinden…",
-    "transcribeRecording": "Aufnahme transkribieren…"
+    "transcribeRecording": "Aufnahme transkribieren…",
+    "dictation": "Diktieren",
+    "dictationHint": "Zum Diktieren {key} gedrückt halten",
+    "dictationSettings": "Diktiereinstellungen…",
+    "dictationTurnOn": "Diktieren einschalten…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: Änderungen bleiben lokal und werden automatisch erneut versucht",
@@ -697,7 +701,8 @@
       "focusUnconfirmed": "stella konnte nicht feststellen, welche App den Fokus hat, daher wurde nichts eingegeben. Versuchen Sie es erneut.",
       "shortcutHeld": "Lassen Sie die Tasten des Tastenkürzels los, damit getippt werden kann. Es wurde nichts eingegeben; versuchen Sie es erneut.",
       "passwordField": "Ein Passwortfeld ist ausgewählt, daher wurde das Diktat weder behalten noch eingegeben.",
-      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter."
+      "cloudTranscription": "stella AI konnte dieses Diktat nicht umwandeln, und das Sprachmodell ist nicht auf diesem Computer. Versuchen Sie es erneut, oder wählen Sie bei „Umwandeln mit“ die Option „Diesem Computer“ und laden Sie das Modell herunter.",
+      "nothingHeard": "stella hat keine Sprache gehört. Prüfen Sie das Eingabegerät in den Ton-Einstellungen."
     },
     "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf.",
     "transcribeRecording": {
@@ -705,6 +710,38 @@
       "description": "Wandelt eine Diktiergerätdatei, ein Sprachmemo oder eine Besprechungsaufnahme von bis zu 4 Stunden in Text um.",
       "open": "Öffnen",
       "failed": "Das Fenster konnte nicht geöffnet werden. Versuchen Sie es erneut."
+    },
+    "notice": {
+      "title": "stella kann Ihr Mikrofon nicht hören",
+      "allowBody": "Erlauben Sie den Mikrofonzugriff und versuchen Sie es dann erneut.",
+      "checkBodyMac": "Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen und versuchen Sie es dann erneut.",
+      "checkBodyPc": "Prüfen Sie den Mikrofonzugriff in den Windows-Einstellungen und versuchen Sie es dann erneut.",
+      "allow": "Mikrofon erlauben",
+      "openSettingsMac": "Systemeinstellungen öffnen",
+      "openSettingsPc": "Einstellungen öffnen",
+      "dismiss": "Schließen",
+      "nothingTitle": "stella hat keine Sprache gehört",
+      "nothingBody": "Sprechen Sie, während Sie die Taste halten, oder wählen Sie in den Ton-Einstellungen einen anderen Eingang.",
+      "inputDevice": "Eingang: {device}",
+      "openSoundMac": "Ton-Einstellungen öffnen",
+      "openSoundPc": "Soundeinstellungen öffnen",
+      "missingTitle": "{missing} ist nicht verbunden",
+      "missingBody": "Das Diktieren verwendet stattdessen {device}.",
+      "chooseMicrophone": "Mikrofon auswählen …"
+    },
+    "microphone": {
+      "title": "Mikrofon",
+      "hint": "Bluetooth-Headsets brauchen einen Moment, um auf ihr Mikrofon umzuschalten, und nehmen in geringerer Qualität auf. Das eingebaute Mikrofon ist meist klarer.",
+      "systemDefault": "Systemstandard",
+      "systemDefaultNamed": "Systemstandard ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nicht verbunden)",
+      "test": "Mikrofon testen",
+      "stopTest": "Stopp",
+      "level": "Eingangspegel",
+      "hearing": "Wir hören Sie.",
+      "noSound": "Kein Ton von {device}.",
+      "checkAccess": "Mikrofonzugriff prüfen"
     },
     "preview": {
       "label": "Bisher Diktiertes",
@@ -809,8 +846,8 @@
     "permissionsTitlePc": "Diesen PC einrichten",
     "permissionsBody": "Jede Berechtigung ist Ihre Entscheidung. Sie können sie später in den Einstellungen ändern.",
     "neverRequested": "Nie angefragt:",
-    "tryTitle": "Jetzt ausprobieren",
-    "tryBody": "Kopieren Sie einen beliebigen Text und drücken Sie dann {shortcut}.",
+    "tryTitle": "Verlauf der Zwischenablage ausprobieren",
+    "tryBody": "Kopieren Sie einen beliebigen Text und drücken Sie dann {shortcut}, um den Verlauf der Zwischenablage zu öffnen.",
     "tryWaiting": "Warte auf das Tastenkürzel",
     "tryKeepGoing": "Weiter so…",
     "tryExtraModifier": "Das ist {pressed}. Verwenden Sie {shortcut}.",

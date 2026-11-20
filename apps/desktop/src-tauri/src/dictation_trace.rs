@@ -26,7 +26,7 @@ use std::{
 
 use crate::{
   dictation::Failed, dictation_cloud::Destination, dictation_focus::Moved,
-  dictation_live::Tally,
+  dictation_live::Tally, dictation_models::ListRead,
 };
 
 /// Model ids come from the server's list: anything but these characters is
@@ -77,6 +77,9 @@ pub enum Line {
     /// The model that answered last: stella AI's, or this computer's once
     /// a stella AI failure fell back to it.
     model: Option<String>,
+    /// When stella AI's model list was at hand, and whether it was read
+    /// again after the model was refused; `None` without a request.
+    model_list: Option<(ListRead, bool)>,
     tally: Tally,
   },
   /// The cleanup round trip; zero while cleanup is off.
@@ -190,6 +193,7 @@ impl fmt::Display for Line {
       Self::Transcribe {
         destination: chosen,
         model,
+        model_list,
         tally,
         ..
       } => {
@@ -201,6 +205,9 @@ impl fmt::Display for Line {
         write!(f, " destination={} engine={engine}", destination(*chosen))?;
         if let Some(model) = model {
           write!(f, " model={}", model_token(model))?;
+        }
+        if let Some((read, read_again)) = model_list {
+          write!(f, " model_list={read:?} model_list_read_again={read_again}")?;
         }
         write!(
           f,
@@ -338,6 +345,7 @@ mod tests {
       duration: ms(1_312),
       destination: Destination::Cloud,
       model: Some("scribe v2\n=1".to_string()),
+      model_list: Some((ListRead::AtPress, false)),
       tally: Tally {
         stretches: 4,
         requests: 2,
@@ -348,16 +356,19 @@ mod tests {
     assert_eq!(
       line.to_string(),
       "window=Dictation span=DictationTranscribe duration_ms=1312 \
-       destination=StellaAi engine=StellaAi model=scribe_v2__1 stretches=4 \
+       destination=StellaAi engine=StellaAi model=scribe_v2__1 \
+       model_list=AtPress model_list_read_again=false stretches=4 \
        requests=2 fallback=false audio_ms=9400"
     );
     let local = Line::Transcribe {
       duration: ms(80),
       destination: Destination::Local,
       model: None,
+      model_list: None,
       tally: Tally::default(),
     };
     assert!(!local.to_string().contains("model="));
+    assert!(!local.to_string().contains("model_list"));
   }
 
   #[test]

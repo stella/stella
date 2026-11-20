@@ -212,6 +212,11 @@
       "validate_skill_package": "Sprawdź umiejętność",
       "web_search": "Wyszukiwanie w sieci"
     },
+    "toolResearch": {
+      "caseLaw": "Przeszukiwanie orzecznictwa",
+      "legislation": "Odczytywanie przepisów",
+      "legislationAndCaseLaw": "Przeszukiwanie przepisów i orzecznictwa"
+    },
     "localRun": {
       "title": {
         "sign_in": "Zaloguj się, aby kontynuować",

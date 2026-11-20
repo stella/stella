@@ -54,6 +54,7 @@ import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
 import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MoveToSideButton } from "@/components/inspector/move-to-side-button";
 import { RenderStormRegion } from "@/components/render-storm-canary";
@@ -492,6 +493,7 @@ export const ChatThreadPage = ({
         id: threadRef.threadId,
         workspaceId: threadRef.workspaceId,
         contextMatterIds: selectedContextMatterIds,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       detached(
         navigate({
@@ -505,6 +507,7 @@ export const ChatThreadPage = ({
     openInspectorChat({
       id: threadRef.threadId,
       contextMatterIds: selectedContextMatterIds,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     detached(navigate({ to: "/chat" }), "chat-thread-page.navigate");
   };
@@ -524,11 +527,10 @@ export const ChatThreadPage = ({
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
-  // Dock new-chat: same destination as the header's labeled "New chat"
-  // button (which stays as the primary affordance); the dock icon keeps
-  // the status row uniform across chat surfaces. Abort any live stream
-  // first — `chatThreadOptions` keeps the in-flight Chat alive in the
-  // query cache, so navigating away would leave it streaming.
+  // The composer (+) menu's New chat: same destination as the header's
+  // labelled New chat button. Abort any live stream first:
+  // `chatThreadOptions` keeps the in-flight Chat alive in the query cache,
+  // so navigating away would leave it streaming.
   const startNewThread = () => {
     leave();
     if (threadRef.scope === "workspace") {
@@ -1010,7 +1012,10 @@ export const ChatThreadPage = ({
                           />
                         </>
                       }
-                      onNewThread={messages.length > 0 ? startNewThread : null}
+                      // The header's labelled New chat is this page's one
+                      // way to start a chat; the bar under the composer
+                      // does not repeat it.
+                      onNewThread={null}
                       status="ready"
                       threadRef={threadRef}
                     />

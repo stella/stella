@@ -64,8 +64,12 @@ import {
 } from "../helpers/smoke-route-defs";
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import { measureTimeLoadingGeometry } from "../helpers/time-loading-geometry";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
-import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+} from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -475,6 +479,23 @@ const declareRouteSmokeGroup = ({
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
 declareVisualSandboxSmoke();
 declarePublicKnowledgeSmoke({ mode: "disabled" });
+
+test("records time loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold document, a hydrated page and a held navigation for both routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureTimeLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+  });
+  await testInfo.attach("time-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+});
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);

@@ -41,6 +41,10 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // The full-size refresh corpus retains PGlite and screening-index memory;
   // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
   "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
+  // Unmeasured, so planned at the fallback estimate; alone it peaked at
+  // 1440 MB on Linux, and sharing with corpus-index-projection-publish-fence
+  // reached 2660 MB against the 2560 MB cap.
+  "src/lib/legal-search/corpus-index-projection-served-copy-legacy.db.test.ts",
   // Sets the deployment's public address before the environment is read.
   "src/lib/oauth-native-client-documents.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.

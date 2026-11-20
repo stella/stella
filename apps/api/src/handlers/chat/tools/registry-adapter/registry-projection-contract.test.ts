@@ -13,6 +13,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import {
   countedSearchTotal,
   DECISION_SEARCH_MATCHES,
@@ -153,6 +154,8 @@ const searchConsolidatedLegislationMock = mock();
 const getLawTextBlockMock = mock();
 const executeRegistryLookupMock = mock();
 const readDataBoxFileMock = mock();
+const resolveDecisionMock = mock();
+const resolveLawCitationMock = mock();
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
 const { runRegistryReadTool } = await import("./run-registry-tool");
@@ -315,6 +318,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         getLawTextBlock: getLawTextBlockMock,
         executeRegistryLookup: executeRegistryLookupMock,
         legalFileReaders: { dataBox: readDataBoxFileMock },
+        resolveDecision: resolveDecisionMock,
+        resolveLawCitation: resolveLawCitationMock,
       },
     }),
   );
@@ -522,6 +527,98 @@ const guidanceFixture = (documentId: string) => ({
   },
   access: "text" as const,
 });
+
+/** A stored decision whose text the reads and the quote check can reach. */
+const storedDecisionFixture = () =>
+  ({
+    appealReviews: noDecisionReviewFound(),
+    extractionWarnings: [],
+    hasDocument: true,
+    documentPending: false,
+    documentReadFailed: false,
+    documentUnavailable: false,
+    textIncompleteReason: null,
+    textWithheldReason: null,
+    id: toSafeId<"caseLawDecision">(uid(54)),
+    resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+    caseNumber: "22 Cdo 1000/2020",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    citationCount: 2,
+    citationsFrom: [
+      {
+        id: toSafeId<"caseLawCitation">(uid(55)),
+        citationText: "21 Cdo 500/2019",
+        citedDecisionId: toSafeId<"caseLawDecision">(uid(56)),
+        sectionIndex: 0,
+      },
+    ],
+    citationsTo: [
+      {
+        id: toSafeId<"caseLawCitation">(uid(57)),
+        citationText: "23 Cdo 200/2021",
+        citingDecisionId: toSafeId<"caseLawDecision">(uid(58)),
+        sectionIndex: 1,
+      },
+    ],
+    citationsNextCursor: null,
+    caseFile: {
+      items: [],
+      nextCursor: null,
+      limit: LIMITS.caseLawCaseFilePageSize,
+    },
+    country: "CZ",
+    court: "Nejvyšší soud",
+    courtId: null,
+    courtAbbreviation: "NS",
+    courtTier: "supreme",
+    // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"
+    // string), not a `Date` object.
+    decisionDate: "2020-05-01",
+    decisionType: "judgment",
+    documentAst: null,
+    documentAstSource: null,
+    projectionDigest: null,
+    // GUID-bearing publisher URL; see the statute fixture above.
+    documentUrl: `https://example.test/decision/${uid(92)}`,
+    ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+    identifiers: [
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: "22 Cdo 1000/2020",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.ECLI,
+        value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+      },
+    ],
+    fulltext: "Full decision text.",
+    judges: [],
+    headnote: { type: "absent", reason: "not_published" },
+    sections: null,
+    language: "cs",
+    languageGroupKey: null,
+    languageAlternates: [],
+    metadata: {},
+    textFields: {
+      abstract: { type: "absent", reason: "not_published" },
+      headnote: { type: "absent", reason: "not_published" },
+      legalSentence: { type: "absent", reason: "not_published" },
+      summary: { type: "absent", reason: "not_published" },
+    },
+    slug: "ns-22-cdo-1000-2020",
+    source: {
+      id: toSafeId<"caseLawSource">(uid(59)),
+      name: "NS ČR",
+      adapterKey: "cz-ns",
+      allowsDerivedAi: true,
+    },
+    // GUID-bearing publisher URLs; see the statute fixture above.
+    sourceUrl: `https://example.test/decision/${uid(93)}`,
+    sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
+    sourceLanguages: null,
+    createdAt: new Date("2020-05-01T00:00:00.000Z"),
+    updatedAt: new Date("2020-05-01T00:00:00.000Z"),
+  }) satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>;
 
 const CONTRACT_CORPUS = {
   list_matters: [
@@ -1865,95 +1962,9 @@ const CONTRACT_CORPUS = {
       mode: "read",
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
-        readGatedDecisionWithDocumentMock.mockResolvedValue({
-          appealReviews: noDecisionReviewFound(),
-          extractionWarnings: [],
-          hasDocument: true,
-          documentPending: false,
-          documentReadFailed: false,
-          documentUnavailable: false,
-          textIncompleteReason: null,
-          textWithheldReason: null,
-          id: toSafeId<"caseLawDecision">(uid(54)),
-          resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
-          caseNumber: "22 Cdo 1000/2020",
-          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-          citationCount: 2,
-          citationsFrom: [
-            {
-              id: toSafeId<"caseLawCitation">(uid(55)),
-              citationText: "21 Cdo 500/2019",
-              citedDecisionId: toSafeId<"caseLawDecision">(uid(56)),
-              sectionIndex: 0,
-            },
-          ],
-          citationsTo: [
-            {
-              id: toSafeId<"caseLawCitation">(uid(57)),
-              citationText: "23 Cdo 200/2021",
-              citingDecisionId: toSafeId<"caseLawDecision">(uid(58)),
-              sectionIndex: 1,
-            },
-          ],
-          citationsNextCursor: null,
-          caseFile: {
-            items: [],
-            nextCursor: null,
-            limit: LIMITS.caseLawCaseFilePageSize,
-          },
-          country: "CZ",
-          court: "Nejvyšší soud",
-          courtId: null,
-          courtAbbreviation: "NS",
-          courtTier: "supreme",
-          // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"
-          // string), not a `Date` object.
-          decisionDate: "2020-05-01",
-          decisionType: "judgment",
-          documentAst: null,
-          documentAstSource: null,
-          projectionDigest: null,
-          // GUID-bearing publisher URL; see the statute fixture above.
-          documentUrl: `https://example.test/decision/${uid(92)}`,
-          ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-              value: "22 Cdo 1000/2020",
-            },
-            {
-              type: DECISION_IDENTIFIER_TYPES.ECLI,
-              value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-            },
-          ],
-          fulltext: "Full decision text.",
-          judges: [],
-          headnote: { type: "absent", reason: "not_published" },
-          sections: null,
-          language: "cs",
-          languageGroupKey: null,
-          languageAlternates: [],
-          metadata: {},
-          textFields: {
-            abstract: { type: "absent", reason: "not_published" },
-            headnote: { type: "absent", reason: "not_published" },
-            legalSentence: { type: "absent", reason: "not_published" },
-            summary: { type: "absent", reason: "not_published" },
-          },
-          slug: "ns-22-cdo-1000-2020",
-          source: {
-            id: toSafeId<"caseLawSource">(uid(59)),
-            name: "NS ČR",
-            adapterKey: "cz-ns",
-            allowsDerivedAi: true,
-          },
-          // GUID-bearing publisher URLs; see the statute fixture above.
-          sourceUrl: `https://example.test/decision/${uid(93)}`,
-          sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
-          sourceLanguages: null,
-          createdAt: new Date("2020-05-01T00:00:00.000Z"),
-          updatedAt: new Date("2020-05-01T00:00:00.000Z"),
-        } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
+        readGatedDecisionWithDocumentMock.mockResolvedValue(
+          storedDecisionFixture(),
+        );
         // The summary names decisions at both ends: a citing one by name and
         // link, a cited one the corpus holds by its decision id, and one it
         // does not hold by its text.
@@ -2083,6 +2094,139 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
+  resolve_case_law_decision: (
+    [
+      [
+        "resolved",
+        {
+          status: "resolved",
+          document: {
+            kind: "decision",
+            decisionId: uid(54),
+            identifier: "22 Cdo 1000/2020",
+            country: "CZE",
+            caseNumber: "22 Cdo 1000/2020",
+            ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+            court: "Nejvyšší soud",
+            decisionDate: "2020-05-01",
+            language: "cs",
+            languageAlternates: [{ decisionId: uid(95), language: "en" }],
+            readerUrl: `https://example.test/case-law/${uid(54)}`,
+            text: { status: "readable", charCount: 18 },
+            appealReviews: noDecisionReviewFound(),
+          },
+          otherCourtCandidates: [
+            {
+              decisionId: uid(96),
+              identifier: "22 Co 1000/2020",
+              label: "Krajský soud v Brně, rozsudek, 2020-01-01",
+              readerUrl: `https://example.test/case-law/${uid(96)}`,
+              court: "Krajský soud v Brně",
+              decisionDate: "2020-01-01",
+              decisionType: "rozsudek",
+              subjectSummary: null,
+            },
+          ],
+        },
+      ],
+      [
+        "not-found",
+        {
+          status: "not_found",
+          reason: "no_exact_identity",
+          coverage: {
+            status: "read",
+            asOf: "2026-11-01",
+            sources: [
+              {
+                verdict: "not_published",
+                source: "cz-ns",
+                sourceName: "NS ČR",
+                years: { from: 2020, to: 2026 },
+              },
+              {
+                verdict: "incomplete",
+                source: "cz-us",
+                sourceName: "ÚS ČR",
+                years: { from: 2020, to: 2026 },
+                gapYears: [{ year: 2021, missing: 3 }],
+                unreconciledYears: [{ from: 2025, to: 2026 }],
+              },
+              {
+                verdict: "not_reconciled",
+                source: "cz-nss",
+                sourceName: "NSS ČR",
+                reason: "listing not reconciled",
+              },
+            ],
+          },
+        },
+      ],
+      [
+        "ambiguous",
+        {
+          status: "ambiguous",
+          candidates: [
+            {
+              decisionId: uid(97),
+              identifier: "22 Cdo 1000/2020",
+              label: "Nejvyšší soud, rozsudek, 2020-05-01",
+              readerUrl: `https://example.test/case-law/${uid(97)}`,
+            },
+          ],
+        },
+      ],
+      ["incomplete", { status: "incomplete_identifier", missing: ["court"] }],
+      ["country-unavailable", { status: "country_unavailable" }],
+    ] satisfies (readonly [string, LegalResolveResponse])[]
+  ).map(([mode, response]) => ({
+    mode,
+    buildArgs: () => ({ country: "CZE", identifier: "22 Cdo 1000/2020" }),
+    setup: () => {
+      resolveDecisionMock.mockResolvedValue(response);
+    },
+    expectRefPaths: [],
+  })),
+  verify_quote: [
+    {
+      mode: "exact",
+      buildArgs: () => ({ decision_id: uid(54), text: "Full decision" }),
+      setup: () => {
+        readGatedDecisionWithDocumentMock.mockResolvedValue(
+          storedDecisionFixture(),
+        );
+      },
+      expectRefPaths: [],
+      expectPayloadContains: ['"status":"exact"', '"verified":true'],
+    },
+    {
+      mode: "not-found",
+      buildArgs: () => ({
+        decision_id: uid(54),
+        text: "Odvolání se zamítá jako opožděné",
+      }),
+      setup: () => {
+        readGatedDecisionWithDocumentMock.mockResolvedValue(
+          storedDecisionFixture(),
+        );
+      },
+      expectRefPaths: [],
+      expectPayloadContains: ['"status":"not_found"', '"verified":false'],
+    },
+    {
+      mode: "cannot-verify",
+      buildArgs: () => ({ decision_id: uid(54), text: "Full decision" }),
+      setup: () => {
+        const decision = storedDecisionFixture();
+        readGatedDecisionWithDocumentMock.mockResolvedValue({
+          ...decision,
+          source: { ...decision.source, allowsDerivedAi: false },
+        });
+      },
+      expectRefPaths: [],
+      expectPayloadContains: ['"textState":"withheld"'],
+    },
+  ],
   search_legislation: LEGISLATION_SEARCH_MATCH_TYPES.map((matchType) => ({
     mode: `search-${matchType}`,
     buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
@@ -2147,6 +2291,61 @@ const CONTRACT_CORPUS = {
         SOFT_LAW_DOCUMENT_CLASS,
         "Summary disclaimer the publisher requires.",
       ],
+    },
+  ],
+  resolve_law_citation: [
+    {
+      mode: "resolved",
+      buildArgs: () => ({
+        country: "CZE",
+        source: { type: "citation", citation: "89/2012 Sb." },
+        section: "2910",
+      }),
+      setup: () => {
+        resolveLawCitationMock.mockResolvedValue({
+          status: "resolved",
+          document: {
+            kind: "provision",
+            documentId: uid(98),
+            eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+            country: "CZE",
+            title: "Občanský zákoník",
+            section: "2910",
+            readerUrl: `https://example.test/legislation/${uid(98)}#par_2910`,
+            inForce: { from: "2014-01-01", to: null },
+            versionStatus: "current",
+            blocks: [
+              {
+                id: "par_2910-1",
+                anchorId: "par_2910",
+                text: "Škůdce, který vlastním zaviněním poruší povinnost…",
+              },
+            ],
+          },
+        } satisfies LegalResolveResponse);
+      },
+      expectRefPaths: [],
+      expectPayloadContains: ["Škůdce, který vlastním zaviněním"],
+    },
+    {
+      mode: "not-found",
+      buildArgs: () => ({
+        country: "CZE",
+        source: {
+          type: "structured",
+          collection: "sb",
+          year: "2012",
+          number: "89",
+        },
+        section: "99999",
+      }),
+      setup: () => {
+        resolveLawCitationMock.mockResolvedValue({
+          status: "not_found",
+          reason: "unknown_section",
+        } satisfies LegalResolveResponse);
+      },
+      expectRefPaths: [],
     },
   ],
   read_statute: [
@@ -2458,6 +2657,8 @@ const ALL_MOCKS = [
   getLawTextBlockMock,
   executeRegistryLookupMock,
   readDataBoxFileMock,
+  resolveDecisionMock,
+  resolveLawCitationMock,
 ];
 
 // A projection refusal reports the offending path through the real capture
@@ -2497,6 +2698,8 @@ beforeEach(() => {
   readWorkspaceContactsHandlerMock.mockReset();
   readWorkspaceHandlerMock.mockReset();
   readWorkspaceMembersHandlerMock.mockReset();
+  resolveDecisionMock.mockReset();
+  resolveLawCitationMock.mockReset();
   resolveStatuteExpressionMock.mockReset();
   resolveStatuteWorkVersionMock.mockReset();
   searchConsolidatedLegislationMock.mockReset();

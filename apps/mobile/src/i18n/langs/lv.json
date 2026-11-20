@@ -212,6 +212,11 @@
       "validate_skill_package": "Pārbaudīt prasmi",
       "web_search": "Meklēšana tīmeklī"
     },
+    "toolResearch": {
+      "caseLaw": "Meklēšana tiesu praksē",
+      "legislation": "Tiesību aktu lasīšana",
+      "legislationAndCaseLaw": "Meklēšana tiesību aktos un tiesu praksē"
+    },
     "localRun": {
       "title": {
         "sign_in": "Lai turpinātu, pieslēdzieties",

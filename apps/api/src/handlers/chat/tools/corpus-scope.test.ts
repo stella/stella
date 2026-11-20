@@ -12,11 +12,17 @@ import {
   PUBLIC_SOURCE_JURISDICTIONS,
   scopeCorpusRead,
 } from "@/api/handlers/chat/tools/corpus-scope";
+import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
+import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { restrictChatToolsToSourceScope } from "@/api/handlers/chat/tools/source-scope";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolDefinition,
+} from "@/api/mcp/static-tool-definitions";
 
 const CZECH_CASE_LAW: ChatSourceScope[] = [
   { kind: "corpus", corpus: "case_law", country: "CZE" },
@@ -305,6 +311,65 @@ describe("scopeCorpusRead", () => {
 
       expect(Result.isError(read) && read.error.kind).toBe("unavailable");
     }
+  });
+
+  it("holds every public-law script read to the scope", async () => {
+    const publicLawReads = DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((definition) =>
+      definition.access === "read" &&
+      getStaticMcpToolDefinition(definition.name)?.feature ===
+        "FEATURE_PUBLIC_LAW" &&
+      READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable &&
+      isChatScriptRead(definition.name)
+        ? [definition.name]
+        : [],
+    );
+    expect(publicLawReads).toContain("verify_quote");
+
+    for (const toolName of publicLawReads) {
+      const read = await scope({
+        scopes: [{ kind: "registry", registry: "ares" }],
+        toolName,
+        args: { country: "CZE" },
+      });
+
+      expect(
+        Result.isError(read) && read.error.kind,
+        `${toolName} reads a public corpus a scoped turn may exclude`,
+      ).toBe("unavailable");
+    }
+  });
+
+  it("holds the citation and quote checks to the scoped countries", async () => {
+    for (const [scopes, toolName, args] of [
+      [
+        CZECH_CASE_LAW,
+        "resolve_case_law_decision",
+        { country: "SVK", identifier: "1 Cdo 1/2026" },
+      ],
+      [
+        CZECH_LEGISLATION,
+        "resolve_law_citation",
+        { country: "SVK", section: "1" },
+      ],
+      [
+        CZECH_CASE_LAW,
+        "verify_quote",
+        { decision_id: SLOVAK_DECISION, text: "q" },
+      ],
+    ] as const) {
+      const read = await scope({ scopes, toolName, args });
+
+      expect(refusalHint(read)).toMatchObject({ code: "validation_error" });
+    }
+    expect(
+      Result.isOk(
+        await scope({
+          scopes: CZECH_CASE_LAW,
+          toolName: "verify_quote",
+          args: { decision_id: CZECH_DECISION, text: "q" },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("leaves tenant reads alone", async () => {

@@ -11,6 +11,7 @@ import { ToastProvider } from "@stll/ui/toast";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
+import { PendingCacheScope } from "@/components/pending-cache";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WebHangRecoveryNotice } from "@/components/web-hang-recovery-notice";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -85,27 +86,29 @@ export const AppProviders = ({
   queryClient: QueryClient;
 }>) => (
   <QueryClientProvider client={queryClient}>
-    <AnalyticsProvider value={analyticsValue}>
-      <AnalyticsAuthIdentity />
-      <I18nProvider>
-        <LocaleHeadSync />
-        <HotkeysProvider
-          defaultOptions={{
-            hotkey: { conflictBehavior: "allow" },
-          }}
-        >
-          <ThemeProvider>
-            <TooltipProvider>
-              <ToastProvider>
-                <WebHangRecoveryNotice />
-                <WebReaderPresentationProvider>
-                  {children}
-                </WebReaderPresentationProvider>
-              </ToastProvider>
-            </TooltipProvider>
-          </ThemeProvider>
-        </HotkeysProvider>
-      </I18nProvider>
-    </AnalyticsProvider>
+    <PendingCacheScope client={queryClient}>
+      <AnalyticsProvider value={analyticsValue}>
+        <AnalyticsAuthIdentity />
+        <I18nProvider>
+          <LocaleHeadSync />
+          <HotkeysProvider
+            defaultOptions={{
+              hotkey: { conflictBehavior: "allow" },
+            }}
+          >
+            <ThemeProvider>
+              <TooltipProvider>
+                <ToastProvider>
+                  <WebHangRecoveryNotice />
+                  <WebReaderPresentationProvider>
+                    {children}
+                  </WebReaderPresentationProvider>
+                </ToastProvider>
+              </TooltipProvider>
+            </ThemeProvider>
+          </HotkeysProvider>
+        </I18nProvider>
+      </AnalyticsProvider>
+    </PendingCacheScope>
   </QueryClientProvider>
 );

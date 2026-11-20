@@ -71,7 +71,7 @@ export const visualRegistry = {
     label: "Connector sign-in confirmation",
     layout: "plain",
   },
-  "table-chart": { label: "Chat table chart", layout: "plain" },
+  "table-chart": { label: "Answer tables", layout: "plain" },
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
