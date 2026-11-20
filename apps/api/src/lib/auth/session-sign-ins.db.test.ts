@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { SESSION_SIGN_IN_REVIEW } from "@stll/api-contract/session-sign-ins";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -31,17 +31,14 @@ const BRATISLAVA = {
 } as const satisfies ViewerLocation;
 
 let testDb: TestDatabase;
-const fixtureUsers: string[] = [];
 
 // timeout: the shared PGlite database boots from its snapshot on first use
 beforeAll(async () => {
   testDb = await getTestDb();
 }, 120_000);
 
+// Fixture users keep their rows: account audit history restricts deleting them.
 afterAll(async () => {
-  if (fixtureUsers.length > 0) {
-    await testDb.delete(user).where(inArray(user.id, fixtureUsers));
-  }
   await releaseTestDb();
 });
 
@@ -56,7 +53,6 @@ const createStore = () =>
 
 const insertUser = async () => {
   const id = mintAuthProviderIdValue();
-  fixtureUsers.push(id);
   await testDb
     .insert(user)
     .values({ id, name: "Jana Nováková", email: `${id}@sign-in.test` });
