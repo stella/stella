@@ -162,9 +162,10 @@ const MemberStyleSetsPage = () => {
     });
   };
 
-  const remove = async () => {
+  // What the delete dialog does once the delete settles.
+  const remove = async (): Promise<"keep-open" | "close"> => {
     if (!deleteTarget) {
-      return;
+      return "close";
     }
     setBusy(true);
     const response = await invokeCapability(
@@ -184,10 +185,11 @@ const MemberStyleSetsPage = () => {
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
       // The dialog stays open for another try.
-      return "keep-open" as const;
+      return "keep-open";
     }
     setDeleteTarget(null);
     await invalidate();
+    return "close";
   };
 
   if (isError) {
