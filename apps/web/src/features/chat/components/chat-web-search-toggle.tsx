@@ -131,6 +131,7 @@ export const ChatWebSearchToggle = ({
       className="text-muted-foreground hover:text-foreground"
       data-pressed={enabled ? "" : undefined}
       disabled={disabled}
+      disabledReason={t("common.loading")}
       onClick={() => {
         setWebSearch(!enabled);
       }}
