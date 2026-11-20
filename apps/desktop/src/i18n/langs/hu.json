@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "A hangot átírásra elküldjük a stellának és a(z) {model} modell szolgáltatójának. A stella nem tárolja.",
       "localMissing": "Ha ezen a számítógépen szeretne átírni, töltse le a beszédmodellt a Beállítások Diktálás részében.",
       "localMissingCloud": "Töltse le a beszédmodellt a Beállítások Diktálás részében, vagy írjon át a stella AI-jal.",
-      "retainsData": "A(z) {provider} megőrzi minden ennek a modellnek küldött felvétel hangját és átiratát. Ne írjon át vele bizalmas vagy ügyfélfelvételeket, vagy válasszon másik modellt a Beállítások Diktálás részében.",
+      "retainsData": "Kérjük, vegye figyelembe a(z) {provider} adatkezelési feltételeit.",
       "modelFailed": "A stella AI modelljét nem sikerült beolvasni, ezért a stella AI most nem tud átírni. Próbálja újra, vagy írja át ezen a számítógépen."
     },
     "matter": {

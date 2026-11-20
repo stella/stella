@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Skaņa transkribēšanai tiek nosūtīta stella un modeļa {model} nodrošinātājam. stella to neglabā.",
       "localMissing": "Lai transkribētu šajā datorā, lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana.",
       "localMissingCloud": "Lejupielādējiet runas modeli sadaļā Iestatījumi, Diktēšana, vai transkribējiet ar stella AI.",
-      "retainsData": "{provider} glabā visu šim modelim nosūtīto ierakstu skaņu un transkripciju. Netranskribējiet ar to konfidenciālus vai klientu ierakstus vai izvēlieties citu modeli sadaļā Iestatījumi, Diktēšana.",
+      "retainsData": "Lūdzu, ņemiet vērā {provider} apstrādes noteikumus.",
       "modelFailed": "stella AI modeli neizdevās nolasīt, tāpēc stella AI pašlaik nevar transkribēt. Mēģiniet vēlreiz vai transkribējiet šajā datorā."
     },
     "matter": {

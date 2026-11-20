@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Dźwięk jest wysyłany do transkrypcji do stella i do dostawcy modelu {model}. stella go nie przechowuje.",
       "localMissing": "Aby transkrybować na tym komputerze, pobierz model mowy w Ustawieniach, w sekcji Dyktowanie.",
       "localMissingCloud": "Pobierz model mowy w Ustawieniach, w sekcji Dyktowanie, albo transkrybuj za pomocą stella AI.",
-      "retainsData": "{provider} przechowuje dźwięk i transkrypcję wszystkiego, co trafia do tego modelu. Nie transkrybuj nim poufnych nagrań ani nagrań klientów albo wybierz inny model w Ustawieniach, w sekcji Dyktowanie.",
+      "retainsData": "Zapoznaj się z warunkami przetwarzania danych przez {provider}.",
       "modelFailed": "Nie udało się odczytać modelu stella AI, więc stella AI nie może teraz transkrybować. Spróbuj ponownie lub transkrybuj na tym komputerze."
     },
     "matter": {

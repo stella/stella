@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Zvuk se k přepisu odešle do stella AI a poskytovateli modelu {model}. stella ho neukládá.",
       "localMissing": "Abyste mohli přepisovat v tomto počítači, stáhněte si v Nastavení v části Diktování řečový model.",
       "localMissingCloud": "Stáhněte si v Nastavení v části Diktování řečový model, nebo přepisujte pomocí stella AI.",
-      "retainsData": "{provider} uchovává zvuk i přepis všeho, co tomuto modelu pošlete. Nepřepisujte s ním důvěrné nahrávky ani nahrávky klientů, nebo v Nastavení v části Diktování vyberte jiný model.",
+      "retainsData": "Berte prosím na vědomí podmínky zpracování společnosti {provider}.",
       "modelFailed": "Model stella AI se nepodařilo načíst, takže stella AI teď nemůže přepisovat. Zkuste to znovu, nebo přepisujte na tomto počítači."
     },
     "matter": {

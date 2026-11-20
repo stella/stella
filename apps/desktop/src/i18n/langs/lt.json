@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Garsas transkribuoti siunčiamas stellai ir modelio {model} teikėjui. stella jo nesaugo.",
       "localMissing": "Norėdami transkribuoti šiame kompiuteryje, atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas.",
       "localMissingCloud": "Atsisiųskite kalbos modelį skiltyje Nustatymai, Diktavimas, arba transkribuokite naudodami stella AI.",
-      "retainsData": "{provider} saugo visų šiam modeliui siunčiamų įrašų garsą ir transkripciją. Netranskribuokite juo konfidencialių ar klientų įrašų arba pasirinkite kitą modelį skiltyje Nustatymai, Diktavimas.",
+      "retainsData": "Atkreipkite dėmesį į {provider} duomenų tvarkymo sąlygas.",
       "modelFailed": "Nepavyko nuskaityti stella AI modelio, todėl stella AI dabar negali transkribuoti. Bandykite dar kartą arba transkribuokite šiame kompiuteryje."
     },
     "matter": {

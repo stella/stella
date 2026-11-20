@@ -1096,7 +1096,7 @@
       "cloudDescriptionModel": "Heli saadetakse transkribeerimiseks stellale ja mudeli {model} pakkujale. stella seda ei salvesta.",
       "localMissing": "Selles arvutis transkribeerimiseks laadige seadetes jaotises Dikteerimine alla kõnemudel.",
       "localMissingCloud": "Laadige seadetes jaotises Dikteerimine alla kõnemudel või transkribeerige stella AI abil.",
-      "retainsData": "{provider} säilitab kõigi sellele mudelile saadetud salvestiste heli ja transkriptsiooni. Ärge transkribeerige sellega konfidentsiaalseid ega klientide salvestisi või valige seadetes jaotises Dikteerimine muu mudel.",
+      "retainsData": "Palun arvestage {provider} töötlemistingimustega.",
       "modelFailed": "stella AI mudelit ei õnnestunud lugeda, seega ei saa stella AI praegu transkribeerida. Proovige uuesti või transkribeerige selles arvutis."
     },
     "matter": {
