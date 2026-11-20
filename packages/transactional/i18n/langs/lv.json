@@ -30,7 +30,6 @@
     "location": "Aptuvenā atrašanās vieta",
     "locationNote": "Atrašanās vieta ir noteikta pēc IP adreses un var būt neprecīza.",
     "mapAlt": "Karte ar aptuveno pieteikšanās vietu: {location}",
-    "mapCredit": "Kartes dati: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

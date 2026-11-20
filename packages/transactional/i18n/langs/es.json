@@ -30,7 +30,6 @@
     "location": "Ubicación aproximada",
     "locationNote": "La ubicación se estima a partir de la dirección IP y puede no ser exacta.",
     "mapAlt": "Mapa con la ubicación aproximada del inicio de sesión: {location}",
-    "mapCredit": "Datos del mapa: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

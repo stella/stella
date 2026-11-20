@@ -30,7 +30,6 @@
     "location": "Přibližné místo",
     "locationNote": "Místo je odhadnuté podle IP adresy a nemusí být přesné.",
     "mapAlt": "Mapa s přibližným místem přihlášení: {location}",
-    "mapCredit": "Mapové podklady: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

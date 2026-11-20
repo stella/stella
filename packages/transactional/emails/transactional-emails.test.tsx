@@ -309,8 +309,6 @@ describe("new-device-login location", () => {
 
       The location is estimated from the IP address and may be inaccurate.
 
-      Map data: Natural Earth
-
       Review sessions https://app.stella.test/account/sessions
 
       ----------------------------------------
@@ -332,7 +330,6 @@ describe("new-device-login location", () => {
     expect(text).toContain(
       "The location is estimated from the IP address and may be inaccurate.",
     );
-    expect(text).not.toContain("Natural Earth");
     expectNoIntlErrors();
   });
 

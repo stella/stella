@@ -30,7 +30,6 @@
     "location": "Ligikaudne asukoht",
     "locationNote": "Asukoht on hinnatud IP-aadressi põhjal ega pruugi olla täpne.",
     "mapAlt": "Kaart sisselogimise ligikaudse asukohaga: {location}",
-    "mapCredit": "Kaardiandmed: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

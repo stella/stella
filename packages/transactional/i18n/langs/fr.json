@@ -30,7 +30,6 @@
     "location": "Emplacement approximatif",
     "locationNote": "L’emplacement est estimé à partir de l’adresse IP et peut être inexact.",
     "mapAlt": "Carte indiquant l’emplacement approximatif de la connexion : {location}",
-    "mapCredit": "Données cartographiques : Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

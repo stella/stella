@@ -30,7 +30,6 @@
     "location": "Ungefährer Standort",
     "locationNote": "Der Standort wird anhand der IP-Adresse geschätzt und kann ungenau sein.",
     "mapAlt": "Karte mit dem ungefähren Standort der Anmeldung: {location}",
-    "mapCredit": "Kartendaten: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

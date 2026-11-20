@@ -30,7 +30,6 @@
     "location": "Approximate location",
     "locationNote": "The location is estimated from the IP address and may be inaccurate.",
     "mapAlt": "Map showing the approximate sign-in location: {location}",
-    "mapCredit": "Map data: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

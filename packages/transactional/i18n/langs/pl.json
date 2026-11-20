@@ -30,7 +30,6 @@
     "location": "Przybliżona lokalizacja",
     "locationNote": "Lokalizacja jest szacowana na podstawie adresu IP i może być niedokładna.",
     "mapAlt": "Mapa z przybliżoną lokalizacją logowania: {location}",
-    "mapCredit": "Dane mapy: Natural Earth",
     "place": {
       "cityCountry": "{city}, {country}",
       "cityRegionCountry": "{city}, {region}, {country}",

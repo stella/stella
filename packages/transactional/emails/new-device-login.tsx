@@ -101,7 +101,10 @@ type KnownLocation = Extract<SignInLocation, { type: "known" }>;
 
 type LocationNotesProps = { location: KnownLocation; lang: SupportedLang };
 
-/** The map, when there is one, and what the location rests on. */
+/**
+ * The map, when there is one, and what the location rests on. The base map is
+ * public domain and needs no credit line.
+ */
 const LocationNotes = ({ location, lang }: LocationNotesProps) => {
   const t = getTranslator(lang);
   return (
@@ -118,9 +121,6 @@ const LocationNotes = ({ location, lang }: LocationNotesProps) => {
         />
       )}
       <Text style={styles.caption}>{t("newDeviceLogin.locationNote")}</Text>
-      {location.map === null ? null : (
-        <Text style={styles.caption}>{t("newDeviceLogin.mapCredit")}</Text>
-      )}
     </>
   );
 };

@@ -30,7 +30,6 @@
     "location": "الموقع التقريبي",
     "locationNote": "يُقدَّر الموقع استنادًا إلى عنوان IP وقد لا يكون دقيقًا.",
     "mapAlt": "خريطة تُظهر الموقع التقريبي لتسجيل الدخول: {location}",
-    "mapCredit": "بيانات الخريطة: Natural Earth",
     "place": {
       "cityCountry": "{city}، {country}",
       "cityRegionCountry": "{city}، {region}، {country}",

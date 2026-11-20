@@ -25,7 +25,6 @@
   "newDeviceLogin.location": "Approximate location",
   "newDeviceLogin.locationNote": "The location is estimated from the IP address and may be inaccurate.",
   "newDeviceLogin.mapAlt": "Map showing the approximate sign-in location: {location}",
-  "newDeviceLogin.mapCredit": "Map data: Natural Earth",
   "newDeviceLogin.place.cityCountry": "{city}, {country}",
   "newDeviceLogin.place.cityRegionCountry": "{city}, {region}, {country}",
   "newDeviceLogin.place.regionCountry": "{region}, {country}",
