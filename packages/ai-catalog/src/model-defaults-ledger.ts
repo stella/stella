@@ -158,13 +158,13 @@ const PROVIDER_DEFAULT_EMIT_MODE = {
   type: "provider-default",
   temperaturePolicy: "emit",
 } as const satisfies ModelMode;
-const GOOGLE_FLASH_NONE_MODE = {
+const GOOGLE_LOW_THINKING_MODE = {
   type: "google-thinking",
   requestedEffort: "none",
   thinkingLevel: "LOW",
   temperaturePolicy: "omit",
 } as const satisfies ModelMode;
-const GOOGLE_FLASH_HIGH_MODE = {
+const GOOGLE_HIGH_THINKING_MODE = {
   type: "google-thinking",
   requestedEffort: "high",
   thinkingLevel: "HIGH",
@@ -189,8 +189,8 @@ const CHAT_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_NONE_MODE,
+      modelId: "gemini-4-hydrogen",
+      mode: GOOGLE_LOW_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.chat,
@@ -198,7 +198,7 @@ const CHAT_DEFAULTS = {
   openrouter: {
     kind: "candidate",
     candidate: {
-      modelId: "openai/gpt-6-sol",
+      modelId: "openai/gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -207,7 +207,7 @@ const CHAT_DEFAULTS = {
   openai: {
     kind: "candidate",
     candidate: {
-      modelId: "gpt-6-sol",
+      modelId: "gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -273,8 +273,8 @@ const REASONING_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_HIGH_MODE,
+      modelId: "gemini-4-neon",
+      mode: GOOGLE_HIGH_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.reasoning,
@@ -282,7 +282,7 @@ const REASONING_DEFAULTS = {
   openrouter: {
     kind: "candidate",
     candidate: {
-      modelId: "openai/gpt-6-sol",
+      modelId: "openai/gpt-6.2-sol",
       mode: {
         type: "reasoning-effort",
         effort: "high",
@@ -295,7 +295,7 @@ const REASONING_DEFAULTS = {
   openai: {
     kind: "candidate",
     candidate: {
-      modelId: "gpt-6-sol",
+      modelId: "gpt-6.2-sol",
       mode: {
         type: "reasoning-effort",
         effort: "medium",
@@ -369,8 +369,8 @@ const PDF_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_NONE_MODE,
+      modelId: "gemini-4-hydrogen",
+      mode: GOOGLE_LOW_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.pdf,
@@ -378,7 +378,7 @@ const PDF_DEFAULTS = {
   openrouter: {
     kind: "candidate",
     candidate: {
-      modelId: "openai/gpt-6-sol",
+      modelId: "openai/gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -387,7 +387,7 @@ const PDF_DEFAULTS = {
   openai: {
     kind: "candidate",
     candidate: {
-      modelId: "gpt-6-sol",
+      modelId: "gpt-6.2-sol",
       mode: PROVIDER_DEFAULT_OMIT_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
@@ -445,8 +445,8 @@ const FAST_DEFAULTS = {
   google: {
     kind: "candidate",
     candidate: {
-      modelId: "gemini-3.8-flash",
-      mode: GOOGLE_FLASH_NONE_MODE,
+      modelId: "gemini-4-hydrogen",
+      mode: GOOGLE_LOW_THINKING_MODE,
     },
     quality: UNMEASURED_SEED_QUALITY,
     rationale: DEFAULT_RATIONALE_BY_GROUP.fast,
