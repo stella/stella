@@ -445,7 +445,7 @@ const endsInDrawnStepRun = (message: ChatUIMessage): boolean => {
   const entries = toAssistantPartRenderEntries(message.parts);
   const last = toAssistantPartRenderGroups(
     entries,
-    narratedIntentIndex(message.parts),
+    drawnIntentIndex(message.parts),
   ).at(-1);
   if (
     last?.kind !== "process" ||
@@ -2472,6 +2472,29 @@ const toLocalRunSubagentGroups = (toolCalls: readonly ToolCallRenderEntry[]) =>
 // The message's narrated intent (`narratedIntentIndex`) joins the run it
 // introduces, so the run reads its plan above its steps and its reasoning
 // stays one of those steps.
+/**
+ * The narrated intent (`narratedIntentIndex`) as this view draws it: above
+ * the run of steps it narrates. An approval card is answer content here, not
+ * a step (`isProcessRenderEntry`), so a text written before one stays a text
+ * of its own instead of an intent with no run to sit above.
+ */
+const drawnIntentIndex = (parts: readonly ChatUIPart[]): number | null => {
+  const index = narratedIntentIndex(parts);
+  if (index === null) {
+    return null;
+  }
+  const next = toAssistantPartRenderEntries(parts)
+    .slice(index + 1)
+    .find(
+      (entry) =>
+        entry.type !== "standard" ||
+        (entry.part.type !== "thinking" &&
+          entry.part.type !== "tool-result" &&
+          !(entry.part.type === "text" && entry.part.content.trim() === "")),
+    );
+  return next !== undefined && isProcessRenderEntry(next) ? index : null;
+};
+
 const toAssistantPartRenderGroups = (
   entries: readonly AssistantPartRenderEntry[],
   intentIndex: number | null,
@@ -2619,7 +2642,7 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
     isTurnActive || isAwaitingUser || hasAnswerContent
       ? "recovered"
       : "terminal";
-  const intentIndex = narratedIntentIndex(message.parts);
+  const intentIndex = drawnIntentIndex(message.parts);
   const intentEntry =
     intentIndex === null ? undefined : renderEntries[intentIndex];
   const renderGroups = toAssistantPartRenderGroups(renderEntries, intentIndex);

@@ -1156,6 +1156,7 @@ describe("chat thread messages", () => {
 
     expect(text).toContain(messages.chat.subagentRun.browseWeb);
     expect(text).toContain(browsingTask);
+    expect(text).toContain("Opening the registry.");
     expect(text).toContain(messages.chat.approval.browser.question);
     expect(approvalCardsOutsideClosedPanels(html)).toBe(1);
     expect(disclosureExpanded(html, messages.chat.subagentRun.browseWeb)).toBe(
@@ -1163,6 +1164,17 @@ describe("chat thread messages", () => {
     );
     // The run draws the call that started it; the call draws no step.
     expect(text).not.toContain(messages.chat.tool.unknown);
+  });
+
+  test("keeps a text written before an approval card, which draws no run of steps", () => {
+    const text = renderedText(
+      renderBrowsingTurn([
+        { type: "text", content: "Opening the registry's website." },
+        browserApproval("top-level-page"),
+      ]),
+    );
+    expect(text).toContain("Opening the registry's website.");
+    expect(text).toContain(messages.chat.approval.browser.question);
   });
 
   test("shows the approval card of a run nested inside a run", () => {
