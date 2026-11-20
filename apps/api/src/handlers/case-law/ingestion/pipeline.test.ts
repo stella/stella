@@ -971,6 +971,7 @@ describe("runIngestionPipeline — failure records", () => {
           }),
         }),
         insert: (table: unknown) => ({
+          // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with conflict chains; async would discard those methods
           values: (rows: FailureRow[]) => {
             if (table === caseLawDecisions) {
               state.decisionWrites++;
