@@ -42,6 +42,10 @@ const { MatterNumberingPending } =
   await import("@/routes/_protected.settings/-organization.matter-numbering.pending");
 const { TimePolicyPending } =
   await import("@/routes/_protected.settings/-organization.time-policy.pending");
+const { QueryClient } = await import("@tanstack/react-query");
+const { PendingCacheScope } = await import("@/components/pending-cache");
+const { organizationSettingsKeys } =
+  await import("@/queries/organization-settings");
 
 afterEach(() => {
   testing.cleanup();
@@ -206,4 +210,54 @@ describe("the organization forms' pending views", () => {
       expect(view.container.textContent).toBe("");
     });
   }
+});
+
+describe("the AI page's pending view and the organization's features", () => {
+  const verificationTitle =
+    messages.settings.organization.verificationDecisionModel.title;
+  const memoryTitle = messages.settings.organization.memoryExtraction.title;
+
+  const renderWithCache = (featureIds: readonly string[] | null) => {
+    const client = new QueryClient();
+    if (featureIds !== null) {
+      client.setQueryData(
+        organizationSettingsKeys.byCaller({
+          organizationId: "org-a",
+          userId: "user-a",
+        }),
+        {
+          declaredFeatureIds: [...featureIds],
+          capabilities: Object.fromEntries(
+            featureIds.map((id) => [id, { status: "enabled" }]),
+          ),
+          deploymentFeatures: {},
+        },
+      );
+    }
+    return testing.render(
+      withIntl(
+        <PendingCacheScope client={client}>
+          <SettingsChromeScope>
+            <AIConfigPending />
+          </SettingsChromeScope>
+        </PendingCacheScope>,
+      ),
+    );
+  };
+
+  test("draws the cards of the features the cached settings admit", () => {
+    const view = renderWithCache([
+      "list-verification",
+      "legal-lists",
+      "ai-memory",
+    ]);
+    expect(view.container.textContent.includes(verificationTitle)).toBe(true);
+    expect(view.container.textContent.includes(memoryTitle)).toBe(true);
+  });
+
+  test("leaves them out with nothing cached", () => {
+    const view = renderWithCache(null);
+    expect(view.container.textContent.includes(verificationTitle)).toBe(false);
+    expect(view.container.textContent.includes(memoryTitle)).toBe(false);
+  });
 });

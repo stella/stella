@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 
 import { ButtonFace } from "@stll/ui/control-face";
 
+import { usePendingCache } from "@/components/pending-cache";
 import { PendingText } from "@/components/pending-text";
+import { cachedCallerFeatureEnabled } from "@/lib/organization/cached-permissions.logic";
 import { SettingsPageHeaderPending } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 
 import {
@@ -13,9 +15,11 @@ import { AIProviderRowsPending } from "./ai-provider-rows.pending";
 import {
   AIToggleCardPending,
   DOCUMENT_PROCESSING_CARD,
+  MEMORY_EXTRACTION_CARD,
   PROMPT_CACHING_CARD,
 } from "./ai-toggle-card.pending";
 import { OrganizationInstructionsCardPending } from "./organization-instructions-card.pending";
+import { VerificationDecisionModelCardPending } from "./verification-decision-model-card.pending";
 
 /*
  * The AI provider settings (`AIConfigForm`), beside its pending phase: the
@@ -79,19 +83,39 @@ export const AIConfigFormLayout = ({
   </div>
 );
 
-/** The AI provider settings while the configuration is read. */
-export const AIConfigCardPending = () => (
-  <AIConfigFormLayout
-    deepl={<DeepLKeyCardPending />}
-    documentProcessing={<AIToggleCardPending {...DOCUMENT_PROCESSING_CARD} />}
-    instructions={<OrganizationInstructionsCardPending />}
-    promptCaching={<AIToggleCardPending {...PROMPT_CACHING_CARD} />}
-    providers={<AIProviderRowsPending />}
-    saveAction={
-      <ButtonFace size="sm" variant="default">
-        <PendingText barClassName="w-20" id="common.saveChanges" />
-      </ButtonFace>
-    }
-    webSearch={<WebSearchKeysCardPending />}
-  />
-);
+/**
+ * The AI provider settings while the configuration is read. A feature's card
+ * (the verification verdicts, memory extraction) is drawn where the
+ * organization settings the cache already holds admit it, as the loaded form
+ * shows it; on a cold load, with nothing cached, it joins once read.
+ */
+export const AIConfigCardPending = () => {
+  const queryClient = usePendingCache();
+  const admits = (feature: "verification" | "aiMemory") =>
+    queryClient !== null && cachedCallerFeatureEnabled(queryClient, feature);
+  return (
+    <AIConfigFormLayout
+      deepl={<DeepLKeyCardPending />}
+      details={
+        admits("verification") ? (
+          <VerificationDecisionModelCardPending />
+        ) : undefined
+      }
+      documentProcessing={<AIToggleCardPending {...DOCUMENT_PROCESSING_CARD} />}
+      instructions={<OrganizationInstructionsCardPending />}
+      memoryExtraction={
+        admits("aiMemory") ? (
+          <AIToggleCardPending {...MEMORY_EXTRACTION_CARD} />
+        ) : undefined
+      }
+      promptCaching={<AIToggleCardPending {...PROMPT_CACHING_CARD} />}
+      providers={<AIProviderRowsPending />}
+      saveAction={
+        <ButtonFace size="sm" variant="default">
+          <PendingText barClassName="w-20" id="common.saveChanges" />
+        </ButtonFace>
+      }
+      webSearch={<WebSearchKeysCardPending />}
+    />
+  );
+};

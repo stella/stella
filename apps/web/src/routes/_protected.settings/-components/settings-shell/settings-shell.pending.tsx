@@ -257,7 +257,9 @@ const ungatedSection = (section: NavSectionSource): PendingNavSection => {
   return {
     id: section.id,
     labelKey: section.labelKey,
-    items: items.filter((item) => !("gate" in item)),
+    // `in` narrows each row to the ungated ones, whose labels the pending
+    // phase draws.
+    items: items.flatMap((item) => ("gate" in item ? [] : [item])),
   };
 };
 

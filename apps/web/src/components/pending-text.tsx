@@ -306,6 +306,8 @@ type PendingTextMessageKey =
   | "settings.organization.timeZone.description"
   | "settings.organization.timeZone.title"
   | "settings.organization.uploadLogo"
+  | "settings.organization.verificationDecisionModel.description"
+  | "settings.organization.verificationDecisionModel.title"
   | "tasks.dueDate"
   | "tasks.priority"
   | "tasks.status"

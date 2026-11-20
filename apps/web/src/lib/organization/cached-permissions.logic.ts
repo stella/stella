@@ -7,6 +7,10 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { newestCachedData } from "@/components/pending-cache-reads.logic";
 import { rootKeys } from "@/lib/account/auth-query-keys.logic";
+import { callerFeatureEnabled } from "@/lib/organization/feature-access/access.logic";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { organizationSettingsQueryRoot } from "@/lib/resource-query-roots.logic";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 
 const isRoleName = (value: unknown): value is OrganizationRoleName =>
   ORGANIZATION_ROLE_NAMES.some((name) => name === value);
@@ -35,3 +39,24 @@ export const cachedRoleGrants = (
     memberHasPermissions({ role, billingAccess: false, permissions })
   );
 };
+
+/**
+ * Whether the organization settings the cache already holds admit a caller
+ * feature (named as `CALLER_FEATURE` names it),
+ * for a loading view that draws a feature's section without subscribing to
+ * the settings read. Fails closed like `useCallerFeatureEnabled`: settings
+ * not in the cache, or whose last read failed, admit nothing.
+ */
+export const cachedCallerFeatureEnabled = (
+  queryClient: QueryClient,
+  feature: keyof typeof CALLER_FEATURE,
+): boolean =>
+  callerFeatureEnabled(
+    newestCachedData(
+      queryClient,
+      queryClient.getQueriesData<OrganizationSettings>({
+        queryKey: organizationSettingsQueryRoot(),
+      }),
+    ),
+    CALLER_FEATURE[feature],
+  );
