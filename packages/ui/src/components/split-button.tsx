@@ -20,7 +20,7 @@ type SplitButtonSharedProps = {
   menuDescriptionId?: string;
   onPrimaryClick: NonNullable<ComponentProps<typeof Button>["onClick"]>;
   menu: ReactNode;
-  primaryDisabled?: boolean;
+  primaryDisabledReason?: string | undefined;
   menuDisabled?: boolean;
   size?: SplitButtonSize;
   className?: string;
@@ -66,7 +66,7 @@ export const SplitButton = (props: SplitButtonProps) => {
     onPrimaryClick,
     children,
     menu,
-    primaryDisabled,
+    primaryDisabledReason,
     menuDisabled,
     size = "md",
     className,
@@ -89,7 +89,8 @@ export const SplitButton = (props: SplitButtonProps) => {
         aria-describedby={primaryDescriptionId}
         aria-label={primaryLabel}
         className={SPLIT_BUTTON_PRIMARY_CLASS[size]}
-        disabled={primaryDisabled}
+        disabled={primaryDisabledReason !== undefined}
+        disabledReason={primaryDisabledReason}
         onClick={onPrimaryClick}
         size="sm"
         tooltip={
