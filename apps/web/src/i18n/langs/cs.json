@@ -5524,7 +5524,7 @@
     "members": {
       "billingAccess": "Přístup k fakturačním údajům",
       "changeRole": "Změnit roli",
-      "confirmRoleChangeDescription": "Role uživatele {email} se změní z {oldRole} na {newRole}.",
+      "confirmRoleChangeDescription": "Role uživatele {email} se změní {oldRole, select, owner {z vlastníka} admin {z administrátora} member {z člena} intern {ze stážisty} external {z externího spolupracovníka} other {}} {newRole, select, owner {na vlastníka} admin {na administrátora} member {na člena} intern {na stážistu} external {na externího spolupracovníka} other {}}.",
       "confirmRoleChangeTitle": "Změnit roli",
       "joined": "Připojil/a se",
       "noMembersFound": "Nebyli nalezeni žádní členové",

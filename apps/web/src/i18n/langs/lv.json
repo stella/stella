@@ -5524,7 +5524,7 @@
     "members": {
       "billingAccess": "Piekļuve norēķinu datiem",
       "changeRole": "Mainīt lomu",
-      "confirmRoleChangeDescription": "{email} loma tiks mainīta no {oldRole} uz {newRole}.",
+      "confirmRoleChangeDescription": "{email} loma tiks mainīta {oldRole, select, owner {no īpašnieka lomas} admin {no administratora lomas} member {no dalībnieka lomas} intern {no praktikanta lomas} external {no ārējā sadarbības partnera lomas} other {}} {newRole, select, owner {uz īpašnieka lomu} admin {uz administratora lomu} member {uz dalībnieka lomu} intern {uz praktikanta lomu} external {uz ārējā sadarbības partnera lomu} other {}}.",
       "confirmRoleChangeTitle": "Mainīt lomu",
       "joined": "Pievienojās",
       "noMembersFound": "Dalībnieki nav atrasti",

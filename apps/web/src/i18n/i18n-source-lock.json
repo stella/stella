@@ -4544,7 +4544,7 @@
   "organization.matterNumber.tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)",
   "organization.members.billingAccess": "Billing visibility",
   "organization.members.changeRole": "Change role",
-  "organization.members.confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
+  "organization.members.confirmRoleChangeDescription": "{email}'s role will change from {oldRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}} to {newRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}}.",
   "organization.members.confirmRoleChangeTitle": "Change role",
   "organization.members.joined": "Joined",
   "organization.members.noMembersFound": "No members found",

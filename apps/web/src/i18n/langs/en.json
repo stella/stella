@@ -5524,7 +5524,7 @@
     "members": {
       "billingAccess": "Billing visibility",
       "changeRole": "Change role",
-      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
+      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}} to {newRole, select, owner {owner} admin {admin} member {member} intern {intern} external {external collaborator} other {}}.",
       "confirmRoleChangeTitle": "Change role",
       "joined": "Joined",
       "noMembersFound": "No members found",

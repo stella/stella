@@ -5524,7 +5524,7 @@
     "members": {
       "billingAccess": "Acceso a datos de facturación",
       "changeRole": "Cambiar rol",
-      "confirmRoleChangeDescription": "El rol de {email} cambiará de {oldRole} a {newRole}.",
+      "confirmRoleChangeDescription": "El rol de {email} cambiará {oldRole, select, owner {de propietario} admin {de administrador} member {de miembro} intern {de pasante} external {de colaborador externo} other {}} {newRole, select, owner {a propietario} admin {a administrador} member {a miembro} intern {a pasante} external {a colaborador externo} other {}}.",
       "confirmRoleChangeTitle": "Cambiar rol",
       "joined": "Se unió",
       "noMembersFound": "No se encontraron miembros",

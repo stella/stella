@@ -95,13 +95,15 @@ export const RoleCell = ({
         cancelLabel={t("common.cancel")}
         confirmation={memberEmail}
         confirmLabel={t("organization.members.changeRole")}
-        description={t("organization.members.confirmRoleChangeDescription", {
-          email: memberEmail,
-          oldRole: t(roleTranslationKeys[memberRole].labelKey),
-          newRole: pendingRole
-            ? t(roleTranslationKeys[pendingRole].labelKey)
-            : "",
-        })}
+        description={
+          pendingRole === null
+            ? ""
+            : t("organization.members.confirmRoleChangeDescription", {
+                email: memberEmail,
+                oldRole: memberRole,
+                newRole: pendingRole,
+              })
+        }
         inputLabel={t("organization.members.typeEmailToConfirm", {
           email: memberEmail,
         })}
