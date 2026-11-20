@@ -76,7 +76,10 @@ import {
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { tableRowWindow } from "@/components/workspaces/table/workspace-table/row-window.logic";
+import {
+  measureFlowRow,
+  tableRowWindow,
+} from "@/components/workspaces/table/workspace-table/row-window.logic";
 import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
@@ -304,7 +307,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     },
     estimateSize: () => TABLE_ROW_ESTIMATE_PX,
     getItemKey: getVirtualRowKey,
-    measureElement: (element) => element.getBoundingClientRect().height,
+    measureElement: measureFlowRow,
     overscan: TABLE_ROW_OVERSCAN,
     scrollMargin: inlineFlow ? scrollMargin : 0,
     ...(inlineFlow && { scrollToFn: noopScrollTo }),
