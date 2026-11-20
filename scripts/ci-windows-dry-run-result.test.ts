@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { reusableResultRun } from "../packages/scripts/src/prepared-generated-sources";
@@ -231,7 +232,9 @@ if (args[0] === "run") {
         const result = Bun.spawnSync(
           [
             process.execPath,
-            new URL("ci-windows-dry-run-result.ts", import.meta.url).pathname,
+            fileURLToPath(
+              new URL("ci-windows-dry-run-result.ts", import.meta.url),
+            ),
           ],
           {
             cwd: root,

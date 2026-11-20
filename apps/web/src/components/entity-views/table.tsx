@@ -56,8 +56,10 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
-import { RowEndFillerCell } from "@/components/workspaces/table/workspace-table/end-fillers";
-import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
+import {
+  PinnedBoundary,
+  RowEndFillerCell,
+} from "@/components/workspaces/table/workspace-table/internals";
 import {
   getGridPinningStyles,
   isPinnedBoundaryColumn,

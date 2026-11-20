@@ -48,6 +48,7 @@ import {
   resultText,
   startsSubagent,
   subagentPromptOf,
+  subagentReport,
   toolCallForUse,
   toolResultFor,
 } from "./items";
@@ -57,12 +58,14 @@ import {
   AssistantMessageSchema,
   CanUseToolRequestSchema,
   CLAUDE_CONTROL_REQUESTS,
+  CLAUDE_DROPPED_COMMAND_STATES,
   CLAUDE_STEER_PRIORITY,
   CLAUDE_STOPPED_TOOL_KINDS,
   type ClaudeControlRequestSubtype,
   type ClaudeResultMessage,
   type ClaudeToolResult,
   type ClaudeToolUse,
+  CommandLifecycleSchema,
   ContentBlockSchema,
   isClaudeContentBlockType,
   isClaudeControlRequestSubtype,
@@ -136,6 +139,35 @@ const SubagentMessageSchema = v.looseObject({
  * The call that started the subagent a message belongs to, read before the
  * message's own schema, or `null` for a message of the main thread.
  */
+/**
+ * System messages about background work: they may come from tasks an
+ * earlier turn left running, so they say nothing about this turn's request.
+ */
+const BACKGROUND_PROGRESS: ReadonlySet<string> = new Set([
+  "task_started",
+  "task_updated",
+  "task_progress",
+  "task_notification",
+  "background_tasks_changed",
+]);
+
+const SystemSubtypeSchema = v.looseObject({ subtype: v.string() });
+
+/**
+ * Whether a message shows that the turn's model request is alive: anything
+ * but a transport keepalive or the progress of background work.
+ */
+const showsRequestProgress = (type: string, raw: unknown) => {
+  if (type === "keep_alive") {
+    return false;
+  }
+  if (type !== "system") {
+    return true;
+  }
+  const system = v.safeParse(SystemSubtypeSchema, raw);
+  return !system.success || !BACKGROUND_PROGRESS.has(system.output.subtype);
+};
+
 const subagentCallOf = (raw: unknown): string | null => {
   const parsed = v.safeParse(SubagentMessageSchema, raw);
   return parsed.success ? parsed.output.parent_tool_use_id : null;
@@ -258,6 +290,33 @@ const usageOf = (
   };
 };
 
+/**
+ * A completed result held past while a steer was unread. `deciding`: the CLI
+ * has not said yet whether it reads the steer; a drop of every unread steer
+ * ends the turn on this result. `answering`: it read one and answers it now,
+ * so only that answer's result ends the turn.
+ */
+type HeldResult = {
+  type: "deciding" | "answering";
+  usage: HarnessUsage | null;
+};
+
+/** Two parts of one turn's usage; the context is the later part's. */
+const addUsage = (
+  earlier: HarnessUsage | null,
+  later: HarnessUsage | null,
+): HarnessUsage | null =>
+  earlier === null || later === null
+    ? (later ?? earlier)
+    : {
+        inputTokens: earlier.inputTokens + later.inputTokens,
+        cachedInputTokens: earlier.cachedInputTokens + later.cachedInputTokens,
+        outputTokens: earlier.outputTokens + later.outputTokens,
+        reasoningOutputTokens:
+          earlier.reasoningOutputTokens + later.reasoningOutputTokens,
+        context: later.context ?? earlier.context,
+      };
+
 /** The `can_use_tool` reply for an answer, or why the answer does not fit. */
 const interactionResult = (
   pending: PendingInteraction,
@@ -355,6 +414,13 @@ export class ClaudeCodeTurnSession {
   private sessionId: HarnessSessionId | null = null;
   /** Steering messages written and not echoed yet: uuid to input id. */
   private readonly steering = new Map<string, string>();
+  /**
+   * A completed result that arrived while the CLI still held a steer: the
+   * usage so far, kept until the CLI reads the steer (the turn answers it)
+   * or drops it (the turn ends here).
+   */
+  private held: HeldResult | null = null;
+  private heldTimer: ReturnType<typeof setTimeout> | null = null;
   private assistantError: string | null = null;
   /**
    * The transcript entry of the main thread's last assistant message: where
@@ -570,6 +636,9 @@ export class ClaudeCodeTurnSession {
   }
 
   private message(type: string, raw: unknown) {
+    if (showsRequestProgress(type, raw)) {
+      this.lifecycle.heard();
+    }
     if (!isClaudeMessageType(type)) {
       this.unsupported(type);
       return;
@@ -601,6 +670,13 @@ export class ClaudeCodeTurnSession {
       case "stream":
         this.stream(this.parse(StreamEventMessageSchema, raw, "stream event"));
         return;
+      case "command": {
+        const parsed = v.safeParse(CommandLifecycleSchema, raw);
+        if (parsed.success) {
+          this.commandLifecycle(parsed.output);
+        }
+        return;
+      }
       case "rate_limit": {
         const parsed = this.parse(RateLimitEventSchema, raw, "rate limit");
         const reset =
@@ -908,11 +984,8 @@ export class ClaudeCodeTurnSession {
     if (parsed?.isReplay === true) {
       // The echo of a message written to stdin: a steer the turn took now,
       // or the turn's own prompt. Neither is output.
-      const inputId =
-        parsed.uuid === undefined ? undefined : this.steering.get(parsed.uuid);
-      if (parsed.uuid !== undefined && inputId !== undefined) {
-        this.steering.delete(parsed.uuid);
-        this.lifecycle.settleInput(inputId, "accepted");
+      if (parsed.uuid !== undefined) {
+        this.steerRead(parsed.uuid);
       }
       return;
     }
@@ -988,24 +1061,101 @@ export class ClaudeCodeTurnSession {
       ...result,
       localOutput: conversation.ended({
         prompt: subagentPromptOf(held.use),
-        report: resultText(block),
+        report: subagentReport(resultText(block)),
       }),
     };
+  }
+
+  /** The CLI read the steer `uuid` into the conversation. */
+  private steerRead(uuid: string) {
+    const inputId = this.steering.get(uuid);
+    if (inputId === undefined) {
+      return;
+    }
+    this.steering.delete(uuid);
+    this.lifecycle.settleInput(inputId, "accepted");
+    // Read after the result it was held past: the CLI answers it now, and
+    // that answer's result ends the turn.
+    this.stopHolding();
+    if (this.held !== null) {
+      this.held = { ...this.held, type: "answering" };
+    }
+  }
+
+  private commandLifecycle({
+    command_uuid: uuid,
+    state,
+  }: v.InferOutput<typeof CommandLifecycleSchema>) {
+    if (state === "started") {
+      this.steerRead(uuid);
+      return;
+    }
+    const inputId = this.steering.get(uuid);
+    if (inputId === undefined || !CLAUDE_DROPPED_COMMAND_STATES.has(state)) {
+      return;
+    }
+    this.steering.delete(uuid);
+    this.lifecycle.settleInput(inputId, "rejected");
+    if (this.held?.type === "deciding" && this.steering.size === 0) {
+      this.completeHeld();
+    }
+  }
+
+  private stopHolding() {
+    if (this.heldTimer !== null) {
+      clearTimeout(this.heldTimer);
+      this.heldTimer = null;
+    }
+  }
+
+  /** End the turn on the result it held: the CLI kept no steer to answer. */
+  private completeHeld() {
+    this.stopHolding();
+    const held = this.held;
+    this.held = null;
+    if (held === null) {
+      return;
+    }
+    if (this.lifecycle.interrupting) {
+      this.emit({ type: "turn.interrupted" });
+      return;
+    }
+    this.emit({
+      type: "turn.completed",
+      usage: held.usage,
+      boundary: this.lastAssistantEntry,
+    });
   }
 
   private result(parsed: ClaudeResultMessage | null) {
     if (parsed === null) {
       return;
     }
+    this.stopHolding();
+    const earlier = this.held?.usage ?? null;
+    this.held = null;
     // Whatever the CLI reports after an interrupt, the user stopped the turn.
     if (this.lifecycle.interrupting) {
       this.emit({ type: "turn.interrupted" });
       return;
     }
     if (parsed.subtype === "success" && !parsed.is_error) {
+      const usage = addUsage(earlier, usageOf(parsed, this.lastRequest));
+      if (this.steering.size > 0) {
+        // The CLI can write a result while it holds a steer it has not
+        // read, then answer that steer as its next turn. The turn waits to
+        // own that answer: ending here would hand the steer back to be sent
+        // again while the CLI still runs it.
+        this.held = { type: "deciding", usage };
+        this.heldTimer = setTimeout(() => {
+          this.heldTimer = null;
+          this.completeHeld();
+        }, this.lifecycle.gracePeriodMs);
+        return;
+      }
       this.emit({
         type: "turn.completed",
-        usage: usageOf(parsed, this.lastRequest),
+        usage,
         boundary: this.lastAssistantEntry,
       });
       return;

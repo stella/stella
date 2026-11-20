@@ -128,6 +128,7 @@ const BUILT_IN_CHAT_TOOL_DISPLAY = {
     category: "research",
     label: "search-all-past-chats",
   },
+  save_skill_package: { category: "mutation", label: "save_skill_package" },
   "search-chat-history": { category: "research", label: "search-chat-history" },
   "search-past-chats": { category: "research", label: "search-past-chats" },
   set_field_value: { category: "mutation", label: "set_field_value" },
@@ -156,6 +157,10 @@ const BUILT_IN_CHAT_TOOL_DISPLAY = {
     label: "update_reader_annotation",
   },
   use_connector_secret: { category: "mutation", label: "use_connector_secret" },
+  validate_skill_package: {
+    category: "computation",
+    label: "validate_skill_package",
+  },
   "use-browser": { category: "research", label: "use-browser" },
   web_search: { category: "research", label: "web_search" },
 } as const satisfies Record<

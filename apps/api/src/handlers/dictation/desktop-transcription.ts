@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import type { InferOk } from "better-result";
 
 import {
   defaultTranscriptionModelId,
@@ -16,23 +17,33 @@ import {
   MAX_DESKTOP_DICTATION_TRANSCRIPT_LENGTH,
 } from "@stll/api-contract/desktop-dictation-transcription";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
-import { MAX_TRANSCRIPTION_MULTIPART_BYTES } from "@stll/api-contract/transcription";
+import {
+  MAX_TRANSCRIPTION_MULTIPART_BYTES,
+  MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH,
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS,
+} from "@stll/api-contract/transcription";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { typedDictationText } from "@/api/handlers/dictation/cleanup-model";
+import { VOCABULARY_STATUS } from "@/api/handlers/dictation/provider";
 import { desktopDictationBodySchema } from "@/api/handlers/dictation/schema";
 import {
   DEFAULT_DICTATION_DEPENDENCIES,
   type DictationCaller,
   type DictationDependencies,
+  type DictationUsageKey,
   executeDictation,
+  RETAINING_MODELS_FEATURE_ID,
 } from "@/api/handlers/dictation/transcribe";
 import {
   readTranscriptionDeployment,
   type TranscriptionDeployment,
   transcriptionRetainsData,
   transcriptionServed,
+  transcriptionServedAnywhere,
 } from "@/api/handlers/dictation/transcription-deployment";
 import {
   loadOrgSettingsForAuth,
@@ -47,6 +58,7 @@ import {
 } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
@@ -55,6 +67,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import { readVocabularyHandler } from "@/api/lib/workspaces/vocabulary/read";
 
 // Its own invitation: dictation alone keeps speech on the computer, and only
 // this decision lets a linked desktop send audio. The registry makes
@@ -62,15 +75,10 @@ import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission"
 const REQUIRED_FEATURE_ID =
   "desktop-dictation-cloud" satisfies DesktopFeatureId;
 
-// A model whose provider keeps the audio is offered to members with this
-// decision only. The API lists and refuses; the desktop only refreshes its
-// model list when the decision changes.
-const RETAINING_MODELS_FEATURE_ID =
-  "desktop-dictation-retaining-models" satisfies DesktopFeatureId;
-
 /**
- * The transcription models stella AI offers this organization, none when
- * its own AI provider does not transcribe. A desktop that labels models
+ * The transcription models stella AI offers this organization, also when it
+ * brings another AI provider of its own, and none when this deployment has
+ * no transcription provider. A desktop that labels models
  * also gets the models its region does not serve, marked as leaving it,
  * after the regional ones; an older desktop reads only the regional ones,
  * without labels. The default is the model a request without one gets and
@@ -104,14 +112,6 @@ export const listDictationModels = (
   if (managedAIResidency === null) {
     return none("region");
   }
-  // Transcription runs only on the managed provider or the organization's
-  // own OpenRouter key, as the transcription endpoint requires.
-  if (
-    orgAIConfig !== null &&
-    !orgAIConfig.providers.some(({ provider }) => provider === "openrouter")
-  ) {
-    return none("provider");
-  }
   const served = transcriptionServed(deployment, orgAIConfig, {
     retainingData: labeled && retention && retainingModels,
   });
@@ -135,6 +135,7 @@ export const listDictationModels = (
     if (!labeled) {
       return { id: modelId, displayName };
     }
+    const takes = takesVocabulary(modelId);
     return retention
       ? {
           id: modelId,
@@ -142,19 +143,19 @@ export const listDictationModels = (
           provider,
           outsideRegion,
           retainsData: transcriptionRetainsData(deployment, modelId),
+          takesVocabulary: takes,
         }
-      : { id: modelId, displayName, provider, outsideRegion };
+      : {
+          id: modelId,
+          displayName,
+          provider,
+          outsideRegion,
+          takesVocabulary: takes,
+        };
   });
   if (models.length === 0) {
     // Nothing this deployment can transcribe with, or nothing in the region.
-    const servedAnywhere = Object.keys(TRANSCRIPTION_MODELS)
-      .filter(isTranscriptionModelId)
-      .some((modelId) =>
-        (["eu", "us", "global"] as const).some((endpoint) =>
-          served(modelId, endpoint),
-        ),
-      );
-    return none(servedAnywhere ? "region" : "provider");
+    return none(transcriptionServedAnywhere(served) ? "region" : "provider");
   }
   return {
     models,
@@ -270,10 +271,124 @@ export const createDesktopDictationModelsEndpoint = (
     },
   );
 
+/** A matter a recording is filed under, as the linked member sees it: its
+ *  access for usage and audit, and the names its transcription should
+ *  spell right. */
+type DesktopMatter = {
+  workspace: AccessibleWorkspace | null;
+  vocabulary: readonly string[];
+};
+
+type DesktopAccount = InferOk<
+  Awaited<ReturnType<typeof authorizeDesktopAccount>>
+>;
+
+/** The matter under the member's own access, so a matter they cannot see
+ *  is not found, with the names, case numbers and parties it holds. */
+const readDesktopMatter = async (
+  account: DesktopAccount,
+  matterId: SafeId<"workspace">,
+): Promise<DesktopMatter> => {
+  const workspace = await account.scopedDb(
+    async (tx) =>
+      (await tx.query.workspaces.findFirst({
+        where: {
+          id: { eq: matterId },
+          organizationId: { eq: account.organizationId },
+        },
+        columns: { id: true, status: true },
+      })) ?? null,
+  );
+  if (workspace === null || !workspaceIsVisible(workspace.status)) {
+    return { workspace: null, vocabulary: [] };
+  }
+  const read = await readVocabularyHandler({
+    scopedDb: account.scopedDb,
+    workspaceId: matterId,
+    organizationId: account.organizationId,
+  });
+  return {
+    workspace,
+    vocabulary: "candidates" in read ? matterTerms(read.candidates) : [],
+  };
+};
+
+/** Terms as a transcription takes them: each once whatever its case, the
+ *  first spelling kept, short enough for a hint, in order, at most the
+ *  contract's number. */
+const transcriptionTerms = (terms: Iterable<string>): string[] => {
+  const kept = new Map<string, string>();
+  for (const term of terms) {
+    const trimmed = term.trim();
+    const key = trimmed.toLocaleLowerCase();
+    if (
+      trimmed.length > 0 &&
+      trimmed.length <= MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH &&
+      !kept.has(key)
+    ) {
+      kept.set(key, trimmed);
+    }
+    if (kept.size === MAX_TRANSCRIPTION_VOCABULARY_TERMS) {
+      break;
+    }
+  }
+  return [...kept.values()];
+};
+
+/** The matter's vocabulary as a transcription takes it, the most telling
+ *  first. */
+export const matterTerms = (
+  candidates: readonly { term: string }[],
+): string[] => transcriptionTerms(candidates.map(({ term }) => term));
+
+/** What one chunk's model is told to spell right: the speaker's own custom
+ *  words first, then the matter's names, within the contract's limits. */
+export const desktopChunkVocabulary = (
+  own: readonly string[] | undefined,
+  matter: readonly string[],
+): string[] =>
+  transcriptionTerms(own === undefined ? matter : [...own, ...matter]);
+
+/** Vocabulary goes only to a model that reads it; another would refuse the
+ *  request or ignore the terms. A request without a model gets none. */
+export const takesVocabulary = (modelId: string | undefined): boolean =>
+  modelId !== undefined &&
+  isTranscriptionModelId(modelId) &&
+  VOCABULARY_STATUS[TRANSCRIPTION_MODELS[modelId].vocabularyMechanism] ===
+    "applied";
+
+/**
+ * A recording's piece is counted once however often the desktop sends it:
+ * the key is the member, the piece's own id and its audio, so an id sent
+ * again with other audio is a new piece and is counted.
+ */
+const desktopPieceUsageKey = async (
+  userId: SafeId<"user">,
+  pieceId: string,
+  audio: Blob,
+): Promise<DictationUsageKey> => {
+  const digest = sha256Hex(new Uint8Array(await audio.arrayBuffer()));
+  return {
+    idempotencyKey: `desktop-dictation-piece:${userId}:${pieceId}:${digest}`,
+    resourceId: pieceId,
+  };
+};
+
+/** The chunk with its vocabulary, for a model that reads one; any other
+ *  gets none, so a custom word never makes a chunk fail. */
+const withVocabulary = <Body extends { modelId?: string | undefined }>(
+  body: Body,
+  vocabulary: readonly string[],
+): Body & { vocabulary?: string[] } =>
+  vocabulary.length > 0 && takesVocabulary(body.modelId)
+    ? { ...body, vocabulary: [...vocabulary] }
+    : body;
+
 type DesktopTranscribeOptions = DesktopDictationOptions & {
   dependencies?: Partial<DictationDependencies>;
   admit?: typeof withActionAdmission;
   readAccountEmail?: typeof readLinkedAccountEmail;
+  readMatter?: typeof readDesktopMatter;
 };
 
 /**
@@ -305,12 +420,17 @@ const admitStandardAccount = async (
  * One audio chunk a linked desktop chose to send to stella AI, transcribed
  * the way the member transcription endpoint does (region, provider, usage
  * and limits included) and answered with its text only. Neither the audio
- * nor the text is stored.
+ * nor the text is stored. A chunk of a recording filed under a matter names
+ * it: the member must see the matter, its usage is the matter's, and a
+ * model that takes vocabulary gets the matter's names and case numbers,
+ * after the speaker's own custom words the chunk carries. Neither is
+ * logged.
  */
 export const createDesktopDictationTranscribeEndpoint = ({
   dependencies = {},
   admit,
   readAccountEmail = readLinkedAccountEmail,
+  readMatter = readDesktopMatter,
   ...options
 }: DesktopTranscribeOptions = {}) =>
   declareAggregateMutation(
@@ -327,10 +447,29 @@ export const createDesktopDictationTranscribeEndpoint = ({
         ),
       },
       async function* (ctx) {
-        const { request, body } = ctx;
+        const { request } = ctx;
+        const { pieceId, vocabulary: ownWords, ...body } = ctx.body;
         const { account, safeDb, settings, retainingModels } =
           yield* Result.await(authorizeDictation(request, options));
         yield* Result.await(admitStandardAccount(account, readAccountEmail));
+        const { matterId } = body;
+        const matter =
+          matterId === undefined
+            ? null
+            : yield* Result.await(
+                Result.tryPromise({
+                  try: async () => await readMatter(account, matterId),
+                  catch: () =>
+                    classifyFailure(
+                      new HandlerError({
+                        status: 503,
+                        code: "service_unavailable",
+                        message: "Matter access is unavailable",
+                      }),
+                      "organization_state_unreadable",
+                    ),
+                }),
+              );
         const user = { id: account.userId };
         const session = { activeOrganizationId: account.organizationId };
         const caller: DictationCaller = {
@@ -350,16 +489,10 @@ export const createDesktopDictationTranscribeEndpoint = ({
             request,
             server: null,
           }),
-          // The desktop names no matter, so no matter is ever looked up.
-          getWorkspaceAccess: async () =>
-            await Promise.reject(
-              classifyFailure(
-                new HandlerError({
-                  status: 500,
-                  message: "A desktop dictation named no matter",
-                }),
-                "organization_state_unreadable",
-              ),
+          // Only the matter read above is ever looked up.
+          getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+            await Promise.resolve(
+              matter?.workspace?.id === workspaceId ? matter.workspace : null,
             ),
         };
         return yield* admitFiniteAction({
@@ -375,7 +508,27 @@ export const createDesktopDictationTranscribeEndpoint = ({
           async *handler({ modelAdmission }) {
             const result = yield* Result.await(
               executeDictation(
-                { ...caller, body, request, modelAdmission },
+                {
+                  ...caller,
+                  body: withVocabulary(
+                    body,
+                    desktopChunkVocabulary(
+                      ownWords,
+                      matter === null ? [] : matter.vocabulary,
+                    ),
+                  ),
+                  request,
+                  modelAdmission,
+                  ...(pieceId === undefined
+                    ? {}
+                    : {
+                        usageKey: await desktopPieceUsageKey(
+                          account.userId,
+                          pieceId,
+                          body.file,
+                        ),
+                      }),
+                },
                 { ...DEFAULT_DICTATION_DEPENDENCIES, ...dependencies },
               ),
             );

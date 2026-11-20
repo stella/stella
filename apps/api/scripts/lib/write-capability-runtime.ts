@@ -1,6 +1,7 @@
 // Embed freshly derived contract data; only the npm package consumes shards.
 import { panic } from "better-result";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import { serializeDispatchModule } from "./capability-catalog";
 import { buildCapabilityHandlerIndex } from "./capability-handler-index";
@@ -22,7 +23,7 @@ export const writeCapabilityRuntime = async (
     }
     return entry.id;
   });
-  const handlers = await buildCapabilityHandlerIndex(root.pathname, ids);
+  const handlers = await buildCapabilityHandlerIndex(fileURLToPath(root), ids);
   await mkdir(new URL("capability-dispatch/", directory), { recursive: true });
   for (const entry of entries) {
     if (
@@ -65,7 +66,7 @@ export const writeCapabilityRuntime = async (
     );
   }
   for (const file of new Bun.Glob("*.ts").scanSync({
-    cwd: new URL("capability-dispatch/", directory).pathname,
+    cwd: fileURLToPath(new URL("capability-dispatch/", directory)),
   })) {
     if (!ids.includes(file.slice(0, -3))) {
       await rm(new URL(`capability-dispatch/${file}`, directory));

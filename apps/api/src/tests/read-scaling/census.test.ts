@@ -15,6 +15,10 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import {
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
+} from "./case-law-browse-hubs";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -35,6 +39,7 @@ import {
   conflictCheckListScalingScenario,
   conflictCheckReadScalingScenario,
 } from "./conflict-checks";
+import { dataBoxPreviewScalingScenario } from "./data-box-preview";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionAnchorRedirectsScalingScenario } from "./decision-anchor-redirects";
@@ -43,6 +48,7 @@ import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   dictationScalingScenario,
 } from "./dictation";
 import {
@@ -76,6 +82,7 @@ import {
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
+import { skillExportScalingScenario } from "./skill-export";
 import {
   softLawReadScalingScenario,
   softLawSearchScalingScenario,
@@ -110,6 +117,8 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   decisionAnchorRedirectsScalingScenario,
   decisionFilterValidationScalingScenario,
+  browseCalendarScalingScenario,
+  browseCourtsScalingScenario,
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
@@ -131,6 +140,7 @@ const measuredApiScenarios = [
   ...verificationGraphScalingScenarios,
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
+  dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -149,11 +159,13 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,
   softLawSearchScalingScenario,
   softLawReadScalingScenario,
   ...sharepointBrowseScalingScenarios,
+  skillExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

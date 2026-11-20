@@ -376,6 +376,7 @@
         "./capabilities/skills.delete.json",
         "./capabilities/skills.discover.json",
         "./capabilities/skills.drafts.generate.json",
+        "./capabilities/skills.export.json",
         "./capabilities/skills.from-blueprint.create.json",
         "./capabilities/skills.from-url.import.json",
         "./capabilities/skills.get.json",

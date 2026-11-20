@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { SlidersHorizontalIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import {
   Popover,
@@ -25,6 +24,10 @@ import type {
   FacetItem,
   FacetSourceBucket,
 } from "@/components/public-law-table/public-law-facets.logic";
+import {
+  PublicLawFiltersButton,
+  PublicLawFiltersLabel,
+} from "@/components/public-law-table/public-law-results-toolbar.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type PublicLawFilterPopoverProps = {
@@ -49,20 +52,11 @@ export const PublicLawFilterPopover = ({
   children,
 }: PublicLawFilterPopoverProps) => {
   const t = useTranslations();
-  const format = useFormatter();
 
   return (
     <Popover>
-      <PopoverTrigger
-        render={<Button className="shrink-0" size="sm" variant="outline" />}
-      >
-        <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
-        {t("common.filters")}
-        {activeFilterCount > 0 && (
-          <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
-            {format.number(activeFilterCount)}
-          </span>
-        )}
+      <PopoverTrigger render={<PublicLawFiltersButton />}>
+        <PublicLawFiltersLabel activeFilterCount={activeFilterCount} />
       </PopoverTrigger>
       <PopoverPanel
         align="start"

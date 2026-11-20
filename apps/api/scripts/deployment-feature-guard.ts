@@ -79,6 +79,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "The caller's private saved searches support search on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/data-box",
+    "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/organization-settings/correspondence/data-boxes",
     "Organization data-box settings support matter correspondence on every deployment",
   ],
@@ -103,8 +107,20 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Storing a reviewed skill draft is a private skill create under the skill create permission on every deployment",
   ],
   [
+    "/v1/skills/:skillId/export",
+    "Downloading a skill the caller may read as an Agent Skills archive is available on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/dictation/models",
+    "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/cleanup",
+    "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
   [
     "/v1/organizations/audit-export",
@@ -132,7 +148,7 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   [
     "/v1/desktop/matters",
-    "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+    "Desktop matter search enforces the caller's activity or dictation feature decision and matter access on every deployment",
   ],
   [
     "/v1/chat/runs/active",
@@ -242,6 +258,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/transcribe",
     "Desktop dictation transcription enforces the caller's cloud dictation feature decision, its dictation kill switch, provider availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts",
+    "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

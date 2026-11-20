@@ -1233,6 +1233,13 @@
       "treatment": "Vėlesnis vertinimas"
     },
     "analyzing": "Analizuojama...",
+    "browse": {
+      "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
+      "courts": "Teismai",
+      "days": "Dienos",
+      "jurisdictionDescription": "{country}: teismų sprendimai viešoje stella teisės duomenų bazėje pagal teismą, metus ir mėnesį.",
+      "periodDescription": "{court} ({country}), {period}: sprendimai viešoje stella teisės duomenų bazėje."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Paieška laikinai nepasiekiama"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ieškokite pagal bylos numerį arba sprendimo ECLI, jei jį žinote.",
+        "message": "Nerasta sprendimo, tiksliai atitinkančio šią rinkinio nuorodą."
+      },
       "noHits": {
         "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
         "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."
@@ -1721,6 +1732,7 @@
       "unorderedList": "Ženklintas sąrašas",
       "wholeBlockRequired": "Norėdami pakeisti stilių, pažymėkite visą pastraipą arba sąrašą."
     },
+    "answerNotFinished": "stella negalėjo užbaigti šio atsakymo.",
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
       "unverified": "Citatos patikrinti nepavyko",
@@ -2120,6 +2132,7 @@
     },
     "newChat": "Naujas pokalbis",
     "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
+    "nextSteps": "Tolesni žingsniai",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
@@ -2226,7 +2239,6 @@
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
       "cloudDescription": "Veikia debesyje. Pasiekiama iš bet kur.",
-      "harnessModels": "{harness} modeliai",
       "hintCheck": "Patikrinkite jį per stella desktop",
       "hintInstall": "Įdiekite jį per stella desktop",
       "hintOffline": "Atidarykite stella desktop savo kompiuteryje",
@@ -2236,8 +2248,9 @@
       "localFolderSelection": "Jūsų kompiuteris · {harness} · {folder}",
       "localPlace": "Jūsų kompiuteris, {harness}",
       "localSelection": "Jūsų kompiuteris · {harness}",
-      "modelDefault": "Numatytasis (rekomenduojamas)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Šis naujas pokalbis pradėtas debesyje, nes {harness} jūsų kompiuteryje nepasiekiamas ({state})",
+      "startedInCloudCheckFailed": "Šis naujas pokalbis pradėtas debesyje, nes nepavyko patikrinti jūsų kompiuterio",
       "stepsCheck": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir patikrinkite agentą {harness} skiltyje Nustatymai › Bendra › DI prenumeratos.",
       "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
       "stepsSignInClaudeCode": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
@@ -2304,13 +2317,26 @@
       "title": "Jūsų žinutė laukia eilėje, kol agentas baigs",
       "turnNotRunning": "Agentas šiuo metu nedirba."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Rastas # sprendimas} few {Rasti # sprendimai} many {Rasta # sprendimo} other {Rasta # sprendimų}}",
+      "decisionsFoundUsed": "{found, plural, one {Rastas # sprendimas} few {Rasti # sprendimai} many {Rasta # sprendimo} other {Rasta # sprendimų}}, {used, plural, one {# panaudotas atsakyme} few {# panaudoti atsakyme} many {# panaudota atsakyme} other {# panaudota atsakyme}}",
+      "filterAsOf": "{date} būklė",
+      "legislationFound": "{count, plural, one {# teisės aktas ar nuostata} few {# teisės aktai ir nuostatos} many {# teisės akto ir nuostatos} other {# teisės aktų ir nuostatų}}",
+      "lookupDidNotGoThrough": "Ši paieška nepavyko.",
+      "moreFound": "{count, plural, one {dar # nerodomas} few {dar # nerodomi} many {dar # nerodoma} other {dar # nerodoma}}",
+      "moreLookups": "{count, plural, one {Dar # užklausa nerodoma} few {Dar # užklausos nerodomos} many {Dar # užklausos nerodoma} other {Dar # užklausų nerodoma}}",
+      "notRecorded": "Šis žingsnis atliktas anksčiau, nei stella pradėjo įrašyti, ko ieško kiekvienas žingsnis.",
+      "nothingFound": "Nieko nerasta.",
+      "technicalDetails": "Techninė informacija",
+      "usedInAnswer": "Panaudota atsakyme",
+      "versionFrom": "Redakcija nuo {date}"
+    },
     "stopFailed": "Nepavyko sustabdyti atsakymo. Bandykite dar kartą.",
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "stopping": "Stabdoma…",
     "suggestTitle": "Pasiūlyti pavadinimą",
     "suggestTitleUnavailableAnonymized": "Anonimizuotiems pokalbiams pavadinimų pasiūlymai negalimi.",
-    "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
     "suggestingTitle": "Siūlomas pavadinimas…",
     "suggestionSeverity": {
       "style": "Stilius",
@@ -2321,7 +2347,6 @@
       "accepted": "Pritaikyta",
       "rejected": "Atmesta"
     },
-    "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "tableChart": {
       "bar": "Stulpelinė",
       "kind": "Diagramos tipas",
@@ -2368,10 +2393,10 @@
       "delete_reader_annotation": "Ištrinti paryškinimą ar komentarą",
       "delete_task": "Ištrinti užduotį",
       "delete_time_entry": "Ištrinti laiko įrašą",
-      "describe-stella-api": "Ruošiama duomenų paieška",
-      "describe-stella-function": "Ruošiama duomenų paieška",
+      "describe-stella-api": "Parenkami šaltiniai",
+      "describe-stella-function": "Parenkami šaltiniai",
       "describe_template": "Skaitomi šablono laukai",
-      "discover_tools": "Ruošiama duomenų paieška",
+      "discover_tools": "Parenkami šaltiniai",
       "docxEditMore": "{count, plural, one {dar # redagavimas} few {dar # redagavimai} many {dar # redagavimo} other {dar # redagavimų}}",
       "docxEditSummary": "{count, plural, one {# siūlomas redagavimas} few {# siūlomi redagavimai} many {# siūlomo redagavimo} other {# siūlomų redagavimų}}",
       "execute-typescript": "Skaitomi bylos duomenys",
@@ -2412,6 +2437,7 @@
       "save_document": "Išsaugoti dokumentą",
       "save_matter": "Išsaugoti bylą",
       "save_playbook": "Išsaugoti peržiūros vadovą",
+      "save_skill_package": "Išsaugoti įgūdį",
       "save_task": "Išsaugoti užduotį",
       "save_template": "Išsaugoti šabloną",
       "save_time_entry": "Išsaugoti laiko įrašą",
@@ -2440,6 +2466,7 @@
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",
       "user_message": "Išsiųsta agentui dirbant",
+      "validate_skill_package": "Patikrinti įgūdį",
       "web_search": "Ieškoma internete"
     },
     "toolCall": {
@@ -2447,11 +2474,10 @@
       "browserPressKey": "Paspausti klavišą {key} elemente „{target}“ puslapyje {url}",
       "browserSelect": "Pasirinkti „{option}“ elemente „{target}“ puslapyje {url}",
       "browserType": "Įvesti tekstą į „{target}“ puslapyje {url}",
-      "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
       "commandExited": "{command} (išėjimo kodas {code})",
       "consoleLogs": "Konsolės išvestis",
       "exactCall": "Tikslus iškvietimas",
-      "failed": "Šis žingsnis nepavyko; stella tęs kitu būdu.",
+      "failed": "Šis žingsnis nepavyko.",
       "field": "Laukas",
       "input": "Įvestis",
       "interrupted": "Nutraukta nebaigus",
@@ -2468,11 +2494,17 @@
         "notStored": "Iš šio žingsnio nieko neišsaugota",
         "runBudgetReached": "Neišsaugota: šis vykdymas jau išsaugojo tiek, kiek leidžiama vienam vykdymui"
       },
+      "lookupCount": "{count, plural, one {# užklausa} few {# užklausos} many {# užklausos} other {# užklausų}}",
       "output": "Išvestis",
       "patternInPath": "{pattern} ({path})",
       "proposedPlan": "Siūlomas planas",
       "readFile": "Skaitomas failas",
+      "readingLegislation": "Skaitomi teisės aktai",
+      "retried": "Bandyta dar kartą",
+      "retriedDetail": "Šis žingsnis nepavyko, todėl stella pabandė kitaip.",
       "searchFiles": "Ieškoma failuose",
+      "searchingCaseLaw": "Ieškoma teismų praktikoje",
+      "searchingLegislationAndCaseLaw": "Ieškoma teisės aktuose ir teismų praktikoje",
       "signInToContinue": "Prisijunkite, kad tęstumėte",
       "sourceCode": "Pirminis kodas",
       "statusWaiting": "Laukiama",
@@ -2738,6 +2770,7 @@
     "done": "Atlikta",
     "doubleClickToRename": "Spustelėkite du kartus, kad pervadintumėte",
     "download": "Atsisiųsti",
+    "downloadOriginal": "Atsisiųsti originalą",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Perkėlimas atšauktas: {itemName}.} few {Perkėlimas atšauktas: {itemName}.} other {Perkėlimas atšauktas: {itemName}.} many {Perkėlimas atšauktas: {itemName}.}}",
       "droppedOn": "{count, plural, one {Numetimas ant {destinationName} baigtas: {itemName}.} few {Numetimas ant {destinationName} baigtas: {itemName}.} other {Numetimas ant {destinationName} baigtas: {itemName}.} many {Numetimas ant {destinationName} baigtas: {itemName}.}}",
@@ -3325,6 +3358,8 @@
       "contact": "Kontaktas: {name}",
       "deliveredAt": "Pristatyta į dėžutę",
       "delivery": "Įteikimas",
+      "deliveryEvents": "Pristatymo eiga",
+      "deliveryReceipt": "Pristatymo patvirtinimas",
       "directionUnknown": "Kryptis nežinoma",
       "messageId": "Pranešimo ID",
       "moreContacts": "Su šia duomenų dėžute susieta daugiau kontaktų.",
@@ -3337,6 +3372,8 @@
       "sent": "Išsiųstas",
       "statedInFile": "Duomenų dėžutės pranešimas (pagal failą)",
       "toHands": "Asmeniškai: {name}",
+      "unlinkedFiles": "Norėdami atidaryti priedus, prie kurių nėra nuorodos, atsisiųskite originalų ZFO failą.",
+      "unreadable": "Failo nepavyko perskaityti nei kaip duomenų dėžutės pranešimo, nei kaip pristatymo patvirtinimo.",
       "uploaded": "Įkeltas duomenų dėžutės pranešimas"
     },
     "deliveredBy": "Pristatė <address>{sender}</address>",
@@ -4040,6 +4077,12 @@
     "versionCreatedTitle": "Versija sukurta",
     "viewOnly": "Tik peržiūra"
   },
+  "guidance": {
+    "notCaseLaw": "Reguliavimo institucijos paskelbtos gairės. Tai nėra teismo sprendimas.",
+    "openAtPublisher": "Atidaryti leidėjo svetainėje",
+    "source": "Šaltinis: {attribution}",
+    "textUnavailable": "Šio dokumento teksto čia nėra. Perskaitykite jį leidėjo svetainėje."
+  },
   "guides": {
     "action": {
       "replay": "Pradėti iš naujo",
@@ -4655,7 +4698,7 @@
       "importSkill": "Importuoti iš URL",
       "importTitle": "Importuoti įgūdį",
       "importedSkills": "{count, plural, one {Importuotas # įgūdis} few {Importuoti # įgūdžiai} other {Importuota # įgūdžių} many {Importuota # įgūdžių}}",
-      "invalidPath": "Kelyje galima naudoti tik mažąsias raides, skaitmenis, taškus, brūkšnelius arba pabraukimus",
+      "invalidPath": "Naudokite santykinį kelią. Failų ir aplankų pavadinimai negali būti . ar .., prasidėti ar baigtis tarpu, baigtis tašku arba turėti \\ : * ? \" |, kampinių skliaustų ar valdymo simbolių.",
       "invocationAuto": "Automatiškai",
       "invocationAutoHelp": "DI gali pats naudoti šį įgūdį, kai jis tinka užklausai.",
       "invocationManual": "Tik iškvietus",
@@ -5730,6 +5773,9 @@
       "chatNotificationsDescription": "Gaukite pranešimą iš šios naršyklės, kai pokalbio atsakymas baigiamas, kol stella veikia fone.",
       "chatNotificationsToggle": "Pranešti, kai atsakymas paruoštas arba laukia mano veiksmo",
       "chatNotificationsUnsupported": "Ši naršyklė nepalaiko pranešimų.",
+      "chatTechnicalDetails": "Techninė informacija pokalbyje",
+      "chatTechnicalDetailsDescription": "Kiekvienas pokalbio žingsnis rodo, ko ieškojo ir ką rado. Įjungę matysite ir už jo esantį kodą bei neapdorotus rezultatus.",
+      "chatTechnicalDetailsToggle": "Rodyti techninę informaciją pokalbyje",
       "confirmDelete": "Patvirtinti paskyros ištrynimą",
       "dangerZone": "Pavojinga zona",
       "dangerZoneDescription": "Visam laikui ištrinti paskyros prieigą ir privačius paskyros duomenis.",
@@ -6305,6 +6351,7 @@
     "compareUnstructured": "Viena iš redakcijų prieinama tik kaip paprastas tekstas, todėl jų palyginti negalima.",
     "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
     "compareWholeAct": "Palyginti visą aktą",
+    "compareWithPreviousWording": "Palyginti su ankstesne redakcija",
     "compareWithVersion": "Palyginti su redakcija {version}",
     "currentWording": "Galiojanti redakcija",
     "description": "Vieša konsoliduotų teisės aktų duomenų bazė, indeksuojama pagal aktą ir jo redakciją.",
@@ -6318,6 +6365,7 @@
       "withdrawn": "Leidėjas jo nebeskelbia"
     },
     "inForceSince": "Galioja nuo {date}",
+    "inForceSinceAtLeast": "Galioja ne vėliau kaip nuo {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Pagrindinis sprendimas",
     "leadingDecisionsExplanation": "Pirmasis paminėjimas kiekviename sprendime, surikiuotas pagal citavimo autoritetą: įvertintos gaunamos citatos, atsižvelgiant į teismo rangą, citatos pobūdį ir senumą.",
@@ -6328,6 +6376,7 @@
     "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
     "pendingChanges": "Būsimi pakeitimai",
     "pendingChangesIncomplete": "Skelbėjo duomenys gali neapimti visų būsimų pakeitimų.",
+    "provisionAbsentVersions": "{count, plural, =1 {Šioje įstatymo redakcijoje nėra} one {Šiose įstatymo redakcijose nėra (#)} few {Šiose įstatymo redakcijose nėra (#)} many {Šiose įstatymo redakcijose nėra (#)} other {Šiose įstatymo redakcijose nėra (#)}}",
     "provisionAskContextPrompt": "\n\nIštraukos, kuriose nuostata taikoma autoritetingiausiuose sprendimuose:\n{passages}\n\nNaudok teismų praktikos įrankius, kad perskaitytum bet kurį iš šių sprendimų visą arba rastum daugiau sprendimų, kuriuose nuostata cituojama.",
     "provisionAskSummarize": "Apibendrinti, kaip teismai taiko šią nuostatą",
     "provisionAskSummarizePrompt": "Apibendrink, kaip teismai taiko {subject}, ir nurodyk sprendimus, kuriais remiesi.",
@@ -6338,7 +6387,14 @@
     "provisionPartTextUnavailable": "{provisionLabel} tekstas neprieinamas",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "taip pat nuo {date}",
+    "provisionRunShowVersions": "Rodyti įstatymo redakcijas laikotarpiu {range}",
+    "provisionRunUnchanged": "{count, plural, one {nepakitusi per # įstatymo redakciją} few {nepakitusi per # įstatymo redakcijas} many {nepakitusi per # įstatymo redakcijos} other {nepakitusi per # įstatymo redakcijų}}",
     "provisionTextUnavailable": "Šios redakcijos tekstas nepasiekiamas",
+    "provisionVersionsAll": "Visos įstatymo redakcijos",
+    "provisionWordingAdded": "Nauja nuostata",
+    "provisionWordingChanged": "Pakeista",
+    "provisionWordingEarliest": "Seniausia turima redakcija",
     "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
     "searchLabel": "Ieškoti teisės aktų",

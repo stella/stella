@@ -8,7 +8,6 @@ import {
   CHAT_CLOUD_RUN_TARGET,
   CHAT_RUN_TARGET_KIND,
   type ChatLocalRunHarness,
-  type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 import { desktopAgentSettingsUrl } from "@stll/api-contract/desktop-account-link";
@@ -24,10 +23,10 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { EFFORT_LABEL_KEY } from "@/components/chat/chat-model-options-menu.logic";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   CHAT_OWN_FOLDER_VALUE,
+  type ChatCloudStart,
   type ChatLocalFolderOption,
   chatLocalFolderOptions,
   type ChatLocalHarnessOption,
@@ -40,7 +39,6 @@ import {
   type LocalRunTargetState,
   type PermissionAvailability,
   permissionView,
-  reasoningEffortChoices,
   runFolderValue,
   runOnPlaceValue,
   sameRunTarget,
@@ -86,9 +84,6 @@ const UNAVAILABLE_PERMISSION_KEY = {
   Exclude<PermissionAvailability, "available">,
   TranslationKey
 >;
-
-/** The radio value of leaving the reasoning effort to the harness. */
-const HARNESS_DEFAULT_EFFORT = "harness-default";
 
 /** How a harness that runs in one mode behaves, said once in its place. */
 const FIXED_PERMISSION_KEY = {
@@ -156,6 +151,29 @@ export const useLocalRunTargetStateLabel = () => {
 };
 
 /**
+ * Why a new chat started in the cloud although the member last chose their
+ * computer, as the where chip says it.
+ */
+export const useCloudStartLabel = () => {
+  const t = useTranslations();
+  const stateLabel = useLocalRunTargetStateLabel();
+  return ({ harness, why }: ChatCloudStart): string => {
+    switch (why.type) {
+      case "unavailable":
+        return t("chat.runOn.startedInCloud", {
+          harness: CHAT_LOCAL_HARNESS_NAMES[harness],
+          state: stateLabel(why.state) ?? t("chat.localRun.stateUnavailable"),
+        });
+      case "check_failed":
+        return t("chat.runOn.startedInCloudCheckFailed");
+      default:
+        why satisfies never;
+        return panic("Unknown cloud start");
+    }
+  };
+};
+
+/**
  * What a member does about a harness that cannot take a turn now, said in
  * its row of the where chip; a usage limit says when it lifts instead.
  */
@@ -167,7 +185,7 @@ const UNAVAILABLE_HINT_KEY = {
   offline: "chat.runOn.hintOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
-const useHarnessHint = () => {
+export const useHarnessHint = () => {
   const t = useTranslations();
   const stateLabel = useHarnessStateLabel();
   return (option: ChatLocalHarnessOption): string | null => {
@@ -211,7 +229,11 @@ const NO_HARNESS_OPTIONS: readonly ChatLocalHarnessOption[] = [];
  * The member's computers could not be read: nothing is claimed about them,
  * and the member can read them again.
  */
-const ReadinessRetry = ({ retry }: { retry: () => Promise<unknown> }) => {
+export const ReadinessRetry = ({
+  retry,
+}: {
+  retry: () => Promise<unknown>;
+}) => {
   const t = useTranslations();
   return (
     <>
@@ -353,6 +375,8 @@ type ChatRunTargetMenuProps = {
   enabled: boolean;
   selected: ChatRunTarget;
   onSelect: (target: ChatRunTarget) => void;
+  /** Why a new chat started in the cloud, said first; `null` otherwise. */
+  startedInCloud: ChatCloudStart | null;
 };
 
 /**
@@ -367,9 +391,11 @@ export const ChatRunTargetMenu = ({
   enabled,
   selected,
   onSelect,
+  startedInCloud,
 }: ChatRunTargetMenuProps) => {
   const t = useTranslations();
   const hint = useHarnessHint();
+  const cloudStartLabel = useCloudStartLabel();
   const runnersView = queryView(
     useQuery({
       ...localRunnersOptions(activeOrganizationId),
@@ -394,6 +420,14 @@ export const ChatRunTargetMenu = ({
 
   return (
     <>
+      {startedInCloud !== null && (
+        <>
+          <p className="text-muted-foreground px-2 py-1.5 text-xs text-pretty">
+            {cloudStartLabel(startedInCloud)}
+          </p>
+          <MenuSeparator />
+        </>
+      )}
       <MenuRadioGroup value={runOnPlaceValue(selected)}>
         {/* Picking a place or an agent is the choice the menu exists for,
             so it closes; a permission pick keeps it open for another. */}
@@ -524,162 +558,6 @@ export const ChatRunTargetMenu = ({
                   }
                   title={t(LOCAL_RUN_PERMISSION_KEYS[mode].label)}
                 />
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-        </>
-      )}
-    </>
-  );
-};
-
-type LocalModelOptionsProps = {
-  activeOrganizationId: string;
-  enabled: boolean;
-  selected: ChatLocalRunTarget;
-  onSelect: (target: ChatRunTarget) => void;
-};
-
-/**
- * The model chip's menu for a chat on the member's computer: the agent's
- * recommended model first, then the rest by the names the agent gives them,
- * then the reasoning efforts the chosen model offers. A model the agent no
- * longer offers stays listed, marked so, until another is picked.
- */
-export const LocalModelOptions = ({
-  activeOrganizationId,
-  enabled,
-  selected,
-  onSelect,
-}: LocalModelOptionsProps) => {
-  const t = useTranslations();
-  const hint = useHarnessHint();
-  const runnersView = queryView(
-    useQuery({
-      ...localRunnersOptions(activeOrganizationId),
-      enabled,
-    }),
-  );
-  const readiness =
-    runnersView.type === "items" ? runnersView.items : undefined;
-  const harness = CHAT_LOCAL_HARNESS_NAMES[selected.harness];
-  if (runnersView.type === "error") {
-    return <ReadinessRetry retry={runnersView.retry} />;
-  }
-  if (runnersView.type === "pending") {
-    return (
-      <p className="text-muted-foreground px-2.5 py-2 text-xs">
-        {t("common.loading")}
-      </p>
-    );
-  }
-  // A turn in a linked folder runs on the folder's computer: its models are
-  // that computer's.
-  const options = chatLocalHarnessOptionsFor(readiness, selected);
-  const option = options?.find(
-    (candidate) => candidate.harness === selected.harness,
-  );
-  if (option?.state !== "ready") {
-    return (
-      <p className="text-muted-foreground px-2.5 py-2 text-xs text-pretty">
-        {option === undefined
-          ? t("chat.localRun.stateUnavailable")
-          : hint(option)}
-      </p>
-    );
-  }
-  // An agent that marks no default (an older desktop) gets its models in
-  // its own order, none called recommended.
-  const recommended =
-    option.models.find(({ isDefault }) => isDefault === true) ?? null;
-  const others = option.models.filter(({ id }) => id !== recommended?.id);
-  const offered = option.models.some(({ id }) => id === selected.model);
-  const choose = (model: string) => {
-    if (model !== selected.model) {
-      onSelect(
-        localRunTargetFor({
-          selected,
-          option,
-          model,
-          maxApprovals: localRunMaxApprovals(readiness),
-        }),
-      );
-    }
-  };
-  const efforts = reasoningEffortChoices(
-    selected,
-    options ?? NO_HARNESS_OPTIONS,
-  );
-  const chooseEffort = (target: ChatLocalRunTarget) => {
-    if (!sameRunTarget(target, selected)) {
-      onSelect(target);
-    }
-  };
-  return (
-    <>
-      <MenuRadioGroup value={selected.model}>
-        <MenuGroupLabel>
-          {t("chat.runOn.harnessModels", { harness })}
-        </MenuGroupLabel>
-        {recommended !== null && (
-          <MenuRadioItem
-            closeOnClick
-            onClick={() => choose(recommended.id)}
-            value={recommended.id}
-          >
-            <PlaceLabel
-              description={recommended.label}
-              title={t("chat.runOn.modelDefault")}
-            />
-          </MenuRadioItem>
-        )}
-        {others.map((model) => (
-          <MenuRadioItem
-            closeOnClick
-            key={model.id}
-            onClick={() => choose(model.id)}
-            value={model.id}
-          >
-            <TruncatedText render={<BidiText as="span" />}>
-              {model.label}
-            </TruncatedText>
-          </MenuRadioItem>
-        ))}
-        {!offered && (
-          <MenuRadioItem disabled value={selected.model}>
-            <PlaceLabel
-              description={t("chat.localRun.stateModelUnavailable")}
-              title={selected.model}
-            />
-          </MenuRadioItem>
-        )}
-      </MenuRadioGroup>
-      {efforts !== null && (
-        <>
-          <MenuSeparator />
-          <MenuRadioGroup
-            value={selected.reasoningEffort ?? HARNESS_DEFAULT_EFFORT}
-          >
-            <MenuGroupLabel>
-              {t("chat.modelSelector.effortLabel")}
-            </MenuGroupLabel>
-            <MenuRadioItem
-              onClick={() =>
-                chooseEffort({ ...selected, reasoningEffort: null })
-              }
-              value={HARNESS_DEFAULT_EFFORT}
-            >
-              {t("chat.modelSelector.effortValues.providerDefault")}
-            </MenuRadioItem>
-            {efforts.map((effort) => (
-              <MenuRadioItem
-                key={effort}
-                onClick={() =>
-                  chooseEffort({ ...selected, reasoningEffort: effort })
-                }
-                value={effort}
-              >
-                {t(EFFORT_LABEL_KEY[effort])}
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>

@@ -52,9 +52,23 @@ const DEFAULT_PROPERTY_TEST_TIMEOUT_MS = 5000;
 // details are invariant in the value type, so it is not assignable to
 // `Plugin<Ts>`. The plugin never reads generated values: it times each run
 // and clears its timer when the runs complete.
-const timeLimitPlugin = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+const timeLimitPlugin = <Ts>(
+  timeLimit: number,
+  options?: { failOnInterrupt: boolean },
+): fc.Plugin<Ts> =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the plugin never reads generated values
-  fc.interruptAfterTimeLimit(timeLimit) as fc.Plugin<Ts>;
+  fc.interruptAfterTimeLimit(timeLimit, options) as fc.Plugin<Ts>;
+
+/**
+ * A budget on a whole property run, its shrinking included, for properties
+ * whose runs are slow (a real database per run). Reaching it fails the
+ * property, reporting the smallest counterexample found so far, so a slow
+ * shrink still ends with a replayable failure instead of a test timeout.
+ * Scale the budget with `propertyTestTimeout` so the nightly sweep's larger
+ * run count fits it.
+ */
+export const failAfterTimeLimit = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+  timeLimitPlugin<Ts>(timeLimit, { failOnInterrupt: true });
 
 // Treat the common CI values as enabled, but honor an explicit opt-out
 // (`CI=false`/`0`) so verbose reporting can be silenced locally.

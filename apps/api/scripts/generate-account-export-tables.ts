@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import {
   formattedLikeRepository,
   writeOrCheckArtifacts,
@@ -15,10 +17,12 @@ if (import.meta.main) {
   process.exitCode = await writeOrCheckArtifacts(
     [
       {
-        path: new URL(
-          "../src/lib/account-export/user-owned-tables.gen.ts",
-          import.meta.url,
-        ).pathname,
+        path: fileURLToPath(
+          new URL(
+            "../src/lib/account-export/user-owned-tables.gen.ts",
+            import.meta.url,
+          ),
+        ),
         contents,
       },
     ],

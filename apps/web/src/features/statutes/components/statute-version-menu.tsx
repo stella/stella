@@ -1,3 +1,5 @@
+import type { PropsWithChildren } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -79,8 +81,7 @@ export const StatuteVersionMenu = ({
   onVersionChange,
   versions,
 }: StatuteVersionMenuProps) => {
-  const t = useTranslations();
-  const format = useFormatter();
+  const versionLabel = useStatuteVersionLabel();
 
   if (versions.length < 2) {
     return null;
@@ -93,15 +94,26 @@ export const StatuteVersionMenu = ({
     return null;
   }
 
-  const rows = versions.map((version) => {
-    const displayStatus = resolveStatuteDisplayStatus({
-      status: version.status,
-      validFrom: version.versionValidFrom,
-    });
-    return { displayStatus, version };
-  });
+  return (
+    <StatuteVersionMenuPopover triggerLabel={versionLabel(currentVersion)}>
+      <StatuteVersionList
+        currentVersionId={currentVersionId}
+        onCompare={onCompare}
+        onVersionChange={onVersionChange}
+        versions={versions}
+      />
+    </StatuteVersionMenuPopover>
+  );
+};
 
-  const versionLabel = (version: PublicStatuteVersion): string => {
+/**
+ * How a version is named in the menu: its window, or the day a version not
+ * yet in force takes effect.
+ */
+export const useStatuteVersionLabel = () => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (version: PublicStatuteVersion): string => {
     const futureDate =
       version.versionValidTo === null &&
       resolveStatuteDisplayStatus({
@@ -121,141 +133,167 @@ export const StatuteVersionMenu = ({
         })
       : t("lawHome.inForceFrom", { date: futureDate });
   };
+};
+
+type StatuteVersionMenuPopoverProps = PropsWithChildren<{
+  onOpenChange?: (open: boolean) => void;
+  triggerLabel: string;
+}>;
+
+/** The menu's trigger, named by the version on screen, and its popup. */
+export const StatuteVersionMenuPopover = ({
+  children,
+  onOpenChange,
+  triggerLabel,
+}: StatuteVersionMenuPopoverProps) => (
+  <Popover {...(onOpenChange === undefined ? {} : { onOpenChange })}>
+    <PopoverTrigger
+      render={
+        <Button size="sm" variant="ghost">
+          <TruncatedText className="max-w-52 tabular-nums">
+            {triggerLabel}
+          </TruncatedText>
+          <ChevronDownIcon className="size-3.5" />
+        </Button>
+      }
+    />
+    <PopoverPopup
+      align="end"
+      className="w-[min(28rem,var(--available-width))]"
+      padding="none"
+      side="bottom"
+    >
+      {children}
+    </PopoverPopup>
+  </Popover>
+);
+
+/** Every version of the Work, one row each, newest first. */
+export const StatuteVersionList = ({
+  currentVersionId,
+  onCompare,
+  onVersionChange,
+  versions,
+}: StatuteVersionMenuProps) => {
+  const t = useTranslations();
+  const versionLabel = useStatuteVersionLabel();
+  const rows = versions.map((version) => {
+    const displayStatus = resolveStatuteDisplayStatus({
+      status: version.status,
+      validFrom: version.versionValidFrom,
+    });
+    return { displayStatus, version };
+  });
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <Button size="sm" variant="ghost">
-            <TruncatedText className="max-w-52 tabular-nums">
-              {versionLabel(currentVersion)}
-            </TruncatedText>
-            <ChevronDownIcon className="size-3.5" />
-          </Button>
-        }
+    <ol className="relative py-1">
+      <span
+        aria-hidden="true"
+        className="bg-border absolute inset-y-4 start-[1.15rem] w-px"
       />
-      <PopoverPopup
-        align="end"
-        className="w-[min(28rem,var(--available-width))]"
-        padding="none"
-        side="bottom"
-      >
-        <ol className="relative py-1">
-          <span
-            aria-hidden="true"
-            className="bg-border absolute inset-y-4 start-[1.15rem] w-px"
-          />
-          {rows.map(({ displayStatus, version }) => {
-            const selected = version.id === currentVersionId;
-            // A version that cannot apply is labelled for what it is, even
-            // as the default of a Work with nothing else, and its dates are
-            // never offered as a window to compare by.
-            const ineligibleLabel = ineligibleExpressionLabelKey(version);
-            const inForce = version.isDefault && ineligibleLabel === null;
-            const compareFrom =
-              selected || ineligibleLabel !== null
-                ? null
-                : version.versionValidFrom;
-            // The dot's colour says future or past; only the version in
-            // force, and a status the colour cannot tell apart, get a label.
-            const rowLabel =
-              ineligibleLabel === null
-                ? rowStatusLabel({
-                    displayStatus,
-                    inForce,
-                    label: (key) => t(STATUTE_STATUS_LABEL_KEYS[key]),
-                    status: version.status,
-                  })
-                : t(ineligibleLabel);
+      {rows.map(({ displayStatus, version }) => {
+        const selected = version.id === currentVersionId;
+        // A version that cannot apply is labelled for what it is, even
+        // as the default of a Work with nothing else, and its dates are
+        // never offered as a window to compare by.
+        const ineligibleLabel = ineligibleExpressionLabelKey(version);
+        const inForce = version.isDefault && ineligibleLabel === null;
+        const compareFrom =
+          selected || ineligibleLabel !== null
+            ? null
+            : version.versionValidFrom;
+        // The dot's colour says future or past; only the version in
+        // force, and a status the colour cannot tell apart, get a label.
+        const rowLabel =
+          ineligibleLabel === null
+            ? rowStatusLabel({
+                displayStatus,
+                inForce,
+                label: (key) => t(STATUTE_STATUS_LABEL_KEYS[key]),
+                status: version.status,
+              })
+            : t(ineligibleLabel);
 
-            return (
-              <li className="relative" key={version.id}>
-                <Button
-                  aria-current={selected ? "true" : undefined}
-                  className="group/plain flex w-full"
-                  disabled={selected}
-                  onClick={() => onVersionChange(version.id)}
-                  variant="plain"
-                >
-                  {/* The version in force stands taller; a row with a compare
+        return (
+          <li className="relative" key={version.id}>
+            <Button
+              aria-current={selected ? "true" : undefined}
+              className="group/plain flex w-full"
+              disabled={selected}
+              onClick={() => onVersionChange(version.id)}
+              variant="plain"
+            >
+              {/* The version in force stands taller; a row with a compare
                       action keeps its text clear of that button. The row is
                       drawn here, so the chosen version keeps full strength
                       while its button is disabled. */}
+              <span
+                className={cn(
+                  "group-hover/plain:bg-muted grid min-w-0 flex-1 grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4",
+                  inForce ? "py-3" : "py-2",
+                  selected && "bg-muted/60",
+                  compareFrom !== null && "pe-12",
+                )}
+              >
+                <span className="bg-popover relative z-10 mt-1 flex size-2 items-center justify-center">
+                  <StatuteStatusDot
+                    expression={version}
+                    status={version.status}
+                    validFrom={version.versionValidFrom}
+                  />
+                </span>
+                <span className="min-w-0">
                   <span
                     className={cn(
-                      "group-hover/plain:bg-muted grid min-w-0 flex-1 grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4",
-                      inForce ? "py-3" : "py-2",
-                      selected && "bg-muted/60",
-                      compareFrom !== null && "pe-12",
+                      "block text-sm tabular-nums",
+                      inForce && "font-semibold",
+                      !inForce && !selected && "text-muted-foreground",
                     )}
                   >
-                    <span className="bg-popover relative z-10 mt-1 flex size-2 items-center justify-center">
-                      <StatuteStatusDot
-                        expression={version}
-                        status={version.status}
-                        validFrom={version.versionValidFrom}
-                      />
-                    </span>
-                    <span className="min-w-0">
-                      <span
-                        className={cn(
-                          "block text-sm tabular-nums",
-                          inForce && "font-semibold",
-                          !inForce && !selected && "text-muted-foreground",
-                        )}
-                      >
-                        {versionLabel(version)}
-                      </span>
-                      {rowLabel === null ? null : (
-                        <span
-                          className={cn(
-                            "text-2xs mt-0.5 block font-medium tracking-wide uppercase",
-                            inForce ? "text-success" : "text-muted-foreground",
-                          )}
-                        >
-                          {rowLabel}
-                          {version.changes === null ? null : (
-                            <StatuteVersionChanges
-                              changes={version.changes}
-                              className="mt-0.5"
-                            />
-                          )}
-                        </span>
-                      )}
-                      {version.changes === null ? null : (
-                        <StatuteVersionChanges
-                          changes={version.changes}
-                          className="mt-0.5"
-                        />
-                      )}
-                    </span>
+                    {versionLabel(version)}
                   </span>
-                </Button>
-                {/* Opening a version replaces the text; this sets it beside
+                  {rowLabel === null ? null : (
+                    <span
+                      className={cn(
+                        "text-2xs mt-0.5 block font-medium tracking-wide uppercase",
+                        inForce ? "text-success" : "text-muted-foreground",
+                      )}
+                    >
+                      {rowLabel}
+                    </span>
+                  )}
+                  {version.changes === null ? null : (
+                    <StatuteVersionChanges
+                      changes={version.changes}
+                      className="mt-0.5"
+                    />
+                  )}
+                </span>
+              </span>
+            </Button>
+            {/* Opening a version replaces the text; this sets it beside
                     the one on screen instead. */}
-                {compareFrom === null ? null : (
-                  <PopoverClose
-                    render={
-                      <Button
-                        aria-label={t("statutes.compareWithVersion", {
-                          version: versionLabel(version),
-                        })}
-                        className="absolute end-2 top-1/2 -translate-y-1/2"
-                        onClick={() => onCompare(compareFrom)}
-                        size="icon-sm"
-                        title={t("statutes.compareSideBySide")}
-                        variant="ghost"
-                      />
-                    }
-                  >
-                    <Columns2Icon className="size-3.5" />
-                  </PopoverClose>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </PopoverPopup>
-    </Popover>
+            {compareFrom === null ? null : (
+              <PopoverClose
+                render={
+                  <Button
+                    aria-label={t("statutes.compareWithVersion", {
+                      version: versionLabel(version),
+                    })}
+                    className="absolute end-2 top-1/2 -translate-y-1/2"
+                    onClick={() => onCompare(compareFrom)}
+                    size="icon-sm"
+                    title={t("statutes.compareSideBySide")}
+                    variant="ghost"
+                  />
+                }
+              >
+                <Columns2Icon className="size-3.5" />
+              </PopoverClose>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 };

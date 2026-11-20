@@ -11,7 +11,7 @@
 
 import { Result } from "better-result";
 
-import { resolveDataBoxMessageMimeType } from "@stll/api-contract/data-box";
+import { legalFileFormat } from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
@@ -36,6 +36,7 @@ import {
 import {
   ATTACHMENT_EXTRACTION_OUTCOME,
   parseAttachmentIssues,
+  STANDALONE_ATTACHMENT_MODE,
 } from "@/api/lib/search/extraction-worker-attachments";
 import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
 import { spawnWorker } from "@/api/lib/subprocess";
@@ -48,7 +49,7 @@ import {
   XLS_MIME_TYPE,
 } from "@/api/mime-types";
 
-const WORKER_PATH = resolveRuntimeWorkerPath({
+export const EXTRACTION_WORKER_PATH = resolveRuntimeWorkerPath({
   outputFile: RUNTIME_WORKER_FILES.extraction,
   sourceDir: import.meta.dir,
   sourceFile: "extraction-worker.ts",
@@ -92,6 +93,10 @@ export const resolveExtractionMimeType = ({
   fileName: string;
   mimeType: string;
 }): string => {
+  const legal = legalFileFormat(mimeType, fileName);
+  if (legal) {
+    return legal.mimeType;
+  }
   const normalized = normalizeMimeType(mimeType);
   if (canExtractMimeType(normalized)) {
     return normalized;
@@ -100,10 +105,6 @@ export const resolveExtractionMimeType = ({
   const emailMimeType = resolveEmailMimeType({ fileName, mimeType });
   if (emailMimeType) {
     return emailMimeType;
-  }
-  const dataBoxMimeType = resolveDataBoxMessageMimeType({ fileName, mimeType });
-  if (dataBoxMimeType) {
-    return dataBoxMimeType;
   }
 
   const dotIndex = fileName.lastIndexOf(".");
@@ -143,6 +144,8 @@ type ExtractFileTextResultOptions = {
    * character past its own limit and refuses when it gets that many.
    */
   maxChars?: number;
+  /** Standalone chat uploads have no separately filed attachment documents. */
+  includeContainerAttachments?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
 };
@@ -151,6 +154,7 @@ export const extractFileTextResult = async (
   { bytes: buffer, mimeType }: ScannedFile,
   {
     maxChars = LIMITS.extractedContentMaxChars,
+    includeContainerAttachments = false,
     signal,
     timeoutMs = LIMITS.extractionTimeoutMs,
   }: ExtractFileTextResultOptions = {},
@@ -161,8 +165,12 @@ export const extractFileTextResult = async (
   }
 
   const result = await spawnWorker({
-    workerPath: WORKER_PATH,
-    args: [normalizedMimeType, String(maxChars)],
+    workerPath: EXTRACTION_WORKER_PATH,
+    args: [
+      normalizedMimeType,
+      String(maxChars),
+      ...(includeContainerAttachments ? [STANDALONE_ATTACHMENT_MODE] : []),
+    ],
     ...(signal ? { signal } : {}),
     stdin: new Blob([buffer]),
     timeoutMs,

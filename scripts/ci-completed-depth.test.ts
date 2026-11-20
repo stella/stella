@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 import * as v from "valibot";
@@ -1799,7 +1800,7 @@ const runPatchIdStep = ({
   head,
   groupRef = "",
   targetBase = base,
-  retryScript = new URL("retry.sh", import.meta.url).pathname,
+  retryScript = fileURLToPath(new URL("retry.sh", import.meta.url)),
 }: PatchIdStepOptions) => {
   const output = nodePath.join(repository, ".git", "step-output");
   writeFileSync(output, "");

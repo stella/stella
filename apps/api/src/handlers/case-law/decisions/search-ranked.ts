@@ -89,6 +89,11 @@ type RankedSearchWord = {
   /** The word as `queryUsed` spells it. */
   term: string;
   leaves: RankedDecisionWord;
+  /**
+   * The word on any passage, typed and stemmed: what a decision whose
+   * decision field is a cut prefix is read from instead.
+   */
+  passageLeaves: readonly string[];
 };
 
 export type RankedSearchPlan = {
@@ -100,6 +105,10 @@ export type RankedSearchPlan = {
   allWordsQuery: (scope: string) => string;
   /** Decisions holding one word, as a query string: coverage and counts. */
   wordQuery: (index: number, scope: string) => string;
+  /** Opening passages whose decision field holds only a prefix of the terms. */
+  partialQuery: string;
+  /** Passages holding one word, for decisions whose decision field is cut. */
+  passageWordQuery: (index: number) => string;
   /** The scope the scan filtered by: opening passage plus the request's filters. */
   scope: string;
 };
@@ -120,6 +129,11 @@ type RankedSearchShapeOptions = {
   functionWords: ReadonlySet<string> | null;
   queryVariant: CorpusIndexQueryVariant;
   jurisdiction: string | undefined;
+  /**
+   * The arm a request without `strict` ranks with, when a caller measuring
+   * the arms sets it; the public routes leave it to the default.
+   */
+  unstrictArm?: DecisionRankingArm | undefined;
 };
 
 /** A request the decision-level ranking answers, before its leaves are built. */
@@ -143,6 +157,7 @@ export const rankedSearchShape = ({
   functionWords,
   queryVariant,
   jurisdiction,
+  unstrictArm = CASE_LAW_RANKED_DEFAULT_ARM,
 }: RankedSearchShapeOptions):
   RankedSearchShape | { type: "passages"; reason: RankedSearchIneligible } => {
   if (decisionTerms === null) {
@@ -172,7 +187,7 @@ export const rankedSearchShape = ({
   }
   return {
     type: "ranked",
-    arm: strict ? "all" : CASE_LAW_RANKED_DEFAULT_ARM,
+    arm: strict ? "all" : unstrictArm,
     decisionTerms,
     tokens,
   };
@@ -211,11 +226,18 @@ const unique = (leaves: readonly string[]): string[] => [
 
 /**
  * One word's leaves on the decision field: the form typed (which is what a
- * decision in a language with no stemmer holds) and its stem (what one with a
- * stemmer holds), and the same two for each single-word legal alternative. A
- * multi-word alternative is a phrase, which the field cannot answer; its words
- * stay with the passages. Publisher leaves name the word in the keywords as
- * typed and in the headnote's stems.
+ * decision in a language with no stemmer holds) and its stem under every
+ * stemmer the searched documents were written with (what each of those
+ * holds), and the same for each single-word legal alternative. A multi-word
+ * alternative is a phrase, which the field cannot answer; its words stay
+ * with the passages. Publisher leaves name the word in the keywords as typed
+ * and in the headnote's stems.
+ *
+ * The stemmers are the searched documents' (`documentStems`), never the one
+ * language the reader is taken to write in: a search with no language (no
+ * country, or the European index without a language filter) has none, yet
+ * each of its documents holds only its own language's stems, so a typed form
+ * alone would miss every inflection.
  */
 const wordLeaves = (
   token: CorpusQueryToken,
@@ -229,7 +251,11 @@ const wordLeaves = (
     legalAlternatives: CorpusTermExpander | null;
   },
 ): RankedDecisionWord => {
-  const language = fields.stemming?.language ?? null;
+  const stems = fields.documentStems;
+  const stemmed = (form: string): string[] =>
+    stems === null
+      ? []
+      : stems.languages.map((language) => stemLegalTerm(form, language));
   const forms = [
     token.value,
     ...(legalAlternatives === null
@@ -238,27 +264,60 @@ const wordLeaves = (
     ).filter((alternative) => corpusTokens(alternative).length === 1),
   ];
   const decisionLeaves = unique(
-    forms.flatMap((form) => [
-      `${decisionField}:${quoteCorpusValue(form)}`,
-      ...(language === null
-        ? []
-        : [
-            `${decisionField}:${quoteCorpusValue(stemLegalTerm(form, language))}`,
-          ]),
-    ]),
+    forms.flatMap((form) =>
+      [form, ...stemmed(form)].map(
+        (term) => `${decisionField}:${quoteCorpusValue(term)}`,
+      ),
+    ),
   );
-  const headnoteStemField = fields.stemming?.fields.at(1);
   const boostedLeaves = unique([
     ...fields.keywordFields.map(
       (field) => `${field}:${quoteCorpusValue(token.value)}`,
     ),
-    ...(language === null || headnoteStemField === undefined
+    ...(stems === null
       ? []
-      : [
-          `${headnoteStemField}:${quoteCorpusValue(stemLegalTerm(token.value, language))}`,
-        ]),
+      : stemmed(token.value).map(
+          (stem) => `${stems.headnoteField}:${quoteCorpusValue(stem)}`,
+        )),
   ]);
   return { decisionLeaves, boostedLeaves };
+};
+
+/**
+ * One word's leaves on the passages: the forms typed, on the surface text a
+ * bare term reaches, and their stems on each passage's stem field under every
+ * stemmer the searched documents were written with. The passages of a
+ * decision hold all its text whatever happened to its decision field.
+ */
+const passageWordLeaves = (
+  token: CorpusQueryToken,
+  {
+    fields,
+    legalAlternatives,
+  }: {
+    fields: CaseLawCorpusQueryFields;
+    legalAlternatives: CorpusTermExpander | null;
+  },
+): string[] => {
+  const stems = fields.documentStems;
+  const forms = [
+    token.value,
+    ...(legalAlternatives === null
+      ? []
+      : legalAlternatives(token.value)
+    ).filter((alternative) => corpusTokens(alternative).length === 1),
+  ];
+  return unique(
+    forms.flatMap((form) => [
+      quoteCorpusValue(form),
+      ...(stems === null
+        ? []
+        : stems.languages.map(
+            (language) =>
+              `${stems.textField}:${quoteCorpusValue(stemLegalTerm(form, language))}`,
+          )),
+    ]),
+  );
 };
 
 const orLeaves = ({ decisionLeaves, boostedLeaves }: RankedDecisionWord) =>
@@ -279,6 +338,7 @@ export const planRankedSearch = (
       fields,
       legalAlternatives,
     }),
+    passageLeaves: passageWordLeaves(token, { fields, legalAlternatives }),
   }));
   const scope = filterClauses.join(" AND ");
   return {
@@ -309,6 +369,14 @@ export const planRankedSearch = (
       }
       return scoped(wordScope, orLeaves(word.leaves));
     },
+    partialQuery: `${OPENING_PASSAGE_CLAUSE} AND ${decisionTerms.partialField}:true`,
+    passageWordQuery: (index) => {
+      const word = words.at(index);
+      if (word === undefined) {
+        return panic(`No ranked word at ${String(index)}`);
+      }
+      return `(${word.passageLeaves.join(" OR ")})`;
+    },
   };
 };
 
@@ -324,20 +392,83 @@ type ReadRankedPageWordsOptions = {
 };
 
 /**
- * Which of the words each decision on a ranked page holds, read off the
- * decision field in the copy the page shows. Bounded by the page, one
- * aggregation per word.
+ * Which of the words each decision on a ranked page holds, in the copy the
+ * page shows, and how that was read: off the decision field, or, for a
+ * decision whose decision field holds only a prefix of its terms (written
+ * that way when the whole did not fit the opening passage), off its passages
+ * as well. A word such a decision lacks on its decision field may stand in
+ * the part that was cut, so it is never reported missing on that field's say.
+ */
+export type RankedPageWords = {
+  readonly decisionField: WordsRead;
+  /** Decisions whose decision field is a cut prefix, read over their passages. */
+  readonly cutDecisions: WordsRead;
+};
+
+/**
+ * The page's words, bounded by the page: one aggregation per word on the
+ * decision field, one for which decisions are cut, and, only when one is, one
+ * per word over those decisions' passages.
  */
 export const readRankedPageWords = async ({
   plan,
+  copies,
   ...read
 }: ReadRankedPageWordsOptions): Promise<
-  Result<WordsRead, HandlerError<400 | 502 | 503>>
-> =>
-  await readWordsAtCopies({
+  Result<RankedPageWords, HandlerError<400 | 502 | 503>>
+> => {
+  const decisionField = await readWordsAtCopies({
     ...read,
+    copies,
     wordQueries: plan.words.map((_, index) => plan.wordQuery(index, "")),
   });
+  if (Result.isError(decisionField)) {
+    return decisionField;
+  }
+  const marked = await readWordsAtCopies({
+    ...read,
+    copies,
+    wordQueries: [plan.partialQuery],
+  });
+  if (Result.isError(marked)) {
+    return marked;
+  }
+  const cut = copies.filter(
+    ({ id }) => marked.value.get(id)?.held.has(0) === true,
+  );
+  if (cut.length === 0) {
+    return Result.ok({
+      decisionField: decisionField.value,
+      cutDecisions: new Map(),
+    });
+  }
+  const cutDecisions = await readWordsAtCopies({
+    ...read,
+    copies: cut,
+    wordQueries: plan.words.map((_, index) => plan.passageWordQuery(index)),
+  });
+  return cutDecisions.map((passages) => ({
+    decisionField: decisionField.value,
+    cutDecisions: passages,
+  }));
+};
+
+/**
+ * A hit's words from the page's read. A cut decision holds a word when its
+ * decision field or any of its passages does; any other decision, when its
+ * decision field does.
+ */
+const pageWordsHeldAt = (
+  words: RankedPageWords,
+  id: string,
+  shown: CorpusProjectionRevision | null,
+): ReadonlySet<number> => {
+  const onField = wordsHeldAt(words.decisionField, id, shown);
+  if (!words.cutDecisions.has(id)) {
+    return onField;
+  }
+  return new Set([...onField, ...wordsHeldAt(words.cutDecisions, id, shown)]);
+};
 
 const RANKED_PAGE_WORDS_TIMEOUT_SINK = failureSink({
   event: "case_law.search_ranked_words.timed_out",
@@ -362,7 +493,7 @@ export const pageWordsRefusal = (error: HandlerError) =>
 
 type RankedHitTermsOptions = {
   plan: RankedSearchPlan;
-  words: WordsRead;
+  words: RankedPageWords;
   /** Decisions an identifier named, which the words did not select. */
   pinnedIds: ReadonlySet<string>;
 };
@@ -374,7 +505,7 @@ export const rankedHitTerms =
     if (pinnedIds.has(id)) {
       return NO_HIT_TERMS;
     }
-    const held = wordsHeldAt(words, id, shown);
+    const held = pageWordsHeldAt(words, id, shown);
     return {
       matchedTerms: plan.words
         .filter((_, index) => held.has(index))

@@ -35,7 +35,12 @@
     "sessionNeedsAttention": "Vyžaduje pozornosť",
     "sessionOpeningInOffice": "Otváranie v Office",
     "sessionSavingDraft": "Ukladanie konceptu",
-    "reconnectAccount": "Znova pripojiť k stella web…"
+    "reconnectAccount": "Znova pripojiť k stella web…",
+    "transcribeRecording": "Prepísať nahrávku…",
+    "dictation": "Diktovanie",
+    "dictationHint": "Na diktovanie podržte {key}",
+    "dictationSettings": "Nastavenia diktovania…",
+    "dictationTurnOn": "Zapnúť diktovanie…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName}: zmeny zostávajú lokálne a budú automaticky zopakované",
@@ -614,6 +619,7 @@
     "descriptionCloud": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč prevádza stella AI a stella ju neukladá.",
     "lede": "Podržte <key>{shortcut}</key> a hovorte. Text sa zobrazí tam, kde píšete.",
     "groups": {
+      "shortcut": "Skratka",
       "transcription": "Prepis",
       "cleanup": "Úprava",
       "thisComputer": "Na tomto počítači"
@@ -652,10 +658,22 @@
     },
     "language": {
       "title": "Jazyk diktovania",
-      "description": "Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača.",
+      "description": "Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača. Ak ich je viac, každé slovo sa rozpozná v jazyku, v ktorom ho vyslovíte.",
       "automatic": "Automaticky",
       "automaticWith": "Automaticky ({languages})",
       "noResults": "Nenašli sa žiadne jazyky"
+    },
+    "customWords": {
+      "group": "Vlastné slová",
+      "title": "Slová a mená, ktoré má stella písať správne",
+      "description": "Napríklad mená klientov alebo anglické výrazy, ktoré používate v slovenčine. Ukladajú sa v tomto počítači pre tento účet a odosielajú sa len s diktátom, na prevod cez stella AI a na úpravu pomocou AI. Model reči v tomto počítači ich nepoužíva.",
+      "count": "{count, number} z {limit, number}",
+      "input": "Pridať slovo alebo meno",
+      "add": "Pridať",
+      "remove": "Odobrať {word}",
+      "duplicate": "Toto slovo už v zozname je.",
+      "full": "Zoznam pojme najviac {limit, number} slov. Ak chcete pridať ďalšie, niektoré odoberte.",
+      "failed": "Zoznam sa nepodarilo uložiť. Skúste to znova."
     },
     "modelNeeded": "Rečový model beží na tomto počítači.",
     "speechModel": "Model reči",
@@ -667,6 +685,13 @@
     "downloadFailed": "Rečový model sa nepodarilo stiahnuť.",
     "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Skratku {shortcut} používa iná aplikácia.",
+    "holdKey": {
+      "title": "Kláves na podržanie",
+      "description": "Podržte ho samotný a hovorte. Krátke stlačenie ani skratka, ktorá ho používa, nič nespustí.",
+      "right": "Pravý {key}",
+      "waiting": "stella zaznamená {shortcut}, keď bude mať prístup k Prístupnosti.",
+      "unavailable": "stella na tomto počítači nemôže sledovať {shortcut}. Vyberte iný kláves."
+    },
     "failure": {
       "accessibility": "Povoľte prístup Prístupnosť, aby stella mohla písať do iných aplikácií.",
       "microphone": "stella nepočuje váš mikrofón. Skontrolujte prístup k mikrofónu v Systémových nastaveniach.",
@@ -675,9 +700,54 @@
       "focusChanged": "Kým bol text pripravený, prepli ste do inej aplikácie, takže sa nič nenapísalo. Skúste to znova.",
       "focusUnconfirmed": "stella nemohla overiť, ktorá aplikácia je aktívna, takže sa nič nenapísalo. Skúste to znova.",
       "shortcutHeld": "Pustite klávesy skratky, aby sa text mohol napísať. Nič sa nenapísalo, skúste to znova.",
-      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite."
+      "passwordField": "Je vybrané pole na heslo, preto sa diktát neuložil ani nenapísal.",
+      "cloudTranscription": "stella AI tento diktát nepreviedla a rečový model v tomto počítači nie je. Skúste to znova alebo pri „Prevádzať pomocou“ zvoľte „Tento počítač“ a model stiahnite.",
+      "nothingHeard": "stella nepočula žiadnu reč. Skontrolujte vstupné zariadenie v nastaveniach Zvuku."
     },
-    "failureKeptInHistory": "Text nájdete v histórii schránky."
+    "failureKeptInHistory": "Text nájdete v histórii schránky.",
+    "transcribeRecording": {
+      "title": "Prepísať nahrávku",
+      "description": "Súbor z diktafónu, hlasovú poznámku alebo záznam z rokovania do 4 hodín prevedie na text.",
+      "open": "Otvoriť",
+      "failed": "Okno sa nepodarilo otvoriť. Skúste to znova."
+    },
+    "notice": {
+      "title": "stella nepočuje váš mikrofón",
+      "allowBody": "Povoľte prístup k mikrofónu a skúste to znova.",
+      "checkBodyMac": "Skontrolujte prístup k mikrofónu v Systémových nastaveniach a skúste to znova.",
+      "checkBodyPc": "Skontrolujte prístup k mikrofónu v Nastaveniach Windows a skúste to znova.",
+      "allow": "Povoliť mikrofón",
+      "openSettingsMac": "Otvoriť Systémové nastavenia",
+      "openSettingsPc": "Otvoriť Nastavenia",
+      "dismiss": "Zavrieť",
+      "nothingTitle": "stella nepočula žiadnu reč",
+      "nothingBody": "Hovorte, kým držíte kláves, alebo v nastaveniach Zvuku vyberte iný vstup.",
+      "inputDevice": "Vstup: {device}",
+      "openSoundMac": "Otvoriť nastavenia Zvuku",
+      "openSoundPc": "Otvoriť nastavenia zvuku",
+      "missingTitle": "{missing} nie je pripojené",
+      "missingBody": "Diktovanie namiesto toho používa {device}.",
+      "chooseMicrophone": "Vybrať mikrofón…"
+    },
+    "microphone": {
+      "title": "Mikrofón",
+      "hint": "Bluetooth slúchadlá chvíľu prepínajú na mikrofón a nahrávajú v nižšej kvalite. Vstavaný mikrofón býva zreteľnejší.",
+      "systemDefault": "Predvolený systémový",
+      "systemDefaultNamed": "Predvolený systémový ({name})",
+      "bluetoothDevice": "{name} · Bluetooth",
+      "notConnected": "{name} (nepripojené)",
+      "test": "Vyskúšať mikrofón",
+      "stopTest": "Zastaviť",
+      "level": "Úroveň vstupu",
+      "hearing": "Počujeme vás.",
+      "noSound": "Zo zariadenia {device} nejde žiadny zvuk.",
+      "checkAccess": "Skontrolovať prístup k mikrofónu"
+    },
+    "preview": {
+      "label": "Čo ste zatiaľ nadiktovali",
+      "listening": "Počúvam…",
+      "finishing": "Dokončujem…"
+    }
   },
   "shortcut": {
     "title": "Skratka schránky",
@@ -776,8 +846,8 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "permissionsBody": "Každé povolenie je na vás. Neskôr ich môžete zmeniť v Nastaveniach.",
     "neverRequested": "Nikdy nevyžadované:",
-    "tryTitle": "Vyskúšajte to",
-    "tryBody": "Skopírujte ľubovoľný text a stlačte {shortcut}.",
+    "tryTitle": "Vyskúšajte históriu schránky",
+    "tryBody": "Skopírujte ľubovoľný text a stlačením {shortcut} otvorte históriu schránky.",
     "tryWaiting": "Čakám na skratku",
     "tryKeepGoing": "Pokračujte…",
     "tryExtraModifier": "To je {pressed}. Použite {shortcut}.",
@@ -817,6 +887,7 @@
       "screenRecording": "Záznam obrazovky",
       "camera": "Kamera",
       "keystrokes": "Stlačenia klávesov",
+      "keystrokesWithoutHoldKey": "Stlačenia klávesov, pokiaľ si nezvolíte kláves na podržanie",
       "fullDiskAccess": "Úplný prístup k disku",
       "administrator": "Oprávnenia správcu"
     }
@@ -953,6 +1024,94 @@
       "network_folder": "Tento priečinok je na sieťovom úložisku. Prepojte priečinok na vlastnom disku tohto počítača.",
       "protected": "Tento priečinok obsahuje vlastné údaje stelly alebo priečinok so zručnosťami, takže v ňom agent nemôže pracovať.",
       "unreadable": "Tento priečinok sa nepodarilo prečítať."
+    }
+  },
+  "keepAwake": {
+    "title": "Udržať v prevádzke",
+    "enabled": "Nechať počítač zapnutý, kým pracujú agenti",
+    "description": "Kým v tomto počítači pracuje agent, počítač pri nečinnosti nezaspí, takže dlhé úlohy dobehnú. Displej sa môže ďalej vypínať. Notebook Mac po zatvorení veka zaspí aj tak.",
+    "onBattery": "Aj na batérii",
+    "onBatteryDescription": "Keď je táto voľba vypnutá, počítač na batérii zaspáva ako zvyčajne, aj keď agent pracuje.",
+    "errorSave": "Toto nastavenie sa nepodarilo uložiť. Skúste to znova."
+  },
+  "transcribe": {
+    "title": "Prepísať nahrávku",
+    "retry": "Skúsiť znova",
+    "drop": {
+      "title": "Presuňte sem nahrávku",
+      "release": "Pustite ju a začne sa prepis",
+      "description": "Súbory z diktafónu, hlasové poznámky a správy, záznamy z rokovaní alebo zvuk z videa.",
+      "choose": "Vybrať súbor",
+      "formats": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, WMA, AMR a video MP4 alebo MOV. Najviac 4 hodiny.",
+      "formatsMac": "WAV, MP3, M4A, AAC, FLAC, Ogg, Opus, AIFF, AMR a video MP4 alebo MOV. Najviac 4 hodiny."
+    },
+    "destination": {
+      "title": "Prepísať pomocou",
+      "thisComputer": "Tento počítač",
+      "cloud": "stella AI",
+      "localDescription": "Nahrávka zostane v tomto počítači.",
+      "cloudDescription": "Zvuk sa na prepis odošle do stella AI a poskytovateľovi modelu vybraného v nastaveniach Diktovania. stella ho neukladá.",
+      "cloudDescriptionModel": "Zvuk sa na prepis odošle do stella AI a poskytovateľovi modelu {model}. stella ho neukladá.",
+      "localMissing": "Ak chcete prepisovať v tomto počítači, stiahnite si v Nastaveniach v časti Diktovanie rečový model.",
+      "localMissingCloud": "Stiahnite si v Nastaveniach v časti Diktovanie rečový model alebo prepisujte pomocou stella AI.",
+      "retainsData": "{provider} uchováva zvuk aj prepis všetkého, čo tomuto modelu pošlete. Neprepisujte s ním dôverné nahrávky ani nahrávky klientov, alebo v Nastaveniach v časti Diktovanie vyberte iný model.",
+      "modelFailed": "Model stella AI sa nepodarilo načítať, takže stella AI teraz nemôže prepisovať. Skúste to znova alebo prepisujte na tomto počítači."
+    },
+    "matter": {
+      "title": "Spis",
+      "description": "Mená a spisové značky z neho sa napíšu správne a text doň môžete uložiť.",
+      "none": "Žiadny",
+      "search": "Hľadať spisy",
+      "clearSearch": "Vymazať hľadanie",
+      "searching": "Hľadá sa…",
+      "noMatters": "Nenašli sa žiadne spisy",
+      "failed": "Spisy sa nepodarilo načítať. Skúste to znova."
+    },
+    "note": "Súbory DSS a DS2 z diktafónov Philips alebo Olympus najprv uložte ako WAV v SpeechExec alebo ODMS.",
+    "refused": {
+      "unsupported": "Súbor {name} stella nevie prečítať. Vyberte nahrávku v jednom z formátov uvedených vyššie.",
+      "tooLong": "Nahrávka {name} je dlhšia ako 4 hodiny. Najprv ju rozdeľte na kratšie.",
+      "unreadable": "Súbor {name} sa nepodarilo prečítať. Môže byť poškodený; exportujte ho znova a skúste to ešte raz."
+    },
+    "kept": {
+      "ready": "{name} je pripravený. Skontrolujte vyššie, ako sa prepíše, a potom začnite.",
+      "start": "Začať prepisovať"
+    },
+    "failure": {
+      "start": "Prepis sa nepodarilo spustiť. Skúste to znova.",
+      "load": "Okno sa nepodarilo načítať. Skúste to znova.",
+      "modelMissing": "Rečový model v tomto počítači nie je. Stiahnite si ho v Nastaveniach v časti Diktovanie.",
+      "thisComputer": "Rečový model v tomto počítači nedokázal prepísať časť nahrávky. Doterajší text zostáva.",
+      "cloud": "stella AI nedokázala prepísať časť nahrávky. Doterajší text zostáva; skúste to neskôr.",
+      "unreadable": "Nahrávku sa nepodarilo prečítať až do konca. Doterajší text zostáva.",
+      "tooLong": "Nahrávka je dlhšia ako 4 hodiny. Doterajší text zostáva."
+    },
+    "result": {
+      "minutes": "{minutes, number} min",
+      "thisComputer": "Tento počítač",
+      "cloud": "stella AI, {model}",
+      "matter": "spis {name}",
+      "copy": "Kopírovať",
+      "copied": "Skopírované",
+      "saveAs": "Uložiť ako",
+      "saveWithTimestamps": "Text s časmi (.txt)",
+      "saveWithoutTimestamps": "Text bez časov (.txt)",
+      "saveToMatter": "Uložiť do spisu",
+      "savingToMatter": "Ukladá sa…",
+      "savedToMatter": "Uložené do spisu {matter} ako {fileName}.",
+      "saveToMatterFailed": "Prepis sa nepodarilo uložiť do spisu. Skúste to znova.",
+      "saveFailed": "Prepis sa nepodarilo skopírovať ani uložiť. Skúste to znova.",
+      "noSpeech": "V nahrávke sa nenašla žiadna reč.",
+      "fileName": "{title} – prepis.txt",
+      "documentTitle": "{title} – prepis"
+    },
+    "progress": {
+      "running": "Prepisuje sa {done, number} z {total, number} min",
+      "runningUnknown": "Prepisuje sa: zatiaľ {done, number} min",
+      "stop": "Zastaviť",
+      "stopped": "Zastavené po {done, number} min. Doterajší text zostáva.",
+      "done": "Prepísané: {total, number} min.",
+      "another": "Prepísať ďalšiu nahrávku"
     }
   }
 }

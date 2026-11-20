@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -21,6 +22,7 @@ import {
   pageWordsRefusal,
   planRankedSearch,
   rankedCursorTarget,
+  rankedHitTerms,
   rankedSearchShape,
 } from "./search-ranked";
 
@@ -43,6 +45,17 @@ describe("which requests rank whole decisions", () => {
   test("a relevance search on a generation with the decision field does", () => {
     expect(shapeOf({})).toMatchObject({ type: "ranked", arm: "any" });
     expect(shapeOf({ strict: true })).toMatchObject({
+      type: "ranked",
+      arm: "all",
+    });
+  });
+
+  test("a caller comparing arms sets the unstrict arm; strict still means every word", () => {
+    expect(shapeOf({ unstrictArm: "half" })).toMatchObject({
+      type: "ranked",
+      arm: "half",
+    });
+    expect(shapeOf({ unstrictArm: "half", strict: true })).toMatchObject({
       type: "ranked",
       arm: "all",
     });
@@ -137,6 +150,131 @@ describe("the ranked plan", () => {
         ...(plan.words.at(0)?.leaves.boostedLeaves ?? []),
       ].join(" OR ")})`,
     );
+  });
+});
+
+describe("a ranked plan with no language to stem under", () => {
+  const planFor = (
+    text: string,
+    jurisdiction: string | undefined,
+    language?: string,
+  ) => {
+    const shaped = shapeOf({ text, jurisdiction });
+    const shape =
+      shaped.type === "ranked" ? shaped : panic("expected a ranked shape");
+    return planRankedSearch(shape, {
+      fields: caseLawCorpusQueryFields({
+        generation: "case_law_v11",
+        jurisdiction,
+        language,
+      }),
+      legalAlternatives: null,
+      filterClauses: [],
+    });
+  };
+  const leavesOf = (plan: ReturnType<typeof planFor>) =>
+    plan.words.at(0)?.leaves.decisionLeaves ?? [];
+
+  test.each([
+    ["an unscoped search", "abandoning", undefined, "en"],
+    ["an unscoped search", "loajality", undefined, "cs"],
+    ["a European search without a language", "abandoning", "EU", "en"],
+    ["a European search without a language", "loajality", "EU", "cs"],
+  ] as const)(
+    "%s asks the decision field for %s under the stemmer its documents used",
+    (_name, word, jurisdiction, language) => {
+      const leaves = leavesOf(planFor(word, jurisdiction));
+      expect(leaves).toContain(`decision_terms:"${word}"`);
+      expect(leaves).toContain(
+        `decision_terms:"${stemLegalTerm(word, language)}"`,
+      );
+      expect(stemLegalTerm(word, language)).not.toBe(word);
+    },
+  );
+
+  test("the headnote is asked in the same stems", () => {
+    const plan = planFor("abandoning", undefined);
+    expect(plan.words.at(0)?.leaves.boostedLeaves).toContain(
+      `headnote_stem:"${stemLegalTerm("abandoning", "en")}"`,
+    );
+  });
+
+  test("a scoped search asks its jurisdiction's languages, a language filter only its own", () => {
+    expect(leavesOf(planFor("loajality", "CZE"))).toEqual([
+      ...new Set([
+        'decision_terms:"loajality"',
+        `decision_terms:"${stemLegalTerm("loajality", "cs")}"`,
+        `decision_terms:"${stemLegalTerm("loajality", "en")}"`,
+      ]),
+    ]);
+    expect(leavesOf(planFor("abandoning", "EU", "en"))).toEqual([
+      'decision_terms:"abandoning"',
+      `decision_terms:"${stemLegalTerm("abandoning", "en")}"`,
+    ]);
+  });
+});
+
+describe("a decision whose decision field the projection cut", () => {
+  const shaped = shapeOf({ text: "zástava hypotéka", jurisdiction: "CZE" });
+  const shape =
+    shaped.type === "ranked" ? shaped : panic("expected a ranked shape");
+  const plan = planRankedSearch(shape, {
+    fields: caseLawCorpusQueryFields({
+      generation: "case_law_v11",
+      jurisdiction: "CZE",
+      language: undefined,
+    }),
+    legalAlternatives: null,
+    filterClauses: [],
+  });
+  const revision = createSafeId<"corpusIndexProjectionIntent">();
+  const read = (held: readonly number[]) =>
+    new Map([["cut", { revision, held: new Set(held) }]]);
+
+  test("its passages are asked for each word, typed and stemmed", () => {
+    expect(plan.partialQuery).toBe(
+      "is_opening:true AND decision_terms_partial:true",
+    );
+    // Under every language Czech decisions are declared in.
+    const leaves = [
+      ...new Set([
+        '"hypotéka"',
+        `text_stem:"${stemLegalTerm("hypotéka", "cs")}"`,
+        `text_stem:"${stemLegalTerm("hypotéka", "en")}"`,
+      ]),
+    ];
+    expect(plan.passageWordQuery(1)).toBe(`(${leaves.join(" OR ")})`);
+    // Not scoped to the opening passage: the cut words are on the others.
+    expect(plan.passageWordQuery(1)).not.toContain("is_opening");
+  });
+
+  test("a word its passages hold is matched though its decision field lacks it", () => {
+    const terms = rankedHitTerms({
+      plan,
+      words: { decisionField: read([0]), cutDecisions: read([1]) },
+      pinnedIds: new Set(),
+    })("cut", revision);
+    expect(terms).toEqual({
+      matchedTerms: ["zástava", "hypotéka"],
+      missingTerms: [],
+    });
+  });
+
+  test("a word neither holds stays missing, and an uncut decision answers from its field alone", () => {
+    expect(
+      rankedHitTerms({
+        plan,
+        words: { decisionField: read([0]), cutDecisions: read([]) },
+        pinnedIds: new Set(),
+      })("cut", revision),
+    ).toEqual({ matchedTerms: ["zástava"], missingTerms: ["hypotéka"] });
+    expect(
+      rankedHitTerms({
+        plan,
+        words: { decisionField: read([0]), cutDecisions: new Map() },
+        pinnedIds: new Set(),
+      })("cut", revision),
+    ).toEqual({ matchedTerms: ["zástava"], missingTerms: ["hypotéka"] });
   });
 });
 

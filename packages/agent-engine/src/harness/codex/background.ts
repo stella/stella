@@ -107,10 +107,23 @@ const IGNORED: AppServerHandlers = {
  * the background, requests are refused and notifications only count that
  * work down as its commands exit.
  */
+/**
+ * What a turn of the process ran at. The model and a set effort carry over
+ * to later turns through `turn/start`; the approval mode is fixed with the
+ * thread.
+ */
+export type CodexProcessSettings = {
+  model: string;
+  effort: string | null;
+  approvals: string;
+};
+
 export class CodexProcess {
   readonly background = new BackgroundTasks();
   /** The thread the process's turns run on, once it is open. */
   threadId: string | null = null;
+  /** What its last turn ran at, for the next turn to switch from. */
+  settings: CodexProcessSettings | null = null;
   private target: AppServerHandlers = IGNORED;
   private attached: AppServerClient | null = null;
   /** Item ids of the background terminals last listed. */

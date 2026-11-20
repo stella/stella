@@ -51,7 +51,7 @@
   {
     "access": "read",
     "command": ["case-law", "search"],
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict requires every word; otherwise function words are optional. Pages may append some_terms hits; terms says which words each hit holds. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values. Under load it may answer status \"running\": not a failure. After retryAfterMs, repeat the call with continuation_token; \"partial\" is never the full answer. Reader: `url`; publisher: `source_url`.",
     "name": "search_case_law",
     "title": "Search case law"
   },
@@ -275,14 +275,14 @@
   {
     "access": "read",
     "command": ["guidance", "search"],
-    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations, FAQs and similar documents issued by data-protection and labour regulators. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
+    "description": "Search regulator guidance (soft law): methodologies, opinions, guidelines, recommendations and FAQs from data-protection, labour, tax and administrative authorities, e.g. Czech GFŘ and MF pokyny or MV závěry on administrative procedure. Results are guidance, never court decisions: for case law use search_case_law. Each result carries documentClass, issuer, kind, reference, issuedOn, validity, source_url and the attribution to show with it. Filter by authority, jurisdiction, kind, date_from and date_to. A source served as metadata only is matched on its title and has a null snippet. Totals are not counted; page with cursor. Read a hit with read_guidance.",
     "name": "search_guidance",
     "title": "Search regulator guidance"
   },
   {
     "access": "read",
     "command": ["guidance", "read"],
-    "description": "Read one regulator guidance document by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
+    "description": "Read one regulator guidance document (data-protection, labour, tax or administrative) by document_id. It is guidance, not a court decision. Returns the issuer, kind, reference, issue date, validity as the publisher states it, source_url, the attribution and any conditions to show with it, and its text. When you summarize this text, show attribution.text and any attribution.summaryDisclaimer with the summary. textState says why text is null: withheld_by_source_setting or not_extracted; use source_url then. Pass nextCursor back as cursor to read more.",
     "name": "read_guidance",
     "title": "Read regulator guidance"
   },
@@ -590,7 +590,7 @@
   {
     "access": "read",
     "command": ["capability", "case-law", "ingestion-get"],
-    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
+    "description": "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items, pending removals and unprobeable identities), and whether the source is parked: failing the same way for so long that it asks its publisher once a day, since when, and its next attempt. The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
     "name": "capability:case-law.ingestion.get",
     "title": "case-law.ingestion.get"
   },

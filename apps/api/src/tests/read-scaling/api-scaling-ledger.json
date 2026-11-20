@@ -1931,6 +1931,10 @@
       "reason": "Transcribes one bounded transient audio chunk and stores only usage and audit events; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
+      "id": "POST /v1/desktop/dictation/transcripts",
+      "reason": "Creates one document through the shared document create that the entity upload routes measure; a desktop-credential write fixture for it is pending."
+    },
+    {
       "id": "POST /v1/desktop/presence",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1957,6 +1961,10 @@
     {
       "id": "POST /v1/dev/seed-firm-knowledge",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dictation/cleanup",
+      "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
       "id": "POST /v1/document-reviews/passages",

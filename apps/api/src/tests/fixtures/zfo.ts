@@ -97,6 +97,25 @@ const element = (name: string, value: string) =>
 const fileXml = ({ name, mimeType, content }: FixtureFile) =>
   `<p:dmFile dmMimeType="${escapeXml(mimeType)}" dmFileMetaType="main" dmFileDescr="${escapeXml(name)}"><p:dmEncodedContent>${Buffer.from(content).toString("base64")}</p:dmEncodedContent></p:dmFile>`;
 
+const envelopeFields = (message: FixtureMessage) => [
+  element("dmID", message.messageId),
+  element("dbIDSender", message.senderBoxId),
+  element("dmSender", message.senderName),
+  element("dmSenderAddress", "Testovací 1, 100 00 Testov"),
+  element("dmSenderType", "10"),
+  element("dmRecipient", message.recipientName),
+  element("dmRecipientAddress", "Příkladná 2, 100 00 Testov"),
+  element("dbIDRecipient", message.recipientBoxId),
+  element("dmToHands", message.toHands),
+  element("dmAnnotation", message.annotation),
+  element("dmRecipientRefNumber", message.recipientRefNumber),
+  element("dmSenderRefNumber", message.senderRefNumber),
+  element("dmRecipientIdent", message.recipientIdent),
+  element("dmSenderIdent", message.senderIdent),
+  element("dmPersonalDelivery", message.personalDelivery),
+  element("dmAllowSubstDelivery", message.allowSubstDelivery),
+];
+
 /** The message XML a `.zfo` file seals. */
 export const messageXml = (message: FixtureMessage = FIXTURE_MESSAGE) =>
   [
@@ -104,22 +123,7 @@ export const messageXml = (message: FixtureMessage = FIXTURE_MESSAGE) =>
     '<q:MessageDownloadResponse xmlns:q="http://isds.czechpoint.cz/v20/message" xmlns:p="http://isds.czechpoint.cz/v20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
     `<q:dmReturnedMessage dmType="${escapeXml(message.messageType)}">`,
     "<p:dmDm>",
-    element("dmID", message.messageId),
-    element("dbIDSender", message.senderBoxId),
-    element("dmSender", message.senderName),
-    element("dmSenderAddress", "Testovací 1, 100 00 Testov"),
-    element("dmSenderType", "10"),
-    element("dmRecipient", message.recipientName),
-    element("dmRecipientAddress", "Příkladná 2, 100 00 Testov"),
-    element("dbIDRecipient", message.recipientBoxId),
-    element("dmToHands", message.toHands),
-    element("dmAnnotation", message.annotation),
-    element("dmRecipientRefNumber", message.recipientRefNumber),
-    element("dmSenderRefNumber", message.senderRefNumber),
-    element("dmRecipientIdent", message.recipientIdent),
-    element("dmSenderIdent", message.senderIdent),
-    element("dmPersonalDelivery", message.personalDelivery),
-    element("dmAllowSubstDelivery", message.allowSubstDelivery),
+    ...envelopeFields(message),
     `<p:dmFiles>${message.files.map(fileXml).join("")}</p:dmFiles>`,
     "</p:dmDm>",
     '<q:dmHash algorithm="SHA-256">AAAA</q:dmHash>',
@@ -129,6 +133,22 @@ export const messageXml = (message: FixtureMessage = FIXTURE_MESSAGE) =>
     "</q:dmReturnedMessage>",
     "</q:MessageDownloadResponse>",
   ].join("");
+
+/** Signed GetDeliveryInfo carries the same envelope without the attachments. */
+export const receiptXml = () => [
+  '<?xml version="1.0" encoding="UTF-8"?>',
+  '<q:GetDeliveryInfoResponse xmlns:q="http://isds.czechpoint.cz/v20/delivery" xmlns:p="http://isds.czechpoint.cz/v20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+  "<q:dmDelivery><p:dmDm>",
+  ...envelopeFields(FIXTURE_MESSAGE),
+  "</p:dmDm>",
+  '<q:dmHash algorithm="SHA-256">AAAA</q:dmHash>',
+  `<q:dmDeliveryTime>${FIXTURE_MESSAGE.deliveryTime}</q:dmDeliveryTime>`,
+  `<q:dmAcceptanceTime>${FIXTURE_MESSAGE.acceptanceTime}</q:dmAcceptanceTime>`,
+  "<q:dmMessageStatus>6</q:dmMessageStatus><q:dmEvents>",
+  `<q:dmEvent><q:dmEventTime>${FIXTURE_MESSAGE.deliveryTime}</q:dmEventTime><q:dmEventDescr>EV5: Dodáno.</q:dmEventDescr></q:dmEvent>`,
+  `<q:dmEvent><q:dmEventTime>${FIXTURE_MESSAGE.acceptanceTime}</q:dmEventTime><q:dmEventDescr>EV11: Doručeno přihlášením oprávněné osoby.</q:dmEventDescr></q:dmEvent>`,
+  "</q:dmEvents></q:dmDelivery></q:GetDeliveryInfoResponse>",
+].join("");
 
 let sealCertificate: ReturnType<typeof createSelfSignedCertificate> | null =
   null;

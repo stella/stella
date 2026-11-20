@@ -447,6 +447,22 @@ export const ReferenceChip = ({
   );
 
 /**
+ * Every matter the reader can open, as one chip: a chat that drew on all of
+ * them says so instead of naming each. It is a scope, not a reference to
+ * open, so it never takes a click. The caller passes the translated label.
+ */
+export const AllMattersChip = ({ label }: { label: string }) => (
+  <InlinePill leadingIcon={<AllMattersIcon />} truncate>
+    <bdi>{label}</bdi>
+  </InlinePill>
+);
+
+/** The "All matters" glyph, for a list of references in its own shell. */
+export const AllMattersIcon = () => (
+  <MatterIcon className={GLYPH_CLASS} variant="all" />
+);
+
+/**
  * A reference's glyph alone, by the same rule as the chip, for a control that
  * lists references in its own shell (the sources tray under an answer).
  */

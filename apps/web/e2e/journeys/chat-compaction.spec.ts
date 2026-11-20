@@ -58,17 +58,8 @@ const currentThreadId = (page: Page): string =>
   CHAT_THREAD_PATH.exec(new URL(page.url()).pathname)?.at(1) ??
   panic(`The chat did not open a thread: ${page.url()}`);
 
-const SUGGESTED_PROMPT_LABEL = messages.chat.tabToAsk.split("{prompt}").at(0);
-
 const chatComposer = (page: Page) =>
-  page
-    .getByRole("textbox", { exact: true, name: messages.chat.placeholder })
-    .or(
-      page.getByRole("textbox", {
-        name:
-          SUGGESTED_PROMPT_LABEL ?? panic("chat.tabToAsk has no prompt slot"),
-      }),
-    );
+  page.getByRole("textbox", { exact: true, name: messages.chat.placeholder });
 
 type SendTurnOptions = {
   page: Page;

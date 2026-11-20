@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 
@@ -374,8 +375,9 @@ describe("extractDocxDocument", () => {
   });
 
   test("works on the SPA fixture", async () => {
-    const fixture = new URL("fixtures/spa-template.docx", import.meta.url)
-      .pathname;
+    const fixture = fileURLToPath(
+      new URL("fixtures/spa-template.docx", import.meta.url),
+    );
     const docx = testDocxFile(await Bun.file(fixture).arrayBuffer());
     const result = await extractDocxDocument(docx);
 

@@ -44,9 +44,17 @@ const threadData: ChatThreadState["data"] = {
   chatLocalRunTarget: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
+  firstSend: true,
   historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
   id: threadId,
   messages: [],
+  sendFields: {
+    activeSkill: null,
+    contextMatterIds: [],
+    dataWorkspaceIds: [workspaceId],
+    subjectDecisionId: null,
+  },
+  title: "New thread",
   webSearchEnabled: false,
   workspaceId,
 };
@@ -137,7 +145,7 @@ describe("send-message side-effect rollback", () => {
       recordAuditEvent,
       safeDb,
       threadId,
-      threadState: { type: "existing", data: threadData },
+      threadState: { type: "existing", adoption: null, data: threadData },
       uploadedFiles: [],
       userId,
     });
@@ -176,7 +184,7 @@ describe("send-message side-effect rollback", () => {
       recordAuditEvent,
       safeDb,
       threadId,
-      threadState: { type: "existing", data: threadData },
+      threadState: { type: "existing", adoption: null, data: threadData },
       uploadedFiles: [uploadedFile],
       userId,
     });

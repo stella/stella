@@ -1233,6 +1233,13 @@
       "treatment": "Hilisem käsitlus"
     },
     "analyzing": "Analüüsin...",
+    "browse": {
+      "courtDescription": "{court} ({country}): lahendid stella avalikus õigusandmebaasis aasta ja kuu kaupa.",
+      "courts": "Kohtud",
+      "days": "Päevad",
+      "jurisdictionDescription": "{country}: kohtulahendid stella avalikus õigusandmebaasis kohtu, aasta ja kuu kaupa.",
+      "periodDescription": "{court} ({country}), {period}: lahendid stella avalikus õigusandmebaasis."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "Otsing pole ajutiselt saadaval"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Kui teate kohtuasja numbrit või lahendi ECLI-t, otsige selle järgi.",
+        "message": "Sellele kogumikuviitele täpselt vastavat kohtulahendit ei leitud."
+      },
       "noHits": {
         "hint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
         "message": "Miski ei vasta sõnadele, mida see otsing nõudis."
@@ -1721,6 +1732,7 @@
       "unorderedList": "Täpploend",
       "wholeBlockRequired": "Stiili muutmiseks valige terve lõik või loend."
     },
+    "answerNotFinished": "stella ei saanud seda vastust lõpetada.",
     "answerQuote": {
       "showInDecision": "Näita lahendis",
       "unverified": "Tsitaati ei õnnestunud kontrollida",
@@ -2120,6 +2132,7 @@
     },
     "newChat": "Uus vestlus",
     "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
+    "nextSteps": "Järgmised sammud",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -2226,7 +2239,6 @@
       "chipLabel": "Töötab: {place}",
       "cloud": "Pilv",
       "cloudDescription": "Töötab pilves. Kasutatav kõikjalt.",
-      "harnessModels": "{harness} mudelid",
       "hintCheck": "Kontrolli seda stella desktopis",
       "hintInstall": "Paigalda see stella desktopist",
       "hintOffline": "Ava oma arvutis stella desktop",
@@ -2236,8 +2248,9 @@
       "localFolderSelection": "Sinu arvuti · {harness} · {folder}",
       "localPlace": "Sinu arvuti, {harness}",
       "localSelection": "Sinu arvuti · {harness}",
-      "modelDefault": "Vaikimisi (soovitatud)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "See uus vestlus algas pilves, sest {harness} pole sinu arvutis saadaval ({state})",
+      "startedInCloudCheckFailed": "See uus vestlus algas pilves, sest sinu arvutit ei õnnestunud kontrollida",
       "stepsCheck": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vaata jaotises Seaded › Üldine › AI-tellimused rida {harness}.",
       "stepsInstall": "stella desktop avaneb. Kui see ei avane, ava see oma arvutis ja vali jaotises Seaded › Üldine rea {harness} juures Installi.",
       "stepsSignInClaudeCode": "stella desktop avaneb sisselogimiseks. Kui see ei avane, ava see ja vali Seaded › Üldine › Logi sisse Claude’iga.",
@@ -2304,13 +2317,26 @@
       "title": "Sinu sõnum ootab järjekorras, kuni agent lõpetab",
       "turnNotRunning": "Agent praegu ei tööta."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}",
+      "decisionsFoundUsed": "{found, plural, one {Leiti # lahend} other {Leiti # lahendit}}, {used, plural, one {vastuses kasutati #} other {vastuses kasutati #}}",
+      "filterAsOf": "Seisuga {date}",
+      "legislationFound": "{count, plural, one {# õigusakt või säte} other {# õigusakti ja sätet}}",
+      "lookupDidNotGoThrough": "See otsing ei õnnestunud.",
+      "moreFound": "{count, plural, one {veel # pole näidatud} other {veel # pole näidatud}}",
+      "moreLookups": "{count, plural, one {Veel # päringut pole näidatud} other {Veel # päringut pole näidatud}}",
+      "notRecorded": "See samm tehti enne, kui stella hakkas salvestama, mida iga samm otsib.",
+      "nothingFound": "Vasteid ei leitud.",
+      "technicalDetails": "Tehnilised üksikasjad",
+      "usedInAnswer": "Kasutati vastuses",
+      "versionFrom": "Redaktsioon alates {date}"
+    },
     "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "stopping": "Peatamine…",
     "suggestTitle": "Paku pealkiri",
     "suggestTitleUnavailableAnonymized": "Anonüümitud vestluste puhul pole pealkirjasoovitused saadaval.",
-    "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
     "suggestingTitle": "Pealkirja pakkumine…",
     "suggestionSeverity": {
       "style": "Stiil",
@@ -2321,7 +2347,6 @@
       "accepted": "Rakendatud",
       "rejected": "Tagasi lükatud"
     },
-    "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "tableChart": {
       "bar": "Tulpdiagramm",
       "kind": "Diagrammi tüüp",
@@ -2368,10 +2393,10 @@
       "delete_reader_annotation": "Kustuta esiletõst või kommentaar",
       "delete_task": "Kustuta ülesanne",
       "delete_time_entry": "Kustuta ajakirje",
-      "describe-stella-api": "Andmepäringu ettevalmistamine",
-      "describe-stella-function": "Andmepäringu ettevalmistamine",
+      "describe-stella-api": "Allikate valimine",
+      "describe-stella-function": "Allikate valimine",
       "describe_template": "Malli väljade lugemine",
-      "discover_tools": "Andmepäringu ettevalmistamine",
+      "discover_tools": "Allikate valimine",
       "docxEditMore": "{count, plural, one {veel # muudatus} other {veel # muudatust}}",
       "docxEditSummary": "{count, plural, one {# kavandatud muudatus} other {# kavandatud muudatust}}",
       "execute-typescript": "Toimiku andmete lugemine",
@@ -2412,6 +2437,7 @@
       "save_document": "Salvesta dokument",
       "save_matter": "Salvesta toimik",
       "save_playbook": "Salvesta playbook",
+      "save_skill_package": "Salvesta oskus",
       "save_task": "Salvesta ülesanne",
       "save_template": "Salvesta mall",
       "save_time_entry": "Salvesta ajakirje",
@@ -2440,6 +2466,7 @@
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
       "user_message": "Saadetud agendi töö ajal",
+      "validate_skill_package": "Kontrolli oskust",
       "web_search": "Veebist otsimine"
     },
     "toolCall": {
@@ -2447,11 +2474,10 @@
       "browserPressKey": "Vajuta klahvi {key} elemendis „{target}“ lehel {url}",
       "browserSelect": "Vali „{option}“ elemendis „{target}“ lehel {url}",
       "browserType": "Sisesta tekst väljale „{target}“ lehel {url}",
-      "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "commandExited": "{command} (väljumiskood {code})",
       "consoleLogs": "Konsooli väljund",
       "exactCall": "Täpne kutse",
-      "failed": "See samm ebaõnnestus; stella jätkab teisiti.",
+      "failed": "See samm ebaõnnestus.",
       "field": "Väli",
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
@@ -2468,11 +2494,17 @@
         "notStored": "Sellest sammust ei salvestatud midagi",
         "runBudgetReached": "Ei salvestatud: see käivitus oli juba salvestanud nii palju, kui üks käivitus tohib"
       },
+      "lookupCount": "{count, plural, one {# päring} other {# päringut}}",
       "output": "Väljund",
       "patternInPath": "{pattern} asukohas {path}",
       "proposedPlan": "Plaani ettepanek",
       "readFile": "Faili lugemine",
+      "readingLegislation": "Õigusaktide lugemine",
+      "retried": "Prooviti uuesti",
+      "retriedDetail": "See samm ei õnnestunud, seega proovis stella teisiti.",
       "searchFiles": "Failidest otsimine",
+      "searchingCaseLaw": "Otsing kohtupraktikast",
+      "searchingLegislationAndCaseLaw": "Otsing õigusaktidest ja kohtupraktikast",
       "signInToContinue": "Jätkamiseks logige sisse",
       "sourceCode": "Lähtekood",
       "statusWaiting": "Ootel",
@@ -2738,6 +2770,7 @@
     "done": "Valmis",
     "doubleClickToRename": "Topeltklõpsa ümbernimetamiseks",
     "download": "Laadi alla",
+    "downloadOriginal": "Laadi originaal alla",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Teisaldamine tühistati. Üksust {itemName} ei teisaldatud.} other {Teisaldamine tühistati. {itemName} ei teisaldatud.}}",
       "droppedOn": "{count, plural, one {Üksus {itemName} asetati sihtkohale {destinationName}.} other {{itemName} asetati sihtkohale {destinationName}.}}",
@@ -3325,6 +3358,8 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Postkasti toimetatud",
       "delivery": "Kättetoimetamine",
+      "deliveryEvents": "Kättetoimetamise käik",
+      "deliveryReceipt": "Kättetoimetamistõend",
       "directionUnknown": "Suund teadmata",
       "messageId": "Sõnumi ID",
       "moreContacts": "Selle andmepostkastiga on seotud veel kontakte.",
@@ -3337,6 +3372,8 @@
       "sent": "Saadetud",
       "statedInFile": "Andmepostkasti sõnum (faili andmetel)",
       "toHands": "Isiklikult: {name}",
+      "unlinkedFiles": "Ilma lingita manuste avamiseks laadige alla algne ZFO-fail.",
+      "unreadable": "Faili ei saanud lugeda andmepostkasti sõnumi ega kättetoimetamistõendina.",
       "uploaded": "Üleslaaditud andmepostkasti sõnum"
     },
     "deliveredBy": "Edastas <address>{sender}</address>",
@@ -4040,6 +4077,12 @@
     "versionCreatedTitle": "Versioon loodud",
     "viewOnly": "Ainult vaatamiseks"
   },
+  "guidance": {
+    "notCaseLaw": "Järelevalveasutuse välja antud juhend. See ei ole kohtulahend.",
+    "openAtPublisher": "Ava väljaandja juures",
+    "source": "Allikas: {attribution}",
+    "textUnavailable": "Selle dokumendi tekst ei ole siin saadaval. Lugege seda väljaandja juures."
+  },
   "guides": {
     "action": {
       "replay": "Alusta uuesti",
@@ -4655,7 +4698,7 @@
       "importSkill": "Impordi URL-ist",
       "importTitle": "Impordi oskus",
       "importedSkills": "{count, plural, one {Imporditi # oskus} other {Imporditi # oskust}}",
-      "invalidPath": "Tee tohib sisaldada ainult väiketähti, numbreid, punkte, sidekriipse või allkriipse",
+      "invalidPath": "Kasutage suhtelist teed. Faili- ja kaustanimed ei tohi olla . ega .., alata ega lõppeda tühikuga, lõppeda punktiga ega sisaldada märke \\ : * ? \" |, noolsulge ega juhtmärke.",
       "invocationAuto": "Automaatselt",
       "invocationAutoHelp": "AI võib seda oskust ise kasutada, kui see päringuga sobib.",
       "invocationManual": "Ainult käivitamisel",
@@ -5730,6 +5773,9 @@
       "chatNotificationsDescription": "Saate sellest brauserist teavituse, kui vestluse vastus valmib ajal, mil stella on taustal.",
       "chatNotificationsToggle": "Teavita mind, kui vastus on valmis või vajab minu sisendit",
       "chatNotificationsUnsupported": "See brauser ei toeta teavitusi.",
+      "chatTechnicalDetails": "Tehnilised üksikasjad vestluses",
+      "chatTechnicalDetailsDescription": "Iga vestluse samm näitab, mida see otsis ja mida leidis. Sisse lülitatuna näete ka selle taga olevat koodi ja töötlemata tulemusi.",
+      "chatTechnicalDetailsToggle": "Näita vestluses tehnilisi üksikasju",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
       "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",
@@ -6305,6 +6351,7 @@
     "compareUnstructured": "Üks redaktsioonidest on saadaval ainult lihttekstina, seega ei saa neid võrrelda.",
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
+    "compareWithPreviousWording": "Võrdle eelmise sõnastusega",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
     "currentWording": "Kehtiv sõnastus",
     "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
@@ -6318,6 +6365,7 @@
       "withdrawn": "Väljaandja seda enam ei avalda"
     },
     "inForceSince": "Kehtib alates {date}",
+    "inForceSinceAtLeast": "Kehtib hiljemalt alates {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Juhtiv lahend",
     "leadingDecisionsExplanation": "Iga lahendi esimene viide, järjestatud viite kaalukuse järgi: kaalutud saabuvad viited, arvestades kohtu taset, viite polaarsust ja vanust.",
@@ -6328,6 +6376,7 @@
     "outlineJumpPlaceholder": "§ 10 või pealkiri",
     "pendingChanges": "Eelseisvad muudatused",
     "pendingChangesIncomplete": "Avaldaja andmed ei pruugi sisaldada kõiki eelseisvaid muudatusi.",
+    "provisionAbsentVersions": "{count, plural, one {Seaduse selles redaktsioonis puudub} other {Seaduse neis # redaktsioonis puudub}}",
     "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
     "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
     "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
@@ -6338,7 +6387,14 @@
     "provisionPartTextUnavailable": "{provisionLabel} tekst ei ole saadaval",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "ka alates {date}",
+    "provisionRunShowVersions": "Näita seaduse redaktsioone perioodil {range}",
+    "provisionRunUnchanged": "{count, plural, one {muutmata seaduse # redaktsioonis} other {muutmata seaduse # redaktsioonis}}",
     "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
+    "provisionVersionsAll": "Seaduse kõik redaktsioonid",
+    "provisionWordingAdded": "Uus säte",
+    "provisionWordingChanged": "Muudetud",
+    "provisionWordingEarliest": "Vanim saadaolev redaktsioon",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
     "searchLabel": "Otsi õigusaktidest",

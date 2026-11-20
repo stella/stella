@@ -37,7 +37,11 @@ import {
 } from "@/components/inspector/inspector-group-rail";
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { planInspectorTabDrop } from "@/components/inspector/inspector-groups.logic";
-import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import {
+  railChatOpenArgs,
+  railChatSkill,
+} from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
@@ -45,6 +49,7 @@ import {
 import type {
   ChatTab,
   InspectorTab,
+  InspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
@@ -54,6 +59,7 @@ import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useMainSkill } from "@/features/knowledge/use-main-skill";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -91,10 +97,16 @@ export const InspectorRail = ({
     activeSkillCatalogueDataView.type === "items"
       ? activeSkillCatalogueDataView.items
       : undefined;
-  const activeSkill = getActiveSkillChatContext(
-    activeTab,
-    activeSkillCatalogueData?.entries,
-  );
+  // The skill editor in the main view names its skill as the editor's own
+  // new-chat button does.
+  const mainViewSkill = useMainSkill();
+  const activeSkill = railChatSkill({
+    activeTabSkill: getActiveSkillChatContext(
+      activeTab,
+      activeSkillCatalogueData?.entries,
+    ),
+    mainViewSkill,
+  });
   // A new chat is about the matter in the URL, not the matter this rail
   // displays (the active tab's, which the user may have left).
   const routeWorkspaceId = useRouteWorkspaceId();
@@ -133,13 +145,14 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(
-      railChatOpenArgs({
+    onOpenChat({
+      ...railChatOpenArgs({
         activeSkill,
         legalDocument,
         workspaceId: routeWorkspaceId,
       }),
-    );
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
   };
 
   const toggleLabel = (() => {
@@ -240,16 +253,7 @@ type InspectorRailProps = {
   minimized: boolean;
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
-  onOpenChat: (
-    args?: Parameters<
-      (args?: {
-        label?: string;
-        workspaceId?: string | undefined;
-        contextMatterIds?: string[];
-        activeSkill?: ChatTab["activeSkill"];
-      }) => void
-    >[0],
-  ) => void;
+  onOpenChat: InspectorTabsStore["openChat"];
   onSetMinimized: (minimized: boolean) => void;
   tabs: InspectorTab[];
 };

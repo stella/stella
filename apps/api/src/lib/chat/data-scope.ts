@@ -53,7 +53,8 @@ const lockThreadDataScopeOnTx = async ({
   return lockedThread.dataWorkspaceIds;
 };
 
-const appendMissingWorkspaceIds = ({
+/** `base` followed by every id of `additions` it lacks, in order. */
+export const appendMissingWorkspaceIds = ({
   additions,
   base,
 }: {

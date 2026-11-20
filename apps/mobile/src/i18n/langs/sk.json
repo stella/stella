@@ -143,10 +143,10 @@
       "delete_reader_annotation": "Vymazať zvýraznenie alebo komentár",
       "delete_task": "Odstrániť úlohu",
       "delete_time_entry": "Vymazať časový záznam",
-      "describe-stella-api": "Pripravujem vyhľadanie dát",
-      "describe-stella-function": "Pripravujem vyhľadanie dát",
+      "describe-stella-api": "Vyberám, kde hľadať",
+      "describe-stella-function": "Vyberám, kde hľadať",
       "describe_template": "Čítanie polí vzoru",
-      "discover_tools": "Pripravujem vyhľadanie dát",
+      "discover_tools": "Vyberám, kde hľadať",
       "execute-typescript": "Čítam dáta spisu",
       "execute_typescript": "Čítam dáta spisu",
       "expand-chat-history": "Čítanie histórie chatu",
@@ -186,6 +186,7 @@
       "save_document": "Uložiť dokument",
       "save_matter": "Uložiť spis",
       "save_playbook": "Uložiť playbook",
+      "save_skill_package": "Uložiť zručnosť",
       "save_task": "Uložiť úlohu",
       "save_template": "Uložiť vzor",
       "save_time_entry": "Uložiť časový záznam",
@@ -208,7 +209,13 @@
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
+      "validate_skill_package": "Skontrolovať zručnosť",
       "web_search": "Vyhľadávanie na webe"
+    },
+    "toolResearch": {
+      "caseLaw": "Hľadám v judikatúre",
+      "legislation": "Čítam predpisy",
+      "legislationAndCaseLaw": "Hľadám v predpisoch a judikatúre"
     },
     "localRun": {
       "title": {
@@ -524,6 +531,7 @@
     "title": "Dokument",
     "failedTitle": "Dokument sa nedá otvoriť",
     "failure": {
+      "dataBoxUnreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "offline": "Ste offline. Pripojte sa na internet a skúste to znova.",
       "noFile": "Tento dokument zatiaľ nemá súbor.",
       "failed": "Pri otváraní sa niečo pokazilo. Skúste to o chvíľu znova.",
@@ -531,6 +539,7 @@
       "android": "V aplikácii pre Android zatiaľ dokumenty nemožno otvoriť."
     },
     "retry": "Skúsiť znova",
+    "openOriginal": "Otvoriť originál",
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
@@ -588,7 +597,17 @@
     "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova.",
     "lockScreenTitle": "Zamknutá obrazovka",
     "timerDetails": "Podrobnosti časovača",
-    "timerDetailsHint": "Keď sa časovač zmení na inom zariadení, doručí jeho popis a spis na zamknutú obrazovku služba oznámení Apple. Po vypnutí sa zobrazí len čas, kým aplikáciu neotvoríte."
+    "timerDetailsHint": "Keď sa časovač zmení na inom zariadení, doručí jeho popis a spis na zamknutú obrazovku služba oznámení Apple. Po vypnutí sa zobrazí len čas, kým aplikáciu neotvoríte.",
+    "dictationTitle": "Diktovanie",
+    "dictationModelDefault": "Predvolený",
+    "dictationModelDefaultNamed": "Predvolený ({model})",
+    "dictationModelOutsideRegion": "Mimo vášho regiónu",
+    "dictationModelRetainsData": "Uchováva váš zvuk",
+    "dictationModelRetainsWarning": "Tento model beží na účte bez nulového uchovávania údajov. {provider} ukladá zvuk aj prepis všetkého, čo nadiktujete, podľa vlastných podmienok a mimo kontroly stella. Nediktujte s ním dôverné ani klientske informácie.",
+    "dictationModelHint": "Model, ktorý z diktátu urobí text. stella zvuk neukladá.",
+    "dictationModelsUnavailable": "Modely sa nepodarilo načítať. Diktovanie použije model, ktorý ste vybrali, alebo predvolený, ak ho server už neponúka.",
+    "dictationCleanup": "Upraviť pomocou AI",
+    "dictationCleanupHint": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“. Len text, nie zvuk, ide cez stella k poskytovateľovi AI vašej organizácie; stella ho neukladá."
   },
   "header": {
     "search": "Hľadať"

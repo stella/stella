@@ -27,6 +27,7 @@ import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 import {
   desktopDictationModelsScalingScenario,
+  dictationModelsScalingScenario,
   dictationScalingScenario,
   seedDesktopDictationModelsScaling,
   seedDictationScaling,
@@ -577,6 +578,54 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           "handler-scaling",
           JSON.stringify({
             name: desktopDictationModelsScalingScenario.name,
+            small,
+            large,
+          }),
+        );
+      });
+    }, 120_000); // timeout: seeds and reads real PostgreSQL settings at two populations
+
+    test("a member's labelled model list reads the same among 10 and 200 other organizations", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      expect(
+        apiApp.routes.some(
+          ({ definition }) =>
+            definition === dictationModelsScalingScenario.definition,
+        ),
+      ).toBe(true);
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const measureModelsAt = async (size: number) => {
+          const fixture = await seedDesktopDictationModelsScaling(db, size);
+          try {
+            testState.patchConfig({
+              AI_PROVIDER: "openrouter",
+              OPENROUTER_API_KEY: "test-instance-key",
+              REQUIRE_PERSONAL_AI_KEY: false,
+              FEATURE_ORG_ACCESS_STATE: true,
+              FEATURE_CONFIGURED_ACCESS: false,
+              FEATURE_FREE_TIER: false,
+            });
+            return await dictationModelsScalingScenario.measure(fixture);
+          } finally {
+            await fixture.cleanup();
+          }
+        };
+        const small = await measureModelsAt(10);
+        const large = await measureModelsAt(200);
+        const expected = listDictationModels(
+          { orgAIConfig: null, managedAIResidency: "eu" },
+          { labeled: true, retention: true },
+        );
+        expect(small.response).toEqual(expected);
+        expect(large.response).toEqual(expected);
+        expect(small.statements).toBeGreaterThan(0);
+        expect(readScalingViolations({ small, large })).toEqual([]);
+        console.info(
+          "handler-scaling",
+          JSON.stringify({
+            name: dictationModelsScalingScenario.name,
             small,
             large,
           }),

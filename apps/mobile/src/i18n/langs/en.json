@@ -143,10 +143,10 @@
       "delete_reader_annotation": "Delete highlight or comment",
       "delete_task": "Delete task",
       "delete_time_entry": "Delete time entry",
-      "describe-stella-api": "Preparing data lookup",
-      "describe-stella-function": "Preparing data lookup",
+      "describe-stella-api": "Choosing where to look",
+      "describe-stella-function": "Choosing where to look",
       "describe_template": "Reading template fields",
-      "discover_tools": "Preparing data lookup",
+      "discover_tools": "Choosing where to look",
       "execute-typescript": "Reading workspace data",
       "execute_typescript": "Reading workspace data",
       "expand-chat-history": "Reading chat history",
@@ -186,6 +186,7 @@
       "save_document": "Save document",
       "save_matter": "Save matter",
       "save_playbook": "Save playbook",
+      "save_skill_package": "Save skill",
       "save_task": "Save task",
       "save_template": "Save template",
       "save_time_entry": "Save time entry",
@@ -208,7 +209,13 @@
       "update_reader_annotation": "Edit highlight or comment",
       "use-browser": "Using your browser",
       "use_connector_secret": "Using connector credential",
+      "validate_skill_package": "Check skill",
       "web_search": "Searching the web"
+    },
+    "toolResearch": {
+      "caseLaw": "Searching case law",
+      "legislation": "Reading legislation",
+      "legislationAndCaseLaw": "Searching legislation and case law"
     },
     "localRun": {
       "title": {
@@ -524,6 +531,7 @@
     "title": "Document",
     "failedTitle": "This document could not be opened",
     "failure": {
+      "dataBoxUnreadable": "This file could not be read as a data-box message or delivery receipt.",
       "offline": "You are offline. Connect to the internet and try again.",
       "noFile": "This document has no file yet.",
       "failed": "Something went wrong while opening it. Try again in a moment.",
@@ -531,6 +539,7 @@
       "android": "Documents cannot be opened in the Android app yet."
     },
     "retry": "Try again",
+    "openOriginal": "Open original",
     "preview": "Open preview",
     "previewDescription": "This file opens in the system preview.",
     "unrendered": "This document cannot be shown here, but the system preview may open it.",
@@ -588,7 +597,17 @@
     "signOutFailed": "Sign-out could not be completed. Try again.",
     "lockScreenTitle": "Lock Screen",
     "timerDetails": "Timer details",
-    "timerDetailsHint": "When a timer changes on another device, Apple's notification service carries its description and matter to the Lock Screen. Off, it shows only the time until you open the app."
+    "timerDetailsHint": "When a timer changes on another device, Apple's notification service carries its description and matter to the Lock Screen. Off, it shows only the time until you open the app.",
+    "dictationTitle": "Dictation",
+    "dictationModelDefault": "Default",
+    "dictationModelDefaultNamed": "Default ({model})",
+    "dictationModelOutsideRegion": "Outside your region",
+    "dictationModelRetainsData": "Keeps your audio",
+    "dictationModelRetainsWarning": "This model runs on an account without zero data retention. {provider} stores the audio and transcript of everything you dictate under its own terms, outside stella’s control. Don’t dictate confidential or client information with it.",
+    "dictationModelHint": "The model that turns what you dictate into text. stella does not store the audio.",
+    "dictationModelsUnavailable": "The models could not be loaded. Dictation uses the model you picked, or the default one if the server no longer offers it.",
+    "dictationCleanup": "Clean up with AI",
+    "dictationCleanupHint": "Fixes recognition mistakes and spoken formatting such as “new line”. Only the text, not the audio, goes through stella to your organization’s AI provider; stella does not store it."
   },
   "header": {
     "search": "Search"

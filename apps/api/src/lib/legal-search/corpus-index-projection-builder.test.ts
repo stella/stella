@@ -40,6 +40,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
 import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
@@ -728,7 +729,9 @@ test("a language with no stemmer writes no stem field at all", () => {
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
     input: {
       ...CASE_LAW_INPUT,
-      // Snowball ships no Bulgarian algorithm, so its text goes unstemmed.
+      // Snowball ships no Bulgarian algorithm, so a Bulgarian judgment of the
+      // European index goes unstemmed.
+      jurisdiction: "eu",
       language: "bg",
       metadata: { legalSentence: "Договорът за наем." },
     },
@@ -782,6 +785,47 @@ test("a European decision stems with the language it is written in", () => {
   expect(
     openingTextStem("eu", "de", "Die Verträge der Gerichte wurden gekündigt."),
   ).toBe("die vertrag der gericht wurd gekundigt");
+});
+
+test("a language its jurisdiction does not declare is refused, not indexed unreachable", () => {
+  // The read side asks a Czech index for Czech and English stems only, so
+  // German stems written there would be stems no query asks for.
+  expect(() =>
+    openingTextStem("cze", "de", "Die Verträge waren nichtig."),
+  ).toThrow("Case-law document of CZE in an undeclared language: de");
+  // A decision with no recorded language declares none either.
+  for (const language of ["", "und"]) {
+    expect(() => openingTextStem("svk", language, "Zmluva.")).toThrow(
+      `Case-law document of SVK in an undeclared language: ${language}`,
+    );
+  }
+  // An undeclared jurisdiction has no index group to be routed to at all.
+  expect(() => openingTextStem("xxx", "cs", "Smlouva.")).toThrow(
+    "Undeclared case-law index group: xxx",
+  );
+  // Declared, with or without a stemmer, including a Slovak decision written
+  // in Czech before 1993.
+  expect(openingTextStem("eu", "mt", "Il-kuntratt.")).toBeUndefined();
+  expect(openingTextStem("gbr", "en", "The contracts were void.")).toBe(
+    "the contract were void",
+  );
+  expect(openingTextStem("svk", "cs", "Smlouvy byly neplatné.")).toBe(
+    openingTextStem("cze", "cs", "Smlouvy byly neplatné."),
+  );
+});
+
+test("the public builder answers an undeclared language as its typed error, for the revision build to block", () => {
+  const built = buildCorpusProjectionDocuments({
+    family: "case_law",
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+    input: { ...CASE_LAW_INPUT, jurisdiction: "pol", language: "cs" },
+    payload: { text: "Umowa jest nieważna.", ast: null },
+    revision: REVISION,
+  });
+  expect(built.isErr()).toBe(true);
+  const error = built.isErr() ? built.error : null;
+  expect(CaseLawDocumentLanguageUndeclaredError.is(error)).toBe(true);
+  expect(error).toMatchObject({ jurisdiction: "POL", language: "cs" });
 });
 
 test("the summary stem is written to the opening passage only", () => {
@@ -1217,10 +1261,11 @@ const DECISION_TERMS_FORM_BY_LANGUAGE = {
   lv: "surface",
   mt: "surface",
   sl: "surface",
-  // No recorded language.
-  "": "surface",
-  und: "surface",
 } as const;
+
+/** A jurisdiction whose documents are declared to be written in `language`. */
+const declaringJurisdiction = (language: string): string =>
+  language === "sk" || language === "cs" ? "svk" : "eu";
 
 test("v11 writes the decision's terms on the opening passage in every language", () => {
   const mapped = manifestFields("case_law_v11");
@@ -1229,7 +1274,11 @@ test("v11 writes the decision's terms on the opening passage in every language",
   )) {
     const { documents, decisionTerms } = buildCaseLawProjection({
       manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
-      input: { ...RANKED_CASE_LAW_INPUT, language },
+      input: {
+        ...RANKED_CASE_LAW_INPUT,
+        jurisdiction: declaringJurisdiction(language),
+        language,
+      },
       payload: { text: DECISION_TERMS_TEXT, ast: null },
       revision: REVISION,
     });
@@ -1282,7 +1331,11 @@ test("v11 writes the decision's terms on the opening passage in every language",
 test("v11 writes exactly v10's documents plus the decision's terms", () => {
   for (const language of Object.keys(DECISION_TERMS_FORM_BY_LANGUAGE)) {
     const options = {
-      input: { ...RANKED_CASE_LAW_INPUT, language },
+      input: {
+        ...RANKED_CASE_LAW_INPUT,
+        jurisdiction: declaringJurisdiction(language),
+        language,
+      },
       payload: { text: DECISION_TERMS_TEXT, ast: null },
       revision: REVISION,
     };
@@ -1339,7 +1392,11 @@ test("terms past the document ceiling are written as a marked prefix, and every 
         paragraph.length,
     ),
   );
-  const input = { ...RANKED_CASE_LAW_INPUT, language: "sl" };
+  const input = {
+    ...RANKED_CASE_LAW_INPUT,
+    jurisdiction: "eu",
+    language: "sl",
+  };
   const { documents, decisionTerms } = buildCaseLawProjection({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
     input,
@@ -1429,7 +1486,7 @@ test("an opening passage over the ceiling on its own is refused as too large, no
   );
   const options = {
     family: "case_law",
-    input: { ...RANKED_CASE_LAW_INPUT, language: "sl" },
+    input: { ...RANKED_CASE_LAW_INPUT, jurisdiction: "eu", language: "sl" },
     payload: { text, ast: null },
     revision: REVISION,
   } as const;

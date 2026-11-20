@@ -64,6 +64,7 @@ import {
   withPinnedDecisions,
 } from "@/api/handlers/case-law/decisions/search-identity-role";
 import {
+  type DecisionQueryInterpretation,
   interpretDecisionQuery,
   searchAnswer,
 } from "@/api/handlers/case-law/decisions/search-interpretation";
@@ -180,6 +181,7 @@ import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
+import { collectionCitationUnresolvedWarning } from "@/api/lib/case-law/search-warnings";
 import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
 import type { OnlineIndexName } from "@/api/lib/db/online-index-readiness";
@@ -266,6 +268,7 @@ import {
   type CorpusIndexQueryVariant,
   corpusQueryVariantCursorTarget,
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import type { DecisionRankingArm } from "@/api/lib/legal-search/corpus-ranked-decision-query";
 import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
@@ -649,6 +652,7 @@ type CaseLawSearchFacet = (typeof DEFAULT_CASE_LAW_SEARCH_FACETS)[number];
 export const CASE_LAW_SEARCH_FACETS = DEFAULT_CASE_LAW_SEARCH_FACETS;
 
 type CaseLawSearchPlanOptions = {
+  identityIds?: readonly SafeId<"caseLawDecision">[] | undefined;
   match?: "all" | "any";
   body: PostgresSearchBody;
   configs: readonly FtsSearchConfig[];
@@ -678,6 +682,7 @@ type CaseLawSearchPlan = {
  */
 export const caseLawSearchPlan = ({
   match = "all",
+  identityIds,
   body,
   configs,
   courtWeights,
@@ -698,6 +703,17 @@ export const caseLawSearchPlan = ({
       vector: sql`sd.tsv`,
     },
   });
+
+  // Reporter identity is indexed independently of full text. An identified
+  // decision can therefore lack a search document, including its headline.
+  const matchPredicate =
+    identityIds === undefined
+      ? ftsSearch.predicate
+      : inArray(sql`d.id`, [...identityIds]);
+  const decisionFrom =
+    identityIds === undefined
+      ? sql`FROM case_law_search_documents sd JOIN case_law_published_decisions d ON d.id = sd.decision_id`
+      : sql`FROM case_law_published_decisions d LEFT JOIN case_law_search_documents sd ON sd.decision_id = d.id`;
 
   // Optional filters on the decisions table
   const courtFilter = body.court ? sql`AND d.court = ${body.court}` : sql``;
@@ -739,7 +755,7 @@ export const caseLawSearchPlan = ({
       courtIdColumn: "d.court_id",
       map: courtWeights,
     }),
-    lexicalRank: ftsSearch.rank,
+    lexicalRank: identityIds === undefined ? ftsSearch.rank : sql`0`,
   });
   const sortKeyExpr = decisionSortKeySql(sort, scoreExpr);
 
@@ -751,7 +767,7 @@ export const caseLawSearchPlan = ({
 
   const matchedPredicate = sql.join(
     [
-      ftsSearch.predicate,
+      matchPredicate,
       courtFilter,
       courtListFilter,
       countryFilter,
@@ -805,15 +821,13 @@ export const caseLawSearchPlan = ({
   const matchedCte = sql`
     matched AS (
       SELECT
-        sd.decision_id,
+        d.id AS decision_id,
         d.language_group_key,
         ${match === "any" ? ftsSearch.coverage : sql`0`} AS term_coverage,
         ${sortKeyExpr} AS sort_key,
         cb.cnt AS citation_count,
         cb.authority AS citation_authority
-      FROM case_law_search_documents sd
-      JOIN case_law_published_decisions d
-        ON d.id = sd.decision_id
+      ${decisionFrom}
       ${publicCaseLawDecisionJoin}
       LEFT JOIN ${citationAuthorityLateral} ON true
       WHERE ${matchedPredicate}
@@ -885,8 +899,7 @@ export const caseLawSearchPlan = ({
     FROM matched m
     JOIN case_law_published_decisions d
       ON d.id = m.decision_id
-    JOIN case_law_search_documents sd
-      ON sd.decision_id = m.decision_id
+    ${identityIds === undefined ? sql`JOIN` : sql`LEFT JOIN`} case_law_search_documents sd ON sd.decision_id = m.decision_id
     JOIN case_law_sources src ON src.id = d.source_id
     ${bodyPreviewJoin}
     WHERE ${representativeFilter}
@@ -907,22 +920,20 @@ export const caseLawSearchPlan = ({
   // contributes one to its court however many versions matched. The language
   // facet is per version by definition, and a version is itself a decision.
   const judgmentCountSql = sql`
-    count(distinct coalesce(d.language_group_key, sd.decision_id::text))::int
+    count(distinct coalesce(d.language_group_key, d.id::text))::int
   `;
 
   // Every facet is cross-filtered: it applies the request's other filters and
   // omits its own, so narrowing inside one facet never empties it.
   const facetFrom = sql`
-    FROM case_law_search_documents sd
-    JOIN case_law_published_decisions d
-      ON d.id = sd.decision_id
+    ${decisionFrom}
     ${publicCaseLawDecisionJoin}
   `;
 
   const courtFacetQuery = sql`
     SELECT d.court AS value, ${judgmentCountSql} AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    WHERE ${matchPredicate}
       ${countryFilter}
       ${provisionFilter}
       ${dateFromFilter}
@@ -941,7 +952,7 @@ export const caseLawSearchPlan = ({
     SELECT extract(year FROM d.decision_date)::int AS value,
            ${judgmentCountSql} AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    WHERE ${matchPredicate}
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
@@ -963,7 +974,7 @@ export const caseLawSearchPlan = ({
     SELECT ${decisionTypeKindSql(sql`d.decision_type`)} AS value,
            ${judgmentCountSql} AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    WHERE ${matchPredicate}
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
@@ -982,7 +993,7 @@ export const caseLawSearchPlan = ({
     WITH source_matches AS NOT MATERIALIZED (
       SELECT d.id, d.source_id, d.language_group_key
       ${facetFrom}
-      WHERE ${ftsSearch.predicate}
+      WHERE ${matchPredicate}
         ${courtFilter}
         ${courtListFilter}
         ${countryFilter}
@@ -1021,7 +1032,7 @@ export const caseLawSearchPlan = ({
   const languageFacetQuery = sql`
     SELECT d.language AS value, count(distinct sd.decision_id)::int AS count
     ${facetFrom}
-    WHERE ${ftsSearch.predicate}
+    WHERE ${matchPredicate}
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
@@ -1275,6 +1286,45 @@ const presentPostgresSearchPage = async ({
   return { hits, facets, total, nextCursor };
 };
 
+const czechCollectionIdentity = (
+  country: string | undefined,
+  intent: DecisionQueryIntent,
+) =>
+  country === "CZE" &&
+  intent.type === "identifier" &&
+  intent.kind === "reporter"
+    ? intent
+    : null;
+
+const emptyCollectionPage = (
+  body: SearchDecisionsBody,
+  interpretation: DecisionQueryInterpretation,
+  identifiedCount: number,
+) => {
+  const answer = searchAnswer({
+    body,
+    interpretation,
+    hitCount: 0,
+    countsResultSet: true,
+  });
+  return projectCaseLawSearchResponse(
+    {
+      ...answer,
+      hits: [],
+      facets: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
+      nextCursor: null,
+      phases: LOOKUP_PHASES,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
+      warnings:
+        identifiedCount === 0
+          ? [collectionCitationUnresolvedWarning(body.query)]
+          : answer.warnings,
+    },
+    decisionHeadnoteMaxChars(body.headnotePresentation),
+  );
+};
+
 export const searchPostgresDecisions = async (
   body: PostgresSearchBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -1313,12 +1363,25 @@ export const searchPostgresDecisions = async (
     intent,
   });
 
+  const collection = czechCollectionIdentity(body.country, intent);
+  const identityIds =
+    collection === null
+      ? undefined
+      : await findDecisionIdsByIdentity({
+          caseLawDb,
+          country: body.country,
+          identity: collection,
+        });
+  if (identityIds?.length === 0) {
+    return emptyCollectionPage(body, interpretation, 0);
+  }
   const configs = await loadPublicFtsSearchConfigs();
   // One registry for both places the statements read it: the tier prior on
   // the decision itself, and the weight each incoming citation carries.
   const courtWeights = await loadPublicCourtWeights();
   const plan = caseLawSearchPlan({
     body,
+    identityIds,
     configs,
     courtWeights,
     excerpt,
@@ -3164,6 +3227,11 @@ const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
 
 type SearchCorpusIndexDependencies = {
   readServingTarget?: () => ReturnType<typeof readServingCorpusIndexTargetTx>;
+  /**
+   * The ranking arm of a request without `strict`, for in-process callers
+   * that compare the arms; no route sets it. Part of the cursor identity.
+   */
+  rankingArm?: DecisionRankingArm;
   configuredVariant?: CorpusIndexQueryVariant;
   loadCourtWeights?: typeof loadPublicCourtWeights;
   readSourceRegistry?: typeof readCaseLawSourceRegistry;
@@ -3418,6 +3486,23 @@ const caseLawIndexRanking = ({
   };
 };
 
+/** Collection lookups page by offset and cannot continue a text cursor. */
+const readCorpusPageCursor = (
+  raw: string | undefined,
+  collection: ReturnType<typeof czechCollectionIdentity>,
+):
+  | { type: "valid"; cursor: CorpusSearchCursor | null }
+  | { type: "invalid" } => {
+  if (!raw) {
+    return { type: "valid", cursor: null };
+  }
+  if (collection !== null) {
+    return { type: "invalid" };
+  }
+  const cursor = decodeCaseLawCorpusCursor(raw);
+  return cursor === null ? { type: "invalid" } : { type: "valid", cursor };
+};
+
 export const searchCorpusIndexDecisions = async (
   {
     signal,
@@ -3445,13 +3530,17 @@ export const searchCorpusIndexDecisions = async (
   // the decisions a reference pins above it); a page reached by cursor or by
   // offset is a slice of a set the first page already described.
   const { isFirstPage, offset } = decisionPagePlacement(body);
-  let parsedCursor: CorpusSearchCursor | null = null;
-  if (body.cursor) {
-    parsedCursor = decodeCaseLawCorpusCursor(body.cursor);
-    if (parsedCursor === null) {
-      return status(400, { message: "Invalid cursor" });
-    }
+  const grammar = decisionDocketGrammarForCountry(body.country);
+  const intent = parseDecisionQuery(body.query, {
+    grammar,
+    reporters: decisionReporterGrammarForJurisdiction(body.country),
+  });
+  const collection = czechCollectionIdentity(body.country, intent);
+  const pageCursor = readCorpusPageCursor(body.cursor, collection);
+  if (pageCursor.type === "invalid") {
+    return status(400, { message: "Invalid cursor" });
   }
+  const parsedCursor = pageCursor.cursor;
 
   if (!isCorpusIndexJurisdiction(body.country)) {
     return status(400, { message: "Invalid country" });
@@ -3481,11 +3570,6 @@ export const searchCorpusIndexDecisions = async (
     sharedFlights: 0,
   };
   let scanAndFacetsMs = 0;
-  const grammar = decisionDocketGrammarForCountry(body.country);
-  const intent = parseDecisionQuery(body.query, {
-    grammar,
-    reporters: decisionReporterGrammarForJurisdiction(body.country),
-  });
   const interpretation = interpretDecisionQuery({
     body,
     intent,
@@ -3536,6 +3620,7 @@ export const searchCorpusIndexDecisions = async (
     functionWords: interpretation.functionWords,
     queryVariant: interpretation.queryVariant,
     jurisdiction: body.country,
+    unstrictArm: dependencies.rankingArm,
   });
   const cursorTarget = rankedCursorTarget(
     corpusQueryVariantCursorTarget(
@@ -3711,6 +3796,10 @@ export const searchCorpusIndexDecisions = async (
           decisionHeadnoteMaxChars(body.headnotePresentation),
         );
       }
+    }
+    if (collection !== null) {
+      report(0, emptyCorpusIndexScan());
+      return emptyCollectionPage(body, interpretation, ids.length);
     }
   }
 

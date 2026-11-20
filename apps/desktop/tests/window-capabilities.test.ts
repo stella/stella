@@ -41,7 +41,10 @@ const SHELL_INVOKE_SOURCES = [
 const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
+    "src/mainview/DictationInputFix.tsx",
+    "src/mainview/DictationMicrophone.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
+    "src/mainview/KeepAwakeSection.tsx",
     "src/mainview/LocalSkillFoldersSection.tsx",
     "src/mainview/PermissionsSection.tsx",
     "src/mainview/ShortcutSetting.tsx",
@@ -51,6 +54,16 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   ],
   "src-tauri/capabilities/accessibility-guide.json": [
     "src/onboarding/AccessibilityGuideApp.tsx",
+  ],
+  "src-tauri/capabilities/transcribe.json": [
+    "src/transcribe/TranscribeApp.tsx",
+    "src/transcribe/TranscribeMatterPicker.tsx",
+  ],
+  "src-tauri/capabilities/dictation-notice.json": [
+    "src/mainview/DictationNoticeApp.tsx",
+  ],
+  "src-tauri/capabilities/dictation-preview.json": [
+    "src/dictation/DictationPreviewApp.tsx",
   ],
   "src-tauri/capabilities/onboarding.json": [
     "src/onboarding/OnboardingApp.tsx",
@@ -124,6 +137,10 @@ const OVERLAY_TITLE_BAR_WINDOWS = {
   "src-tauri/src/pdf_signing.rs": {
     capability: "src-tauri/capabilities/pdf-sign-dialog.json",
     page: "src/mainview/pdf-sign-dialog.html",
+  },
+  "src-tauri/src/transcribe_window.rs": {
+    capability: "src-tauri/capabilities/transcribe.json",
+    page: "src/transcribe/TranscribeApp.tsx",
   },
 } as const satisfies Record<string, { capability: string; page: string }>;
 

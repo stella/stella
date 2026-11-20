@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { SuggestionKind } from "@stll/api-contract/signals";
 
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
   INBOX_SIGNAL_VIEW,
@@ -142,6 +143,7 @@ export const openSignalChat = (signal: InboxSignal, prompt: string): void => {
           contextMatterIds: [signal.workspaceId],
         }
       : {}),
+    focus: INSPECTOR_FOCUS_INTENT.claim,
   });
 };
 

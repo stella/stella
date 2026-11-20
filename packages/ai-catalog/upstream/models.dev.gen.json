@@ -2991,6 +2991,108 @@
         "temperature": true,
         "tool_call": true
       },
+      "global.openai.gpt-6.2-astra": {
+        "cost": {
+          "cache_read": 0.4,
+          "cache_write": 10,
+          "context_over_200k": {
+            "cache_read": 0.8,
+            "cache_write": 20,
+            "input": 16,
+            "output": 60
+          },
+          "input": 8,
+          "output": 40,
+          "tiers": [
+            {
+              "cache_read": 0.8,
+              "cache_write": 20,
+              "input": 16,
+              "output": 60,
+              "tier": {
+                "size": 272000,
+                "type": "context"
+              }
+            }
+          ]
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "global.openai.gpt-6.2-sol": {
+        "cost": {
+          "cache_read": 0.1,
+          "cache_write": 2.5,
+          "context_over_200k": {
+            "cache_read": 0.2,
+            "cache_write": 5,
+            "input": 4,
+            "output": 15
+          },
+          "input": 2,
+          "output": 10,
+          "tiers": [
+            {
+              "cache_read": 0.2,
+              "cache_write": 5,
+              "input": 4,
+              "output": 15,
+              "tier": {
+                "size": 272000,
+                "type": "context"
+              }
+            }
+          ]
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
       "global.xai.grok-4.6": {
         "cost": {
           "cache_read": 0.5,
@@ -4735,6 +4837,108 @@
         "temperature": true,
         "tool_call": true
       },
+      "openai.gpt-6.2-astra": {
+        "cost": {
+          "cache_read": 0.44,
+          "cache_write": 11,
+          "context_over_200k": {
+            "cache_read": 0.88,
+            "cache_write": 22,
+            "input": 17.6,
+            "output": 66
+          },
+          "input": 8.8,
+          "output": 44,
+          "tiers": [
+            {
+              "cache_read": 0.88,
+              "cache_write": 22,
+              "input": 17.6,
+              "output": 66,
+              "tier": {
+                "size": 272000,
+                "type": "context"
+              }
+            }
+          ]
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "openai.gpt-6.2-sol": {
+        "cost": {
+          "cache_read": 0.11,
+          "cache_write": 2.75,
+          "context_over_200k": {
+            "cache_read": 0.22,
+            "cache_write": 5.5,
+            "input": 4.4,
+            "output": 16.5
+          },
+          "input": 2.2,
+          "output": 11,
+          "tiers": [
+            {
+              "cache_read": 0.22,
+              "cache_write": 5.5,
+              "input": 4.4,
+              "output": 16.5,
+              "tier": {
+                "size": 272000,
+                "type": "context"
+              }
+            }
+          ]
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
       "openai.gpt-oss-120b": {
         "cost": {
           "input": 0.15,
@@ -6424,6 +6628,108 @@
         ],
         "release_date": "2026-10-26",
         "temperature": true,
+        "tool_call": true
+      },
+      "us.openai.gpt-6.2-astra": {
+        "cost": {
+          "cache_read": 0.44,
+          "cache_write": 11,
+          "context_over_200k": {
+            "cache_read": 0.88,
+            "cache_write": 22,
+            "input": 17.6,
+            "output": 66
+          },
+          "input": 8.8,
+          "output": 44,
+          "tiers": [
+            {
+              "cache_read": 0.88,
+              "cache_write": 22,
+              "input": 17.6,
+              "output": 66,
+              "tier": {
+                "size": 272000,
+                "type": "context"
+              }
+            }
+          ]
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-17",
+        "temperature": false,
+        "tool_call": true
+      },
+      "us.openai.gpt-6.2-sol": {
+        "cost": {
+          "cache_read": 0.11,
+          "cache_write": 2.75,
+          "context_over_200k": {
+            "cache_read": 0.22,
+            "cache_write": 5.5,
+            "input": 4.4,
+            "output": 16.5
+          },
+          "input": 2.2,
+          "output": 11,
+          "tiers": [
+            {
+              "cache_read": 0.22,
+              "cache_write": 5.5,
+              "input": 4.4,
+              "output": 16.5,
+              "tier": {
+                "size": 272000,
+                "type": "context"
+              }
+            }
+          ]
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-17",
+        "temperature": false,
         "tool_call": true
       },
       "us.writer.palmyra-x4-v1:0": {
@@ -8256,6 +8562,41 @@
           }
         ],
         "release_date": "2026-11-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "gemini-4-neon": {
+        "cost": {
+          "cache_read": 0.15,
+          "input": 3,
+          "input_audio": 3,
+          "output": 15
+        },
+        "limit": {
+          "output": 65536
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "release_date": "2026-11-18",
         "temperature": true,
         "tool_call": true
       },
@@ -12375,12 +12716,11 @@
       },
       "deepseek/deepseek-r1-0528": {
         "cost": {
-          "cache_read": 0.35,
-          "input": 0.5,
-          "output": 2.15
+          "input": 0.571,
+          "output": 2.286
         },
         "limit": {
-          "output": 32768
+          "output": 32000
         },
         "modalities": {
           "input": [
@@ -12494,12 +12834,12 @@
       },
       "deepseek/deepseek-v4-flash-0731": {
         "cost": {
-          "cache_read": 0.015,
-          "input": 0.06,
-          "output": 0.18
+          "cache_read": 0.035,
+          "input": 0.047,
+          "output": 0.3
         },
         "limit": {
-          "output": 384000
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -12614,9 +12954,9 @@
       },
       "deepseek/deepseek-v4.1-flash": {
         "cost": {
-          "cache_read": 0.018,
-          "input": 0.051,
-          "output": 0.567
+          "cache_read": 0.006,
+          "input": 0.3,
+          "output": 1.2
         },
         "limit": {
           "output": 943718
@@ -12645,12 +12985,12 @@
       },
       "deepseek/deepseek-v4.1-flash-1017": {
         "cost": {
-          "cache_read": 0.01,
-          "input": 0.036,
-          "output": 0.5
+          "cache_read": 0.003,
+          "input": 0.15,
+          "output": 0.6
         },
         "limit": {
-          "output": 943718
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -13581,6 +13921,43 @@
         "temperature": true,
         "tool_call": true
       },
+      "google/gemini-4-neon": {
+        "cost": {
+          "cache_read": 0.15,
+          "cache_write": 0.083333,
+          "input": 3,
+          "input_audio": 3,
+          "output": 15,
+          "reasoning": 15
+        },
+        "limit": {
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "release_date": "2026-11-18",
+        "temperature": true,
+        "tool_call": true
+      },
       "google/gemini-nano-banana-2.1": {
         "cost": {
           "input": 1.5,
@@ -13707,12 +14084,11 @@
       },
       "google/gemma-3-27b-it": {
         "cost": {
-          "cache_read": 0.04,
           "input": 0.08,
-          "output": 0.45
+          "output": 0.16
         },
         "limit": {
-          "output": 117964
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -15377,9 +15753,9 @@
       },
       "moonshotai/kimi-k2.7-code": {
         "cost": {
-          "cache_read": 0.17,
-          "input": 0.7,
-          "output": 3.75
+          "cache_read": 0.16,
+          "input": 0.6,
+          "output": 3.5
         },
         "limit": {
           "output": 235929
@@ -15398,8 +15774,8 @@
       },
       "moonshotai/kimi-k3": {
         "cost": {
-          "cache_read": 0.19,
-          "input": 0.2,
+          "cache_read": 0.182,
+          "input": 0.192,
           "output": 16
         },
         "limit": {
@@ -15430,9 +15806,9 @@
       },
       "moonshotai/kimi-k3.1-pro": {
         "cost": {
-          "cache_read": 0.2,
-          "input": 0.2403,
-          "output": 8.4023
+          "cache_read": 0.18,
+          "input": 0.253,
+          "output": 8.8
         },
         "limit": {
           "output": 943718
@@ -18889,8 +19265,8 @@
       },
       "qwen/qwen3.5-27b": {
         "cost": {
-          "input": 0.3,
-          "output": 2.4
+          "input": 0.195,
+          "output": 1.56
         },
         "limit": {
           "output": 65536
@@ -18966,9 +19342,9 @@
       },
       "qwen/qwen3.5-9b": {
         "cost": {
-          "cache_read": 0.052,
-          "input": 0.057,
-          "output": 0.084
+          "cache_read": 0.128,
+          "input": 0.142,
+          "output": 0.21
         },
         "limit": {
           "output": 40960
@@ -19592,12 +19968,12 @@
       },
       "reflection/beam-1.0-501b-a23b": {
         "cost": {
-          "cache_read": 0.04,
-          "input": 0.3,
+          "cache_read": 0.05,
+          "input": 0.25,
           "output": 1
         },
         "limit": {
-          "output": 943718
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -20906,12 +21282,12 @@
       },
       "xiaomi/mimo-v2.5-pro": {
         "cost": {
-          "cache_read": 0.0036,
-          "input": 0.435,
-          "output": 0.87
+          "cache_read": 0.096,
+          "input": 0.48,
+          "output": 1.8
         },
         "limit": {
-          "output": 131072
+          "output": 235929
         },
         "modalities": {
           "input": [
@@ -21234,7 +21610,7 @@
           "output": 4.4
         },
         "limit": {
-          "output": 182476
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -21312,11 +21688,11 @@
       "z-ai/glm-5.3-flash": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.0399,
-          "output": 0.0784
+          "input": 0.15,
+          "output": 0.5
         },
         "limit": {
-          "output": 131072
+          "output": 943717
         },
         "modalities": {
           "input": [
@@ -21608,9 +21984,9 @@
       },
       "~deepseek/deepseek-flash-latest": {
         "cost": {
-          "cache_read": 0.01,
-          "input": 0.036,
-          "output": 0.5
+          "cache_read": 0.0015,
+          "input": 0.035,
+          "output": 0.15
         },
         "limit": {
           "output": 943718
@@ -21670,7 +22046,7 @@
       "~deepseek/deepseek-v4-flash-latest": {
         "cost": {
           "cache_read": 0.035,
-          "input": 0.0434,
+          "input": 0.047,
           "output": 0.3
         },
         "limit": {
@@ -21788,9 +22164,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.19,
-          "input": 0.19,
-          "output": 10.6066
+          "cache_read": 0.18,
+          "input": 0.1824,
+          "output": 11.0055
         },
         "limit": {
           "output": 943718

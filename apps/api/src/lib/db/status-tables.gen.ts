@@ -460,6 +460,7 @@ export const ENUM_COLUMNS = {
   invoice_sends: ["language"],
   invoices: ["billing_mode", "document_type", "language"],
   justifications: ["entity_feature_gate"],
+  kept_transcript_deletions: ["environment"],
   legal_graph_edges: [
     "confidence",
     "entity_feature_gate",

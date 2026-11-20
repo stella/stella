@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import type * as v from "valibot";
 
 import {
   desktopDictationCleanupRequestSchema,
@@ -8,9 +9,11 @@ import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access
 import { classifyFailure } from "@stll/errors";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
+import type { OrgAISettings } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   generateArtefact,
@@ -24,12 +27,14 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 import {
@@ -46,11 +51,142 @@ const REQUIRED_FEATURE_ID = "desktop-dictation" satisfies DesktopFeatureId;
 const CLEANUP_DEADLINE_MS = 5000;
 const CLEANUP_OUTPUT_TOKENS = 8000;
 
-type DictationCleanupEndpointOptions = {
+/** Who a cleanup runs for, with the organization's AI settings. */
+type DictationCleanupCaller = OrgAISettings & {
+  readonly organizationId: SafeId<"organization">;
+  readonly userId: SafeId<"user">;
+  readonly safeDb: SafeDb;
+};
+
+type DictationCleanupOptions = {
+  caller: DictationCleanupCaller;
+  body: v.InferOutput<typeof desktopDictationCleanupRequestSchema>;
+  /** The admission the caller's action admission granted this cleanup. */
+  modelAdmission: ModelDispatchAdmission;
+  actionSignal: AbortSignal;
+  generateObjectForTask?: typeof generateTanStackObjectForTask;
+};
+
+/**
+ * One cleanup generation, whichever credential proved its caller: the
+ * transcript goes to the organization's model, and its answer is accepted
+ * only when it is a plausible cleanup of that transcript. The caller has
+ * already authorized the member, the limit, usage and the action.
+ */
+export const cleanUpDictation = async ({
+  caller,
+  body,
+  modelAdmission,
+  actionSignal,
+  generateObjectForTask = generateTanStackObjectForTask,
+}: DictationCleanupOptions) =>
+  await Result.gen(async function* () {
+    const {
+      organizationId,
+      userId,
+      safeDb,
+      orgAIConfig,
+      managedAIResidency,
+      promptCachingEnabled,
+    } = caller;
+    const analytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
+      feature: "dictation.cleanup",
+      modelTask: "short-text",
+      modelTier: modelAdmission.modelTier,
+      orgAIConfig,
+      properties: {},
+      traceId: Bun.randomUUIDv7(),
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        userId,
+        safeDb,
+        serviceTier: "standard",
+        workspaceId: null,
+      },
+    });
+    const generated = await Result.tryPromise({
+      try: async () =>
+        await generateArtefact({
+          generator: GENERATOR,
+          // The request carries the transcript itself; no stored record or
+          // decision feeds the answer.
+          sources: { decisionIds: [], inputs: [] },
+          generate: async () =>
+            await generateObjectForTask({
+              dataClass: "customer",
+              admission: modelAdmission,
+              userId,
+              organizationId,
+              orgAIConfig,
+              managedAIResidency,
+              task: "short-text",
+              serviceTier: "standard",
+              analytics,
+              caching: resolveCaching({
+                promptCachingEnabled,
+                task: "short-text",
+                scopeKey: null,
+              }),
+              tenantWorkspaceIds: [],
+              abortSignal: actionSignal,
+              deadlineMs: CLEANUP_DEADLINE_MS,
+              systemPromptOrigin: "server-built",
+              system: DICTATION_CLEANUP_SYSTEM_PROMPT,
+              prompt: buildDictationCleanupPrompt(body),
+              outputSchema: dictationCleanupModelOutputSchema,
+              outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
+            }),
+        }),
+      catch: (cause: unknown) => cause,
+    });
+    const output = yield* generated
+      .andThen((artefact) => artefact.map(readUnsourcedArtefact))
+      .mapError((cause) => {
+        analytics.captureError(cause);
+        return aiHandlerError(cause, {
+          status: 502,
+          message: "Dictation cleanup failed",
+        });
+      });
+    const accepted = acceptDictationCleanup(output, body.transcript);
+    if (accepted.isErr()) {
+      // The reason only, never the text that caused it.
+      analytics.captureError(
+        classifyFailure(
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: `Dictation cleanup answer refused: ${accepted.error}`,
+          }),
+          "response_invalid",
+        ),
+      );
+      return Result.err(
+        classifyFailure(
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Dictation cleanup failed validation",
+          }),
+          "response_invalid",
+        ),
+      );
+    }
+    return Result.ok(accepted.value);
+  });
+
+/** The model call a test puts in place of the organization's model. */
+export type DictationCleanupGeneration = Pick<
+  DictationCleanupOptions,
+  "generateObjectForTask"
+>;
+
+type DictationCleanupEndpointOptions = DictationCleanupGeneration & {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadAISettings?: typeof loadOrgAISettings;
   limit?: typeof consumeDictationLimit;
-  generateObjectForTask?: typeof generateTanStackObjectForTask;
   admit?: typeof withActionAdmission;
 };
 
@@ -67,8 +203,8 @@ export const createDictationCleanupEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadAISettings = loadOrgAISettings,
   limit = consumeDictationLimit,
-  generateObjectForTask = generateTanStackObjectForTask,
   admit,
+  ...generation
 }: DictationCleanupEndpointOptions = {}) =>
   declareAggregateMutation(
     createSafeBoundedPublicHandler(
@@ -150,95 +286,23 @@ export const createDictationCleanupEndpoint = ({
                 },
                 ...(admit ? { admit } : {}),
                 async *handler({ actionSignal, modelAdmission }) {
-                  const analytics = createTanStackAIAnalyticsCallbacks({
-                    dataClass: "customer",
-                    feature: "dictation.cleanup",
-                    modelTask: "short-text",
-                    modelTier: modelAdmission.modelTier,
-                    orgAIConfig,
-                    properties: {},
-                    traceId: Bun.randomUUIDv7(),
-                    usageMetering: {
-                      actionType: "chat",
-                      organizationId: account.organizationId,
-                      userId: account.userId,
-                      safeDb,
-                      serviceTier: "standard",
-                      workspaceId: null,
-                    },
-                  });
-                  const generated = await Result.tryPromise({
-                    try: async () =>
-                      await generateArtefact({
-                        generator: GENERATOR,
-                        // The request carries the transcript itself; no
-                        // stored record or decision feeds the answer.
-                        sources: { decisionIds: [], inputs: [] },
-                        generate: async () =>
-                          await generateObjectForTask({
-                            dataClass: "customer",
-                            admission: modelAdmission,
-                            userId: account.userId,
-                            organizationId: account.organizationId,
-                            orgAIConfig,
-                            managedAIResidency,
-                            task: "short-text",
-                            serviceTier: "standard",
-                            analytics,
-                            caching: resolveCaching({
-                              promptCachingEnabled,
-                              task: "short-text",
-                              scopeKey: null,
-                            }),
-                            tenantWorkspaceIds: [],
-                            abortSignal: actionSignal,
-                            deadlineMs: CLEANUP_DEADLINE_MS,
-                            systemPromptOrigin: "server-built",
-                            system: DICTATION_CLEANUP_SYSTEM_PROMPT,
-                            prompt: buildDictationCleanupPrompt(body),
-                            outputSchema: dictationCleanupModelOutputSchema,
-                            outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
-                          }),
-                      }),
-                    catch: (cause: unknown) => cause,
-                  });
-                  const output = yield* generated
-                    .andThen((artefact) => artefact.map(readUnsourcedArtefact))
-                    .mapError((cause) => {
-                      analytics.captureError(cause);
-                      return aiHandlerError(cause, {
-                        status: 502,
-                        message: "Dictation cleanup failed",
-                      });
-                    });
-                  const accepted = acceptDictationCleanup(
-                    output,
-                    body.transcript,
+                  const segments = yield* Result.await(
+                    cleanUpDictation({
+                      caller: {
+                        organizationId: account.organizationId,
+                        userId: account.userId,
+                        safeDb,
+                        orgAIConfig,
+                        managedAIResidency,
+                        promptCachingEnabled,
+                      },
+                      body,
+                      modelAdmission,
+                      actionSignal,
+                      ...generation,
+                    }),
                   );
-                  if (accepted.isErr()) {
-                    // The reason only, never the text that caused it.
-                    analytics.captureError(
-                      classifyFailure(
-                        new HandlerError({
-                          status: 502,
-                          code: "internal_error",
-                          message: `Dictation cleanup answer refused: ${accepted.error}`,
-                        }),
-                        "response_invalid",
-                      ),
-                    );
-                    return Result.err(
-                      classifyFailure(
-                        new HandlerError({
-                          status: 502,
-                          code: "internal_error",
-                          message: "Dictation cleanup failed validation",
-                        }),
-                        "response_invalid",
-                      ),
-                    );
-                  }
-                  return Result.ok(accepted.value);
+                  return Result.ok(segments);
                 },
               });
             }),

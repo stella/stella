@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/auth/demo-account-otp-policy";
 
@@ -24,7 +25,7 @@ const LOCAL_DEV_ENV = {
 } as const;
 
 const envModuleUrl = new URL("env.ts", import.meta.url).href;
-const repoRoot = new URL("../../..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
 // A developer's .env in the repository root would otherwise leak into these
 // runtimes and decide their outcome.

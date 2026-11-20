@@ -143,10 +143,10 @@
       "delete_reader_annotation": "حذف التمييز أو التعليق",
       "delete_task": "حذف المهمة",
       "delete_time_entry": "حذف إدخال الوقت",
-      "describe-stella-api": "جارٍ تجهيز عملية البحث عن البيانات",
-      "describe-stella-function": "جارٍ تجهيز عملية البحث عن البيانات",
+      "describe-stella-api": "جارٍ اختيار مصادر البحث",
+      "describe-stella-function": "جارٍ اختيار مصادر البحث",
       "describe_template": "قراءة حقول القالب",
-      "discover_tools": "جارٍ تجهيز عملية البحث عن البيانات",
+      "discover_tools": "جارٍ اختيار مصادر البحث",
       "execute-typescript": "قراءة بيانات الملف",
       "execute_typescript": "قراءة بيانات الملف",
       "expand-chat-history": "قراءة سجلّ الدردشة",
@@ -186,6 +186,7 @@
       "save_document": "حفظ المستند",
       "save_matter": "حفظ الملف القانوني",
       "save_playbook": "حفظ دليل المراجعة",
+      "save_skill_package": "حفظ المهارة",
       "save_task": "حفظ المهمة",
       "save_template": "حفظ القالب",
       "save_time_entry": "حفظ إدخال الوقت",
@@ -208,7 +209,13 @@
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
+      "validate_skill_package": "التحقق من المهارة",
       "web_search": "البحث على الويب"
+    },
+    "toolResearch": {
+      "caseLaw": "جارٍ البحث في الاجتهاد القضائي",
+      "legislation": "جارٍ قراءة التشريعات",
+      "legislationAndCaseLaw": "جارٍ البحث في التشريعات والاجتهاد القضائي"
     },
     "localRun": {
       "title": {
@@ -524,6 +531,7 @@
     "title": "مستند",
     "failedTitle": "تعذّر فتح هذا المستند",
     "failure": {
+      "dataBoxUnreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "offline": "أنت غير متصل. اتصل بالإنترنت ثم أعد المحاولة.",
       "noFile": "لا يحتوي هذا المستند على ملف بعد.",
       "failed": "حدث خطأ أثناء فتحه. أعد المحاولة بعد قليل.",
@@ -531,6 +539,7 @@
       "android": "لا يمكن فتح المستندات في تطبيق Android حتى الآن."
     },
     "retry": "إعادة المحاولة",
+    "openOriginal": "فتح الأصل",
     "preview": "فتح المعاينة",
     "previewDescription": "يُفتح هذا الملف في معاينة النظام.",
     "unrendered": "لا يمكن عرض هذا المستند هنا، لكن قد تتمكن معاينة النظام من فتحه.",
@@ -588,7 +597,17 @@
     "signOutFailed": "تعذّر إكمال تسجيل الخروج. حاول مرة أخرى.",
     "lockScreenTitle": "شاشة القفل",
     "timerDetails": "تفاصيل المؤقت",
-    "timerDetailsHint": "عند تغيير مؤقت على جهاز آخر، تنقل خدمة الإشعارات من Apple وصفه وقضيته إلى شاشة القفل. عند الإيقاف تُعرض الساعة فقط حتى تفتح التطبيق."
+    "timerDetailsHint": "عند تغيير مؤقت على جهاز آخر، تنقل خدمة الإشعارات من Apple وصفه وقضيته إلى شاشة القفل. عند الإيقاف تُعرض الساعة فقط حتى تفتح التطبيق.",
+    "dictationTitle": "الإملاء",
+    "dictationModelDefault": "الافتراضي",
+    "dictationModelDefaultNamed": "الافتراضي ({model})",
+    "dictationModelOutsideRegion": "خارج منطقتك",
+    "dictationModelRetainsData": "يحتفظ بصوتك",
+    "dictationModelRetainsWarning": "يعمل هذا النموذج على حساب بلا احتفاظ صفري بالبيانات. يخزّن {provider} الصوت والنص المكتوب لكل ما تمليه وفق شروطه الخاصة، خارج سيطرة stella. لا تُملِ به معلومات سرية أو بيانات عملاء.",
+    "dictationModelHint": "النموذج الذي يحوّل ما تمليه إلى نص. لا تخزّن stella الصوت.",
+    "dictationModelsUnavailable": "تعذّر تحميل النماذج. يستخدم الإملاء النموذج الذي اخترته، أو النموذج الافتراضي إذا لم يعد الخادم يوفّره.",
+    "dictationCleanup": "التنقيح بالذكاء الاصطناعي",
+    "dictationCleanupHint": "يصحّح أخطاء التعرّف والتنسيق المنطوق مثل «سطر جديد». يمر النص فقط، لا الصوت، عبر stella إلى مزوّد الذكاء الاصطناعي لدى مؤسستك؛ ولا تخزّنه stella."
   },
   "header": {
     "search": "بحث"

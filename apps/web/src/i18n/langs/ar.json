@@ -1233,6 +1233,13 @@
       "treatment": "المعالجة اللاحقة"
     },
     "analyzing": "جارٍ التحليل...",
+    "browse": {
+      "courtDescription": "{court} ({country}): أحكام في قاعدة stella القانونية العامة، حسب السنة والشهر.",
+      "courts": "المحاكم",
+      "days": "الأيام",
+      "jurisdictionDescription": "{country}: أحكام قضائية في قاعدة stella القانونية العامة، حسب المحكمة والسنة والشهر.",
+      "periodDescription": "{court} ({country})، {period}: أحكام في قاعدة stella القانونية العامة."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "البحث غير متاح مؤقتًا"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "ابحث برقم القضية أو معرّف ECLI للقرار، إن كان معروفًا.",
+        "message": "لم يُعثر على قرار يطابق هذا المرجع في مجموعة الأحكام تمامًا."
+      },
       "noHits": {
         "hint": "جرّب كلمات أقل أو كلمات مختلفة: المصطلحات التي يستخدمها الحكم، لا الجملة التي يُطرح بها السؤال.",
         "message": "لا شيء يطابق الكلمات التي اشترطها هذا البحث."
@@ -1721,6 +1732,7 @@
       "unorderedList": "قائمة نقطية",
       "wholeBlockRequired": "حدد فقرة أو قائمة بالكامل لتغيير نمطها."
     },
+    "answerNotFinished": "لم تتمكن stella من إكمال هذه الإجابة.",
     "answerQuote": {
       "showInDecision": "عرض في القرار",
       "unverified": "تعذّر التحقق من الاقتباس",
@@ -2120,6 +2132,7 @@
     },
     "newChat": "دردشة جديدة",
     "newChatInSidePanel": "الدردشة الجديدة متاحة في اللوحة الجانبية",
+    "nextSteps": "الخطوات التالية",
     "noPromptPresetOnly": "لا توجد رسالة، الإعداد المُسبق فقط",
     "noThreads": "لا توجد محادثات بعد",
     "officeCitationUnavailable": "لم يعد هذا الاستشهاد متاحًا.",
@@ -2226,7 +2239,6 @@
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
       "cloudDescription": "يعمل في السحابة. متاح من أي مكان.",
-      "harnessModels": "نماذج {harness}",
       "hintCheck": "تحقّق منه في stella desktop",
       "hintInstall": "ثبّته من stella desktop",
       "hintOffline": "افتح stella desktop على حاسوبك",
@@ -2236,8 +2248,9 @@
       "localFolderSelection": "حاسوبك · {harness} · {folder}",
       "localPlace": "حاسوبك، {harness}",
       "localSelection": "حاسوبك · {harness}",
-      "modelDefault": "الافتراضي (موصى به)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "بدأت هذه الدردشة الجديدة في السحابة لأن {harness} غير متاح على حاسوبك ({state})",
+      "startedInCloudCheckFailed": "بدأت هذه الدردشة الجديدة في السحابة لأنه تعذّر التحقق من حاسوبك",
       "stepsCheck": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك وتحقّق من {harness} في الإعدادات › عام › اشتراكات الذكاء الاصطناعي.",
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
       "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
@@ -2304,13 +2317,26 @@
       "title": "رسالتك في قائمة الانتظار حتى ينتهي الوكيل",
       "turnNotRunning": "الوكيل لا يعمل الآن."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}",
+      "decisionsFoundUsed": "{found, plural, zero {لم يُعثر على أي قرار} one {عُثر على قرار واحد} two {عُثر على قرارين} few {عُثر على # قرارات} many {عُثر على # قرارًا} other {عُثر على # قرار}}، {used, plural, zero {لم يُستخدم أي منها في الإجابة} one {استُخدم واحد في الإجابة} two {استُخدم اثنان في الإجابة} few {استُخدم # في الإجابة} many {استُخدم # في الإجابة} other {استُخدم # في الإجابة}}",
+      "filterAsOf": "حتى تاريخ {date}",
+      "legislationFound": "{count, plural, zero {# تشريع أو حكم} one {تشريع أو حكم واحد} two {تشريعان أو حكمان} few {# تشريعات وأحكام} many {# تشريعًا وحكمًا} other {# تشريع وحكم}}",
+      "lookupDidNotGoThrough": "لم يكتمل هذا البحث.",
+      "moreFound": "{count, plural, zero {لا يوجد المزيد} one {واحد آخر غير معروض} two {اثنان آخران غير معروضين} few {# أخرى غير معروضة} many {# أخرى غير معروضة} other {# أخرى غير معروضة}}",
+      "moreLookups": "{count, plural, zero {لا توجد استعلامات أخرى} one {استعلام آخر غير معروض} two {استعلامان آخران غير معروضين} few {# استعلامات أخرى غير معروضة} many {# استعلامًا آخر غير معروض} other {# استعلام آخر غير معروض}}",
+      "notRecorded": "نُفذت هذه الخطوة قبل أن تبدأ stella بتسجيل ما تبحث عنه كل خطوة.",
+      "nothingFound": "لا توجد نتائج مطابقة.",
+      "technicalDetails": "التفاصيل التقنية",
+      "usedInAnswer": "مستخدم في الإجابة",
+      "versionFrom": "الصيغة السارية منذ {date}"
+    },
     "stopFailed": "تعذّر إيقاف الإجابة. حاول مرة أخرى.",
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "stopping": "جارٍ الإيقاف…",
     "suggestTitle": "اقتراح عنوان",
     "suggestTitleUnavailableAnonymized": "اقتراح العناوين غير متاح للمحادثات التي تم إخفاء هويتها.",
-    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestingTitle": "جارٍ اقتراح عنوان…",
     "suggestionSeverity": {
       "style": "أسلوب",
@@ -2321,7 +2347,6 @@
       "accepted": "مُطبَّق",
       "rejected": "مرفوض"
     },
-    "tabToAsk": "→ للسؤال: «{prompt}»",
     "tableChart": {
       "bar": "أعمدة",
       "kind": "نوع الرسم البياني",
@@ -2368,10 +2393,10 @@
       "delete_reader_annotation": "حذف التمييز أو التعليق",
       "delete_task": "حذف المهمة",
       "delete_time_entry": "حذف إدخال الوقت",
-      "describe-stella-api": "جارٍ تجهيز عملية البحث عن البيانات",
-      "describe-stella-function": "جارٍ تجهيز عملية البحث عن البيانات",
+      "describe-stella-api": "جارٍ اختيار مصادر البحث",
+      "describe-stella-function": "جارٍ اختيار مصادر البحث",
       "describe_template": "قراءة حقول القالب",
-      "discover_tools": "جارٍ تجهيز عملية البحث عن البيانات",
+      "discover_tools": "جارٍ اختيار مصادر البحث",
       "docxEditMore": "{count, plural, zero {# تعديل إضافي} one {# تعديل إضافي} two {# تعديلان إضافيان} few {# تعديلات إضافية} many {# تعديلاً إضافياً} other {# تعديل إضافي}}",
       "docxEditSummary": "{count, plural, zero {# تعديل مقترح} one {# تعديل مقترح} two {# تعديلان مقترحان} few {# تعديلات مقترحة} many {# تعديلاً مقترحاً} other {# تعديل مقترح}}",
       "execute-typescript": "قراءة بيانات الملف",
@@ -2412,6 +2437,7 @@
       "save_document": "حفظ المستند",
       "save_matter": "حفظ الملف القانوني",
       "save_playbook": "حفظ دليل المراجعة",
+      "save_skill_package": "حفظ المهارة",
       "save_task": "حفظ المهمة",
       "save_template": "حفظ القالب",
       "save_time_entry": "حفظ إدخال الوقت",
@@ -2440,6 +2466,7 @@
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
       "user_message": "أُرسلت أثناء عمل الوكيل",
+      "validate_skill_package": "التحقق من المهارة",
       "web_search": "البحث على الويب"
     },
     "toolCall": {
@@ -2447,11 +2474,10 @@
       "browserPressKey": "الضغط على المفتاح {key} في «{target}» في {url}",
       "browserSelect": "تحديد «{option}» في «{target}» في {url}",
       "browserType": "إدخال نص في «{target}» في {url}",
-      "characterCount": "{count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
       "commandExited": "{command} (رمز الخروج {code})",
       "consoleLogs": "مخرجات وحدة التحكم",
       "exactCall": "الاستدعاء الدقيق",
-      "failed": "فشلت هذه الخطوة؛ ستتجاوزها stella وتتابع العمل.",
+      "failed": "فشلت هذه الخطوة.",
       "field": "الحقل",
       "input": "المدخلات",
       "interrupted": "توقّف قبل الاكتمال",
@@ -2468,11 +2494,17 @@
         "notStored": "لم يُحفظ شيء من هذه الخطوة",
         "runBudgetReached": "لم يُحفظ: كان هذا التشغيل قد حفظ بالفعل أقصى ما يُسمح به لتشغيل واحد"
       },
+      "lookupCount": "{count, plural, zero {# استعلام} one {استعلام واحد} two {استعلامان} few {# استعلامات} many {# استعلامًا} other {# استعلام}}",
       "output": "المخرجات",
       "patternInPath": "{pattern} في {path}",
       "proposedPlan": "اقتراح خطة",
       "readFile": "قراءة ملف",
+      "readingLegislation": "جارٍ قراءة التشريعات",
+      "retried": "أُعيدت المحاولة",
+      "retriedDetail": "لم تنجح هذه الخطوة، فجرّبت stella طريقة أخرى.",
       "searchFiles": "البحث في الملفات",
+      "searchingCaseLaw": "جارٍ البحث في الاجتهاد القضائي",
+      "searchingLegislationAndCaseLaw": "جارٍ البحث في التشريعات والاجتهاد القضائي",
       "signInToContinue": "سجّل الدخول للمتابعة",
       "sourceCode": "الشيفرة المصدرية",
       "statusWaiting": "في الانتظار",
@@ -2738,6 +2770,7 @@
     "done": "تم",
     "doubleClickToRename": "انقر نقرًا مزدوجًا لإعادة التسمية",
     "download": "تنزيل",
+    "downloadOriginal": "تنزيل الملف الأصلي",
     "dragAndDrop": {
       "cancelled": "{count, plural, zero {أُلغي النقل. لم تُنقل {itemName}.} one {أُلغي النقل. لم يُنقل {itemName}.} two {أُلغي النقل. لم يُنقل {itemName}.} few {أُلغي النقل. لم تُنقل {itemName}.} many {أُلغي النقل. لم تُنقل {itemName}.} other {أُلغي النقل. لم تُنقل {itemName}.}}",
       "droppedOn": "{count, plural, zero {تم إفلات {itemName} على {destinationName}.} one {تم إفلات {itemName} على {destinationName}.} two {تم إفلات {itemName} على {destinationName}.} few {تم إفلات {itemName} على {destinationName}.} many {تم إفلات {itemName} على {destinationName}.} other {تم إفلات {itemName} على {destinationName}.}}",
@@ -3325,6 +3358,8 @@
       "contact": "جهة الاتصال: {name}",
       "deliveredAt": "سُلّمت إلى الصندوق",
       "delivery": "التسليم",
+      "deliveryEvents": "سجلّ التسليم",
+      "deliveryReceipt": "إيصال التسليم",
       "directionUnknown": "الاتجاه غير معروف",
       "messageId": "معرّف الرسالة",
       "moreContacts": "هناك جهات اتصال أخرى مرتبطة بصندوق البيانات هذا.",
@@ -3337,6 +3372,8 @@
       "sent": "مُرسلة",
       "statedInFile": "رسالة صندوق البيانات (كما وردت في الملف)",
       "toHands": "لعناية {name}",
+      "unlinkedFiles": "لفتح المرفقات التي تظهر من دون رابط، نزّل ملف ZFO الأصلي.",
+      "unreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "uploaded": "رسالة صندوق بيانات مرفوعة"
     },
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
@@ -4040,6 +4077,12 @@
     "versionCreatedTitle": "تم إنشاء الإصدار",
     "viewOnly": "عرض فقط"
   },
+  "guidance": {
+    "notCaseLaw": "إرشادات صادرة عن جهة تنظيمية. هذا ليس حكمًا قضائيًا.",
+    "openAtPublisher": "فتح لدى الناشر",
+    "source": "المصدر: {attribution}",
+    "textUnavailable": "نص هذا المستند غير متاح هنا. اقرأه لدى الناشر."
+  },
   "guides": {
     "action": {
       "replay": "البدء من جديد",
@@ -4655,7 +4698,7 @@
       "importSkill": "استيراد من رابط URL",
       "importTitle": "استيراد مهارة",
       "importedSkills": "{count, plural, zero {لم يتم استيراد أي مهارات} one {تم استيراد مهارة واحدة} two {تم استيراد مهارتين} few {تم استيراد # مهارات} many {تم استيراد # مهارة} other {تم استيراد # مهارة}}",
-      "invalidPath": "يجب أن يستخدم المسار حروفاً صغيرة وأرقاماً ونقاطاً وشرطات أو شرطات سفلية",
+      "invalidPath": "استخدم مسارًا نسبيًا. لا يجوز أن تكون أسماء الملفات والمجلدات . أو .. أو أن تبدأ أو تنتهي بمسافة أو أن تنتهي بنقطة، أو أن تحتوي على \\ : * ? \" | أو أقواس زاوية أو أحرف تحكم.",
       "invocationAuto": "تلقائيًا",
       "invocationAutoHelp": "يمكن للذكاء الاصطناعي استخدام هذه المهارة من تلقاء نفسه عندما تناسب الطلب.",
       "invocationManual": "عند الاستدعاء فقط",
@@ -5730,6 +5773,9 @@
       "chatNotificationsDescription": "تلقَّ إشعارًا من هذا المتصفح عند اكتمال رد في الدردشة بينما تعمل stella في الخلفية.",
       "chatNotificationsToggle": "أعلمني عندما يكون الرد جاهزًا أو يحتاج إلى مدخلاتي",
       "chatNotificationsUnsupported": "لا يدعم هذا المتصفح الإشعارات.",
+      "chatTechnicalDetails": "التفاصيل التقنية في الدردشة",
+      "chatTechnicalDetailsDescription": "تعرض كل خطوة في الدردشة ما بحثت عنه وما وجدته. فعّل هذا الخيار لترى أيضًا الشيفرة والنتائج الخام وراءها.",
+      "chatTechnicalDetailsToggle": "إظهار التفاصيل التقنية في الدردشة",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
       "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
@@ -6305,6 +6351,7 @@
     "compareUnstructured": "إحدى الصيغتين متاحة كنص عادي فقط، لذا تتعذر المقارنة بينهما.",
     "compareVersionMissing": "الصيغة المطلوب المقارنة بها غير موجودة في سجل هذا التشريع.",
     "compareWholeAct": "مقارنة التشريع كاملًا",
+    "compareWithPreviousWording": "المقارنة مع الصيغة السابقة",
     "compareWithVersion": "المقارنة مع {version}",
     "currentWording": "الصياغة الحالية",
     "description": "قاعدة بيانات عامة للتشريعات الموحّدة، قابلة للفهرسة بحسب التشريع والإصدار.",
@@ -6318,6 +6365,7 @@
       "withdrawn": "لم يعد الناشر يدرجه"
     },
     "inForceSince": "نافذ منذ {date}",
+    "inForceSinceAtLeast": "نافذ منذ {date} على الأقل",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "قرار رائد",
     "leadingDecisionsExplanation": "أول إشارة في كل قرار، مرتبة حسب حجية الاستشهاد: الاستشهادات الواردة الموزونة، مع مراعاة مرتبة المحكمة ودلالة الاستشهاد وحداثته.",
@@ -6328,6 +6376,7 @@
     "outlineJumpPlaceholder": "§ 10 أو عنوان",
     "pendingChanges": "التعديلات المرتقبة",
     "pendingChangesIncomplete": "قد لا تتضمن بيانات الجهة الناشرة جميع التعديلات المرتقبة.",
+    "provisionAbsentVersions": "{count, plural, zero {غير واردة في هذه الصيغ من القانون} one {غير واردة في هذه الصيغة من القانون} two {غير واردة في هاتين الصيغتين من القانون} few {غير واردة في هذه الصيغ الـ# من القانون} many {غير واردة في هذه الصيغ الـ# من القانون} other {غير واردة في هذه الصيغ الـ# من القانون}}",
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
@@ -6338,7 +6387,14 @@
     "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "provisionRunAlsoFrom": "وأيضًا اعتبارًا من {date}",
+    "provisionRunShowVersions": "عرض صيغ القانون للفترة {range}",
+    "provisionRunUnchanged": "{count, plural, zero {دون تغيير في # صيغة من صيغ القانون} one {دون تغيير في صيغة واحدة من صيغ القانون} two {دون تغيير في صيغتين من صيغ القانون} few {دون تغيير في # صيغ من صيغ القانون} many {دون تغيير في # صيغة من صيغ القانون} other {دون تغيير في # صيغة من صيغ القانون}}",
     "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
+    "provisionVersionsAll": "جميع صيغ القانون",
+    "provisionWordingAdded": "مادة جديدة",
+    "provisionWordingChanged": "معدَّلة",
+    "provisionWordingEarliest": "أقدم صيغة متاحة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchLabel": "البحث في التشريعات",

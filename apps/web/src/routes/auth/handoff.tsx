@@ -1,15 +1,10 @@
-import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useTranslations } from "use-intl";
 
-import { HandoffConfirmationPanel } from "@/components/auth/handoff-confirmation-panel";
-import {
-  cancelHandoff,
-  finishHandoff,
-  handoffConfirmation,
-} from "@/lib/account/mcp-handoff";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { handoffConfirmation } from "@/lib/account/mcp-handoff";
+
+import { HandoffPage } from "./-handoff.page";
+import { HandoffPending } from "./-handoff.pending";
 
 export const Route = createFileRoute("/auth/handoff")({
   ssr: false,
@@ -22,25 +17,6 @@ export const Route = createFileRoute("/auth/handoff")({
     return { confirmation };
   },
   head: () => ({ meta: [{ name: "referrer", content: "no-referrer" }] }),
-  component: HandoffConfirmation,
+  component: HandoffPage,
+  pendingComponent: HandoffPending,
 });
-
-function HandoffConfirmation() {
-  const t = useTranslations();
-  const confirmation = Route.useRouteContext({
-    select: (context) => context.confirmation,
-  });
-  const confirm = useMutation({
-    mutationFn: finishHandoff,
-    onError: (error) => notifyUserError(error, t("common.somethingWentWrong")),
-  });
-  return (
-    <HandoffConfirmationPanel
-      email={confirmation.email}
-      organizationName={confirmation.organizationName}
-      submissionStatus={confirm.isPending ? "submitting" : "ready"}
-      onConfirm={() => confirm.mutate()}
-      onCancel={cancelHandoff}
-    />
-  );
-}

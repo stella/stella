@@ -30,6 +30,7 @@ import {
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
+  corpusIndexDecisionTerms,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
@@ -61,7 +62,6 @@ const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v11;
 const GENERATION = MANIFEST.generation;
 const INDEX_ID = `case_law_v11_ranked_${createSafeId<"corpusIndexProjectionIntent">().replaceAll("-", "")}`;
-const ROUTED_INDEX_ID = corpusIndexId(GENERATION, "CZE");
 const ENGINE_TIMEOUT_MS = 120_000;
 const FINGERPRINT = "a".repeat(64);
 const engine = getCorpusIndexClient("q09");
@@ -79,16 +79,27 @@ type Fixture = {
   caseNumber: string;
   revision: SafeId<"corpusIndexProjectionIntent">;
   text: string;
+  jurisdiction: "CZE" | "EU";
+  language: "cs" | "en";
+  court: string;
 };
+
+const CZECH_ORIGIN = {
+  jurisdiction: "CZE",
+  language: "cs",
+  court: "Nejvyšší soud",
+} as const satisfies Pick<Fixture, "jurisdiction" | "language" | "court">;
 
 const fixture = (
   caseNumber: string,
   sentences: readonly string[],
+  origin: Pick<Fixture, "jurisdiction" | "language" | "court"> = CZECH_ORIGIN,
 ): Fixture => ({
   id: createSafeId<"caseLawDecision">(),
   caseNumber,
   revision: createSafeId<"corpusIndexProjectionIntent">(),
   text: sentences.map((sentence) => `${sentence} ${FILLER}`).join("\n\n"),
+  ...origin,
 });
 
 const FIXTURES = {
@@ -105,27 +116,65 @@ const FIXTURES = {
   ]),
   /** None of the words. */
   unrelated: fixture("27 Cdo 3/2026", ["Nájemní vztah skončil výpovědí."]),
+  /**
+   * A decision whose decision field the projection cut to its opening
+   * passage: "zástava" stands in the kept prefix, "hypotéka" only in the cut
+   * tail, which its passages still hold.
+   */
+  cut: fixture("27 Cdo 4/2026", [
+    "Zástava nemovitosti byla zřízena.",
+    "Hypotéka byla splacena včas.",
+  ]),
+  /**
+   * An English judgment of the European index: the inflected word a reader
+   * types ("abandoning") is held only as its stem, and only in the body.
+   */
+  abandoned: fixture(
+    "C-1/26",
+    ["The applicant abandoned the action before the hearing."],
+    { jurisdiction: "EU", language: "en", court: "Court of Justice" },
+  ),
 } as const satisfies Record<string, Fixture>;
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
 
-const search = async (strict: boolean) => {
-  const { indexGroup } = corpusIndexGroupContractForJurisdiction(
-    MANIFEST,
-    "CZE",
+const search = async (
+  strict: boolean,
+  {
+    country = "CZE",
+    query = QUESTION,
+    language,
+  }: {
+    country?: "CZE" | "EU";
+    query?: string;
+    language?: string;
+  } = {},
+) => {
+  const groups = new Set(
+    (["CZE", "EU"] as const).map(
+      (jurisdiction) =>
+        corpusIndexGroupContractForJurisdiction(MANIFEST, jurisdiction)
+          .indexGroup,
+    ),
   );
   const resolution = corpusIndexReadTarget({
     manifest: MANIFEST,
-    jurisdiction: "CZE",
-    attestedGroups: new Set([indexGroup]),
-    enrolledGroups: new Set([indexGroup]),
+    jurisdiction: country,
+    attestedGroups: groups,
+    enrolledGroups: groups,
   });
   if (resolution.type !== "ready") {
-    return panic("Expected the Czech corpus group to be ready");
+    return panic("Expected the corpus groups to be ready");
   }
   const result = await searchCorpusIndexDecisions({
-    body: { country: "CZE", query: QUESTION, strict, limit: 10 },
+    body: {
+      country,
+      ...(language === undefined ? {} : { language }),
+      query,
+      strict,
+      limit: 10,
+    },
     caseLawDb,
     observer: "unobserved",
     dependencies: {
@@ -198,9 +247,9 @@ describe.skipIf(!runEngineTests)(
           id: entry.id,
           sourceId,
           caseNumber: entry.caseNumber,
-          court: "Nejvyšší soud",
-          country: "CZE",
-          language: "cs",
+          court: entry.court,
+          country: entry.jurisdiction,
+          language: entry.language,
           contentHash: "ranked",
         })),
       );
@@ -218,15 +267,15 @@ describe.skipIf(!runEngineTests)(
             fixtures.map(({ id }) => id),
           ),
       );
-      const documents = fixtures.flatMap((entry) =>
-        buildCaseLawProjectionDocuments({
+      const documents = fixtures.flatMap((entry) => {
+        const built = buildCaseLawProjectionDocuments({
           manifest: MANIFEST,
           input: {
             family: "case_law",
             documentId: entry.id,
             sourceId,
-            jurisdiction: "CZE",
-            language: "cs",
+            jurisdiction: entry.jurisdiction,
+            language: entry.language,
             documentType: null,
             contentHash: "ranked",
             redistributionEligible: true,
@@ -238,7 +287,7 @@ describe.skipIf(!runEngineTests)(
             vacatedFrom: null,
             caseNumber: entry.caseNumber,
             identifiers: [],
-            court: "Nejvyšší soud",
+            court: entry.court,
             courtId: null,
             decisionDate: null,
             ecli: null,
@@ -246,8 +295,30 @@ describe.skipIf(!runEngineTests)(
           },
           payload: { text: entry.text, ast: null },
           revision: entry.revision,
-        }),
-      );
+        });
+        if (entry.id !== FIXTURES.cut.id) {
+          return built;
+        }
+        // What the projection writes when a decision's terms do not fit the
+        // opening passage: a prefix of them, marked partial. Here the prefix
+        // is the opening passage's own stems.
+        const decisionTerms =
+          corpusIndexDecisionTerms(MANIFEST) ??
+          panic("v11 maps decision terms");
+        return built.map((document) =>
+          document.is_opening
+            ? {
+                ...document,
+                [decisionTerms.field]: String(document.text_stem),
+                [decisionTerms.partialField]: true,
+              }
+            : document,
+        );
+      });
+      expect(
+        documents.filter(({ document_id }) => document_id === FIXTURES.cut.id)
+          .length,
+      ).toBeGreaterThan(1);
       // The case the search exists for: the words are spread over passages.
       expect(
         documents.filter(
@@ -263,7 +334,7 @@ describe.skipIf(!runEngineTests)(
           entityId: entry.id,
           epoch: 1n,
           fingerprint: FINGERPRINT,
-          indexId: ROUTED_INDEX_ID,
+          indexId: corpusIndexId(GENERATION, entry.jurisdiction),
           appendStartedAt: appliedAt,
           appendCommittedAt: appliedAt,
           expectedDocumentCount: documents.filter(
@@ -281,12 +352,12 @@ describe.skipIf(!runEngineTests)(
           desiredAction: "upsert" as const,
           desiredEpoch: 1n,
           desiredFingerprint: FINGERPRINT,
-          desiredIndexId: ROUTED_INDEX_ID,
+          desiredIndexId: corpusIndexId(GENERATION, entry.jurisdiction),
           appliedAction: "upsert" as const,
           appliedEpoch: 1n,
           appliedRevision: entry.revision,
           appliedFingerprint: FINGERPRINT,
-          appliedIndexId: ROUTED_INDEX_ID,
+          appliedIndexId: corpusIndexId(GENERATION, entry.jurisdiction),
           appliedAt,
         })),
       );
@@ -373,6 +444,54 @@ describe.skipIf(!runEngineTests)(
         expect(result.hits).toEqual([]);
         expect(pageEnd(result)).toBe(SEARCH_PAGE_END.COMPLETE);
         expect(result.warnings.map(({ code }) => code)).toContain("no_hits");
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    // A word the body holds only inflected, asked with and without a language
+    // filter. The decision field holds each document's stems in its own
+    // language, so a European read with no language asks for the stems of
+    // every language its documents were written in.
+    // timeout: each case is two real engine searches plus PGlite reads.
+    test.each([
+      ["a Czech search", "CZE", undefined, "loajality", "tenOfEleven"],
+      ["a European search", "EU", undefined, "abandoning", "abandoned"],
+      ["a European English search", "EU", "en", "abandoning", "abandoned"],
+    ] as const)(
+      "%s (%s, language %s) finds the body-only inflection %s",
+      async (_name, country, language, query, expected) => {
+        for (const strict of [false, true]) {
+          const result = await search(strict, {
+            country,
+            query,
+            ...(language === undefined ? {} : { language }),
+          });
+          const hit = result.hits.find(
+            ({ decisionId }) => decisionId === FIXTURES[expected].id,
+          );
+          expect(hit?.matchedTerms).toEqual([query]);
+          expect(hit?.missingTerms).toEqual([]);
+          expect(hit?.match).toBe("all_terms");
+        }
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    // timeout: one search is real engine round trips plus PGlite reads.
+    test(
+      "a cut decision is never reported missing a word its cut tail holds",
+      async () => {
+        const result = await search(false, {
+          query: "zástava hypotéka leasing",
+        });
+        const hit = result.hits.find(
+          ({ decisionId }) => decisionId === FIXTURES.cut.id,
+        );
+        // Found by the word its kept prefix holds; the tail's word is read
+        // off its passages; a word no passage holds stays missing.
+        expect(hit?.matchedTerms).toEqual(["zástava", "hypotéka"]);
+        expect(hit?.missingTerms).toEqual(["leasing"]);
+        expect(hit?.match).toBe("some_terms");
       },
       ENGINE_TIMEOUT_MS,
     );

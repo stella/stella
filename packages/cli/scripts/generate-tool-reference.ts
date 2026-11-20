@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { fileURLToPath } from "node:url";
 
 import { formattedLikeRepository } from "../../scripts/src/generated-artifact-format";
 import registry from "../src/generated/registry-snapshot.json";
@@ -73,7 +74,7 @@ if (import.meta.main) {
   const content = await formattedLikeRepository(
     JSON.stringify(projectToolReference(generatedRouteMap, registry)),
     "json",
-    new URL("../../../", import.meta.url).pathname,
+    fileURLToPath(new URL("../../../", import.meta.url)),
   );
   if (process.argv.includes("--check")) {
     if ((await Bun.file(output).text()) !== content) {

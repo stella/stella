@@ -82,6 +82,9 @@ export const corePresentationPrefsSchema = v.strictObject({
     v.picklist(["auto", "saturday", "sunday", "monday"]),
     "auto",
   ),
+  // An opened chat step shows what it looked up and found; its code and raw
+  // result are for people who build with stella, so only they turn them on.
+  chatTechnicalDetails: v.fallback(v.boolean(), false),
 });
 
 export const DECISION_LAYOUT_COOKIE = "stella-decision-layouts";

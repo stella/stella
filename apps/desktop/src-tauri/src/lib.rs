@@ -48,11 +48,18 @@ mod dictation_context;
 mod dictation_engine;
 mod dictation_focus;
 mod dictation_format;
+mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_microphone;
+mod dictation_models;
+mod dictation_notice;
 mod dictation_pauses;
+mod dictation_preview;
+mod dictation_trace;
+mod dictation_words;
 #[cfg(dictation)]
 mod dictation_worker;
 mod document_sessions;
@@ -72,6 +79,7 @@ mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
+mod keep_awake;
 mod keychain;
 mod local_linked_folder_commands;
 mod local_linked_folders;
@@ -99,6 +107,8 @@ mod sse;
 mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
+mod transcribe_recording;
+mod transcribe_window;
 mod tray;
 mod types;
 mod updater;
@@ -229,6 +239,10 @@ pub fn run() {
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
+    .manage(transcribe_recording::TranscribeState::default())
+    .manage(dictation_notice::DictationNotice::default())
+    .manage(dictation_microphone::MicrophoneTest::default())
+    .manage(dictation_preview::PreviewState::new())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -307,6 +321,7 @@ pub fn run() {
         app.manage(installation);
       }
       harness_commands::manage(&handle);
+      dictation_notice::listen_for_clicks(&handle);
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
@@ -407,6 +422,9 @@ pub fn run() {
               }
               tray::MenuAction::OpenActivity => {
                 activity_window::show(&handle);
+              }
+              tray::MenuAction::OpenTranscribe => {
+                transcribe_window::show(&handle);
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
@@ -538,6 +556,7 @@ pub fn run() {
 
       presence::start(handle.clone());
       desktop_runner::watch_state(&handle);
+      keep_awake::watch_power_source();
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
@@ -610,6 +629,7 @@ pub fn run() {
         }
       }
       tauri::RunEvent::Exit => {
+        keep_awake::global().release_for_exit();
         activity::flush_on_exit(app);
         desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]
@@ -639,6 +659,7 @@ pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PreferencesTab {
   General,
+  Dictation,
   Agents,
   Activity,
   About,
@@ -646,11 +667,18 @@ pub(crate) enum PreferencesTab {
 
 impl PreferencesTab {
   #[cfg(test)]
-  const ALL: [Self; 4] = [Self::General, Self::Agents, Self::Activity, Self::About];
+  const ALL: [Self; 5] = [
+    Self::General,
+    Self::Dictation,
+    Self::Agents,
+    Self::Activity,
+    Self::About,
+  ];
 
   const fn id(self) -> &'static str {
     match self {
       Self::General => "general",
+      Self::Dictation => "dictation",
       Self::Agents => "agents",
       Self::Activity => "activity",
       Self::About => "about",
@@ -689,6 +717,8 @@ pub(crate) enum SettingsView {
   Tab(PreferencesTab),
   /// AI and agents, scrolled to the coding agents' sign-ins and installs.
   Agents(AgentSettingsFocus),
+  /// Dictation, focused on the microphone it records from.
+  Microphone,
 }
 
 impl SettingsView {
@@ -699,6 +729,10 @@ impl SettingsView {
       Self::Agents(focus) => serde_json::json!({
         "tab": PreferencesTab::Agents.id(),
         "focus": focus.id(),
+      }),
+      Self::Microphone => serde_json::json!({
+        "tab": PreferencesTab::Dictation.id(),
+        "focus": "microphone",
       }),
     }
   }

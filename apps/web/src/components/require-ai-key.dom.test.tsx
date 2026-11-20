@@ -822,6 +822,9 @@ test("the real chat textbox mounts during a pending availability read", async ()
       .hasAttribute("disabled"),
   ).toBe(true);
   expect(textbox.getAttribute("contenteditable")).toBe("true");
+  // The wait shows in the composer row (send unavailable), not as a line
+  // added above the page that moves it when it goes.
+  expect(screen.queryByText(messages.common.loading)).toBeNull();
   expect(sends.length).toBe(0);
   instanceProvisioned = true;
   await act(async () => {

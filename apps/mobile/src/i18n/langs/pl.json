@@ -143,10 +143,10 @@
       "delete_reader_annotation": "Usuń wyróżnienie lub komentarz",
       "delete_task": "Usuń zadanie",
       "delete_time_entry": "Usuń wpis czasu",
-      "describe-stella-api": "Przygotowywanie odczytu danych",
-      "describe-stella-function": "Przygotowywanie odczytu danych",
+      "describe-stella-api": "Wybieranie źródeł",
+      "describe-stella-function": "Wybieranie źródeł",
       "describe_template": "Odczytywanie pól szablonu",
-      "discover_tools": "Przygotowywanie odczytu danych",
+      "discover_tools": "Wybieranie źródeł",
       "execute-typescript": "Odczytywanie danych sprawy",
       "execute_typescript": "Odczytywanie danych sprawy",
       "expand-chat-history": "Odczytywanie historii czatu",
@@ -186,6 +186,7 @@
       "save_document": "Zapisz dokument",
       "save_matter": "Zapisz sprawę",
       "save_playbook": "Zapisz playbook",
+      "save_skill_package": "Zapisz umiejętność",
       "save_task": "Zapisz zadanie",
       "save_template": "Zapisz szablon",
       "save_time_entry": "Zapisz wpis czasu",
@@ -208,7 +209,13 @@
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
+      "validate_skill_package": "Sprawdź umiejętność",
       "web_search": "Wyszukiwanie w sieci"
+    },
+    "toolResearch": {
+      "caseLaw": "Przeszukiwanie orzecznictwa",
+      "legislation": "Odczytywanie przepisów",
+      "legislationAndCaseLaw": "Przeszukiwanie przepisów i orzecznictwa"
     },
     "localRun": {
       "title": {
@@ -524,6 +531,7 @@
     "title": "Dokument",
     "failedTitle": "Nie udało się otworzyć tego dokumentu",
     "failure": {
+      "dataBoxUnreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "offline": "Jesteś offline. Połącz się z internetem i spróbuj ponownie.",
       "noFile": "Ten dokument nie ma jeszcze pliku.",
       "failed": "Podczas otwierania coś poszło nie tak. Spróbuj ponownie za chwilę.",
@@ -531,6 +539,7 @@
       "android": "W aplikacji na Androida nie można jeszcze otwierać dokumentów."
     },
     "retry": "Spróbuj ponownie",
+    "openOriginal": "Otwórz oryginał",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
@@ -588,7 +597,17 @@
     "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie.",
     "lockScreenTitle": "Ekran blokady",
     "timerDetails": "Szczegóły licznika",
-    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji."
+    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji.",
+    "dictationTitle": "Dyktowanie",
+    "dictationModelDefault": "Domyślny",
+    "dictationModelDefaultNamed": "Domyślny ({model})",
+    "dictationModelOutsideRegion": "Poza Twoim regionem",
+    "dictationModelRetainsData": "Przechowuje Twój dźwięk",
+    "dictationModelRetainsWarning": "Ten model działa na koncie bez zerowej retencji danych. {provider} przechowuje dźwięk i transkrypcję wszystkiego, co dyktujesz, na własnych warunkach, poza kontrolą stella. Nie dyktuj za jego pomocą informacji poufnych ani danych klientów.",
+    "dictationModelHint": "Model, który zamienia dyktowanie na tekst. stella nie przechowuje dźwięku.",
+    "dictationModelsUnavailable": "Nie udało się wczytać modeli. Dyktowanie użyje wybranego modelu albo domyślnego, jeśli serwer już go nie oferuje.",
+    "dictationCleanup": "Popraw za pomocą AI",
+    "dictationCleanupHint": "Poprawia błędy rozpoznawania i wypowiedziane formatowanie, takie jak „nowa linia”. Tylko tekst, nie dźwięk, trafia przez stella do dostawcy AI Twojej organizacji; stella go nie przechowuje."
   },
   "header": {
     "search": "Szukaj"

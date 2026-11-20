@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
@@ -9,6 +10,10 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { readProvision } from "@/api/handlers/legislation/provision-text";
+import {
+  provisionWordingChange,
+  type VersionProvisionReading,
+} from "@/api/handlers/legislation/provision-wording-change";
 import { projectProvisionHistoryItem } from "@/api/handlers/legislation/reader-response";
 import {
   selectWorkKey,
@@ -28,7 +33,7 @@ import {
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
-  readVersionBlocks,
+  readVersionAst,
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -125,6 +130,15 @@ const versionColumns = {
  * document only establishes the Work key: an anchor a later consolidation
  * dropped is still reachable, and "provision not found" is answered once the
  * walk has seen every version of the Work without one occurrence.
+ *
+ * Each found wording says how it relates to the consolidation just before
+ * it (`wordingChange`), compared on the full text rather than the projected
+ * one. The page already reads one version past its end for the cursor, so
+ * the last item of a page is compared with the first version of the next
+ * one at no extra read, and a run of unchanged wording reads the same at any
+ * page size. A version whose structure cannot be read is an `unavailable`
+ * item: neither it nor its newer neighbour is claimed changed or unchanged,
+ * and it is never mistaken for one that lacks the provision.
  */
 export const readProvisionHistoryHandler = async ({
   documentId,
@@ -183,22 +197,27 @@ export const readProvisionHistoryHandler = async ({
   // One object-storage read per version, bounded rather than one request per
   // item: a page is already capped far below the version page size because
   // each item costs one whole AST.
-  const texts = await mapWithConcurrency({
+  const readings = await mapWithConcurrency({
     items: versions,
     limit: LIMITS.legislationProvisionReadConcurrency,
-    operation: async (version) =>
-      readProvision(
-        {
-          blocks: await readVersionBlocks({
-            surface,
-            row: version,
-            legislationDb,
-            step: HISTORY_READ_STEP,
-          }),
-          scheme: statuteAnchorSchemeFor(version.country),
-        },
+    operation: async (version): Promise<VersionProvisionReading> => {
+      const ast = await readVersionAst({
+        surface,
+        row: version,
+        legislationDb,
+        step: HISTORY_READ_STEP,
+      });
+      // No structure (unreadable, or a source without a parser) says nothing
+      // about whether the provision is there.
+      if (ast === null || !("blocks" in ast)) {
+        return { type: "unavailable" };
+      }
+      const reading = readProvision(
+        { blocks: ast.blocks, scheme: statuteAnchorSchemeFor(version.country) },
         anchor,
-      ),
+      );
+      return reading === null ? { type: "absent" } : { type: "found", reading };
+    },
   });
 
   const page = createCursorPage({
@@ -214,7 +233,11 @@ export const readProvisionHistoryHandler = async ({
       expressionKind: version.expressionKind,
       windowDisposition: version.windowDisposition,
       windowDispositionBasis: version.windowDispositionBasis,
-      reading: texts[index] ?? null,
+      reading: readings[index] ?? panic("A history version lost its reading"),
+      // The look-ahead row is the next page's first version, so even a
+      // page's last item has its older neighbour here; only the oldest
+      // version of the Work has none.
+      older: readings[index + 1],
     })),
     limit,
     cursorForItem: (item) =>
@@ -224,20 +247,31 @@ export const readProvisionHistoryHandler = async ({
       ]),
   });
 
-  const items = page.items.flatMap(({ reading, ...item }) =>
-    reading === null
-      ? []
-      : [
+  const items = page.items.flatMap(({ reading, older, ...item }) => {
+    switch (reading.type) {
+      case "absent":
+        return [];
+      case "unavailable":
+        return [
+          projectProvisionHistoryItem({ ...item, status: "unavailable" }),
+        ];
+      case "found":
+        return [
           projectProvisionHistoryItem({
             ...item,
-            text: reading.text,
-            governingText: reading.governing,
-            ...(reading.governingTruncated
+            status: "found",
+            wordingChange: provisionWordingChange(reading.reading, older),
+            text: reading.reading.text,
+            governingText: reading.reading.governing,
+            ...(reading.reading.governingTruncated
               ? { governingTextTruncated: true as const }
               : {}),
           }),
-        ],
-  );
+        ];
+      default:
+        return panic("Unhandled provision reading", reading satisfies never);
+    }
+  });
 
   // Only a first page can establish that no consolidation of the Work carries
   // the anchor. A continuation page sees the older tail alone: versions that

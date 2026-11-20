@@ -23,6 +23,7 @@ import { Glob } from "bun";
  * — those index the raw `plainTextOf` axis, which nothing here touches.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
@@ -224,7 +225,7 @@ const fixtureAsts = async (): Promise<{ name: string; ast: DocumentAst }[]> => {
 
   const ecjDir = new URL("eu-ecj/", FIXTURES);
   const names = await Array.fromAsync(
-    new Glob("*.html.gz").scan(ecjDir.pathname),
+    new Glob("*.html.gz").scan(fileURLToPath(ecjDir)),
   );
   const ecjSources = await Promise.all(
     names.toSorted().map(async (name) => ({

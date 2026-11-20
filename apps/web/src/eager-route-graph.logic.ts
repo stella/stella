@@ -77,6 +77,13 @@ export const walkEagerGraph = ({
       if (file === undefined) {
         continue;
       }
+      // A route's page module is its `component`: the router's code
+      // splitter moves it behind the route's lazy chunk, so it is not part
+      // of the eager graph. The startup bundle gate checks the built graph
+      // keeps it out.
+      if (file.endsWith(".page.tsx")) {
+        continue;
+      }
       const chain = [...next.chain, repoRelativePath(root, file)];
       if (forbiddenFiles.has(file)) {
         violations.push(chain.join(" -> "));

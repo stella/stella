@@ -1233,6 +1233,13 @@
       "treatment": "Tratamiento posterior"
     },
     "analyzing": "Analizando...",
+    "browse": {
+      "courtDescription": "{court} ({country}): resoluciones en la base jurídica pública de stella, por año y mes.",
+      "courts": "Tribunales",
+      "days": "Días",
+      "jurisdictionDescription": "{country}: resoluciones judiciales en la base jurídica pública de stella, por tribunal, año y mes.",
+      "periodDescription": "{court} ({country}), {period}: resoluciones en la base jurídica pública de stella."
+    },
     "chat": {
       "prompts": {
         "facts": {
@@ -1494,6 +1501,10 @@
       "title": "La búsqueda no está disponible temporalmente"
     },
     "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Busque por el número de expediente o el ECLI de la resolución, si lo conoce.",
+        "message": "No se ha encontrado ninguna resolución que corresponda exactamente a esta referencia de repertorio."
+      },
       "noHits": {
         "hint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
         "message": "Nada coincide con las palabras que exigió esta búsqueda."
@@ -1721,6 +1732,7 @@
       "unorderedList": "Lista con viñetas",
       "wholeBlockRequired": "Seleccione un párrafo o una lista completos para cambiar su estilo."
     },
+    "answerNotFinished": "stella no pudo terminar esta respuesta.",
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
       "unverified": "Cita no verificada",
@@ -2120,6 +2132,7 @@
     },
     "newChat": "Nuevo chat",
     "newChatInSidePanel": "El chat nuevo está disponible en el panel lateral",
+    "nextSteps": "Próximos pasos",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",
     "officeCitationUnavailable": "Esta cita ya no está disponible.",
@@ -2226,7 +2239,6 @@
       "chipLabel": "Se ejecuta en: {place}",
       "cloud": "Nube",
       "cloudDescription": "Se ejecuta en la nube. Funciona desde cualquier sitio.",
-      "harnessModels": "Modelos de {harness}",
       "hintCheck": "Revísalo en stella desktop",
       "hintInstall": "Instálalo desde stella desktop",
       "hintOffline": "Abre stella desktop en tu ordenador",
@@ -2236,8 +2248,9 @@
       "localFolderSelection": "Tu ordenador · {harness} · {folder}",
       "localPlace": "Tu ordenador, {harness}",
       "localSelection": "Tu ordenador · {harness}",
-      "modelDefault": "Predeterminado (recomendado)",
       "placeState": "{place}. {state}",
+      "startedInCloud": "Este chat nuevo se ha iniciado en la nube porque {harness} no está disponible en tu ordenador ({state})",
+      "startedInCloudCheckFailed": "Este chat nuevo se ha iniciado en la nube porque no se ha podido comprobar tu ordenador",
       "stepsCheck": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y revisa {harness} en Configuración › General › Suscripciones de IA.",
       "stepsInstall": "Abriendo stella desktop. Si no se abre, ábrelo en tu ordenador y, en Configuración › General, elige Instalar para {harness}.",
       "stepsSignInClaudeCode": "Abriendo stella desktop para iniciar sesión. Si no se abre, ábrelo y elige Configuración › General › Iniciar sesión con Claude.",
@@ -2304,13 +2317,26 @@
       "title": "Tu mensaje queda en cola hasta que el agente termine",
       "turnNotRunning": "El agente no está trabajando ahora."
     },
+    "stepDigest": {
+      "decisionsFound": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}",
+      "decisionsFoundUsed": "{found, plural, one {# resolución encontrada} many {# resoluciones encontradas} other {# resoluciones encontradas}}, {used, plural, one {# usada en la respuesta} many {# usadas en la respuesta} other {# usadas en la respuesta}}",
+      "filterAsOf": "A {date}",
+      "legislationFound": "{count, plural, one {# norma o disposición} many {# normas y disposiciones} other {# normas y disposiciones}}",
+      "lookupDidNotGoThrough": "Esta búsqueda no se completó.",
+      "moreFound": "{count, plural, one {# más sin mostrar} many {# más sin mostrar} other {# más sin mostrar}}",
+      "moreLookups": "{count, plural, one {# consulta más sin mostrar} many {# consultas más sin mostrar} other {# consultas más sin mostrar}}",
+      "notRecorded": "Este paso se ejecutó antes de que stella registrara lo que consulta cada paso.",
+      "nothingFound": "Sin resultados.",
+      "technicalDetails": "Detalles técnicos",
+      "usedInAnswer": "Usada en la respuesta",
+      "versionFrom": "Versión desde {date}"
+    },
     "stopFailed": "No se pudo detener la respuesta. Inténtalo de nuevo.",
     "stopResponse": "Detener",
     "stopped": "Detenido",
     "stopping": "Deteniendo…",
     "suggestTitle": "Sugerir un título",
     "suggestTitleUnavailableAnonymized": "Las sugerencias de título no están disponibles para conversaciones anonimizadas.",
-    "suggestedFollowupsLabel": "Sugerencias de preguntas de seguimiento",
     "suggestingTitle": "Sugiriendo un título…",
     "suggestionSeverity": {
       "style": "Estilo",
@@ -2321,7 +2347,6 @@
       "accepted": "Aplicado",
       "rejected": "Rechazado"
     },
-    "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "tableChart": {
       "bar": "Barras",
       "kind": "Tipo de gráfico",
@@ -2368,10 +2393,10 @@
       "delete_reader_annotation": "Eliminar resaltado o comentario",
       "delete_task": "Eliminar tarea",
       "delete_time_entry": "Eliminar registro de tiempo",
-      "describe-stella-api": "Preparando búsqueda de datos",
-      "describe-stella-function": "Preparando búsqueda de datos",
+      "describe-stella-api": "Eligiendo dónde buscar",
+      "describe-stella-function": "Eligiendo dónde buscar",
       "describe_template": "Leyendo campos de la plantilla",
-      "discover_tools": "Preparando búsqueda de datos",
+      "discover_tools": "Eligiendo dónde buscar",
       "docxEditMore": "{count, plural, one {# edición más} many {# ediciones más} other {# ediciones más}}",
       "docxEditSummary": "{count, plural, one {# edición propuesta} many {# ediciones propuestas} other {# ediciones propuestas}}",
       "execute-typescript": "Leyendo datos del asunto",
@@ -2412,6 +2437,7 @@
       "save_document": "Guardar documento",
       "save_matter": "Guardar asunto",
       "save_playbook": "Guardar playbook",
+      "save_skill_package": "Guardar habilidad",
       "save_task": "Guardar tarea",
       "save_template": "Guardar plantilla",
       "save_time_entry": "Guardar registro de tiempo",
@@ -2440,6 +2466,7 @@
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
       "user_message": "Enviado mientras el agente trabajaba",
+      "validate_skill_package": "Comprobar habilidad",
       "web_search": "Buscando en la web"
     },
     "toolCall": {
@@ -2447,11 +2474,10 @@
       "browserPressKey": "Pulsar la tecla {key} en «{target}» en {url}",
       "browserSelect": "Seleccionar «{option}» en «{target}» en {url}",
       "browserType": "Introducir texto en «{target}» en {url}",
-      "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
       "commandExited": "{command} (código de salida {code})",
       "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
-      "failed": "Este paso falló; stella lo resolverá de otra manera.",
+      "failed": "Este paso falló.",
       "field": "Campo",
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
@@ -2468,11 +2494,17 @@
         "notStored": "No se guardó nada de este paso",
         "runBudgetReached": "No se guardó: esta ejecución ya había guardado todo lo que puede guardar una ejecución"
       },
+      "lookupCount": "{count, plural, one {# consulta} many {# consultas} other {# consultas}}",
       "output": "Salida",
       "patternInPath": "{pattern} en {path}",
       "proposedPlan": "Proponiendo un plan",
       "readFile": "Leyendo un archivo",
+      "readingLegislation": "Leyendo la legislación",
+      "retried": "Reintentado",
+      "retriedDetail": "Este paso no salió bien, así que stella lo intentó de otra manera.",
       "searchFiles": "Buscando en archivos",
+      "searchingCaseLaw": "Buscando en la jurisprudencia",
+      "searchingLegislationAndCaseLaw": "Buscando en la legislación y la jurisprudencia",
       "signInToContinue": "Inicia sesión para continuar",
       "sourceCode": "Código fuente",
       "statusWaiting": "En espera",
@@ -2738,6 +2770,7 @@
     "done": "Hecho",
     "doubleClickToRename": "Haz doble clic para renombrar",
     "download": "Descargar",
+    "downloadOriginal": "Descargar el original",
     "dragAndDrop": {
       "cancelled": "{count, plural, one {Movimiento cancelado. {itemName} no se movió.} other {Movimiento cancelado. {itemName} no se movieron.} many {Movimiento cancelado. {itemName} no se movieron.}}",
       "droppedOn": "{count, plural, one {Se soltó {itemName} sobre {destinationName}.} other {Se soltaron {itemName} sobre {destinationName}.} many {Se soltaron {itemName} sobre {destinationName}.}}",
@@ -3325,6 +3358,8 @@
       "contact": "Contacto: {name}",
       "deliveredAt": "Entregado en el buzón",
       "delivery": "Entrega",
+      "deliveryEvents": "Historial de entrega",
+      "deliveryReceipt": "Acuse de recibo",
       "directionUnknown": "Dirección desconocida",
       "messageId": "ID del mensaje",
       "moreContacts": "Hay más contactos asociados a este buzón de datos.",
@@ -3337,6 +3372,8 @@
       "sent": "Enviado",
       "statedInFile": "Mensaje de buzón de datos (según el archivo)",
       "toHands": "A la atención de {name}",
+      "unlinkedFiles": "Para abrir los archivos adjuntos que aparecen sin enlace, descargue el archivo ZFO original.",
+      "unreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "uploaded": "Mensaje de buzón de datos subido"
     },
     "deliveredBy": "Entregado por <address>{sender}</address>",
@@ -4040,6 +4077,12 @@
     "versionCreatedTitle": "Versión creada",
     "viewOnly": "Solo lectura"
   },
+  "guidance": {
+    "notCaseLaw": "Orientación emitida por un organismo regulador. No es una resolución judicial.",
+    "openAtPublisher": "Abrir en el sitio del editor",
+    "source": "Fuente: {attribution}",
+    "textUnavailable": "El texto de este documento no está disponible aquí. Consúltelo en el sitio del editor."
+  },
   "guides": {
     "action": {
       "replay": "Volver a empezar",
@@ -4655,7 +4698,7 @@
       "importSkill": "Importar desde URL",
       "importTitle": "Importar habilidad",
       "importedSkills": "{count, plural, one {Se importó # habilidad} other {Se importaron # habilidades} many {Se importaron # habilidades}}",
-      "invalidPath": "La ruta solo puede usar letras minúsculas, dígitos, puntos, guiones o guiones bajos",
+      "invalidPath": "Usa una ruta relativa. Los nombres de archivos y carpetas no pueden ser . ni .., empezar ni terminar con un espacio, terminar en punto ni contener \\ : * ? \" |, corchetes angulares ni caracteres de control.",
       "invocationAuto": "Automáticamente",
       "invocationAutoHelp": "La IA puede usar esta habilidad por su cuenta cuando encaje con la solicitud.",
       "invocationManual": "Solo cuando se invoque",
@@ -5730,6 +5773,9 @@
       "chatNotificationsDescription": "Recibe una notificación de este navegador cuando una respuesta del chat termine mientras stella está en segundo plano.",
       "chatNotificationsToggle": "Avisarme cuando una respuesta esté lista o necesite mi intervención",
       "chatNotificationsUnsupported": "Este navegador no admite notificaciones.",
+      "chatTechnicalDetails": "Detalles técnicos en el chat",
+      "chatTechnicalDetailsDescription": "Cada paso del chat muestra qué consultó y qué encontró. Si lo activas, también verás el código y los resultados sin procesar.",
+      "chatTechnicalDetailsToggle": "Mostrar detalles técnicos en el chat",
       "confirmDelete": "Confirmar eliminación de cuenta",
       "dangerZone": "Zona de peligro",
       "dangerZoneDescription": "Eliminar permanentemente el acceso a su cuenta y los datos privados de la cuenta.",
@@ -6305,6 +6351,7 @@
     "compareUnstructured": "Una de las versiones solo está disponible como texto plano, por lo que no se pueden comparar.",
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
+    "compareWithPreviousWording": "Comparar con la redacción anterior",
     "compareWithVersion": "Comparar con {version}",
     "currentWording": "Redacción actual",
     "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
@@ -6318,6 +6365,7 @@
       "withdrawn": "El editor ya no lo publica"
     },
     "inForceSince": "En vigor desde el {date}",
+    "inForceSinceAtLeast": "En vigor al menos desde el {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecision": "Sentencia de referencia",
     "leadingDecisionsExplanation": "La primera mención en cada resolución, ordenada por autoridad de cita: citas recibidas ponderadas y ajustadas según la jerarquía del tribunal, el sentido de la cita y su antigüedad.",
@@ -6328,6 +6376,7 @@
     "outlineJumpPlaceholder": "§ 10 o un título",
     "pendingChanges": "Próximas modificaciones",
     "pendingChangesIncomplete": "Es posible que los datos del editor no incluyan todas las próximas modificaciones.",
+    "provisionAbsentVersions": "{count, plural, one {No figura en esta versión de la ley} many {No figura en estas # versiones de la ley} other {No figura en estas # versiones de la ley}}",
     "provisionAskContextPrompt": "\n\nPasajes que aplican la disposición en las resoluciones de mayor autoridad:\n{passages}\n\nUsa las herramientas de jurisprudencia para leer íntegramente cualquiera de estas resoluciones o para encontrar otras que citen la disposición.",
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
@@ -6338,7 +6387,14 @@
     "provisionPartTextUnavailable": "El texto de {provisionLabel} no está disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionRunAlsoFrom": "también desde el {date}",
+    "provisionRunShowVersions": "Mostrar las versiones de la ley de {range}",
+    "provisionRunUnchanged": "{count, plural, one {sin cambios en # versión de la ley} many {sin cambios en # versiones de la ley} other {sin cambios en # versiones de la ley}}",
     "provisionTextUnavailable": "Texto no disponible para esta versión",
+    "provisionVersionsAll": "Todas las versiones de la ley",
+    "provisionWordingAdded": "Nuevo precepto",
+    "provisionWordingChanged": "Modificado",
+    "provisionWordingEarliest": "Versión más antigua disponible",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
     "searchLabel": "Buscar en la legislación",

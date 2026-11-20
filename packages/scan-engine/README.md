@@ -127,8 +127,8 @@ compatible runtime such as OrbStack. Crates, the `wasm-bindgen` CLI and the
 build cache stay in Docker volumes, never in the host's `~/.cargo`. A cold run
 compiles `wasm-bindgen` under emulation and takes several minutes.
 
-Update crates with `bun run cargo:update --manifest-path
-packages/scan-engine/Cargo.toml <crate>` from the repository root, never with a
-bare `cargo update`: it keeps every new pin out of the release-age quarantine
-that CI enforces on `Cargo.lock`. `deny.toml` is the crate's `cargo deny`
+Update crates with `cargo update --manifest-path packages/scan-engine/Cargo.toml
+-p <crate>` from inside the repository: the root `.cargo/config.toml` makes
+Cargo skip versions younger than the release-age quarantine that CI enforces on
+`Cargo.lock`. `deny.toml` is the crate's `cargo deny`
 policy (licenses, bans, sources and advisories).

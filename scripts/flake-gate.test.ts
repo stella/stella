@@ -362,6 +362,30 @@ test.each(["api", "web"] as const)(
   },
 );
 
+test("a Bun file whose every test is skipped on this runner is not gated", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "fixture.test.ts",
+      'import {test} from "bun:test"; test.skipIf(true)("needs a browser", () => {});',
+    );
+    expect(
+      await runOnce({ target: targetFor(root), seed: 11, timeoutMs: 10_000 }),
+    ).toEqual({
+      type: "no-tests",
+      reason: "not gated (every test is skipped on this runner)",
+    });
+    write(
+      root,
+      "fixture.test.ts",
+      'import {test} from "bun:test"; test.skipIf(true)("needs a browser", () => {}); test("runs", () => {});',
+    );
+    expect(
+      await runOnce({ target: targetFor(root), seed: 11, timeoutMs: 10_000 }),
+    ).toMatchObject({ type: "executed", passed: true, ranTests: true });
+  });
+});
+
 test("a failed Bun trial exposes its captured failure without changing its verdict", async () => {
   await withFixture(async (root) => {
     write(

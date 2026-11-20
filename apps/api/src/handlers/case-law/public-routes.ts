@@ -4,6 +4,8 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import readDecisionAnchorRedirectsRoute from "@/api/handlers/case-law/decisions/anchor-redirects";
+import readBrowseCalendar from "@/api/handlers/case-law/decisions/browse-calendar";
+import listBrowseCourts from "@/api/handlers/case-law/decisions/browse-courts";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -510,6 +512,8 @@ const listSitemapShards = createSafeBoundedPublicHandler(
 export const publicCaseLawRoute = routes(
   {
     "/coverage": { GET: readCaseLawCoverage },
+    "/browse/courts": { GET: listBrowseCourts },
+    "/browse/calendar": { GET: readBrowseCalendar },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
     "/decisions/filter-validation": { GET: validateDecisionFilters },
