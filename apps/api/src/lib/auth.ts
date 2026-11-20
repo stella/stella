@@ -2684,7 +2684,7 @@ export const createAuth = (
               ) {
                 await rememberSignInCodeSend({
                   store: getSignInCodeDeliveryStore(),
-                  headers: ctx?.headers,
+                  headers: ctx.headers,
                   outcome,
                   audience,
                 });
