@@ -112,14 +112,7 @@ afterEach(() => {
   }
 });
 
-type FixtureRun = {
-  readonly signalCode: NodeJS.Signals | null;
-  readonly exitCode: number | null;
-  readonly stderr: string;
-  readonly stdout: string;
-};
-
-const runFixture = async (source: string): Promise<FixtureRun> => {
+const runFixture = async (source: string) => {
   const directory = mkdtempSync(path.join(tmpdir(), "event-loop-watchdog-"));
   directories.push(directory);
   writeFileSync(path.join(directory, "fixture.test.ts"), source);
