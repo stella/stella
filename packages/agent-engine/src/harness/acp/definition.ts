@@ -6,7 +6,7 @@ import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runne
  * an OS sandbox an agent's commands are only as bounded as the permission
  * requests it chooses to send.
  */
-export type AcpApprovalMode = Exclude<DesktopRunnerApprovalMode, "full_auto">;
+type AcpApprovalMode = Exclude<DesktopRunnerApprovalMode, "full_auto">;
 
 /** What a definition's environment is built from, per process. */
 type AcpLaunchContext = {

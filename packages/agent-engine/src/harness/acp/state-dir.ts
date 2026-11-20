@@ -57,13 +57,16 @@ export const removeTempDir = (dir: string): boolean =>
     }),
   );
 
-const OWNER_FILE = "stella-owner.pid";
+const OWNER_FILE = "stella-owner.json";
+const OwnerSchema = v.object({
+  pid: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+});
 
 /** Name the process a temporary directory belongs to, for `sweepTempDirs`. */
 export const recordTempDirOwner = (dir: string, pid: number): boolean =>
   Result.isOk(
     Result.try(() => {
-      writeFileSync(path.join(dir, OWNER_FILE), String(pid));
+      writeFileSync(path.join(dir, OWNER_FILE), JSON.stringify({ pid }));
     }),
   );
 
@@ -72,10 +75,17 @@ const ownerRuns = (dir: string): boolean => {
   const text = Result.try(() =>
     readFileSync(path.join(dir, OWNER_FILE), "utf-8"),
   );
-  const pid = Result.isOk(text) ? Number.parseInt(text.value, 10) : Number.NaN;
-  if (!Number.isSafeInteger(pid) || pid <= 0) {
+  const json = Result.isOk(text)
+    ? Result.try((): unknown => JSON.parse(text.value))
+    : null;
+  const owner =
+    json !== null && Result.isOk(json)
+      ? v.safeParse(OwnerSchema, json.value)
+      : null;
+  if (owner?.success !== true) {
     return false;
   }
+  const { pid } = owner.output;
   // Signal 0 only asks whether the process exists.
   return Result.isOk(Result.try(() => process.kill(pid, 0)));
 };
