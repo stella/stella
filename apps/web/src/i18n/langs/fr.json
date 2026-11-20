@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Invitation refusée",
       "declinedDescription": "Vous n’avez pas rejoint cette organisation.",
-      "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail} en tant que {role}.",
+      "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail}{role, select, owner { en tant que propriétaire} admin { en tant qu'administrateur} member { en tant que membre} intern { en tant que stagiaire} external { en tant que collaborateur externe} other {}}.",
       "goToWorkspaces": "Accéder aux dossiers",
       "title": "Invitation à l'organisation",
       "verifyEmailHint": "Pour vérifier {email}, déconnectez-vous, puis connectez-vous avec un code à usage unique envoyé à cette adresse.",

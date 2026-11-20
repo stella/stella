@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Uzaicinājums noraidīts",
       "declinedDescription": "Jūs nepievienojāties šai organizācijai.",
-      "description": "{inviterEmail} ir uzaicinājis jūs pievienoties organizācijai {organizationName} kā {role}.",
+      "description": "{inviterEmail} ir uzaicinājis jūs pievienoties organizācijai {organizationName}{role, select, owner { ar īpašnieka lomu} admin { ar administratora lomu} member { ar dalībnieka lomu} intern { ar praktikanta lomu} external { ar ārējā sadarbības partnera lomu} other {}}.",
       "goToWorkspaces": "Doties uz lietām",
       "title": "Uzaicinājums organizācijā",
       "verifyEmailHint": "Lai apstiprinātu adresi {email}, atslēdzieties un pieslēdzieties ar vienreizējo kodu, ko nosūtīsim uz šo adresi.",

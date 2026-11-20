@@ -165,7 +165,7 @@
     "invitation": {
       "declined": "Pozvánka odmítnuta",
       "declinedDescription": "K této organizaci jste se nepřipojili.",
-      "description": "{inviterEmail} vás pozval/a do organizace {organizationName} jako {role}.",
+      "description": "{inviterEmail} vás pozval/a do organizace {organizationName}{role, select, owner { jako vlastníka} admin { jako administrátora} member { jako člena} intern { jako stážistu} external { jako externího spolupracovníka} other {}}.",
       "goToWorkspaces": "Přejít na spisy",
       "title": "Pozvánka do organizace",
       "verifyEmailHint": "Chcete-li ověřit adresu {email}, odhlaste se a přihlaste se jednorázovým kódem, který na ni odešleme.",
